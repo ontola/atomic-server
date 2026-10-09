@@ -1456,6 +1456,12 @@ fn register_live_peer(
                                                             .has_blob(&hash)
                                                             .await
                                                             .unwrap_or(false)
+                                                            || !store.drive_holds_blob(
+                                                                hash_hex,
+                                                                &store.claim_drive_id(
+                                                                    &admitted_drive,
+                                                                ),
+                                                            )
                                                         {
                                                             store.note_pending_blob_request(
                                                                 hash,

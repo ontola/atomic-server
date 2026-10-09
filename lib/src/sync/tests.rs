@@ -376,6 +376,8 @@ mod peer_sync_tests {
         db.kv
             .insert(crate::db::trees::Tree::Blobs, hash.as_bytes(), content)
             .unwrap();
+        // The drive supplied the bytes: its proof of possession.
+        db.claim_blob(&hash_hex, &drive_did).unwrap();
         db.create_resource(
             crate::urls::FILE,
             &drive_did,
@@ -501,6 +503,27 @@ mod peer_sync_tests {
         );
     }
 
+    /// The bytes of a pulled blob are the pulling drive's proof of possession
+    /// (issue #2157): the drive the request was issued for is claimed, any
+    /// other drive naming the same hash is not.
+    #[tokio::test]
+    async fn a_pulled_blob_is_claimed_for_its_drive_only() {
+        let db = Db::init_temp("blob_pull_claim").await.unwrap();
+        let content = b"pulled for one drive";
+        let hash = blake3::hash(content);
+        let hex = hash.to_hex().to_string();
+        let drive = "https://example.com/some-drive";
+        db.note_pending_blob_request(*hash.as_bytes(), drive.into());
+
+        let frame = crate::sync::protocol::encode_blob_response(hash.as_bytes(), content);
+        let mut agent = ForAgent::Sudo;
+        let out = crate::sync::engine::handle_frame(&frame, &db, &mut agent).await;
+        assert!(out.is_empty(), "{out:?}");
+
+        assert!(db.drive_holds_blob(&hex, &db.claim_drive_id(drive)));
+        assert!(!db.drive_holds_blob(&hex, &db.claim_drive_id("https://example.com/other")));
+    }
+
     /// A device that dials us is never written to the known-peers table (F9: an
     /// unsolicited connection has not earned a permanent reconnect slot). So
     /// the name it introduced itself with lives only as long as the connection
@@ -614,6 +637,7 @@ mod peer_sync_tests {
         db_a.kv
             .insert(crate::db::trees::Tree::Blobs, hash.as_bytes(), test_content)
             .unwrap();
+        db_a.claim_blob(&hash.to_hex(), &drive_a).unwrap();
 
         // Create the File resource referencing the hash. (Until the ontology
         // rename to `blob: did:ad:blob:<hash>` lands, sync-engine matching

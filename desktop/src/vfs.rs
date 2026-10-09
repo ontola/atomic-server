@@ -461,6 +461,12 @@ impl AtomicNfsFs {
       .await
       .map_err(|_| nfsstat3::NFS3ERR_IO)?;
 
+    // This node stored the bytes for its own user: that is the proof of
+    // possession peers are served against (`Db::claim_blobs_of`).
+    if let Ok(file) = self.store.get_resource(&subject).await {
+      let _ = self.store.claim_blobs_of(&file);
+    }
+
     let id = self.ids.get_or_alloc(&subject);
     self.ids.persist_pending();
 
@@ -1374,6 +1380,9 @@ async fn commit_file(store: &Db, subject: &str, data: &[u8]) {
 
     return;
   }
+
+  // The user wrote these bytes on this node: their proof of possession.
+  let _ = store.claim_blobs_of(&resource);
 
   if let Err(error) = resource.save_locally(store).await {
     eprintln!("[vfs] flush commit failed for {subject}: {error}");

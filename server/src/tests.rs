@@ -954,6 +954,11 @@ async fn content_addressed_image_with_storage(remote: bool) {
     let drive = atomic_lib::test_utils::create_test_drive(&appstate.store)
         .await
         .unwrap();
+    // The bytes were stored on behalf of this drive: its proof of possession.
+    appstate
+        .store
+        .claim_blob(&hash.to_hex(), drive.as_str())
+        .unwrap();
     let mut file = atomic_lib::Resource::new_instance(atomic_lib::urls::FILE, &appstate.store)
         .await
         .unwrap();
@@ -1257,6 +1262,258 @@ async fn upload_download_with_backend(
     let public = test::call_service(&app, TestRequest::get().uri(&path).to_request()).await;
     assert_eq!(public.status(), 200, "public-read files must stay public");
     assert_eq!(test::read_body(public).await, test_content.as_slice());
+}
+
+/// A signed request for `path` from `agent`, as the browser sends it.
+fn request_as(path: &str, agent: &atomic_lib::agents::Agent, appstate: &AppState) -> TestRequest {
+    let origin = appstate.config.get_origin();
+    let url = format!("{}{}", origin, path);
+    let mut request = TestRequest::with_uri(path);
+    for (k, v) in atomic_lib::client::get_authentication_headers(&url, agent).unwrap() {
+        request = request.insert_header((k, v));
+    }
+    if let Ok(u) = url::Url::parse(&origin) {
+        if let Some(host) = u.host_str() {
+            let authority = match u.port() {
+                Some(port) => format!("{host}:{port}"),
+                None => host.to_string(),
+            };
+            request = request.insert_header(("Host", authority));
+        }
+    }
+    request
+}
+
+/// A drive `agent` may read and write, next to the default agent's.
+async fn drive_for(
+    store: &atomic_lib::Db,
+    agent: &atomic_lib::agents::Agent,
+) -> atomic_lib::Subject {
+    let drive = atomic_lib::test_utils::create_test_drive(store)
+        .await
+        .unwrap();
+    let mut resource = store.get_resource(&drive).await.unwrap();
+    for right in [urls::READ, urls::WRITE] {
+        resource
+            .push(right, agent.subject.to_string().into(), true)
+            .unwrap();
+    }
+    resource.save_locally(store).await.unwrap();
+    drive
+}
+
+/// Possession proof for blob access (ontola/atomic-server#2157): `internalId`,
+/// `blob` and `chunks` are properties anyone can set, so a File an attacker
+/// makes for a hash they only know must not unlock the bytes. Only a drive
+/// that handed the bytes to the node may expose them.
+#[actix_rt::test]
+async fn forged_file_references_do_not_unlock_a_blob() {
+    use clap::Parser;
+    let unique_string = atomic_lib::utils::random_string(10);
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{unique_string}/db"),
+        "--config-dir",
+        &format!("./.temp/{unique_string}/config"),
+    ]);
+    let mut config = config::build_config(opts).unwrap();
+    config.search_index_path = format!("./.temp/{unique_string}/search_index").into();
+    let appstate = crate::appstate::AppState::init(config).await.unwrap();
+    let store = appstate.store.clone();
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let secret = b"alice's private bytes";
+    let hash = blake3::hash(secret);
+    let hash_hex = hash.to_hex().to_string();
+    let boundary = "boundary";
+    let multipart = |bytes: &[u8]| {
+        format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.txt\"\r\n\
+             Content-Type: text/plain\r\n\r\n{}\r\n--{boundary}--\r\n",
+            String::from_utf8_lossy(bytes)
+        )
+    };
+
+    // Alice (the node's default agent) uploads into her private drive.
+    let alice = store.get_default_agent().unwrap();
+    let alice_drive = atomic_lib::test_utils::create_test_drive(&store)
+        .await
+        .unwrap();
+    let upload = build_request_authenticated(
+        &format!(
+            "/upload?parent={}",
+            urlencoding::encode(alice_drive.as_str())
+        ),
+        &appstate,
+    )
+    .method(actix_web::http::Method::POST)
+    .insert_header((
+        "Content-Type",
+        format!("multipart/form-data; boundary={boundary}"),
+    ))
+    .set_payload(multipart(secret))
+    .to_request();
+    assert!(test::call_service(&app, upload).await.status().is_success());
+
+    // Mallory has her own drive, no rights on Alice's.
+    let mallory = store.create_agent(Some("mallory")).await.unwrap();
+    let mallory_drive = drive_for(&store, &mallory).await;
+
+    // Each of the three shapes the lookup used to trust.
+    let blob_ref = atomic_lib::identifiers::blob_subject(&hash_hex);
+    let mut forged: Vec<atomic_lib::Subject> = Vec::new();
+    for shape in ["internalId", "blob", "chunks"] {
+        let mut file = atomic_lib::Resource::new_instance(urls::FILE, &store)
+            .await
+            .unwrap();
+        file.set_string(urls::PARENT.into(), mallory_drive.as_str(), &store)
+            .await
+            .unwrap();
+        file.set_string(urls::MIMETYPE.into(), "text/plain", &store)
+            .await
+            .unwrap();
+        file.set_string(urls::FILENAME.into(), "mine.txt", &store)
+            .await
+            .unwrap();
+        file.set_string(urls::DOWNLOAD_URL.into(), "http://localhost/x", &store)
+            .await
+            .unwrap();
+        file.set(urls::FILESIZE.into(), atomic_lib::Value::Integer(1), &store)
+            .await
+            .unwrap();
+        match shape {
+            "internalId" => {
+                file.set_string(urls::INTERNAL_ID.into(), &hash_hex, &store)
+                    .await
+                    .unwrap();
+            }
+            "blob" => {
+                file.set_string(urls::INTERNAL_ID.into(), &"0".repeat(64), &store)
+                    .await
+                    .unwrap();
+                file.set(
+                    urls::BLOB.into(),
+                    atomic_lib::Value::AtomicUrl(blob_ref.clone().into()),
+                    &store,
+                )
+                .await
+                .unwrap();
+            }
+            _ => {
+                file.set_string(urls::INTERNAL_ID.into(), &"0".repeat(64), &store)
+                    .await
+                    .unwrap();
+                file.set(
+                    urls::CHUNKS.into(),
+                    atomic_lib::Value::ResourceArray(vec![blob_ref.clone().into()]),
+                    &store,
+                )
+                .await
+                .unwrap();
+            }
+        }
+        let saved = file.save_as_genesis(&store).await.unwrap();
+        forged.push(saved.resource_new.unwrap().get_subject().clone());
+    }
+
+    let status = |path: String, agent: atomic_lib::agents::Agent| {
+        let app = &app;
+        let appstate = &appstate;
+        async move {
+            test::call_service(app, request_as(&path, &agent, appstate).to_request())
+                .await
+                .status()
+        }
+    };
+
+    // Mallory: 404 on every route, as for a hash that does not exist.
+    for path in [
+        format!("/download/files/{hash_hex}"),
+        format!(
+            "/download/{}",
+            atomic_lib::identifiers::blob_subject(&hash_hex)
+        ),
+        format!("/download/did:ad:blob:{hash_hex}"),
+    ] {
+        assert_eq!(status(path.clone(), mallory.clone()).await, 404, "{path}");
+    }
+    for file in &forged {
+        let path = format!("/download/{}", file.as_str());
+        // A File is signed for under its own identifier, not the download URL.
+        let mut request = TestRequest::with_uri(&path);
+        for (k, v) in
+            atomic_lib::client::get_authentication_headers(file.as_str(), &mallory).unwrap()
+        {
+            request = request.insert_header((k, v));
+        }
+        let response = test::call_service(&app, request.to_request()).await;
+        assert_eq!(
+            response.status(),
+            404,
+            "a forged File must not serve the bytes it names: {path}"
+        );
+    }
+    // The sync BLOB_REQUEST answers the same.
+    let mallory_for = ForAgent::AgentSubject(mallory.subject.clone());
+    let denied =
+        atomic_lib::sync::engine::answer_blob_request(&store, hash.as_bytes(), &mallory_for).await;
+    assert_ne!(
+        denied.first(),
+        Some(&atomic_lib::sync::protocol::tag::BLOB_RESPONSE)
+    );
+    assert!(
+        !store
+            .agent_may_read_blob(hash.as_bytes(), &mallory_for)
+            .await
+    );
+
+    // Alice still reads her file, over HTTP and sync.
+    assert_eq!(
+        status(format!("/download/files/{hash_hex}"), alice.clone()).await,
+        200
+    );
+    let alice_for = ForAgent::AgentSubject(alice.subject.clone());
+    let served =
+        atomic_lib::sync::engine::answer_blob_request(&store, hash.as_bytes(), &alice_for).await;
+    assert_eq!(
+        served.first(),
+        Some(&atomic_lib::sync::protocol::tag::BLOB_RESPONSE)
+    );
+
+    // Mallory uploading the real bytes is proof of possession: now she may.
+    let upload = request_as(
+        &format!(
+            "/upload?parent={}",
+            urlencoding::encode(mallory_drive.as_str())
+        ),
+        &mallory,
+        &appstate,
+    )
+    .method(actix_web::http::Method::POST)
+    .insert_header((
+        "Content-Type",
+        format!("multipart/form-data; boundary={boundary}"),
+    ))
+    .set_payload(multipart(secret))
+    .to_request();
+    let response = test::call_service(&app, upload).await;
+    assert!(response.status().is_success(), "{:?}", response.status());
+    assert_eq!(
+        status(format!("/download/files/{hash_hex}"), mallory.clone()).await,
+        200
+    );
+    assert!(
+        store
+            .agent_may_read_blob(hash.as_bytes(), &mallory_for)
+            .await
+    );
 }
 
 /// `GET /drive-usage` reports a drive's resource count + blob/Loro bytes for the

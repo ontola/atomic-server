@@ -101,15 +101,9 @@ The `blake3` is a 32-byte BLAKE3 hash, hex-encoded (64 characters). Hex rather t
 
 Blobs are **not Resources**. They have no parent, no class, no ACL, no commit history — they are raw, content-addressed bytes. The File resource that *describes* a blob is a normal Resource and carries all the metadata (filename, mimetype, parent for permissions); it points at its blob via a `blob` property whose value is a `atomic:blob:` reference.
 
-#### Capability semantics
+#### Access semantics
 
-Knowing a `atomic:blob:` identifier is, by itself, the capability to retrieve the bytes — there is no second authorization check inside the blob store. This works because:
-
-- A 256-bit BLAKE3 hash is unforgeable: you cannot guess one.
-- The only ways to obtain it are to already have the bytes (and compute it yourself), or to read a Resource that references it.
-- Reading that Resource passes through the normal [hierarchy](hierarchy.md) authorization. That is where access control lives — the bytes simply follow.
-
-So the auth boundary is the **File resource**, not the blob. This is the same model used by Git objects, IPFS CIDs, S3 presigned URLs, and Iroh tickets. Treat a leaked blob identifier the same as a leaked file.
+Knowing a `atomic:blob:` identifier grants nothing by itself. A server serves the bytes only to a requester who can read a resource that references the blob, and only when that resource's drive has proven it holds the bytes (it supplied them to the server). Both checks answer with the same "not found" as for an unknown hash, so the identifier is neither a bearer token nor a way to probe for what a server stores. See [Files](files.md#authorization-model-the-hash-is-not-a-capability).
 
 #### Resolution and routing
 

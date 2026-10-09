@@ -284,6 +284,18 @@ pub async fn download_file_handler_partial(
     params: &web::Query<DownloadParams>,
     appstate: &AppState,
 ) -> AtomicServerResult<HttpResponse> {
+    // `internalId` and `chunks` are plain properties: a File can name any hash.
+    // Its bytes are only served when its drive has proven it holds them (the
+    // same rule as the content-addressed routes), otherwise a File made for a
+    // hash the writer only knows would download someone else's file.
+    if !appstate.store.resource_holds_its_blobs(resource) {
+        return Err(blob_not_found(
+            &resource
+                .get(urls::INTERNAL_ID)
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+        ));
+    }
     let bytes = reconstruct_file_bytes(resource, appstate).await?;
 
     // The source hash for the image-rendition cache key is the whole-file hash.

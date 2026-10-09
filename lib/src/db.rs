@@ -136,7 +136,7 @@ fn purge_blob_key(hash_hex: &str) -> Vec<u8> {
 /// The blobs (hex BLAKE3 hashes) a stored resource references: the same three
 /// shapes [`Db::readable_blob_referrers`] looks up (a File's whole-file
 /// `internalId`, a `blob` reference, and the `chunks` of a chunked File).
-fn blob_hashes(propvals: &PropVals) -> Vec<String> {
+pub(crate) fn blob_hashes(propvals: &PropVals) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut push = |candidate: &str| {
         let hex = candidate
@@ -595,6 +595,13 @@ impl Db {
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         crate::search::maybe_rebuild_search_index(&self)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let claimed = self.backfill_blob_claims()?;
+            if claimed > 0 {
+                tracing::info!("Blob access: backfilled {claimed} proof-of-possession claims");
+            }
+        }
         Ok(self)
     }
 
