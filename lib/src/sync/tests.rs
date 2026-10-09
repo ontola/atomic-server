@@ -2228,6 +2228,7 @@ mod peer_sync_tests {
         let opts = CommitIngestOpts {
             source_id: None,
             validate_loro_causality: true,
+            validate_constraints: true,
             enforce_subject_ownership: true,
             response_origin: None,
         };
