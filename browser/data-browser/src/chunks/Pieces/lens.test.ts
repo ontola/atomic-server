@@ -127,8 +127,21 @@ describe('lens', () => {
 
   it('refuses a mapping version it cannot run', () => {
     expect(() =>
-      parseMapping({ version: 3, fields: [{ source: NAME, target: NAME }] }),
+      parseMapping({ version: 4, fields: [{ source: NAME, target: NAME }] }),
     ).toThrow(expect.objectContaining({ code: 'bad-mapping' }));
+  });
+
+  it('runs mapping version 3: a guard refuses a record outside the domain', () => {
+    const v3 = parseMapping({
+      version: 3,
+      guards: [{ at: '/deleted', is: 'absent' }],
+      fields: [{ source: '/description', target: NAME }],
+    });
+
+    expect(lensGet(v3, { description: 'Kept' })).toEqual({ [NAME]: 'Kept' });
+    expect(() => lensGet(v3, { description: 'Gone', deleted: true })).toThrow(
+      expect.objectContaining({ code: 'out-of-domain' }),
+    );
   });
 
   it('stores mappings as plain data, so a frame can receive them', () => {

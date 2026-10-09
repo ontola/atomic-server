@@ -9,15 +9,16 @@ const LENS_CATALOG_URL_KEY = 'lens-catalog-url';
  * published files never change, so a newer catalog reaches this host only
  * when this pin moves.
  *
- * Release 1 uses lens mapping version 2, which the vendored interpreter runs.
- * Release 2 (mapping version 3) is not pinned: it is unpublished, and the
- * vendored `lens.mjs` does not run version 3.
+ * Release 2 (atomic-plugins #405): Clockify, Todoist and Raindrop at lens
+ * mapping version 3 (guards, per-field `absent`), Solid unchanged at version
+ * 2. The vendored interpreter runs versions 1 to 3. Release 1 (all version 2)
+ * stays served and can still be pinned through the override below.
  *
  * The base is the ontology's temporary github.io one (pieces.md O11), which is
  * why the catalog loads only behind the split-pieces flag.
  */
 export const PINNED_LENS_CATALOG_URL =
-  'https://ontola.github.io/atomic-plugins/ontology/lenses/v1';
+  'https://ontola.github.io/atomic-plugins/ontology/lenses/v2';
 
 export function validateLensCatalogUrl(value: string): string {
   if (!isHttpsOrLoopback(new URL(value))) {

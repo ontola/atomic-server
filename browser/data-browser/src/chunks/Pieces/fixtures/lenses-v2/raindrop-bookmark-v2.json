@@ -1,0 +1,141 @@
+{
+  "@id": "https://ontola.github.io/atomic-plugins/ontology/lenses/raindrop-bookmark-v2",
+  "lensFormat": 1,
+  "release": "https://ontola.github.io/atomic-plugins/ontology/lenses/v2",
+  "name": "Raindrop bookmark ↔ Bookmark",
+  "description": "A Raindrop.io bookmark record and the host's built-in Bookmark class: title, link and excerpt. A description removed in the table clears the excerpt, and an excerpt missing in Raindrop removes the description.",
+  "source": {
+    "record": {
+      "provider": "raindrop.io",
+      "resource": "raindrop"
+    }
+  },
+  "target": {
+    "class": "https://atomicdata.dev/class/Bookmark"
+  },
+  "mapping": {
+    "version": 3,
+    "fields": [
+      {
+        "source": "/title",
+        "target": "https://atomicdata.dev/properties/name"
+      },
+      {
+        "source": "/link",
+        "target": "https://atomicdata.dev/property/url"
+      },
+      {
+        "source": "/excerpt",
+        "target": "https://atomicdata.dev/properties/description",
+        "absent": "default",
+        "default": ""
+      }
+    ],
+    "guards": [
+      {
+        "at": "/_id",
+        "is": "present"
+      }
+    ]
+  },
+  "limits": [
+    "No overlay declares a Raindrop crudResource yet, so no catalog integration produces this source; the record endpoint names the shape the code lens reads.",
+    "The guard refuses a record without an _id; the code lens also refuses a non-positive id, titles over 1000 and excerpts over 10000 UTF-16 code units, and a link that is not an absolute http(s) URL."
+  ],
+  "implementation": "integrations/bookmarks/devonian/raindrop/lens/index.ts",
+  "examples": [
+    {
+      "source": {
+        "_id": 41,
+        "title": "A bookmark",
+        "link": "https://example.org/article",
+        "tags": [
+          "invented"
+        ],
+        "note": "Provider-only note",
+        "created": "2026-10-01T12:00:00+02:00"
+      },
+      "target": {
+        "https://atomicdata.dev/properties/name": "A bookmark",
+        "https://atomicdata.dev/property/url": "https://example.org/article"
+      },
+      "edits": [
+        {
+          "target": {
+            "https://atomicdata.dev/properties/name": "Changed",
+            "https://atomicdata.dev/property/url": "https://example.org/article",
+            "https://atomicdata.dev/properties/description": "Edited"
+          },
+          "source": {
+            "_id": 41,
+            "title": "Changed",
+            "link": "https://example.org/article",
+            "tags": [
+              "invented"
+            ],
+            "note": "Provider-only note",
+            "created": "2026-10-01T12:00:00+02:00",
+            "excerpt": "Edited"
+          }
+        }
+      ]
+    },
+    {
+      "source": {
+        "_id": 42,
+        "title": "Notes",
+        "link": "https://example.org/notes",
+        "excerpt": "Old",
+        "tags": []
+      },
+      "target": {
+        "https://atomicdata.dev/properties/name": "Notes",
+        "https://atomicdata.dev/property/url": "https://example.org/notes",
+        "https://atomicdata.dev/properties/description": "Old"
+      },
+      "edits": [
+        {
+          "target": {
+            "https://atomicdata.dev/properties/name": "Notes",
+            "https://atomicdata.dev/property/url": "https://example.org/notes"
+          },
+          "source": {
+            "_id": 42,
+            "title": "Notes",
+            "link": "https://example.org/notes",
+            "excerpt": "",
+            "tags": []
+          }
+        },
+        {
+          "direction": "backward",
+          "target": {
+            "https://atomicdata.dev/properties/name": "Notes",
+            "https://atomicdata.dev/property/url": "https://example.org/notes"
+          },
+          "source": {
+            "_id": 42,
+            "title": "Notes",
+            "link": "https://example.org/notes",
+            "tags": []
+          }
+        },
+        {
+          "direction": "backward",
+          "source": {
+            "title": "Notes",
+            "link": "https://example.org/notes"
+          },
+          "error": "out-of-domain"
+        }
+      ]
+    },
+    {
+      "source": {
+        "title": "No id",
+        "link": "https://example.org/x"
+      },
+      "error": "out-of-domain"
+    }
+  ]
+}
