@@ -4268,6 +4268,15 @@ export class Store {
       !isEmbeddedVocabulary(subject) &&
       !this.isLocalOnlySubject(subject)
     ) {
+      // Show the cached copy while the authority answers. Without this a
+      // legacy `https://` drive (every profile, avatar and table on it) came
+      // up as `loading` after each reload even though OPFS held it, because
+      // the only thing that read OPFS was the offline fallback below. Not
+      // awaited: the server read must not wait for the database. Hydration
+      // merges the stored Loro state, so a late local answer cannot undo the
+      // server's.
+      void this.hydrateFromLocalDb(subject).catch(() => undefined);
+
       try {
         const remote = await this.fetchResourceFromServer(subject, opts);
         if (!isTransportError(remote.error)) return;
