@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Phones: the chat view no longer scrolls sideways by a few pixels, the "more" menu no longer opens the on-screen keyboard, and the Back button closes an open dropdown menu.
 - Schemas (#2151): `ensureOntology` creates or updates an ontology with content-addressed properties, classes and class constraints, and running it twice writes nothing; `ensureSchema` is now a deprecated alias. `ontologyFromJsonSchema` and `ontologyToJsonSchema` convert JSON Schema draft 2020-12 to and from that input. New: `propertyId`, `getEffectiveConstraint`, `setClassConstraint`, `useEffectiveConstraint`, `ensureLens`, `loadLenses`, and `store.newResource({ contentAddressedProperty: true })`.
 - `ad-generate ontology push | lock | check` writes the same lockfile as `atomic-cli schema` (#2151).
 - Tables, kanban, the ontology editor and forms store select options, single pick, limits and linked classes on the class instead of on the Property; each property in a class card has a Constraints section. Renaming a property's shortname or changing its datatype creates a new property and a lens that keeps old values visible (#2151).
