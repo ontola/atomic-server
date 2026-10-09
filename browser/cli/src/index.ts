@@ -14,6 +14,12 @@ commands.set('ontologies', () =>
   ),
 );
 
+commands.set('ontology', () =>
+  import('./commands/ontology.js').then(m =>
+    m.ontologyCommand(process.argv.slice(3)),
+  ),
+);
+
 commands.set('connect', () =>
   import('./commands/connect.js').then(m =>
     m.connectCommand(process.argv.slice(3)),

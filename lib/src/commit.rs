@@ -105,6 +105,10 @@ pub struct CommitApplied {
 pub struct CommitOpts {
     /// Makes sure all `required` properties are present.
     pub validate_schema: bool,
+    /// Checks values against the `constraints` of the resource's classes (and
+    /// the shape of a Class's own map). Needs `validate_schema`. Off for peer
+    /// transports: a replica must accept what another node already accepted.
+    pub validate_constraints: bool,
     /// Checks the public key and the signature of the Commit.
     pub validate_signature: bool,
     /// Checks whether the Commit isn't too old, or has been created in the future.
@@ -134,6 +138,7 @@ impl CommitOpts {
     pub fn no_validations_no_index() -> Self {
         Self {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: false,
             validate_timestamp: false,
             validate_rights: false,
@@ -197,6 +202,106 @@ impl std::fmt::Debug for Commit {
             .field("url", &self.url)
             .finish()
     }
+}
+
+/// Check a Property ID against the namespace, shortname and datatype in the
+/// propvals of the resource it names. All three must be present.
+fn verify_property_genesis(
+    subject: &str,
+    propvals: &crate::resources::PropVals,
+) -> AtomicResult<()> {
+    let field = |prop: &str, name: &str| -> AtomicResult<String> {
+        propvals
+            .get(prop)
+            .map(|v| v.to_string())
+            .ok_or_else(|| format!("Property {subject} has no {name}; its ID is derived from parent, shortname and datatype").into())
+    };
+    let parent = field(urls::PARENT, "parent")?;
+    let shortname = field(urls::SHORTNAME, "shortname")?;
+    let datatype = field(urls::DATATYPE_PROP, "datatype")?;
+    crate::property_identity::verify_property_id(subject, &parent, &shortname, &datatype)
+}
+
+/// True for the content-addressed kinds: Property and Lens IDs name no
+/// signature and carry no genesis certificate.
+fn is_content_addressed_id(subject: &str) -> bool {
+    crate::identifiers::is_prop_id(subject) || crate::identifiers::is_lens_id(subject)
+}
+
+/// Check a content-addressed ID (`atomic:prop:` or `atomic:lens:`) against the
+/// fields in the propvals it names.
+fn verify_content_addressed_genesis(
+    subject: &str,
+    propvals: &crate::resources::PropVals,
+) -> AtomicResult<()> {
+    if crate::identifiers::is_lens_id(subject) {
+        crate::lens::verify_lens_genesis(subject, propvals)
+    } else {
+        verify_property_genesis(subject, propvals)
+    }
+}
+
+/// Derive lens values into `new` and bring the index atoms in line.
+///
+/// The doc diff knows only what the doc really holds. For every property a
+/// lens touches, the index must instead follow what the resource shows: the
+/// real value, or the derived one. So drop the diff's atoms for that property
+/// and file the change between what `old` showed and what `new` shows.
+fn reconcile_lens_atoms(
+    lenses: &crate::lens::LensIndex,
+    old: Option<&Resource>,
+    new: &mut Resource,
+    add_atoms: &mut Vec<Atom>,
+    remove_atoms: &mut Vec<Atom>,
+) {
+    new.apply_lenses(lenses);
+    let subject = new.get_subject().clone();
+    for prop in lenses.properties() {
+        let is_prop =
+            |atom: &Atom| crate::identifiers::canonicalize_scheme(&atom.property) == *prop;
+        add_atoms.retain(|atom| !is_prop(atom));
+        remove_atoms.retain(|atom| !is_prop(atom));
+        let before = old.and_then(|r| r.get(prop).ok()).cloned();
+        let after = new.get(prop).ok().cloned();
+        let same = match (&before, &after) {
+            (None, None) => true,
+            (Some(a), Some(b)) => a.datatype() == b.datatype() && a.to_string() == b.to_string(),
+            _ => false,
+        };
+        if same {
+            continue;
+        }
+        if let Some(value) = before {
+            remove_atoms.push(Atom::new(subject.clone(), prop.clone(), value));
+        }
+        if let Some(value) = after {
+            add_atoms.push(Atom::new(subject.clone(), prop.clone(), value));
+        }
+    }
+}
+
+/// A Property's identity is hashed into its ID, so `parent`, `shortname` and
+/// `datatype` can never change after creation.
+fn check_property_identity_unchanged(old: &Resource, new: &Resource) -> AtomicResult<()> {
+    for (prop, name) in [
+        (urls::PARENT, "parent"),
+        (urls::SHORTNAME, "shortname"),
+        (urls::DATATYPE_PROP, "datatype"),
+    ] {
+        let norm = |r: &Resource| {
+            r.get(prop)
+                .ok()
+                .map(|v| crate::identifiers::canonicalize_scheme(&v.to_string()))
+        };
+        if norm(old) != norm(new) {
+            return Err(format!(
+                "Cannot change the {name} of property {}: a property's identity cannot change",
+                new.get_subject()
+            )
+            .into());
+        }
+    }
+    Ok(())
 }
 
 impl Commit {
@@ -457,6 +562,16 @@ impl Commit {
             && commit.subject.is_did()
             && !commit.subject.is_agent_did()
         {
+            // A Property ID names no signature and has no cert: its hash must
+            // match the namespace, shortname and datatype in the doc.
+            if is_content_addressed_id(commit.subject.as_str()) {
+                let propvals = commit
+                    .loro_update
+                    .as_ref()
+                    .and_then(|u| crate::Resource::propvals_from_loro_update(u))
+                    .ok_or("A property or lens genesis commit must carry its fields")?;
+                return verify_content_addressed_genesis(commit.subject.as_str(), &propvals);
+            }
             let subject_val = crate::identifiers::identifier_body(commit.subject.as_str())
                 .filter(|body| !body.contains(':'))
                 .ok_or("Invalid atomic: / did:ad: resource subject")?;
@@ -529,6 +644,17 @@ impl Commit {
         if !self.subject.is_did() || self.subject.is_agent_did() {
             return Ok(false);
         }
+        if is_content_addressed_id(self.subject.as_str()) {
+            // Two devices mint the same Property or Lens ID independently. No
+            // cert: the hash of the incoming doc's fields is the proof.
+            return Ok(self
+                .loro_update
+                .as_ref()
+                .and_then(|u| crate::Resource::propvals_from_loro_update(u))
+                .is_some_and(|p| {
+                    verify_content_addressed_genesis(self.subject.as_str(), &p).is_ok()
+                }));
+        }
         let subject_val = crate::identifiers::identifier_body(self.subject.as_str())
             .filter(|body| !body.contains(':'))
             .ok_or("Invalid atomic: / did:ad: resource subject")?;
@@ -570,26 +696,36 @@ impl Commit {
 
         if subject.is_did() && crate::identifiers::is_atomic_identifier(subject.as_str()) {
             let pure_id = subject.pure_id();
-            let b64_part = if subject.is_agent_did() {
-                crate::identifiers::agent_public_key(&pure_id)
-            } else if subject.is_commit_did() {
-                crate::identifiers::commit_signature(&pure_id)
+            if crate::identifiers::is_prop_id(&pure_id) {
+                if !crate::property_identity::is_property_id(&pure_id) {
+                    return Err("Invalid property ID: expected 64 lowercase hex characters".into());
+                }
+            } else if crate::identifiers::is_lens_id(&pure_id) {
+                if !crate::lens::is_lens_id(&pure_id) {
+                    return Err("Invalid lens ID: expected 64 lowercase hex characters".into());
+                }
             } else {
-                crate::identifiers::identifier_body(&pure_id)
-            }
-            .ok_or("Invalid Atomic identifier format")?;
+                let b64_part = if subject.is_agent_did() {
+                    crate::identifiers::agent_public_key(&pure_id)
+                } else if subject.is_commit_did() {
+                    crate::identifiers::commit_signature(&pure_id)
+                } else {
+                    crate::identifiers::identifier_body(&pure_id)
+                }
+                .ok_or("Invalid Atomic identifier format")?;
 
-            let decoded = crate::agents::decode_base64(b64_part)
-                .map_err(|_| "Invalid DID: not valid base64")?;
+                let decoded = crate::agents::decode_base64(b64_part)
+                    .map_err(|_| "Invalid DID: not valid base64")?;
 
-            let expected_len = if subject.is_agent_did() { 32 } else { 64 };
-            if decoded.len() != expected_len {
-                return Err(format!(
+                let expected_len = if subject.is_agent_did() { 32 } else { 64 };
+                if decoded.len() != expected_len {
+                    return Err(format!(
                     "Invalid DID: expected {} bytes, got {}. DID subjects cannot contain a path.",
                     expected_len,
                     decoded.len()
                 )
-                .into());
+                    .into());
+                }
             }
         }
 
@@ -705,6 +841,22 @@ impl Commit {
                     commit.subject, e
                 )
             })?;
+
+        if is_content_addressed_id(commit.subject.as_str()) && !is_destroy {
+            if is_new {
+                verify_content_addressed_genesis(
+                    commit.subject.as_str(),
+                    applied.resource_new.get_propvals(),
+                )?;
+            } else if crate::identifiers::is_lens_id(commit.subject.as_str()) {
+                crate::lens::check_lens_identity_unchanged(
+                    &applied.resource_old,
+                    &applied.resource_new,
+                )?;
+            } else {
+                check_property_identity_unchanged(&applied.resource_old, &applied.resource_new)?;
+            }
+        }
 
         // NOTE: `createdAt` / `createdBy` are server-managed creation metadata
         // (materialized from the genesis oplog change). We do NOT reject commits
@@ -967,7 +1119,16 @@ impl Commit {
         if opts.validate_rights {
             let signer_str = commit.signer.to_string();
             let validate_for = opts.validate_for_agent.as_ref().unwrap_or(&signer_str);
-            if is_new {
+            // A repeat genesis of a Property ID needs append rights on the
+            // parent, like the first one: the earlier minter's write grant
+            // does not extend to another agent.
+            let repeat_property_genesis = !is_new
+                && commit.is_genesis == Some(true)
+                && is_content_addressed_id(commit.subject.as_str());
+            if repeat_property_genesis {
+                crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
+                    .await?;
+            } else if is_new {
                 crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
                     .await?;
 
@@ -1110,6 +1271,13 @@ impl Commit {
         if opts.validate_schema {
             applied.resource_new.check_required_props(store).await?;
         }
+        // Value constraints from the resource's classes, and the shape of a
+        // Class's own `constraints` map. Reconcile writes snapshots straight
+        // to the store and never gets here; peer commits opt out.
+        if opts.validate_schema && opts.validate_constraints {
+            crate::class_constraints::validate_constraints_prop(&applied.resource_new)?;
+            crate::class_constraints::check_resource(store, &applied.resource_new).await?;
+        }
 
         let commit_resource: Resource = commit.into_resource(store).await?;
 
@@ -1125,6 +1293,21 @@ impl Commit {
             .await?;
 
         let destroyed = commit.destroy.unwrap_or(false);
+
+        // Lenses derive values for the properties the doc does not really
+        // hold. Done last: setting `lastCommit` above rebuilds the propvals
+        // from the doc. The index follows the derived values like real ones.
+        if !destroyed {
+            if let Some(lenses) = store.lens_index() {
+                reconcile_lens_atoms(
+                    &lenses,
+                    (!is_new).then_some(&applied.resource_old),
+                    &mut applied.resource_new,
+                    &mut applied.add_atoms,
+                    &mut applied.remove_atoms,
+                );
+            }
+        }
 
         // Export what the doc gained during this apply — the author's ops and
         // the stamp above — for the live fan-out (`CommitResponse::fanout_delta`).
@@ -1696,6 +1879,7 @@ mod test {
     lazy_static::lazy_static! {
         pub static ref OPTS: CommitOpts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: true,
             validate_timestamp: true,
             validate_loro_causality: true,
@@ -2992,6 +3176,7 @@ mod test {
         let subject = "https://localhost/body_merge_guard";
         let opts = CommitOpts {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: true,
             validate_timestamp: false,
             validate_loro_causality: true,
@@ -3079,6 +3264,7 @@ mod test {
         // `previousCommit`, so that check is not the gate under test).
         let opts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: true,
             validate_timestamp: false,
             validate_loro_causality: true,
@@ -3137,6 +3323,128 @@ mod test {
         );
     }
 
+    /// Class `constraints` are enforced on commits, a bad map is refused when
+    /// the Class is written, and a peer-style apply (`validate_constraints`
+    /// off) keeps what another node already accepted.
+    #[tokio::test]
+    async fn class_constraints_are_enforced_on_commits() {
+        let (store, agent) = store_with_known_agent().await;
+        let opts = CommitOpts {
+            validate_schema: true,
+            validate_constraints: true,
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_loro_causality: false,
+            validate_rights: false,
+            validate_for_agent: None,
+            update_index: true,
+            source_id: None,
+        };
+        let class_subject = "https://localhost/constrained_class";
+
+        async fn commit_doc(
+            store: &crate::Store,
+            agent: &crate::agents::Agent,
+            subject: &str,
+            props: &[(&str, Value)],
+            opts: &CommitOpts,
+        ) -> AtomicResult<()> {
+            let doc = crate::loro::AtomicLoroDoc::new();
+            for (prop, value) in props {
+                doc.set_property(prop, value)?;
+            }
+            let mut builder = CommitBuilder::new(subject.into());
+            builder.set_loro_update(doc.export_snapshot());
+            let commit = builder
+                .sign(agent, store, &Resource::new(subject.into()))
+                .await?;
+            store.apply_commit(commit, opts).await.map(|_| ())
+        }
+
+        let class_props = |constraints: serde_json::Value| {
+            vec![
+                (
+                    crate::urls::IS_A,
+                    Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+                ),
+                (crate::urls::SHORTNAME, Value::String("constrained".into())),
+                (crate::urls::DESCRIPTION, Value::String("desc".into())),
+                (crate::urls::CONSTRAINTS, Value::Json(constraints)),
+            ]
+        };
+
+        let bad = commit_doc(
+            &store,
+            &agent,
+            "https://localhost/bad_class",
+            &class_props(serde_json::json!({ crate::urls::NAME: { "minimun": 1 } })),
+            &opts,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(bad.contains("Unknown constraint keyword"), "{bad}");
+
+        commit_doc(
+            &store,
+            &agent,
+            class_subject,
+            &class_props(serde_json::json!({ crate::urls::NAME: { "maxLength": 3 } })),
+            &opts,
+        )
+        .await
+        .unwrap();
+
+        let instance = |name: &str| {
+            vec![
+                (
+                    crate::urls::IS_A,
+                    Value::ResourceArray(vec![class_subject.to_string().into()]),
+                ),
+                (crate::urls::NAME, Value::String(name.into())),
+            ]
+        };
+
+        commit_doc(
+            &store,
+            &agent,
+            "https://localhost/ok_inst",
+            &instance("abc"),
+            &opts,
+        )
+        .await
+        .unwrap();
+
+        let err = commit_doc(
+            &store,
+            &agent,
+            "https://localhost/long_inst",
+            &instance("abcd"),
+            &opts,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.contains("Value for name breaks maxLength on class constrained:"),
+            "{err}"
+        );
+
+        let peer_opts = CommitOpts {
+            validate_constraints: false,
+            ..opts.clone()
+        };
+        commit_doc(
+            &store,
+            &agent,
+            "https://localhost/peer_inst",
+            &instance("abcd"),
+            &peer_opts,
+        )
+        .await
+        .unwrap();
+    }
+
     /// A commit whose Loro delta depends on ops the server never received
     /// must be REJECTED — not silently accepted as an "idempotent replay".
     /// Loro parks such ops as pending (VV doesn't advance, diff is empty),
@@ -3151,6 +3459,7 @@ mod test {
 
         let opts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: true,
             validate_timestamp: false,
             validate_loro_causality: true,
@@ -3924,6 +4233,310 @@ mod test {
             err.contains("does not match the resource's parent"),
             "{err}"
         );
+    }
+    // --- Content-addressed Property IDs (`atomic:prop:{hash}`) ---
+
+    /// Genesis commit for a property whose subject is `id`, with the given fields.
+    async fn property_genesis(
+        store: &Store,
+        signer: &Agent,
+        id: &str,
+        parent: Option<&str>,
+        shortname: Option<&str>,
+        datatype: Option<&str>,
+    ) -> Commit {
+        let mut b = CommitBuilder::new(id.into());
+        b.is_genesis = true;
+        if let Some(parent) = parent {
+            b.set(urls::PARENT.into(), Value::AtomicUrl(parent.into()));
+        }
+        if let Some(shortname) = shortname {
+            b.set(urls::SHORTNAME.into(), Value::Slug(shortname.into()));
+        }
+        if let Some(datatype) = datatype {
+            b.set(
+                urls::DATATYPE_PROP.into(),
+                Value::AtomicUrl(datatype.into()),
+            );
+        }
+        b.set(urls::DESCRIPTION.into(), Value::Markdown("first".into()));
+        b.sign(signer, store, &Resource::new(id.into()))
+            .await
+            .unwrap()
+    }
+
+    /// Non-genesis commit on an existing property.
+    async fn property_edit(
+        store: &Store,
+        signer: &Agent,
+        id: &str,
+        edit: impl FnOnce(&mut CommitBuilder),
+    ) -> Commit {
+        let mut b = CommitBuilder::new(id.into());
+        edit(&mut b);
+        let existing = store.get_resource(&id.into()).await.unwrap();
+        b.sign(signer, store, &existing).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn property_genesis_with_matching_hash_is_created() {
+        let (store, owner) = store_with_known_agent().await;
+        let drive = owned_drive(&store, &owner).await;
+        let id = crate::property_identity::property_id(&drive, "colour", urls::STRING).unwrap();
+        let c = property_genesis(
+            &store,
+            &owner,
+            &id,
+            Some(&drive),
+            Some("colour"),
+            Some(urls::STRING),
+        )
+        .await;
+        store
+            .apply_commit(c, &rights_opts())
+            .await
+            .expect("a property with a correct ID is valid");
+        let prop = store.get_property(&id).await.unwrap();
+        assert_eq!(prop.shortname, "colour");
+        assert_eq!(prop.subject, id);
+        let res = store.get_resource(&id.as_str().into()).await.unwrap();
+        // No cert: creation metadata degrades to the oplog fallback.
+        assert!(res.genesis_signer().is_none());
+        assert!(res.get(urls::GENESIS).is_err());
+    }
+
+    #[tokio::test]
+    async fn property_genesis_with_wrong_hash_is_rejected() {
+        let (store, owner) = store_with_known_agent().await;
+        let drive = owned_drive(&store, &owner).await;
+        let old_id = crate::property_identity::property_id(&drive, "colour", urls::STRING).unwrap();
+        let c = property_genesis(
+            &store,
+            &owner,
+            &old_id,
+            Some(&drive),
+            Some("color"),
+            Some(urls::STRING),
+        )
+        .await;
+        let err = store.apply_commit(c, &rights_opts()).await.unwrap_err();
+        assert!(err.to_string().contains("Property ID mismatch"), "{err}");
+        assert!(store.get_resource(&old_id.as_str().into()).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn property_genesis_needs_parent_shortname_and_datatype() {
+        let (store, owner) = store_with_known_agent().await;
+        let drive = owned_drive(&store, &owner).await;
+        let id = crate::property_identity::property_id(&drive, "colour", urls::STRING).unwrap();
+        for (parent, shortname, datatype, missing) in [
+            (None, Some("colour"), Some(urls::STRING), "parent"),
+            (Some(drive.as_str()), None, Some(urls::STRING), "shortname"),
+            (Some(drive.as_str()), Some("colour"), None, "datatype"),
+        ] {
+            let c = property_genesis(&store, &owner, &id, parent, shortname, datatype).await;
+            let err = store.apply_commit(c, &rights_opts()).await.unwrap_err();
+            assert!(err.to_string().contains(&format!("no {missing}")), "{err}");
+        }
+        assert!(store.get_resource(&id.as_str().into()).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn property_genesis_needs_append_rights_on_parent() {
+        let (store, owner) = store_with_known_agent().await;
+        let drive = owned_drive(&store, &owner).await;
+        let id = crate::property_identity::property_id(&drive, "colour", urls::STRING).unwrap();
+        let stranger = Agent::new(Some("stranger")).unwrap();
+        let c = property_genesis(
+            &store,
+            &stranger,
+            &id,
+            Some(&drive),
+            Some("colour"),
+            Some(urls::STRING),
+        )
+        .await;
+        store
+            .apply_commit(c, &rights_opts())
+            .await
+            .expect_err("a stranger cannot append to the drive");
+        // And a parentless property can never use the parentless-DID shortcut.
+        let parentless =
+            crate::property_identity::property_id("atomic:x", "colour", urls::STRING).unwrap();
+        let c = property_genesis(
+            &store,
+            &owner,
+            &parentless,
+            None,
+            Some("colour"),
+            Some(urls::STRING),
+        )
+        .await;
+        store.apply_commit(c, &rights_opts()).await.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn repeat_property_genesis_merges_with_append_rights_only() {
+        let (store, owner) = store_with_known_agent().await;
+        let appender = Agent::new(Some("appender")).unwrap();
+        let stranger = Agent::new(Some("stranger")).unwrap();
+        let mut b = CommitBuilder::new("placeholder".into());
+        b.set(
+            urls::IS_A.into(),
+            Value::from(vec![urls::DRIVE.to_string()]),
+        );
+        b.set(
+            urls::WRITE.into(),
+            Value::from(vec![owner.subject.to_string()]),
+        );
+        b.set(
+            urls::APPEND.into(),
+            Value::from(vec![appender.subject.to_string()]),
+        );
+        let drive = store
+            .apply_commit(
+                Commit::create_did(b, &owner, &store).await.unwrap(),
+                &rights_opts(),
+            )
+            .await
+            .unwrap()
+            .resource_new
+            .unwrap()
+            .get_subject()
+            .to_string();
+        let id = crate::property_identity::property_id(&drive, "colour", urls::STRING).unwrap();
+        let first = property_genesis(
+            &store,
+            &owner,
+            &id,
+            Some(&drive),
+            Some("colour"),
+            Some(urls::STRING),
+        )
+        .await;
+        store.apply_commit(first, &rights_opts()).await.unwrap();
+
+        let by_stranger = property_genesis(
+            &store,
+            &stranger,
+            &id,
+            Some(&drive),
+            Some("colour"),
+            Some(urls::STRING),
+        )
+        .await;
+        store
+            .apply_commit(by_stranger, &rights_opts())
+            .await
+            .expect_err("a repeat genesis still needs rights");
+
+        let by_appender = property_genesis(
+            &store,
+            &appender,
+            &id,
+            Some(&drive),
+            Some("colour"),
+            Some(urls::STRING),
+        )
+        .await;
+        store
+            .apply_commit(by_appender, &rights_opts())
+            .await
+            .expect("the same property minted by another device merges");
+        assert_eq!(store.get_property(&id).await.unwrap().shortname, "colour");
+    }
+
+    #[tokio::test]
+    async fn property_identity_fields_are_immutable() {
+        let (store, owner) = store_with_known_agent().await;
+        let drive = owned_drive(&store, &owner).await;
+        let other_drive = owned_drive(&store, &owner).await;
+        let id = crate::property_identity::property_id(&drive, "colour", urls::STRING).unwrap();
+        let c = property_genesis(
+            &store,
+            &owner,
+            &id,
+            Some(&drive),
+            Some("colour"),
+            Some(urls::STRING),
+        )
+        .await;
+        store.apply_commit(c, &rights_opts()).await.unwrap();
+
+        let c = property_edit(&store, &owner, &id, |b| {
+            b.set(urls::SHORTNAME.into(), Value::Slug("color".into()))
+        })
+        .await;
+        let err = store.apply_commit(c, &rights_opts()).await.unwrap_err();
+        assert!(err.to_string().contains("shortname"), "{err}");
+        assert!(err.to_string().contains("identity cannot change"), "{err}");
+
+        let c = property_edit(&store, &owner, &id, |b| {
+            b.set(
+                urls::DATATYPE_PROP.into(),
+                Value::AtomicUrl(urls::INTEGER.into()),
+            )
+        })
+        .await;
+        let err = store.apply_commit(c, &rights_opts()).await.unwrap_err();
+        assert!(err.to_string().contains("datatype"), "{err}");
+
+        let c = property_edit(&store, &owner, &id, |b| {
+            b.set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(other_drive.as_str().into()),
+            )
+        })
+        .await;
+        let err = store.apply_commit(c, &rights_opts()).await.unwrap_err();
+        assert!(err.to_string().contains("parent"), "{err}");
+
+        let c = property_edit(&store, &owner, &id, |b| b.remove(urls::SHORTNAME.into())).await;
+        store.apply_commit(c, &rights_opts()).await.unwrap_err();
+
+        let c = property_edit(&store, &owner, &id, |b| {
+            b.set(urls::DESCRIPTION.into(), Value::Markdown("changed".into()))
+        })
+        .await;
+        store
+            .apply_commit(c, &rights_opts())
+            .await
+            .expect("a description is not part of the identity");
+        let prop = store.get_property(&id).await.unwrap();
+        assert_eq!(prop.shortname, "colour");
+        assert_eq!(prop.description, "changed");
+    }
+
+    #[tokio::test]
+    async fn resource_stores_value_under_property_id_key() {
+        let (store, owner) = store_with_known_agent().await;
+        let drive = owned_drive(&store, &owner).await;
+        let id = crate::property_identity::property_id(&drive, "colour", urls::STRING).unwrap();
+        let c = property_genesis(
+            &store,
+            &owner,
+            &id,
+            Some(&drive),
+            Some("colour"),
+            Some(urls::STRING),
+        )
+        .await;
+        store.apply_commit(c, &rights_opts()).await.unwrap();
+
+        let mut b = CommitBuilder::new("placeholder".into());
+        b.set(urls::PARENT.into(), Value::AtomicUrl(drive.as_str().into()));
+        b.set(id.clone(), Value::String("red".into()));
+        let c = Commit::create_did(b, &owner, &store).await.unwrap();
+        let subject = c.subject.clone();
+        store.apply_commit(c, &rights_opts()).await.unwrap();
+
+        let res = store.get_resource(&subject).await.unwrap();
+        assert_eq!(res.get(&id).unwrap().to_string(), "red");
+        let found = res
+            .resolve_shortname_to_property(&id, &store)
+            .await
+            .unwrap();
+        assert_eq!(found.shortname, "colour");
     }
 }
 

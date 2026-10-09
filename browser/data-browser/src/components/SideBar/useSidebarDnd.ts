@@ -11,6 +11,8 @@ import {
 } from '@dnd-kit/core';
 import { core, dataBrowser, useStore } from '@tomic/react';
 import { useCallback, useState } from 'react';
+import toast from 'react-hot-toast';
+import { isContentAddressed } from '../../helpers/propertyIdentity';
 import {
   SIDEBAR_TRANSITION_TAG,
   getTransitionName,
@@ -156,6 +158,16 @@ export const useSidebarDnd = (
 
     // The user should not be able to nest a folder inside itself.
     if (subject === dropParent) {
+      onIsRearangingChange(false);
+      setDraggingResource(undefined);
+      setWaitForSavePromise(Promise.resolve());
+
+      return;
+    }
+
+    // A content-addressed property's parent is part of its ID: it cannot move.
+    if (renderedUnder !== dropParent && isContentAddressed(subject)) {
+      toast.error("A property can't be moved to another parent.");
       onIsRearangingChange(false);
       setDraggingResource(undefined);
       setWaitForSavePromise(Promise.resolve());

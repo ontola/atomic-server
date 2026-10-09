@@ -7,6 +7,12 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Schemas (#2151): properties get content-addressed subjects, `atomic:prop:{blake3}` of their ontology, shortname and datatype (`docs/src/schema/property-identity.md`). The server verifies the hash on genesis, accepts the same property from two devices, and refuses changes to its `parent`, `shortname` or `datatype`. Existing properties keep their subjects and stay editable.
+- Class constraints (#2151): a Class's `constraints` map holds JSON Schema keywords per property (`enum`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, `pattern`, `class`), enforced on commit; peer commits and sync skip it. An empty `allowsOnly` on a Property now restricts nothing.
+- Lenses (#2151): `atomic:lens:` resources map one property onto another (`rename`, `wrap`, `head`, `map`, `convert`); the derived values appear in reads and indexes without changing signed data (`docs/src/schema/lenses.md`).
+- `atomic-cli schema push | lock | check`: turn a JSON Schema or ontology file into an ontology and a lockfile that pins its property IDs (#2151). `atomic_lib::schema::json_schema` imports JSON Schema and `ensure_ontology` creates the result.
+- Forms: field options use JSON Schema keyword names (`minItems`, `maxItems`, `minimum`, `maximum`; the old names are still read) and may only tighten the column's class constraints; `describe_form` returns the form's JSON Schema (#2151).
+
 - `--served-domain-suffix` / `ATOMIC_SERVED_DOMAIN_SUFFIX` takes a comma-separated list (`atomicserver.eu,atomic.place`), so a node can answer under two domains while it moves from one to the other.
 
 - MCP endpoint: `POST /mcp` (Streamable HTTP) is the one implementation of the

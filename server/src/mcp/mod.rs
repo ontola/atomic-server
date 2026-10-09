@@ -20,6 +20,7 @@ pub mod compact;
 pub mod document_text;
 pub mod endpoint;
 pub mod oauth;
+pub mod schema;
 pub mod tokens;
 pub mod tools;
 pub mod write;

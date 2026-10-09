@@ -14,6 +14,7 @@ mod connect;
 mod get;
 mod new;
 mod print;
+mod schema;
 mod search;
 
 #[derive(Parser)]
@@ -113,6 +114,19 @@ enum Commands {
         #[arg(long, value_enum, default_value = "pretty")]
         as_: SerializeOptions,
     },
+    /// Make a schema file a real ontology, and pin its property IDs in a lockfile
+    #[command(after_help = "\
+        Reads a JSON Schema or an ontology JSON ({ shortname, classes }). \n\n\
+        Examples: \n\n\
+        $ atomic-cli schema push shop.schema.json --parent <drive subject>\n\
+        $ atomic-cli schema lock shop.schema.json --ontology <ontology subject>\n\
+        $ atomic-cli schema check shop.schema.json \n\n\
+        The lockfile is written next to the schema file as <file>.lock.json. \
+    ")]
+    Schema {
+        #[command(subcommand)]
+        command: SchemaCommands,
+    },
     /// List all bookmarks
     List,
     /// Validates the store
@@ -140,6 +154,56 @@ enum Commands {
         /// Ask for edit rights too. You still decide in the app.
         #[arg(long)]
         write: bool,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+enum SchemaCommands {
+    /// Create or update the ontology on the configured server, and write the lockfile
+    Push {
+        /// A JSON Schema or an ontology JSON file
+        #[arg(required = true)]
+        file: PathBuf,
+        /// Subject of the resource (usually a drive) that holds the ontology.
+        /// Defaults to the initial drive in the config.
+        #[arg(long)]
+        parent: Option<String>,
+        /// The ontology's shortname. Defaults to the one in the file.
+        #[arg(long)]
+        shortname: Option<String>,
+        /// Lockfile path. Defaults to <file>.lock.json
+        #[arg(long)]
+        lockfile: Option<PathBuf>,
+        /// Push even if the lockfile no longer matches the schema (new properties are made)
+        #[arg(long)]
+        accept_changes: bool,
+    },
+    /// Offline: write the lockfile for an ontology whose subject you already know
+    Lock {
+        /// A JSON Schema or an ontology JSON file
+        #[arg(required = true)]
+        file: PathBuf,
+        /// Subject of the Ontology resource
+        #[arg(long, required = true)]
+        ontology: String,
+        /// The ontology's shortname. Defaults to the one in the file.
+        #[arg(long)]
+        shortname: Option<String>,
+        /// Lockfile path. Defaults to <file>.lock.json
+        #[arg(long)]
+        lockfile: Option<PathBuf>,
+    },
+    /// Offline: fail if the lockfile no longer matches the schema
+    Check {
+        /// A JSON Schema or an ontology JSON file
+        #[arg(required = true)]
+        file: PathBuf,
+        /// The ontology's shortname. Defaults to the one in the file.
+        #[arg(long)]
+        shortname: Option<String>,
+        /// Lockfile path. Defaults to <file>.lock.json
+        #[arg(long)]
+        lockfile: Option<PathBuf>,
     },
 }
 
@@ -303,6 +367,34 @@ async fn exec_command(context: &mut Context) -> AtomicResult<()> {
         } => {
             commit::set(context, &subject, &property, &value).await?;
         }
+        Commands::Schema { command } => match command {
+            SchemaCommands::Push {
+                file,
+                parent,
+                shortname,
+                lockfile,
+                accept_changes,
+            } => {
+                schema::push(context, &file, parent, shortname, lockfile, accept_changes).await?;
+            }
+            SchemaCommands::Lock {
+                file,
+                ontology,
+                shortname,
+                lockfile,
+            } => {
+                let path = schema::lock(&file, &ontology, shortname, lockfile)?;
+                println!("Lockfile written to {}", path.display());
+            }
+            SchemaCommands::Check {
+                file,
+                shortname,
+                lockfile,
+            } => {
+                schema::check(&file, shortname, lockfile)?;
+                println!("{}", "Lockfile matches the schema".green());
+            }
+        },
         Commands::Search {
             query,
             parent,

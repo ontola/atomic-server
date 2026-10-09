@@ -88,9 +88,19 @@ import {
   isAgentSubject,
   isAtomicIdentifier,
   isBlobSubject,
+  isLensSubject,
+  isPropertySubject,
   commitSubject,
   blobSubject,
 } from './subject.js';
+import { propertyId } from './property-identity.js';
+import {
+  LensIndex,
+  lensId,
+  parseTransform,
+  readTransformValue,
+  verifyLensId,
+} from './lens.js';
 import {
   encodeGenesisCert,
   GENESIS_VERSION_V1,
@@ -191,6 +201,25 @@ type CreateResourceOptions = {
   genesisCert?: GenesisCert;
   /** Seed a body or other state before the first save signs its genesis. */
   deferGenesis?: boolean;
+  /**
+   * Create a Property under its content-addressed ID, `atomic:prop:{blake3}`,
+   * derived from `parent`, `propVals[shortname]` and `propVals[datatype]`
+   * (see docs/src/schema/property-identity.md). No genesis cert is minted; the
+   * resource is still signed as a genesis commit. Returns the existing Property
+   * when the store already has it.
+   *
+   * This is an explicit opt-in rather than inferred from `isA`: the ID is
+   * immutable and the three inputs must be known up front, so a caller that
+   * builds a Property draft in steps must not silently get a hashed subject.
+   */
+  contentAddressedProperty?: boolean;
+  /**
+   * Create a Lens under its content-addressed ID, `atomic:lens:{blake3}`,
+   * derived from `propVals[lensFrom]`, `propVals[lensTo]` and
+   * `propVals[lensTransform]` (see docs/src/schema/lenses.md). Returns the
+   * existing Lens when the store already has it.
+   */
+  contentAddressedLens?: boolean;
 };
 
 export interface StoreOpts {
@@ -3039,6 +3068,8 @@ export class Store {
     did,
     genesisCert,
     deferGenesis,
+    contentAddressedProperty,
+    contentAddressedLens,
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
     const agentSubject = this.getAgent()?.subject;
     const shouldUseDid =
@@ -3070,7 +3101,53 @@ export class Store {
     let newSubject: string;
     let genesisCertB64: string | undefined;
 
-    if (genesisCert) {
+    if (contentAddressedProperty) {
+      const shortname = propVals?.[core.properties.shortname];
+      const datatype = propVals?.[core.properties.datatype];
+
+      if (
+        noParent ||
+        !parent ||
+        typeof shortname !== 'string' ||
+        typeof datatype !== 'string'
+      ) {
+        throw new Error(
+          'contentAddressedProperty needs parent, shortname and datatype',
+        );
+      }
+
+      newSubject = propertyId(normalizedParent, shortname, datatype);
+
+      // Two devices can mint the same Property. Reuse it instead of failing.
+      const existing = this.resources.get(newSubject);
+
+      if (existing && !existing.new) {
+        return existing as Resource<C>;
+      }
+    } else if (contentAddressedLens) {
+      const from = propVals?.[core.properties.lensFrom];
+      const to = propVals?.[core.properties.lensTo];
+
+      if (
+        noParent ||
+        !parent ||
+        typeof from !== 'string' ||
+        typeof to !== 'string'
+      ) {
+        throw new Error(
+          'contentAddressedLens needs parent, lensFrom, lensTo and lensTransform',
+        );
+      }
+
+      newSubject = lensId(from, to, propVals?.[core.properties.lensTransform]);
+
+      // Two devices can mint the same Lens. Reuse it instead of failing.
+      const existing = this.resources.get(newSubject);
+
+      if (existing && !existing.new) {
+        return existing as Resource<C>;
+      }
+    } else if (genesisCert) {
       const minted = await this.mintFromCert(genesisCert);
       newSubject = subject ?? minted.did;
       genesisCertB64 = minted.certB64;
@@ -3127,7 +3204,13 @@ export class Store {
     // only `save()` does (it moves the stash into the outbox). So a
     // created-but-never-saved resource (e.g. an unfilled `TableNewRow`) is never
     // POSTed. This is the only remaining `signChanges` call site.
-    if (!deferGenesis && ((shouldUseDid && !subject) || genesisCert)) {
+    if (
+      !deferGenesis &&
+      ((shouldUseDid && !subject) ||
+        genesisCert ||
+        contentAddressedProperty ||
+        contentAddressedLens)
+    ) {
       const genesisCommit = await resource.signChanges(this.getAgent()!);
       resource.stashGenesis(genesisCommit);
     }
@@ -5758,6 +5841,14 @@ export class Store {
     // the subject as destroyed and drops it from the answer.
     this.markDestroyed(resolved);
 
+    if (isLensSubject(resolved)) {
+      const lens = this.lenses.get(resolved);
+
+      this.lenses.remove(resolved);
+
+      if (lens) this.rematerializeLensed(lens.from, lens.to);
+    }
+
     // Tombstone in ClientDb (OPFS) so the resource doesn't reappear after a
     // page reload. The in-memory `resources` map is wiped on reload, but the
     // WASM DB persists; without this, cascade-deleted children survive
@@ -7681,6 +7772,86 @@ export class Store {
     }
   }
 
+  /**
+   * The lenses this store knows, by the properties they touch. Resources
+   * derive values through them when their Loro doc is materialized (see
+   * `lens.ts`). Filled as Lens resources load; `loadLenses` brings in a
+   * drive's lenses.
+   */
+  public readonly lenses = new LensIndex();
+
+  /**
+   * Make a loaded Lens active and re-materialize the loaded resources that
+   * hold one of its properties.
+   *
+   * It applies only when its ID matches its content and its `parent` is the
+   * parent of the property it writes (`lensTo`): a lens never applies across an
+   * ontology it does not own. Anything wrong just means the lens is not
+   * applied; it never fails a load.
+   */
+  public async activateLens(resource: Resource): Promise<void> {
+    try {
+      const from = resource.get(core.properties.lensFrom);
+      const to = resource.get(core.properties.lensTo);
+      const parent = resource.get(core.properties.parent);
+      const transform = readTransformValue(
+        resource.get(core.properties.lensTransform),
+      );
+
+      if (
+        typeof from !== 'string' ||
+        typeof to !== 'string' ||
+        typeof parent !== 'string' ||
+        !verifyLensId(resource.subject, from, to, transform)
+      ) {
+        return;
+      }
+
+      const canonical = canonicalizeScheme(resource.subject);
+      const existing = this.lenses.get(canonical);
+
+      if (existing) return;
+
+      // `lensTo` must be known to read its parent. Only content-addressed
+      // properties are fetched: a lens must not make the store fetch any URL.
+      const target = isPropertySubject(to)
+        ? await this.getResource(to)
+        : this.resources.get(canonicalizeScheme(to));
+      const targetParent = target?.get(core.properties.parent);
+
+      if (
+        typeof targetParent !== 'string' ||
+        canonicalizeScheme(targetParent) !== canonicalizeScheme(parent)
+      ) {
+        return;
+      }
+
+      this.lenses.insert({
+        id: canonical,
+        from: canonicalizeScheme(from),
+        to: canonicalizeScheme(to),
+        transform: parseTransform(transform),
+        parent: canonicalizeScheme(parent),
+      });
+
+      this.rematerializeLensed(
+        canonicalizeScheme(from),
+        canonicalizeScheme(to),
+      );
+    } catch {
+      // An inactive lens derives nothing; reading is unaffected.
+    }
+  }
+
+  /** Re-derive the loaded resources that hold one of these properties. */
+  private rematerializeLensed(...props: string[]): void {
+    for (const resource of this.resources.values()) {
+      if (resource.refreshDerivedValues(props)) {
+        void this.notify(resource);
+      }
+    }
+  }
+
   /** Lets subscribers know that a resource has been changed. */
   private async notify(resource: Resource): Promise<void> {
     // A React snapshot read may initialize a missing resource. Other mounted
@@ -7697,6 +7868,10 @@ export class Store {
     // all `Object.is` needs.
     const key = this.normalizeSubject(resource.subject);
     this.snapshots.set(key, captureResourceSnapshot(resource));
+
+    if (isLensSubject(key)) {
+      void this.activateLens(resource);
+    }
 
     this.eventManager.emit(StoreEvents.ResourceUpdated, resource);
 

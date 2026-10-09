@@ -18,6 +18,7 @@ pub const FOLDER: &str = "https://atomicdata.dev/classes/Folder";
 pub const PARAGRAPH: &str = "https://atomicdata.dev/classes/elements/Paragraph";
 pub const MESSAGE: &str = "https://atomicdata.dev/classes/Message";
 pub const IMPORTER: &str = "https://atomicdata.dev/classes/Importer";
+pub const LENS: &str = "https://atomicdata.dev/classes/Lens";
 pub const ERROR: &str = "https://atomicdata.dev/classes/Error";
 pub const BOOKMARK: &str = "https://atomicdata.dev/class/Bookmark";
 pub const DOCUMENT_V2: &str = "https://atomicdata.dev/classes/DocumentV2";
@@ -72,6 +73,11 @@ pub const ALLOWS_ONLY: &str = "https://atomicdata.dev/properties/allowsOnly";
 pub const COLOR: &str = "https://atomicdata.dev/properties/color";
 // ... for Classes
 pub const REQUIRES: &str = "https://atomicdata.dev/properties/requires";
+pub const CONSTRAINTS: &str = "https://atomicdata.dev/properties/constraints";
+// ... for Lenses
+pub const LENS_FROM: &str = "https://atomicdata.dev/properties/lensFrom";
+pub const LENS_TO: &str = "https://atomicdata.dev/properties/lensTo";
+pub const LENS_TRANSFORM: &str = "https://atomicdata.dev/properties/lensTransform";
 pub const RECOMMENDS: &str = "https://atomicdata.dev/properties/recommends";
 // ... for Drives
 pub const DEFAULT_ONTOLOGY: &str =
