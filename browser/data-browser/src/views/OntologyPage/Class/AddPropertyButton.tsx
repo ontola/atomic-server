@@ -13,7 +13,9 @@ interface AddPropertyButtonProps {
   type: 'required' | 'recommended';
 }
 
-const BUTTON_WIDTH = 'calc(100% - 5.6rem + 4px)'; //Width is 100% - (2 * 1.8rem for button width) + (2rem for gaps) + (4px for borders)
+export const BUTTON_WIDTH = 'calc(100% - 5.6rem + 4px)'; //Width is 100% - (2 * 1.8rem for button width) + (2rem for gaps) + (4px for borders)
+/** Below this the property row wraps, so there is no icon column to leave room for. */
+export const NARROW_BREAKPOINT = '40rem';
 
 export function AddPropertyButton({
   creator,
@@ -89,6 +91,9 @@ export function AddPropertyButton({
 
 const SearchBoxWrapper = styled.div`
   width: ${BUTTON_WIDTH};
+  @media (max-width: ${NARROW_BREAKPOINT}) {
+    width: 100%;
+  }
 `;
 
 const AddButton = styled.button`
@@ -97,6 +102,9 @@ const AddButton = styled.button`
   height: 2.5rem;
 
   width: ${BUTTON_WIDTH};
+  @media (max-width: ${NARROW_BREAKPOINT}) {
+    width: 100%;
+  }
   border-radius: ${p => p.theme.radius};
   display: flex;
   align-items: center;

@@ -13,10 +13,12 @@ import {
 import { useCallback, useState, type JSX } from 'react';
 import toast from 'react-hot-toast';
 import { Column, Row } from '../../../components/Row';
-import { Details } from '../../../components/Details';
+import { styled } from 'styled-components';
+import { FaCaretRight } from 'react-icons/fa6';
 import { Button } from '../../../components/Button';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { ResourceInline } from '../../ResourceInline';
+import { BUTTON_WIDTH, NARROW_BREAKPOINT } from './AddPropertyButton';
 import { FaPlus, FaXmark } from 'react-icons/fa6';
 import { ErrorChip } from '../../../components/forms/ErrorChip';
 import {
@@ -71,7 +73,21 @@ export function ClassConstraintEditor({
   }
 
   return (
-    <Details title={<LabelText>Constraints</LabelText>} onStateToggle={setOpen}>
+    <Wrapper>
+      <Toggle
+        type='button'
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+      >
+        <Caret $open={open} />
+        <span>Constraints</span>
+        {!open && (
+          <ConstraintSummary
+            classResource={classResource}
+            propertySubject={propertySubject}
+          />
+        )}
+      </Toggle>
       {/* Only mounted while open: every property line has one of these. */}
       {open && (
         <ConstraintFields
@@ -81,9 +97,122 @@ export function ClassConstraintEditor({
           title={property.title}
         />
       )}
-    </Details>
+    </Wrapper>
   );
 }
+
+const Wrapper = styled.div`
+  margin-top: 0.15rem;
+`;
+
+const Toggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  padding: 0.1rem 0.25rem 0.1rem 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.85em;
+  color: ${p => p.theme.colors.textLight};
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: ${p => p.theme.colors.main};
+  }
+`;
+
+const Caret = styled(FaCaretRight)<{ $open: boolean }>`
+  flex-shrink: 0;
+  transition: transform ${p => p.theme.animation.duration} ease-in-out;
+  transform: rotate(${p => (p.$open ? '90deg' : '0deg')});
+`;
+
+const Summary = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+  &::before {
+    content: '· ';
+  }
+`;
+
+/** What is set, in a few words, so a collapsed section still says something. */
+function ConstraintSummary({
+  classResource,
+  propertySubject,
+}: ClassConstraintEditorProps): JSX.Element | null {
+  const c = useEffectiveConstraint([classResource.subject], propertySubject);
+  const parts: JSX.Element[] = [];
+
+  if (c.minimum !== undefined) parts.push(<>min {c.minimum}</>);
+
+  if (c.maximum !== undefined) parts.push(<>max {c.maximum}</>);
+
+  if (c.minLength !== undefined) parts.push(<>min {c.minLength} chars</>);
+
+  if (c.maxLength !== undefined) parts.push(<>max {c.maxLength} chars</>);
+
+  if (c.minItems !== undefined) parts.push(<>min {c.minItems} items</>);
+
+  if (c.maxItems !== undefined) parts.push(<>max {c.maxItems} items</>);
+
+  if (c.pattern) parts.push(<>pattern</>);
+
+  if (c.class) parts.push(<>linked class</>);
+
+  if (optionSubjects(c).length > 0) parts.push(<>options</>);
+
+  if (parts.length === 0) return null;
+
+  return (
+    <Summary>
+      {parts.map((part, i) => (
+        <span key={i}>
+          {i > 0 && ', '}
+          {part}
+        </span>
+      ))}
+    </Summary>
+  );
+}
+
+/** Inputs on one grid: pairs share the row 50/50, wide fields span both. */
+const Grid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  padding: 0.4rem 0 0.25rem;
+  /* Same right edge as the add-property row below. */
+  width: ${BUTTON_WIDTH};
+  @media (max-width: ${NARROW_BREAKPOINT}) {
+    width: 100%;
+  }
+
+  & > .span-all {
+    grid-column: 1 / -1;
+  }
+`;
+
+const FieldError = styled(ErrorChip).attrs({ noMovement: true })`
+  top: 0;
+  margin-top: 0.4rem;
+  display: block;
+`;
+
+const FieldLabel = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  font-size: 0.85em;
+  font-weight: normal;
+  color: ${p => p.theme.colors.textLight};
+`;
 
 function ConstraintFields({
   classResource,
@@ -106,7 +235,7 @@ function ConstraintFields({
   const isArray = datatype === Datatype.RESOURCEARRAY;
 
   return (
-    <Column data-testid={`constraints-${title}`}>
+    <Grid data-testid={`constraints-${title}`}>
       {isLink && (
         <LinkConstraints
           classResource={classResource}
@@ -116,7 +245,7 @@ function ConstraintFields({
         />
       )}
       {isNumber && (
-        <Row wrapItems>
+        <>
           <NumberField
             label='Minimum'
             keyword='minimum'
@@ -133,30 +262,28 @@ function ConstraintFields({
             value={constraint.maximum}
             disabled={!canWrite}
           />
-        </Row>
+        </>
       )}
       {isText && (
         <>
-          <Row wrapItems>
-            <NumberField
-              label='Min length'
-              keyword='minLength'
-              count
-              classResource={classResource}
-              propertySubject={propertySubject}
-              value={constraint.minLength}
-              disabled={!canWrite}
-            />
-            <NumberField
-              label='Max length'
-              keyword='maxLength'
-              count
-              classResource={classResource}
-              propertySubject={propertySubject}
-              value={constraint.maxLength}
-              disabled={!canWrite}
-            />
-          </Row>
+          <NumberField
+            label='Min length'
+            keyword='minLength'
+            count
+            classResource={classResource}
+            propertySubject={propertySubject}
+            value={constraint.minLength}
+            disabled={!canWrite}
+          />
+          <NumberField
+            label='Max length'
+            keyword='maxLength'
+            count
+            classResource={classResource}
+            propertySubject={propertySubject}
+            value={constraint.maxLength}
+            disabled={!canWrite}
+          />
           <PatternField
             classResource={classResource}
             propertySubject={propertySubject}
@@ -166,7 +293,7 @@ function ConstraintFields({
         </>
       )}
       {isArray && (
-        <Row wrapItems>
+        <>
           <NumberField
             label='Min items'
             keyword='minItems'
@@ -185,9 +312,9 @@ function ConstraintFields({
             value={constraint.maxItems}
             disabled={!canWrite}
           />
-        </Row>
+        </>
       )}
-    </Column>
+    </Grid>
   );
 }
 
@@ -268,8 +395,8 @@ function NumberField({
   };
 
   return (
-    <Column gap='0.25rem' as='label'>
-      <LabelText>{label}</LabelText>
+    <FieldLabel>
+      <span>{label}</span>
       <InputWrapper $invalid={!!error}>
         <InputStyled
           type='number'
@@ -280,8 +407,8 @@ function NumberField({
           onBlur={commit}
         />
       </InputWrapper>
-      {error && <ErrorChip>{error}</ErrorChip>}
-    </Column>
+      {error && <FieldError>{error}</FieldError>}
+    </FieldLabel>
   );
 }
 
@@ -303,8 +430,8 @@ function PatternField({
   };
 
   return (
-    <Column gap='0.25rem' as='label'>
-      <LabelText>Pattern (regular expression)</LabelText>
+    <FieldLabel className='span-all'>
+      <span>Pattern (regular expression)</span>
       <InputWrapper $invalid={!!error}>
         <InputStyled
           aria-label='Pattern'
@@ -314,8 +441,8 @@ function PatternField({
           onBlur={commit}
         />
       </InputWrapper>
-      {error && <ErrorChip>{error}</ErrorChip>}
-    </Column>
+      {error && <FieldError>{error}</FieldError>}
+    </FieldLabel>
   );
 }
 
@@ -335,7 +462,7 @@ function LinkConstraints({
   );
 
   return (
-    <>
+    <LinkWrapper className='span-all'>
       <LinkedClassField
         classResource={classResource}
         propertySubject={propertySubject}
@@ -359,9 +486,13 @@ function LinkConstraints({
           disabled={disabled}
         />
       )}
-    </>
+    </LinkWrapper>
   );
 }
+
+const LinkWrapper = styled(Column)`
+  min-width: 0;
+`;
 
 /**
  * Picks the class a link points at, as the `class` constraint of one class for

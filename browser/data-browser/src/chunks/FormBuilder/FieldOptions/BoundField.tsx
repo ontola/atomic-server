@@ -1,3 +1,4 @@
+import { styled } from 'styled-components';
 import { useState, type JSX } from 'react';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import Field from '@components/forms/Field';
@@ -83,13 +84,23 @@ export function BoundField({
         />
       </InputWrapper>
       {held === 'max' && (
-        <ErrorChip>Cannot exceed the table column limit ({max}).</ErrorChip>
+        <BoundError>Cannot exceed the table column limit ({max}).</BoundError>
       )}
       {held === 'floor' && (
-        <ErrorChip>
+        <BoundError>
           Cannot go below the table column minimum ({floor}).
-        </ErrorChip>
+        </BoundError>
       )}
     </Field>
   );
 }
+
+/** In normal flow under the input, so it wraps inside the column instead of
+ * overflowing it and pushing the paired field out of line. */
+const BoundError = styled(ErrorChip).attrs({ noMovement: true })`
+  top: 0;
+  display: block;
+  margin-top: 0.6rem;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+`;

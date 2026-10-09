@@ -12659,3 +12659,45 @@ msgstr ""
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "Summaries are made by a server, and this workspace has none. Host it on a Cloud Server to collect answers and see them summarized here."
 msgstr ""
+
+#. 0: c.minimum
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "min {0}"
+msgstr ""
+
+#. 0: c.maximum
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "max {0}"
+msgstr ""
+
+#. 0: c.minLength
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "min {0} chars"
+msgstr ""
+
+#. 0: c.maxLength
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "max {0} chars"
+msgstr ""
+
+#. 0: c.minItems
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "min {0} items"
+msgstr ""
+
+#. 0: c.maxItems
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "max {0} items"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "pattern"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "linked class"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "options"
+msgstr ""
