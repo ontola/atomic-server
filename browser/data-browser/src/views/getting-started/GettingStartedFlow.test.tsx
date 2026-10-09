@@ -43,6 +43,7 @@ const state = vi.hoisted(() => ({
   },
   restoreVault: vi.fn(),
   identityProps: undefined as Record<string, unknown> | undefined,
+  info: null as { oidcProviderName?: string } | null,
 }));
 vi.mock('@tomic/react', async original => ({
   ...(await original<typeof import('@tomic/react')>()),
@@ -80,7 +81,7 @@ vi.mock('../../helpers/managed/session', () => ({
     account.address ?? account.email,
 }));
 vi.mock('../../helpers/managedServer', () => ({
-  fetchManagedInfo: async () => null,
+  fetchManagedInfo: async () => state.info,
   isHostedDistribution: () => state.hosted,
   accountCreationTarget: () =>
     state.portal ? { kind: 'portal', url: state.portal } : { kind: 'local' },
@@ -185,6 +186,7 @@ beforeEach(() => {
   state.recovery.mockResolvedValue(null);
   state.account = null;
   state.hasData = true;
+  state.info = null;
   state.restoreVault.mockResolvedValue({
     status: 'no-backup',
     reason: 'no backup',
@@ -217,6 +219,35 @@ it('keeps a self-hosted welcome usable', async () => {
   await show();
   expect(screen.getByRole('button', { name: 'Create account' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+});
+
+it('offers no OIDC sign-in unless the server advertises a provider', async () => {
+  state.portal = '';
+  await show();
+  expect(screen.queryByText(/Sign in with/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+});
+
+it('offers "Sign in with <provider>" when the server advertises one', async () => {
+  state.portal = '';
+  state.info = { oidcProviderName: 'Company SSO' };
+  await show();
+  const button = await screen.findByRole('button', {
+    name: 'Sign in with Company SSO',
+  });
+  expect(button).toBeTruthy();
+  // The ordinary choices are untouched.
+  expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Create account' })).toBeTruthy();
+});
+
+it('continues a secret recovered through OIDC like a pasted one', async () => {
+  state.portal = '';
+  const { setOidcHandoff } = await import('../../helpers/oidc/handoff');
+  setOidcHandoff('recovered-secret');
+  await show();
+  expect(Agent.fromSecret).toHaveBeenCalledWith('recovered-secret');
+  expect(state.setAgent).toHaveBeenCalled();
 });
 
 it('opens settings requests directly at unlock', async () => {

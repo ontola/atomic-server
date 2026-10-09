@@ -138,6 +138,10 @@ pub const SERVER_PORTAL_URL: &str = "https://atomicdata.dev/properties/server/po
 /// The Drive this server serves as its front page, if configured
 /// (`ATOMIC_HOME_DRIVE`). Absent when `/` should fall back to the sign-in flow.
 pub const SERVER_HOME_DRIVE: &str = "https://atomicdata.dev/properties/server/homeDrive";
+/// Display name of the OIDC provider the operator configured
+/// (`ATOMIC_OIDC_NAME`). Absent when OIDC sign-in is off.
+pub const SERVER_OIDC_PROVIDER_NAME: &str =
+    "https://atomicdata.dev/properties/server/oidcProviderName";
 /// The devices this node syncs with directly — nested [PEER] resources.
 pub const SERVER_PEERS: &str = "https://atomicdata.dev/properties/server/peers";
 /// `open` or `owner` — who may create a new Drive here. Absent on a node older

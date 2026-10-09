@@ -45,6 +45,10 @@ pub struct ServerInfo {
     /// whether offering "create account" would be offering something that
     /// works.
     pub host_mode: crate::host_mode::HostModeConfig,
+    /// Display name of the configured OIDC provider; `None` when OIDC is off.
+    /// A name only: the sign-in routes are fixed (`/oidc/start`), and nothing
+    /// secret or configurable-by-URL is advertised.
+    pub oidc_provider_name: Option<String>,
 }
 
 pub fn server_info_endpoint(info: ServerInfo) -> Endpoint {
@@ -238,6 +242,10 @@ fn handle_get(
 
         if let Some(portal_url) = portal_url {
             resource.set_unsafe(urls::SERVER_PORTAL_URL.into(), Value::String(portal_url))?;
+        }
+
+        if let Some(name) = info.oidc_provider_name.clone() {
+            resource.set_unsafe(urls::SERVER_OIDC_PROVIDER_NAME.into(), Value::String(name))?;
         }
 
         if let Some(home_drive) = info.home_drive.clone() {

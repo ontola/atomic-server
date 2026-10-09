@@ -45,6 +45,8 @@ pub struct AppState {
     /// `crate::rate_limit`. Sized from `--write-rate-limit` and
     /// `--anonymous-write-rate-limit`.
     pub write_rate_limiter: Arc<crate::rate_limit::WriteRateLimiter>,
+    /// Optional OIDC sign-in (`--oidc-issuer`). `None` unless configured.
+    pub oidc: Option<Arc<crate::oidc::Oidc>>,
 }
 
 impl AppState {
@@ -116,6 +118,14 @@ impl AppState {
         ))?;
         store.add_class_extender(plugins::form::build_form_extender())?;
 
+        let oidc = match crate::oidc::OidcSettings::from_opts(&config.opts, &config.get_origin())? {
+            Some(settings) => {
+                tracing::info!("OIDC sign-in enabled for issuer {}", settings.issuer);
+                Some(Arc::new(crate::oidc::Oidc::new(settings)?))
+            }
+            None => None,
+        };
+
         // Owned here rather than in the AppState literal below, because the
         // `/server` endpoint closes over them to report this node's status.
         let server_info = plugins::server_info::ServerInfo {
@@ -129,6 +139,7 @@ impl AppState {
                 .filter(|d| !d.is_empty())
                 .map(str::to_string),
             host_mode: config.host_mode.clone(),
+            oidc_provider_name: oidc.as_ref().map(|o| o.settings.name.clone()),
         };
 
         // Register all built-in endpoints
@@ -271,6 +282,7 @@ impl AppState {
         let captcha = Arc::new(crate::captcha::AltchaVerifier::from_store(&store));
 
         Ok(AppState {
+            oidc,
             store,
             config,
             write_rate_limiter,

@@ -27,6 +27,7 @@ import { OnboardingRoute } from './OnboardingRoute';
 import { WelcomeRoute } from './WelcomeRoute';
 import { NewDriveRoute } from './NewDriveRoute';
 import { SignOutRoute } from './SignOutRoute';
+import { OidcRoute } from './OidcRoute';
 
 const DevDriveRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -73,6 +74,7 @@ const routeTree = rootRoute.addChildren({
   appRoute: appRoute.addChildren({
     WelcomeRoute,
     SignOutRoute,
+    OidcRoute,
     ShowRoute,
     SearchRoute,
     AppSettingsRoute,

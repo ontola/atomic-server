@@ -117,8 +117,8 @@ msgstr "AI Agents"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
-#: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -144,9 +144,10 @@ msgstr "AI Agents"
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
-#: src/views/Conversation/NewMessageDialog.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/Conversation/NewMessageDialog.tsx
 #: src/views/Installation/AssignRights.tsx
+#: src/views/OidcSignInPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/PluginView/useResourcePicker.tsx
@@ -313,6 +314,7 @@ msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/views/OidcSignInPage.tsx
 msgid "Continue"
 msgstr "Continue"
 
@@ -4922,6 +4924,7 @@ msgstr "Could not show your secret."
 
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/AccountRecoveryCard.tsx
+#: src/views/OidcSignInPage.tsx
 msgid "Unlocking…"
 msgstr "Unlocking…"
 
@@ -7129,6 +7132,8 @@ msgid "New app"
 msgstr "New app"
 
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/views/OidcSignInPage.tsx
+#: src/views/OidcSignInPage.tsx
 msgid "Something went wrong."
 msgstr "Something went wrong."
 
@@ -12393,3 +12398,101 @@ msgstr "Group"
 #: src/components/Share/GroupPicker.tsx
 msgid "That is not a group."
 msgstr "That is not a group."
+
+#: src/views/OidcSignInPage.tsx
+msgid "Signing in"
+msgstr "Signing in"
+
+#: src/views/OidcSignInPage.tsx
+msgid "Sign-in did not complete"
+msgstr "Sign-in did not complete"
+
+#: src/views/OidcSignInPage.tsx
+msgid "Back to sign in"
+msgstr "Back to sign in"
+
+#: src/views/OidcSignInPage.tsx
+msgid "The sign-in was cancelled or refused."
+msgstr "The sign-in was cancelled or refused."
+
+#: src/views/OidcSignInPage.tsx
+msgid "This account is not allowed to sign in to this server."
+msgstr "This account is not allowed to sign in to this server."
+
+#: src/views/OidcSignInPage.tsx
+msgid "The sign-in expired. Please start again."
+msgstr "The sign-in expired. Please start again."
+
+#: src/views/OidcSignInPage.tsx
+msgid "The identity provider could not be reached or gave an unusable answer. Please try again."
+msgstr "The identity provider could not be reached or gave an unusable answer. Please try again."
+
+#. 0: MIN_PASSPHRASE_LENGTH
+#: src/views/OidcSignInPage.tsx
+msgid "Use at least {0} characters."
+msgstr "Use at least {0} characters."
+
+#: src/views/OidcSignInPage.tsx
+msgid "The two passphrases are not the same."
+msgstr "The two passphrases are not the same."
+
+#: src/views/OidcSignInPage.tsx
+msgid "This account already has an identity on this server. Sign in again to recover it."
+msgstr "This account already has an identity on this server. Sign in again to recover it."
+
+#: src/views/OidcSignInPage.tsx
+msgid "Start over"
+msgstr "Start over"
+
+#. 0: phase.provider
+#: src/views/OidcSignInPage.tsx
+msgid "Welcome, {0} user"
+msgstr "Welcome, {0} user"
+
+#: src/views/OidcSignInPage.tsx
+msgid "This creates a new identity and replaces the old link. Data owned by the old identity stays with whoever still has its key."
+msgstr "This creates a new identity and replaces the old link. Data owned by the old identity stays with whoever still has its key."
+
+#: src/views/OidcSignInPage.tsx
+msgid "Choose a recovery passphrase. It unlocks your identity on a new device after you sign in here. We cannot reset it."
+msgstr "Choose a recovery passphrase. It unlocks your identity on a new device after you sign in here. We cannot reset it."
+
+#: src/views/OidcSignInPage.tsx
+#: src/views/OidcSignInPage.tsx
+#: src/views/OidcSignInPage.tsx
+#: src/views/OidcSignInPage.tsx
+msgid "Recovery passphrase"
+msgstr "Recovery passphrase"
+
+#: src/views/OidcSignInPage.tsx
+msgid "Repeat the passphrase"
+msgstr "Repeat the passphrase"
+
+#: src/views/OidcSignInPage.tsx
+msgid "Repeat the recovery passphrase"
+msgstr "Repeat the recovery passphrase"
+
+#: src/views/OidcSignInPage.tsx
+msgid "Creating your identity…"
+msgstr "Creating your identity…"
+
+#: src/views/OidcSignInPage.tsx
+msgid "Unlock"
+msgstr "Unlock"
+
+#: src/views/OidcSignInPage.tsx
+msgid "Unlock your identity"
+msgstr "Unlock your identity"
+
+#: src/views/OidcSignInPage.tsx
+msgid "I forgot my passphrase"
+msgstr "I forgot my passphrase"
+
+#. 0: providerName
+#: src/components/Oidc/OidcSignInButton.tsx
+msgid "<0/> Sign in with {0}"
+msgstr "<0/> Sign in with {0}"
+
+#: src/views/OidcSignInPage.tsx
+msgid "Enter the recovery passphrase you chose when you first signed in."
+msgstr "Enter the recovery passphrase you chose when you first signed in."

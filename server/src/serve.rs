@@ -99,7 +99,10 @@ struct AtomicRootSpanBuilder;
 
 impl RootSpanBuilder for AtomicRootSpanBuilder {
     fn on_request_start(request: &ServiceRequest) -> tracing::Span {
-        if request.match_pattern().is_none() {
+        // `/oidc/*` carries the authorization code and `state` in its query
+        // string, which the default span would record as `http.target`: log the
+        // path only, like an unmatched route.
+        if request.match_pattern().is_none() || request.path().starts_with("/oidc/") {
             let name = format!("{} {}", request.method(), request.path());
             return tracing::info_span!("HTTP request", "otel.name" = name, "http.method" = %request.method(), "http.target" = %request.path());
         }

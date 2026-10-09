@@ -239,6 +239,53 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_DEVICE_NAME")]
     pub device_name: Option<String>,
 
+    /// OpenID Connect issuer URL. Setting it turns on "Sign in with ..." for
+    /// this node; leave it unset and no OIDC route exists. Discovery is read from
+    /// `{issuer}/.well-known/openid-configuration`. Use the tenant-specific URL
+    /// of a multi-tenant provider, never a "common" one. See `docs/src/atomicserver/oidc.md`.
+    #[clap(long, env = "ATOMIC_OIDC_ISSUER")]
+    pub oidc_issuer: Option<String>,
+
+    /// OAuth client id registered at the OIDC provider.
+    #[clap(long, env = "ATOMIC_OIDC_CLIENT_ID")]
+    pub oidc_client_id: Option<String>,
+
+    /// OAuth client secret. Optional: without one the client is public and
+    /// PKCE alone protects the code exchange.
+    #[clap(long, env = "ATOMIC_OIDC_CLIENT_SECRET", hide_env_values = true)]
+    pub oidc_client_secret: Option<crate::oidc::Redacted>,
+
+    /// Name shown on the button: "Sign in with <name>". Defaults to the issuer's host.
+    #[clap(long, env = "ATOMIC_OIDC_NAME")]
+    pub oidc_name: Option<String>,
+
+    /// Space-separated OAuth scopes. `openid` is always requested.
+    #[clap(
+        long,
+        default_value = "openid email profile",
+        env = "ATOMIC_OIDC_SCOPES"
+    )]
+    pub oidc_scopes: String,
+
+    /// The redirect URI registered at the provider. Defaults to
+    /// `<this server's origin>/oidc/callback`; set it behind a proxy or tunnel.
+    #[clap(long, env = "ATOMIC_OIDC_REDIRECT_URL")]
+    pub oidc_redirect_url: Option<String>,
+
+    /// Comma-separated email domains allowed to sign in. Admission policy only:
+    /// the email is never used to identify a user. Requires a verified `email` claim.
+    #[clap(long, env = "ATOMIC_OIDC_ALLOWED_EMAIL_DOMAINS", value_delimiter = ',')]
+    pub oidc_allowed_email_domains: Vec<String>,
+
+    /// Comma-separated `name=value` claims every ID token must carry. For an
+    /// array claim such as `groups`, the value must be one of its members.
+    #[clap(
+        long = "oidc-required-claim",
+        env = "ATOMIC_OIDC_REQUIRED_CLAIMS",
+        value_delimiter = ','
+    )]
+    pub oidc_required_claims: Vec<String>,
+
     /// Who may create a **new** Drive on this node.
     ///
     /// `open` (the default) lets anyone who can reach the server create an

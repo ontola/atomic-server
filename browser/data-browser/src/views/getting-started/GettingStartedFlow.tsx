@@ -6,6 +6,8 @@ import {
   readPendingTemplate,
 } from '../../chunks/Templates/pendingTemplate';
 import { WorkspaceLoading } from './WorkspaceLoading';
+import { OidcSignInButton } from '../../components/Oidc/OidcSignInButton';
+import { takeOidcHandoff } from '../../helpers/oidc/handoff';
 import {
   PRODUCT_NAME,
   clearManagedAccountBinding,
@@ -179,10 +181,22 @@ export function GettingStartedFlow({
       safePortalUrl(getManagedPortalUrl() ?? getRememberedProvider()) ?? null,
   );
 
+  /** Set only when the operator configured OIDC; nothing renders otherwise. */
+  const [oidcProviderName, setOidcProviderName] = useState<string | null>(null);
+
+  // A secret recovered on the OIDC page continues like a pasted one.
+  useEffect(() => {
+    const recovered = takeOidcHandoff();
+
+    if (recovered) void handleSignInWithSecret(recovered);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void fetchManagedInfo(baseURL).then(info => {
       if (cancelled) return;
+
+      setOidcProviderName(info?.oidcProviderName ?? null);
 
       setCreateTarget(accountCreationTarget(info));
       // The remembered provider covers the desktop and Android apps: their
@@ -1078,6 +1092,13 @@ export function GettingStartedFlow({
               >
                 {loading ? 'Waiting for your passkey…' : 'Sign in'}
               </CtaButton>
+              {oidcProviderName ? (
+                <OidcSignInButton
+                  key='oidc'
+                  serverUrl={baseURL}
+                  providerName={oidcProviderName}
+                />
+              ) : null}
               <CtaButton
                 key='demo'
                 type='button'

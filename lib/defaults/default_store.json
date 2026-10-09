@@ -1457,7 +1457,8 @@
       "https://atomicdata.dev/properties/server/hostMode",
       "https://atomicdata.dev/properties/server/acceptsNewDrives",
       "https://atomicdata.dev/properties/server/ownerSet",
-      "https://atomicdata.dev/properties/server/homeDrive"
+      "https://atomicdata.dev/properties/server/homeDrive",
+      "https://atomicdata.dev/properties/server/oidcProviderName"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/shortname"
@@ -1701,6 +1702,16 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "home-drive"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/server/oidcProviderName",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Display name of the OpenID Connect provider this server offers sign-in with (`ATOMIC_OIDC_NAME`). Absent unless the operator configured OIDC (`ATOMIC_OIDC_ISSUER`); clients show a \"Sign in with ...\" button only when it is present.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "oidc-provider-name"
   },
   {
     "@id": "https://atomicdata.dev/properties/versionId",

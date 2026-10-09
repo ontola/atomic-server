@@ -22,6 +22,7 @@ mod invite_token;
 mod jsonerrors;
 mod metrics;
 mod node_key;
+mod oidc;
 pub mod plugins;
 mod rate_limit;
 mod routes;

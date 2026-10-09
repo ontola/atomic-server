@@ -117,8 +117,8 @@ msgstr ""
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
-#: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -144,9 +144,10 @@ msgstr ""
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
-#: src/views/Conversation/NewMessageDialog.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/Conversation/NewMessageDialog.tsx
 #: src/views/Installation/AssignRights.tsx
+#: src/views/OidcSignInPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/PluginView/useResourcePicker.tsx
@@ -313,6 +314,7 @@ msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/views/OidcSignInPage.tsx
 msgid "Continue"
 msgstr ""
 
@@ -4916,6 +4918,7 @@ msgstr ""
 
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/AccountRecoveryCard.tsx
+#: src/views/OidcSignInPage.tsx
 msgid "Unlocking…"
 msgstr ""
 
@@ -7123,6 +7126,8 @@ msgid "New app"
 msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/views/OidcSignInPage.tsx
+#: src/views/OidcSignInPage.tsx
 msgid "Something went wrong."
 msgstr ""
 
@@ -12379,4 +12384,102 @@ msgstr ""
 
 #: src/components/Share/GroupPicker.tsx
 msgid "That is not a group."
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Signing in"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Sign-in did not complete"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Back to sign in"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "The sign-in was cancelled or refused."
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "This account is not allowed to sign in to this server."
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "The sign-in expired. Please start again."
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "The identity provider could not be reached or gave an unusable answer. Please try again."
+msgstr ""
+
+#. 0: MIN_PASSPHRASE_LENGTH
+#: src/views/OidcSignInPage.tsx
+msgid "Use at least {0} characters."
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "The two passphrases are not the same."
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "This account already has an identity on this server. Sign in again to recover it."
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Start over"
+msgstr ""
+
+#. 0: phase.provider
+#: src/views/OidcSignInPage.tsx
+msgid "Welcome, {0} user"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "This creates a new identity and replaces the old link. Data owned by the old identity stays with whoever still has its key."
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Choose a recovery passphrase. It unlocks your identity on a new device after you sign in here. We cannot reset it."
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+#: src/views/OidcSignInPage.tsx
+#: src/views/OidcSignInPage.tsx
+#: src/views/OidcSignInPage.tsx
+msgid "Recovery passphrase"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Repeat the passphrase"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Repeat the recovery passphrase"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Creating your identity…"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Unlock"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Unlock your identity"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "I forgot my passphrase"
+msgstr ""
+
+#. 0: providerName
+#: src/components/Oidc/OidcSignInButton.tsx
+msgid "<0/> Sign in with {0}"
+msgstr ""
+
+#: src/views/OidcSignInPage.tsx
+msgid "Enter the recovery passphrase you chose when you first signed in."
 msgstr ""

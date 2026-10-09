@@ -19,6 +19,8 @@ export const serverProps = {
   hostMode: 'https://atomicdata.dev/properties/server/hostMode',
   acceptsNewDrives: 'https://atomicdata.dev/properties/server/acceptsNewDrives',
   ownerSet: 'https://atomicdata.dev/properties/server/ownerSet',
+  /** Display name of the OIDC provider. Absent unless the operator enabled OIDC. */
+  oidcProviderName: 'https://atomicdata.dev/properties/server/oidcProviderName',
 } as const;
 
 /** Property URLs of a nested `Peer` — a device the server syncs with. */

@@ -21,6 +21,7 @@ pub mod get_resource;
 pub mod history_attribution;
 #[cfg(feature = "image")]
 pub mod image;
+pub mod oidc;
 #[cfg(feature = "wasm-plugins")]
 pub mod plugin_connection;
 #[cfg(feature = "wasm-plugins")]

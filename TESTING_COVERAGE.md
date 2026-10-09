@@ -423,6 +423,19 @@ installed metadata and a dependency sentinel remain untouched. Corepack must
 have this pnpm version cached or be able to download it. A stub Cargo command
 verifies Clippy dispatch, staged input, and failure propagation; this fixture does not compile the Rust workspace.
 
+## Optional OIDC sign-in (issue #277)
+
+| Flow | Where |
+|---|---|
+| ID-token validation: wrong `iss`/`aud`/`azp`/`nonce`, expired, from the future, bad signature, `none`/`HS*`/unknown `alg`, key-type confusion, unknown `kid`, malformed input | `server/src/oidc/jose.rs` (unit, RS256 and ES256 tokens minted in the test) |
+| Return-URL sanitising (open redirect), email-domain and required-claim policy, ticket expiry/use cap, secret never printed | `server/src/oidc/mod.rs` (unit) |
+| Link store keyed on `(issuer, sub)`, no silent overwrite | `server/src/oidc/links.rs` (unit, real store) |
+| Possession proof binds agent and ticket | `server/src/handlers/oidc.rs` (unit) |
+| Whole flow over HTTP against an in-process mock provider (discovery, authorize, token with PKCE and client auth, JWKS): off by default, `/server` advertisement, link, recover on a second device, replace, unlink, login CSRF, replay, forged/expired/foreign tokens, provider denial, policy, unreachable provider | `server/tests/it/oidc.rs` |
+| Passphrase blob round-trip, wrong passphrase, hostile iteration count; hash/ticket parsing; link signature message | `browser/data-browser/src/helpers/oidc/*.test.ts` |
+| Button shown only when `/server` advertises a provider; recovered secret continues like a pasted one | `GettingStartedFlow.test.tsx` |
+| **Not covered:** a Playwright run of the redirect dance (needs the e2e server started with OIDC flags and a mock provider); done by hand with a Node mock provider and Chromium instead | |
+
 ## Browser WebRTC transport (issue #1396)
 
 `browser/lib/src/webrtc-transport.test.ts` covers frame fragmentation/order,

@@ -420,6 +420,19 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::forget_peer::handle_forget_peer),
     )
     .service(web::resource("/iroh-sync").route(web::post().to(iroh_sync_handler)))
+    .service(
+        web::resource("/oidc/start")
+            .guard(guard::Method(Method::GET))
+            .to(handlers::oidc::start),
+    )
+    .service(
+        web::resource("/oidc/callback")
+            .guard(guard::Method(Method::GET))
+            .to(handlers::oidc::callback),
+    )
+    .service(web::resource("/oidc/session").route(web::post().to(handlers::oidc::session)))
+    .service(web::resource("/oidc/link").route(web::post().to(handlers::oidc::link)))
+    .service(web::resource("/oidc/unlink").route(web::post().to(handlers::oidc::unlink)))
     .service(web::resource("/export").to(handlers::export::handle_export))
     .configure(configure_wasm_plugin_routes)
     .service(

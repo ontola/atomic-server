@@ -46,6 +46,11 @@ export type ManagedInfo = {
    * `false` would hide account creation on every server currently running.
    */
   acceptsNewDrives?: boolean;
+  /**
+   * Display name of the OIDC provider this node offers sign-in with. Absent
+   * unless the operator configured one; nothing is shown then.
+   */
+  oidcProviderName?: string;
 };
 
 /** What a node reports when it is unreachable, or says nothing about itself. */
@@ -156,6 +161,11 @@ export async function fetchManagedInfo(
       // Only an explicit `false` closes this. Absent means an older node, which
       // accepts new Drives.
       acceptsNewDrives: data?.[serverProps.acceptsNewDrives] !== false,
+      ...(readString(data?.[serverProps.oidcProviderName])
+        ? {
+            oidcProviderName: readString(data?.[serverProps.oidcProviderName])!,
+          }
+        : {}),
     };
   } catch {
     // Older/self-hosted nodes have no such endpoint — treat as non-managed.
