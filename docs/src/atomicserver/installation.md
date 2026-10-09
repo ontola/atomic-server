@@ -4,7 +4,7 @@
 
 You can run AtomicServer in different ways:
 
-1. Using docker (probably the quickest): `docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`
+1. Using docker (probably the quickest): `docker run -p 80:80 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`
 2. From a published [binary](https://github.com/ontola/atomic-server/releases)
 3. Using [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) from crates.io: `cargo install atomic-server`
 4. Manually from source
@@ -53,12 +53,40 @@ injects one.
 
 ## 1. Run using docker
 
-- Run: `docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`
-The `dockerfile` is located in the project root, above this `server` folder.
-- Images are published to the GitHub Container Registry — see the [list of all the available tags](https://github.com/ontola/atomic-server/pkgs/container/atomic-server) (e.g. the `develop` tag for the very latest version)
-- If you want to make changes (e.g. to the port), make sure to pass the relevant CLI options (e.g. `--port 9883`).
-- If you want to update, run `docker pull ghcr.io/ontola/atomic-server` and docker should fetch the latest version.
-- By default, docker downloads the `latest` tag. You can find other tags [here](https://github.com/ontola/atomic-server/pkgs/container/atomic-server).
+The quickest way to try it. This starts a server on port 80 and keeps its data in a named volume:
+
+```sh
+docker run -p 80:80 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server
+```
+
+Then open `http://localhost/` (port 80, so no port number). That is the first-run page, where you create your account. In Docker the server listens on port 80, so `http://localhost:9883/setup` only applies to the binary and `cargo run`, which default to port `9883`.
+
+Or with docker-compose. Set `ATOMIC_DOMAIN` to the name people will type in their browser (leave it out for localhost):
+
+```yaml
+services:
+  atomic-server:
+    image: ghcr.io/ontola/atomic-server
+    container_name: atomic-server
+    restart: unless-stopped
+    ports:
+      - 80:80
+    environment:
+      ATOMIC_DOMAIN: atomic.example.com
+    volumes:
+      - atomic-storage:/atomic-storage
+volumes:
+  atomic-storage:
+```
+
+Things to know:
+
+- **Port 443 only works with `--https`.** Publishing `-p 443:443` does nothing unless you also run the server with `--https` (and `--email`, see [HTTPS setup](#https-setup-on-a-vps-static-ip-required)), which makes it terminate TLS itself. If you put a reverse proxy in front instead, publish only port 80 and read [Behind a reverse proxy](#behind-a-reverse-proxy-nginx-caddy-traefik-ferron-cloudflare-tunnel).
+- **Hosts without IPv6.** The server binds to `::` by default. On a host or container without IPv6 support that fails with `Address family not supported by protocol`. Add `-e ATOMIC_IP=0.0.0.0` (or `ATOMIC_IP: 0.0.0.0` in docker-compose). The server will soon fall back to IPv4 by itself.
+- To pass other options, append them after the image name (e.g. `--port 9883`), or set the matching `ATOMIC_*` environment variables.
+- The primary image is on the GitHub Container Registry, `ghcr.io/ontola/atomic-server`. The same images are mirrored to Docker Hub as `joepmeneer/atomic-server`, but use the GitHub Container Registry one, since the mirror can lag behind.
+- See the [list of all the available tags](https://github.com/ontola/atomic-server/pkgs/container/atomic-server) (`develop` is the very latest version). Docker downloads the `latest` tag by default.
+- To update, run `docker pull ghcr.io/ontola/atomic-server` and restart the container.
 
 ## 2. Run pre-compiled binary
 
