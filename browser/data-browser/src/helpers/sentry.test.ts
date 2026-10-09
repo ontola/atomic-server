@@ -109,13 +109,45 @@ describe('Sentry configuration', () => {
       server: 'https://node1.example',
     });
     expect(Sentry.captureMessage).toHaveBeenCalledWith(
-      'Commit keeps failing',
+      'Commit keeps failing: Parent of <id> (<id>) not found',
       expect.objectContaining({
         fingerprint: [
           'commit-keeps-failing',
           'https://node1.example',
           'Parent of <id> (<id>) not found',
         ],
+        tags: expect.objectContaining({
+          error_kind: 'Parent of <id> (<id>) not found',
+        }),
+        extra: expect.objectContaining({
+          error: 'Parent of atomic:abc (atomic:def) not found',
+        }),
+      }),
+    );
+  });
+
+  it('truncates a long cause in the title and the tag', () => {
+    let handler: ((failure: unknown) => void) | undefined;
+    const store = {
+      on: vi.fn((event: string, cb: (failure: unknown) => void) => {
+        if (event === StoreEvents.CommitRepeatedlyFailing) handler = cb;
+
+        return () => {};
+      }),
+    };
+    reportRepeatedCommitFailures(store as never);
+    const long = 'x'.repeat(500);
+    handler?.({
+      subject: 'atomic:abc',
+      error: new Error(long),
+      failures: 4,
+      server: 'https://node1.example',
+    });
+    expect(Sentry.captureMessage).toHaveBeenCalledWith(
+      `Commit keeps failing: ${'x'.repeat(160)}`,
+      expect.objectContaining({
+        fingerprint: ['commit-keeps-failing', 'https://node1.example', long],
+        tags: expect.objectContaining({ error_kind: 'x'.repeat(200) }),
       }),
     );
   });
@@ -152,10 +184,11 @@ describe('Sentry configuration', () => {
       rearmedAfterResync: true,
     });
     expect(Sentry.captureMessage).toHaveBeenCalledWith(
-      'Commit keeps failing',
+      'Commit keeps failing: boom',
       expect.objectContaining({
         tags: {
           server: 'https://node1.example',
+          error_kind: 'boom',
           connected: 'false',
           genesis: 'true',
         },
