@@ -55,6 +55,34 @@ export * from './commit.js';
 export * from './error.js';
 export * from './withDeadline.js';
 export * from './datatypes.js';
+export * from './class-constraints.js';
+export * from './effective-constraint.js';
+export {
+  planOntology,
+  slugify,
+  type ConstraintInput,
+  type OntologyClassInput,
+  type OntologyInput,
+  type OntologyPlan,
+  type OntologyPropertyInput,
+} from './ontology-input.js';
+export {
+  JSON_SCHEMA_DIALECT,
+  ontologyFromJsonSchema,
+  ontologyToJsonSchema,
+  propertyJsonSchema,
+  type JsonSchemaImportOptions,
+} from './schema-json-schema.js';
+export { isJsonSchema, ontologyFromSchemaFile } from './schema-file.js';
+export {
+  assertLockfileMatches,
+  checkLockfile,
+  lockfileFromEnsured,
+  lockfileFromInput,
+  parseLockfile,
+  serializeLockfile,
+  type Lockfile,
+} from './schema-lockfile.js';
 export * from './safeHref.js';
 export { EventManager } from './EventManager.js';
 export * from './parse.js';
@@ -62,6 +90,9 @@ export * from './search.js';
 export * from './resource.js';
 export * from './forks.js';
 export * from './store.js';
+export * from './property-identity.js';
+export * from './lens.js';
+export * from './lens-ensure.js';
 export * from './subject.js';
 export * from './value.js';
 export * from './urls.js';
@@ -186,9 +217,12 @@ export {
   type CreateRequest,
 } from './plugin-apply.js';
 export {
+  ensureOntology,
   ensureSchema,
   findSchema,
   type ClassSpec,
+  type EnsureOntologyOptions,
+  type EnsuredOntology,
   type EnsuredSchema,
   type PropertySpec,
   type SchemaSpec,
@@ -242,6 +276,7 @@ export {
   type DeclaredConfigField,
   type DeclaredAccept,
   type DeclaredDestination,
+  type DeclaredDestinationTable,
   DEFAULT_ACCEPT_MAX_BYTES,
   ACCEPT_MAX_BYTES_CEILING,
   type ManifestRuntime,
@@ -333,6 +368,12 @@ export * from './import-resolution.js';
 
 export * from './import-reference-review.js';
 
+export {
+  destinationTablesFor,
+  provisionDestination,
+  type DestinationConfig,
+  type DestinationTable,
+} from './plugin-destination.js';
 export { pluginWorkspace, workspaceConnections } from './plugin-workspace.js';
 export type { WorkspaceConnection } from './plugin-workspace.js';
 

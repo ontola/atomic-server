@@ -1867,6 +1867,22 @@ window, clears its deadline on completion, and rejects a host that stays silent.
 The packaged adapter additionally tests canonical requests, caller-supplied policy
 spoofing, subscription acknowledgements and unsupported operations.
 
+App frame `store.getMany(subjects)` (#1737): `hostStore.test.ts` checks it
+answers in order through the same store read as `get` (same state after a
+local change), reports an unreadable subject in its place without failing the
+rest, and refuses more than 100 subjects or a non-array before reading any.
+`viewProtocol.test.ts` checks the generated client makes one request for the
+batch, hands back resources like `getResource`'s, asks nothing for an empty
+list and refuses 101 without asking.
+
+App frame theme (#1738): `views/PluginView/useCreateThemeVars.test.ts` checks
+the frame stylesheet carries `--t-color-success` and `color-scheme` from the
+built theme's `darkMode`. `FrameBridge.test.ts` checks the theme message
+carries `colorScheme` and keeps it across a ready message and a reload.
+`viewProtocol.test.ts` checks `store.getTheme()` reads the scheme from the
+applied stylesheet before any message, then from messages (only the parent's,
+only `light`/`dark`), and `onThemeChange` fires once per change until stopped.
+
 `apps.spec.ts` runs the first write scenario with both the served SDK and this
 checkout's v1 JS asset. The latter explicitly intercepts only `format=client`;
 resource creation and signing still use the real local backend. This verifies the
@@ -2393,6 +2409,41 @@ truncation (a table with more than 1,000 rows silently offering only the first
 1,000, and rejecting a pick past the cap) is untested, and the preview
 deliberately applies no cap at all.
 
+Class constraints in tables, kanban and the ontology editor
+(`planning/class-constraints-and-forms.md`, step 2): `getEffectiveConstraint` /
+`setClassConstraint` are unit-tested in `browser/lib/src/effective-constraint.test.ts`
+(merge across classes, per-keyword fallback to `allowsOnly` / `classtype` /
+`min` / `max`, edit semantics). `createSelectProperty.test.ts` pins that a new
+select column's options and single pick land in the row class's `constraints`
+(not on the Property), that a reused property gets Tags of its own, and the
+`constraintsOn: 'property'` mode the form builder still uses. `ontology.spec.ts`
+drives linked class, options and instance restrictions through the class card;
+`tables.spec.ts` creates and fills a select column. Not covered: editing an
+existing select column's options in `EditPropertyDialog` (class save, legacy
+dual-write), the number / text range and relation class going from the dialog
+to the class map, `useTableColumns` re-reading columns when the class map
+changes, `TagPropertyCard`'s class usage rows, and forms bound to a table column
+whose options now live only in the class map (see the forms entry below).
+
+Class constraints in forms (`planning/class-constraints-and-forms.md`, step 3):
+`formFieldSettings.test.ts` and `formConstraints.test.ts` pin the limit
+keywords, that old names read and are rewritten on edit, that a question can only
+tighten its column's constraint (rejected before any write), and the
+`describe_form` JSON Schema (class narrowed by the question, `enum` of Tags).
+`createFormFromSpec.test.ts` / `formOps.test.ts` pin that a new choice question's
+options and single pick land in the data class's constraints and that choice
+edits write the class, not the Property. `server/src/forms.rs` tests cover
+options from the class `enum` over legacy `allowsOnly`, legacy key renaming,
+narrowing, exclusive bounds, `pattern` and row counts in `validate_submission`;
+`class_constraints.rs` covers `effective_constraint` / `tighten`. The renderer
+checks the same keywords in `validation.test.ts`. `forms.spec.ts` reads option
+labels from the class map. Not covered: linking options to another table in the
+builder writes the class (no unit test; the e2e links a table), the Rust and TS
+narrowing are separate implementations without a shared fixture, a `pattern`
+the Rust regex and the JS `RegExp` read differently, and legacy forms whose
+Property keeps `allowsOnly` after a row link (the class `enum` is removed but the
+Property fallback still lists the old tags in the builder).
+
 Not covered (drafts): the debounce/flush wiring in `useFormDraft` — the
 `pagehide` and `visibilitychange` flushes in particular — is only exercised
 through the e2e (which waits for the debounced write rather than forcing a
@@ -2617,6 +2668,25 @@ tamper rejection, and closing during a pending request. Atomic Audio additionall
 checks isolated native identity installation and actual bidirectional iroh/Loro
 with BLAKE3 files introduced after pairing. Production account approval, Vault
 transport and recovery on a physical device are not covered by these tests.
+
+## Lenses (`docs/src/schema/lenses.md`)
+
+Both implementations run the cases in `lib/tests/fixtures/lenses.json`
+(rename, wrap and head, enum map, string to integer with an unparseable value,
+both properties present, no chaining): `lens::tests::shared_fixture` (JSON and
+propvals paths) in `lib/src/lens.rs`, and `browser/lib/src/lens.test.ts`. Lens
+ID vectors are asserted on both sides. Store level: `db::test::lenses` covers
+derived values on read and in the value index (backfill when the Lens arrives,
+an edit of the old property, a real value winning, index rebuild from stored Lens
+resources), the `parent` authority check, ID mismatch and identity
+immutability; `lens.test.ts` covers `ensureLens`, activation, and
+re-materializing a loaded resource when a Lens arrives.
+
+Not covered: lens application on the Iroh and WebSocket sync import paths (they
+share `persist_replicated_*`, which is covered through `build_projection_tx`
+only by reasoning, not a test), a browser reload with lenses loaded through
+`loadLenses`, and the data-browser flows that mint a lens (datatype change,
+form question shortname) end to end.
 
 ## Optional account sign-in after local identity unlock
 

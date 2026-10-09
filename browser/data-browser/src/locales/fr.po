@@ -620,10 +620,6 @@ msgid "Reading schema"
 msgstr "Lecture du schéma"
 
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
-msgid "Listing user classes"
-msgstr "Liste des classes d'utilisateurs"
-
-#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Loading skill: <0/>"
 msgstr "Chargement de la compétence : <0/>"
 
@@ -2674,6 +2670,7 @@ msgid "To large for preview"
 msgstr "Trop grand pour l'aperçu"
 
 #: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
 msgid "Datatype"
 msgstr "Type de données"
 
@@ -2852,6 +2849,8 @@ msgstr "Cette ressource a <0/> enfants"
 msgid "Edit {0}"
 msgstr "Modifier {0}"
 
+#: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/OntologyPage/PropertyDatatypePicker.tsx
 #: src/views/OntologyPage/PropertyDatatypePicker.tsx
 msgid "Property datatype"
 msgstr "Type de données de la propriété"
@@ -3414,6 +3413,7 @@ msgid "Slug"
 msgstr "Slug"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 msgid "Length"
 msgstr "Longueur"
 
@@ -4410,9 +4410,6 @@ msgstr ""
 msgid "Your data lives on the device you’re connected to."
 msgstr ""
 
-#~ msgid "Syncing this workspace…"
-#~ msgstr ""
-
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SyncProblemBanner.tsx
@@ -5278,6 +5275,7 @@ msgstr ""
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 msgid "Value"
 msgstr ""
 
@@ -8219,8 +8217,8 @@ msgstr ""
 msgid "Resume"
 msgstr ""
 
-#: src/components/ConnectedAppsCard.tsx
 #: src/chunks/FormBuilder/FormAccessSection.tsx
+#: src/components/ConnectedAppsCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoke"
@@ -8988,7 +8986,7 @@ msgstr ""
 msgid "Set up"
 msgstr ""
 
-#. 0: manifest.destination.table.name
+#. 0: names[0]
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr ""
@@ -9422,101 +9420,6 @@ msgstr "Votre espace de travail n’a pas pu être ajouté à votre compte. Rée
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permet à {0} de modifier les drives créés dans ce navigateur, puis bascule vers cette identité. Tout reste modifiable et est sauvegardé avec votre compte."
-
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-msgid "An app"
-msgstr ""
-
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-msgid "Connect an app"
-msgstr ""
-
-#: src/routes/ConnectAgentRoute.tsx
-msgid "This link is missing the app's key. Start again from the app that sent you here."
-msgstr ""
-
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-msgid "Sign in first, then open this link again."
-msgstr ""
-
-#. 0: name; 1: write ? 'read and edit' \\: 'read'
-#: src/routes/ConnectAgentRoute.tsx
-msgid "{0} can now {1} what you shared. You can go back to it. To stop it, revoke it under Connected apps in your account settings."
-msgstr ""
-
-#: src/routes/ConnectAgentRoute.tsx
-msgid "Account settings"
-msgstr ""
-
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-msgid "Read only"
-msgstr ""
-
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-msgid "Read and edit"
-msgstr ""
-
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-msgid "What it can reach"
-msgstr ""
-
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-msgid "What it can do"
-msgstr ""
-
-#: src/routes/AuthorizeMcpRoute.tsx
-#: src/routes/ConnectAgentRoute.tsx
-msgid "Connecting"
-msgstr ""
-
-#: src/routes/ConnectAgentRoute.tsx
-msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
-msgstr ""
-
-#: src/components/ConnectedAppsCard.tsx
-msgid "No apps yet. An AI assistant connected through the Atomic MCP server shows up here."
-msgstr ""
-
-#. 0: report.failed.length; 1: report.failed.length === 1 ? 'resource' \\: 'resources'; 2: report.failed.map(f => f.reason).join('\; ')
-#: src/components/ConnectedAppsCard.tsx
-msgid "Still has access to {0} {1}: {2}"
-msgstr ""
-
-#. 0: subject.slice(-8)
-#: src/components/ConnectedAppsCard.tsx
-msgid "App {0}"
-msgstr ""
-
-#: src/components/ConnectedAppsCard.tsx
-msgid "No access left"
-msgstr ""
-
-#: src/components/ConnectedAppsCard.tsx
-msgid "Revoking"
-msgstr ""
-
-#: src/routes/SettingsAgent.tsx
-msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
-msgstr ""
-
-#: src/routes/SettingsAgent.tsx
-msgid "Connected apps"
-msgstr ""
-
-#: src/routes/AuthorizeMcpRoute.tsx
-msgid "This link is incomplete. Start again from the app that sent you here."
-msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Add or remove tags"
@@ -10348,6 +10251,7 @@ msgid "♥ Heart"
 msgstr ""
 
 #: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Min length"
 msgstr ""
 
@@ -10356,6 +10260,7 @@ msgid "The fewest characters an answer may carry. An unanswered question still c
 msgstr ""
 
 #: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Max length"
 msgstr ""
 
@@ -10384,7 +10289,7 @@ msgstr ""
 msgid "Max rows"
 msgstr ""
 
-#. 0: allowsOnly.length + 1
+#. 0: tags.length + 1
 #: src/chunks/FormBuilder/FieldOptions/TagListEditor.tsx
 msgid "Option {0}"
 msgstr ""
@@ -11302,26 +11207,6 @@ msgstr ""
 msgid "The easiest way to create, share and model Linked Atomic Data."
 msgstr ""
 
-#. 0: serverHost ?? 'an unknown server'
-#: src/routes/AuthorizeMcpRoute.tsx
-msgid "This link points at {0}, which is not the server you are signed in to, so nothing was shared. Start again from the app that sent you here, using your own server."
-msgstr ""
-
-#. 0: host
-#: src/routes/AuthorizeMcpRoute.tsx
-msgid "Connect an app that returns to {0}"
-msgstr ""
-
-#. 0: action; 1: serverHost
-#: src/routes/AuthorizeMcpRoute.tsx
-msgid "<0/> asks to {0} your data on {1}."
-msgstr ""
-
-#. 0: host
-#: src/routes/AuthorizeMcpRoute.tsx
-msgid "When you allow it, you go back to {0}. The name is chosen by the app, so only allow it if that is where you expect to go. It gets its own access, so your secret stays with you, and you can revoke it at any time."
-msgstr ""
-
 #: src/chunks/TablePage/QuickFilterField.tsx
 msgid "Find rows"
 msgstr ""
@@ -12192,14 +12077,6 @@ msgstr ""
 msgid "This filters on each entry's own date. A repeating entry is matched on its first date, not on the days it repeats on."
 msgstr ""
 
-#: src/components/SideBar/AccountMenu.tsx
-msgid "Signed in"
-msgstr ""
-
-#: src/components/Vault/VaultRestoreAction.tsx
-msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
-msgstr ""
-
 #: src/components/AccountRecoveryCard.tsx
 msgid "Could not turn this on. Please try again."
 msgstr ""
@@ -12248,29 +12125,166 @@ msgstr ""
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 msgstr ""
 
-#: src/components/Share/UsageLimit.tsx
-msgid "Maximum number of people"
+#: src/hooks/useAddToOntology.ts
+msgid "A property can't be moved to another ontology."
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "A property can't be moved to another parent."
+msgstr ""
+
+#. 0: (err as Error).message
+#: src/views/OntologyPage/PropertyDatatypePicker.tsx
+msgid "Could not change datatype: {0}"
+msgstr ""
+
+#. 0: (err as Error).message
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "Failed to save column: {0}"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Minimum"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Maximum"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Min items"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Max items"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Constraints"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Enter a number"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Enter a whole number, zero or more"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Pattern"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Pattern (regular expression)"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Linked class"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "Links to <0/>"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Allows only: <0/>"
+msgstr ""
+
+#. 0: constraint.pattern.source
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "Pattern: {0}"
+msgstr ""
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "The linked class, options and limits of this property are set per class. Open a class that uses it to edit them."
+msgstr ""
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Classtype: <0/>"
+msgstr ""
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Stored on this property (legacy)"
+msgstr ""
+
+#. 0: String(min ?? '…'); 1: String(max ?? '…')
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "{0} to {1}"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "Items"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Remove from the allowed list"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "<0/> Add"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Add an item to the allows-only list"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Allows only"
+msgstr ""
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Searching schemas"
+msgstr ""
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Saving schema"
+msgstr ""
+
+#. 0: max
+#: src/chunks/FormBuilder/FieldOptions/BoundField.tsx
+msgid "Cannot exceed the table column limit ({0})."
+msgstr ""
+
+#. 0: floor
+#: src/chunks/FormBuilder/FieldOptions/BoundField.tsx
+msgid "Cannot go below the table column minimum ({0})."
 msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Invite people and manage who has access."
 msgstr ""
 
-#: src/components/Share/UsageLimit.tsx
-msgid "Limit uses"
+#: src/components/ConnectedAppsCard.tsx
+msgid "No apps yet. An AI assistant connected through the Atomic MCP server shows up here."
 msgstr ""
 
-#. 0: text
-#: src/components/Share/useEditorSeats.ts
-msgid "{0} Viewers are free."
+#. 0: report.failed.length; 1: report.failed.length === 1 ? 'resource' \\: 'resources'; 2: report.failed.map(f => f.reason).join('\; ')
+#: src/components/ConnectedAppsCard.tsx
+msgid "Still has access to {0} {1}: {2}"
 msgstr ""
 
-#: src/components/Share/UsageLimit.tsx
-msgid "person can join"
+#. 0: subject.slice(-8)
+#: src/components/ConnectedAppsCard.tsx
+msgid "App {0}"
 msgstr ""
 
-#: src/components/Share/UsageLimit.tsx
-msgid "people can join"
+#: src/components/ConnectedAppsCard.tsx
+msgid "No access left"
+msgstr ""
+
+#: src/components/ConnectedAppsCard.tsx
+msgid "Revoking"
+msgstr ""
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "Updating your local data"
+msgstr ""
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "This is needed once after an update and takes a moment. Keep this tab open."
 msgstr ""
 
 #: src/components/ConnectDevice.tsx
@@ -12319,7 +12333,15 @@ msgid "Pairing code or server address"
 msgstr ""
 
 #: src/components/ConnectDevice.tsx
+msgid "Code or server address"
+msgstr ""
+
+#: src/components/ConnectDevice.tsx
 msgid "Add a device"
+msgstr ""
+
+#: src/components/Spinner.tsx
+msgid "Loading"
 msgstr ""
 
 #: src/components/SyncProblemBanner.tsx
@@ -12329,6 +12351,11 @@ msgstr ""
 #: src/components/Cloud/CloudServerDetails.tsx
 #: src/components/SyncProblemBanner.tsx
 msgid "See where space goes"
+msgstr ""
+
+#. 0: count
+#: src/helpers/sentry.ts
+msgid "Event repeated {0} times"
 msgstr ""
 
 #: src/helpers/syncProblem.ts
@@ -12381,13 +12408,125 @@ msgstr ""
 msgid "Some changes keep failing to sync"
 msgstr ""
 
-#. 0: formatBytes(usedBytes)
-#: src/components/Cloud/UsageMeter.tsx
-msgid "{0} used"
+#: src/routes/AppSettings.tsx
+msgid "Show Messages panel"
 msgstr ""
 
-#: src/components/Cloud/UsageMeter.tsx
-msgid "Storage used"
+#: src/routes/AppSettings.tsx
+msgid "Show Favorites panel"
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Show Shared with me panel"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "An app"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Connect an app"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "This link is incomplete. Start again from the app that sent you here."
+msgstr ""
+
+#. 0: serverHost ?? 'an unknown server'
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "This link points at {0}, which is not the server you are signed in to, so nothing was shared. Start again from the app that sent you here, using your own server."
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Sign in first, then open this link again."
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Read only"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Read and edit"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Connecting"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "What it can reach"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "What it can do"
+msgstr ""
+
+#. 0: host
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "Connect an app that returns to {0}"
+msgstr ""
+
+#. 0: action; 1: serverHost
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "<0/> asks to {0} your data on {1}."
+msgstr ""
+
+#. 0: host
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "When you allow it, you go back to {0}. The name is chosen by the app, so only allow it if that is where you expect to go. It gets its own access, so your secret stays with you, and you can revoke it at any time."
+msgstr ""
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "This link is missing the app's key. Start again from the app that sent you here."
+msgstr ""
+
+#. 0: name; 1: write ? 'read and edit' \\: 'read'
+#: src/routes/ConnectAgentRoute.tsx
+msgid "{0} can now {1} what you shared. You can go back to it. To stop it, revoke it under Connected apps in your account settings."
+msgstr ""
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Account settings"
+msgstr ""
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Connected apps"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server setup: no portal configured"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server setup failed after sign-in"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server setup failed on its own"
+msgstr ""
+
+#: src/views/ImporterPage.tsx
+msgid "Imported."
 msgstr ""
 
 #: src/components/Cloud/DriveAddress.tsx
@@ -12403,6 +12542,10 @@ msgstr ""
 #: src/components/Cloud/DriveAddress.tsx
 #: src/helpers/managed/aliases.ts
 msgid "Could not release that address."
+msgstr ""
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Available."
 msgstr ""
 
 #: src/components/Cloud/DriveAddress.tsx
@@ -12430,6 +12573,57 @@ msgstr ""
 msgid "New web address"
 msgstr ""
 
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Change"
+msgstr ""
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Claim"
+msgstr ""
+
+#. 0: formatBytes(usedBytes)
+#: src/components/Cloud/UsageMeter.tsx
+msgid "{0} used"
+msgstr ""
+
+#: src/components/Cloud/UsageMeter.tsx
+msgid "Storage used"
+msgstr ""
+
+#: src/components/Share/UsageLimit.tsx
+msgid "Limit uses"
+msgstr ""
+
+#: src/components/Share/UsageLimit.tsx
+msgid "Maximum number of people"
+msgstr ""
+
+#: src/components/Share/UsageLimit.tsx
+msgid "person can join"
+msgstr ""
+
+#: src/components/Share/UsageLimit.tsx
+msgid "people can join"
+msgstr ""
+
+#. 0: text
+#: src/components/Share/useEditorSeats.ts
+msgid "{0} Viewers are free."
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Signed in"
+msgstr ""
+
+#. 0: title
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Hide {0}"
+msgstr ""
+
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
+msgstr ""
+
 #: src/helpers/managed/aliases.ts
 msgid "Web addresses are not available on your account yet."
 msgstr ""
@@ -12450,43 +12644,6 @@ msgstr ""
 msgid "Storage details are not available on your account yet."
 msgstr ""
 
-#: src/components/ConnectDevice.tsx
-msgid "Code or server address"
-msgstr ""
-
-#: src/components/Cloud/DriveAddress.tsx
-msgid "Change"
-msgstr ""
-
-#: src/components/Cloud/DriveAddress.tsx
-msgid "Claim"
-msgstr ""
-
-#: src/components/Cloud/DriveAddress.tsx
-msgid "Available."
-msgstr ""
-
-#: src/views/ImporterPage.tsx
-msgid "Imported."
-msgstr ""
-
-#: src/routes/AppSettings.tsx
-msgid "Show Messages panel"
-msgstr ""
-
-#: src/routes/AppSettings.tsx
-msgid "Show Favorites panel"
-msgstr ""
-
-#: src/routes/AppSettings.tsx
-msgid "Show Shared with me panel"
-msgstr ""
-
-#. 0: title
-#: src/components/SideBar/SideBarPanel.tsx
-msgid "Hide {0}"
-msgstr ""
-
 #: src/views/Conversation/NewMessageDialog.tsx
 msgid "Name or did:ad:agent:…"
 msgstr ""
@@ -12499,41 +12656,53 @@ msgstr ""
 msgid "Search people in this drive by name, or paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
 msgstr ""
 
-#: src/components/Spinner.tsx
-msgid "Loading"
-msgstr ""
-
-#: src/components/DatabaseUpgradeNotice.tsx
-msgid "Updating your local data"
-msgstr ""
-
-#~ msgid "The server could not be reached"
-#~ msgstr ""
-
-#: src/components/DatabaseUpgradeNotice.tsx
-msgid "This is needed once after an update and takes a moment. Keep this tab open."
-msgstr ""
-
-#. 0: count
-#: src/helpers/sentry.ts
-msgid "Event repeated {0} times"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server setup: no portal configured"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server setup failed after sign-in"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server setup failed on its own"
-msgstr ""
-
-#~ msgid "Check your connection and that your server is running, then try again."
-#~ msgstr ""
-
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "Summaries are made by a server, and this workspace has none. Host it on a Cloud Server to collect answers and see them summarized here."
+msgstr ""
+
+#. 0: c.minimum
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "min {0}"
+msgstr ""
+
+#. 0: c.maximum
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "max {0}"
+msgstr ""
+
+#. 0: c.minLength
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "min {0} chars"
+msgstr ""
+
+#. 0: c.maxLength
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "max {0} chars"
+msgstr ""
+
+#. 0: c.minItems
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "min {0} items"
+msgstr ""
+
+#. 0: c.maxItems
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "max {0} items"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "pattern"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "linked class"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "options"
+msgstr ""
+
+#. 0: names.length
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr ""

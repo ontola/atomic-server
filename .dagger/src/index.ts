@@ -1413,6 +1413,13 @@ export class AtomicServer {
         this.source.directory('lib/test_files/loro-compat'),
       )
       .withFile('/Cargo.lock', this.source.file('Cargo.lock'))
+      // Fixtures shared by the Rust and TS twins (class constraints, lenses,
+      // JSON Schema interop, schema lockfiles), read by repository-root
+      // path. Same /lib collision: mount only that directory.
+      .withDirectory(
+        '/lib/tests/fixtures',
+        this.source.directory('lib/tests/fixtures'),
+      )
       // Tests read shared fixtures directly from the repository-root paths.
       // Include the manifest and planner corpus as well as pairing fixtures.
       .withDirectory('/testdata', this.source.directory('testdata'))

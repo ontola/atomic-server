@@ -222,6 +222,7 @@ describe('hosted MCP against a live server', () => {
       'get_resource',
       'search',
       'query',
+      'find_schema',
       'get_user_classes',
       'get_schema',
     ]);
@@ -346,6 +347,7 @@ describe('hosted MCP against a live server', () => {
         'edit_resource',
         'create_resource',
         'delete_resource',
+        'ensure_ontology',
       ]),
     );
 
@@ -416,6 +418,82 @@ describe('hosted MCP against a live server', () => {
       parents: [shared.subject],
     });
     expect(found.text).toContain(docSubject);
+
+    // Schemas: describe a type as JSON Schema, find it again, create a row of it.
+    const shop = {
+      title: 'Shop',
+      $defs: {
+        customer: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', minLength: 1 },
+            tier: { type: 'string', enum: ['free', 'pro'] },
+          },
+          required: ['name'],
+        },
+      },
+    };
+    const ensured = await tool(token, 'ensure_ontology', {
+      drive: shared.subject,
+      schema: shop,
+    });
+    expect(ensured.isError).toBe(false);
+    const made = JSON.parse(ensured.text);
+    expect(made.shortname).toBe('shop');
+    expect(made.classes.customer).toBeTruthy();
+
+    // Idempotent.
+    const repeated = await tool(token, 'ensure_ontology', {
+      drive: shared.subject,
+      schema: shop,
+    });
+    expect(JSON.parse(repeated.text)).toEqual(made);
+
+    // An invalid schema names the JSON pointer.
+    const invalid = await tool(token, 'ensure_ontology', {
+      drive: shared.subject,
+      schema: {
+        title: 'Bad',
+        $defs: { x: { type: 'object', properties: { y: { oneOf: [] } } } },
+      },
+    });
+    expect(invalid.isError).toBe(true);
+    expect(invalid.text).toContain('/$defs/x/properties/y');
+
+    const foundSchema = JSON.parse(
+      (await tool(token, 'find_schema', { query: 'customer' })).text,
+    );
+    expect(foundSchema.matches[0].class).toBe(made.classes.customer);
+    expect(foundSchema.matches[0].jsonSchema.required).toEqual(['name']);
+    expect(foundSchema.matches[0].jsonSchema.properties.tier.enum).toEqual([
+      'free',
+      'pro',
+    ]);
+
+    // The deprecated listing still answers, in the old shape plus the schema.
+    const legacy = JSON.parse(
+      (await tool(token, 'get_user_classes', { drive: shared.subject })).text,
+    );
+    expect(legacy.map((c: any) => c.subject)).toContain(made.classes.customer);
+
+    const row = await tool(token, 'create_resource', {
+      resources: [
+        {
+          '@class': made.classes.customer,
+          '@parent': shared.subject,
+          name: 'Anna',
+          tier: 'pro',
+        },
+      ],
+    });
+    expect(row.isError).toBe(false);
+
+    // Nobody else can put an ontology on a drive that was not shared.
+    const elsewhere = await tool(token, 'ensure_ontology', {
+      drive: kept.subject,
+      schema: shop,
+    });
+    expect(elsewhere.isError).toBe(true);
 
     // What was not shared cannot be written, even with edit rights elsewhere.
     const outside = await tool(token, 'create_resource', {

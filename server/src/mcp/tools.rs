@@ -7,18 +7,20 @@ use atomic_lib::{agents::ForAgent, client::search::SearchOpts, urls, Storelike, 
 use serde_json::{json, Value};
 
 use super::{
-    compact::{build_context, coerce_value, describe_class, standard_class_alias},
+    compact::{build_context, coerce_value, describe_class, is_subject, standard_class_alias},
     document_text::document_text,
+    schema,
     tokens::Grant,
     write::{classes_on_drive, str_arg, Writer},
 };
 use crate::appstate::AppState;
 
 const MAX_SUBJECTS: usize = 20;
+const MAX_SCHEMA_MATCHES: usize = 50;
 
-pub const READ_INSTRUCTIONS: &str = "Tools for reading Atomic Data (a graph of resources, each with a subject such as did:ad:… and properties). This connection is read-only: it can find and read what the person approved, and cannot change it. Start with list_drives or search, then read resources with get_resource.";
+pub const READ_INSTRUCTIONS: &str = "Tools for reading Atomic Data (a graph of resources, each with a subject such as did:ad:… and properties). This connection is read-only: it can find and read what the person approved, and cannot change it. Start with list_drives or search, then read resources with get_resource. Use find_schema to look up the classes (types) that exist, with their JSON Schema.";
 
-pub const WRITE_INSTRUCTIONS: &str = "Tools for reading and editing Atomic Data (a graph of resources, each with a subject such as did:ad:… and properties). Edits are made as this connection's own identity, within what the person approved. Start with list_drives or search, read resources with get_resource, and use get_user_classes / get_schema before creating resources of a custom class. Property names are shortnames from a class's schema (full property URLs also work); select values take tag names and dates take ISO strings.";
+pub const WRITE_INSTRUCTIONS: &str = "Tools for reading and editing Atomic Data (a graph of resources, each with a subject such as did:ad:… and properties). Edits are made as this connection's own identity, within what the person approved. Start with list_drives or search, read resources with get_resource, and call find_schema before creating resources of a custom class. To add a new type, search with find_schema first and reuse an existing class if one fits; only then describe the missing ones as a JSON Schema for ensure_ontology. Property names are shortnames from a class's schema (full property URLs also work); select values take tag names and dates take ISO strings.";
 
 pub fn instructions(write: bool) -> &'static str {
     if write {
@@ -107,9 +109,23 @@ pub fn list(write: bool) -> Value {
             "annotations": read_only
         }),
         json!({
+            "name": "find_schema",
+            "title": "Find classes",
+            "description": "Search the classes (custom types, like \"task\" or \"deal\") defined on the drives shared with this connection, each as a JSON Schema. Search FIRST, before creating a class or resources of a custom type, and reuse a class that fits instead of making a near-duplicate. `query` is words matched (OR) against a class's and its ontology's shortname, name and description; classes that match more words come first; an empty query lists everything. Each match has `class` (subject), `shortname`, `ontology` ({subject, shortname}) and `jsonSchema`: the class as an object schema, with `required`, constraints as JSON Schema keywords, and `x-atomic-property` holding each property's subject. Default 10 matches, `total` is how many matched.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Words to look for, e.g. \"invoice customer\". Empty lists all classes."},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": MAX_SCHEMA_MATCHES}
+                },
+                "required": ["query"]
+            },
+            "annotations": read_only
+        }),
+        json!({
             "name": "get_user_classes",
-            "title": "List classes",
-            "description": "List the classes (custom types, like \"task\" or \"deal\") defined on a drive (the default drive unless `drive` is given).",
+            "title": "List classes (deprecated)",
+            "description": "Deprecated: use find_schema. Same as find_schema with an empty query (up to 50 classes), as a plain list. Takes an optional `drive` to list the classes of that drive only.",
             "inputSchema": {"type": "object", "properties": {"drive": {"type": "string"}}},
             "annotations": read_only
         }),
@@ -145,13 +161,28 @@ pub fn list(write: bool) -> Value {
             json!({
                 "name": "create_resource",
                 "title": "Create resources",
-                "description": "Create one or more resources from compact JSON-AD. For a document or meeting, \"_documentText\" sets its text from Markdown or plain text. Each object needs \"@class\" (a shortname like \"folder\", \"document\", \"table\", a class from get_user_classes, or a full URL) and \"@parent\" (a drive, folder or table subject), plus property shortnames as keys, e.g. {\"@class\": \"task\", \"@parent\": \"did:ad:…\", \"name\": \"Call Anna\", \"status\": \"todo\"}. Never pass \"@id\". Pass several to create many at once.",
+                "description": "Create one or more resources from compact JSON-AD. For a document or meeting, \"_documentText\" sets its text from Markdown or plain text. Each object needs \"@class\" (a shortname like \"folder\", \"document\", \"table\", a class from find_schema, or a full URL) and \"@parent\" (a drive, folder or table subject), plus property shortnames as keys, e.g. {\"@class\": \"task\", \"@parent\": \"did:ad:…\", \"name\": \"Call Anna\", \"status\": \"todo\"}. Never pass \"@id\". Pass several to create many at once.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {"resources": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"type": "object"}}},
                     "required": ["resources"]
                 },
                 "annotations": {"readOnlyHint": false, "destructiveHint": false}
+            }),
+            json!({
+                "name": "ensure_ontology",
+                "title": "Create or update a schema",
+                "description": "Create or update classes from a JSON Schema (draft 2020-12). Run find_schema first and reuse existing classes; only describe what is missing. Every object schema in `$defs` becomes a class, its `properties` become properties, `required` becomes required properties, and constraints go in the schema as keywords: enum, minimum, maximum, minLength, maxLength, pattern, minItems, maxItems. A `$ref` to \"#/$defs/Name\" links to another class. Idempotent: calling it again with the same schema changes nothing. Properties are identified by ontology, shortname and type, so renaming a shortname or changing a type makes a NEW property (the old one and its data stay). Returns the shortname to subject maps of the classes and properties; use a class subject as `@class` in create_resource. An invalid schema returns an error naming the JSON pointer to fix (unsupported: oneOf/anyOf/allOf, nullable types, nested object schemas; move those to `$defs`). Example schema: {\"title\":\"Shop\",\"$defs\":{\"customer\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"name\"]}}}",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "drive": {"type": "string", "description": "The drive (or folder) to put the ontology in. Defaults to the first drive that can be edited."},
+                        "schema": {"type": "object", "description": "The JSON Schema."},
+                        "shortname": {"type": "string", "description": "Shortname (lowercase slug) of the ontology. Defaults to the schema's `x-atomic-ontology`, then its `title`, then the drive's default ontology."}
+                    },
+                    "required": ["schema"]
+                },
+                "annotations": {"readOnlyHint": false, "destructiveHint": false, "idempotentHint": true}
             }),
             json!({
                 "name": "delete_resource",
@@ -187,9 +218,10 @@ pub async fn call(
         "get_resource" => get_resource(appstate, origin, &for_agent, args).await,
         "search" => search(appstate, &for_agent, args).await,
         "query" => query(appstate, &for_agent, agent, args).await,
-        "get_user_classes" => get_user_classes(appstate, &for_agent, agent, args).await,
+        "find_schema" => schema::find_schema(appstate, &for_agent, agent, args, None).await,
+        "get_user_classes" => schema::get_user_classes(appstate, &for_agent, agent, args).await,
         "get_schema" => get_schema(appstate, &for_agent, agent, args).await,
-        "edit_resource" | "create_resource" | "delete_resource" => {
+        "edit_resource" | "create_resource" | "delete_resource" | "ensure_ontology" => {
             // Writes are rate limited per agent, like any signed write.
             crate::helpers::enforce_write_rate_limit(appstate, req, &for_agent)
                 .map_err(|e| e.to_string())?;
@@ -198,6 +230,7 @@ pub async fn call(
             match name {
                 "edit_resource" => writer.edit(args).await,
                 "create_resource" => writer.create(args).await,
+                "ensure_ontology" => writer.ensure_ontology(args).await,
                 _ => writer.delete(args).await,
             }
         }
@@ -206,7 +239,7 @@ pub async fn call(
 }
 
 /// The drive a tool works in when the call names none: the first shared one.
-async fn default_drive(
+pub(super) async fn default_drive(
     appstate: &AppState,
     for_agent: &ForAgent,
     agent: &str,
@@ -239,7 +272,7 @@ async fn resolve_class_name(
     drive: &str,
     name: &str,
 ) -> Result<String, String> {
-    if atomic_lib::mapping::is_url(name) || name.starts_with("did:ad:") {
+    if is_subject(name) {
         return Ok(name.to_string());
     }
     if let Some(standard) = standard_class_alias(name) {
@@ -256,26 +289,8 @@ async fn resolve_class_name(
     }
 
     Err(format!(
-        "Unknown class \"{name}\". Use get_user_classes to list available classes, or pass a full class URL."
+        "Unknown class \"{name}\". Use find_schema to look for classes, or pass a full class URL."
     ))
-}
-
-async fn get_user_classes(
-    appstate: &AppState,
-    for_agent: &ForAgent,
-    agent: &str,
-    args: &Value,
-) -> Result<Value, String> {
-    let drive = default_drive(appstate, for_agent, agent, args).await?;
-    let mut out = Vec::new();
-
-    for subject in classes_on_drive(appstate, &drive)? {
-        if let Some(name) = title(appstate, &subject, for_agent).await {
-            out.push(json!({"shortname": name, "subject": subject}));
-        }
-    }
-
-    Ok(json!(out))
 }
 
 async fn get_schema(
@@ -285,7 +300,7 @@ async fn get_schema(
     args: &Value,
 ) -> Result<Value, String> {
     let name = str_arg(args, "subject")?;
-    let drive = if atomic_lib::mapping::is_url(name) || standard_class_alias(name).is_some() {
+    let drive = if is_subject(name) || standard_class_alias(name).is_some() {
         String::new()
     } else {
         default_drive(appstate, for_agent, agent, args).await?
@@ -328,7 +343,7 @@ async fn query(
         let value = condition
             .get("value")
             .ok_or("Each condition needs a value")?;
-        if class.is_none() && !atomic_lib::mapping::is_url(property) {
+        if class.is_none() && !is_subject(property) {
             return Err(format!(
                 "Invalid property subject in where clause: '{property}'. Pass `class` to use shortnames."
             ));
@@ -412,7 +427,7 @@ async fn title(appstate: &AppState, subject: &str, for_agent: &ForAgent) -> Opti
 }
 
 /// What the person shared: resources whose `read` (or `write`) lists this agent.
-async fn shared_drives(
+pub(super) async fn shared_drives(
     appstate: &AppState,
     for_agent: &ForAgent,
     agent: &str,

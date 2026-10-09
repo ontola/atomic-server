@@ -92,8 +92,18 @@ pub async fn build_context(appstate: &AppState, classes: &[String]) -> ClassCont
     }
 
     for subject in UNIVERSAL {
-        if !ctx.properties.iter().any(|p| p.subject == subject) {
-            if let Some(info) = load_property(appstate, subject).await {
+        if ctx.properties.iter().any(|p| p.subject == subject) {
+            continue;
+        }
+        if let Some(info) = load_property(appstate, subject).await {
+            // A class's own `name` (a schema from ensure_ontology has one per
+            // class) wins over the universal one; the universal is still
+            // reachable by its full URL.
+            let shadowed = ctx
+                .properties
+                .iter()
+                .any(|p| p.shortname.to_lowercase() == info.shortname.to_lowercase());
+            if !shadowed {
                 ctx.properties.push(info);
             }
         }
@@ -107,7 +117,7 @@ impl ClassContext {
     /// else loaded on its own) or a shortname or display name. Unknown and
     /// ambiguous keys fail with what is available, so the model can repair.
     pub async fn resolve(&self, appstate: &AppState, key: &str) -> Result<PropInfo, String> {
-        if atomic_lib::mapping::is_url(key) {
+        if is_subject(key) {
             if let Some(known) = self.properties.iter().find(|p| p.subject == key) {
                 return Ok(known.clone());
             }
@@ -161,7 +171,7 @@ pub fn coerce_value(info: &PropInfo, raw: &Value) -> Result<Value, String> {
                 .as_str()
                 .map(str::to_string)
                 .unwrap_or_else(|| entry.to_string());
-            if atomic_lib::mapping::is_url(&name) || name.starts_with("did:ad:") {
+            if is_subject(&name) {
                 out.push(json!(name));
                 continue;
             }
@@ -252,6 +262,12 @@ pub async fn describe_class(appstate: &AppState, class_subject: &str) -> Result<
 }
 
 /// Class names models use for the built-in classes.
+/// Whether a name is already a subject: a URL, or an Atomic identifier in
+/// either scheme (`did:ad:…`, `atomic:…`, as `ensure_ontology` returns them).
+pub fn is_subject(name: &str) -> bool {
+    atomic_lib::mapping::is_url(name) || atomic_lib::identifiers::is_atomic_identifier(name)
+}
+
 pub fn standard_class_alias(name: &str) -> Option<&'static str> {
     let aliases: HashMap<&str, &str> = HashMap::from([
         ("file", urls::FILE),

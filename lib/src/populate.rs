@@ -67,6 +67,38 @@ fn base_models() -> (Vec<Property>, Vec<Class>) {
             allows_only: None,
         },
         Property {
+            class_type: None,
+            data_type: DataType::Json,
+            shortname: "constraints".into(),
+            description: "Per-property value constraints for instances of this Class: a JSON object keyed by property subject whose values use a subset of JSON Schema keywords (`enum`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, `pattern`, `class`).".into(),
+            subject: urls::CONSTRAINTS.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: None,
+            data_type: DataType::AtomicUrl,
+            shortname: "lens-from".into(),
+            description: "The property a Lens reads. Part of the Lens's content-addressed identity.".into(),
+            subject: urls::LENS_FROM.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: None,
+            data_type: DataType::AtomicUrl,
+            shortname: "lens-to".into(),
+            description: "The property a Lens writes. The Lens belongs to the ontology that owns this property. Part of the Lens's content-addressed identity.".into(),
+            subject: urls::LENS_TO.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: None,
+            data_type: DataType::Json,
+            shortname: "lens-transform".into(),
+            description: "How a value under `lensFrom` becomes a value under `lensTo`: a JSON object with an `op` (`rename`, `wrap`, `head`, `map` or `convert`). Part of the Lens's content-addressed identity.".into(),
+            subject: urls::LENS_TRANSFORM.into(),
+            allows_only: None,
+        },
+        Property {
             class_type: Some(urls::PROPERTY.into()),
             data_type: DataType::ResourceArray,
             shortname: "requires".into(),
@@ -168,7 +200,7 @@ fn base_models() -> (Vec<Property>, Vec<Class>) {
         },
         Class {
             requires: vec![urls::SHORTNAME.into(), urls::DESCRIPTION.into()],
-            recommends: vec![urls::RECOMMENDS.into(), urls::REQUIRES.into()],
+            recommends: vec![urls::RECOMMENDS.into(), urls::REQUIRES.into(), urls::CONSTRAINTS.into()],
             shortname: "class".into(),
             description: "A Class describes an abstract concept, such as 'Person' or 'Blogpost'. It describes the data shape of data (which fields are required and recommended) and explains what the concept represents. It is convention to use Uppercase in its URL.Resources use the [is-a](https://atomicdata.dev/properties/isA) attribute to indicate which classes they are instances of. Note that in Atomic Data, a Resource can have several Classes - not just a single one.".into(),
             subject: urls::CLASS.into(),
@@ -195,6 +227,13 @@ fn base_models() -> (Vec<Property>, Vec<Class>) {
             description:
                 "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.".into(),
             subject: urls::AGENT.into(),
+        },
+        Class {
+            requires: vec![urls::LENS_FROM.into(), urls::LENS_TO.into(), urls::LENS_TRANSFORM.into()],
+            recommends: vec![urls::DESCRIPTION.into()],
+            shortname: "lens".into(),
+            description: "A Lens maps the values of one Property onto another, so data stored under an old Property shows up under its replacement. Its ID is the hash of `lensFrom`, `lensTo` and `lensTransform`, and it belongs to the ontology that owns `lensTo`.".into(),
+            subject: urls::LENS.into(),
         },
         // The Commit class is fundamental: commit serialization
         // (`CommitBuilder::into_resource` → `Resource::new_instance(COMMIT)`)
