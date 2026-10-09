@@ -145,11 +145,14 @@ export function useChatLogEntry(id: string): {
 
 const NO_PAGES: string[] = [];
 
-/** How many messages the pages hold in all. */
-export function useChatLogCount(pages: string[]): number {
+/**
+ * The entry keys the pages hold, each once: one key on two pages (two peers
+ * migrated the same message) is one message.
+ */
+export function useChatLogKeys(pages: string[]): ReadonlySet<string> {
   const store = useStore();
   const revision = useChatLogRevision(pages);
-  const [count, setCount] = useState(0);
+  const [keys, setKeys] = useState<ReadonlySet<string>>(NO_KEYS);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,12 +160,15 @@ export function useChatLogCount(pages: string[]): number {
     void Promise.all(pages.map(page => store.getResource(page))).then(
       resources => {
         if (cancelled) return;
-        setCount(
-          resources.reduce(
-            (sum, page) => sum + (page.error ? 0 : page.countChatLogEntries()),
-            0,
-          ),
-        );
+        const next = new Set<string>();
+
+        for (const page of resources) {
+          if (page.error) continue;
+
+          for (const { key } of page.listChatLogEntries()) next.add(key);
+        }
+
+        setKeys(next);
       },
     );
 
@@ -171,5 +177,12 @@ export function useChatLogCount(pages: string[]): number {
     };
   }, [store, pages, revision]);
 
-  return pages.length === 0 ? 0 : count;
+  return pages.length === 0 ? NO_KEYS : keys;
+}
+
+const NO_KEYS: ReadonlySet<string> = new Set();
+
+/** How many messages the pages hold in all. */
+export function useChatLogCount(pages: string[]): number {
+  return useChatLogKeys(pages).size;
 }

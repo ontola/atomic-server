@@ -564,8 +564,6 @@ impl Db {
         // before bootstrap, so any filter-matching commits during bootstrap
         // see the right state.
         self.migrate_canonical_scheme_if_needed()?;
-        // A store with nothing in it has no old messages to move.
-        let fresh_store = self.kv.iter_tree(Tree::Resources).next().is_none();
         // The browser runs this in slices it can show progress for
         // (`ClientDb.migrateIndexKeysStep`); everywhere else it is done here.
         #[cfg(not(target_arch = "wasm32"))]
@@ -587,9 +585,6 @@ impl Db {
         // this in slices it can show progress for
         // (`ClientDb.migrateMessagesStep`); everywhere else it is done here,
         // after the watched queries are loaded so the new pages are indexed.
-        if fresh_store {
-            self.skip_message_migration()?;
-        }
         #[cfg(not(target_arch = "wasm32"))]
         self.migrate_messages().await?;
         crate::search::maybe_rebuild_search_index(&self)?;

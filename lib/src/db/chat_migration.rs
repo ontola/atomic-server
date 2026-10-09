@@ -112,16 +112,18 @@ fn has_class(classes: &[String], class: &str) -> bool {
 }
 
 impl Db {
-    /// Whether old `Message` resources may still have to be moved into pages.
+    /// Whether old `Message` resources are left to move: not marked done, and
+    /// the index lists at least one. A store without any writes nothing at all
+    /// (not even a marker), so opening it costs one index lookup.
     pub fn message_migration_pending(&self) -> AtomicResult<bool> {
-        Ok(self.kv.get(Tree::PluginMeta, DONE_KEY)?.is_none())
-    }
-
-    /// Marks the migration done without looking at anything: for a store that
-    /// has nothing in it.
-    pub fn skip_message_migration(&self) -> AtomicResult<()> {
-        self.kv.insert(Tree::PluginMeta, DONE_KEY, b"1")?;
-        Ok(())
+        if self.kv.get(Tree::PluginMeta, DONE_KEY)?.is_some() {
+            return Ok(false);
+        }
+        let class = Value::AtomicUrl(urls::MESSAGE.into());
+        Ok(find_in_prop_val_sub_index(self, urls::IS_A, Some(&class))
+            .flatten()
+            .next()
+            .is_some())
     }
 
     /// Migrates whole groups until `limit` messages are done (at least one
@@ -184,9 +186,10 @@ impl Db {
     }
 
     fn finish_message_migration(&self, total: u64) -> AtomicResult<MessageMigration> {
-        self.kv.insert(Tree::PluginMeta, DONE_KEY, b"1")?;
-        self.kv.remove(Tree::PluginMeta, STATE_KEY)?;
+        // Nothing to move: leave the store untouched.
         if total > 0 {
+            self.kv.insert(Tree::PluginMeta, DONE_KEY, b"1")?;
+            self.kv.remove(Tree::PluginMeta, STATE_KEY)?;
             self.kv.flush()?;
         }
         Ok(MessageMigration {
