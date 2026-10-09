@@ -360,8 +360,8 @@ export const store = {
      * text. Resolves to `{ status, headers, body }`, `body` parsed as JSON
      * when it is JSON.
      */
-    async request({ platform, connectionId, path, method = 'GET', query, body, ifMatch }) {
-      return proxyRequest({ platform, connectionId, path, method, query, body, ifMatch });
+    async request({ platform, connectionId, path, method = 'GET', query, body, ifMatch, ifNoneMatch, ifModifiedSince, idempotencyKey }) {
+      return proxyRequest({ platform, connectionId, path, method, query, body, ifMatch, ifNoneMatch, ifModifiedSince, idempotencyKey });
     },
 
     /** Connections for `platform` delegated to this app: `[{ connectionId, platform }]`. */
@@ -385,7 +385,25 @@ export const store = {
 // ---- Integration proxy: frame key, capabilities, signed requests ----
 
 const PROXY_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const PROXY_HEADERS = ['link', 'retry-after', 'etag', 'content-type'];
+const PROXY_HEADERS = [
+  'link',
+  'retry-after',
+  'etag',
+  'content-type',
+  'last-modified',
+  'x-ratelimit-limit',
+  'x-ratelimit-remaining',
+  'x-ratelimit-used',
+  'x-ratelimit-reset',
+  'x-ratelimit-resource',
+  'ratelimit',
+  'ratelimit-policy',
+  'ratelimit-limit',
+  'ratelimit-remaining',
+  'ratelimit-reset',
+  'x-total-count',
+  'x-next-page',
+];
 const PROXY_MAX_BODY = 10 * 1024 * 1024;
 /** Mint a new capability this long before the current one expires. */
 const CAPABILITY_MARGIN_MS = 60_000;
@@ -517,12 +535,15 @@ function parseBody(text) {
   }
 }
 
-async function proxyRequest({ platform, connectionId, path, method, query, body, ifMatch }) {
+async function proxyRequest({ platform, connectionId, path, method, query, body, ifMatch, ifNoneMatch, ifModifiedSince, idempotencyKey }) {
   const verb = String(method).toUpperCase();
   if (!PROXY_METHODS.includes(verb)) throw new Error('Invalid proxy method');
   if (body !== undefined && typeof body !== 'string') throw new Error('A proxy request body is JSON text');
   if (body !== undefined && verb === 'GET') throw new Error('A GET proxy request has no body');
   if (ifMatch !== undefined && typeof ifMatch !== 'string') throw new Error('Invalid If-Match');
+  if (ifNoneMatch !== undefined && typeof ifNoneMatch !== 'string') throw new Error('Invalid If-None-Match');
+  if (ifModifiedSince !== undefined && typeof ifModifiedSince !== 'string') throw new Error('Invalid If-Modified-Since');
+  if (idempotencyKey !== undefined && typeof idempotencyKey !== 'string') throw new Error('Invalid Idempotency-Key');
 
   const attempt = async fresh => {
     const cap = await capabilityFor(platform, connectionId, fresh);
@@ -532,6 +553,9 @@ async function proxyRequest({ platform, connectionId, path, method, query, body,
       ...(await signV2(verb, url, body)),
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(ifMatch ? { 'If-Match': ifMatch } : {}),
+      ...(ifNoneMatch ? { 'If-None-Match': ifNoneMatch } : {}),
+      ...(ifModifiedSince ? { 'If-Modified-Since': ifModifiedSince } : {}),
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     };
 
     return fetch(url, {
