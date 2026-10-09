@@ -4,6 +4,7 @@ use actix_web::{
     middleware, web, Error, HttpServer,
 };
 use atomic_lib::Storelike;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use tracing_actix_web::{DefaultRootSpanBuilder, RootSpanBuilder};
 
 /// Actix's connection limit is per worker (25,000 by default), while the OS
@@ -593,11 +594,11 @@ where
                 let https_config = crate::https::get_https_config(&config)
                     .expect("HTTPS TLS Configuration with Let's Encrypt failed.");
                 spawn_cert_renewal_task(config.clone());
-                let endpoint = format!("{}:{}", config.opts.ip, config.opts.port_https);
+                let (listener, endpoint) = bind_listener(config.opts.ip, config.opts.port_https)?;
                 tracing::info!("Binding HTTPS server to endpoint {}", endpoint);
                 println!("{}", message);
                 server
-                    .bind_rustls_0_23(&endpoint, https_config)
+                    .listen_rustls_0_23(listener, https_config)
                     .map_err(|e| format!("Cannot bind to endpoint {}: {}", endpoint, e))?
                     .shutdown_timeout(TIMEOUT)
                     .run()
@@ -607,11 +608,11 @@ where
             return Err("The HTTPS feature has been disabled for this build. Please compile atomic-server with the HTTP feature. `cargo install atomic-server`".into());
         }
     } else {
-        let endpoint = format!("{}:{}", config.opts.ip, config.opts.port);
+        let (listener, endpoint) = bind_listener(config.opts.ip, config.opts.port)?;
         tracing::info!("Binding HTTP server to endpoint {}", endpoint);
         println!("{}", message);
         server
-            .bind(&endpoint)
+            .listen(listener)
             .map_err(|e| format!("Cannot bind to endpoint {}: {}", endpoint, e))?
             .shutdown_timeout(TIMEOUT)
             .run()
@@ -627,6 +628,44 @@ where
 
     tracing::info!("Server stopped");
     Ok(())
+}
+
+/// Whether the operator chose the bind address (`--ip` or `ATOMIC_IP`), as
+/// opposed to getting the default `::`.
+fn ip_is_explicit() -> bool {
+    std::env::var_os("ATOMIC_IP").is_some()
+        || std::env::args().any(|a| a == "--ip" || a.starts_with("--ip="))
+}
+
+/// Whether a failed bind of the default `::` should be retried on `0.0.0.0`:
+/// only when the address was not set explicitly and the host has no IPv6.
+fn should_fall_back_to_ipv4(ip: IpAddr, explicit: bool, error: &std::io::Error) -> bool {
+    use std::io::ErrorKind;
+
+    !explicit
+        && ip == IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+        && (error.kind() == ErrorKind::AddrNotAvailable
+            // EAFNOSUPPORT: Docker containers and some VPSs have no IPv6 at all.
+            || error.raw_os_error() == Some(97))
+}
+
+/// Binds the listening socket. The default `::` fails on hosts without IPv6,
+/// so then (and only then) we fall back to `0.0.0.0`.
+fn bind_listener(ip: IpAddr, port: u32) -> Result<(std::net::TcpListener, String), String> {
+    let port = u16::try_from(port).map_err(|_| format!("Invalid port {port}"))?;
+    let endpoint = format!("{}:{}", ip, port);
+    match std::net::TcpListener::bind((ip, port)) {
+        Ok(listener) => Ok((listener, endpoint)),
+        Err(e) if should_fall_back_to_ipv4(ip, ip_is_explicit(), &e) => {
+            let v4 = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+            tracing::info!("IPv6 is not available on this host, listening on 0.0.0.0 instead (set --ip / ATOMIC_IP to choose an address)");
+            let endpoint = format!("{}:{}", v4, port);
+            let listener = std::net::TcpListener::bind((v4, port))
+                .map_err(|e| format!("Cannot bind to endpoint {}: {}", endpoint, e))?;
+            Ok((listener, endpoint))
+        }
+        Err(e) => Err(format!("Cannot bind to endpoint {}: {}", endpoint, e)),
+    }
 }
 
 /// Amount of seconds before server shuts down connections after SIGTERM signal
@@ -718,5 +757,38 @@ mod connection_budget_tests {
             super::process_fd_soft_limit().is_some_and(|soft| soft >= 1024),
             "the raised limit should be readable and no smaller than the stock default"
         );
+    }
+}
+
+#[cfg(test)]
+mod bind_tests {
+    use super::*;
+    use std::io::{Error, ErrorKind};
+
+    const V6: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
+
+    #[test]
+    fn falls_back_only_for_the_default_address_without_ipv6() {
+        let unsupported = Error::from_raw_os_error(97);
+        assert!(should_fall_back_to_ipv4(V6, false, &unsupported));
+        assert!(should_fall_back_to_ipv4(
+            V6,
+            false,
+            &Error::from(ErrorKind::AddrNotAvailable)
+        ));
+        // Explicit setting fails loudly.
+        assert!(!should_fall_back_to_ipv4(V6, true, &unsupported));
+        // Other errors (port in use) never fall back.
+        assert!(!should_fall_back_to_ipv4(
+            V6,
+            false,
+            &Error::from(ErrorKind::AddrInUse)
+        ));
+        // Not the IPv6 default.
+        assert!(!should_fall_back_to_ipv4(
+            IpAddr::V4(Ipv4Addr::LOCALHOST),
+            false,
+            &unsupported
+        ));
     }
 }
