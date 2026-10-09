@@ -30,6 +30,9 @@ import {
   useFrameColorScheme,
 } from '@views/PluginView/useCreateThemeVars';
 import { getIntegrationProxy } from '@helpers/integrationProxy';
+import { integrationReturnAddress } from '@helpers/integrationReturn';
+import { openExternal } from '@helpers/openExternal';
+import { isRunningInTauri } from '@helpers/tauri';
 import {
   isPlatformId,
   ProxyConnections,
@@ -348,10 +351,17 @@ function AppFrameSession({
       ask.platform,
       location.href,
       await appLabel(store, app),
+      location.origin,
+      integrationReturnAddress(isRunningInTauri(), location.origin),
     );
 
     // Closing the dialog meanwhile was a no; leaving now would overrule it.
-    if (connectAskRef.current?.id === ask.id) location.assign(url);
+    if (connectAskRef.current?.id !== ask.id) return;
+
+    // Providers refuse OAuth in an embedded webview, so the apps use the
+    // system browser and come back through `atomic://integrations/return`.
+    if (isRunningInTauri()) void openExternal(url);
+    else location.assign(url);
   };
 
   const shareExisting = async (connection: ProxyConnection) => {
