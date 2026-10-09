@@ -8992,7 +8992,7 @@ msgstr "Could not set up this importer: {0}"
 msgid "Set up"
 msgstr "Set up"
 
-#. 0: manifest.destination.table.name
+#. 0: names[0]
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr "Set up creates a {0} table for this importer. Nothing is imported yet."
@@ -12714,3 +12714,7 @@ msgstr "linked class"
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "options"
 msgstr "options"
+#. 0: names.length
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
+msgstr "Set up creates {0} tables for this importer. Nothing is imported yet."

@@ -5053,7 +5053,14 @@ mod tests {
 
         // ...which the class falls back to until it says otherwise.
         let mut options = json!({});
-        resolve_choice_options(&store, &[class.clone()], "dropdown", &prop, &mut options).await;
+        resolve_choice_options(
+            &store,
+            std::slice::from_ref(&class),
+            "dropdown",
+            &prop,
+            &mut options,
+        )
+        .await;
         assert_eq!(options[OPTIONS_KEY][0]["value"], json!(old));
 
         set_class_constraints(
@@ -5063,7 +5070,14 @@ mod tests {
         )
         .await;
         let mut options = json!({});
-        resolve_choice_options(&store, &[class.clone()], "dropdown", &prop, &mut options).await;
+        resolve_choice_options(
+            &store,
+            std::slice::from_ref(&class),
+            "dropdown",
+            &prop,
+            &mut options,
+        )
+        .await;
         let values: Vec<&str> = options[OPTIONS_KEY]
             .as_array()
             .unwrap()

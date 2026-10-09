@@ -276,6 +276,7 @@ export {
   type DeclaredConfigField,
   type DeclaredAccept,
   type DeclaredDestination,
+  type DeclaredDestinationTable,
   DEFAULT_ACCEPT_MAX_BYTES,
   ACCEPT_MAX_BYTES_CEILING,
   type ManifestRuntime,
@@ -367,6 +368,12 @@ export * from './import-resolution.js';
 
 export * from './import-reference-review.js';
 
+export {
+  destinationTablesFor,
+  provisionDestination,
+  type DestinationConfig,
+  type DestinationTable,
+} from './plugin-destination.js';
 export { pluginWorkspace, workspaceConnections } from './plugin-workspace.js';
 export type { WorkspaceConnection } from './plugin-workspace.js';
 
