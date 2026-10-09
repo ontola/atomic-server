@@ -1,5 +1,9 @@
 import { useEffect, useEffectEvent, type JSX } from 'react';
 import { isAtomicIdentifier, looksLikePairingUri } from '@tomic/lib';
+import {
+  deliverIntegrationReturn,
+  parseIntegrationReturn,
+} from '../helpers/integrationReturn';
 import { clearDeepLinkSink, setDeepLinkSink } from '../helpers/deepLinkQueue';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -44,6 +48,15 @@ export function PairingLinkHandler(): JSX.Element {
       if (subject) {
         navigate(constructOpenURL(subject));
       }
+
+      return;
+    }
+
+    const integrationReturn = parseIntegrationReturn(uri);
+
+    if (integrationReturn) {
+      // Redeemed by `ProxyConnectReturn`, which holds the PKCE verifier.
+      deliverIntegrationReturn(integrationReturn);
 
       return;
     }

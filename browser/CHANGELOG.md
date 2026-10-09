@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Desktop and mobile apps: connecting an integration opens the system browser and returns through an `atomic://integrations/return` link, because providers such as Google refuse sign-in inside embedded webviews (#2163).
 - Calendar: the repeat "Last day" date keeps focus while you type and is saved when you leave the field or press Enter, instead of after every keystroke (#2137).
 - Documents: after mentioning a resource with `@` or the toolbar button, the caret sits in a paragraph after the card (one is added if needed), so typing no longer replaces the card (#2139).
 

@@ -258,6 +258,9 @@ export class ProxyConnections {
    * The proxy only returns to `/app/integrations`, so `returnTo` is where the
    * return handler goes afterwards. No proxy login: the redeem that follows
    * is signed with the user key, and that makes the user the owner.
+   * `callbackBase` is the address the proxy returns to; the Tauri apps pass
+   * `atomic://integrations/return` because the connect page opens in the
+   * system browser.
    */
   async start(
     scope: ConnectScope,
@@ -265,6 +268,7 @@ export class ProxyConnections {
     returnTo: string,
     label: string,
     pageOrigin = location.origin,
+    callbackBase = new URL('/app/integrations', pageOrigin).href,
   ): Promise<string> {
     if (!isPlatformId(platform)) throw new Error('Invalid platform');
     const back = new URL(returnTo, pageOrigin);
@@ -281,7 +285,7 @@ export class ProxyConnections {
         ),
       ),
     );
-    const callback = new URL('/app/integrations', pageOrigin);
+    const callback = new URL(callbackBase);
     callback.searchParams.set('integration_state', state);
     callback.searchParams.set('platform', platform);
     const url = new URL('/connect', this.origin);
