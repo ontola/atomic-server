@@ -153,6 +153,7 @@ pub async fn push(
     let target = EnsureTarget {
         remote: true,
         ontology: previous.map(|p| p.ontology),
+        ..Default::default()
     };
     let ensured = ensure_ontology_with(
         &context.store,

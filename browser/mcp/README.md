@@ -83,11 +83,32 @@ tools.
 | `get_resource`     | Reads resources; documents and meetings include their text.              |
 | `search`           | Full-text search.                                                        |
 | `query`            | Finds resources by property values, e.g. all tasks with status "done".   |
-| `get_user_classes` | The custom classes on a drive.                                           |
+| `find_schema`      | Searches the classes on the shared drives by words; each match comes with its JSON Schema. Search first, reuse what fits. |
+| `get_user_classes` | Deprecated: `find_schema` with an empty query, as a list.                |
 | `get_schema`       | The properties of a class.                                               |
 | `create_resource`  | Creates one or many resources; documents take their text as `_documentText`. |
 | `edit_resource`    | Sets one property, or replaces a document's text (`_documentText`).      |
+| `ensure_ontology`  | Creates or updates classes from a JSON Schema (draft 2020-12). Idempotent. |
 | `delete_resource`  | Deletes a resource (never a whole drive).                                |
+
+### Schemas
+
+Types are classes in an ontology, and an ontology is described as a JSON
+Schema, the same way as in the app's assistant. Call `find_schema` first and
+reuse a class that fits. Only for what is missing, call `ensure_ontology` with
+`{drive, schema, shortname?}`: every object schema in `$defs` becomes a class,
+`properties` become properties, `required` becomes required properties, and
+constraints go in the schema as keywords (`enum`, `minimum`, `maximum`,
+`minLength`, `maxLength`, `pattern`, `minItems`, `maxItems`). A
+`$ref: "#/$defs/Name"` links to another class. It returns the shortname to
+subject maps of the classes and properties; pass a class subject as `@class` to
+`create_resource`. Calling it again with the same schema changes nothing.
+Properties are identified by ontology, shortname and type, so renaming a
+shortname or changing a type makes a *new* property; the old one and its data
+stay. An invalid schema comes back as an error naming the JSON pointer to fix
+(`oneOf`/`anyOf`/`allOf`, nullable types and nested object schemas are not
+supported: move them to `$defs`). The commits are signed as the connection's
+own identity, so it needs write rights on the drive.
 
 A document's or meeting's text is written as Markdown or plain text through
 `_documentText`, on `create_resource` and on `edit_resource`: headings,

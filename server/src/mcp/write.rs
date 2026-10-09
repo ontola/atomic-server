@@ -14,7 +14,7 @@ use atomic_lib::{
 use serde_json::{json, Value};
 
 use super::{
-    compact::{self, build_context, coerce_value, has_document_body},
+    compact::{self, build_context, coerce_value, has_document_body, is_subject},
     tokens::Grant,
 };
 use crate::appstate::AppState;
@@ -48,7 +48,7 @@ impl<'a> Writer<'a> {
     }
 
     /// Reads as the agent: the rights check is the store's.
-    async fn read(&self, subject: &str) -> Result<Resource, String> {
+    pub(super) async fn read(&self, subject: &str) -> Result<Resource, String> {
         self.appstate
             .store
             .get_resource_extended(&subject.into(), true, &self.for_agent)
@@ -58,16 +58,7 @@ impl<'a> Writer<'a> {
     }
 
     async fn submit(&self, commit: atomic_lib::Commit) -> Result<(), String> {
-        let json = commit
-            .into_resource(&self.appstate.store)
-            .await
-            .and_then(|r| r.to_json_ad(Some(self.origin)))
-            .map_err(|e| e.to_string())?;
-
-        crate::handlers::commit::apply_commit_json(&self.appstate.store, self.origin, &json, None)
-            .await
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+        submit_commit(self.appstate, self.origin, commit).await
     }
 
     /// The drive a resource lives in: the top of its parent chain.
@@ -86,7 +77,7 @@ impl<'a> Writer<'a> {
 
     /// A class by shortname or title: a built-in alias, or one defined on the drive.
     async fn resolve_class(&self, drive: &str, name: &str) -> Result<String, String> {
-        if atomic_lib::mapping::is_url(name) || name.starts_with("did:ad:") {
+        if is_subject(name) {
             return Ok(name.to_string());
         }
         if let Some(standard) = compact::standard_class_alias(name) {
@@ -113,7 +104,7 @@ impl<'a> Writer<'a> {
         match matches.len() {
             1 => Ok(matches.remove(0)),
             0 => Err(format!(
-                "Unknown class \"{name}\". Use get_user_classes to list available classes, or pass a full class URL."
+                "Unknown class \"{name}\". Use find_schema to look for classes, or pass a full class URL."
             )),
             _ => Err(format!(
                 "Ambiguous class \"{name}\": {}. Use the full class URL.",
@@ -295,6 +286,25 @@ impl<'a> Writer<'a> {
 
         Ok(json!(format!("Deleted {title} ({subject}).")))
     }
+}
+
+/// Sends a signed commit through the same pipeline as any client's: signature,
+/// rights, subject ownership, broadcast.
+pub async fn submit_commit(
+    appstate: &AppState,
+    origin: &str,
+    commit: atomic_lib::Commit,
+) -> Result<(), String> {
+    let json = commit
+        .into_resource(&appstate.store)
+        .await
+        .and_then(|r| r.to_json_ad(Some(origin)))
+        .map_err(|e| e.to_string())?;
+
+    crate::handlers::commit::apply_commit_json(&appstate.store, origin, &json, None)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 pub fn str_arg<'v>(args: &'v Value, key: &str) -> Result<&'v str, String> {

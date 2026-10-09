@@ -137,6 +137,17 @@ In MCP:
   builders that already go through compact. Same compact JSON-AD as the
   assistant (`toCompact` / `fromCompact`). Short `#xxxxxxxx` refs at the
   tool boundary.
+- **Schema tools** (hosted, built) — `find_schema({query, limit?})` and, on
+  write connections only, `ensure_ontology({drive, schema, shortname?})`,
+  twins of the assistant's tools (`schemaTools.ts`). Both run on the Rust
+  JSON Schema import/export (`lib/src/schema/json_schema.rs`, shared fixture
+  with `@tomic/lib`). `ensure_ontology` signs every commit as the issued
+  agent and sends it through the commit pipeline (`CommitSink` in
+  `EnsureTarget`), so rights apply as for `create_resource`.
+  `get_user_classes` stays as a deprecated alias of `find_schema` with an empty
+  query; `get_schema` stays. The descriptions tell the model to search first,
+  reuse classes, put constraints in the schema, and that renaming a shortname
+  or changing a type makes a new property.
 - **Resources** — `atomic://{subject}` (or the subject URL itself).
   `resources/read` is GET; `resources/list` is a drive/query listing.
   This mapping is almost free and is how clients that prefer resources
@@ -210,8 +221,8 @@ POST /oauth/token          code + PKCE verifier -> access (1 h) + refresh (90 d)
   redirected to.
 - Known limits: codes are single-use per process (a restart forgets spent
   codes, which are valid for two minutes and PKCE-bound); refresh tokens are
-  not rotated server-side; the compact `#ref` form and `query`/`get_schema`
-  tools are not in the hosted tool list yet (step 3 makes them cheap).
+  not rotated server-side; the compact `#ref` form is not in the hosted tool
+  list yet (step 3 makes it cheap).
 
 ## Allowed and forbidden
 

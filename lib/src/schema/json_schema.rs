@@ -11,7 +11,8 @@
 //! class constraints. Anything Atomic cannot express is an error naming its
 //! JSON pointer. [`ensure_ontology`] makes a plan real in a store.
 //!
-//! Only the import direction exists in Rust; export is TypeScript only.
+//! [`ontology_to_json_schema`] writes an ontology back out as a JSON Schema,
+//! with the same output as the TypeScript twin.
 
 use std::collections::BTreeMap;
 
@@ -23,7 +24,7 @@ use serde_json::{Map, Number, Value as Json};
 
 use crate::{
     agents::Agent,
-    class_constraints::parse_constraint,
+    class_constraints::{parse_constraint, parse_constraints},
     commit::{Commit, CommitBuilder, CommitOpts},
     datatype::{match_datatype, DataType},
     errors::AtomicResult,
@@ -1121,6 +1122,388 @@ pub(super) fn check_plan(plan: &OntologyPlan) -> AtomicResult<CheckedPlan> {
 }
 
 // ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
+
+/// A non-empty string value of `property`, like `asString` in the TypeScript twin.
+fn string_of(resource: &crate::Resource, property: &str) -> Option<String> {
+    resource
+        .get(property)
+        .ok()
+        .map(|v| v.to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// The identifier-like name a class is given in `$defs`, else its shortname.
+fn def_key(name: Option<&str>, shortname: &str) -> String {
+    let mut chars = name.unwrap_or("").chars();
+    let identifier = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+    match name {
+        Some(name) if identifier && slugify(name).as_deref() == Some(shortname) => name.to_string(),
+        _ => shortname.to_string(),
+    }
+}
+
+struct LoadedProperty {
+    subject: String,
+    shortname: String,
+    datatype: String,
+    name: Option<String>,
+    description: Option<String>,
+    classtype: Option<String>,
+}
+
+struct LoadedClass {
+    subject: String,
+    shortname: String,
+    name: Option<String>,
+    description: Option<String>,
+    requires: Vec<String>,
+    recommends: Vec<String>,
+    constraints: BTreeMap<String, Map<String, Json>>,
+    key: String,
+}
+
+/// Where a link constraint points: a class of this ontology (its `$defs` key)
+/// or a subject outside it.
+enum Linked {
+    Key(String),
+    External(String),
+    Nowhere,
+}
+
+/// Numbers that hold a whole value become integers. A constraint stored in the
+/// document comes back with every number as a float (`1` as `1.0`), and JSON
+/// does not tell them apart, so the export writes what the TypeScript twin
+/// does.
+fn whole_numbers(value: &mut Json) {
+    match value {
+        Json::Number(n) => {
+            if let Some(f) = n.as_f64().filter(|_| !n.is_i64() && !n.is_u64()) {
+                if f.fract() == 0.0 && f.abs() < 9.0e15 {
+                    *n = Number::from(f as i64);
+                }
+            }
+        }
+        Json::Array(items) => items.iter_mut().for_each(whole_numbers),
+        Json::Object(map) => map.values_mut().for_each(whole_numbers),
+        _ => {}
+    }
+}
+
+fn string_json(value: &str) -> Json {
+    Json::String(value.to_string())
+}
+
+/// A property's schema as one class sees it; `constraint` holds that class's
+/// keywords for it. Mirrors `propertySchema` in `schema-json-schema.ts`.
+fn property_schema(
+    property: &LoadedProperty,
+    constraint: &Map<String, Json>,
+    link: &dyn Fn(Option<&str>) -> Linked,
+) -> Map<String, Json> {
+    let mut keywords = constraint.clone();
+    let target = match keywords.remove("class") {
+        Some(Json::String(s)) if !s.is_empty() => Some(s),
+        _ => property.classtype.clone(),
+    };
+    let linked = link(target.as_deref());
+
+    let link_schema = || -> Map<String, Json> {
+        let mut out = Map::new();
+        match &linked {
+            Linked::Key(key) => {
+                out.insert(
+                    "$ref".into(),
+                    Json::String(format!("#/$defs/{}", escape_pointer(key))),
+                );
+            }
+            other => {
+                out.insert("type".into(), string_json("string"));
+                out.insert("format".into(), string_json("uri"));
+                if let Linked::External(class) = other {
+                    out.insert("x-atomic-class".into(), string_json(class));
+                }
+            }
+        }
+        out
+    };
+
+    let mut schema = Map::new();
+    let set = |schema: &mut Map<String, Json>, key: &str, value: &str| {
+        schema.insert(key.into(), string_json(value));
+    };
+
+    match property.datatype.as_str() {
+        urls::STRING => set(&mut schema, "type", "string"),
+        urls::MARKDOWN | urls::SLUG => {
+            set(&mut schema, "type", "string");
+            set(&mut schema, "x-atomic-datatype", &property.datatype);
+        }
+        urls::INTEGER => set(&mut schema, "type", "integer"),
+        urls::FLOAT => set(&mut schema, "type", "number"),
+        urls::BOOLEAN => set(&mut schema, "type", "boolean"),
+        urls::TIMESTAMP => {
+            set(&mut schema, "type", "string");
+            set(&mut schema, "format", "date-time");
+        }
+        urls::DATE => {
+            set(&mut schema, "type", "string");
+            set(&mut schema, "format", "date");
+        }
+        urls::ATOMIC_URL => schema.extend(link_schema()),
+        urls::URI => {
+            set(&mut schema, "type", "string");
+            set(&mut schema, "format", "uri");
+            set(&mut schema, "x-atomic-datatype", &property.datatype);
+        }
+        urls::RESOURCE_ARRAY => {
+            let mut items = link_schema();
+            if let Some(allowed) = keywords.remove("enum") {
+                items.insert("enum".into(), allowed);
+            }
+            set(&mut schema, "type", "array");
+            schema.insert("items".into(), Json::Object(items));
+        }
+        _ => set(&mut schema, "x-atomic-datatype", &property.datatype),
+    }
+
+    schema.extend(keywords);
+    schema
+}
+
+/// Adds `title` and `description` when they say more than the shortname, and
+/// the property's subject.
+fn annotate_property(schema: &mut Map<String, Json>, property: &LoadedProperty) {
+    if let Some(name) = &property.name {
+        if *name != property.shortname {
+            schema.insert("title".into(), string_json(name));
+        }
+    }
+    if let Some(description) = &property.description {
+        if property.name.as_ref() != Some(description) && *description != property.shortname {
+            schema.insert("description".into(), string_json(description));
+        }
+    }
+    schema.insert("x-atomic-property".into(), string_json(&property.subject));
+}
+
+async fn load_property(store: &impl Storelike, subject: &str) -> AtomicResult<LoadedProperty> {
+    let resource = store.get_resource(&subject.into()).await?;
+    let (Some(shortname), Some(datatype)) = (
+        string_of(&resource, urls::SHORTNAME),
+        string_of(&resource, urls::DATATYPE_PROP),
+    ) else {
+        return Err(format!("{subject} is not a property with a shortname and datatype").into());
+    };
+
+    Ok(LoadedProperty {
+        subject: canonicalize_scheme(subject),
+        shortname,
+        datatype,
+        name: string_of(&resource, urls::NAME),
+        description: string_of(&resource, urls::DESCRIPTION),
+        classtype: string_of(&resource, urls::CLASSTYPE_PROP),
+    })
+}
+
+async fn load_class(store: &impl Storelike, subject: &str) -> AtomicResult<LoadedClass> {
+    let resource = store.get_resource(&subject.into()).await?;
+    let shortname = string_of(&resource, urls::SHORTNAME)
+        .ok_or_else(|| format!("{subject} has no shortname"))?;
+    let name = string_of(&resource, urls::NAME);
+
+    let raw = match resource.get(urls::CONSTRAINTS) {
+        Ok(Value::Json(json)) => Some(json.clone()),
+        Ok(Value::String(s)) | Ok(Value::Markdown(s)) => {
+            Some(serde_json::from_str(s).unwrap_or_else(|_| Json::String(s.clone())))
+        }
+        _ => None,
+    };
+    let mut constraints = BTreeMap::new();
+    if let Some(raw) = &raw {
+        // Validates the whole map; the raw JSON is what gets written out.
+        parse_constraints(raw)?;
+        if let Json::Object(raw) = raw {
+            for (key, keywords) in raw {
+                if let Json::Object(keywords) = keywords {
+                    let mut keywords = Json::Object(keywords.clone());
+                    whole_numbers(&mut keywords);
+                    if let Json::Object(keywords) = keywords {
+                        constraints.insert(canonicalize_scheme(key), keywords);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(LoadedClass {
+        subject: canonicalize_scheme(subject),
+        key: def_key(name.as_deref(), &shortname),
+        shortname,
+        name,
+        description: string_of(&resource, urls::DESCRIPTION),
+        requires: subjects_of(&resource, urls::REQUIRES),
+        recommends: subjects_of(&resource, urls::RECOMMENDS),
+        constraints,
+    })
+}
+
+/// Writes an ontology as a JSON Schema (draft 2020-12): one `$defs` entry per
+/// class, its properties keyed by shortname, `required` from `requires`, class
+/// constraints as keywords, and a link constraint as a `$ref` to the target's
+/// entry. Atomic-only information is written as `x-atomic-*` keywords, and
+/// `x-atomic-property` carries each property's subject. The twin of
+/// `ontologyToJsonSchema` in `@tomic/lib`; both are tested against the same
+/// fixture.
+///
+/// Reads through `store.get_resource`, so the ontology, its classes and its
+/// properties must be loadable. Object keys come out sorted (that is
+/// `serde_json`), so use `required` rather than key order to tell required
+/// properties apart.
+pub async fn ontology_to_json_schema(
+    store: &impl Storelike,
+    ontology_subject: &str,
+) -> AtomicResult<Json> {
+    let ontology = store.get_resource(&ontology_subject.into()).await?;
+    let shortname = string_of(&ontology, urls::SHORTNAME)
+        .ok_or_else(|| format!("{ontology_subject} has no shortname"))?;
+    let name = string_of(&ontology, urls::NAME);
+    let description = string_of(&ontology, urls::DESCRIPTION);
+
+    let mut classes = Vec::new();
+    for subject in subjects_of(&ontology, urls::CLASSES) {
+        classes.push(load_class(store, &subject).await?);
+    }
+
+    let mut keys: Vec<&str> = Vec::new();
+    for class in &classes {
+        if keys.contains(&class.key.as_str()) {
+            return Err(format!("two classes would both be $defs/{}", class.key).into());
+        }
+        keys.push(&class.key);
+    }
+    let key_by_subject: BTreeMap<&str, &str> = classes
+        .iter()
+        .map(|c| (c.subject.as_str(), c.key.as_str()))
+        .collect();
+    let link = |target: Option<&str>| match target {
+        None => Linked::Nowhere,
+        Some(target) => {
+            let canonical = canonicalize_scheme(target);
+            match key_by_subject.get(canonical.as_str()) {
+                Some(key) => Linked::Key((*key).to_string()),
+                None => Linked::External(canonical),
+            }
+        }
+    };
+
+    let mut loaded: BTreeMap<String, LoadedProperty> = BTreeMap::new();
+    for class in &classes {
+        for subject in class.requires.iter().chain(&class.recommends) {
+            let canonical = canonicalize_scheme(subject);
+            if let std::collections::btree_map::Entry::Vacant(slot) = loaded.entry(canonical) {
+                slot.insert(load_property(store, subject).await?);
+            }
+        }
+    }
+
+    let mut defs = Map::new();
+    for class in &classes {
+        let mut properties = Map::new();
+        for subject in class.requires.iter().chain(&class.recommends) {
+            let property = &loaded[&canonicalize_scheme(subject)];
+            let empty = Map::new();
+            let constraint = class
+                .constraints
+                .get(&canonicalize_scheme(subject))
+                .unwrap_or(&empty);
+            let mut schema = property_schema(property, constraint, &link);
+            annotate_property(&mut schema, property);
+            properties.insert(property.shortname.clone(), Json::Object(schema));
+        }
+        let required: Vec<Json> = class
+            .requires
+            .iter()
+            .map(|s| string_json(&loaded[&canonicalize_scheme(s)].shortname))
+            .collect();
+
+        let mut def = Map::new();
+        def.insert("type".into(), string_json("object"));
+        if let Some(name) = class.name.as_ref().filter(|n| **n != class.key) {
+            def.insert("title".into(), string_json(name));
+        }
+        if let Some(description) = class
+            .description
+            .as_ref()
+            .filter(|d| class.name.as_ref() != Some(*d) && **d != class.shortname)
+        {
+            def.insert("description".into(), string_json(description));
+        }
+        def.insert("x-atomic-subject".into(), string_json(&class.subject));
+        def.insert("properties".into(), Json::Object(properties));
+        if !required.is_empty() {
+            def.insert("required".into(), Json::Array(required));
+        }
+        defs.insert(class.key.clone(), Json::Object(def));
+    }
+
+    let mut out = Map::new();
+    out.insert("$schema".into(), string_json(JSON_SCHEMA_DIALECT));
+    if let Some(name) = name.as_ref().filter(|n| **n != shortname) {
+        out.insert("title".into(), string_json(name));
+    }
+    if let Some(description) = description
+        .as_ref()
+        .filter(|d| name.as_ref() != Some(*d) && **d != shortname)
+    {
+        out.insert("description".into(), string_json(description));
+    }
+    out.insert("x-atomic-ontology".into(), string_json(&shortname));
+    out.insert(
+        "x-atomic-subject".into(),
+        string_json(&canonicalize_scheme(ontology_subject)),
+    );
+    out.insert("$defs".into(), Json::Object(defs));
+
+    Ok(Json::Object(out))
+}
+
+/// The `$defs` entry of the class with this subject in an exported ontology.
+pub fn class_in_json_schema<'a>(schema: &'a Json, class_subject: &str) -> Option<&'a Json> {
+    let wanted = canonicalize_scheme(class_subject);
+    schema
+        .get("$defs")?
+        .as_object()?
+        .values()
+        .find(|def| def.get("x-atomic-subject").and_then(Json::as_str) == Some(wanted.as_str()))
+}
+
+/// One class as a JSON Schema object schema (an entry of its ontology's
+/// `$defs`, so a `$ref` in it names a sibling class by `x-atomic-subject`).
+/// Exports the class's whole ontology, which is its `parent`; to export many
+/// classes of one ontology, call [`ontology_to_json_schema`] once and pick
+/// with [`class_in_json_schema`].
+pub async fn class_to_json_schema(
+    store: &impl Storelike,
+    class_subject: &str,
+) -> AtomicResult<Json> {
+    let class = store.get_resource(&class_subject.into()).await?;
+    let ontology = class
+        .get(urls::PARENT)
+        .map(|v| v.to_string())
+        .map_err(|_| format!("{class_subject} is not part of an ontology"))?;
+    let schema = ontology_to_json_schema(store, &ontology).await?;
+
+    class_in_json_schema(&schema, class_subject)
+        .cloned()
+        .ok_or_else(|| format!("{class_subject} is missing from its ontology").into())
+}
+
+// ---------------------------------------------------------------------------
 // Ensure
 // ---------------------------------------------------------------------------
 
@@ -1138,18 +1521,23 @@ fn commit_opts(agent: &Agent) -> CommitOpts {
     }
 }
 
-/// Applies a signed commit. When `remote`, it is posted to the server first
-/// (as `resource.save` does), then applied to the local store as a cache.
+/// Applies a signed commit: through the target's sink when it has one, else
+/// posted to the server first when `remote` (as `resource.save` does) and then
+/// applied to the local store as a cache.
 async fn apply(
     store: &impl Storelike,
     agent: &Agent,
     commit: Commit,
-    remote: bool,
-) -> AtomicResult<crate::commit::CommitResponse> {
-    if remote {
+    target: &EnsureTarget,
+) -> AtomicResult<()> {
+    if let Some(sink) = &target.sink {
+        return (sink.0)(commit).await;
+    }
+    if target.remote {
         crate::client::post_commit(&commit, store).await?;
     }
-    store.apply_commit(commit, &commit_opts(agent)).await
+    store.apply_commit(commit, &commit_opts(agent)).await?;
+    Ok(())
 }
 
 fn subjects_value(subjects: &[String]) -> Value {
@@ -1160,7 +1548,7 @@ fn subjects_value(subjects: &[String]) -> Value {
 async fn create_did(
     store: &impl Storelike,
     agent: &Agent,
-    remote: bool,
+    target: &EnsureTarget,
     set: Vec<(&str, Value)>,
 ) -> AtomicResult<String> {
     let mut builder = CommitBuilder::new("placeholder".into());
@@ -1168,19 +1556,16 @@ async fn create_did(
         builder.set(property.into(), value);
     }
     let commit = Commit::create_did(builder, agent, store).await?;
-    let response = apply(store, agent, commit, remote).await?;
-    Ok(response
-        .resource_new
-        .ok_or("The commit created no resource")?
-        .get_subject()
-        .to_string())
+    let subject = commit.subject.to_string();
+    apply(store, agent, commit, target).await?;
+    Ok(subject)
 }
 
 /// Changes properties of an existing resource.
 async fn edit(
     store: &impl Storelike,
     agent: &Agent,
-    remote: bool,
+    target: &EnsureTarget,
     subject: &str,
     set: Vec<(&str, Value)>,
 ) -> AtomicResult<()> {
@@ -1190,7 +1575,7 @@ async fn edit(
     }
     let existing = store.get_resource(&subject.into()).await?;
     let commit = builder.sign(agent, store, &existing).await?;
-    apply(store, agent, commit, remote).await?;
+    apply(store, agent, commit, target).await?;
     Ok(())
 }
 
@@ -1257,6 +1642,24 @@ pub async fn ensure_ontology(
     ensure_ontology_with(store, parent, plan, agent, &EnsureTarget::default()).await
 }
 
+/// Where [`ensure_ontology_with`] sends each signed commit instead of applying
+/// it to the store itself. A server uses this to put them through its own commit
+/// pipeline, so rights, subject ownership and broadcast apply as for any
+/// client's commit.
+#[derive(Clone)]
+pub struct CommitSink(
+    #[allow(clippy::type_complexity)]
+    pub  std::sync::Arc<
+        dyn Fn(Commit) -> std::pin::Pin<Box<dyn std::future::Future<Output = AtomicResult<()>>>>,
+    >,
+);
+
+impl std::fmt::Debug for CommitSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("CommitSink")
+    }
+}
+
 /// Where [`ensure_ontology_with`] writes, and how it finds the ontology again.
 #[derive(Clone, Debug, Default)]
 pub struct EnsureTarget {
@@ -1264,6 +1667,10 @@ pub struct EnsureTarget {
     /// `store`), the way the CLI saves resources. `store` is then a client
     /// cache: reads fall through to the server.
     pub remote: bool,
+    /// Hands every signed commit to this function and applies nothing else:
+    /// the sink is the write path. Takes precedence over `remote`. `store` is
+    /// still read from, so it must be the store the sink writes to.
+    pub sink: Option<CommitSink>,
     /// The ontology made by an earlier run, usually from a lockfile. A remote
     /// `store` cannot query the server for the ontology's `localId`, so this
     /// is how a re-run finds it again. `None` looks it up under `parent`.
@@ -1279,7 +1686,6 @@ pub async fn ensure_ontology_with(
     target: &EnsureTarget,
 ) -> AtomicResult<EnsuredOntology> {
     let checked = check_plan(plan)?;
-    let remote = target.remote;
 
     // The ontology.
     let local_id = format!("schema:ontology:{}", plan.shortname);
@@ -1294,7 +1700,7 @@ pub async fn ensure_ontology_with(
             create_did(
                 store,
                 agent,
-                remote,
+                target,
                 vec![
                     (
                         urls::IS_A,
@@ -1363,7 +1769,7 @@ pub async fn ensure_ontology_with(
             let commit = builder
                 .sign(agent, store, &crate::Resource::new(id.clone()))
                 .await?;
-            if let Err(error) = apply(store, agent, commit, remote).await {
+            if let Err(error) = apply(store, agent, commit, target).await {
                 // Another device may have made the same property meanwhile.
                 if store.get_resource(&id.as_str().into()).await.is_err() {
                     return Err(error);
@@ -1398,7 +1804,7 @@ pub async fn ensure_ontology_with(
                     set.push((urls::RECOMMENDS, subjects_value(&recommends)));
                 }
                 if !set.is_empty() {
-                    edit(store, agent, remote, &subject, set).await?;
+                    edit(store, agent, target, &subject, set).await?;
                 }
                 subject
             }
@@ -1406,7 +1812,7 @@ pub async fn ensure_ontology_with(
                 create_did(
                     store,
                     agent,
-                    remote,
+                    target,
                     vec![
                         (urls::IS_A, Value::ResourceArray(vec![urls::CLASS.into()])),
                         (urls::PARENT, Value::AtomicUrl(ontology.as_str().into())),
@@ -1468,7 +1874,7 @@ pub async fn ensure_ontology_with(
             edit(
                 store,
                 agent,
-                remote,
+                target,
                 subject,
                 vec![(urls::CONSTRAINTS, Value::Json(desired))],
             )
@@ -1511,7 +1917,7 @@ pub async fn ensure_ontology_with(
         }
     }
     if !set.is_empty() {
-        edit(store, agent, remote, &ontology, set).await?;
+        edit(store, agent, target, &ontology, set).await?;
     }
 
     Ok(EnsuredOntology {
@@ -1740,6 +2146,100 @@ mod tests {
             assert_eq!(subjects_of(&ontology, urls::CLASSES).len(), 3);
             // `notes` is declared by two classes and is one property.
             assert_eq!(subjects_of(&ontology, urls::PROPERTIES).len(), 15);
+        }
+
+        /// The subjects an export adds are Atomic's, not the schema's.
+        fn without_subjects(value: &mut Json) {
+            match value {
+                Json::Array(items) => items.iter_mut().for_each(without_subjects),
+                Json::Object(map) => {
+                    map.remove("x-atomic-subject");
+                    map.remove("x-atomic-property");
+                    map.values_mut().for_each(without_subjects);
+                }
+                _ => {}
+            }
+        }
+
+        /// What the case's ontology exports as: the schema itself unless the fixture says otherwise.
+        fn expected(case: &Node) -> Json {
+            case.get("export")
+                .or_else(|| case.get("schema"))
+                .unwrap()
+                .to_json()
+        }
+
+        #[tokio::test]
+        async fn fixture_exports_like_the_typescript_twin() {
+            for case in &cases("cases") {
+                let name = text(case, "name");
+                let (store, parent, agent) = setup().await;
+                let plan = import(case).unwrap();
+                let ensured = ensure_ontology(&store, &parent, &plan, &agent)
+                    .await
+                    .unwrap();
+                let mut exported = ontology_to_json_schema(&store, &ensured.ontology)
+                    .await
+                    .unwrap();
+
+                // Every property carries its subject, as a content-addressed id.
+                let subjects: std::collections::BTreeSet<String> = exported["$defs"]
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .flat_map(|def| def["properties"].as_object().unwrap().values())
+                    .map(|p| p["x-atomic-property"].as_str().unwrap().to_string())
+                    .collect();
+                assert_eq!(
+                    subjects,
+                    ensured.properties.values().cloned().collect(),
+                    "{name}"
+                );
+                assert_eq!(
+                    exported["x-atomic-subject"],
+                    Json::String(canonicalize_scheme(&ensured.ontology))
+                );
+
+                let again = exported.clone();
+                without_subjects(&mut exported);
+                assert_eq!(exported, expected(case), "{name}");
+
+                // The export is a fixed point: importing it gives the same ontology.
+                let (store, parent, agent) = setup().await;
+                let plan = ontology_from_json_schema(&again, &ImportOptions::default()).unwrap();
+                let second = ensure_ontology(&store, &parent, &plan, &agent)
+                    .await
+                    .unwrap();
+                let mut exported = ontology_to_json_schema(&store, &second.ontology)
+                    .await
+                    .unwrap();
+                without_subjects(&mut exported);
+                assert_eq!(exported, expected(case), "{name} (second round)");
+            }
+        }
+
+        #[tokio::test]
+        async fn a_class_exports_on_its_own() {
+            let (store, parent, agent) = setup().await;
+            let ensured = ensure_ontology(&store, &parent, &shop_plan(), &agent)
+                .await
+                .unwrap();
+            let whole = ontology_to_json_schema(&store, &ensured.ontology)
+                .await
+                .unwrap();
+            let invoice = class_to_json_schema(&store, &ensured.classes["invoice"])
+                .await
+                .unwrap();
+
+            assert_eq!(
+                Some(&invoice),
+                class_in_json_schema(&whole, &ensured.classes["invoice"])
+            );
+            assert_eq!(invoice["type"], "object");
+            assert!(invoice["required"].as_array().unwrap().len() >= 2);
+            assert!(class_to_json_schema(&store, &ensured.ontology)
+                .await
+                .is_err());
         }
 
         #[tokio::test]
