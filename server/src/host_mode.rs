@@ -373,9 +373,11 @@ pub fn exposure_warning(reachability: Reachability) -> String {
         "This node accepts a new Drive from anyone who can reach it, and it may be reachable ({}).\n\
          Anyone who opens it can create an account and store their data on this disk.\n\
          \n\
-         If this node is only for you, name yourself as its owner:\n\
+         If this node is only for you, name yourself as its owner. Order matters: \
+         first create your account in the browser, then copy your Agent ID from Settings, \
+         then restart with:\n\
          \n\
-             ATOMIC_OWNER_AGENT={AGENT_ID_HINT}...   (copy your Agent ID from Settings)\n\
+             ATOMIC_OWNER_AGENT={AGENT_ID_HINT}...\n\
          \n\
          Visitors keep reading whatever you shared, and people you invited keep their access.\n\
          Only creating a *new* Drive here becomes yours alone.\n\
@@ -544,6 +546,10 @@ mod tests {
         assert!(!warning.contains("standard web port"), "{warning}");
         // It must carry the fix, not just the diagnosis.
         assert!(warning.contains("ATOMIC_OWNER_AGENT="), "{warning}");
+        // The account must exist before there is an Agent ID to copy.
+        let account = warning.find("create your account").expect("order");
+        let copy = warning.find("copy your Agent ID").expect("order");
+        assert!(account < copy, "{warning}");
     }
 
     #[test]

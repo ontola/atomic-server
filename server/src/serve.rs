@@ -570,11 +570,9 @@ where
 
             if reachability.looks_exposed() && config.opts.host_mode.is_none() {
                 let warning = crate::host_mode::exposure_warning(reachability);
-                // Both, deliberately: the banner is what someone watching the
-                // terminal sees, and the `warn!` is what survives into
-                // journalctl for someone reading back later.
+                // Once: the `warn!` reaches both the terminal and journalctl.
+                // Repeating it in the banner printed it twice.
                 tracing::warn!("{}", warning);
-                message.push_str(&format!("{}\n\n", warning));
             } else {
                 message.push_str("Anyone who can reach this node can create a Drive on it.\n\n");
             }
