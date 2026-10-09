@@ -214,6 +214,10 @@ export class Resource<C extends OptionalClass = any> {
 
   private _subject: string;
   /** Memoized read cache derived from Loro. Rebuilt lazily when #cacheDirty. */
+  private _genesisCertCache?: {
+    encoded: string;
+    cert: ReturnType<typeof decodeGenesisCert> | undefined;
+  };
   #cache: Record<string, JSONValue> = Object.create(null);
   /** True when Loro has been modified but #cache hasn't been rebuilt yet. */
   #cacheDirty = false;
@@ -2219,11 +2223,24 @@ export class Resource<C extends OptionalClass = any> {
       return undefined;
     }
 
-    try {
-      return decodeGenesisCert(decodeB64(encoded));
-    } catch {
-      return undefined;
+    // The certificate never changes for a given string, and a collection
+    // reads `createdAt` of every member each time one is added, so decoding
+    // it per call made opening a big table quadratic (seconds for 1500 rows).
+    if (this._genesisCertCache?.encoded === encoded) {
+      return this._genesisCertCache.cert;
     }
+
+    let cert: ReturnType<typeof decodeGenesisCert> | undefined;
+
+    try {
+      cert = decodeGenesisCert(decodeB64(encoded));
+    } catch {
+      cert = undefined;
+    }
+
+    this._genesisCertCache = { encoded, cert };
+
+    return cert;
   }
 
   /**
