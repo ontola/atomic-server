@@ -4023,6 +4023,7 @@ msgstr "Could not copy — select and copy the code manually."
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
+#: src/views/Installation/ConnectionRequests.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect"
 msgstr "Connect"
@@ -4415,9 +4416,6 @@ msgstr "Copy {0}"
 #: src/helpers/syncPresentation.ts
 msgid "Your data lives on the device you’re connected to."
 msgstr "Your data lives on the device you’re connected to."
-
-#~ msgid "Syncing this workspace…"
-#~ msgstr "Syncing this workspace…"
 
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
@@ -12520,9 +12518,6 @@ msgstr "Loading"
 msgid "Updating your local data"
 msgstr "Updating your local data"
 
-#~ msgid "The server could not be reached"
-#~ msgstr "The server could not be reached"
-
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "This is needed once after an update and takes a moment. Keep this tab open."
 msgstr "This is needed once after an update and takes a moment. Keep this tab open."
@@ -12544,9 +12539,6 @@ msgstr "Cloud Server setup failed after sign-in"
 msgid "Cloud Server setup failed on its own"
 msgstr "Cloud Server setup failed on its own"
 
-#~ msgid "Check your connection and that your server is running, then try again."
-#~ msgstr "Check your connection and that your server is running, then try again."
-
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "Summaries are made by a server, and this workspace has none. Host it on a Cloud Server to collect answers and see them summarized here."
 msgstr "Summaries are made by a server, and this workspace has none. Host it on a Cloud Server to collect answers and see them summarized here."
@@ -12555,3 +12547,34 @@ msgstr "Summaries are made by a server, and this workspace has none. Host it on 
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr "Set up creates {0} tables for this importer. Nothing is imported yet."
+
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "The connection was revoked."
+msgstr "The connection was revoked."
+
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "The connection expired."
+msgstr "The connection expired."
+
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "It was never connected."
+msgstr "It was never connected."
+
+#. 0: title; 1: node; 2: name
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "{0} on {1} needs {2}"
+msgstr "{0} on {1} needs {2}"
+
+#. 0: title; 1: name
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "{0} needs {1}"
+msgstr "{0} needs {1}"
+
+#. 0: toRelativeDateTime(new Date(since), true)
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "Asked {0}."
+msgstr "Asked {0}."
+
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "Its scheduled runs are paused until you connect it."
+msgstr "Its scheduled runs are paused until you connect it."

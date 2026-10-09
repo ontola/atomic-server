@@ -160,6 +160,11 @@ pub async fn run_due(appstate: &AppState) -> usize {
                 }
             }
         }
+        // Waiting for someone to connect a platform. Not advanced and not an
+        // error: the request is the record, and destroying it resumes this.
+        if super::connection_request::is_paused(&appstate.store, &key.plugin).await {
+            continue;
+        }
         // Advanced before the run, not after: a plugin that hangs or panics
         // must not be picked up again on the next tick and every tick after.
         let action_waits = schedule
@@ -237,10 +242,41 @@ pub async fn run_due(appstate: &AppState) -> usize {
                     }
                 }
             },
-            Err(e) => {
-                tracing::warn!(plugin = %key.plugin, "scheduled run failed: {e}");
-                schedule.record_error(e);
-            }
+            Err(e) => match super::connection_request::ConnectionNeed::find(&e) {
+                Some(need) => {
+                    let actor = schedule
+                        .run_as
+                        .as_deref()
+                        .map(|agent| ForAgent::AgentSubject(agent.into()))
+                        .unwrap_or(ForAgent::Sudo);
+                    let label = appstate.config.opts.domain.clone();
+                    match super::connection_request::record(
+                        &appstate.store,
+                        &key.drive,
+                        &key.plugin,
+                        actor,
+                        &need,
+                        &label,
+                        now,
+                    )
+                    .await
+                    {
+                        Ok(_) => schedule.record_error(format!(
+                            "needs a connection: {} ({})",
+                            need.platform,
+                            need.reason.as_str()
+                        )),
+                        Err(error) => {
+                            tracing::warn!(plugin = %key.plugin, %error, "could not record the connection request");
+                            schedule.record_error(e);
+                        }
+                    }
+                }
+                None => {
+                    tracing::warn!(plugin = %key.plugin, "scheduled run failed: {e}");
+                    schedule.record_error(e);
+                }
+            },
         }
 
         if resuming && schedule.pending_verdict.is_none() {
@@ -574,6 +610,68 @@ mod tests {
             .unwrap();
 
         key
+    }
+
+    /// A run that finds its installation lacks a connection leaves a request
+    /// on the installation, stops being scheduled, and resumes once the
+    /// request is destroyed.
+    #[actix_rt::test]
+    async fn a_run_that_needs_a_connection_pauses_until_the_request_is_cleared() {
+        use crate::plugins::connection_request::open_requests;
+
+        let mut f = fixture("needs_connection").await;
+        write_plugin(&mut f, "Written once connected").await;
+        let store = &f.appstate.store;
+
+        let mut plugin = store.get_resource(&f.plugin.as_str().into()).await.unwrap();
+        plugin
+            .set_unsafe(
+                f.terms.property("plugin-source").unwrap().into(),
+                atomic_lib::Value::Markdown(
+                    "export function run() { throw new Error('needs-connection:google-calendar:revoked'); }"
+                        .into(),
+                ),
+            )
+            .unwrap();
+        plugin.save(store).await.unwrap();
+
+        let key = arm(&f, false).await;
+        assert_eq!(run_due(&f.appstate).await, 1);
+
+        let schedule = store.get_plugin_schedule(&key).unwrap().unwrap();
+        assert_eq!(
+            schedule.last_error.as_deref(),
+            Some("needs a connection: google-calendar (revoked)")
+        );
+
+        let requests = open_requests(store, &f.plugin).await;
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].1, "google-calendar");
+        let request = store
+            .get_resource(&requests[0].0.as_str().into())
+            .await
+            .unwrap();
+        assert_eq!(
+            request
+                .get(atomic_lib::urls::CONNECTION_REASON)
+                .unwrap()
+                .to_string(),
+            "revoked"
+        );
+        assert!(request.get(atomic_lib::urls::CONNECTION_SINCE).is_ok());
+
+        // Paused: due again, but nothing starts, and no duplicate request.
+        let mut due = schedule.clone();
+        due.next_run_at = 0;
+        store.set_plugin_schedule(&key, &due).unwrap();
+        assert_eq!(run_due(&f.appstate).await, 0);
+        assert_eq!(open_requests(store, &f.plugin).await.len(), 1);
+
+        // Connecting destroys the request; the next tick runs again.
+        let mut request = request;
+        request.destroy(store).await.unwrap();
+        assert!(open_requests(store, &f.plugin).await.is_empty());
+        assert_eq!(run_due(&f.appstate).await, 1);
     }
 
     #[actix_rt::test]

@@ -152,6 +152,11 @@ async fn drain(appstate: &AppState, guard: &Arc<Mutex<Guard>>) {
             }
             Err(_) => continue,
         };
+        // Queued events wait while someone connects a platform; destroying
+        // the request resumes delivery.
+        if super::connection_request::is_paused(&appstate.store, &key.plugin).await {
+            continue;
+        }
         let journal = super::journal::Journal::new(
             &appstate.store,
             &key.drive,
@@ -250,7 +255,30 @@ async fn drain(appstate: &AppState, guard: &Arc<Mutex<Guard>>) {
                 }
             }
             Ok(_) => {}
-            Err(e) => record_error(appstate, &key, &trigger, e),
+            Err(e) => {
+                if let Some(need) = super::connection_request::ConnectionNeed::find(&e) {
+                    let actor = trigger
+                        .run_as
+                        .as_deref()
+                        .map(|agent| ForAgent::AgentSubject(agent.into()))
+                        .unwrap_or(ForAgent::Sudo);
+                    let label = appstate.config.opts.domain.clone();
+                    if let Err(error) = super::connection_request::record(
+                        &appstate.store,
+                        &key.drive,
+                        &key.plugin,
+                        actor,
+                        &need,
+                        &label,
+                        atomic_lib::utils::now(),
+                    )
+                    .await
+                    {
+                        tracing::warn!(plugin = %key.plugin, %error, "could not record the connection request");
+                    }
+                }
+                record_error(appstate, &key, &trigger, e)
+            }
         }
     }
 }
