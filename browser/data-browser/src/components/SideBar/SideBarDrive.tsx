@@ -28,8 +28,10 @@ import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
 import { LuChevronsUpDown } from 'react-icons/lu';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ScrollArea } from '../ScrollArea';
-import { useSidebarDnd } from './useSidebarDnd';
-import { closestCenter, DndContext, DragOverlay } from '@dnd-kit/core';
+import { sidebarCollisionDetection, useSidebarDnd } from './useSidebarDnd';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
+import { SidebarDropZones } from './SidebarDropZones';
+import { SidebarTrashLink } from './SidebarTrashLink';
 import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
 import { DropEdge } from './ResourceSideBar/DropEdge';
 import { SIDEBAR_CHILD_LIMIT, SideBarMoreRow } from './SideBarMoreRow';
@@ -89,6 +91,11 @@ export function SideBarDrive({
   // And the Inbox (on the personal drive): it opens from Notifications in the
   // app menu.
   const [inbox] = useString(driveResource, notifications.properties.inbox);
+  // And the Trash folder: reached through its own row below the tree.
+  const [trashFolder] = useString(
+    driveResource,
+    dataBrowser.properties.trashFolder,
+  );
   const subResources = useMemo(
     () =>
       allChildren.filter(subject => {
@@ -98,10 +105,18 @@ export function SideBarDrive({
           canonical !== canonicalizeScheme(defaultOntology ?? '') &&
           canonical !== canonicalizeScheme(commentsFolder ?? '') &&
           canonical !== canonicalizeScheme(aiChatsFolder ?? '') &&
-          canonical !== canonicalizeScheme(inbox ?? '')
+          canonical !== canonicalizeScheme(inbox ?? '') &&
+          canonical !== canonicalizeScheme(trashFolder ?? '')
         );
       }),
-    [allChildren, defaultOntology, commentsFolder, aiChatsFolder, inbox],
+    [
+      allChildren,
+      defaultOntology,
+      commentsFolder,
+      aiChatsFolder,
+      inbox,
+      trashFolder,
+    ],
   );
   const [title] = useTitle(driveResource);
   const isPrivateDrive = useIsPrivateDrive(drive);
@@ -158,8 +173,9 @@ export function SideBarDrive({
         // siblings win over the much-taller "drop onto folder row"
         // targets when the dragged item is over a sibling gap. With the
         // default `rectIntersection` the bigger row always swallowed
-        // every drop and inter-sibling reordering became unreachable.
-        collisionDetection={closestCenter}
+        // every drop and inter-sibling reordering became unreachable. The
+        // Favorites / Trash zones take priority while the pointer is on them.
+        collisionDetection={sidebarCollisionDetection}
         accessibility={{
           announcements,
           screenReaderInstructions: {
@@ -219,6 +235,9 @@ export function SideBarDrive({
                 onClick={onItemClick}
               />
             )}
+            {trashFolder && (
+              <SidebarTrashLink subject={trashFolder} onClick={onItemClick} />
+            )}
             {agentCanWrite && (
               <NewResourceRow gap='0' center>
                 <QuickCreateRow
@@ -231,6 +250,7 @@ export function SideBarDrive({
             )}
           </ListWrapper>
         </StyledScrollArea>
+        <SidebarDropZones draggingResource={draggingResource} />
         {createPortal(
           <DragOverlay dropAnimation={animateDrop}>
             {draggingResource && (

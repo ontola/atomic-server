@@ -1,10 +1,13 @@
 import {
   Announcements,
+  closestCenter,
+  CollisionDetection,
   DragEndEvent,
   DragStartEvent,
   DropAnimationFunction,
   KeyboardSensor,
   MouseSensor,
+  pointerWithin,
   TouchSensor,
   useSensor,
   useSensors,
@@ -18,6 +21,8 @@ import {
   getTransitionName,
 } from '../../helpers/transitionName';
 import { useSettings } from '../../helpers/AppSettings';
+import { useFavorites } from '../../hooks/useFavorites';
+import { moveToTrash } from '../../helpers/trash';
 // Fractional-key math shared with table row insertion.
 import {
   computeSortOrder,
@@ -46,15 +51,82 @@ export type SideBarDropData = {
   nextSubject?: string;
 };
 
+/** Drop zones that act on the dragged item instead of moving it. */
+export type SideBarZoneKind = 'favorites' | 'trash';
+
+/** Data attached to the Favorites / Trash drop zones. */
+export type SideBarZoneData = {
+  zone: SideBarZoneKind;
+};
+
 export type SideBarDragData = {
   renderedUnder: string;
+};
+
+export const isZoneData = (data: unknown): data is SideBarZoneData => {
+  const zone = (data as Partial<SideBarZoneData> | null | undefined)?.zone;
+
+  return zone === 'favorites' || zone === 'trash';
+};
+
+/**
+ * The zones sit far from the tree, so when the pointer is inside one it wins
+ * outright. Everything else keeps using `closestCenter` (see SideBarDrive).
+ */
+export const sidebarCollisionDetection: CollisionDetection = args => {
+  const zoneHits = pointerWithin({
+    ...args,
+    droppableContainers: args.droppableContainers.filter(c =>
+      isZoneData(c.data.current),
+    ),
+  });
+
+  return zoneHits.length > 0 ? zoneHits : closestCenter(args);
+};
+
+interface ZoneDropDeps {
+  favorites: string[];
+  addFavorite: (subject: string) => void;
+  moveToTrash: (subject: string) => Promise<unknown>;
+}
+
+/**
+ * Applies a drop on a zone, so the caller skips the parent / sortOrder logic.
+ * Trash parks the item in the drive's Trash folder (nothing is destroyed);
+ * the returned promise settles once that move is saved.
+ */
+export const handleZoneDrop = async (
+  zone: SideBarZoneKind,
+  subject: string,
+  { favorites, addFavorite, moveToTrash: move }: ZoneDropDeps,
+): Promise<void> => {
+  if (zone === 'trash') {
+    try {
+      if (await move(subject)) {
+        toast.success('Moved to Trash');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not move to Trash');
+    }
+
+    return;
+  }
+
+  if (favorites.includes(subject)) {
+    toast('Already in your favorites');
+
+    return;
+  }
+
+  addFavorite(subject);
+  toast.success('Added to favorites');
 };
 
 export const useSidebarDnd = (
   onIsRearangingChange: (isRearanging: boolean) => void,
 ) => {
   const store = useStore();
-  const { sidebarKeyboardDndEnabled } = useSettings();
+  const { sidebarKeyboardDndEnabled, drive } = useSettings();
 
   const keyboardSensor = useSensor(KeyboardSensor);
 
@@ -75,6 +147,7 @@ export const useSidebarDnd = (
 
   const [draggingResource, setDraggingResource] = useState<string>();
   const [waitForSavePromise, setWaitForSavePromise] = useState<Promise<void>>();
+  const [favorites, addFavorite] = useFavorites();
 
   const animateDrop: DropAnimationFunction = useCallback(
     ({ active, dragOverlay, transform }) => {
@@ -146,6 +219,24 @@ export const useSidebarDnd = (
     }
 
     const subject = event.active.id as string;
+
+    if (isZoneData(event.over.data.current)) {
+      // The drop animation waits on this, so the overlay only flies back once
+      // a trashed row has left the tree.
+      const promise = handleZoneDrop(event.over.data.current.zone, subject, {
+        favorites,
+        addFavorite,
+        moveToTrash: s => moveToTrash(store, s, drive),
+      });
+
+      setWaitForSavePromise(promise);
+      await promise;
+      setDraggingResource(undefined);
+      onIsRearangingChange(false);
+
+      return;
+    }
+
     const { renderedUnder } = event.active.data
       .current as unknown as SideBarDragData;
     const {
@@ -222,6 +313,16 @@ export const useSidebarDnd = (
     ? 'To rearange items, press space or enter to start dragging. While dragging, use the arrow keys to move the item in any given direction. Press space or enter again to drop the item in its new position, or press escape to cancel.'
     : 'Keyboard support for drag and drop is disabled. Enable it in the settings.';
 
+  const describeTarget = (data: unknown): string => {
+    if (isZoneData(data)) {
+      return data.zone === 'trash' ? 'the trash' : 'your favorites';
+    }
+
+    const { parent } = data as SideBarDropData;
+
+    return store.getResourceLoading(parent).title;
+  };
+
   const announcements: Announcements = {
     onDragStart: ({ active }) => {
       const resource = store.getResourceLoading(active.id as string);
@@ -234,9 +335,8 @@ export const useSidebarDnd = (
       }
 
       const dragResource = store.getResourceLoading(active.id as string);
-      const dropResource = store.getResourceLoading(over.data.current.parent);
 
-      return `Draggable item ${dragResource.title} was moved over droppable area in ${dropResource.title}`;
+      return `Draggable item ${dragResource.title} was moved over droppable area in ${describeTarget(over.data.current)}`;
     },
     onDragEnd: ({ active, over }) => {
       if (!over || !over.data.current) {
@@ -244,9 +344,14 @@ export const useSidebarDnd = (
       }
 
       const dragResource = store.getResourceLoading(active.id as string);
-      const dropResource = store.getResourceLoading(over.data.current.parent);
 
-      return `${dragResource.title} was moved to ${dropResource.title}`;
+      if (isZoneData(over.data.current)) {
+        return over.data.current.zone === 'trash'
+          ? `${dragResource.title} was moved to the trash`
+          : `${dragResource.title} was dropped on your favorites`;
+      }
+
+      return `${dragResource.title} was moved to ${describeTarget(over.data.current)}`;
     },
     onDragCancel: () => {
       return `Dragging canceled`;
