@@ -28,6 +28,7 @@ import { FaTriangleExclamation } from 'react-icons/fa6';
 import { Dialog, useDialog } from '../Dialog';
 import { Button } from '../Button';
 import { ErrorLook } from '../ErrorLook';
+import { UnreachableOriginNotice } from '../UnreachableOriginNotice';
 import { TeamProfileStep } from '../TeamProfileStep';
 import {
   profileReviewedBefore,
@@ -292,7 +293,10 @@ function ShareOverview({
             <SeatsNote>{describeEditorSeats(editorSeats)}</SeatsNote>
           )}
           {canWrite && !isSaas && (
-            <InviteLinkField createInviteLink={createInviteLink} />
+            <>
+              <InviteLinkField createInviteLink={createInviteLink} />
+              <UnreachableOriginNotice />
+            </>
           )}
           {composing ? (
             <MessageField>

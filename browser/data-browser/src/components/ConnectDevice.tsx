@@ -3,6 +3,7 @@ import { styled } from 'styled-components';
 import { Button } from './Button';
 import { ScanCodeButton } from './ConnectToDeviceForm';
 import { PairingCode } from './PairingCode';
+import { UnreachableOriginNotice } from './UnreachableOriginNotice';
 import { cardSurface } from './cardSurface';
 import { classifyConnectInput } from '../helpers/connectInput';
 import { deliverDeepLink } from '../helpers/deepLinkQueue';
@@ -111,6 +112,7 @@ export function ConnectDevice({
             <Centered>
               <PairingCode nodeDid={pairNodeDid} />
             </Centered>
+            <UnreachableOriginNotice />
           </Side>
         )}
         {showPairing && pairNodeDid && <Divider aria-hidden />}

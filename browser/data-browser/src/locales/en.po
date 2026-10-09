@@ -12714,7 +12714,12 @@ msgstr "linked class"
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "options"
 msgstr "options"
+
 #. 0: names.length
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr "Set up creates {0} tables for this importer. Nothing is imported yet."
+
+#: src/components/UnreachableOriginNotice.tsx
+msgid "Other people and devices cannot reach this address. Give the server a public HTTPS address to share or sync. <0>Read the docs</0>"
+msgstr "Other people and devices cannot reach this address. Give the server a public HTTPS address to share or sync. <0>Read the docs</0>"
