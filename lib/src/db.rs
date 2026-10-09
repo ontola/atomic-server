@@ -1,6 +1,9 @@
 //! Persistent, ACID compliant, threadsafe to-disk store.
 //! Powered by redb (sled only to migrate old stores).
 
+mod ai_chat_migration;
+#[cfg(test)]
+mod ai_chat_migration_test;
 pub mod app_agent;
 pub mod blob_backend;
 mod canonical_scheme;
@@ -587,6 +590,8 @@ impl Db {
         // after the watched queries are loaded so the new pages are indexed.
         #[cfg(not(target_arch = "wasm32"))]
         self.migrate_messages().await?;
+        #[cfg(not(target_arch = "wasm32"))]
+        self.migrate_ai_chats().await?;
         crate::search::maybe_rebuild_search_index(&self)?;
         self.load_lenses().await;
         Ok(self)

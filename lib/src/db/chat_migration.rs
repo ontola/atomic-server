@@ -107,6 +107,51 @@ pub(super) fn id_body(subject: &str) -> String {
         .to_string()
 }
 
+/// The creator of an old resource: `createdBy`, else the agent its genesis
+/// change names. Empty when neither is known.
+pub(super) fn creator_of(resource: &crate::Resource) -> String {
+    match resource.get(urls::CREATED_BY) {
+        Ok(v) => v.to_string(),
+        Err(_) => resource
+            .build_state_doc()
+            .ok()
+            .and_then(|doc| doc.genesis_change())
+            .and_then(|genesis| genesis.message)
+            .unwrap_or_default(),
+    }
+}
+
+/// The agent that signs migrated pages, with its raw key material.
+pub(super) struct PageSigner {
+    pub agent: Agent,
+    pub public_key: [u8; 32],
+    pub private_key: String,
+}
+
+/// A page that is planned: its certificate is signed, so its subject is known
+/// before it is written.
+pub(super) struct PlannedPage {
+    pub cert: GenesisCert,
+    pub subject: String,
+}
+
+impl PageSigner {
+    /// Plans a page for `parent` in `drive`, created at `created_at`.
+    pub(super) fn plan_page(
+        &self,
+        created_at: i64,
+        parent: &str,
+        drive: &str,
+    ) -> AtomicResult<PlannedPage> {
+        let mut nonce = [0u8; 16];
+        rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut nonce);
+        let cert = GenesisCert::new_v2(self.public_key, created_at, nonce, None, parent, drive);
+        let signature = cert.sign(&self.private_key)?;
+        let subject = GenesisCert::subject_for_signature(&signature);
+        Ok(PlannedPage { cert, subject })
+    }
+}
+
 fn has_class(classes: &[String], class: &str) -> bool {
     classes.iter().any(|c| c == class)
 }
@@ -257,7 +302,7 @@ impl Db {
 
     /// The agent that signs migrated pages. Made on first use and kept in the
     /// store, so a resumed run and later runs sign as the same one.
-    fn chat_migration_agent(&self) -> AtomicResult<Agent> {
+    pub(super) fn chat_migration_agent(&self) -> AtomicResult<Agent> {
         if let Some(bytes) = self.kv.get(Tree::PluginMeta, AGENT_KEY)? {
             let private_key = String::from_utf8(bytes.to_vec())
                 .map_err(|e| format!("Unreadable chat migration agent: {e}"))?;
@@ -320,16 +365,7 @@ impl Db {
                 .ok()
                 .and_then(|v| v.to_int().ok())
                 .unwrap_or(0);
-            // The creator: `createdBy`, else the agent the genesis change names.
-            let author = match message.get(urls::CREATED_BY) {
-                Ok(v) => v.to_string(),
-                Err(_) => message
-                    .build_state_doc()
-                    .ok()
-                    .and_then(|doc| doc.genesis_change())
-                    .and_then(|genesis| genesis.message)
-                    .unwrap_or_default(),
-            };
+            let author = creator_of(&message);
             let text = message
                 .get(urls::DESCRIPTION)
                 .map(|v| v.to_string())
@@ -443,12 +479,7 @@ impl Db {
         let signer = if missing.is_empty() {
             None
         } else {
-            let agent = self.chat_migration_agent()?;
-            let key: [u8; 32] = crate::agents::decode_base64(&agent.public_key)?
-                .try_into()
-                .map_err(|_| "Agent public key must be 32 bytes")?;
-            let private_key = agent.private_key.clone().ok_or("No private key")?;
-            Some((agent, key, private_key))
+            Some(self.page_signer()?)
         };
 
         // Where each message ends up: a page that has its entry, or a page
@@ -461,60 +492,42 @@ impl Db {
             }
         }
         struct Planned<'a> {
-            cert: GenesisCert,
-            subject: String,
+            page: PlannedPage,
             messages: Vec<&'a Old>,
         }
         let mut planned: Vec<Planned> = Vec::new();
         for chunk in missing.chunks(PAGE_SIZE) {
-            let Some((_, agent_key, private_key)) = &signer else {
+            let Some(signer) = &signer else {
                 break;
             };
-            let mut nonce = [0u8; 16];
-            rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut nonce);
             // Pages sort by creation time: the first message's.
             let created_at = chunk[0].entry.created_at.max(1);
-            let cert = GenesisCert::new_v2(*agent_key, created_at, nonce, None, parent, &drive);
-            let signature = cert.sign(private_key)?;
-            let subject = GenesisCert::subject_for_signature(&signature);
+            let page = signer.plan_page(created_at, parent, &drive)?;
             for message in chunk {
                 location.insert(
                     message.subject.clone(),
                     format!(
                         "{}#{}",
-                        Subject::from(subject.as_str()).pure_id(),
+                        Subject::from(page.subject.as_str()).pure_id(),
                         message.key
                     ),
                 );
             }
             planned.push(Planned {
-                cert,
-                subject,
+                page,
                 messages: chunk.to_vec(),
             });
         }
 
-        let opts = CommitOpts {
-            update_index: true,
-            ..CommitOpts::no_validations_no_index()
-        };
         for page in &planned {
-            let doc = AtomicLoroDoc::new();
-            let is_a = Value::ResourceArray(vec![urls::CHAT_LOG.to_string().into()]);
-            let parent_value = Value::AtomicUrl(parent.into());
-            doc.set_property(urls::IS_A, &is_a)?;
-            doc.set_property(urls::PARENT, &parent_value)?;
-            let mut builder = CommitBuilder::new("placeholder".into());
-            builder.set(urls::PARENT.into(), parent_value);
-            if let Some(about) = about {
-                let about = Value::AtomicUrl(about.into());
-                doc.set_property(urls::ABOUT, &about)?;
-                builder.set(urls::ABOUT.into(), about);
-            }
+            let signer = signer
+                .as_ref()
+                .expect("pages are only planned with a signer");
+            let mut entries: Vec<(String, Entry)> = Vec::new();
             for message in &page.messages {
                 let mut entry = message.entry.clone();
-                if let (true, Some((agent, _, _))) = (entry.author.is_empty(), &signer) {
-                    entry.author = agent.subject.to_string();
+                if entry.author.is_empty() {
+                    entry.author = signer.agent.subject.to_string();
                 }
                 entry.reply_to = message.reply_to.as_ref().map(|r| {
                     location
@@ -522,24 +535,10 @@ impl Db {
                         .cloned()
                         .unwrap_or_else(|| r.clone())
                 });
-                doc.put_entry(&message.key, &entry)?;
+                entries.push((message.key.clone(), entry));
             }
-            builder.set_loro_update(doc.export_snapshot());
-            let commit = Commit::create_did_with_cert(
-                builder,
-                &signer
-                    .as_ref()
-                    .expect("pages are only planned with a signer")
-                    .0,
-                self,
-                Some(page.cert.clone()),
-            )
-            .await?;
-            debug_assert_eq!(
-                Subject::from(commit.subject.as_str()).pure_id(),
-                Subject::from(page.subject.as_str()).pure_id()
-            );
-            self.apply_commit(commit, &opts).await?;
+            self.write_log_page(signer, &page.page, parent, about, &entries)
+                .await?;
         }
 
         if !remove_old {
@@ -559,8 +558,64 @@ impl Db {
         Ok(())
     }
 
+    /// The signer for migrated pages (made on first use, see
+    /// [`Self::chat_migration_agent`]).
+    pub(super) fn page_signer(&self) -> AtomicResult<PageSigner> {
+        let agent = self.chat_migration_agent()?;
+        let public_key: [u8; 32] = crate::agents::decode_base64(&agent.public_key)?
+            .try_into()
+            .map_err(|_| "Agent public key must be 32 bytes")?;
+        let private_key = agent.private_key.clone().ok_or("No private key")?;
+        Ok(PageSigner {
+            agent,
+            public_key,
+            private_key,
+        })
+    }
+
+    /// Writes one planned page with `entries` in it: signed by `signer`, applied
+    /// with rights checks off.
+    pub(super) async fn write_log_page(
+        &self,
+        signer: &PageSigner,
+        page: &PlannedPage,
+        parent: &str,
+        about: Option<&str>,
+        entries: &[(String, Entry)],
+    ) -> AtomicResult<()> {
+        let opts = CommitOpts {
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+        let doc = AtomicLoroDoc::new();
+        let is_a = Value::ResourceArray(vec![urls::CHAT_LOG.to_string().into()]);
+        let parent_value = Value::AtomicUrl(parent.into());
+        doc.set_property(urls::IS_A, &is_a)?;
+        doc.set_property(urls::PARENT, &parent_value)?;
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(urls::PARENT.into(), parent_value);
+        if let Some(about) = about {
+            let about = Value::AtomicUrl(about.into());
+            doc.set_property(urls::ABOUT, &about)?;
+            builder.set(urls::ABOUT.into(), about);
+        }
+        for (key, entry) in entries {
+            doc.put_entry(key, entry)?;
+        }
+        builder.set_loro_update(doc.export_snapshot());
+        let commit =
+            Commit::create_did_with_cert(builder, &signer.agent, self, Some(page.cert.clone()))
+                .await?;
+        debug_assert_eq!(
+            Subject::from(commit.subject.as_str()).pure_id(),
+            Subject::from(page.subject.as_str()).pure_id()
+        );
+        self.apply_commit(commit, &opts).await?;
+        Ok(())
+    }
+
     /// Removes an old message and everything stored for it.
-    async fn remove_old_message(&self, subject: &str) -> AtomicResult<()> {
+    pub(super) async fn remove_old_message(&self, subject: &str) -> AtomicResult<()> {
         let message = Subject::from(subject);
         let body = |s: &str| {
             crate::identifiers::identifier_body(s)

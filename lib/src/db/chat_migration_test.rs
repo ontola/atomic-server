@@ -12,12 +12,12 @@ use crate::{
 };
 use loro::LoroValue;
 
-struct World {
-    db: Db,
-    alice: Agent,
-    bob: Agent,
-    drive: String,
-    chat: String,
+pub(super) struct World {
+    pub db: Db,
+    pub alice: Agent,
+    pub bob: Agent,
+    pub drive: String,
+    pub chat: String,
 }
 
 fn grant(res: &mut Resource, prop: &str, agents: &[&Agent]) {
@@ -34,7 +34,7 @@ fn grant(res: &mut Resource, prop: &str, agents: &[&Agent]) {
 }
 
 /// Alice owns the drive. Bob may append to the chat.
-async fn world(id: &str) -> World {
+pub(super) async fn world(id: &str) -> World {
     let db = Db::init_temp(id).await.unwrap();
     let (alice, drive) = db.setup("Alice").await.unwrap();
     let bob = db.create_agent(Some("Bob")).await.unwrap();
@@ -601,7 +601,7 @@ async fn a_member_edits_own_migrated_entry_and_not_another() {
     .expect("a moderator may remove any entry");
 }
 
-fn stored_bytes(store: &Db) -> (usize, Vec<(Tree, usize, usize)>) {
+pub(super) fn stored_bytes(store: &Db) -> (usize, Vec<(Tree, usize, usize)>) {
     let trees = [
         Tree::Resources,
         Tree::LoroSnapshots,
