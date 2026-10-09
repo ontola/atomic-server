@@ -28,14 +28,9 @@ import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
 import { LuChevronsUpDown } from 'react-icons/lu';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ScrollArea } from '../ScrollArea';
-import { sidebarCollisionDetection, useSidebarDnd } from './useSidebarDnd';
-import { DndContext, DragOverlay } from '@dnd-kit/core';
-import { SidebarDropZones } from './SidebarDropZones';
 import { SidebarTrashLink } from './SidebarTrashLink';
-import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
 import { DropEdge } from './ResourceSideBar/DropEdge';
 import { SIDEBAR_CHILD_LIMIT, SideBarMoreRow } from './SideBarMoreRow';
-import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { LoaderInline } from '../Loader';
 import { QuickCreateRow } from '../NewInstanceButton';
@@ -44,25 +39,15 @@ import { useIsPrivateDrive } from '../../hooks/useIsPrivateDrive';
 
 interface SideBarDriveProps {
   onItemClick: () => unknown;
-  onIsRearangingChange: (isRearanging: boolean) => void;
 }
 
-/** Shows the current Drive, it's children and an option to change to a different Drive */
-export function SideBarDrive({
-  onItemClick,
-  onIsRearangingChange,
-}: SideBarDriveProps): JSX.Element {
+/**
+ * Shows the current Drive, it's children and an option to change to a different Drive.
+ * Must render inside the sidebar's `DndContext` (see `SideBar`).
+ */
+export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
   const store = useStore();
   const { drive, agent } = useSettings();
-  const {
-    handleDragStart,
-    handleDragEnd,
-    draggingResource,
-    sensors,
-    animateDrop,
-    dndExplanation,
-    announcements,
-  } = useSidebarDnd(onIsRearangingChange);
   const driveResource = useResource(drive);
   const {
     subjects: allChildren,
@@ -165,105 +150,73 @@ export function SideBarDrive({
         </TitleButton>
         <DriveSwitcher Trigger={DriveSwitcherTrigger} />
       </SideBarHeader>
-      <DndContext
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        sensors={sensors}
-        // `closestCenter` lets the 3-pixel `DropEdge` strips between
-        // siblings win over the much-taller "drop onto folder row"
-        // targets when the dragged item is over a sibling gap. With the
-        // default `rectIntersection` the bigger row always swallowed
-        // every drop and inter-sibling reordering became unreachable. The
-        // Favorites / Trash zones take priority while the pointer is on them.
-        collisionDetection={sidebarCollisionDetection}
-        accessibility={{
-          announcements,
-          screenReaderInstructions: {
-            draggable: dndExplanation,
-          },
-        }}
-      >
-        <StyledScrollArea>
-          <ListWrapper>
-            <DropEdge
-              parentHierarchy={[drive]}
-              index={0}
-              prevSubject={undefined}
-              nextSubject={subResources[0]}
-            />
-            {/* Gate on `subResources` (reactive `useChildren` state), NOT on
+      <StyledScrollArea>
+        <ListWrapper>
+          <DropEdge
+            parentHierarchy={[drive]}
+            index={0}
+            prevSubject={undefined}
+            nextSubject={subResources[0]}
+          />
+          {/* Gate on `subResources` (reactive `useChildren` state), NOT on
                 `driveResource.isReady()`. The latter is a proxy read the React
                 Compiler memoizes on the stable ref, so when the drive flips to
                 ready it doesn't re-render and the sidebar stays empty even
                 though the children are in state (confirmed: `setSubjects([3])`
                 ran but the list rendered nothing). If we HAVE children, show
                 them; otherwise fall back to a loader / error. */}
-            {subResources.length > 0 ? (
-              subResources.map((child, index) => {
-                return (
-                  <Fragment key={child}>
-                    <ResourceSideBar
-                      subject={child}
-                      renderedHierarchy={[drive]}
-                      ancestry={ancestry}
-                      onClick={onItemClick}
-                    />
-                    <DropEdge
-                      parentHierarchy={[drive]}
-                      index={index + 1}
-                      prevSubject={child}
-                      nextSubject={subResources[index + 1]}
-                    />
-                  </Fragment>
-                );
-              })
-            ) : childrenLoading ? (
-              <SideBarLoader />
-            ) : driveResource.error ? (
-              <SideBarErr>
-                {driveResource.isUnauthorized()
-                  ? agent
-                    ? 'unauthorized'
-                    : 'This drive is private, sign in to view it'
-                  : driveResource.error.message}
-              </SideBarErr>
-            ) : null}
-            {totalChildren > allChildren.length && (
-              <SideBarMoreRow
+          {subResources.length > 0 ? (
+            subResources.map((child, index) => {
+              return (
+                <Fragment key={child}>
+                  <ResourceSideBar
+                    subject={child}
+                    renderedHierarchy={[drive]}
+                    ancestry={ancestry}
+                    onClick={onItemClick}
+                  />
+                  <DropEdge
+                    parentHierarchy={[drive]}
+                    index={index + 1}
+                    prevSubject={child}
+                    nextSubject={subResources[index + 1]}
+                  />
+                </Fragment>
+              );
+            })
+          ) : childrenLoading ? (
+            <SideBarLoader />
+          ) : driveResource.error ? (
+            <SideBarErr>
+              {driveResource.isUnauthorized()
+                ? agent
+                  ? 'unauthorized'
+                  : 'This drive is private, sign in to view it'
+                : driveResource.error.message}
+            </SideBarErr>
+          ) : null}
+          {totalChildren > allChildren.length && (
+            <SideBarMoreRow
+              parent={drive}
+              hidden={totalChildren - allChildren.length}
+              onClick={onItemClick}
+            />
+          )}
+          {trashFolder && (
+            <SidebarTrashLink subject={trashFolder} onClick={onItemClick} />
+          )}
+          {agentCanWrite && (
+            <NewResourceRow gap='0' center>
+              <QuickCreateRow
                 parent={drive}
-                hidden={totalChildren - allChildren.length}
-                onClick={onItemClick}
+                newResourceButtonTestId='sidebar-new-resource'
+                highlightUntilUsed
+                onItemClick={onItemClick}
               />
-            )}
-            {trashFolder && (
-              <SidebarTrashLink subject={trashFolder} onClick={onItemClick} />
-            )}
-            {agentCanWrite && (
-              <NewResourceRow gap='0' center>
-                <QuickCreateRow
-                  parent={drive}
-                  newResourceButtonTestId='sidebar-new-resource'
-                  highlightUntilUsed
-                  onItemClick={onItemClick}
-                />
-              </NewResourceRow>
-            )}
-          </ListWrapper>
-        </StyledScrollArea>
-        <SidebarDropZones draggingResource={draggingResource} />
-        {createPortal(
-          <DragOverlay dropAnimation={animateDrop}>
-            {draggingResource && (
-              <SidebarItemTitle
-                subject={draggingResource}
-                hideActionButtons
-                isDragging
-              />
-            )}
-          </DragOverlay>,
-          document.body,
-        )}
-      </DndContext>
+            </NewResourceRow>
+          )}
+        </ListWrapper>
+      </StyledScrollArea>
     </>
   );
 }

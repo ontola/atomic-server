@@ -1,6 +1,5 @@
 import { useDroppable } from '@dnd-kit/core';
 import { useCanWrite, useResource } from '@tomic/react';
-import { createPortal } from 'react-dom';
 import { FaStar, FaTrash } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { transition } from '../../helpers/transition';
@@ -12,9 +11,11 @@ interface SidebarDropZonesProps {
 }
 
 /**
- * Favorites and Trash targets pinned to the bottom-left of the screen while a
- * sidebar item is dragged. Rendered in a portal so they stay visible however
- * far the tree is scrolled, and big enough to hit with a thumb.
+ * Favorites and Trash targets shown at the bottom of the sidebar while an item
+ * is dragged, in the spot of the panels (which are hidden meanwhile). Normal
+ * flow, no portal or fixed positioning, so they are as wide as the sidebar
+ * (also as a phone drawer) and big enough to hit with a thumb. Must render
+ * inside the sidebar's `DndContext`.
  */
 export function SidebarDropZones({
   draggingResource,
@@ -23,7 +24,7 @@ export function SidebarDropZones({
     return null;
   }
 
-  return createPortal(
+  return (
     <ZoneBar data-testid='sidebar-drop-zones'>
       <TrashZone subject={draggingResource} />
       <DropZone
@@ -33,8 +34,7 @@ export function SidebarDropZones({
       >
         Favorites
       </DropZone>
-    </ZoneBar>,
-    document.body,
+    </ZoneBar>
   );
 }
 
@@ -93,19 +93,16 @@ function DropZone({
 }
 
 const ZoneBar = styled.div`
-  position: fixed;
-  left: 0;
-  bottom: 0;
-  z-index: ${p => p.theme.zIndex.sidebar + 4};
+  /* Pushed to the bottom of the nav, like the panels' MenuWrapper. */
+  margin-top: auto;
   box-sizing: border-box;
   display: flex;
   gap: 0.5rem;
-  width: min(100vw, 20rem);
-  padding: 0.75rem;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
-  background: ${p => p.theme.colors.bg};
-  border-top: 1px solid ${p => p.theme.colors.bg2};
-  box-shadow: ${p => p.theme.boxShadowSoft};
+  width: 100%;
+  min-width: 0;
+  padding-block: 0.5rem;
+  /* Same horizontal inset as the tree and the panels. */
+  padding-inline: ${p => p.theme.margin}rem;
   /* Keep a finger on a zone from starting a scroll or text selection. */
   touch-action: none;
   user-select: none;

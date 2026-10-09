@@ -71,7 +71,7 @@ export const isZoneData = (data: unknown): data is SideBarZoneData => {
 
 /**
  * The zones sit far from the tree, so when the pointer is inside one it wins
- * outright. Everything else keeps using `closestCenter` (see SideBarDrive).
+ * outright. Everything else keeps using `closestCenter` (see SideBar).
  */
 export const sidebarCollisionDetection: CollisionDetection = args => {
   const zoneHits = pointerWithin({
@@ -207,6 +207,14 @@ export const useSidebarDnd = (
   const handleDragStart = (event: DragStartEvent) => {
     onIsRearangingChange(true);
     setDraggingResource(event.active.id as string);
+  };
+
+  // Escape or a cancelled touch ends a drag without a drop: leave drag mode so
+  // the panels come back.
+  const handleDragCancel = () => {
+    setDraggingResource(undefined);
+    onIsRearangingChange(false);
+    setWaitForSavePromise(Promise.resolve());
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -361,6 +369,7 @@ export const useSidebarDnd = (
   return {
     handleDragStart,
     handleDragEnd,
+    handleDragCancel,
     draggingResource,
     sensors,
     animateDrop,
