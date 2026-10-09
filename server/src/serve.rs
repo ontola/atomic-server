@@ -608,6 +608,11 @@ where
             return Err("The HTTPS feature has been disabled for this build. Please compile atomic-server with the HTTP feature. `cargo install atomic-server`".into());
         }
     } else {
+        tracing::info!(
+            "HTTPS is off: this server only listens on port {} (plain HTTP), so published port 443 reaches nothing. \
+             Enable it with `--https --domain <domain> --email <email>`, or put a reverse proxy in front and set the public URL with `--server-url https://<domain>`.",
+            config.opts.port
+        );
         let (listener, endpoint) = bind_listener(config.opts.ip, config.opts.port)?;
         tracing::info!("Binding HTTP server to endpoint {}", endpoint);
         println!("{}", message);
