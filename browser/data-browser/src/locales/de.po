@@ -12768,3 +12768,11 @@ msgstr ""
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "Chat messages are being packed into compact logs. This is needed once after an update and can take a while for a big chat. Keep this tab open."
 msgstr ""
+
+#: src/components/ConnectDevice.tsx
+msgid "Could not reach that address."
+msgstr ""
+
+#: src/components/ConnectDevice.tsx
+msgid "That address answers, but it is not an AtomicServer."
+msgstr ""
