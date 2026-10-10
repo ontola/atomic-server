@@ -1,3 +1,5 @@
+// Regression test for existing behaviour, not for a new change: an errored
+// Resource stays cached in store.resources, so a 404 is fetched only once.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Store } from './store.js';
 

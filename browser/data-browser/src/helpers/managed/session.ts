@@ -46,15 +46,29 @@ let settled:
     }
   | undefined;
 
-const sessionChangeListeners = new Set<() => void>();
+function listenerRegistry() {
+  const listeners = new Set<() => void>();
+
+  return {
+    add(listener: () => void): () => void {
+      listeners.add(listener);
+
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    run() {
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
+const sessionChangeListeners = listenerRegistry();
+const logoutListeners = listenerRegistry();
 
 /** Run when a sign-in lands in this tab (or the session was otherwise replaced). */
 export function onManagedSessionChanged(listener: () => void): () => void {
-  sessionChangeListeners.add(listener);
-
-  return () => {
-    sessionChangeListeners.delete(listener);
-  };
+  return sessionChangeListeners.add(listener);
 }
 
 /**
@@ -66,7 +80,7 @@ export function noteManagedSessionChanged(): void {
   sessionGeneration++;
   settled = undefined;
   inFlight = undefined;
-  for (const listener of sessionChangeListeners) listener();
+  sessionChangeListeners.run();
 }
 
 // Another tab or window can sign in or out through the shared cookie; the
@@ -163,15 +177,9 @@ async function fetchManagedAccount(
   return generation === sessionGeneration ? account : null;
 }
 
-const logoutListeners = new Set<() => void>();
-
 /** Stop account-scoped work before invalidating its credentials. */
 export function onManagedLogout(listener: () => void): () => void {
-  logoutListeners.add(listener);
-
-  return () => {
-    logoutListeners.delete(listener);
-  };
+  return logoutListeners.add(listener);
 }
 
 /**
@@ -183,7 +191,7 @@ export async function logoutManagedSession(): Promise<void> {
   sessionGeneration++;
   settled = undefined;
   pendingLogouts++;
-  for (const listener of logoutListeners) listener();
+  logoutListeners.run();
 
   try {
     // A FOSS node has no control plane; its own origin answers 405.

@@ -508,8 +508,10 @@ pub struct Db {
     pending_lenses: Arc<RwLock<Vec<String>>>,
     /// External subjects the remote answered 404/410 for this session. A
     /// definitive "not found" is asked once: without this, every parse or
-    /// serialize that meets an unknown property fetched it again.
-    remote_not_found: Arc<Mutex<HashSet<String>>>,
+    /// serialize that meets an unknown property fetched it again. Maps the
+    /// subject to when the entry expires, so a resource published later is
+    /// found again after `REMOTE_NOT_FOUND_TTL`.
+    remote_not_found: Arc<Mutex<HashMap<String, web_time::Instant>>>,
 }
 
 #[derive(Default)]
@@ -528,6 +530,9 @@ fn default_fetch_counters() -> Arc<FetchCounters> {
 /// mid-sync, not a normal-latency budget.
 const PENDING_BLOB_REQUEST_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 
+/// How long a remote 404/410 is remembered before the subject is asked for again.
+const REMOTE_NOT_FOUND_TTL: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// The default (permissive) sync policy reference used by every `Db` until a
 /// managed node installs one.
 fn default_sync_policy() -> Arc<RwLock<Arc<dyn crate::sync::policy::SyncPolicy>>> {
@@ -536,15 +541,25 @@ fn default_sync_policy() -> Arc<RwLock<Arc<dyn crate::sync::policy::SyncPolicy>>
 
 impl Db {
     fn is_remote_not_found(&self, subject: &str) -> bool {
-        self.remote_not_found
-            .lock()
-            .map(|set| set.contains(subject))
-            .unwrap_or(false)
+        let Ok(mut map) = self.remote_not_found.lock() else {
+            return false;
+        };
+        match map.get(subject) {
+            Some(expires) if web_time::Instant::now() < *expires => true,
+            Some(_) => {
+                map.remove(subject);
+                false
+            }
+            None => false,
+        }
     }
 
     fn remember_remote_not_found(&self, subject: &str) {
-        if let Ok(mut set) = self.remote_not_found.lock() {
-            set.insert(subject.to_string());
+        if let Ok(mut map) = self.remote_not_found.lock() {
+            map.insert(
+                subject.to_string(),
+                web_time::Instant::now() + REMOTE_NOT_FOUND_TTL,
+            );
         }
     }
 
@@ -6002,6 +6017,26 @@ mod remote_not_found_tests {
         }
 
         assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn an_expired_404_is_fetched_again() {
+        let db = Db::init_temp("remote_not_found_expiry").await.unwrap();
+        let (server, hits) = serve("404 Not Found");
+        let property = format!("{server}/properties/demo/speaker");
+
+        assert!(db.get_property(&property).await.is_err());
+        assert!(db.get_property(&property).await.is_err());
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+
+        // Backdate the entry: it expires now.
+        db.remote_not_found
+            .lock()
+            .unwrap()
+            .insert(property.clone(), web_time::Instant::now());
+
+        assert!(db.get_property(&property).await.is_err());
+        assert_eq!(hits.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test]

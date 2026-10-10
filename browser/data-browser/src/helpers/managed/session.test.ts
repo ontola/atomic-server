@@ -158,3 +158,23 @@ it('does not keep a settled answer across logout', async () => {
   fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
   expect(await getManagedAccount()).toBeNull();
 });
+
+it('does not cache a rejected fetch', async () => {
+  fetchMock.mockClear();
+  fetchMock.mockRejectedValueOnce(new TypeError('network down'));
+  await expect(getManagedAccount()).rejects.toThrow('network down');
+
+  fetchMock.mockResolvedValueOnce(Response.json({ email: 'test@example.com' }));
+  expect(await getManagedAccount()).toEqual({ email: 'test@example.com' });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it('does not cache a 5xx answer', async () => {
+  fetchMock.mockClear();
+  fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
+  await expect(getManagedAccount()).rejects.toThrow();
+
+  fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+  expect(await getManagedAccount()).toBeNull();
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
