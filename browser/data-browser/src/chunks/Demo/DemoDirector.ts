@@ -8,6 +8,7 @@ import {
   core,
   dataBrowser,
   type PresenceEntry,
+  type Resource,
   type Store,
 } from '@tomic/react';
 import {
@@ -23,7 +24,7 @@ import {
 import { colorForAgent } from '../../components/Presence/AgentAvatar';
 import { getOrCreateMeetingsFolder } from '../../helpers/standardLocations';
 import { simulatePropEdit } from './simulatedEdits';
-import { DEMO_SPEAKER } from './messageSpeaker';
+import { isFollowEntry } from '../../helpers/chatLog';
 import { SimulatedTypist } from './SimulatedTypist';
 import { YUSUF_LIVE_STROKES } from './moodboardStrokes';
 
@@ -139,22 +140,17 @@ export class DemoDirector {
         if (this.selfSaving) return;
         if (!this.store.isLocalOnlySubject(resource.subject)) return;
 
-        // The reactive trigger: a message the user posted into the
-        // meeting chat ("say something"). An open editor re-saving
-        // imported persona ops can't reach this — those aren't Messages
-        // parented to the meeting.
-        // Only something the user typed counts. Joining the meeting and
-        // following Mara also post messages here, as the user: the "Demo
-        // User joined the meeting" and "Viewing …" trail entries. Those
-        // ticked off "Say hi" the moment the user joined, before they had
-        // typed anything. A persona's line carries its speaker, which also
-        // covers overlapping saves the shared `selfSaving` flag misses.
+        // The reactive trigger: a message the user posted into the meeting
+        // chat ("say something"). A message is an entry in a page of the
+        // meeting's chat log. Only something the user typed counts: joining
+        // the meeting and following Mara also post entries here, as the user
+        // ("Demo User joined the meeting", "Viewing …"), but those are
+        // follow events; a persona's line is authored as the persona.
         if (
           this.meeting &&
           resource.get(core.properties.parent) === this.meeting &&
-          resource.hasClasses(dataBrowser.classes.message) &&
-          !resource.hasClasses(dataBrowser.classes.followEvent) &&
-          !resource.get(DEMO_SPEAKER)
+          resource.hasClasses(dataBrowser.classes.chatLog) &&
+          this.userTyped(resource)
         ) {
           this.userChatted = true;
           this.userChatWaiters.forEach(resolve => resolve());
@@ -176,6 +172,18 @@ export class DemoDirector {
       console.warn('[Demo] director stopped on error:', e);
       this.stop();
     });
+  }
+
+  /** Whether the chat log page holds a line the signed-in user typed. */
+  private userTyped(page: Resource): boolean {
+    const me = this.store.getAgent()?.subject;
+
+    return (
+      !!me &&
+      page
+        .listChatLogEntries()
+        .some(({ entry }) => entry.a === me && !isFollowEntry(entry))
+    );
   }
 
   public stop(): void {

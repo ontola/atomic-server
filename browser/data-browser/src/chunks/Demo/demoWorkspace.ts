@@ -11,13 +11,12 @@ import {
   commits,
   server,
   classes,
-  Datatype,
   type JSONValue,
   type Resource,
   type Store,
 } from '@tomic/react';
 import { buildTableFromSpec } from '../TablePage/createTableFromSpec';
-import { DEMO_SPEAKER } from './messageSpeaker';
+import { sendLogEntry } from '../../helpers/chatLog';
 import { MOODBOARD_BAKED_STROKES } from './moodboardStrokes';
 
 /**
@@ -156,7 +155,12 @@ const TEAM_CHAT_SEED: Array<{ author: PersonaKey; text: string }> = [
   },
 ];
 
-/** Create local scripted speech while preserving the real genesis creator. */
+/**
+ * Scripted speech as an entry of the chat's log, authored as the persona. The
+ * demo drive is local-only (nothing checks the entry's author against a
+ * signer), and the personas have no keys of their own, so the visitor's guest
+ * identity writes the commit.
+ */
 export async function createDemoMessage(
   store: Store,
   opts: {
@@ -165,20 +169,15 @@ export async function createDemoMessage(
     text: string;
     extraClasses?: string[];
   },
-): Promise<Resource> {
-  const message = await store.newResource({
+): Promise<void> {
+  await sendLogEntry(store, {
     parent: opts.parent,
-    isA: [dataBrowser.classes.message, ...(opts.extraClasses ?? [])],
-    propVals: {
-      [core.properties.description]: opts.text,
-    },
+    text: opts.text,
+    author: opts.author,
+    kind: opts.extraClasses?.includes(dataBrowser.classes.followEvent)
+      ? dataBrowser.classes.followEvent
+      : undefined,
   });
-  // The speaker property is local to the demo and not published on
-  // atomicdata.dev, so validating it would fetch a 404 for every message.
-  await message.set(DEMO_SPEAKER, opts.author, true, Datatype.STRING);
-  await message.save();
-
-  return message;
 }
 
 /** Mirrors `useAddToOntology` for imperative (non-hook) callers: parent

@@ -24,7 +24,10 @@ import {
   appendToChatLog,
   deleteLogEntry,
   editLogEntry,
+  hideMigrated,
+  isFollowEntry,
   parseEntryId,
+  sendLogEntry,
   scopeKey,
   queryPages,
   toEntryId,
@@ -55,7 +58,7 @@ import { IconButton } from '../../components/IconButton/IconButton';
 import { ChatMessagesContainer } from '../../components/ChatMessagesContainer';
 import Markdown from '../../components/datatypes/Markdown';
 import { Detail } from '../../components/Detail';
-import { LoaderInline } from '../../components/Loader';
+import { Spinner } from '../../components/Spinner';
 import { editURL } from '../../helpers/navigation';
 import { formatCompactDateTime } from '../../helpers/dates/compactDateTime';
 import { ResourceInline } from '../ResourceInline';
@@ -286,7 +289,7 @@ export function ChatView({
           fullView={noContainerPadding}
         >
           {messagesLoading ? (
-            <LoaderInline>Loading messages...</LoaderInline>
+            <Spinner centered />
           ) : messages.length === 0 ? (
             <EmptyChatState>
               <FaMessage />
@@ -412,30 +415,24 @@ interface SendChatMessageOptions {
   extraClasses?: string[];
 }
 
-/** Creates and saves a Message resource. */
+/**
+ * Posts a message to a chat as an entry of its log (`planning/chat-log.md`);
+ * no `Message` resource is made. Follow events (`extraClasses` with
+ * FollowEvent) become entries of kind FollowEvent.
+ */
 export async function sendChatMessage(
   store: Store,
   { parent, text, about, replyTo, extraClasses }: SendChatMessageOptions,
 ) {
-  const msgResource = await store.newResource({
+  await sendLogEntry(store, {
     parent,
-    isA: [dataBrowser.classes.message, ...(extraClasses ?? [])],
-    propVals: {
-      [core.properties.description]: text,
-      // `createdAt` is NOT set here: it's derived from the genesis Loro
-      // change (timestamp) and materialized server-side. Authoring it
-      // explicitly is now rejected by the server.
-      ...(about && {
-        [dataBrowser.properties.about]: about,
-      }),
-      ...(replyTo && {
-        [dataBrowser.properties.replyTo]: replyTo,
-      }),
-    },
+    text,
+    about,
+    replyTo,
+    kind: extraClasses?.includes(dataBrowser.classes.followEvent)
+      ? dataBrowser.classes.followEvent
+      : undefined,
   });
-
-  await msgResource.save();
-  store.notifyResourceManuallyCreated(msgResource);
 }
 
 type SetReplyToType = (subject: string) => unknown;
@@ -624,6 +621,16 @@ function LogMessage({
 
   if (!entry || !key) {
     return <MessageComponent about={id} />;
+  }
+
+  if (isFollowEntry(entry)) {
+    return (
+      <FollowEventMessage
+        description={entry.t}
+        createdAt={new Date(entry.c)}
+        createdBy={entry.a}
+      />
+    );
   }
 
   // The server only lets an author change their own entries; moderators can
@@ -1005,6 +1012,9 @@ const MessageComponent = styled.div`
   /* Enough room that the avatar's hover ring never touches the body chip. */
   gap: 0.75rem;
   padding-block: 0.1rem;
+  /* Room for the body chip's negative right margin. Without it the row is
+   * 0.5rem wider than the scroll viewport and the chat scrolls sideways. */
+  padding-inline-end: 0.5rem;
 
   &:hover ${MessageBody} {
     background: ${p => p.theme.colors.bg1};
@@ -1274,6 +1284,7 @@ export function useChatMessages(
             at: (await store.getResource(id)).getCreatedAt() ?? 0,
           })),
         );
+        const entryKeys = new Set<string>();
         const log: Timed[] = [];
         const loadedPages: string[] = [];
         let index = pages.length - 1;
@@ -1289,13 +1300,20 @@ export function useChatMessages(
           if (page.error) continue;
 
           for (const { key, entry } of page.listChatLogEntries()) {
+            // One key on two pages (two peers migrated the same message) is
+            // one message.
+            if (entryKeys.has(key)) continue;
+            entryKeys.add(key);
             log.push({ id: toEntryId(current, key), at: entry.c });
           }
         }
 
+        // An old Message that already has its entry is a stale copy.
+        const { shown, hidden } = hideMigrated(old, entryKeys);
+
         const merged = windowChat({
-          old,
-          oldTotal: count,
+          old: shown,
+          oldTotal: count - hidden,
           log,
           unloadedPages: index + 1,
           visible,

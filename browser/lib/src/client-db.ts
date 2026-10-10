@@ -82,6 +82,26 @@ function isStorageBlockedDbError(error: unknown): boolean {
  *  caller that cannot work without it (the demo) can say so in its own words. */
 export const STORAGE_BLOCKED_ERROR_NAME = 'StorageBlockedError';
 
+/**
+ * Drives that exist only in this browser, as `Store.registerLocalOnlyDrive`
+ * stored them. A worker has no `localStorage`, so the page reads them for it.
+ * Anything unreadable counts as none: the chat migration then writes no pages
+ * and only drops cached messages that already have their entry, which is the
+ * safe side.
+ */
+function readLocalOnlyDrives(): string[] {
+  try {
+    const raw = localStorage.getItem('atomic.localOnlyDrives');
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+
+    return Array.isArray(parsed)
+      ? parsed.filter((d): d is string => typeof d === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function asInitError(e: unknown): Error {
   const message = e instanceof Error ? e.message : String(e);
 
@@ -707,9 +727,9 @@ export class ClientDbWorker {
 
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       if ((event.data as { type: string }).type === 'migration-progress') {
-        const { done, total, finished } =
+        const { done, total, finished, phase } =
           event.data as unknown as IndexMigrationProgress;
-        publishIndexMigration({ done, total, finished });
+        publishIndexMigration({ done, total, finished, phase });
 
         return;
       }
@@ -741,6 +761,7 @@ export class ClientDbWorker {
       dbKey: this.opts.dbKey,
       migrateLegacy: this.opts.migrateLegacy,
       discardUndecryptable: this.opts.discardUndecryptable,
+      localOnlyDrives: readLocalOnlyDrives(),
     })) as ClientDbInitTimings | undefined;
     endWorkerInit(timings);
 

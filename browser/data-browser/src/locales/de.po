@@ -1013,10 +1013,6 @@ msgstr ""
 msgid "Remove tag"
 msgstr ""
 
-#: src/views/ChatRoom/ChatRoomView.tsx
-msgid "Loading messages..."
-msgstr ""
-
 #: src/components/SideBar/MessagesPanel.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "No messages yet"
@@ -2009,10 +2005,6 @@ msgstr ""
 
 #: src/views/Card/BookmarkCard.tsx
 msgid "Open site"
-msgstr ""
-
-#: src/components/AI/ChatLoadingIndicator.tsx
-msgid "Loading AI"
 msgstr ""
 
 #: src/views/Installation/AssignRights.tsx
@@ -4314,11 +4306,6 @@ msgstr ""
 
 #: src/views/Meeting/MeetingPage.tsx
 msgid "Open chat"
-msgstr ""
-
-#: src/views/Meeting/MeetingPage.tsx
-#: src/views/Meeting/MeetingPage.tsx
-msgid "Loading meeting notes…"
 msgstr ""
 
 #: src/components/Presence/FollowSessionPanelContainer.tsx
@@ -8269,10 +8256,6 @@ msgstr ""
 msgid "This view has no dashboard yet."
 msgstr ""
 
-#: src/chunks/TablePage/Dashboard/DashboardView.tsx
-msgid "Loading dashboard…"
-msgstr ""
-
 #: src/views/PeerInvitePage.tsx
 msgid "This is taking longer than it should. The person who invited you needs to have this drive open in their browser. Try again, or ask them for a new invitation."
 msgstr ""
@@ -11109,9 +11092,6 @@ msgstr ""
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
 msgstr ""
 
-#~ msgid "Commit keeps failing"
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
 msgstr ""
@@ -12783,4 +12763,8 @@ msgstr ""
 
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Edit message text"
+msgstr ""
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "Chat messages are being packed into compact logs. This is needed once after an update and can take a while for a big chat. Keep this tab open."
 msgstr ""

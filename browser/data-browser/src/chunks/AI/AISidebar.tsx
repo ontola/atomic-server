@@ -25,7 +25,8 @@ import {
 } from '@tomic/react';
 import { useGenerativeData } from './useGenerativeData';
 import {
-  messageResourcesToDisplayMessages,
+  loadChatMessages,
+  type AiMessageRef,
   removeFollowingMessagesFromChatResource,
   removeMessageFromChatResource,
 } from './chatConversionUtils';
@@ -87,12 +88,14 @@ const AISidebar: React.FC = () => {
   // Draft creation starts on the first message; store the in-flight promise so
   // concurrent persistence calls share the same resource.
   const draftChatPromiseRef = useRef<Promise<Resource<Ai.AiChat>> | null>(null);
-  const messageToResourceMapRef = useRef(new Map<AtomicUIMessage, Resource>());
+  const messageToResourceMapRef = useRef(
+    new Map<AtomicUIMessage, AiMessageRef>(),
+  );
   // Incremented when starting a new chat to ignore stale async resource
   // creation from the previous conversation.
   const chatGenerationRef = useRef(0);
   const [messageToResourceMap, setMessageToResourceMap] = useState(
-    new Map<AtomicUIMessage, Resource>(),
+    new Map<AtomicUIMessage, AiMessageRef>(),
   );
   const [currentSubject] = useCurrentSubject();
   const titlePromiseRef = useRef<TitlePromise | undefined>(undefined);
@@ -187,12 +190,7 @@ const AISidebar: React.FC = () => {
     async (chatSubject: string) => {
       const generation = chatGenerationRef.current;
       const chatRes = await store.getResource<Ai.AiChat>(chatSubject);
-      const messageSubjects =
-        (chatRes.get(ai.properties.messages) as string[] | undefined) ?? [];
-      const map = await messageResourcesToDisplayMessages(
-        messageSubjects,
-        store,
-      );
+      const map = await loadChatMessages(chatRes, store);
 
       if (generation !== chatGenerationRef.current) {
         return;
@@ -281,9 +279,12 @@ const AISidebar: React.FC = () => {
 
     if (chatResource && messageResource) {
       try {
-        await removeMessageFromChatResource(messageResource, chatResource, {
-          saveChat: isChatSavedRef.current,
-        });
+        await removeMessageFromChatResource(
+          messageResource,
+          chatResource,
+          store,
+          { persist: isChatSavedRef.current },
+        );
       } catch (error) {
         console.error('Error removing message:', error);
         toast.error('Failed to remove AI chat message');
@@ -385,7 +386,8 @@ const AISidebar: React.FC = () => {
           allMessages,
           messageToResourceMap,
           chatResource,
-          { saveChat: isChatSavedRef.current },
+          store,
+          { persist: isChatSavedRef.current },
         );
 
         setMessageToResourceMap(prev => {

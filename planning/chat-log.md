@@ -3,7 +3,9 @@
 > **Status:** Design (2026-10-09). Joep chose this route ("Chatlog (D)") after
 > the measurements in [`chat-message-storage.md`](./chat-message-storage.md).
 > Steps 1 (class, entries, server rule, tests) and 2 (group chat and comments)
-> are built.
+> are built, and so is the migration of existing messages and the follow events
+> (see "Existing messages"). Step 3, AI chat, is built with its migration (see
+> "Step 3: AI chat").
 
 ## Why
 
@@ -112,12 +114,60 @@ one-resource-per-event data; they can become an inbox log later, same design.
 
 ## Existing messages
 
-Old `Message`, `ai-message` and `SealedMessage` resources stay as they are and
-stay readable: views read both the old resources and the log and merge them by
-time. They cannot be moved into a log, because every entry must carry its
-author's signature and only the author can make that. New messages go to the
-log. Released clients that still write `Message` resources keep working; their
-messages show up through the same merge.
+Old `Message` resources are moved into the log, and the old resources are then
+removed. Decisions (Joep, 2026-10-09):
+
+1. **Scope.** Every `Message` resource: group chat, comments, meeting chat and
+   FollowEvents. Not `SealedMessage` (DMs) and not AI chat yet.
+2. **Grouping.** By `(parent, about)`. Inside a group the messages sort by
+   `createdAt` and fill pages of 256, the same page shape the app writes
+   (`ChatLog`, `parent`, `about` for comments, entries in `entries`). Entry `a`
+   is the message's original author (`createdBy`), `t` the description, `c` the
+   `createdAt`, `k` FollowEvent when the class is there, `e` when it was edited
+   (a retained commit more than a second newer than the creation). `r` is the
+   new `<page>#<key>` id when the replied-to message is migrated too, else the
+   old subject.
+3. **Deterministic key.** `<createdAt hex>-<first 8 hex chars of SHA-256 of the
+   old subject's id>` (the part after `did:ad:` / `atomic:`, no query or
+   fragment: `migrated_entry_key` in Rust, `migratedEntryKey` in TS, one shared
+   test vector). A re-run, a second migrating peer or a stale cached copy can
+   recognise a migrated message by it. The reader hides an old `Message`
+   resource whose key exists in a loaded page of the same chat, and lists one
+   entry key that sits on two pages once.
+4. **Authority.** The pages are signed by an agent that belongs to the store
+   (made on first use, kept in `Tree::PluginMeta`) and written with rights
+   checks off, like a server-internal write. The author of an entry is
+   attested by the host; the original per-message signature is not carried
+   over. The page creator gets no `write`, so the normal rule for later commits
+   holds: members only change their own entries, writers of the chat all.
+5. **Removal.** After a group's pages are written, the old resources go:
+   resource row, Loro snapshot, envelopes, genesis commit row, index and search
+   rows (`remove_resource`, which also leaves a tombstone so a stale peer cannot
+   bring them back). Old message URLs then 404. Order matters for a crash: pages
+   first, removal second; a restart finds the entries by key and only removes.
+6. **Where it runs.** Resumable, marker `chat-log-migration-v1` (and a
+   `-state` row with `done`, `total` and the list of groups) in
+   `Tree::PluginMeta`, in slices of whole groups, progress `done/total`:
+   - Server and other native stores: `Db::open` after the index migration and
+     the bootstrap, logged (`Db::migrate_messages`; the AI chats follow in `Db::migrate_ai_chats`, see step 3).
+   - Browser worker: `ClientDb` init, after the index rebuild, with progress on
+     the existing upgrade notice (`phase: 'messages'`). The page passes the
+     drives that exist only in this browser (`atomic.localOnlyDrives`, the
+     registry `Store.registerLocalOnlyDrive` keeps); only for those the worker
+     writes pages. For every other drive (hosted by a server) the server makes
+     the pages and the worker only deletes cached `Message` rows whose key is
+     in a local ChatLog page. Nothing in the registry (empty, unreadable,
+     private window) means cleanup only: the safe side. A cache that gets its
+     pages after the migration ran is cleaned when the next version opens the
+     store; until then the reader's hiding rule (3) covers it.
+7. **New follow events and meeting messages** are entries (`k` FollowEvent),
+   written by `sendChatMessage` through `sendLogEntry`. No `Message` resource is
+   created by the app any more (the demo workspace's persona messages still are:
+   they cannot be signed as a persona).
+
+Known leftovers: an edited old message whose genesis commit row cannot be reached
+(no `lastCommit` or retained envelope pointing at it) keeps that row, about 1 KB;
+a tombstone costs about 100 B per migrated message in `PluginMeta`.
 
 ## Build order (one PR each)
 
@@ -129,7 +179,8 @@ messages show up through the same merge.
 2. Group chat and comments, with the merged reader and pagination per page.
 3. AI chat.
 4. DMs.
-5. Follow events and meeting toasts.
+5. Follow events and meeting toasts (built with the migration of existing
+   messages).
 
 ## Step 2: group chat and comments (as built)
 
@@ -166,9 +217,9 @@ messages show up through the same merge.
 - **Opening a page.** A ChatLog page has no view of its own: opening it (the
   parent of a copied link) redirects to the chat, or to the item with the
   comments open.
-- **Not in the log yet.** FollowEvents, meeting toasts, AI chat and DMs are
-  untouched. Meeting chat messages typed by people are entries (it is a
-  ChatRoom); the meeting toaster reads both.
+- **Not in the log yet.** DMs are untouched (AI chat: see step 3). Meeting chat messages
+  typed by people are entries (it is a ChatRoom); the meeting toaster reads both.
+  Follow events became entries with the migration of existing messages.
 
 Choices to revisit:
 
@@ -180,6 +231,68 @@ Choices to revisit:
 - Comments (log or not) live in the drive's comments folder, so only people
   with access to the drive see them; a guest invited to a single item sees no
   comments. Unchanged from `Message`s.
+
+## Step 3: AI chat (as built)
+
+- **Shape.** The AI chat resource stays (name, `about`, emoji). Its messages
+  are entries of `ChatLog` pages whose `parent` is the chat. An entry is one
+  whole message: `a` the author agent, `t` empty, `c`, `role` (`user`,
+  `assistant`, `system`, `summary`), `parts` the parts as a JSON string, as the
+  UI message holds them (text and reasoning `{type, text}`, `file`,
+  `source-url`, tool calls in the normalized form `restoreToolPart` produces:
+  `type: "tool-<name>"`, `toolCallId`, `state`, `input`, `output` or
+  `errorText`), `ctx` the provided context as a JSON string (atomic and MCP
+  resources; skills are not stored, as before), `sc` the server provided
+  context, `err` why a reply stopped. `ai-chat.messages` is no longer written.
+  Code: `chunks/AI/aiChatEntries.ts` (message <-> entry),
+  `chatConversionUtils.ts` (writes, removes, reads).
+- **Writes.** `addMessageToChatResource` appends to the newest page that has
+  room or makes the next one (`parent` the chat). A checkpoint of a streaming
+  reply, a retry or a regenerate re-saves the same message by putting the same
+  entry key with its first `c`: nothing moves. `c` of a new entry is the larger
+  of now and one more than the newest `c` this client knows, so two messages in
+  one millisecond keep their order. Removing one message, or all after one
+  (regenerate, delete-following) removes entries, a page save per page. All
+  writes of a chat, removals included, run on the chat's one queue
+  (`queueChatWrite`), so a checkpoint in flight cannot bring back an entry that
+  was just removed.
+- **Draft chats** (planning/ai-chat-draft-persistence.md). While the chat is a
+  draft its page is only local; the finalisation sweep saves the page(s) before
+  the chat, as it did for the message resources.
+- **Reading.** `loadChatMessages` lists the pages of the chat, merges their
+  entries by `c` (not by key: migrated keys carry the old creation time while
+  `c` was raised to keep the list's order) and merges old `ai-message`
+  resources that have no entry yet (hidden when their deterministic key is in a
+  page, as for `Message`s). The display message id is the entry id
+  `<page>#<key>`.
+- **Migration** (`lib/src/db/ai_chat_migration.rs`). Same mechanism as the
+  `Message` migration: its own marker `ai-chat-log-migration-v1` and `-state`
+  row in `Tree::PluginMeta`, whole chats per slice with `done/total` in
+  messages, `Db::open` on native stores (after the `Message` migration), the
+  browser worker after it (same upgrade notice, same local-only versus hosted
+  rule: hosted drives are only cleaned of cached rows that have their entry).
+  Per chat: the order is the `messages` list, not `createdAt`; `c` is the
+  creation time raised to one millisecond after the entry before it. Entry key
+  = `migrated_entry_key(createdAt, subject)`. Pages of 256 entries are written
+  first, then each old message goes together with its part resources and its
+  `mcp-resource` context items, then `messages` is cleared on the chat (signed
+  by the migration agent). A restart in between finds the entries by key.
+- **Page size counts entries, not bytes.** An AI message can carry large tool
+  outputs, so 256 messages is not a bounded page the way 256 chat lines are.
+  No byte cap was added: a page is one Loro document and a commit rewrites
+  only the delta, so the cost is in loading a page (the chat loads every page
+  anyway) and in the first sync of it. If big outputs turn out common, the
+  cheap fix is a smaller entry count for AI pages (the page choice already
+  takes a capacity), or storing outputs above a size as a file and keeping a
+  reference in the part. Decide with measurements from real chats.
+- **Measured** (`migrating_an_ai_chat_shrinks_the_store`, 20 messages, half of
+  them assistant messages with a reasoning part, a text part and three tool
+  calls with a 12-row result): 43.5 KB per message as resources, 1.8 KB per
+  message after (1,941,584 B to 1,107,362 B on a 1,071,006 B baseline). What
+  remains is mostly the tool results themselves and the tombstones.
+- **Not changed.** The chat list (`AIPanel`, `findLatestAiChatAbout`) reads the
+  AI chat resources, not messages. The summary role and
+  `CompactSeparatorWidget` work on UI messages, so they are untouched.
 
 ## Open questions
 

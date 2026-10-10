@@ -1,5 +1,13 @@
-import { commits, core, dataBrowser, useCollection } from '@tomic/react';
-import { useChatLogCount, useChatLogPages } from './useChatLog';
+import { useEffect, useState } from 'react';
+import {
+  commits,
+  core,
+  dataBrowser,
+  useCollection,
+  useStore,
+} from '@tomic/react';
+import { hideMigrated } from '../helpers/chatLog';
+import { useChatLogKeys, useChatLogPages } from './useChatLog';
 import { useLastSeenComments } from './useLastSeenComments';
 
 // `about` is also used by AI chats; only Messages are comments.
@@ -30,10 +38,44 @@ export function useCommentCount(subject: string): {
     { pageSize: 100 },
   );
   const { pages } = useChatLogPages(dataBrowser.properties.about, subject);
-  const logged = useChatLogCount(pages);
+  const keys = useChatLogKeys(pages);
+  const store = useStore();
   const [lastSeen] = useLastSeenComments(subject);
+  // Old Messages that already have their entry are stale copies: the reader
+  // hides them, so they are not counted either.
+  const [stale, setStale] = useState(0);
 
-  const count = (ready ? collection.totalMembers : 0) + logged;
+  useEffect(() => {
+    if (!ready || keys.size === 0) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const old = [];
+
+      for (let i = 0; i < collection.totalMembers; i++) {
+        const id = await collection.getMemberWithIndex(i);
+
+        if (id) {
+          old.push({
+            id,
+            at: (await store.getResource(id)).getCreatedAt() ?? 0,
+          });
+        }
+      }
+
+      if (!cancelled) setStale(hideMigrated(old, keys).hidden);
+    })().catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [collection, ready, keys, store]);
+
+  const count =
+    (ready ? collection.totalMembers : 0) -
+    (keys.size > 0 ? stale : 0) +
+    keys.size;
   const hasUnseen = count > 0 && (lastSeen === undefined || count > lastSeen);
 
   return { count, hasUnseen };
