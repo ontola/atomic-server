@@ -2708,3 +2708,30 @@ managed node, reads a saved child directly over HTTP, queues an edit with WS
 disconnected, reconnects, then signs in on a fresh browser and verifies the
 edited child after reload. It does not certify real billing or a full network
 partition.
+
+## Encrypted conversation attachments (2026-10-10, `planning/encrypted-conversations.md`)
+
+`atomic_lib::conversation` (`lib/src/conversation.rs`, `mod tests`) covers
+`seal_file` and `open_file`: a round trip, refusal in another conversation,
+refusal with another file's key, a flipped byte in the version, nonce, body and
+tag, a truncated or empty ciphertext, two seals of equal bytes differing in key
+and nonce, and an empty and a 25 MiB file. `server/tests/it/conversations.rs`
+`member_attaches_a_file_under_their_message` runs a real server with three
+agents: a member with only `append` creates the `File` under their own message
+and `PUT`s the blob (admitted through the File), the download returns
+ciphertext that only the right key opens, an outsider can neither attach nor
+read the File, the other member cannot rewrite it, and an unreferenced hash is
+refused. In the app, `helpers/conversations/attachments.test.ts` covers
+`parsePayload` for the old shape (no attachments), the new shape, unknown
+fields and unusable entries, the 25 MiB and 10 file caps, the raster-only
+preview allowlist and download names; `sendSealedMessage.test.ts` checks both
+caps refuse before anything is encrypted or saved; `openAttachment.test.ts`
+checks the local copy winning over the server, the retry while an upload is
+still on its way, giving up, and a bad reference.
+
+Not covered: attaching and downloading in a running app (the wasm encryption,
+`Store.uploadFiles` and the outbox PUT together), the composer (button, drop,
+paste, chips) and the inline image preview have no component or Playwright test
+yet, a 25 MiB file on a phone-width browser (wasm memory), whether a message
+arriving before its upload finished is shown correctly in a second browser, and
+quota for attachments on a hosted conversation.

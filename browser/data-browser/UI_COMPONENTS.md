@@ -87,6 +87,7 @@ These components help with rendering resources in different contexts.
 - `src/components/ProgressBar.tsx` - Theme-styled `<progress>` element.
 - `src/components/CodeBlock.tsx` - Code `<pre>` wrapper with a copy button and toast feedback.
 - `src/components/HighlightedCodeBlock.tsx` - Lazy-loaded syntax-highlighted code block boundary.
+- `src/components/FileChip.tsx` - Compact file line (icon by mime type, name, size) that can be a button (download), show a spinner while busy, carry a note, and offer a remove button. Used for files waiting in the chat composer and for received attachments.
 - `src/components/ErrorLook.tsx` - Shared error typography, simple error box, and `ErrorBlock` with optional trace details.
 - `src/components/CommentCountBadge.tsx` - Live comment-count pill for any resource (counts Messages whose `about` points at it); highlights when there are unseen messages (device-local, via `useLastSeenComments`).
 - `src/components/Presence/ResourcePresenceRow.tsx` - Facepile of agents currently viewing a resource (ephemeral drive presence); also announces the viewer's own presence. Skips the currently-followed agent (their avatar lives in the navbar's Following indicator).

@@ -227,3 +227,143 @@ async fn members_post_and_outsiders_cannot() -> AtomicResult<()> {
 
     Ok(())
 }
+
+/// A `File` child of `message`, as the app creates it for an attachment: an
+/// opaque carrier whose `blob` names the ciphertext.
+async fn attach_file(
+    client: &Client,
+    message: &str,
+    ciphertext: &[u8],
+) -> AtomicResult<(String, String)> {
+    let hash = blake3::hash(ciphertext).to_hex().to_string();
+    let mut file = client.new_resource(message)?;
+    file.set_unsafe(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![urls::FILE.into()]),
+    )?;
+    file.set_unsafe(urls::FILENAME.into(), Value::String("attachment".into()))?;
+    file.set_unsafe(
+        urls::MIMETYPE.into(),
+        Value::String("application/octet-stream".into()),
+    )?;
+    file.set_unsafe(
+        urls::FILESIZE.into(),
+        Value::Integer(ciphertext.len() as i64),
+    )?;
+    file.set_unsafe(
+        urls::BLOB.into(),
+        Value::AtomicUrl(format!("did:ad:blob:{hash}").into()),
+    )?;
+    // Required by the File class; the app writes the same content-addressed URL.
+    file.set_unsafe(
+        urls::DOWNLOAD_URL.into(),
+        Value::String(format!("{}/download/files/{hash}", client.server_url())),
+    )?;
+    let subject = file.save_remote(client.store()).await?;
+
+    Ok((subject, hash))
+}
+
+/// An attachment in a conversation: a member who may only `append` creates the
+/// `File` under their own message and pushes the ciphertext to `/blob`. The
+/// bytes are ciphertext, so the unauthenticated download (the hash is the
+/// capability) leaks nothing; what must hold is who may attach and who may
+/// change it afterwards.
+#[tokio::test]
+async fn member_attaches_a_file_under_their_message() -> AtomicResult<()> {
+    let port = start_server("conversations_attachments");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{}", port);
+
+    let alice_client = Client::new(&server_url).await?;
+    let bob_client = Client::new(&server_url).await?;
+    let carol_client = Client::new(&server_url).await?;
+    let alice = alice_client.new_agent("Alice").await?;
+    let bob = bob_client.new_agent("Bob").await?;
+    carol_client.new_agent("Carol").await?;
+
+    let mut keyring = Keyring::default();
+    keyring.add_epoch(&[member(&alice, 1), member(&bob, 2)])?;
+    let dm = new_drive(
+        &alice_client,
+        &[urls::DRIVE, urls::CONVERSATION],
+        &[&alice, &bob],
+        Some(&keyring),
+    )
+    .await?;
+    let from_bob = post_message(&bob_client, &dm, &bob).await?;
+
+    // What a device uploads: the sealed file, never the plaintext.
+    let (key, sealed) = atomic_lib::conversation::seal_file(&dm, b"holiday photo")?;
+    let (file, hash) = attach_file(&bob_client, &from_bob, &sealed).await?;
+
+    // The File lands before its bytes, as in the app's outbox. Bob has only
+    // `append` on the conversation and the PUT is admitted through the File.
+    let http = reqwest::Client::new();
+    let put = http
+        .put(format!("{server_url}/blob/{hash}"))
+        .body(sealed.clone())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(put.status(), 204, "the blob is admitted through Bob's File");
+
+    // Alice reads the File and fetches the ciphertext, and only the ciphertext.
+    let as_alice = alice_client.get_resource(&file).await?;
+    assert_eq!(as_alice.get(urls::FILENAME)?.to_string(), "attachment");
+    let downloaded = http
+        .get(format!("{server_url}/download/files/{hash}"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(downloaded.status(), 200);
+    let bytes = downloaded.bytes().await.map_err(|e| e.to_string())?;
+    assert_eq!(bytes.as_ref(), sealed.as_slice());
+    assert_ne!(bytes.as_ref(), b"holiday photo".as_slice());
+    // Only the key from the sealed message opens it.
+    assert_eq!(
+        atomic_lib::conversation::open_file(&dm, &key, &bytes)?,
+        b"holiday photo"
+    );
+    let (other_key, _) = atomic_lib::conversation::seal_file(&dm, b"x")?;
+    assert!(atomic_lib::conversation::open_file(&dm, &other_key, &bytes).is_err());
+
+    // Nobody outside the conversation attaches to it, or reads the File.
+    assert!(
+        attach_file(&carol_client, &from_bob, b"carol was here")
+            .await
+            .is_err(),
+        "Carol is not a member and cannot attach"
+    );
+    assert!(
+        carol_client.get_resource(&file).await.is_err(),
+        "Carol cannot read the File"
+    );
+
+    // The other member cannot rewrite Bob's File, nor point it at other bytes.
+    let mut forged = alice_client.get_resource(&file).await?;
+    forged.set_unsafe(urls::FILENAME.into(), Value::String("forged".into()))?;
+    assert!(
+        forged.save_remote(alice_client.store()).await.is_err(),
+        "Alice cannot change Bob's File"
+    );
+
+    // Bob can: it is his.
+    let mut as_bob = bob_client.get_resource(&file).await?;
+    as_bob.set_unsafe(urls::FILENAME.into(), Value::String("renamed".into()))?;
+    as_bob.save_remote(bob_client.store()).await?;
+
+    // A hash nothing references is not a write capability, members included.
+    let stray = http
+        .put(format!(
+            "{server_url}/blob/{}",
+            blake3::hash(b"never committed").to_hex()
+        ))
+        .body(b"never committed".to_vec())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert!(stray.status().is_client_error(), "got {}", stray.status());
+
+    Ok(())
+}
