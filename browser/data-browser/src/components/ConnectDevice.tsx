@@ -6,6 +6,7 @@ import { PairingCode } from './PairingCode';
 import { cardSurface } from './cardSurface';
 import { classifyConnectInput } from '../helpers/connectInput';
 import { deliverDeepLink } from '../helpers/deepLinkQueue';
+import { probeServer } from '../helpers/probeServer';
 
 const SECTION_ID = 'connect-device';
 const INPUT_ID = 'connect-device-input';
@@ -57,8 +58,9 @@ export function ConnectDevice({
 }: ConnectDeviceProps): JSX.Element {
   const [input, setInput] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function connect(raw: string) {
+  async function connect(raw: string) {
     const parsed = classifyConnectInput(raw);
 
     if (parsed.kind === 'empty') return;
@@ -76,6 +78,23 @@ export function ConnectDevice({
       // and start a sync.
       deliverDeepLink(parsed.code);
     } else if (parsed.kind === 'server') {
+      setBusy(true);
+      setMessage(null);
+
+      const probe = await probeServer(parsed.url);
+
+      setBusy(false);
+
+      if (probe !== 'node') {
+        setMessage(
+          probe === 'unreachable'
+            ? 'Could not reach that address.'
+            : 'That address answers, but it is not an AtomicServer.',
+        );
+
+        return;
+      }
+
       onAddServer(parsed.url);
     } else {
       setMessage(
@@ -121,11 +140,11 @@ export function ConnectDevice({
               ? 'Paste a pairing code, or type the address of an always-on device.'
               : 'Type the address of an always-on device.'}
           </Hint>
-          <ScanCodeButton onCode={connect} />
+          <ScanCodeButton onCode={code => void connect(code)} />
           <Form
             onSubmit={e => {
               e.preventDefault();
-              connect(input);
+              if (!busy) void connect(input);
             }}
           >
             <Input
@@ -141,7 +160,7 @@ export function ConnectDevice({
                 setMessage(null);
               }}
             />
-            <Button type='submit' disabled={!input.trim()}>
+            <Button type='submit' disabled={!input.trim() || busy}>
               Connect
             </Button>
           </Form>
