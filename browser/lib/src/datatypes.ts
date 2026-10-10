@@ -52,6 +52,15 @@ export const datatypeFromUrl = (url: string): Datatype => {
 };
 
 /**
+ * Strings the untagged reader would reinterpret as JSON or a reference.
+ * `atomic://` links are excluded on purpose: the Rust heuristic
+ * (`is_atomic_identifier`) leaves them as plain strings. Mirrors Rust
+ * `datatype_tag`; both are tested against
+ * `lib/test_files/string-datatype-tags.json`.
+ */
+const STRING_TAG_PREFIX = /^(\[|\{|atomic:(?!\/\/)|did:ad:|https?:\/\/)/;
+
+/**
  * The sibling `datatypes` Loro-map tag for a property, mirroring the Rust
  * `datatype_tag` (`lib/src/loro.rs`). Lets the server materialize a value to
  * the exact `Value` variant instead of guessing from the primitive.
@@ -77,8 +86,7 @@ export const datatypeTag = (
         ? 'atomicUrl'
         : undefined;
     case Datatype.STRING:
-      return typeof loroValue === 'string' &&
-        /^(\[|\{|atomic:|did:ad:|https?:\/\/)/.test(loroValue)
+      return typeof loroValue === 'string' && STRING_TAG_PREFIX.test(loroValue)
         ? 'string'
         : undefined;
     case Datatype.RESOURCEARRAY:

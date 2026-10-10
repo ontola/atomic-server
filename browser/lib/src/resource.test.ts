@@ -10,6 +10,7 @@ import type { JSONValue } from './value.js';
 import { testStore } from './test-store.js';
 import { core } from './index.js';
 import { LoroLoader } from './loro-loader.js';
+import { LoroList as LoroListClass, LoroMap as LoroMapClass } from 'loro-crdt';
 
 describe('resource.ts', () => {
   it('reports buffered snapshots separately until WASM can materialize them', ({
@@ -90,6 +91,45 @@ describe('resource.ts', () => {
     expect(
       resource.get('https://atomicdata.dev/properties/subresources'),
     ).toStrictEqual([testsubject, testsubject2, testsubject, testsubject]);
+  });
+
+  it('ignores an unknown datatype tag and reads the raw value', async ({
+    expect,
+  }) => {
+    // The path an older client takes on a tag it does not know (e.g. the
+    // `string` tag): `normalizeLoroValue` only acts on the tags it knows.
+    const prop = 'https://example.com/unknown-tag';
+    const original = new Resource('https://example.com/unknown-tag-test');
+    await original.set(prop, '["a","b"]', false);
+    const doc = original.getLoroDoc()!;
+    doc.getMap('datatypes').set(prop, 'someFutureTag');
+    doc.commit();
+
+    const reloaded = new Resource('https://example.com/unknown-tag-test');
+    reloaded.importLoroUpdate(doc.export({ mode: 'snapshot' }));
+
+    expect(reloaded.get(prop)).toBe('["a","b"]');
+  });
+
+  it('reads Null inside nested maps and lists without error', async ({
+    expect,
+  }) => {
+    const prop = 'https://example.com/nulls';
+    const original = new Resource('https://example.com/nulls-test');
+    await original.set(prop, 'placeholder', false);
+    const doc = original.getLoroDoc()!;
+    const props = doc.getMap('properties');
+    const map = props.setContainer(prop, new LoroMapClass());
+    map.set('a', null);
+    const list = map.setContainer('l', new LoroListClass());
+    list.push('x');
+    list.push(null);
+    doc.commit();
+
+    const reloaded = new Resource('https://example.com/nulls-test');
+    reloaded.importLoroUpdate(doc.export({ mode: 'snapshot' }));
+
+    expect(reloaded.get(prop)).toEqual({ a: null, l: ['x', null] });
   });
 
   it('getCreatedAt / getCreatedBy read the genesis change, surviving a snapshot round-trip', async ({

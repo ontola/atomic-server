@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'vitest';
 
 import {
@@ -184,4 +185,31 @@ describe('datatypeTag', () => {
     expect(datatypeTag(Datatype.INTEGER, 5)).toBeUndefined();
     expect(datatypeTag(Datatype.BOOLEAN, true)).toBeUndefined();
   });
+});
+
+describe('datatypeTag string cases shared with Rust', () => {
+  // The same file drives `datatype_tag` in lib/src/loro.rs.
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL(
+        '../../../lib/test_files/string-datatype-tags.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  ) as { cases: { value: string; tagged: boolean }[] };
+
+  it('has cases', ({ expect }) => {
+    expect(fixture.cases.length).toBeGreaterThan(0);
+  });
+
+  for (const { value, tagged } of fixture.cases) {
+    it(`${JSON.stringify(value)} ${tagged ? 'is' : 'is not'} tagged`, ({
+      expect,
+    }) => {
+      expect(datatypeTag(Datatype.STRING, value)).toBe(
+        tagged ? 'string' : undefined,
+      );
+    });
+  }
 });

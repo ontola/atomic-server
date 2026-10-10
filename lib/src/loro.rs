@@ -1633,6 +1633,115 @@ mod test {
         }
     }
 
+    /// Shared with the TS test `datatypes.test.ts`: both sides must agree on
+    /// which plain strings get the `string` tag.
+    #[test]
+    fn string_datatype_tag_matches_shared_fixture() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../test_files/string-datatype-tags.json")).unwrap();
+        let cases = fixture["cases"].as_array().unwrap();
+        assert!(!cases.is_empty());
+        for case in cases {
+            let value = case["value"].as_str().unwrap();
+            let expected = case["tagged"].as_bool().unwrap().then_some("string");
+            assert_eq!(
+                datatype_tag(&Value::String(value.into())),
+                expected,
+                "tag for {value:?}"
+            );
+        }
+    }
+
+    /// Legacy behaviour, unchanged: a snapshot written before the `string`
+    /// tag existed has no `datatypes` entry, so a string that looks like a
+    /// JSON array still materializes through the heuristic.
+    #[test]
+    fn old_untagged_snapshot_still_uses_the_heuristic() {
+        let doc = AtomicLoroDoc::new();
+        let props = doc.doc().get_map("properties");
+        props.insert("urn:arr", r#"["a","b"]"#).unwrap();
+        props.insert("urn:link", "https://example.com/x").unwrap();
+        props.insert("urn:plain", "hello").unwrap();
+        doc.doc().commit();
+
+        let read = AtomicLoroDoc::from_snapshot(&doc.export_snapshot()).unwrap();
+        assert!(read.get_all_datatypes().is_empty());
+        let values = read.get_all_properties();
+        let mat = |k: &str| loro_value_to_atomic_value_tagged(&values[k], None);
+        assert!(matches!(
+            mat("urn:arr"),
+            Some(Value::ResourceArray(a)) if a.len() == 2
+        ));
+        assert!(matches!(mat("urn:link"), Some(Value::AtomicUrl(_))));
+        assert!(matches!(mat("urn:plain"), Some(Value::String(s)) if s == "hello"));
+    }
+
+    /// An unknown tag is ignored and the value goes through the heuristic.
+    /// This is the path a reader that predates the `string` tag takes on a
+    /// new doc: `atomic_value_from_tag` returns `None` for a tag it does not
+    /// know and the caller falls back (checked against origin/develop).
+    #[test]
+    fn unknown_datatype_tag_falls_back_to_the_heuristic() {
+        let doc = AtomicLoroDoc::new();
+        doc.doc()
+            .get_map("properties")
+            .insert("urn:arr", r#"["a","b"]"#)
+            .unwrap();
+        doc.doc()
+            .get_map("datatypes")
+            .insert("urn:arr", "someFutureTag")
+            .unwrap();
+        doc.doc().commit();
+
+        let read = AtomicLoroDoc::from_snapshot(&doc.export_snapshot()).unwrap();
+        let tags = read.get_all_datatypes();
+        assert_eq!(tags["urn:arr"], "someFutureTag");
+        let values = read.get_all_properties();
+        assert!(matches!(
+            loro_value_to_atomic_value_tagged(&values["urn:arr"], Some(&tags["urn:arr"])),
+            Some(Value::ResourceArray(a)) if a.len() == 2
+        ));
+        // A known tag on a mismatched primitive also falls back, not errors.
+        assert!(matches!(
+            loro_value_to_atomic_value_tagged(&loro::LoroValue::I64(3), Some("string")),
+            Some(Value::Integer(3))
+        ));
+    }
+
+    /// Null inside nested maps and lists reads without error. The reader
+    /// functions (`loro_value_to_json`, `loro_value_to_atomic_value`,
+    /// `atomic_value_from_tag`) are unchanged from origin/develop (only the
+    /// writers changed), so this also covers readers that predate the fix.
+    #[test]
+    fn snapshot_with_null_in_nested_containers_reads_without_error() {
+        let doc = AtomicLoroDoc::new();
+        let props = doc.doc().get_map("properties");
+        let map = props
+            .insert_container("urn:map", loro::LoroMap::new())
+            .unwrap();
+        map.insert("a", loro::LoroValue::Null).unwrap();
+        let list = map.insert_container("l", loro::LoroList::new()).unwrap();
+        list.push("x").unwrap();
+        list.push(loro::LoroValue::Null).unwrap();
+        let top = props
+            .insert_container("urn:list", loro::LoroList::new())
+            .unwrap();
+        top.push(loro::LoroValue::Null).unwrap();
+        doc.doc().commit();
+
+        let read = AtomicLoroDoc::from_snapshot(&doc.export_snapshot()).unwrap();
+        let values = read.get_all_properties();
+        assert_eq!(
+            loro_value_to_json(&values["urn:map"]),
+            serde_json::json!({"a": null, "l": ["x", null]})
+        );
+        for k in ["urn:map", "urn:list"] {
+            // Must not panic; the result itself is not asserted.
+            let _ = loro_value_to_atomic_value_tagged(&values[k], None);
+            let _ = loro_value_to_atomic_value_tagged(&values[k], Some("json"));
+        }
+    }
+
     #[test]
     fn json_null_is_preserved_in_nested_maps_and_lists() {
         let json = serde_json::json!({"a": null, "b": ["x", null, {"c": null}]});
