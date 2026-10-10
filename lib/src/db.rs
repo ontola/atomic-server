@@ -5996,10 +5996,8 @@ mod remote_not_found_tests {
                 let _ = stream.read(&mut buf);
                 counter.fetch_add(1, Ordering::SeqCst);
                 let _ = stream.write_all(
-                    format!(
-                        "HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                    )
-                    .as_bytes(),
+                    format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                        .as_bytes(),
                 );
             }
         });
