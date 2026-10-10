@@ -3030,7 +3030,9 @@ export class Resource<C extends OptionalClass = any> {
     const { LoroList, LoroMap } = LoroLoader.Loro;
 
     for (const [key, value] of Object.entries(obj)) {
-      if (
+      if (value === null) {
+        map.set(key, null);
+      } else if (
         typeof value === 'string' ||
         typeof value === 'number' ||
         typeof value === 'boolean'
@@ -3167,7 +3169,9 @@ export class Resource<C extends OptionalClass = any> {
     const { LoroList, LoroMap } = LoroLoader.Loro;
 
     for (const item of arr) {
-      if (Array.isArray(item)) {
+      if (item === null) {
+        list.push(null);
+      } else if (Array.isArray(item)) {
         const nested = list.pushContainer(new LoroList());
         this.writeJsonToLoroList(nested, item);
       } else if (item && typeof item === 'object') {
