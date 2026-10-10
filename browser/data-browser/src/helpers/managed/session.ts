@@ -89,6 +89,7 @@ if (typeof window !== 'undefined') {
   const forget = () => {
     settled = undefined;
   };
+
   window.addEventListener('focus', forget);
   window.addEventListener('pageshow', forget);
   document.addEventListener('visibilitychange', () => {

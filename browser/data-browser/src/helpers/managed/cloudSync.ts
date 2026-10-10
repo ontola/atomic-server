@@ -159,6 +159,7 @@ export async function ensureManagedSession(
 
         return true;
       }
+
       if (await win.isClosed()) return false;
     }
 

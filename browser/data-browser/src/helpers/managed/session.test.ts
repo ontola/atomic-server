@@ -120,9 +120,7 @@ it('skips the settled answer when asked for a fresh one', async () => {
   expect(fetchMock).toHaveBeenCalledTimes(2);
 
   // The fresh answer becomes the settled one.
-  fetchMock.mockImplementation(async () =>
-    Response.json({ email: 'acct_1' }),
-  );
+  fetchMock.mockImplementation(async () => Response.json({ email: 'acct_1' }));
   expect(await getManagedAccount({ fresh: true })).toEqual({ email: 'acct_1' });
   expect(await getManagedAccount()).toEqual({ email: 'acct_1' });
   expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -135,9 +133,7 @@ it('asks again after a sign-in is announced, and tells listeners', async () => {
   const off = onManagedSessionChanged(listener);
 
   expect(await getManagedAccount()).toBeNull();
-  fetchMock.mockImplementation(async () =>
-    Response.json({ email: 'acct_1' }),
-  );
+  fetchMock.mockImplementation(async () => Response.json({ email: 'acct_1' }));
   noteManagedSessionChanged();
   expect(listener).toHaveBeenCalledTimes(1);
   expect(await getManagedAccount()).toEqual({ email: 'acct_1' });

@@ -44,7 +44,9 @@ describe('a property that is not found', () => {
     }
 
     expect(
-      fetchMock.mock.calls.filter(([url]) => String(url).includes('demo/other')),
+      fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('demo/other'),
+      ),
     ).toHaveLength(1);
   });
 });
