@@ -26,9 +26,15 @@ async function agent(): Promise<Agent> {
   );
 }
 
+/** Every store the tests opened, closed in `afterAll`: a commit the server
+ * refused is retried by its outbox, and that retry (and its log) would
+ * otherwise outlive the server and land in the worker's teardown. */
+const openStores: Store[] = [];
+
 function storeFor(url: string, who: Agent): Store {
   const store = new Store({ serverUrl: url, agent: who });
   store.setServerConnected(true);
+  openStores.push(store);
 
   return store;
 }
@@ -50,6 +56,12 @@ describe('chat log rights against a live server', () => {
   }, 120_000);
 
   afterAll(async () => {
+    for (const store of openStores) {
+      store.disconnect();
+      store.setServerConnected(false);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 500));
     await handle?.stop();
   });
 
