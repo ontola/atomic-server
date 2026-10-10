@@ -39,6 +39,10 @@ test.describe('chat mentions', () => {
     await expect(
       page.getByRole('main').getByText('Mention Target'),
     ).toBeVisible({ timeout: 10000 });
+    // The mention is stored in a chat log entry and rendered from it.
+    await expect(
+      page.locator('[data-entry-key]').filter({ hasText: 'Mention Target' }),
+    ).toHaveCount(1);
 
     // Drive members are found by name too (the dev user is the drive owner).
     await input.pressSequentially('and @Dev');

@@ -163,6 +163,10 @@ test.describe('offline chatroom', () => {
       'Message date missing after offline→sync→reload',
     ).toHaveAttribute('datetime', new RegExp(`^${year}-`));
 
+    // New messages are entries in the chat's log page, which synced and
+    // reloaded like the rest.
+    await expect(page.locator('[data-entry-key]')).toHaveCount(MESSAGES.length);
+
     // No duplicates: each message must appear exactly once. `getByText` with
     // `exact: true` ensures we don't accidentally match substrings of a
     // longer message.

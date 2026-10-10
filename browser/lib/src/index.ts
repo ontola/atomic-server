@@ -88,6 +88,7 @@ export { EventManager } from './EventManager.js';
 export * from './parse.js';
 export * from './search.js';
 export * from './resource.js';
+export * from './chat-log.js';
 export * from './forks.js';
 export * from './store.js';
 export * from './property-identity.js';

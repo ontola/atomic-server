@@ -16,6 +16,7 @@ pub const FILE: &str = "https://atomicdata.dev/classes/File";
 pub const CHATROOM: &str = "https://atomicdata.dev/classes/ChatRoom";
 pub const FOLDER: &str = "https://atomicdata.dev/classes/Folder";
 pub const PARAGRAPH: &str = "https://atomicdata.dev/classes/elements/Paragraph";
+pub const CHAT_LOG: &str = "https://atomicdata.dev/classes/ChatLog";
 pub const MESSAGE: &str = "https://atomicdata.dev/classes/Message";
 pub const IMPORTER: &str = "https://atomicdata.dev/classes/Importer";
 pub const LENS: &str = "https://atomicdata.dev/classes/Lens";
@@ -232,6 +233,8 @@ pub const MESSAGES: &str = "https://atomicdata.dev/properties/messages";
 pub const NEXT_PAGE: &str = "https://atomicdata.dev/properties/nextPage";
 pub const ABOUT: &str = "https://atomicdata.dev/properties/about";
 pub const COMMENTS_FOLDER: &str = "https://atomicdata.dev/properties/commentsFolder";
+pub const TRASH_FOLDER: &str = "https://atomicdata.dev/properties/trashFolder";
+pub const TRASHED_FROM: &str = "https://atomicdata.dev/properties/trashedFrom";
 pub const MEETINGS_FOLDER: &str = "https://atomicdata.dev/properties/meetingsFolder";
 pub const FOLLOW_SESSIONS_CHATROOM: &str =
     "https://atomicdata.dev/properties/followSessionsChatroom";

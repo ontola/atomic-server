@@ -830,6 +830,7 @@ msgid "This drive is private, sign in to view it"
 msgstr "Ce lecteur est privé, connectez-vous pour le consulter"
 
 #: src/components/SideBar/SideBarHomePanels.tsx
+#: src/components/SideBar/SidebarDropZones.tsx
 msgid "Favorites"
 msgstr ""
 
@@ -1039,6 +1040,7 @@ msgstr "Envoyer"
 msgid "Send message [enter]"
 msgstr "Envoyer le message [entrée]"
 
+#: src/views/ChatRoom/ChatRoomView.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copied message URL to clipboard"
 msgstr "URL du message copiée dans le presse-papiers"
@@ -2171,7 +2173,7 @@ msgstr "La prise en charge du clavier pour le glisser-déposer est désactivée.
 msgid "Picked up {0}"
 msgstr "Pris {0}"
 
-#. 0: dragResource.title; 1: dropResource.title
+#. 0: dragResource.title; 1: describeTarget(over.data.current)
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Draggable item {0} was moved over droppable area in {1}"
 msgstr "L'élément déplaçable {0} a été déplacé sur la zone de dépôt dans {1}"
@@ -3802,7 +3804,7 @@ msgstr ""
 msgid "{0} changes pending"
 msgstr ""
 
-#. 0: dragResource.title; 1: dropResource.title
+#. 0: dragResource.title; 1: describeTarget(over.data.current)
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "{0} was moved to {1}"
 msgstr ""
@@ -6194,6 +6196,7 @@ msgstr ""
 msgid "Could not prepare file. Select it again to retry."
 msgstr ""
 
+#: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
 msgid "Restore"
 msgstr ""
@@ -11106,9 +11109,8 @@ msgstr ""
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
 msgstr ""
 
-#: src/helpers/sentry.ts
-msgid "Commit keeps failing"
-msgstr ""
+#~ msgid "Commit keeps failing"
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
@@ -12705,4 +12707,80 @@ msgstr ""
 #. 0: names.length
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
+msgstr ""
+
+#. 0: formatBytes(usedBytes)
+#: src/components/Cloud/UsageMeter.tsx
+msgid "{0} backed up"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This backup is part of your Cloud Server plan."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Move this resource out of the Trash, back to where it was."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Delete permanently"
+msgstr ""
+
+#: src/components/SideBar/SidebarTrashLink.tsx
+msgid "Trash"
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Moved to Trash"
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Could not move to Trash"
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Already in your favorites"
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Added to favorites"
+msgstr ""
+
+#. 0: dragResource.title
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "{0} was moved to the trash"
+msgstr ""
+
+#. 0: dragResource.title
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "{0} was dropped on your favorites"
+msgstr ""
+
+#: src/components/SideBar/SidebarDropZones.tsx
+msgid "Delete"
+msgstr ""
+
+#. 0: message.slice(0, 160)
+#: src/helpers/sentry.ts
+msgid "Commit keeps failing: {0}"
+msgstr ""
+
+#: src/views/ChatLogPage.tsx
+msgid "Opening the chat..."
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "(edited)"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Delete message"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Delete this message?"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Edit message text"
 msgstr ""
