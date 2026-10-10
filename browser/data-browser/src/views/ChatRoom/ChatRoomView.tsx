@@ -1012,6 +1012,9 @@ const MessageComponent = styled.div`
   /* Enough room that the avatar's hover ring never touches the body chip. */
   gap: 0.75rem;
   padding-block: 0.1rem;
+  /* Room for the body chip's negative right margin. Without it the row is
+   * 0.5rem wider than the scroll viewport and the chat scrolls sideways. */
+  padding-inline-end: 0.5rem;
 
   &:hover ${MessageBody} {
     background: ${p => p.theme.colors.bg1};
