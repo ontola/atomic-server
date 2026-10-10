@@ -76,7 +76,7 @@ use crate::{
         val_prop_sub_index::find_in_val_prop_sub_index,
     },
     endpoints::{Endpoint, HandleGetContext},
-    errors::{AtomicError, AtomicResult},
+    errors::{AtomicError, AtomicErrorType, AtomicResult},
     hierarchy::RightsCache,
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
@@ -506,6 +506,10 @@ pub struct Db {
     /// Lens subjects that are stored but not active yet, because the property
     /// they write is not in this store (it may sync later).
     pending_lenses: Arc<RwLock<Vec<String>>>,
+    /// External subjects the remote answered 404/410 for this session. A
+    /// definitive "not found" is asked once: without this, every parse or
+    /// serialize that meets an unknown property fetched it again.
+    remote_not_found: Arc<Mutex<HashSet<String>>>,
 }
 
 #[derive(Default)]
@@ -531,6 +535,19 @@ fn default_sync_policy() -> Arc<RwLock<Arc<dyn crate::sync::policy::SyncPolicy>>
 }
 
 impl Db {
+    fn is_remote_not_found(&self, subject: &str) -> bool {
+        self.remote_not_found
+            .lock()
+            .map(|set| set.contains(subject))
+            .unwrap_or(false)
+    }
+
+    fn remember_remote_not_found(&self, subject: &str) {
+        if let Ok(mut set) = self.remote_not_found.lock() {
+            set.insert(subject.to_string());
+        }
+    }
+
     /// A `Db` over `kv` with every other field at its default. Not usable
     /// until [`Db::open`] has run.
     fn from_kv(path: std::path::PathBuf, kv: Arc<dyn KvStore>, base_domain: Option<String>) -> Db {
@@ -556,6 +573,7 @@ impl Db {
             fetch_counters: default_fetch_counters(),
             lenses: Default::default(),
             pending_lenses: Default::default(),
+            remote_not_found: Default::default(),
         }
     }
 
@@ -5191,26 +5209,36 @@ impl Storelike for Db {
                     .await;
             }
 
-            if let Ok(resource) = self
+            if self.is_remote_not_found(&resolved_url) {
+                return Err(AtomicError::not_found(format!(
+                    "{} was not found on its server earlier this session",
+                    resolved_url
+                )));
+            }
+
+            match self
                 .fetch_resource(&resolved_url, self.get_default_agent().ok().as_ref())
                 .await
             {
-                // If the resource is external, it's not present in the store.
-                // However, we did fetch it (because the user probably requested it).
-                // So we should add it to the store.
-                // Note that this logic is also in `Store`'s `get_resource`, but it's slightly different there.
-                // We should probably unify this.
-                // Also, this might cause issues if we want to get a resource but NOT save it.
-                self.add_resource_opts(&resource, false, false, true)
-                    .await?;
-                Ok(resource)
-            } else {
-                self.handle_not_found(
-                    &resolved_url,
-                    "Not found in DB".into(),
-                    self.get_default_agent().ok().as_ref(),
-                )
-                .await
+                Ok(resource) => {
+                    // If the resource is external, it's not present in the store.
+                    // However, we did fetch it (because the user probably requested it).
+                    // So we should add it to the store.
+                    // Note that this logic is also in `Store`'s `get_resource`, but it's slightly different there.
+                    // We should probably unify this.
+                    // Also, this might cause issues if we want to get a resource but NOT save it.
+                    self.add_resource_opts(&resource, false, false, true)
+                        .await?;
+                    Ok(resource)
+                }
+                Err(e) => {
+                    // The failed fetch is the answer. The default
+                    // `handle_not_found` would fetch the same URL a second time.
+                    if e.error_type == AtomicErrorType::NotFoundError {
+                        self.remember_remote_not_found(&resolved_url);
+                    }
+                    Err(e)
+                }
             }
         }
     }
@@ -5930,5 +5958,62 @@ mod private_drive_tests {
         assert!(drives
             .iter()
             .any(|d| d.subject == extra && d.name == "Project"));
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod remote_not_found_tests {
+    use super::*;
+    use crate::Storelike;
+    use std::io::{Read, Write};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Serves `status` to every request and counts them.
+    fn serve(status: &'static str) -> (String, Arc<AtomicUsize>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        let hits = Arc::new(AtomicUsize::new(0));
+        let counter = hits.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                counter.fetch_add(1, Ordering::SeqCst);
+                let _ = stream.write_all(
+                    format!(
+                        "HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    )
+                    .as_bytes(),
+                );
+            }
+        });
+        (url, hits)
+    }
+
+    #[tokio::test]
+    async fn a_404_property_is_fetched_once() {
+        let db = Db::init_temp("remote_not_found_404").await.unwrap();
+        let (server, hits) = serve("404 Not Found");
+        let property = format!("{server}/properties/demo/speaker");
+
+        for _ in 0..3 {
+            assert!(db.get_property(&property).await.is_err());
+        }
+
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_server_error_is_retried() {
+        let db = Db::init_temp("remote_not_found_500").await.unwrap();
+        let (server, hits) = serve("500 Internal Server Error");
+        let property = format!("{server}/properties/demo/speaker");
+
+        for _ in 0..2 {
+            assert!(db.get_property(&property).await.is_err());
+        }
+
+        assert_eq!(hits.load(Ordering::SeqCst), 2);
     }
 }
