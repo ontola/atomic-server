@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { dataBrowser, migratedEntryKey } from '@tomic/react';
 import {
   CHAT_LOG_CAPACITY,
+  hideMigrated,
+  isFollowEntry,
   pageWithRoom,
   parseEntryId,
   toEntryId,
@@ -125,5 +128,44 @@ describe('pageWithRoom', () => {
     expect(
       pageWithRoom([page('a', 10, 1), page('b', CHAT_LOG_CAPACITY, 2)]),
     ).toBeUndefined();
+  });
+});
+
+describe('hideMigrated', () => {
+  it('hides an old Message whose entry key is in a page, and counts it', () => {
+    const old = [t('did:ad:aaa', 1000), t('did:ad:bbb', 2000)];
+    const keys = new Set([migratedEntryKey(1000, 'did:ad:aaa')]);
+
+    expect(hideMigrated(old, keys)).toEqual({
+      shown: [t('did:ad:bbb', 2000)],
+      hidden: 1,
+    });
+  });
+
+  it('keeps a message with the same hash but another time, and another id', () => {
+    const old = [t('did:ad:aaa', 1000)];
+
+    expect(
+      hideMigrated(old, new Set([migratedEntryKey(1001, 'did:ad:aaa')])).hidden,
+    ).toBe(0);
+    expect(
+      hideMigrated(old, new Set([migratedEntryKey(1000, 'did:ad:other')]))
+        .hidden,
+    ).toBe(0);
+  });
+
+  it('recognises the copy in either spelling of the subject', () => {
+    const keys = new Set([migratedEntryKey(5, 'atomic:aaa')]);
+
+    expect(hideMigrated([t('did:ad:aaa?drive=x', 5)], keys).hidden).toBe(1);
+  });
+});
+
+describe('isFollowEntry', () => {
+  it('reads the follow event kind', () => {
+    expect(isFollowEntry({ k: dataBrowser.classes.followEvent })).toBe(true);
+    expect(isFollowEntry({ k: [dataBrowser.classes.followEvent] })).toBe(true);
+    expect(isFollowEntry({})).toBe(false);
+    expect(isFollowEntry(undefined)).toBe(false);
   });
 });

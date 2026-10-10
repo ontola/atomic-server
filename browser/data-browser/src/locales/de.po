@@ -11109,9 +11109,6 @@ msgstr ""
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
 msgstr ""
 
-#~ msgid "Commit keeps failing"
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
 msgstr ""
@@ -12783,4 +12780,8 @@ msgstr ""
 
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Edit message text"
+msgstr ""
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "Chat messages are being packed into compact logs. This is needed once after an update and can take a while for a big chat. Keep this tab open."
 msgstr ""

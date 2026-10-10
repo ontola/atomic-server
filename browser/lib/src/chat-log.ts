@@ -1,4 +1,6 @@
 import type { LoroDoc } from 'loro-crdt';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import type { JSONValue } from './value.js';
 
 /**
@@ -41,6 +43,23 @@ export function newChatLogEntryKey(createdAt: number): string {
   globalThis.crypto.getRandomValues(random);
 
   return `${createdAt.toString(16)}-${random[0].toString(16).padStart(8, '0')}`;
+}
+
+/**
+ * The entry key of a `Message` resource that was moved into a log:
+ * `<createdAt hex>-<first 8 hex chars of SHA-256 of the subject's id>`. The id
+ * is what follows the `did:ad:` / `atomic:` scheme, without query or fragment.
+ * Mirrors `migrated_entry_key` in `lib/src/chat_log.rs`; a reader uses it to
+ * recognise an old resource (a stale cached copy, a straggler from an old
+ * client) whose entry already exists.
+ */
+export function migratedEntryKey(createdAt: number, subject: string): string {
+  const id = (
+    /^(?:did:ad:|atomic:)(?!\/\/)(.*)$/.exec(subject)?.[1] ?? subject
+  ).split(/[?#]/)[0];
+  const hash = bytesToHex(sha256(utf8ToBytes(id))).slice(0, 8);
+
+  return `${Math.max(0, Math.trunc(createdAt)).toString(16)}-${hash}`;
 }
 
 function clean(entry: ChatLogEntry): ChatLogEntry {

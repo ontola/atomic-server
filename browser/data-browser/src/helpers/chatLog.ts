@@ -11,7 +11,10 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
-import type { ChatLogEntry } from '@tomic/react';
+import { migratedEntryKey, type ChatLogEntry } from '@tomic/react';
+
+/** The `drive` stamp of a resource. */
+const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
 
 /** A page holds at most this many entries; the next message starts a new page. */
 export const CHAT_LOG_CAPACITY = 256;
@@ -82,6 +85,32 @@ export function windowChat({
       (all.length - shown.length) +
       unloadedPages,
   };
+}
+
+/** Whether an entry is a follow event (a system line in a meeting). */
+export function isFollowEntry(entry: Pick<ChatLogEntry, 'k'> | undefined) {
+  const kinds = entry?.k;
+
+  return Array.isArray(kinds)
+    ? kinds.includes(dataBrowser.classes.followEvent)
+    : kinds === dataBrowser.classes.followEvent;
+}
+
+/**
+ * Old Message resources that are not in a log yet. A resource whose entry key
+ * (see {@link migratedEntryKey}) exists in a loaded page of its chat has been
+ * moved: this is a stale cached copy, or a straggler from a client that has not
+ * updated, and the entry is the message that counts.
+ */
+export function hideMigrated(
+  old: Timed[],
+  entryKeys: ReadonlySet<string>,
+): { shown: Timed[]; hidden: number } {
+  const shown = old.filter(
+    message => !entryKeys.has(migratedEntryKey(message.at, message.id)),
+  );
+
+  return { shown, hidden: old.length - shown.length };
 }
 
 export interface PageInfo {
@@ -179,6 +208,10 @@ export interface SendLogMessage {
   text: string;
   /** An entry id or the subject of an old Message. */
   replyTo?: string;
+  /** `FollowEvent` for a system line of a meeting. */
+  kind?: string;
+  /** Writes the entry as this author instead of the signed-in agent (the demo's personas). */
+  author?: string;
   /** Pages of this chat the client already knows. */
   pages: string[];
   scope: string;
@@ -209,7 +242,7 @@ export function appendToChatLog(
 
 async function append(
   store: Store,
-  { parent, about, text, replyTo, pages, scope }: SendLogMessage,
+  { parent, about, text, replyTo, kind, author, pages, scope }: SendLogMessage,
 ): Promise<string> {
   const candidates = mergePages(store, scope, pages);
   const infos: PageInfo[] = [];
@@ -228,7 +261,12 @@ async function append(
   }
 
   const target = pageWithRoom(infos);
-  const entry = { t: text, ...(replyTo && { r: replyTo }) };
+  const entry = {
+    t: text,
+    ...(replyTo && { r: replyTo }),
+    ...(kind && { k: kind }),
+    ...(author && { a: author }),
+  };
 
   if (target) {
     const page = await store.getResource(target);
@@ -291,4 +329,57 @@ export async function deleteLogEntry(store: Store, id: string) {
   if (!found) throw new Error('This message is not loaded');
   found.page.removeChatLogEntry(found.key);
   await found.page.save();
+}
+
+export interface SendEntryOptions {
+  /** The chat the message goes to; `about` makes it a comment on that item. */
+  parent: string;
+  text: string;
+  about?: string;
+  replyTo?: string;
+  /** Marks a system line, for example a follow event in a meeting. */
+  kind?: string;
+  /** See {@link SendLogMessage.author}. */
+  author?: string;
+}
+
+/**
+ * Writes a message as an entry of the chat's log, without a hook around it:
+ * for the code that posts messages on its own (meeting and follow events).
+ * Finds the chat's pages itself.
+ */
+export async function sendLogEntry(
+  store: Store,
+  { parent, text, about, replyTo, kind, author }: SendEntryOptions,
+): Promise<string> {
+  const property = about
+    ? dataBrowser.properties.about
+    : core.properties.parent;
+  const value = about ?? parent;
+  const scope = scopeKey(property, value);
+  // Pages this client made or saw are remembered; ask the server only for the
+  // first message of a chat.
+  let pages = knownPages(store, scope);
+
+  if (pages.length === 0) {
+    const chat = await store.getResource(parent);
+    const drive = chat.get(DRIVE_PROP);
+    pages = await queryPages(
+      store,
+      property,
+      value,
+      typeof drive === 'string' ? drive : undefined,
+    );
+  }
+
+  return appendToChatLog(store, {
+    parent,
+    about,
+    text,
+    replyTo,
+    kind,
+    author,
+    pages,
+    scope,
+  });
 }

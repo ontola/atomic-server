@@ -17,7 +17,11 @@ import { useFollow } from './FollowContext';
 import { AgentAvatar } from './AgentAvatar';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useChatMessages } from '../../views/ChatRoom/ChatRoomView';
-import { parseEntryId, readLogEntry } from '../../helpers/chatLog';
+import {
+  isFollowEntry,
+  parseEntryId,
+  readLogEntry,
+} from '../../helpers/chatLog';
 import { useChatLogEntry } from '../../hooks/useChatLog';
 
 /**
@@ -65,9 +69,12 @@ export function MeetingMessageToaster(): null {
     seenRef.current = messages.length;
 
     for (const subject of fresh) {
-      // A message in the chat log: its author is on the entry.
+      // A message in the chat log: its author and kind are on the entry.
       if (parseEntryId(subject)) {
-        if (readLogEntry(store, subject)?.entry.a === agent?.subject) continue;
+        const logged = readLogEntry(store, subject)?.entry;
+
+        // System lines ("Viewing …", "Started/ended") and my own messages.
+        if (isFollowEntry(logged) || logged?.a === agent?.subject) continue;
 
         toast.custom(
           t => (
