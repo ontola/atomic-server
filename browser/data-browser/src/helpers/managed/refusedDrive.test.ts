@@ -1,11 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { conversations } from '@tomic/react';
 import { healRefusedDrive } from './refusedDrive';
 import { setManagedDeviceToken } from './api';
 
 const DRIVE = 'did:ad:W2Q3';
 
-function setup(local = false) {
+/** What `store.getResource` resolves for a drive, as far as the decision reads. */
+function resource(classes: string[] = [], error?: Error, ready = true) {
   return {
+    error,
+    isReady: () => ready,
+    hasClasses: (...wanted: string[]) =>
+      wanted.every(klass => classes.includes(klass)),
+  };
+}
+
+function setup(local = false, found: unknown = resource()) {
+  return {
+    getResource: vi.fn(async () => found as never),
     isLocalOnlyDrive: vi.fn(() => local),
     normalizeSubject: (subject: string) =>
       subject.replace(/^did:ad:/, 'atomic:'),
@@ -131,6 +143,44 @@ describe('a drive the node refuses as not enrolled', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     expect(await healRefusedDrive(store, DRIVE, async () => [])).toBe(false);
+  });
+
+  it('never moves an encrypted conversation, whatever the account hosts', async () => {
+    const store = setup(false, resource([conversations.classes.conversation]));
+    const lookup = vi.fn(async () => []);
+
+    expect(await healRefusedDrive(store, DRIVE, lookup)).toBe(false);
+    expect(store.makeDriveLocal).not.toHaveBeenCalled();
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it('moves a plain drive that is readable here', async () => {
+    const store = setup(
+      false,
+      resource(['https://atomicdata.dev/classes/Drive']),
+    );
+
+    expect(await healRefusedDrive(store, DRIVE, async () => [])).toBe(true);
+    expect(store.getResource).toHaveBeenCalledWith(DRIVE);
+    expect(store.makeDriveLocal).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['carries an error', resource([], new Error('Not found'))],
+    ['is not ready', resource([], undefined, false)],
+  ])('does not move a drive whose resource %s', async (_, found) => {
+    const store = setup(false, found);
+
+    expect(await healRefusedDrive(store, DRIVE, async () => [])).toBe(false);
+    expect(store.makeDriveLocal).not.toHaveBeenCalled();
+  });
+
+  it('does not move a drive whose resource cannot be read', async () => {
+    const store = setup();
+    store.getResource.mockRejectedValue(new Error('timed out'));
+
+    expect(await healRefusedDrive(store, DRIVE, async () => [])).toBe(false);
+    expect(store.makeDriveLocal).not.toHaveBeenCalled();
   });
 
   it('has nothing to do for a drive that is already browser-only', async () => {

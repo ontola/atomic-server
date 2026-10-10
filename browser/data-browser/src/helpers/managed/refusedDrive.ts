@@ -1,4 +1,4 @@
-import type { Store } from '@tomic/react';
+import { conversations, type Store } from '@tomic/react';
 import {
   getManagedEnrollments,
   type ManagedEnrollmentSummary,
@@ -6,8 +6,33 @@ import {
 
 type RefusedDriveStore = Pick<
   Store,
-  'isLocalOnlyDrive' | 'makeDriveLocal' | 'normalizeSubject'
+  'isLocalOnlyDrive' | 'makeDriveLocal' | 'normalizeSubject' | 'getResource'
 >;
+
+/**
+ * Whether `drive` is something other people depend on this node for. An
+ * encrypted conversation is a drive of its own whose members read it through
+ * its host, so moving it to browser-only would stop delivering their messages
+ * without telling anyone.
+ *
+ * Only a drive that can be read here and is not a conversation is safe to
+ * move. One that cannot be read is not: not knowing is not "no members".
+ * The person's own drives are on this device, so they read.
+ */
+async function mayMoveToBrowser(
+  store: RefusedDriveStore,
+  drive: string,
+): Promise<boolean> {
+  try {
+    const resource = await store.getResource(drive);
+
+    if (resource.error || !resource.isReady()) return false;
+
+    return !resource.hasClasses(conversations.classes.conversation);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * A node refused `drive` as "not enrolled". Switch the drive to browser-only
@@ -18,8 +43,9 @@ type RefusedDriveStore = Pick<
  *
  * "Could not find out" is never "nothing hosts it". A lookup that fails, or
  * that cannot run because nobody is signed in, leaves the drive alone, as does
- * an enrollment on another node, a pending or paused one, and a local copy
- * `makeDriveLocal` cannot vouch for. Nothing is deleted from the server, and
+ * an enrollment on another node, a pending or paused one, a conversation (its
+ * other members need the host), a drive that cannot be read here, and a local
+ * copy `makeDriveLocal` cannot vouch for. Nothing is deleted from the server, and
  * the drive's data stays on this device.
  */
 export async function healRefusedDrive(
@@ -30,6 +56,7 @@ export async function healRefusedDrive(
   > = () => getManagedEnrollments(true),
 ): Promise<boolean> {
   if (store.isLocalOnlyDrive(drive)) return true;
+  if (!(await mayMoveToBrowser(store, drive))) return false;
 
   let enrollments: Pick<ManagedEnrollmentSummary, 'drive_subject' | 'status'>[];
 
