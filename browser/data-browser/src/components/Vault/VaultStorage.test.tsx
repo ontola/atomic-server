@@ -95,7 +95,7 @@ it('asks before discarding history and states the space gained', async () => {
   fireEvent.click(await screen.findByTestId('vault-discard-history'));
 
   expect((await screen.findByTestId('vault-discard-warning')).textContent).toBe(
-    'The backup will keep one copy of your workspace as it is now, and about 1.4 MB will be freed.',
+    'The backup will keep only its newest snapshot, and about 1.4 MB will be freed.',
   );
   expect(onCompact).not.toHaveBeenCalled();
 

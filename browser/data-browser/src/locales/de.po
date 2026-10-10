@@ -12801,10 +12801,6 @@ msgid "Compress now"
 msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
-msgid "Older backup copies and the edit history stored in them are removed. Items you deleted recently can no longer be recovered from the backup. Your workspace on your devices is not changed."
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
 msgid "This cannot be undone."
 msgstr ""
 
@@ -12814,10 +12810,14 @@ msgstr ""
 
 #. 0: formatBytes(discardGain(usage))
 #: src/components/Vault/VaultStorage.tsx
-msgid "Or keep only the current state: about {0} would be freed. This cannot be undone."
+msgid "Or remove older backup copies and recently deleted items, about {0}. The newest snapshot, with its edit history, is kept. This cannot be undone."
 msgstr ""
 
 #. 0: formatBytes(discardGain(usage))
 #: src/components/Vault/VaultStorage.tsx
-msgid "The backup will keep one copy of your workspace as it is now, and about {0} will be freed."
+msgid "The backup will keep only its newest snapshot, and about {0} will be freed."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Older backup copies are removed. The newest snapshot keeps its own edit history. Items you deleted recently can no longer be recovered from the backup. Your workspace on your devices is not changed."
 msgstr ""

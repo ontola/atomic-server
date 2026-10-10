@@ -223,7 +223,7 @@ export function VaultStorage({
               {discardGain(usage) > 0 && (
                 <>
                   <span>
-                    {`Or keep only the current state: about ${formatBytes(discardGain(usage))} would be freed. This cannot be undone.`}
+                    {`Or remove older backup copies and recently deleted items, about ${formatBytes(discardGain(usage))}. The newest snapshot, with its edit history, is kept. This cannot be undone.`}
                   </span>
                   <Button
                     data-testid='vault-discard-history'
@@ -256,12 +256,12 @@ export function VaultStorage({
           onConfirm={() => void compact(true)}
         >
           <p data-testid='vault-discard-warning'>
-            {`The backup will keep one copy of your workspace as it is now, and about ${formatBytes(discardGain(usage))} will be freed.`}
+            {`The backup will keep only its newest snapshot, and about ${formatBytes(discardGain(usage))} will be freed.`}
           </p>
           <p>
-            Older backup copies and the edit history stored in them are removed.
-            Items you deleted recently can no longer be recovered from the
-            backup. Your workspace on your devices is not changed.
+            Older backup copies are removed. The newest snapshot keeps its own
+            edit history. Items you deleted recently can no longer be recovered
+            from the backup. Your workspace on your devices is not changed.
           </p>
           <p>This cannot be undone.</p>
         </ConfirmationDialog>
