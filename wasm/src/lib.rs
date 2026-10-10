@@ -1416,6 +1416,36 @@ pub fn conversation_open(
         .collect())
 }
 
+/// Encrypts an attachment for `conversation` under a fresh random key.
+/// Returns `{ key, ciphertext }`: the base64url file key (to put inside the
+/// sealed message that references the file) and the bytes to upload.
+#[wasm_bindgen(js_name = "conversationSealFile")]
+pub fn conversation_seal_file(conversation: &str, plaintext: &[u8]) -> Result<JsValue, JsError> {
+    let (key, ciphertext) =
+        atomic_lib::conversation::seal_file(conversation, plaintext).map_err(to_js_err)?;
+    let sealed = js_sys::Object::new();
+    js_sys::Reflect::set(&sealed, &"key".into(), &JsValue::from_str(&key))
+        .map_err(|_| JsError::new("could not build the sealed file"))?;
+    js_sys::Reflect::set(
+        &sealed,
+        &"ciphertext".into(),
+        &js_sys::Uint8Array::from(ciphertext.as_slice()).into(),
+    )
+    .map_err(|_| JsError::new("could not build the sealed file"))?;
+    Ok(sealed.into())
+}
+
+/// Decrypts what `conversationSealFile` produced. Throws when the key is wrong,
+/// the bytes were altered, or the file belongs to another conversation.
+#[wasm_bindgen(js_name = "conversationOpenFile")]
+pub fn conversation_open_file(
+    conversation: &str,
+    key: &str,
+    ciphertext: &[u8],
+) -> Result<Vec<u8>, JsError> {
+    atomic_lib::conversation::open_file(conversation, key, ciphertext).map_err(to_js_err)
+}
+
 /// The proof must be a 64-byte Ed25519 signature.
 ///
 /// Not the private key: the browser's `CryptoProvider` exposes signing rather
