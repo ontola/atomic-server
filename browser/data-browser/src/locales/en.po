@@ -12734,7 +12734,7 @@ msgstr "Delete permanently"
 msgid "Delete"
 msgstr "Delete"
 
-#: src/components/SideBar/SidebarTrashLink.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Trash"
 msgstr "Trash"
 
@@ -12763,3 +12763,11 @@ msgstr "{0} was moved to the trash"
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "{0} was dropped on your favorites"
 msgstr "{0} was dropped on your favorites"
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Could not open Trash"
+msgstr "Could not open Trash"
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Items you deleted from this drive"
+msgstr "Items you deleted from this drive"

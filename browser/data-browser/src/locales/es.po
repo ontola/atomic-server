@@ -12721,7 +12721,7 @@ msgstr ""
 msgid "Delete"
 msgstr ""
 
-#: src/components/SideBar/SidebarTrashLink.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Trash"
 msgstr ""
 
@@ -12749,4 +12749,12 @@ msgstr ""
 #. 0: dragResource.title
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "{0} was dropped on your favorites"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Could not open Trash"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Items you deleted from this drive"
 msgstr ""

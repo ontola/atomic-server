@@ -28,7 +28,6 @@ import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
 import { LuChevronsUpDown } from 'react-icons/lu';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ScrollArea } from '../ScrollArea';
-import { SidebarTrashLink } from './SidebarTrashLink';
 import { DropEdge } from './ResourceSideBar/DropEdge';
 import { SIDEBAR_CHILD_LIMIT, SideBarMoreRow } from './SideBarMoreRow';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
@@ -76,7 +75,7 @@ export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
   // And the Inbox (on the personal drive): it opens from Notifications in the
   // app menu.
   const [inbox] = useString(driveResource, notifications.properties.inbox);
-  // And the Trash folder: reached through its own row below the tree.
+  // And the Trash folder: reached from the account menu at the bottom of the sidebar.
   const [trashFolder] = useString(
     driveResource,
     dataBrowser.properties.trashFolder,
@@ -201,9 +200,6 @@ export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
               hidden={totalChildren - allChildren.length}
               onClick={onItemClick}
             />
-          )}
-          {trashFolder && (
-            <SidebarTrashLink subject={trashFolder} onClick={onItemClick} />
           )}
           {agentCanWrite && (
             <NewResourceRow gap='0' center>
