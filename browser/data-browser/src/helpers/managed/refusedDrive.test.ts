@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { conversations, core } from '@tomic/react';
 import { healRefusedDrive } from './refusedDrive';
 import { setManagedDeviceToken } from './api';
+import { noteManagedSessionChanged } from './session';
 
 const DRIVE = 'did:ad:W2Q3';
 const ME = 'did:ad:agent:me';
@@ -36,6 +37,10 @@ function setup(local = false, found: unknown = resource()) {
 }
 
 describe('a drive the node refuses as not enrolled', () => {
+  // The session answer is cached; a signed-out answer from one test must not
+  // stand in for the next test's control plane.
+  beforeEach(() => noteManagedSessionChanged());
+
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
