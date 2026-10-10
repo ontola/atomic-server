@@ -8,7 +8,7 @@ import {
 import { readManagedAccountBinding } from './binding';
 import { canHoldProviderCookie } from './deviceLink';
 import { readCachedBackups, sameAgent } from './recovery';
-import { getManagedAccount } from './session';
+import { getManagedAccount, noteManagedSessionChanged } from './session';
 
 /**
  * One sign-in for the app and the account: the identity this device has
@@ -104,6 +104,8 @@ export async function signInAccountWithAgent(
     // Only 204 establishes a session. A verified identity without an account
     // returns 200 with signed_in:false; no follow-up account read is needed.
     if (signedIn.status !== 204) return false;
+
+    noteManagedSessionChanged();
 
     return !!(await getManagedAccount());
   } catch {
