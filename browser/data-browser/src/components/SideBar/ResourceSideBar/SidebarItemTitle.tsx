@@ -1,5 +1,5 @@
 import { websiteVersionName } from '@chunks/Website/websiteVersionName';
-import { forwardRef, memo } from 'react';
+import { forwardRef, memo, useState } from 'react';
 import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
 import { FloatingActions, floatingHoverStyles } from './FloatingActions';
@@ -72,6 +72,11 @@ export const SidebarItemTitle = memo(
       const [storedTitle] = useTitle(resource);
       const title = websiteVersionName(storedTitle);
 
+      // The context menu is only visible on hover or focus, so it mounts then.
+      // Mounting one per row cost ~3 ms a render, on every row, every click.
+      const [actionsArmed, setActionsArmed] = useState(false);
+      const armActions = () => setActionsArmed(true);
+
       const expandLabel = expanded ? 'Collapse folder' : 'Expand folder';
 
       // An expandable row keeps its icon and wears the caret as a small
@@ -89,6 +94,8 @@ export const SidebarItemTitle = memo(
       return (
         <ActionWrapper
           isDragging={isDragging}
+          onPointerEnter={armActions}
+          onFocus={armActions}
           data-sidebar-id={getTransitionName(SIDEBAR_TRANSITION_TAG, subject)}
         >
           {sidebarKeyboardDndEnabled ? (
@@ -206,7 +213,7 @@ export const SidebarItemTitle = memo(
           )}
           {!hideActionButtons && (
             <FloatingActionsCell>
-              <FloatingActions subject={subject} />
+              <FloatingActions subject={subject} armed={actionsArmed} />
             </FloatingActionsCell>
           )}
         </ActionWrapper>

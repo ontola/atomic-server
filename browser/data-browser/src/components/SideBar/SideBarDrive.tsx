@@ -19,6 +19,7 @@ import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
 import { Button } from '../Button';
 import { ResourceSideBar } from './ResourceSideBar/ResourceSideBar';
+import { SidebarSelectionProvider } from './ResourceSideBar/SidebarSelection';
 import { SideBarHeader } from './SideBarHeader';
 import { SimpleErrorBlock } from '../ErrorLook';
 import { DriveSwitcher } from './DriveSwitcher';
@@ -115,6 +116,9 @@ export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
   const [currentSubject] = useCurrentSubject();
   const currentResource = useResource(currentSubject);
   const [ancestry, setAncestry] = useState<string[]>([]);
+  // One array for the whole render: a fresh `[drive]` per render defeats the
+  // memo on every top-level row, and with it the rows below.
+  const driveHierarchy = useMemo(() => [drive], [drive]);
 
   useEffect(() => {
     store.getResourceAncestry(currentResource.stable).then(result => {
@@ -150,73 +154,74 @@ export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
         </TitleButton>
         <DriveSwitcher Trigger={DriveSwitcherTrigger} />
       </SideBarHeader>
-      <StyledScrollArea>
-        <ListWrapper>
-          <DropEdge
-            parentHierarchy={[drive]}
-            index={0}
-            prevSubject={undefined}
-            nextSubject={subResources[0]}
-          />
-          {/* Gate on `subResources` (reactive `useChildren` state), NOT on
+      <SidebarSelectionProvider current={currentSubject} ancestry={ancestry}>
+        <StyledScrollArea>
+          <ListWrapper>
+            <DropEdge
+              parentHierarchy={driveHierarchy}
+              index={0}
+              prevSubject={undefined}
+              nextSubject={subResources[0]}
+            />
+            {/* Gate on `subResources` (reactive `useChildren` state), NOT on
                 `driveResource.isReady()`. The latter is a proxy read the React
                 Compiler memoizes on the stable ref, so when the drive flips to
                 ready it doesn't re-render and the sidebar stays empty even
                 though the children are in state (confirmed: `setSubjects([3])`
                 ran but the list rendered nothing). If we HAVE children, show
                 them; otherwise fall back to a loader / error. */}
-          {subResources.length > 0 ? (
-            subResources.map((child, index) => {
-              return (
-                <Fragment key={child}>
-                  <ResourceSideBar
-                    subject={child}
-                    renderedHierarchy={[drive]}
-                    ancestry={ancestry}
-                    onClick={onItemClick}
-                  />
-                  <DropEdge
-                    parentHierarchy={[drive]}
-                    index={index + 1}
-                    prevSubject={child}
-                    nextSubject={subResources[index + 1]}
-                  />
-                </Fragment>
-              );
-            })
-          ) : childrenLoading ? (
-            <SideBarLoader />
-          ) : driveResource.error ? (
-            <SideBarErr>
-              {driveResource.isUnauthorized()
-                ? agent
-                  ? 'unauthorized'
-                  : 'This drive is private, sign in to view it'
-                : driveResource.error.message}
-            </SideBarErr>
-          ) : null}
-          {totalChildren > allChildren.length && (
-            <SideBarMoreRow
-              parent={drive}
-              hidden={totalChildren - allChildren.length}
-              onClick={onItemClick}
-            />
-          )}
-          {trashFolder && (
-            <SidebarTrashLink subject={trashFolder} onClick={onItemClick} />
-          )}
-          {agentCanWrite && (
-            <NewResourceRow gap='0' center>
-              <QuickCreateRow
+            {subResources.length > 0 ? (
+              subResources.map((child, index) => {
+                return (
+                  <Fragment key={child}>
+                    <ResourceSideBar
+                      subject={child}
+                      renderedHierarchy={driveHierarchy}
+                      onClick={onItemClick}
+                    />
+                    <DropEdge
+                      parentHierarchy={driveHierarchy}
+                      index={index + 1}
+                      prevSubject={child}
+                      nextSubject={subResources[index + 1]}
+                    />
+                  </Fragment>
+                );
+              })
+            ) : childrenLoading ? (
+              <SideBarLoader />
+            ) : driveResource.error ? (
+              <SideBarErr>
+                {driveResource.isUnauthorized()
+                  ? agent
+                    ? 'unauthorized'
+                    : 'This drive is private, sign in to view it'
+                  : driveResource.error.message}
+              </SideBarErr>
+            ) : null}
+            {totalChildren > allChildren.length && (
+              <SideBarMoreRow
                 parent={drive}
-                newResourceButtonTestId='sidebar-new-resource'
-                highlightUntilUsed
-                onItemClick={onItemClick}
+                hidden={totalChildren - allChildren.length}
+                onClick={onItemClick}
               />
-            </NewResourceRow>
-          )}
-        </ListWrapper>
-      </StyledScrollArea>
+            )}
+            {trashFolder && (
+              <SidebarTrashLink subject={trashFolder} onClick={onItemClick} />
+            )}
+            {agentCanWrite && (
+              <NewResourceRow gap='0' center>
+                <QuickCreateRow
+                  parent={drive}
+                  newResourceButtonTestId='sidebar-new-resource'
+                  highlightUntilUsed
+                  onItemClick={onItemClick}
+                />
+              </NewResourceRow>
+            )}
+          </ListWrapper>
+        </StyledScrollArea>
+      </SidebarSelectionProvider>
     </>
   );
 }
