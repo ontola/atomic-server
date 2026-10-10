@@ -44,6 +44,27 @@
     "https://atomicdata.dev/properties/shortname": "comments-folder"
   },
   {
+    "@id": "https://atomicdata.dev/properties/trashFolder",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Folder",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Points to the Folder in this Drive that holds resources moved to the Trash.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "trash-folder"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/trashedFrom",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The parent a resource had before it was moved to the Trash. Restoring moves it back there.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "trashed-from"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/followSessionsChatroom",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/ChatRoom",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",

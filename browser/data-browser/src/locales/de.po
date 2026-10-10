@@ -830,6 +830,7 @@ msgid "This drive is private, sign in to view it"
 msgstr ""
 
 #: src/components/SideBar/SideBarHomePanels.tsx
+#: src/components/SideBar/SidebarDropZones.tsx
 msgid "Favorites"
 msgstr ""
 
@@ -2172,7 +2173,7 @@ msgstr ""
 msgid "Picked up {0}"
 msgstr ""
 
-#. 0: dragResource.title; 1: dropResource.title
+#. 0: dragResource.title; 1: describeTarget(over.data.current)
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Draggable item {0} was moved over droppable area in {1}"
 msgstr ""
@@ -3803,7 +3804,7 @@ msgstr ""
 msgid "{0} changes pending"
 msgstr ""
 
-#. 0: dragResource.title; 1: dropResource.title
+#. 0: dragResource.title; 1: describeTarget(over.data.current)
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "{0} was moved to {1}"
 msgstr ""
@@ -6195,6 +6196,7 @@ msgstr ""
 msgid "Could not prepare file. Select it again to retry."
 msgstr ""
 
+#: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
 msgid "Restore"
 msgstr ""
@@ -11107,10 +11109,6 @@ msgstr ""
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
 msgstr ""
 
-#: src/helpers/sentry.ts
-msgid "Commit keeps failing"
-msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
 msgstr ""
@@ -12708,6 +12706,62 @@ msgstr ""
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr ""
 
+#. 0: formatBytes(usedBytes)
+#: src/components/Cloud/UsageMeter.tsx
+msgid "{0} backed up"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This backup is part of your Cloud Server plan."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Move this resource out of the Trash, back to where it was."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Delete permanently"
+msgstr ""
+
+#: src/components/SideBar/SidebarTrashLink.tsx
+msgid "Trash"
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Moved to Trash"
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Could not move to Trash"
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Already in your favorites"
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Added to favorites"
+msgstr ""
+
+#. 0: dragResource.title
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "{0} was moved to the trash"
+msgstr ""
+
+#. 0: dragResource.title
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "{0} was dropped on your favorites"
+msgstr ""
+
+#: src/components/SideBar/SidebarDropZones.tsx
+msgid "Delete"
+msgstr ""
+
+#. 0: message.slice(0, 160)
+#: src/helpers/sentry.ts
+msgid "Commit keeps failing: {0}"
+msgstr ""
+
 #: src/views/ChatLogPage.tsx
 msgid "Opening the chat..."
 msgstr ""
@@ -12730,4 +12784,4 @@ msgstr ""
 
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "Chat messages are being packed into compact logs. This is needed once after an update and can take a while for a big chat. Keep this tab open."
-msgstr "Chat-Nachrichten werden in kompakte Protokolle verpackt. Das ist nach einem Update einmal nötig und kann bei einem großen Chat eine Weile dauern. Lassen Sie diesen Tab geöffnet."
+msgstr ""

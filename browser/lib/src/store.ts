@@ -86,6 +86,7 @@ import { decodeB64, encodeB64Url } from './base64.js';
 import {
   canonicalizeScheme,
   isAgentSubject,
+  agentPublicKey,
   isAtomicIdentifier,
   isBlobSubject,
   isLensSubject,
@@ -140,6 +141,15 @@ type LoroEphemeralCallback = (update: Uint8Array) => void;
 /** Callback for drive-scoped presence updates */
 type PresenceCallback = (update: Uint8Array) => void;
 type SubjectCallback = (subject: string) => void;
+
+/** The public key an agent subject names, whatever its spelling. */
+function agentKeyOf(subject: string): string {
+  return (agentPublicKey(subject) ?? subject)
+    .replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
 /** Callback called when the stores agent changes */
 type AgentCallback = (agent: Agent | undefined) => void;
 type ErrorCallback = (e: Error) => void;
@@ -1704,6 +1714,42 @@ export class Store {
     );
   }
 
+  /**
+   * Whether signing `resource` as `agent` would put another agent's name on a
+   * parentless Agent resource. Compared by key, not spelling: the same key
+   * appears as `atomic:agent:`, `did:ad:agent:`, base64url or padded base64.
+   * An Agent resource with a parent (an access key's profile, filed under
+   * its issuer's folder) is rightly written by someone else.
+   */
+  private signsForeignAgentResource(resource: Resource, agent: Agent): boolean {
+    if (!isAgentSubject(resource.subject) || !agent.subject) return false;
+    if (resource.get(core.properties.parent)) return false;
+
+    return agentKeyOf(resource.subject) !== agentKeyOf(agent.subject);
+  }
+
+  /** Subjects of Agent resources with edits waiting for their own agent, by
+   *  agent key. In memory: the resource itself still holds the ops. */
+  private heldForOwner = new Map<string, Set<string>>();
+
+  private holdForOwner(subject: string): void {
+    const key = agentKeyOf(subject);
+    const held = this.heldForOwner.get(key) ?? new Set<string>();
+    held.add(subject);
+    this.heldForOwner.set(key, held);
+  }
+
+  private releaseHeldFor(agent: Agent | undefined): void {
+    const key = agent?.subject ? agentKeyOf(agent.subject) : undefined;
+    const held = key ? this.heldForOwner.get(key) : undefined;
+
+    if (!key || !held) return;
+
+    this.heldForOwner.delete(key);
+
+    for (const subject of held) this.outbox.markDirty(subject);
+  }
+
   private outboxTierOf = (entry: OutboxEntry): string => {
     const [priority, depth] = this.outboxTier(entry.subject);
 
@@ -1877,6 +1923,20 @@ export class Store {
 
     const agent = this.getAgent();
     if (!agent) return;
+
+    // An Agent resource is created and written by that agent alone (the
+    // server rejects any other signer). The signer is picked here, at drain
+    // time, so an identity swap between the edit and this point would send
+    // agent A's profile signed as agent B. Hold the edit for its owner
+    // instead: it stays dirty on the resource, is not an error, and is
+    // re-queued when that agent is current again (see `setAgent`).
+    if (this.signsForeignAgentResource(resource, agent)) {
+      this.holdForOwner(resource.subject);
+      this.outbox.clearDirty(subject);
+      this.emitSyncStatus();
+
+      return;
+    }
 
     // Offline-edit recovery: if this subject went dirty while offline, the
     // outbox holds the last-synced version, and the ops past it live ONLY in
@@ -3416,6 +3476,17 @@ export class Store {
         : undefined;
     }
 
+    // The fetch above can outlast a sign-in as another identity. The pointer
+    // is only a cache for older clients, so leave it rather than write
+    // agent A's resource while another agent is signed in.
+    const current = this.getAgent()?.subject;
+
+    if (!current || agentKeyOf(current) !== agentKeyOf(agentSubject)) {
+      return oldPointer && oldPointer !== drive.subject
+        ? oldPointer
+        : undefined;
+    }
+
     await agentResource.set(
       core.properties.personalDrive,
       drive.subject,
@@ -4197,6 +4268,15 @@ export class Store {
       !isEmbeddedVocabulary(subject) &&
       !this.isLocalOnlySubject(subject)
     ) {
+      // Show the cached copy while the authority answers. Without this a
+      // legacy `https://` drive (every profile, avatar and table on it) came
+      // up as `loading` after each reload even though OPFS held it, because
+      // the only thing that read OPFS was the offline fallback below. Not
+      // awaited: the server read must not wait for the database. Hydration
+      // merges the stored Loro state, so a late local answer cannot undo the
+      // server's.
+      void this.hydrateFromLocalDb(subject).catch(() => undefined);
+
       try {
         const remote = await this.fetchResourceFromServer(subject, opts);
         if (!isTransportError(remote.error)) return;
@@ -5928,6 +6008,7 @@ export class Store {
     // identity never drains a previous agent's commits (whose `did:ad:<sig>`
     // subjects can't be re-signed by anyone else — they'd 401 forever).
     this.outbox.rebind(agent?.subject);
+    this.releaseHeldFor(agent);
     // Drain the now-loaded queue for this agent (no-ops if empty/offline).
     this.scheduleOutboxDrain();
 

@@ -261,7 +261,13 @@ account card, then Devices, then one **Connect a device** section, then
 Developer.
 
 - **Plan rows share one `details` slot.** Both rows draw usage with
-  `UsageMeter` (bar plus "X MB of Y GB"). Cloud Vault adds a **Manage storage**
+  `UsageMeter` (bar plus "X MB of Y GB"). When Cloud Server is the current
+  service, the Cloud Vault row ("Included") shows no bar and no quota, only
+  "N objects · X MB backed up" and a muted note that the backup is part of the
+  Cloud Server plan: the vault's allowance there is a Cloud Server entitlement
+  (50 GiB, against 100 MB for free Cloud Vault), and quoting it on the vault
+  row reads as the vault's own limit. The bar returns at 90% of the quota even
+  when included. Cloud Vault adds a **Manage storage**
   action in its row actions (subtle, like Restore and Turn off) that opens the
   breakdown inside the row. Cloud Server, once on, shows
   `CloudServerDetails`: the usage meter with "(see where space goes)", a line

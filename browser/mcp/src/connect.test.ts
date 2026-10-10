@@ -145,6 +145,34 @@ describe('connect', () => {
     ).rejects.toThrow(/Gave up/);
   });
 
+  it('does not leak a rejection when the timeout fires before anyone waits', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+
+    await expect(
+      connect({
+        server: node.origin,
+        clientName: 'x',
+        write: false,
+        timeoutMs: 10,
+        // Registration outlasts the timeout, so `done` rejects unobserved.
+        fetch: async (input, init) => {
+          if (init?.method === 'POST') {
+            await new Promise(resolve => setTimeout(resolve, 60));
+          }
+
+          return fetch(input, init);
+        },
+        openUrl: () => undefined,
+      }),
+    ).rejects.toThrow(/Gave up/);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    process.off('unhandledRejection', onUnhandled);
+
+    expect(unhandled).toEqual([]);
+  });
+
   it('makes PKCE pairs and normalizes servers', () => {
     const { verifier, challenge } = pkcePair();
     expect(verifier).not.toBe(challenge);

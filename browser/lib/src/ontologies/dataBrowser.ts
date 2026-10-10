@@ -41,6 +41,8 @@ export const dataBrowser = {
     about: 'https://atomicdata.dev/properties/about',
     color: 'https://atomicdata.dev/properties/color',
     commentsFolder: 'https://atomicdata.dev/properties/commentsFolder',
+    trashFolder: 'https://atomicdata.dev/properties/trashFolder',
+    trashedFrom: 'https://atomicdata.dev/properties/trashedFrom',
     coverImage: 'https://atomicdata.dev/properties/coverImage',
     coverImageFocus: 'https://atomicdata.dev/properties/coverImageFocus',
     followSessionsChatroom:
@@ -484,6 +486,8 @@ declare module '../index.js' {
     [dataBrowser.properties.about]: string;
     [dataBrowser.properties.color]: string;
     [dataBrowser.properties.commentsFolder]: string;
+    [dataBrowser.properties.trashFolder]: string;
+    [dataBrowser.properties.trashedFrom]: string;
     [dataBrowser.properties.coverImage]: string;
     [dataBrowser.properties.coverImageFocus]: number;
     [dataBrowser.properties.followSessionsChatroom]: string;
@@ -607,6 +611,8 @@ declare module '../index.js' {
     [dataBrowser.properties.about]: 'about';
     [dataBrowser.properties.color]: 'color';
     [dataBrowser.properties.commentsFolder]: 'commentsFolder';
+    [dataBrowser.properties.trashFolder]: 'trashFolder';
+    [dataBrowser.properties.trashedFrom]: 'trashedFrom';
     [dataBrowser.properties.coverImage]: 'coverImage';
     [dataBrowser.properties.coverImageFocus]: 'coverImageFocus';
     [dataBrowser.properties.followSessionsChatroom]: 'followSessionsChatroom';

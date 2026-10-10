@@ -509,6 +509,18 @@ export class Resource<C extends OptionalClass = any> {
             this.loroSetProperty(key, value);
           }
         }
+
+        // Seeding from server-provided propvals is hydration, not an edit:
+        // leave it open and the next seal (a refetch's `applyHydratedValues`)
+        // commits it as a local write, which the outbox signs as the current
+        // agent, even for someone else's resource.
+        if (
+          !this.new &&
+          !this._dirty &&
+          this._loroDoc.getPendingTxnLength() > 0
+        ) {
+          this._loroDoc.commit({ origin: SYSTEM_COMMIT_ORIGIN });
+        }
       }
 
       // Heal: a Loro snapshot may be stale relative to the JSON-AD propvals
