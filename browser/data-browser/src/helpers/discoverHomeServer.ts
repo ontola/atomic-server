@@ -24,8 +24,9 @@ const MAX_DRIVE_BYTES = 256 * 1024;
  * certificate that signs to it, wherever they host it. A node that merely
  * answers `/server`, or serves some other drive, does not pass.
  *
- * A plain anonymous GET, no redirects. A drive that refuses anonymous reads
- * cannot be verified this way and counts as not verified (fails closed).
+ * A plain anonymous GET of `/genesis`, which serves only that certificate
+ * (never the drive's content, so it works for private drives), no redirects.
+ * A server without the route, or without the drive, counts as not verified.
  */
 export async function serverServesGenesis(
   origin: string,
@@ -41,7 +42,7 @@ export async function serverServesGenesis(
     if (!signature) return false;
 
     const res = await fetch(
-      `${origin}/did?subject=${encodeURIComponent(drive)}`,
+      `${origin}/genesis?subject=${encodeURIComponent(drive)}`,
       {
         headers: { Accept: 'application/ad+json' },
         credentials: 'omit',

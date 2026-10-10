@@ -435,6 +435,7 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::form::form_page),
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
+    .service(web::resource("/genesis").route(web::get().to(handlers::genesis::handle_genesis)))
     .service(web::resource("/drive-usage").to(handlers::drive_usage::handle_drive_usage))
     .service(
         web::resource("/drive-usage/breakdown")

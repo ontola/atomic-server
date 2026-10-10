@@ -285,6 +285,9 @@ describe('serverServesGenesis', () => {
     const fetchMock = serve({ [GENESIS]: home.genesis });
 
     expect(await serverServesGenesis('https://a.example', home.did)).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `https://a.example/genesis?subject=${encodeURIComponent(home.did)}`,
+    );
     expect(fetchMock.mock.calls[0][1]).toMatchObject({
       redirect: 'error',
       credentials: 'omit',
