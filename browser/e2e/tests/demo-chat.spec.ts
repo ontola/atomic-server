@@ -20,3 +20,36 @@ test('the demo team chat shows its seeded lines as entries', async ({
   await expect(entry).toBeVisible({ timeout: 30000 });
   await expect(page.locator('[data-entry-key]').first()).toBeVisible();
 });
+
+test('the demo opens in the onboarding meeting, greets the visitor, then moves to the board', async ({
+  page,
+}) => {
+  test.setTimeout(180000);
+  await page.goto(`${FRONTEND_URL}/app/demo`);
+
+  // The first resource is the meeting, with its chat open beside it.
+  await expect(
+    page.getByRole('heading', { name: 'Onboarding meeting' }).first(),
+  ).toBeVisible({ timeout: 90000 });
+  const message = page.getByPlaceholder('type a message');
+  await expect(message).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('Issue Tracker').first()).toBeVisible();
+  await expect(
+    page.locator('[data-entry-key]').filter({ hasText: 'say hi' }),
+  ).toBeVisible({ timeout: 60000 });
+
+  // Still in the meeting: nothing moves them until they have said hi.
+  const meetingUrl = page.url();
+
+  await message.fill('Hi');
+  await message.press('Enter');
+
+  // Mara answers them directly, and promptly.
+  await expect(
+    page.locator('[data-entry-key]').filter({ hasText: 'Welcome to the team' }),
+  ).toBeVisible({ timeout: 5000 });
+
+  // Then they follow her to the board, where the card has been ticked.
+  await expect(page).not.toHaveURL(meetingUrl, { timeout: 60000 });
+  await expect(page.getByText('Say hi in the meeting chat')).toBeVisible();
+});

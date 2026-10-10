@@ -17,6 +17,7 @@ import {
 } from '@tomic/react';
 import { buildTableFromSpec } from '../TablePage/createTableFromSpec';
 import { sendLogEntry } from '../../helpers/chatLog';
+import { getOrCreateMeetingsFolder } from '../../helpers/standardLocations';
 import { MOODBOARD_BAKED_STROKES } from './moodboardStrokes';
 
 /**
@@ -34,6 +35,10 @@ export type ChecklistStatus = 'Todo' | 'Doing' | 'Done';
 
 export interface DemoManifest {
   drive: string;
+  /** The onboarding Meeting: where the visitor lands. It exists (and holds
+   *  its start time) from the first frame, but is only listed as live — which
+   *  opens its chat for the visitor — once the director starts the scenario. */
+  meeting: string;
   welcomeDoc: string;
   assetsFolder: string;
   moodboard: string;
@@ -414,6 +419,21 @@ export async function createDemoWorkspace(
     personas[key] = teamResult.rowSubjects[index];
   });
 
+  // The visitor's first stop. Created up front so the route can open it
+  // straight away; the director lists it in `currentMeetings` when the show
+  // starts. It carries its start time already so it never shows as an
+  // unstarted agenda with a "Start meeting" button.
+  const meeting = await store.newResource({
+    parent: await getOrCreateMeetingsFolder(store, drive.subject),
+    isA: dataBrowser.classes.meeting,
+    propVals: {
+      [core.properties.name]: 'Onboarding meeting',
+      [dataBrowser.properties.meetingStartedAt]: Date.now(),
+      [dataBrowser.properties.meetingLeader]: personas.mara,
+    },
+  });
+  await meeting.save();
+
   const moodboard = await store.newResource({
     parent: drive.subject,
     isA: canvas.classes.canvas,
@@ -460,6 +480,7 @@ export async function createDemoWorkspace(
 
   const manifest: DemoManifest = {
     drive: drive.subject,
+    meeting: meeting.subject,
     welcomeDoc: welcomeDoc.subject,
     assetsFolder: assetsFolder.subject,
     moodboard: moodboard.subject,
