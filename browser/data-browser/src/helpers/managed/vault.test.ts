@@ -1794,6 +1794,36 @@ describe('compacting the backup', () => {
     expect(result.checkpointBytes).toBe(8);
   });
 
+  it('requests a current-state-only checkpoint only when discarding history', async () => {
+    for (const discard of [false, true]) {
+      const db = dbWith('checkpoint');
+      storageMock();
+
+      await compactVaultBackup({
+        drivePseudonym: PSEUDONYM,
+        includeUndoWindow: discard,
+        runBackup: ({ currentStateOnly }) =>
+          runVaultBackup({
+            ...args(db),
+            forceCheckpoint: true,
+            currentStateOnly,
+          }),
+      });
+
+      // Argument 10 is currentStateOnly: "Compress now" keeps the history.
+      expect(db.vaultExport.mock.calls[0][9]).toBe(discard);
+    }
+  });
+
+  it('keeps history unless asked otherwise', async () => {
+    const db = dbWith('pack');
+    storageMock();
+
+    await runVaultBackup(args(db));
+
+    expect(db.vaultExport.mock.calls[0][9]).toBe(false);
+  });
+
   it('passes the undo-window choice through to free-up', async () => {
     const db = dbWith('checkpoint');
     let body: unknown;

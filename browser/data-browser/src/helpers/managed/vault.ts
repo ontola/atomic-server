@@ -236,6 +236,12 @@ export type VaultCapableDb = {
     checkpointN: number,
     driveHasCheckpoint: boolean,
     observedLanes: Record<string, number>,
+    /**
+     * A checkpoint keeps only each resource's current state (shallow
+     * snapshots, no signed envelopes). Ignored by delta packs. Omit for the
+     * default, which keeps the whole edit history.
+     */
+    currentStateOnly?: boolean,
   ): Promise<{
     objectKey: string;
     sealed: Uint8Array;
@@ -598,19 +604,25 @@ export type CompactResult = {
  * "compress" would then report success while doing none of what was asked.
  *
  * `includeUndoWindow` is the irreversible variant; it must only be passed after
- * the person confirmed it. This touches the backup only, never the live drive.
+ * the person confirmed it, and it also makes the new checkpoint a shallow one:
+ * the backup keeps each item's current state and none of its edit history.
+ * Devices keep the history they hold. Plain compression keeps the history.
+ * This touches the backup only, never the live drive.
  */
 export async function compactVaultBackup({
   runBackup,
   drivePseudonym,
   includeUndoWindow,
 }: {
-  /** Runs one backup pass with `forceCheckpoint: true`. */
-  runBackup: () => Promise<BackupOutcome>;
+  /**
+   * Runs one backup pass with `forceCheckpoint: true`, and with
+   * `currentStateOnly` as given.
+   */
+  runBackup: (options: { currentStateOnly: boolean }) => Promise<BackupOutcome>;
   drivePseudonym: string;
   includeUndoWindow: boolean;
 }): Promise<CompactResult> {
-  const outcome = await runBackup();
+  const outcome = await runBackup({ currentStateOnly: includeUndoWindow });
 
   if (outcome.status !== 'backed-up' || outcome.kind !== 'checkpoint') {
     throw new Error(
@@ -671,6 +683,7 @@ export async function backupDrive({
   checkpointN,
   driveHasCheckpoint,
   forceCheckpoint = false,
+  currentStateOnly = false,
   observedLanes,
   collisionRetries = 0,
   beforeNetworkWrite,
@@ -695,6 +708,11 @@ export async function backupDrive({
    * path.
    */
   forceCheckpoint?: boolean;
+  /**
+   * With a checkpoint, drop the edit history and keep only the current state
+   * ("Discard history"). Deltas are unaffected: they carry just the new ops.
+   */
+  currentStateOnly?: boolean;
   observedLanes: Record<string, number>;
 }): Promise<BackupOutcome> {
   signal?.throwIfAborted();
@@ -708,6 +726,7 @@ export async function backupDrive({
     checkpointN,
     driveHasCheckpoint && !forceCheckpoint,
     observedLanes,
+    currentStateOnly,
   );
 
   signal?.throwIfAborted();
@@ -781,6 +800,7 @@ export async function backupDrive({
       keyEpoch,
       driveHasCheckpoint,
       forceCheckpoint,
+      currentStateOnly,
       observedLanes,
       checkpointN: isCheckpoint ? checkpointN + 1 : checkpointN,
       segment: isCheckpoint ? segment : segment + 1,
@@ -1212,6 +1232,8 @@ export function runVaultBackup(args: {
   refreshDriveKey?: () => Promise<DriveKeyHandle>;
   /** Force this pass to be a full checkpoint. See {@link backupDrive}. */
   forceCheckpoint?: boolean;
+  /** Make that checkpoint keep only the current state. See {@link backupDrive}. */
+  currentStateOnly?: boolean;
 }): Promise<BackupOutcome> {
   const existing = inFlight.get(args.drivePseudonym);
 

@@ -223,7 +223,7 @@ export function VaultStorage({
               {discardGain(usage) > 0 && (
                 <>
                   <span>
-                    {`Or remove older backup copies and recently deleted items, about ${formatBytes(discardGain(usage))}. The newest snapshot, with its edit history, is kept. This cannot be undone.`}
+                    {`Or remove older backup copies and recently deleted items, about ${formatBytes(discardGain(usage))}. The backup keeps only the current state of your workspace, without its edit history. This cannot be undone.`}
                   </span>
                   <Button
                     data-testid='vault-discard-history'
@@ -259,9 +259,12 @@ export function VaultStorage({
             {`The backup will keep only its newest snapshot, and about ${formatBytes(discardGain(usage))} will be freed.`}
           </p>
           <p>
-            Older backup copies are removed. The newest snapshot keeps its own
-            edit history. Items you deleted recently can no longer be recovered
-            from the backup. Your workspace on your devices is not changed.
+            Older backup copies are removed, and so is the edit history of the
+            backup: it keeps only the current state of every item. Restoring
+            from it brings back your workspace as it is now, without its version
+            history. Items you deleted recently can no longer be recovered from
+            the backup. Your devices keep their own edit history and your
+            workspace is not changed.
           </p>
           <p>This cannot be undone.</p>
         </ConfirmationDialog>

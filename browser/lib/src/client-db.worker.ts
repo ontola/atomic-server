@@ -144,6 +144,7 @@ export type WorkerRequest =
       checkpointN: number;
       driveHasCheckpoint: boolean;
       observedLanes: Record<string, number>;
+      currentStateOnly?: boolean;
     }
   | {
       id: number;
@@ -513,6 +514,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         BigInt(msg.checkpointN),
         msg.driveHasCheckpoint,
         msg.observedLanes,
+        msg.currentStateOnly ?? false,
       );
     }
 

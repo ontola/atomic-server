@@ -16,7 +16,7 @@ use atomic_lib::{
     vault::store::{MemoryVaultStore, VaultObjectStore},
     vault::sync::{
         commit_lane_state, drive_prefix, export_vault_segment, import_vault_batch,
-        CheckpointPolicy, SegmentKind,
+        CheckpointPolicy, HistoryKeep, SegmentKind,
     },
     Db, Resource, Subject, Value,
 };
@@ -1464,6 +1464,10 @@ impl ClientDb {
     /// segments predate the anchor; pass an empty object when it is unavailable
     /// and the anchor simply orders every segment after itself.
     ///
+    /// `current_state_only` makes a checkpoint carry each resource as a shallow
+    /// snapshot (current values, no edit history) and no signed envelopes.
+    /// It only matters when this pass is a checkpoint. Omit for the default.
+    ///
     /// The returned bytes are already encrypted: the control plane and the
     /// bucket only ever see ciphertext.
     #[wasm_bindgen(js_name = "vaultExport")]
@@ -1479,6 +1483,7 @@ impl ClientDb {
         checkpoint_n: u64,
         drive_has_checkpoint: bool,
         observed_lanes: JsValue,
+        current_state_only: Option<bool>,
     ) -> Result<JsValue, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
         let subject = Subject::from_raw(drive_subject, self.db().get_base_domain().as_deref());
@@ -1502,7 +1507,14 @@ impl ClientDb {
             checkpoint_n,
             drive_has_checkpoint,
             &observed,
-            CheckpointPolicy::default(),
+            CheckpointPolicy {
+                history: if current_state_only.unwrap_or(false) {
+                    HistoryKeep::CurrentStateOnly
+                } else {
+                    HistoryKeep::Full
+                },
+                ..CheckpointPolicy::default()
+            },
         )
         .await
         .map_err(to_js_err)?;

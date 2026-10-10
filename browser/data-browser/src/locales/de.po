@@ -12810,16 +12810,7 @@ msgstr ""
 
 #. 0: formatBytes(discardGain(usage))
 #: src/components/Vault/VaultStorage.tsx
-msgid "Or remove older backup copies and recently deleted items, about {0}. The newest snapshot, with its edit history, is kept. This cannot be undone."
-msgstr ""
-
-#. 0: formatBytes(discardGain(usage))
-#: src/components/Vault/VaultStorage.tsx
 msgid "The backup will keep only its newest snapshot, and about {0} will be freed."
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Older backup copies are removed. The newest snapshot keeps its own edit history. Items you deleted recently can no longer be recovered from the backup. Your workspace on your devices is not changed."
 msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
@@ -12880,4 +12871,13 @@ msgstr ""
 
 #: src/helpers/managed/vaultFile.ts
 msgid "The list of objects and their contents do not match."
+msgstr ""
+
+#. 0: formatBytes(discardGain(usage))
+#: src/components/Vault/VaultStorage.tsx
+msgid "Or remove older backup copies and recently deleted items, about {0}. The backup keeps only the current state of your workspace, without its edit history. This cannot be undone."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr ""

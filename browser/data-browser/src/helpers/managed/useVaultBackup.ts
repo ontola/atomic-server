@@ -50,8 +50,9 @@ export type UseVaultBackup = {
   backupNow: () => Promise<void>;
   /**
    * Take a fresh full checkpoint of the backup, then free what it replaced.
-   * `includeUndoWindow` also gives up recently deleted items and must only be
-   * passed after the person confirmed it. Resolves to null when it failed
+   * `includeUndoWindow` ("Discard history") also gives up recently deleted
+   * items and the backup's edit history (the checkpoint keeps only the current
+   * state), and must only be passed after the person confirmed it. Resolves to null when it failed
    * (`error` says why).
    */
   compact: (includeUndoWindow: boolean) => Promise<CompactResult | null>;
@@ -368,7 +369,7 @@ export function useVaultBackup({
         const result = await compactVaultBackup({
           drivePseudonym,
           includeUndoWindow,
-          runBackup: () =>
+          runBackup: ({ currentStateOnly }) =>
             runVaultBackup({
               db: db!,
               driveSubject: driveSubject!,
@@ -378,6 +379,7 @@ export function useVaultBackup({
               driveKeyEpoch: key.keyEpoch,
               refreshDriveKey: () => refreshKey(drivePseudonym),
               forceCheckpoint: true,
+              currentStateOnly,
             }),
         });
         await refresh();
