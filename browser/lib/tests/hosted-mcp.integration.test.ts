@@ -84,14 +84,38 @@ describe('hosted MCP against a live server', () => {
     SERVER = handle.serverUrl;
   }, 120_000);
 
+  /** Every store a test opened. Their sockets are closed before the server
+   * goes: left open, the server's exit makes each one log "Server
+   * disconnected" after the last test, when vitest is already closing the
+   * worker, and a log that arrives then fails the run
+   * (`EnvironmentTeardownError: Closing rpc while "onUserConsoleLog" was
+   * pending`) with every test green. */
+  const stores: Store[] = [];
+  const openStore = (agent: Agent) => {
+    const store = new Store({ serverUrl: SERVER, agent });
+    stores.push(store);
+
+    return store;
+  };
+
   afterAll(async () => {
+    for (const store of stores) {
+      store.disconnect();
+      // The outbox re-arms its retry timer only while the store counts itself
+      // connected; a commit the server refused would otherwise keep retrying,
+      // and logging, into the next teardown.
+      store.setServerConnected(false);
+    }
+
+    // Let the close frames and whatever they log land while the file is live.
+    await new Promise(resolve => setTimeout(resolve, 500));
     await handle?.stop();
   });
 
   it('approves a client and lets it read only what was shared', async () => {
     const agent = await Agent.fromSecret(handle.agentSecret);
     const did = agent.subject;
-    const store = new Store({ serverUrl: SERVER, agent });
+    const store = openStore(agent);
     store.setServerConnected(true);
     const shared = await newDrive(store, did, 'Shared with the client');
     const kept = await newDrive(store, did, 'Kept private');
@@ -328,7 +352,7 @@ describe('hosted MCP against a live server', () => {
 
   it('lets a client that may edit create, edit, query and delete', async () => {
     const agent = await Agent.fromSecret(handle.agentSecret);
-    const store = new Store({ serverUrl: SERVER, agent });
+    const store = openStore(agent);
     store.setServerConnected(true);
     const shared = await newDrive(store, agent.subject, 'Editable drive');
     const kept = await newDrive(store, agent.subject, 'Not shared');
@@ -537,7 +561,7 @@ describe('hosted MCP against a live server', () => {
   it('serves the local bridge through the same endpoint, after the same approval', async () => {
     process.env.XDG_CONFIG_HOME = await mkdtemp(path.join(tmpdir(), 'bridge-'));
     const agent = await Agent.fromSecret(handle.agentSecret);
-    const store = new Store({ serverUrl: SERVER, agent });
+    const store = openStore(agent);
     store.setServerConnected(true);
     const shared = await newDrive(store, agent.subject, 'Bridge drive');
 
