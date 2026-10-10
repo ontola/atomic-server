@@ -881,43 +881,30 @@ export async function backupDrive({
 /** Matches `MAX_URL_BATCH` in the control plane's vault API. */
 const DOWNLOAD_URL_BATCH = 64;
 
-/**
- * Restore a drive from its vault into this device's store.
- *
- * Objects are listed from the control plane rather than guessed: keys are
- * reconstructible from the format, but the ids `download-urls` needs are not,
- * so a device that lost its local state can only learn them by asking.
- *
- * The list arrives ordered by key and is applied in that order. Out of order, a
- * later segment's deletion would be applied before the earlier pack that
- * re-creates the resource, and the delete would be undone.
- */
-export async function restoreDrive({
-  db,
-  drivePseudonym,
-  devicePubkey,
-  driveKey,
-  keyEpoch = 1,
-  onProgress,
-}: {
-  db: VaultCapableDb;
-  drivePseudonym: string;
-  devicePubkey: string;
-  driveKey: Uint8Array;
-  keyEpoch?: number;
-  onProgress?: (downloaded: number, total: number) => void;
-}): Promise<RestoreOutcome> {
-  const objects = await listVaultObjects(drivePseudonym);
+/** One sealed object as the importer takes it. */
+export type SealedObject = { objectKey: string; sealed: Uint8Array };
 
-  if (objects.length === 0) {
-    return {
-      packsRead: 0,
-      resourcesRestored: 0,
-      tombstonesApplied: 0,
-      objectsSkipped: 0,
-      objectsUnreadable: 0,
-    };
-  }
+/**
+ * Where restore reads its sealed objects from: the cloud vault, or a backup
+ * file on this device. It must return them in the order they are to be applied.
+ */
+export type RestoreSource = (
+  onProgress?: (done: number, total: number) => void,
+) => Promise<SealedObject[]>;
+
+/**
+ * Download every listed object's body, at most four at a time, in listing order.
+ *
+ * `read` decides what a body becomes: bytes for a restore, a `Blob` for a
+ * backup file (the browser may keep those on disk rather than in memory).
+ */
+export async function downloadVaultObjects<T>(
+  drivePseudonym: string,
+  objects: VaultObject[],
+  read: (response: Response) => Promise<T>,
+  onProgress?: (done: number, total: number) => void,
+): Promise<T[]> {
+  if (objects.length === 0) return [];
 
   // The control plane signs at most DOWNLOAD_URL_BATCH objects per request,
   // and a drive with a longer history refused to restore at all.
@@ -938,9 +925,7 @@ export async function restoreDrive({
   // Preserve the server's ordering: `download-urls` answers per request and is
   // not required to echo the order back.
   const urlByKey = new Map(downloads.map(d => [d.object_key, d.url]));
-  const fetched = new Array<{ objectKey: string; sealed: Uint8Array }>(
-    objects.length,
-  );
+  const fetched = new Array<T>(objects.length);
   let next = 0;
   let completed = 0;
   let failed = false;
@@ -965,10 +950,7 @@ export async function restoreDrive({
             );
           }
 
-          fetched[index] = {
-            objectKey: object.object_key,
-            sealed: new Uint8Array(await response.arrayBuffer()),
-          };
+          fetched[index] = await read(response);
           completed++;
           if (!failed) onProgress?.(completed, objects.length);
         } catch (error) {
@@ -978,6 +960,71 @@ export async function restoreDrive({
       }
     }),
   );
+
+  return fetched;
+}
+
+/** The cloud vault as a {@link RestoreSource}. */
+export function cloudRestoreSource(drivePseudonym: string): RestoreSource {
+  return async onProgress => {
+    const objects = await listVaultObjects(drivePseudonym);
+
+    const bodies = await downloadVaultObjects(
+      drivePseudonym,
+      objects,
+      async response => new Uint8Array(await response.arrayBuffer()),
+      onProgress,
+    );
+
+    return objects.map((object, i) => ({
+      objectKey: object.object_key,
+      sealed: bodies[i],
+    }));
+  };
+}
+
+/**
+ * Restore a drive from its vault into this device's store.
+ *
+ * Objects are listed from the control plane rather than guessed: keys are
+ * reconstructible from the format, but the ids `download-urls` needs are not,
+ * so a device that lost its local state can only learn them by asking.
+ *
+ * The list arrives ordered by key and is applied in that order. Out of order, a
+ * later segment's deletion would be applied before the earlier pack that
+ * re-creates the resource, and the delete would be undone.
+ *
+ * `source` replaces the cloud vault, e.g. with a backup file; whatever it
+ * returns goes through exactly the same import.
+ */
+export async function restoreDrive({
+  db,
+  drivePseudonym,
+  devicePubkey,
+  driveKey,
+  keyEpoch = 1,
+  onProgress,
+  source = cloudRestoreSource(drivePseudonym),
+}: {
+  db: VaultCapableDb;
+  drivePseudonym: string;
+  devicePubkey: string;
+  driveKey: Uint8Array;
+  keyEpoch?: number;
+  onProgress?: (downloaded: number, total: number) => void;
+  source?: RestoreSource;
+}): Promise<RestoreOutcome> {
+  const fetched = await source(onProgress);
+
+  if (fetched.length === 0) {
+    return {
+      packsRead: 0,
+      resourcesRestored: 0,
+      tombstonesApplied: 0,
+      objectsSkipped: 0,
+      objectsUnreadable: 0,
+    };
+  }
 
   // Every lane, not just this device's: each device appends only to its own,
   // so importing one would silently drop the rest of the drive's history.

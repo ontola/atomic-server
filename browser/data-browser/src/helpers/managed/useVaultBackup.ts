@@ -19,6 +19,12 @@ import {
   type VaultKeyOps,
   type VaultProofSigner,
 } from './vault';
+import {
+  fetchVaultBackupFile,
+  pickVaultFileTarget,
+  restoreDriveFromFile,
+  suggestedFileName,
+} from './vaultFile';
 import { onVaultChanged, setVaultOptOut } from './vaultAutoBackup';
 
 /**
@@ -50,6 +56,14 @@ export type UseVaultBackup = {
    */
   compact: (includeUndoWindow: boolean) => Promise<CompactResult | null>;
   restore: () => Promise<RestoreOutcome | null>;
+  /**
+   * Save the sealed backup to this device as one `.atomic-vault` file. Resolves
+   * to `'saved'`, `'cancelled'` (no location chosen), `'empty'` (nothing is
+   * backed up yet) or null on failure (`error` says why).
+   */
+  downloadBackup: () => Promise<'saved' | 'cancelled' | 'empty' | null>;
+  /** Restore from such a file. Nothing is uploaded. */
+  restoreFromFile: (file: File) => Promise<RestoreOutcome | null>;
   /** 0–1 while a restore is downloading, otherwise null. */
   restoreProgress: number | null;
   /**
@@ -409,10 +423,80 @@ export function useVaultBackup({
     });
   }, [run, status, ensureKey, db, devicePubkey]);
 
+  const downloadBackup = useCallback(async () => {
+    if (status.state !== 'on') return null;
+
+    const drivePseudonym = status.enrollment.drive_pseudonym;
+    // Asked first: the browser allows the save dialog only straight after the
+    // click, and the downloads below can take a while.
+    let target;
+
+    try {
+      target = await pickVaultFileTarget(suggestedFileName(drivePseudonym));
+    } catch (e) {
+      setError((e as Error).message);
+
+      return null;
+    }
+
+    if (!target) return 'cancelled' as const;
+
+    const chosen = target;
+
+    return run(async () => {
+      setRestoreProgress(0);
+
+      try {
+        const build = await fetchVaultBackupFile(
+          drivePseudonym,
+          (done, total) => setRestoreProgress(total === 0 ? 1 : done / total),
+        );
+
+        if (!build) return 'empty' as const;
+
+        await chosen.save(build);
+
+        return 'saved' as const;
+      } finally {
+        setRestoreProgress(null);
+      }
+    });
+  }, [run, status]);
+
+  const restoreFromFile = useCallback(
+    async (file: File) => {
+      if (status.state !== 'on') return null;
+
+      return run(async () => {
+        const drivePseudonym = status.enrollment.drive_pseudonym;
+        const key = await ensureKey(drivePseudonym);
+        setRestoreProgress(0);
+
+        try {
+          return await restoreDriveFromFile({
+            file,
+            db: db!,
+            drivePseudonym,
+            devicePubkey: devicePubkey!,
+            driveKey: key.driveKey,
+            keyEpoch: key.keyEpoch,
+            onProgress: (done, total) =>
+              setRestoreProgress(total === 0 ? 1 : done / total),
+          });
+        } finally {
+          setRestoreProgress(null);
+        }
+      });
+    },
+    [run, status, ensureKey, db, devicePubkey],
+  );
+
   return {
     status,
     busy,
     error,
+    downloadBackup,
+    restoreFromFile,
     enable,
     disable,
     backupNow,

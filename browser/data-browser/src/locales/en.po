@@ -12834,3 +12834,63 @@ msgstr "The backup will keep only its newest snapshot, and about {0} will be fre
 #: src/components/Vault/VaultStorage.tsx
 msgid "Older backup copies are removed. The newest snapshot keeps its own edit history. Items you deleted recently can no longer be recovered from the backup. Your workspace on your devices is not changed."
 msgstr "Older backup copies are removed. The newest snapshot keeps its own edit history. Items you deleted recently can no longer be recovered from the backup. Your workspace on your devices is not changed."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backup saved to this device."
+msgstr "Backup saved to this device."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Nothing is backed up yet."
+msgstr "Nothing is backed up yet."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Download backup"
+msgstr "Download backup"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restore from file"
+msgstr "Restore from file"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backup file"
+msgstr "Backup file"
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This is not an Atomic vault backup file. Pick a file ending in .atomic-vault."
+msgstr "This is not an Atomic vault backup file. Pick a file ending in .atomic-vault."
+
+#: src/helpers/managed/vaultFile.ts
+msgid "Atomic vault backup"
+msgstr "Atomic vault backup"
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file is incomplete. Download it again."
+msgstr "This backup file is incomplete. Download it again."
+
+#: src/helpers/managed/vaultFile.ts
+msgid "The header of this backup file is damaged."
+msgstr "The header of this backup file is damaged."
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file was made by a newer version of the app. Update the app to restore it."
+msgstr "This backup file was made by a newer version of the app. Update the app to restore it."
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file has extra data at the end and cannot be trusted."
+msgstr "This backup file has extra data at the end and cannot be trusted."
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file is damaged: an object does not match its checksum."
+msgstr "This backup file is damaged: an object does not match its checksum."
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file is from a different workspace than the one you are restoring."
+msgstr "This backup file is from a different workspace than the one you are restoring."
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file was sealed under a different encryption key than this workspace uses now, so it cannot be opened."
+msgstr "This backup file was sealed under a different encryption key than this workspace uses now, so it cannot be opened."
+
+#: src/helpers/managed/vaultFile.ts
+msgid "The list of objects and their contents do not match."
+msgstr "The list of objects and their contents do not match."
