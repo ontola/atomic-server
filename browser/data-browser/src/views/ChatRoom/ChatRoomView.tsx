@@ -19,6 +19,7 @@ import {
   useSubject,
   useTypingPresence,
 } from '@tomic/react';
+import { useDropzone } from 'react-dropzone';
 import { memo, useRef, useState, useEffect, useLayoutEffect } from 'react';
 import {
   appendToChatLog,
@@ -45,6 +46,7 @@ import {
   FaLink,
   FaLocationArrow,
   FaMessage,
+  FaPaperclip,
   FaPencil,
   FaTrash,
   FaReply,
@@ -58,6 +60,7 @@ import { IconButton } from '../../components/IconButton/IconButton';
 import { ChatMessagesContainer } from '../../components/ChatMessagesContainer';
 import Markdown from '../../components/datatypes/Markdown';
 import { Detail } from '../../components/Detail';
+import { FileChip } from '../../components/FileChip';
 import { Spinner } from '../../components/Spinner';
 import { editURL } from '../../helpers/navigation';
 import { formatCompactDateTime } from '../../helpers/dates/compactDateTime';
@@ -69,6 +72,7 @@ import {
   ChatMentionPicker,
   type ChatMentionPickerHandle,
 } from './ChatMentionPicker';
+import { MessageAttachments } from '../Conversation/MessageAttachments';
 import {
   useSealedMessage,
   type SealedState,
@@ -82,8 +86,13 @@ export interface ChatViewProps {
   /** Messages older than the ones listed; shows a "load older" row when > 0. */
   olderCount?: number;
   onLoadOlder?: () => void;
-  /** Persists a message. Throwing restores the composer text and shows the error. */
-  onSend: (text: string, replyTo?: string) => Promise<void>;
+  /** Persists a message. Throwing restores the composer text and files and
+   *  shows the error. */
+  onSend: (text: string, replyTo?: string, files?: File[]) => Promise<void>;
+  /** Turns on attaching files (the button, dropping and pasting), for hosts
+   *  that can send them. Gets the files already attached and the ones being
+   *  added; returns why they are refused, or nothing to accept them. */
+  onAttach?: (current: File[], added: File[]) => string | undefined;
   /** Pass a ref to control composer focus from outside (e.g. after a title edit). */
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
   /** Give the composer the `chat-input` view-transition-name. Only ONE
@@ -109,6 +118,7 @@ export function ChatView({
   olderCount = 0,
   onLoadOlder,
   onSend,
+  onAttach,
   inputRef: inputRefProp,
   viewTransition = false,
   noContainerPadding = false,
@@ -123,6 +133,10 @@ export function ChatView({
   // Start index of an `@` token closed with Escape; reopens on a new `@`.
   const [dismissedAt, setDismissedAt] = useState<number>();
   const pickerRef = useRef<ChatMentionPickerHandle>(null);
+  // Files waiting to be sent with the next message, and whether that send is
+  // under way (encrypting a large file takes a moment).
+  const [files, setFiles] = useState<File[]>([]);
+  const [sendingFiles, setSendingFiles] = useState(false);
 
   const { typers, notifyTyping, stopTyping } = useTypingPresence(threadSubject);
 
@@ -139,7 +153,30 @@ export function ChatView({
     return () => clearTimeout(timer);
   }, [messagesLoading, settled]);
 
-  const disableSend = newMessageVal.length === 0;
+  const disableSend =
+    (newMessageVal.length === 0 && files.length === 0) || sendingFiles;
+
+  const addFiles = (added: File[]) => {
+    if (!onAttach || added.length === 0) return;
+
+    const refusal = onAttach(files, added);
+
+    if (refusal) {
+      toast.error(refusal);
+
+      return;
+    }
+
+    setFiles(prev => [...prev, ...added]);
+  };
+
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+    onDrop: addFiles,
+    disabled: !onAttach,
+    // The paperclip opens the picker; clicking the chat itself must not.
+    noClick: true,
+    noKeyboard: true,
+  });
 
   // Older messages are added ABOVE the ones being read. Keep the message that
   // was at the top where it was (browsers without scroll anchoring would
@@ -180,6 +217,7 @@ export function ChatView({
 
     const messageBackup = newMessageVal;
     const replyBackup = isReplyTo;
+    const filesBackup = files;
 
     try {
       setScrollToBottomTrigger(prev => prev + 1);
@@ -188,12 +226,27 @@ export function ChatView({
       // state is cleared with the text: the next message is a plain one.
       setReplyTo(undefined);
       stopTyping();
-      await onSend(messageBackup, replyBackup);
+
+      // The files stay in view while they are encrypted and handed over, and
+      // are kept if that fails.
+      setSendingFiles(filesBackup.length > 0);
+      await onSend(messageBackup, replyBackup, filesBackup);
+      setFiles([]);
+      setSendingFiles(false);
     } catch (err) {
       setNewMessage(messageBackup);
       setReplyTo(replyBackup);
+      setSendingFiles(false);
       toast.error(err.message);
     }
+  };
+
+  const handlePaste: React.ClipboardEventHandler<HTMLTextAreaElement> = e => {
+    if (!onAttach || e.clipboardData.files.length === 0) return;
+
+    // Pasted files are attached; pasted text stays text.
+    e.preventDefault();
+    addFiles(Array.from(e.clipboardData.files));
   };
 
   const mentionTrigger = findMentionTrigger(newMessageVal, caret);
@@ -281,7 +334,14 @@ export function ChatView({
   }, [newMessageVal, inputRef]);
 
   return (
-    <ViewWrapper>
+    <ViewWrapper {...getRootProps()}>
+      {onAttach && <input {...getInputProps()} />}
+      {isDragActive && (
+        <DropHint>
+          <FaPaperclip />
+          <span>Drop files to attach them</span>
+        </DropHint>
+      )}
       <ScrollAreaWrapper>
         <ChatMessagesContainer
           enableAutoScroll
@@ -326,6 +386,24 @@ export function ChatView({
       )}
       <TypingIndicator typers={typers} />
       <ComposerWrapper>
+        {files.length > 0 && (
+          <PendingFiles>
+            {files.map((file, index) => (
+              <FileChip
+                key={`${index}-${file.name}-${file.lastModified}`}
+                name={file.name}
+                size={file.size}
+                mimeType={file.type}
+                busy={sendingFiles}
+                onRemove={
+                  sendingFiles
+                    ? undefined
+                    : () => setFiles(prev => prev.filter((_, i) => i !== index))
+                }
+              />
+            ))}
+          </PendingFiles>
+        )}
         {openTrigger && (
           <ChatMentionPicker
             trigger={openTrigger}
@@ -334,6 +412,16 @@ export function ChatView({
           />
         )}
         <MessageForm onSubmit={sendMessage} $viewTransition={viewTransition}>
+          {onAttach && (
+            <AttachButton
+              type='button'
+              title='Attach files'
+              disabled={sendingFiles}
+              onClick={open}
+            >
+              <FaPaperclip />
+            </AttachButton>
+          )}
           <MessageInput
             aria-label='Chat input'
             rows={1}
@@ -343,6 +431,7 @@ export function ChatView({
             onChange={handleChangeMessageText}
             onKeyDown={handleKeyDown}
             onKeyUp={syncCaret}
+            onPaste={handlePaste}
             onClick={syncCaret}
             onBlur={stopTyping}
             placeholder={'type a message'}
@@ -450,6 +539,16 @@ function sealedText(state: SealedState & { sealed: true }): string {
   );
 }
 
+/** One line for a reply: the text, or the names of the files when it has none. */
+function sealedPreview(state: SealedState & { sealed: true }): string {
+  const text = sealedText(state);
+  const attachments = state.payload?.attachments;
+
+  return text === '' && attachments
+    ? attachments.map(attachment => attachment.name).join(', ')
+    : text;
+}
+
 interface MessageProps {
   subject: string;
   /** Is called when the `reply` button is pressed */
@@ -480,6 +579,8 @@ interface MessageViewProps {
   edited?: boolean;
   /** Replaces the text with an editor. Only for messages the viewer may change. */
   editing?: React.ReactNode;
+  /** Files sent along with the message, shown under its text. */
+  attachments?: React.ReactNode;
   onEdit?: () => void;
   onDelete?: () => void;
   onReply: () => void;
@@ -496,6 +597,7 @@ function MessageView({
   entryKey,
   edited,
   editing,
+  attachments,
   onEdit,
   onDelete,
   onReply,
@@ -546,13 +648,16 @@ function MessageView({
         </MessageDetails>
         {/* markExternalLinks routes links through AtomicLink: subject links
             navigate in-app instead of triggering a full page load. */}
-        {editing ?? (
-          <Markdown
-            text={text || ''}
-            maxLength={MESSAGE_MAX_LEN}
-            markExternalLinks
-          />
-        )}
+        {editing ??
+          // A message of only files has no text to lay out.
+          (text === '' && attachments ? null : (
+            <Markdown
+              text={text || ''}
+              maxLength={MESSAGE_MAX_LEN}
+              markExternalLinks
+            />
+          ))}
+        {attachments}
       </MessageBody>
     </MessageComponent>
   );
@@ -599,6 +704,14 @@ function ResourceMessage({ subject, setReplyTo }: MessageProps) {
       createdAt={createdAt}
       createdBy={createdBy}
       replyTo={replyTo}
+      attachments={
+        sealed.sealed && sealed.payload?.attachments ? (
+          <MessageAttachments
+            conversation={sealed.conversation}
+            attachments={sealed.payload.attachments}
+          />
+        ) : undefined
+      }
       onEdit={canWrite ? () => navigate(editURL(subject)) : undefined}
       onReply={() => setReplyTo(subject)}
       onCopyUrl={handleCopyUrl}
@@ -877,7 +990,7 @@ function ResourceMessageLine({ subject }: MessageLineProps) {
   const { resource, ready } = useResourceSnapshot(subject);
   const sealed = useSealedMessage(subject);
   const [plainDescription] = useString(resource, core.properties.description);
-  const description = sealed.sealed ? sealedText(sealed) : plainDescription;
+  const description = sealed.sealed ? sealedPreview(sealed) : plainDescription;
   // Author from the resource's own genesis metadata (createdBy) — not a commit
   // fetch, so it survives a refresh.
   const author = useMessageSpeaker(resource);
@@ -1079,11 +1192,47 @@ const MessageForm = styled.form<{ $viewTransition?: boolean }>`
 `;
 
 const ViewWrapper = styled.div`
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   gap: ${p => p.theme.size(2)};
+`;
+
+/** Covers the chat while files are dragged over it. */
+const DropHint = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 3px dashed ${p => p.theme.colors.textLight};
+  border-radius: ${p => p.theme.radius};
+  background: ${p =>
+    p.theme.darkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)'};
+  color: ${p => p.theme.colors.textLight};
+  font-size: 1.2rem;
+  pointer-events: none;
+`;
+
+/** Files that go out with the next message. */
+const PendingFiles = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+`;
+
+const AttachButton = styled(IconButton)`
+  flex-shrink: 0;
+  width: 2.5rem;
+  border: ${p => p.theme.colors.bg2} solid 1px;
+  border-right: none;
+  border-radius: 0;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const ScrollAreaWrapper = styled.div`

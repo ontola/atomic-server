@@ -1,4 +1,6 @@
 import {
+  blobSubject,
+  bytesToHex,
   conversations,
   core,
   Datatype,
@@ -8,8 +10,17 @@ import {
   type Store,
 } from '@tomic/react';
 import {
+  CARRIER_FILENAME,
+  CARRIER_MIMETYPE,
+  describeRefusal,
+  isRasterImage,
+  refuseAttachments,
+  type SealedAttachment,
+} from './attachments';
+import {
   addEpoch,
   encryptionKeyFor,
+  sealFile,
   sealPayload,
   type ConversationMember,
 } from './conversationCrypto';
@@ -146,12 +157,79 @@ export async function startConversation(
   return conversation;
 }
 
-/** Encrypts `text` and posts it in `conversation`. */
+/** The pixel size of a raster image, to reserve its space before it is opened. */
+async function imageSize(
+  file: File,
+): Promise<{ width?: number; height?: number }> {
+  if (!isRasterImage(file.type) || typeof createImageBitmap !== 'function') {
+    return {};
+  }
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+
+    return size;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Encrypts one file for `conversation` on this device. Returns what goes
+ * inside the sealed message, and the opaque file that gets uploaded: its name
+ * and type say nothing, and its size is the only thing the host learns.
+ */
+export async function encryptAttachment(
+  store: Store,
+  conversation: string,
+  file: File,
+): Promise<{ attachment: SealedAttachment; carrier: File }> {
+  const clientDb = store.getClientDb();
+
+  if (!clientDb) {
+    throw new Error(
+      'Attachments need local storage, which this browser could not open.',
+    );
+  }
+
+  const { key, ciphertext } = await sealFile(
+    conversation,
+    new Uint8Array(await file.arrayBuffer()),
+  );
+  // The hash of the ciphertext, which is what the blob is stored under.
+  const hash = bytesToHex(await clientDb.blake3Hash(ciphertext));
+
+  return {
+    attachment: {
+      blob: blobSubject(hash),
+      key,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      ...(await imageSize(file)),
+    },
+    carrier: new File([ciphertext as BlobPart], CARRIER_FILENAME, {
+      type: CARRIER_MIMETYPE,
+    }),
+  };
+}
+
+/**
+ * Encrypts `text` and posts it in `conversation`, with `files` attached.
+ *
+ * Each file is encrypted here under a key of its own; the key, the real name
+ * and the type travel inside the sealed message. The ciphertext is uploaded as
+ * a blob through the local database (a member may only append, and `/upload`
+ * needs write access), as a `File` under the member's own message.
+ */
 export async function sendSealedMessage(
   store: Store,
   conversation: Resource,
   text: string,
   replyTo?: string,
+  files: File[] = [],
 ): Promise<void> {
   const agent = store.getAgent();
   const me = requireSubject(agent);
@@ -161,9 +239,30 @@ export async function sendSealedMessage(
     throw new Error('This conversation has no keys, so nothing can be sent.');
   }
 
+  const refusal = refuseAttachments([], files);
+
+  if (refusal) {
+    throw new Error(describeRefusal(refusal));
+  }
+
+  // One at a time: only one plaintext is in memory at once.
+  const attachments: SealedAttachment[] = [];
+  const carriers: File[] = [];
+
+  for (const file of files) {
+    const { attachment, carrier } = await encryptAttachment(
+      store,
+      conversation.subject,
+      file,
+    );
+    attachments.push(attachment);
+    carriers.push(carrier);
+  }
+
   const sealed = await sealPayload(agent!, keyring, conversation.subject, {
     text,
     replyTo,
+    attachments: attachments.length > 0 ? attachments : undefined,
   });
 
   const message = await store.newResource({
@@ -178,4 +277,18 @@ export async function sendSealedMessage(
 
   await message.save();
   store.notifyResourceManuallyCreated(message);
+
+  if (carriers.length === 0) {
+    return;
+  }
+
+  // After the message: a member may append under their own message only once
+  // it exists, and the blob is admitted through the File that names it.
+  try {
+    await store.uploadFiles(carriers, message.subject);
+  } catch (error) {
+    // A message that points at files that never arrive is worse than none.
+    await message.destroy().catch(() => undefined);
+    throw error;
+  }
 }

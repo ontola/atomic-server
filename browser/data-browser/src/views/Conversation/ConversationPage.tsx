@@ -11,6 +11,8 @@ import { FaLock } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Column } from '../../components/Row';
 import { useSettings } from '../../helpers/AppSettings';
+import { refuseAttachments } from '../../helpers/conversations/attachments';
+import { formatBytes } from '../../helpers/formatBytes';
 import {
   openPayloads,
   type SealedPayload,
@@ -51,9 +53,28 @@ export function ConversationPage({ resource }: ResourcePageProps) {
   // messages only arrive with a subscription of their own.
   useEffect(() => store.subscribeLive(resource.subject), [store, resource]);
 
-  const handleSend = async (text: string, replyTo?: string) => {
-    await sendSealedMessage(store, resource, text, replyTo);
+  const handleSend = async (text: string, replyTo?: string, files?: File[]) => {
+    await sendSealedMessage(store, resource, text, replyTo, files);
     invalidate();
+  };
+
+  // The limits are checked as files are added, so nothing is encrypted that
+  // could not be sent. Returns why a file was refused, in words.
+  const handleAttach = (current: File[], added: File[]) => {
+    const refusal = refuseAttachments(current, added);
+
+    if (!refusal) {
+      return undefined;
+    }
+
+    return refusal.reason === 'too-large'
+      ? `${refusal.name} is too large. A file can be at most ${formatBytes(refusal.max)}.`
+      : `A message can have at most ${refusal.max} files.`;
+  };
+
+  const sealedMessages = {
+    conversation: resource.subject,
+    opened,
   };
 
   return (
@@ -71,11 +92,12 @@ export function ConversationPage({ resource }: ResourcePageProps) {
             </span>
           </Encrypted>
         </Header>
-        <SealedMessagesContext.Provider value={opened}>
+        <SealedMessagesContext.Provider value={sealedMessages}>
           <ChatView
             messages={messages}
             loading={loading}
             onSend={handleSend}
+            onAttach={handleAttach}
             inputRef={inputRef}
             viewTransition
             threadSubject={resource.subject}

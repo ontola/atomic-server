@@ -83,6 +83,7 @@ msgid "Set up a model"
 msgstr "Configurar un modelo"
 
 #: src/chunks/AI/RealAIChat.tsx
+#: src/components/FileChip.tsx
 msgid "Remove file"
 msgstr "Eliminar archivo"
 
@@ -3268,6 +3269,7 @@ msgstr "Buscar"
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
+#: src/helpers/managed/refusedDrive.ts
 msgid "Disabled"
 msgstr ""
 
@@ -12767,4 +12769,26 @@ msgstr ""
 
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "Chat messages are being packed into compact logs. This is needed once after an update and can take a while for a big chat. Keep this tab open."
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Drop files to attach them"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Attach files"
+msgstr ""
+
+#. 0: refusal.name; 1: formatBytes(refusal.max)
+#: src/views/Conversation/ConversationPage.tsx
+msgid "{0} is too large. A file can be at most {1}."
+msgstr ""
+
+#. 0: refusal.max
+#: src/views/Conversation/ConversationPage.tsx
+msgid "A message can have at most {0} files."
+msgstr ""
+
+#: src/views/Conversation/MessageAttachments.tsx
+msgid "This file could not be opened. Select it to try again."
 msgstr ""

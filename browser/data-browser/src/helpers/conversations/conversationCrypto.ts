@@ -1,6 +1,7 @@
 import { AGENT_VAULT_PROOF_MESSAGE } from '@tomic/lib';
 import { atomicWasmSource, wasmJsUrl } from '../wasmUrls';
 import { agentVaultProof, type VaultProofSigner } from '../managed/vault';
+import { parseAttachments, type SealedAttachment } from './attachments';
 
 /**
  * End-to-end encryption for conversations, from the wasm bundle.
@@ -202,9 +203,17 @@ export async function openFile(
 export interface SealedPayload {
   text: string;
   replyTo?: string;
+  /** Files sent along. Absent in messages from before attachments existed. */
+  attachments?: SealedAttachment[];
 }
 
-function parsePayload(text: string): SealedPayload | null {
+/**
+ * Reads a decrypted payload. Unknown fields are ignored and a payload without
+ * `attachments` is the old shape, so messages from before attachments, and
+ * from clients that do not know them, keep reading. `null` when it is not a
+ * payload at all.
+ */
+export function parsePayload(text: string): SealedPayload | null {
   try {
     const parsed = JSON.parse(text);
 
@@ -213,6 +222,7 @@ function parsePayload(text: string): SealedPayload | null {
         text: parsed.text,
         replyTo:
           typeof parsed.replyTo === 'string' ? parsed.replyTo : undefined,
+        attachments: parseAttachments(parsed.attachments),
       };
     }
   } catch {
