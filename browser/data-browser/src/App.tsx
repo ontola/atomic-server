@@ -25,6 +25,7 @@ import { ProxyConnectReturn } from './chunks/AppPage/ProxyConnectReturn';
 import { router } from './routes/Router';
 
 import { errorHandler } from './handlers/errorHandler';
+import { registerRefusedDriveHealing } from './helpers/managed/refusedDrive';
 import { PerformanceProfiler, attachStoreToProfiler } from './helpers/profiler';
 
 /**
@@ -249,6 +250,7 @@ window.store = store;
 attachStoreToProfiler(store);
 reportRepeatedCommitFailures(store);
 identifyAgentInSentry(store);
+registerRefusedDriveHealing(store);
 
 if (isDev()) {
   const { attachDevtools } = await import('./helpers/devtools');

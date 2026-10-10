@@ -179,6 +179,18 @@ export interface RepeatedCommitFailure {
 
 type RepeatedCommitFailureCallback = (failure: RepeatedCommitFailure) => void;
 
+/**
+ * Lets the app deal with a drive the server refuses as "not enrolled" before
+ * the store reports it. `drive` is the drive the refusal names. Resolve `true`
+ * when the drive was handled (for instance switched to browser-only), so
+ * there is nothing left to report. Resolve `false`, or reject, to leave the
+ * report as it is. Called at most once per drive per session.
+ */
+export type RefusedDriveHandler = (
+  drive: string,
+  message: string,
+) => boolean | Promise<boolean>;
+
 type ServerURLCallback = (serverURL: string) => void;
 type DriveCallback = (drive: string) => void;
 
@@ -1608,18 +1620,33 @@ export class Store {
           return isUnrecoverableCommitError(msg, code);
         },
         onRepeatedFailure: (entry, e) => {
-          this.eventManager.emit(StoreEvents.CommitRepeatedlyFailing, {
-            subject: entry.subject,
-            error: e instanceof Error ? e : new Error(String(e)),
-            failures: entry.failures ?? 0,
-            server: this.getServerUrl(),
-            drive: this.getDrive(),
-            ageMs: Math.max(0, Date.now() - entry.enqueuedAt),
-            outboxSize: this.outbox.size,
-            connected: this._serverConnected,
-            isGenesis: entry.signedGenesis !== undefined,
-            rearmedAfterResync: entry.rearmedAfterResync === true,
-          });
+          const error = e instanceof Error ? e : new Error(String(e));
+          const report = () =>
+            this.eventManager.emit(StoreEvents.CommitRepeatedlyFailing, {
+              subject: entry.subject,
+              error,
+              failures: entry.failures ?? 0,
+              server: this.getServerUrl(),
+              drive: this.getDrive(),
+              ageMs: Math.max(0, Date.now() - entry.enqueuedAt),
+              outboxSize: this.outbox.size,
+              connected: this._serverConnected,
+              isGenesis: entry.signedGenesis !== undefined,
+              rearmedAfterResync: entry.rearmedAfterResync === true,
+            });
+          const refused = this.refusedDriveOf(error.message);
+
+          // A refusal the app resolves (the drive moves to browser-only) is
+          // not a failure worth reporting: nothing keeps failing afterwards.
+          if (refused && this.refusedDriveHandler) {
+            void this.healRefusedDrive(refused, error.message).then(healed => {
+              if (!healed) report();
+            });
+
+            return;
+          }
+
+          report();
         },
         onBlocked: (entry, e) => {
           this.notifyBlockedSync(
@@ -5383,6 +5410,62 @@ export class Store {
   /** Drives whose "server lacks the parent" refusal was already reported. */
   private _notifiedMissingParentDrives = new Set<string>();
 
+  private refusedDriveHandler: RefusedDriveHandler | undefined;
+
+  /** One attempt per drive per session, so a failing drive is not looked up
+   *  again by every entry that fails for it. */
+  private _refusedDriveAttempts = new Map<string, Promise<boolean>>();
+
+  /**
+   * Register how the app resolves a drive the server refuses as "not
+   * enrolled" ({@link RefusedDriveHandler}). Without one, or when it does not
+   * resolve the drive, the person is told as before. Returns a function that
+   * removes the handler.
+   */
+  public setRefusedDriveHandler(
+    handler: RefusedDriveHandler | undefined,
+  ): () => void {
+    this.refusedDriveHandler = handler;
+
+    return () => {
+      if (this.refusedDriveHandler === handler) {
+        this.refusedDriveHandler = undefined;
+      }
+    };
+  }
+
+  /** The drive a "not enrolled" refusal names, if `message` is one. The
+   *  refusal names the drive it refuses; that is the same for every resource
+   *  in it, where a resource's own drive may not be known yet. */
+  private refusedDriveOf(message: string): string | undefined {
+    if (!isNotEnrolledMessage(message)) return undefined;
+
+    return /Drive (\S+) is not enrolled/.exec(message)?.[1];
+  }
+
+  /** Ask the registered handler about a refused drive, once per drive. A
+   *  handler that throws counts as not resolved. */
+  private healRefusedDrive(drive: string, message: string): Promise<boolean> {
+    const key = this.normalizeSubject(drive);
+    const existing = this._refusedDriveAttempts.get(key);
+
+    if (existing) return existing;
+
+    const handler = this.refusedDriveHandler;
+    const attempt = (async () => {
+      try {
+        return !!(await handler?.(drive, message));
+      } catch (e) {
+        console.warn('[Store] refused drive handler failed:', e);
+
+        return false;
+      }
+    })();
+    this._refusedDriveAttempts.set(key, attempt);
+
+    return attempt;
+  }
+
   /**
    * Tell the person a write stopped syncing. The entry stays queued and
    * visible, and a fresh edit re-arms it.
@@ -5395,24 +5478,37 @@ export class Store {
    */
   private notifyBlockedSync(subject: string, message: string): void {
     if (isNotEnrolledMessage(message)) {
-      // The refusal names the drive it refuses; that is the same for every
-      // resource in it, where a resource's own drive may not be known yet.
+      const named = this.refusedDriveOf(message);
       const drive =
-        /Drive (\S+) is not enrolled/.exec(message)?.[1] ??
-        this.driveOf(this.normalizeSubject(subject)) ??
-        subject;
+        named ?? this.driveOf(this.normalizeSubject(subject)) ?? subject;
 
       if (this._notifiedRefusedDrives.has(drive)) return;
 
       this._notifiedRefusedDrives.add(drive);
-      this.notifyError(
-        new Error(
-          `This server does not host this workspace (${message.trim()}) ` +
-            `Your changes are kept on this device and are not being sent. ` +
-            `Ask the server's operator to enrol the workspace, or turn on ` +
-            `browser-only sync for it in the sync settings.`,
-        ),
-      );
+
+      const toast = () =>
+        this.notifyError(
+          new Error(
+            `This server does not host this workspace (${message.trim()}) ` +
+              `Your changes are kept on this device and are not being sent. ` +
+              `Ask the server's operator to enrol the workspace, or turn on ` +
+              `browser-only sync for it in the sync settings.`,
+          ),
+        );
+
+      // The app may resolve the drive first (it moves to browser-only); only
+      // a drive it leaves alone is reported.
+      if (named && this.refusedDriveHandler) {
+        void this.healRefusedDrive(named, message)
+          .then(healed => {
+            if (!healed) toast();
+          })
+          .catch(e => console.warn('[Store] could not report refusal:', e));
+
+        return;
+      }
+
+      toast();
 
       return;
     }
