@@ -56,7 +56,7 @@ export const datatypeFromUrl = (url: string): Datatype => {
  * `atomic://` links are excluded on purpose: the Rust heuristic
  * (`is_atomic_identifier`) leaves them as plain strings. Mirrors Rust
  * `datatype_tag`; both are tested against
- * `lib/test_files/string-datatype-tags.json`.
+ * `browser/lib/src/string_datatype_tags.json`.
  */
 const STRING_TAG_PREFIX = /^(\[|\{|atomic:(?!\/\/)|did:ad:|https?:\/\/)/;
 

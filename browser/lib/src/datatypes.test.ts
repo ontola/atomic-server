@@ -191,10 +191,7 @@ describe('datatypeTag string cases shared with Rust', () => {
   // The same file drives `datatype_tag` in lib/src/loro.rs.
   const fixture = JSON.parse(
     readFileSync(
-      new URL(
-        '../../../lib/test_files/string-datatype-tags.json',
-        import.meta.url,
-      ),
+      new URL('./string_datatype_tags.json', import.meta.url),
       'utf8',
     ),
   ) as { cases: { value: string; tagged: boolean }[] };

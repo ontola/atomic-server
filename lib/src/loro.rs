@@ -1637,8 +1637,10 @@ mod test {
     /// which plain strings get the `string` tag.
     #[test]
     fn string_datatype_tag_matches_shared_fixture() {
-        let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../test_files/string-datatype-tags.json")).unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../browser/lib/src/string_datatype_tags.json"
+        ))
+        .unwrap();
         let cases = fixture["cases"].as_array().unwrap();
         assert!(!cases.is_empty());
         for case in cases {
