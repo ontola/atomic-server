@@ -616,31 +616,86 @@ test.describe('forms', async () => {
 
     /** Records the form's own page animations as they start. Other keyframes
      * on the page (the dialog's own entrance, under a hashed
-     * styled-components name) are filtered out here. */
+     * styled-components name) are filtered out here. A timeline of what the
+     * browser did rides along (animation events, long tasks, visibility) so a
+     * red run says whether the animation never started or the page was too
+     * busy to start it. */
     const recordAnimations = () =>
       page.evaluate(() => {
         const names: string[] = [];
-        (window as unknown as { __formAnims: string[] }).__formAnims = names;
-        document.addEventListener(
-          'animationstart',
-          event => {
-            const name = (event as AnimationEvent).animationName;
+        const trace: string[] = [];
+        const w = window as unknown as {
+          __formAnims: string[];
+          __formTrace: string[];
+        };
+        w.__formAnims = names;
+        w.__formTrace = trace;
+        const started = performance.now();
+        const stamp = (what: string) =>
+          trace.push(`${Math.round(performance.now() - started)}ms ${what}`);
 
-            if (
-              name.startsWith('atomic-form-page-') ||
-              name === 'atomic-form-stagger-in'
-            ) {
-              names.push(name);
-            }
-          },
-          true,
+        stamp(
+          `visibility=${document.visibilityState} reducedMotion=${
+            matchMedia('(prefers-reduced-motion: reduce)').matches
+          }`,
         );
+
+        for (const type of [
+          'animationstart',
+          'animationend',
+          'animationcancel',
+        ]) {
+          document.addEventListener(
+            type,
+            event => {
+              const name = (event as AnimationEvent).animationName;
+
+              if (
+                name.startsWith('atomic-form-page-') ||
+                name === 'atomic-form-stagger-in'
+              ) {
+                stamp(`${type} ${name}`);
+
+                if (type === 'animationstart') names.push(name);
+              }
+            },
+            true,
+          );
+        }
+
+        try {
+          new PerformanceObserver(list => {
+            for (const entry of list.getEntries()) {
+              stamp(`long task ${Math.round(entry.duration)}ms`);
+            }
+          }).observe({ type: 'longtask' });
+        } catch {
+          stamp('long task timing unavailable');
+        }
       });
 
     const readAnimations = () =>
       page.evaluate(
         () => (window as unknown as { __formAnims: string[] }).__formAnims,
       );
+
+    /** `expect.poll(readAnimations).toEqual(...)`, with the browser's timeline
+     * added to the failure. */
+    const expectAnimations = async (expected: string[]) => {
+      try {
+        await expect.poll(readAnimations).toEqual(expected);
+      } catch (error) {
+        const trace = await page
+          .evaluate(
+            () => (window as unknown as { __formTrace: string[] }).__formTrace,
+          )
+          .catch(() => ['(page gone)']);
+
+        throw new Error(
+          `${(error as Error).message}\n\nBrowser timeline:\n${trace.join('\n')}`,
+        );
+      }
+    };
 
     const openPreview = async () => {
       await page.getByRole('button', { name: 'Preview', exact: true }).click();
@@ -681,25 +736,24 @@ test.describe('forms', async () => {
     // (the newer intent wins) but would leave nothing to observe.
     await preview.getByRole('button', { name: 'Next' }).click();
     await expect(preview.getByRole('button', { name: 'Submit' })).toBeVisible();
-    await expect
-      .poll(readAnimations)
-      .toEqual(['atomic-form-page-exit-up', 'atomic-form-stagger-in']);
+    await expectAnimations([
+      'atomic-form-page-exit-up',
+      'atomic-form-stagger-in',
+    ]);
 
     await preview.getByRole('button', { name: 'Back' }).click();
     await expect(preview.getByRole('button', { name: 'Next' })).toBeVisible();
     // Page 1's four things fade separately — not one event for the page, and
     // not one for the whole radio question either.
-    await expect
-      .poll(readAnimations)
-      .toEqual([
-        'atomic-form-page-exit-up',
-        'atomic-form-stagger-in',
-        'atomic-form-page-exit-down',
-        'atomic-form-stagger-in',
-        'atomic-form-stagger-in',
-        'atomic-form-stagger-in',
-        'atomic-form-stagger-in',
-      ]);
+    await expectAnimations([
+      'atomic-form-page-exit-up',
+      'atomic-form-stagger-in',
+      'atomic-form-page-exit-down',
+      'atomic-form-stagger-in',
+      'atomic-form-stagger-in',
+      'atomic-form-stagger-in',
+      'atomic-form-stagger-in',
+    ]);
 
     // …in document order, and the options take the slots after the question
     // they belong to rather than restarting from it, so the heading below
