@@ -407,6 +407,38 @@ impl AtomicLoroDoc {
         messages
     }
 
+    /// The version of the newest *tokened* change and everything it builds on.
+    ///
+    /// A signed commit's change carries a token message (`c-…`, or the
+    /// creator's subject for genesis). Changes without a message are local
+    /// bookkeeping a node writes after applying a commit (the `lastCommit`
+    /// stamp) that no signed commit has carried yet. Exporting a delta from
+    /// the full version would leave those out, while the next change builds
+    /// on them: the receiver would park it as pending for a missing
+    /// dependency. Exporting from this version carries them along.
+    /// `None` when no change is tokened (legacy docs).
+    pub fn tokened_base_vv(&self) -> Option<VersionVector> {
+        let frontier_ids: Vec<loro::ID> = self.doc.oplog_frontiers().iter().collect();
+        if frontier_ids.is_empty() {
+            return None;
+        }
+        let mut found: Option<loro::ID> = None;
+        let _ = self
+            .doc
+            .travel_change_ancestors(&frontier_ids, &mut |change| {
+                if change.message.as_ref().is_some_and(|m| !m.is_empty()) {
+                    found = Some(loro::ID::new(
+                        change.id.peer,
+                        change.id.counter + change.len.saturating_sub(1) as i32,
+                    ));
+                    return ControlFlow::Break(());
+                }
+                ControlFlow::Continue(())
+            });
+        let id = found?;
+        self.doc.frontiers_to_vv(&loro::Frontiers::from_id(id))
+    }
+
     /// The `[start, end)` version range an update or snapshot blob covers.
     pub fn update_range(update: &[u8]) -> AtomicResult<(VersionVector, VersionVector)> {
         let meta = LoroDoc::decode_import_blob_meta(update, false)

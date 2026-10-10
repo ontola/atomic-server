@@ -195,12 +195,13 @@ Measured on a native release build (`lib/tests/vault_incremental_cost.rs`):
 
 | resources | full export | idle pass | one-resource edit |
 | --- | --- | --- | --- |
-| 100 | 137 KB / 19 ms | 0 B / 3 ms | 383 B / 4 ms |
-| 500 | 675 KB / 113 ms | 0 B / 21 ms | 380 B / 25 ms |
-| 2,000 | 2.69 MB / 508 ms | 0 B / 89 ms | 383 B / 93 ms |
+| 100 | 437 KB / 28 ms | 0 B / 6 ms | 3.3 KB / 6 ms |
+| 500 | 2.17 MB / 157 ms | 0 B / 33 ms | 3.3 KB / 41 ms |
+| 2,000 | 8.68 MB / 759 ms | 0 B / 125 ms | 3.3 KB / 154 ms |
 
-Bytes per pass are flat in drive size; wall clock is still linear in it, at
-roughly 45 µs per resource, because the walk visits every subject to read its
+(The anchor and one-edit figures now include signed envelopes, which the
+earlier numbers predate.) Bytes per pass are flat in drive size; wall clock is
+still linear in it, at roughly 60 µs per resource, because the walk visits every subject to read its
 version vector.
 
 Cursors are **local, never uploaded** — the metadata invariant is that no stored
@@ -208,6 +209,16 @@ object is O(resources). A device with no cursor (a fresh install, or one
 upgrading from a format-1 vault) exports everything, which is always safe
 because a full export is a superset of any delta. It is never safe to invent a
 cursor for history that was never recorded as shipped.
+
+Bytes per pass are also flat in the size of the edited document. Signed
+commits carry the Loro delta since the resource's previous state, not a full
+snapshot (`sign_at` in `lib/src/commit.rs`); before that, every envelope held
+the whole document, so under `all` retention a 40-edit run grew from 7.1 KB to
+32.1 KB per pass (`latest`: 4.2 KB to 16.3 KB). Now, over the same 40 edits of
+one note (`vault_envelope_growth`): `latest` stays at about 1.9 KB per pass and
+`all` at about 3.1 KB (first pass 4.8 KB, which includes the genesis). The
+extra ~1.2 KB under `all` is the previous pass's newest envelope, re-shipped
+because the envelope floor is `>=` (two commits can share a millisecond).
 
 ## Checkpoints
 

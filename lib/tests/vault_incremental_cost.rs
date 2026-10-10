@@ -146,9 +146,11 @@ async fn vault_incremental_cost() {
 
 /// Delta cost of repeated edits to one document, per envelope retention.
 ///
-/// Delta packs ship only envelopes newer than the lane's cursor, so under
-/// `all` retention the bytes per pass stay flat instead of growing with the
-/// number of earlier edits. Run with
+/// Delta packs ship only envelopes newer than the lane's cursor, and each
+/// signed commit carries a Loro delta rather than a full snapshot, so the
+/// bytes per pass stay roughly flat (under `all` retention the previous pass's
+/// newest envelope is re-shipped, a constant overhead) instead of growing with
+/// the number of earlier edits or the size of the document. Run with
 /// `cargo test --features db-redb --release vault_envelope_growth -- --ignored --nocapture`.
 #[tokio::test]
 #[ignore]
@@ -214,6 +216,17 @@ async fn vault_envelope_growth() {
             sizes[39],
             sizes.iter().sum::<usize>(),
             sizes
+        );
+        // Regression guard: a signed commit used to embed a full snapshot,
+        // so the last pass was 3-4x the first. The first pass under `all`
+        // also carries the genesis, hence the min with the second.
+        let baseline = sizes[0].min(sizes[1]);
+        assert!(
+            sizes[39] < baseline + 1500,
+            "{}: last delta ({}) grew past baseline ({}) + 1500 bytes",
+            retention.as_str(),
+            sizes[39],
+            baseline
         );
     }
 }
