@@ -9,6 +9,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## [v0.41.0-beta.8] - 2026-10-10
 
+- Discovery (#2198): a drive's pkarr record also lists the public https origins of the servers hosting it (`_atomic_http`), published at boot and every hour, so the app can find a drive's server from the secret alone. New anonymous `GET /genesis?subject=<did>` returns only a drive's genesis certificate, which the app verifies against the drive DID before connecting. Drives minted before genesis certificates existed answer 404 and are not found this way.
 - Schemas (#2151): properties get content-addressed subjects, `atomic:prop:{blake3}` of their ontology, shortname and datatype (`docs/src/schema/property-identity.md`). The server verifies the hash on genesis, accepts the same property from two devices, and refuses changes to its `parent`, `shortname` or `datatype`. Existing properties keep their subjects and stay editable.
 - Class constraints (#2151): a Class's `constraints` map holds JSON Schema keywords per property (`enum`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, `pattern`, `class`), enforced on commit; peer commits and sync skip it. An empty `allowsOnly` on a Property now restricts nothing.
 - Lenses (#2151): `atomic:lens:` resources map one property onto another (`rename`, `wrap`, `head`, `map`, `convert`); the derived values appear in reads and indexes without changing signed data (`docs/src/schema/lenses.md`).
