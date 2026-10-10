@@ -1,5 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
-import { discoverHomeServer, type DiscoveryDeps } from './discoverHomeServer';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  Agent,
+  decodeB64,
+  encodeGenesisCert,
+  privateDriveCert,
+  signGenesisCert,
+  subjectForSignature,
+} from '@tomic/lib';
+import {
+  discoverHomeServer,
+  discoverHomeServerForApp,
+  serverServesGenesis,
+  type DiscoveryDeps,
+} from './discoverHomeServer';
+import { serverURLStorage } from './serverURLStorage';
 
 const DRIVE = 'did:ad:home';
 
@@ -17,6 +31,7 @@ function setup(overrides: Partial<DiscoveryDeps> = {}) {
     hasDriveData: async () => false,
     resolveOrigins: async () => ['https://a.example', 'https://b.example'],
     probe: async () => 'node',
+    verifyGenesis: async () => true,
     ...overrides,
   };
 
@@ -141,5 +156,172 @@ describe('discoverHomeServer', () => {
 
     expect(await discoverHomeServer(store, DRIVE, persist, deps)).toBe(false);
     expect(store.setServerUrl).not.toHaveBeenCalled();
+  });
+
+  it('skips a node that does not serve the drive', async () => {
+    const { store, persist, deps } = setup({
+      verifyGenesis: async origin => origin === 'https://b.example',
+    });
+
+    expect(await discoverHomeServer(store, DRIVE, persist, deps)).toBe(true);
+    expect(store.setServerUrl).toHaveBeenCalledWith('https://b.example');
+  });
+
+  it('stays put when no node verifies', async () => {
+    const { store, persist, deps } = setup({
+      verifyGenesis: async () => false,
+    });
+
+    expect(await discoverHomeServer(store, DRIVE, persist, deps)).toBe(false);
+    expect(store.setServerUrl).not.toHaveBeenCalled();
+  });
+
+  it('checks each candidate once and at most three', async () => {
+    const verifyGenesis = vi.fn(async (_origin: string) => false);
+    const { store, persist, deps } = setup({
+      resolveOrigins: async () => [
+        'https://a.example',
+        'https://a.example',
+        'https://b.example',
+        'https://c.example',
+        'https://d.example',
+        'https://e.example',
+      ],
+      verifyGenesis,
+    });
+
+    await discoverHomeServer(store, DRIVE, persist, deps);
+    expect(verifyGenesis.mock.calls.map(c => c[0])).toEqual([
+      'https://a.example',
+      'https://b.example',
+      'https://c.example',
+    ]);
+  });
+});
+
+describe('discoverHomeServerForApp', () => {
+  // Node environment (noble rejects jsdom's Uint8Array realm): a plain map
+  // stands in for localStorage.
+  beforeEach(() => {
+    const data = new Map<string, string>();
+
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('remembers the server as inferred, not explicit', async () => {
+    const setBaseURL = vi.fn();
+    const store = {
+      getServerUrl: () => 'https://app.example',
+      setServerUrl: vi.fn(),
+      unregisterLocalOnlyDrive: vi.fn(),
+      waitForServerConnected: vi.fn(async () => true),
+    };
+
+    // A previous explicit choice must not keep vouching for the new server.
+    serverURLStorage.set('https://chosen.example', true);
+    expect(serverURLStorage.wasExplicitlyChosen()).toBe(true);
+
+    const found = await discoverHomeServerForApp(
+      store,
+      DRIVE,
+      setBaseURL,
+      async () => false,
+      {
+        wasExplicitlyChosen: () => false,
+        hasEmbeddedNode: () => false,
+        resolveOrigins: async () => ['https://a.example'],
+        probe: async () => 'node',
+        verifyGenesis: async () => true,
+      },
+    );
+
+    expect(found).toBe(true);
+    expect(setBaseURL).toHaveBeenCalledWith('https://a.example');
+    expect(serverURLStorage.get()).toBe('https://a.example');
+    expect(serverURLStorage.wasExplicitlyChosen()).toBe(false);
+  });
+});
+
+describe('serverServesGenesis', () => {
+  const GENESIS = 'https://atomicdata.dev/properties/genesis';
+
+  async function drive() {
+    const keys = await Agent.generateKeyPair();
+    const cert = privateDriveCert(new Uint8Array(decodeB64(keys.publicKey)));
+    const signature = await signGenesisCert(
+      cert,
+      new Uint8Array(decodeB64(keys.privateKey)),
+    );
+
+    return {
+      did: subjectForSignature(signature),
+      genesis: btoa(String.fromCharCode(...encodeGenesisCert(cert)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, ''),
+    };
+  }
+
+  function serve(body: unknown, init: ResponseInit = { status: 200 }) {
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify(body), init),
+    );
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    return fetchMock;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('accepts the genesis that signs to the DID, fetched without redirects', async () => {
+    const home = await drive();
+    const fetchMock = serve({ [GENESIS]: home.genesis });
+
+    expect(await serverServesGenesis('https://a.example', home.did)).toBe(true);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      redirect: 'error',
+      credentials: 'omit',
+    });
+  });
+
+  it('rejects a genesis forged for another DID', async () => {
+    const home = await drive();
+    const attacker = await drive();
+
+    serve({ [GENESIS]: attacker.genesis });
+    expect(await serverServesGenesis('https://evil.example', home.did)).toBe(
+      false,
+    );
+  });
+
+  it('rejects a missing, garbled or refused answer', async () => {
+    const home = await drive();
+
+    serve({ other: 'x' });
+    expect(await serverServesGenesis('https://a.example', home.did)).toBe(
+      false,
+    );
+    serve({ [GENESIS]: 'AAAA' });
+    expect(await serverServesGenesis('https://a.example', home.did)).toBe(
+      false,
+    );
+    serve({}, { status: 401 });
+    expect(await serverServesGenesis('https://a.example', home.did)).toBe(
+      false,
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new TypeError('redirect')),
+    );
+    expect(await serverServesGenesis('https://a.example', home.did)).toBe(
+      false,
+    );
   });
 });

@@ -156,7 +156,7 @@ export function GettingStartedFlow({
   useWelcomeLayoutEffect();
   const store = useStore();
   const navigate = useNavigateWithTransition();
-  const { setAgent, setDrive, setServer, baseURL } = useSettings();
+  const { setAgent, setDrive, setServer, setBaseURL, baseURL } = useSettings();
   // When the connected node is "managed" (reports a dashboard/portal URL via
   // /node-info), account creation goes through the portal (email
   // verification). Self-hosted / FOSS nodes report nothing here, so we keep the
@@ -654,7 +654,7 @@ export function GettingStartedFlow({
       const hosted =
         hostedByAccount ||
         (!!target &&
-          (await discoverHomeServerForApp(store, target, setServer, subject =>
+          (await discoverHomeServerForApp(store, target, setBaseURL, subject =>
             deviceHasDriveData(store, subject),
           )));
 

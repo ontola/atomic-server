@@ -1,10 +1,77 @@
-import { resolveDriveOrigins } from '@tomic/lib';
+import {
+  decodeB64,
+  decodeGenesisCert,
+  identifierBody,
+  resolveDriveOrigins,
+  verifyGenesisCert,
+} from '@tomic/lib';
 import { probeServer } from './probeServer';
 import { serverURLStorage } from './serverURLStorage';
 import { isRunningInTauri } from './tauri';
 
-/** Resolving (6 s) and probing (5 s) are bounded by one deadline. */
-const DISCOVERY_DEADLINE_MS = 12_000;
+/** Resolving (6 s), probing (5 s) and verifying (4 s) share one deadline. */
+const DISCOVERY_DEADLINE_MS = 14_000;
+/** The record is public and anyone may add to it: look at a few, not all. */
+const MAX_CANDIDATES = 3;
+const VERIFY_TIMEOUT_MS = 4_000;
+const GENESIS_PROPERTY = 'https://atomicdata.dev/properties/genesis';
+const MAX_DRIVE_BYTES = 256 * 1024;
+
+/**
+ * Whether `origin` serves the drive's own genesis certificate and it verifies
+ * against the DID. The DID is the genesis signature, so this is
+ * self-certifying: nobody without the drive owner's key can produce a
+ * certificate that signs to it, wherever they host it. A node that merely
+ * answers `/server`, or serves some other drive, does not pass.
+ *
+ * A plain anonymous GET, no redirects. A drive that refuses anonymous reads
+ * cannot be verified this way and counts as not verified (fails closed).
+ */
+export async function serverServesGenesis(
+  origin: string,
+  drive: string,
+  timeoutMs = VERIFY_TIMEOUT_MS,
+): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const signature = identifierBody(drive);
+
+    if (!signature) return false;
+
+    const res = await fetch(
+      `${origin}/did?subject=${encodeURIComponent(drive)}`,
+      {
+        headers: { Accept: 'application/ad+json' },
+        credentials: 'omit',
+        redirect: 'error',
+        signal: controller.signal,
+      },
+    );
+
+    if (!res.ok) return false;
+
+    const text = await res.text();
+
+    if (text.length > MAX_DRIVE_BYTES) return false;
+
+    const encoded = (JSON.parse(text) as Record<string, unknown> | null)?.[
+      GENESIS_PROPERTY
+    ];
+
+    if (typeof encoded !== 'string' || !encoded) return false;
+
+    return await verifyGenesisCert(
+      decodeGenesisCert(decodeB64(encoded)),
+      signature,
+    );
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 type DiscoveryStore = {
   getServerUrl(): string | undefined;
@@ -23,6 +90,8 @@ export type DiscoveryDeps = {
   hasDriveData: (drive: string) => Promise<boolean>;
   resolveOrigins: (drive: string) => Promise<string[]>;
   probe: (origin: string) => Promise<'node' | 'not-node' | 'unreachable'>;
+  /** The origin serves the drive's genesis and it verifies against the DID. */
+  verifyGenesis: (origin: string, drive: string) => Promise<boolean>;
 };
 
 const defaultDeps = (
@@ -33,6 +102,7 @@ const defaultDeps = (
   hasDriveData,
   resolveOrigins: drive => resolveDriveOrigins(drive),
   probe: origin => probeServer(origin),
+  verifyGenesis: (origin, drive) => serverServesGenesis(origin, drive),
 });
 
 function sameOrigin(a: string | undefined, b: string): boolean {
@@ -53,7 +123,8 @@ function sameOrigin(a: string | undefined, b: string): boolean {
  *  - the person chose a server themselves, or the desktop shell runs its own,
  *  - the server in use already has the drive (an already restored session
  *    must not be switched),
- *  - pkarr names no origin that answers like an AtomicServer,
+ *  - pkarr names no origin that is a node serving a genesis that verifies
+ *    against the DID (the record is public; naming a server proves nothing),
  *  - or anything fails or takes longer than the deadline.
  *
  * It never throws and never connects after the deadline has passed, so a slow
@@ -74,15 +145,23 @@ export async function discoverHomeServer(
   const lookup = async (): Promise<string | undefined> => {
     if (await deps.hasDriveData(drive)) return undefined;
 
-    const origins = (await deps.resolveOrigins(drive)).filter(
-      origin => !sameOrigin(store.getServerUrl(), origin),
+    // Deduped and capped: anyone who knows the DID can add names to the record.
+    const origins = [...new Set(await deps.resolveOrigins(drive))]
+      .filter(origin => !sameOrigin(store.getServerUrl(), origin))
+      .slice(0, MAX_CANDIDATES);
+
+    // Check together so one dead origin does not eat the whole deadline, but
+    // keep the announced order when several pass. Being a node is not enough:
+    // it has to serve this drive's genesis, signed for this DID.
+    const ok = await Promise.all(
+      origins.map(
+        async origin =>
+          (await deps.probe(origin)) === 'node' &&
+          (await deps.verifyGenesis(origin, drive)),
+      ),
     );
 
-    // Probe together so one dead origin does not eat the whole deadline, but
-    // keep the announced order when several answer.
-    const probes = await Promise.all(origins.map(origin => deps.probe(origin)));
-
-    return origins.find((_, i) => probes[i] === 'node');
+    return origins.find((_, i) => ok[i]);
   };
 
   try {
@@ -113,17 +192,26 @@ export async function discoverHomeServer(
   }
 }
 
-/** {@link discoverHomeServer} with the real network and device behind it. */
+/**
+ * {@link discoverHomeServer} with the real network and device behind it.
+ * The server found is remembered as an inferred choice, not an explicit one:
+ * it is not sticky, and a device's own embedded node still outranks it later.
+ * `setBaseURL` moves the app's state to it.
+ */
 export function discoverHomeServerForApp(
   store: DiscoveryStore,
   drive: string,
-  persistServer: (url: string) => void,
+  setBaseURL: (url: string) => void,
   hasDriveData: DiscoveryDeps['hasDriveData'],
+  deps: Partial<DiscoveryDeps> = {},
 ): Promise<boolean> {
   return discoverHomeServer(
     store,
     drive,
-    persistServer,
-    defaultDeps(hasDriveData),
+    origin => {
+      setBaseURL(origin);
+      serverURLStorage.set(origin, false);
+    },
+    { ...defaultDeps(hasDriveData), ...deps },
   );
 }

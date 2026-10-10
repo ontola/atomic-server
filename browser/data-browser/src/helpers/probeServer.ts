@@ -27,6 +27,9 @@ export async function probeServer(
     const res = await fetch(new URL('/server', serverUrl).toString(), {
       headers: { Accept: 'application/ad+json' },
       credentials: 'omit',
+      // An address that redirects is not the node the person typed (or the
+      // one a record named); a redirect can lead anywhere.
+      redirect: 'error',
       signal: controller.signal,
     });
 

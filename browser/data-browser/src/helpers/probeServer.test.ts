@@ -35,4 +35,12 @@ describe('probeServer', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('failed')));
     expect(await probeServer('https://down.example')).toBe('unreachable');
   });
+
+  it('does not follow redirects', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('redirect'));
+
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await probeServer('https://node.example')).toBe('unreachable');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: 'error' });
+  });
 });

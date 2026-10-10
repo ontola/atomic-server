@@ -54,6 +54,7 @@ vi.mock('../../helpers/AppSettings', () => ({
     setAgent: state.setAgent,
     setDrive: state.setDrive,
     setServer: state.setServer,
+    setBaseURL: vi.fn(),
   }),
 }));
 vi.mock('../../hooks/useNavigateWithTransition', () => ({
