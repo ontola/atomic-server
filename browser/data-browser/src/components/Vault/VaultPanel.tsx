@@ -192,6 +192,9 @@ export function VaultPanel({
                 drivePseudonym={enrollment.drive_pseudonym}
                 onChanged={() => void vault.refresh()}
                 onClose={() => setStorageOpen(false)}
+                busy={busy}
+                suspended={suspended}
+                onCompact={vault.compact}
               />
             )}
           </>

@@ -2224,4 +2224,99 @@ mod tests {
             "a resource deleted before this checkpoint must stay deleted — recovering it is what an OLDER object would be kept for"
         );
     }
+
+    /// "Compress now" forces a checkpoint by telling the exporter the vault has
+    /// no anchor, even though it does. That must be an ordinary checkpoint in
+    /// every other respect: it advances the lane like any pass, later passes go
+    /// back to deltas, and the vault restores from it alone.
+    #[tokio::test]
+    async fn a_forced_checkpoint_replaces_the_chain_and_restores_alone() {
+        let source = Db::init_temp("vault_forced_checkpoint").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let note_str = source
+            .create_resource(FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let note = Subject::from_raw(&note_str, source.get_base_domain().as_deref());
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+
+        let first = backup(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        assert_eq!(first.kind, SegmentKind::Checkpoint);
+        for name in ["one", "two"] {
+            rename(&source, &note_str, name).await;
+            let pass = backup(&source, &drive_subject, &key, &vault, DEVICE)
+                .await
+                .unwrap();
+            assert_eq!(pass.kind, SegmentKind::Pack, "an anchor exists: deltas");
+        }
+
+        // The forced pass: same inputs the host sends, with the anchor denied.
+        let keys = vault.list(&drive_prefix(PSEUDONYM)).unwrap();
+        let mut observed: BTreeMap<String, u32> = BTreeMap::new();
+        for object_key in &keys {
+            if let Some((lane, segment)) = parse_segment_key(object_key) {
+                let slot = observed.entry(lane).or_insert(0);
+                *slot = (*slot).max(segment);
+            }
+        }
+        assert_eq!(observed.get(DEVICE), Some(&2));
+        let forced = export_vault_segment(
+            &source,
+            &drive_subject,
+            &key,
+            &vault,
+            PSEUDONYM,
+            DEVICE,
+            3,
+            2,
+            false,
+            &observed,
+            CheckpointPolicy::default(),
+        )
+        .await
+        .unwrap()
+        .expect("a forced pass over a populated drive writes an object");
+        assert_eq!(forced.kind, SegmentKind::Checkpoint);
+        assert_eq!(
+            forced.coverage.get(DEVICE),
+            Some(&2),
+            "it subsumes every delta this lane has written"
+        );
+        commit_lane_state(&source, PSEUDONYM, DEVICE, 3).unwrap();
+
+        // Cursors moved with it: the next ordinary pass is a delta carrying
+        // only the new edit, not another full export.
+        rename(&source, &note_str, "three").await;
+        let after = backup(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        assert_eq!(after.kind, SegmentKind::Pack);
+        assert_eq!(after.resources, 1, "only the edited resource");
+
+        // A vault holding only the forced checkpoint restores the drive as of
+        // that pass, edit history included.
+        let only = MemoryVaultStore::new();
+        let ckpt = checkpoint_key(PSEUDONYM, 2);
+        only.put(&ckpt, &vault.get(&ckpt).unwrap()).unwrap();
+        let target = Db::init_temp("vault_forced_checkpoint_target")
+            .await
+            .unwrap();
+        restore(&target, &key, &only).await;
+        let restored = target.get_resource(&note).await.unwrap();
+        assert_eq!(
+            restored.get(crate::urls::NAME).unwrap().to_string(),
+            "two",
+            "the state when the checkpoint was taken"
+        );
+        let live = source.get_resource(&note).await.unwrap();
+        assert_eq!(
+            crate::history::versions(&restored).unwrap().len() + 1,
+            crate::history::versions(&live).unwrap().len(),
+            "the checkpoint carries every version up to the pass; only the later edit is missing"
+        );
+    }
 }

@@ -2,6 +2,8 @@ import { getManagedAccount } from './session';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   agentVaultProof,
+  compactVaultBackup,
+  type CompactResult,
   disableVault,
   getVaultState,
   listVaultDrives,
@@ -40,6 +42,13 @@ export type UseVaultBackup = {
   enable: () => Promise<void>;
   disable: () => Promise<void>;
   backupNow: () => Promise<void>;
+  /**
+   * Take a fresh full checkpoint of the backup, then free what it replaced.
+   * `includeUndoWindow` also gives up recently deleted items and must only be
+   * passed after the person confirmed it. Resolves to null when it failed
+   * (`error` says why).
+   */
+  compact: (includeUndoWindow: boolean) => Promise<CompactResult | null>;
   restore: () => Promise<RestoreOutcome | null>;
   /** 0–1 while a restore is downloading, otherwise null. */
   restoreProgress: number | null;
@@ -335,6 +344,45 @@ export function useVaultBackup({
     refresh,
   ]);
 
+  const compact = useCallback(
+    async (includeUndoWindow: boolean) => {
+      if (status.state !== 'on') return null;
+
+      return run(async () => {
+        const drivePseudonym = status.enrollment.drive_pseudonym;
+        const key = await ensureKey(drivePseudonym);
+        const result = await compactVaultBackup({
+          drivePseudonym,
+          includeUndoWindow,
+          runBackup: () =>
+            runVaultBackup({
+              db: db!,
+              driveSubject: driveSubject!,
+              drivePseudonym,
+              devicePubkey: devicePubkey!,
+              driveKey: key.driveKey,
+              driveKeyEpoch: key.keyEpoch,
+              refreshDriveKey: () => refreshKey(drivePseudonym),
+              forceCheckpoint: true,
+            }),
+        });
+        await refresh();
+
+        return result;
+      });
+    },
+    [
+      run,
+      status,
+      ensureKey,
+      refreshKey,
+      db,
+      driveSubject,
+      devicePubkey,
+      refresh,
+    ],
+  );
+
   const restore = useCallback(async () => {
     if (status.state !== 'on') return null;
 
@@ -368,6 +416,7 @@ export function useVaultBackup({
     enable,
     disable,
     backupNow,
+    compact,
     restore,
     restoreProgress,
     refresh,

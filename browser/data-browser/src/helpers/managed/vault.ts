@@ -579,6 +579,50 @@ export async function freeUpVaultStorage(
   );
 }
 
+/** What {@link compactVaultBackup} did, for the screen to report. */
+export type CompactResult = {
+  freed: VaultFreeUpResult;
+  /** Bytes of the checkpoint written first, so the net gain can be shown. */
+  checkpointBytes: number;
+};
+
+/**
+ * Collapse the backup's change chain into one fresh checkpoint, then free what
+ * that checkpoint made redundant.
+ *
+ * The order is the safety property. The control plane only prunes a delta once
+ * a *published* checkpoint covers it, and this device only calls free-up after
+ * its own checkpoint pass finished, so a failure at any step leaves the old
+ * chain intact. In particular, if the checkpoint does not happen, free-up is
+ * never called: freeing against an older anchor would still be safe, but
+ * "compress" would then report success while doing none of what was asked.
+ *
+ * `includeUndoWindow` is the irreversible variant; it must only be passed after
+ * the person confirmed it. This touches the backup only, never the live drive.
+ */
+export async function compactVaultBackup({
+  runBackup,
+  drivePseudonym,
+  includeUndoWindow,
+}: {
+  /** Runs one backup pass with `forceCheckpoint: true`. */
+  runBackup: () => Promise<BackupOutcome>;
+  drivePseudonym: string;
+  includeUndoWindow: boolean;
+}): Promise<CompactResult> {
+  const outcome = await runBackup();
+
+  if (outcome.status !== 'backed-up' || outcome.kind !== 'checkpoint') {
+    throw new Error(
+      'The backup could not be compressed right now, so nothing was removed.',
+    );
+  }
+
+  const freed = await freeUpVaultStorage(drivePseudonym, includeUndoWindow);
+
+  return { freed, checkpointBytes: outcome.bytes };
+}
+
 /**
  * The segment number this device should write next.
  *
@@ -626,6 +670,7 @@ export async function backupDrive({
   segment,
   checkpointN,
   driveHasCheckpoint,
+  forceCheckpoint = false,
   observedLanes,
   collisionRetries = 0,
   beforeNetworkWrite,
@@ -642,6 +687,14 @@ export async function backupDrive({
   segment: number;
   checkpointN: number;
   driveHasCheckpoint: boolean;
+  /**
+   * Make this pass a full checkpoint even though the vault already has an
+   * anchor. Done by telling the exporter there is none, which is the one input
+   * it already treats as "this pass must be an anchor": the cursors, lane
+   * state and coverage logic all run unchanged, so nothing here needs its own
+   * path.
+   */
+  forceCheckpoint?: boolean;
   observedLanes: Record<string, number>;
 }): Promise<BackupOutcome> {
   signal?.throwIfAborted();
@@ -653,7 +706,7 @@ export async function backupDrive({
     devicePubkey,
     segment,
     checkpointN,
-    driveHasCheckpoint,
+    driveHasCheckpoint && !forceCheckpoint,
     observedLanes,
   );
 
@@ -727,6 +780,7 @@ export async function backupDrive({
       driveKey,
       keyEpoch,
       driveHasCheckpoint,
+      forceCheckpoint,
       observedLanes,
       checkpointN: isCheckpoint ? checkpointN + 1 : checkpointN,
       segment: isCheckpoint ? segment : segment + 1,
@@ -1109,10 +1163,21 @@ export function runVaultBackup(args: {
    * read, which is the exact hole the epoch exists to close.
    */
   refreshDriveKey?: () => Promise<DriveKeyHandle>;
+  /** Force this pass to be a full checkpoint. See {@link backupDrive}. */
+  forceCheckpoint?: boolean;
 }): Promise<BackupOutcome> {
   const existing = inFlight.get(args.drivePseudonym);
 
-  if (existing) return existing;
+  if (existing) {
+    if (!args.forceCheckpoint) return existing;
+
+    // Joining a pass that is only a delta would hand back something other
+    // than the checkpoint that was asked for. Wait for it, then run our own.
+    return existing.then(
+      () => runVaultBackup(args),
+      () => runVaultBackup(args),
+    );
+  }
 
   const pass = (async () => {
     args.signal?.throwIfAborted();

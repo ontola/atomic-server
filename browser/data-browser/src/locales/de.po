@@ -11271,6 +11271,7 @@ msgid "Freed {0}."
 msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
+#: src/components/Vault/VaultStorage.tsx
 msgid "Nothing to free."
 msgstr ""
 
@@ -12767,4 +12768,56 @@ msgstr ""
 
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "Chat messages are being packed into compact logs. This is needed once after an update and can take a while for a big chat. Keep this tab open."
+msgstr ""
+
+#. 0: formatBytes(result.freed.bytes_reclaimed); 1: formatBytes(result.checkpointBytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freed {0}. The new snapshot uses {1}."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Backups are paused, so the backup cannot be compressed."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Wait for the current backup to finish."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+#: src/components/Vault/VaultStorage.tsx
+msgid "Discard history"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Backup history"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Replace the backup's chain of changes with one fresh snapshot. Your workspace is not touched, and recently deleted items stay recoverable."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Compress now"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Older backup copies and the edit history stored in them are removed. Items you deleted recently can no longer be recovered from the backup. Your workspace on your devices is not changed."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "This cannot be undone."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Discard backup history?"
+msgstr ""
+
+#. 0: formatBytes(discardGain(usage))
+#: src/components/Vault/VaultStorage.tsx
+msgid "Or keep only the current state: about {0} would be freed. This cannot be undone."
+msgstr ""
+
+#. 0: formatBytes(discardGain(usage))
+#: src/components/Vault/VaultStorage.tsx
+msgid "The backup will keep one copy of your workspace as it is now, and about {0} will be freed."
 msgstr ""
