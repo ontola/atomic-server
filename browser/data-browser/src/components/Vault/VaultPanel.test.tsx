@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
-import { cleanup, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
@@ -30,15 +36,21 @@ function vaultWith(usedBytes: number): UseVaultBackup {
     disable: vi.fn(),
     backupNow: vi.fn(),
     restore: vi.fn(),
+    downloadBackup: vi.fn(async () => 'saved'),
+    restoreFromFile: vi.fn(async () => ({})),
     restoreProgress: null,
     refresh: vi.fn(),
   } as unknown as UseVaultBackup;
 }
 
-const show = (usedBytes: number, included: boolean) =>
+const show = (
+  usedBytes: number,
+  included: boolean,
+  vault = vaultWith(usedBytes),
+) =>
   render(
     <ThemeProvider theme={theme}>
-      <VaultPanel vault={vaultWith(usedBytes)} included={included} />
+      <VaultPanel vault={vault} included={included} />
     </ThemeProvider>,
   );
 
@@ -71,4 +83,33 @@ it('brings the bar back when included but nearly full', () => {
   );
   expect(screen.getByTestId('usage-meter-text').textContent).toContain(' of ');
   expect(screen.queryByTestId('vault-included-note')).toBeNull();
+});
+
+it('downloads the backup and says so', async () => {
+  const vault = vaultWith(1000);
+  show(1000, false, vault);
+
+  fireEvent.click(screen.getByTestId('vault-download'));
+
+  await waitFor(() =>
+    expect(screen.getByTestId('vault-notice').textContent).toContain('saved'),
+  );
+  expect(vault.downloadBackup).toHaveBeenCalled();
+});
+
+it('restores from a picked file and clears the input', async () => {
+  const vault = vaultWith(1000);
+  const onRestored = vi.fn();
+  render(
+    <ThemeProvider theme={theme}>
+      <VaultPanel vault={vault} onRestored={onRestored} />
+    </ThemeProvider>,
+  );
+  const input = screen.getByTestId('vault-file-input') as HTMLInputElement;
+  const file = new File([new Uint8Array([1])], 'x.atomic-vault');
+
+  fireEvent.change(input, { target: { files: [file] } });
+
+  await waitFor(() => expect(onRestored).toHaveBeenCalled());
+  expect(vault.restoreFromFile).toHaveBeenCalledWith(file);
 });
