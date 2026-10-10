@@ -1,4 +1,5 @@
 import { conversations, type Store } from '@tomic/react';
+import { hasMembers } from '../conversations/conversations';
 import {
   getManagedEnrollments,
   type ManagedEnrollmentSummary,
@@ -6,7 +7,11 @@ import {
 
 type RefusedDriveStore = Pick<
   Store,
-  'isLocalOnlyDrive' | 'makeDriveLocal' | 'normalizeSubject' | 'getResource'
+  | 'isLocalOnlyDrive'
+  | 'makeDriveLocal'
+  | 'normalizeSubject'
+  | 'getResource'
+  | 'getAgent'
 >;
 
 /**
@@ -18,6 +23,9 @@ type RefusedDriveStore = Pick<
  * Only a drive that can be read here and is not a conversation is safe to
  * move. One that cannot be read is not: not knowing is not "no members".
  * The person's own drives are on this device, so they read.
+ *
+ * The one conversation that is safe to move is a note to yourself: `read` is
+ * exactly the signed-in agent, so nobody else depends on its host.
  */
 async function mayMoveToBrowser(
   store: RefusedDriveStore,
@@ -28,7 +36,11 @@ async function mayMoveToBrowser(
 
     if (resource.error || !resource.isReady()) return false;
 
-    return !resource.hasClasses(conversations.classes.conversation);
+    if (!resource.hasClasses(conversations.classes.conversation)) return true;
+
+    const me = store.getAgent()?.subject;
+
+    return me !== undefined && hasMembers(resource, [me]);
   } catch {
     return false;
   }
@@ -43,8 +55,8 @@ async function mayMoveToBrowser(
  *
  * "Could not find out" is never "nothing hosts it". A lookup that fails, or
  * that cannot run because nobody is signed in, leaves the drive alone, as does
- * an enrollment on another node, a pending or paused one, a conversation (its
- * other members need the host), a drive that cannot be read here, and a local
+ * an enrollment on another node, a pending or paused one, a conversation with
+ * anyone but yourself (its other members need the host), a drive that cannot be read here, and a local
  * copy `makeDriveLocal` cannot vouch for. Nothing is deleted from the server, and
  * the drive's data stays on this device.
  */
