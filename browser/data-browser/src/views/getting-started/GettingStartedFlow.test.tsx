@@ -110,6 +110,9 @@ vi.mock('../../helpers/managed/reconcile', () => ({
   connectHostedDrive: async () => true,
   shortDid: (subject: string) => subject,
 }));
+vi.mock('../../helpers/discoverHomeServer', () => ({
+  discoverHomeServerForApp: async () => false,
+}));
 vi.mock('../../helpers/agentStorage', () => ({ saveAgentToIDB: vi.fn() }));
 vi.mock('../../helpers/deviceLock', () => ({ beat: vi.fn() }));
 vi.mock('../../helpers/privateDrive', () => ({

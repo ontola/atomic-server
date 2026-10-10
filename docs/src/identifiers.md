@@ -216,6 +216,8 @@ For a Drive you only know by identifier, a node holding the Drive publishes its 
 2. A client resolving the Drive reads the list and dials a node over Iroh. Addressing (relay URL, direct addresses) is handled by Iroh.
 3. The client requests the Resource and verifies the Commit signatures itself.
 
+The same record can also carry a second TXT value, `_atomic_http`: a JSON array of the public `https://` origins of servers hosting the Drive. A browser cannot dial Iroh, but it can read the relay over HTTPS (`GET https://dns.iroh.link/pkarr/<z-base-32 public key>`, answered with CORS enabled). A client that holds only the person's secret derives the key from the Drive's identifier, verifies the signed packet against that key, and probes each origin's `/server` endpoint before using it. Servers skip origins that are not reachable from outside (plain `http`, `localhost`, IP addresses, single-label or `.local` hosts) and publish again every hour, because the record expires. As with node IDs the record is only a hint: anyone who knows the identifier can write to it, so clients ignore unusable origins and still verify Commit signatures.
+
 The relay speaks HTTP, so this works through NAT and in places where raw UDP does not. It is a pure _discovery_ mechanism: all trust and authenticity comes from the Commit signatures in the data.
 Reticulum, for resolution over a mesh without internet access, is planned but not implemented.
 
