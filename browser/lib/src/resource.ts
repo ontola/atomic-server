@@ -6,6 +6,16 @@ import type {
   VersionVector,
 } from 'loro-crdt';
 import { ulid } from 'ulidx';
+import {
+  addChatLogEntry,
+  countChatLogEntries,
+  getChatLogEntry,
+  listChatLogEntries,
+  putChatLogEntry,
+  removeChatLogEntry,
+  type ChatLogEntry,
+  type NewChatLogEntry,
+} from './chat-log.js';
 import { enableLoro, LoroLoader } from './loro-loader.js';
 import { decodeB64, encodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
@@ -2077,6 +2087,72 @@ export class Resource<C extends OptionalClass = any> {
     this._dirty = true;
     this.armStagedCommitToken();
     this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
+  }
+
+  /**
+   * Chat log pages (class `ChatLog`): add an entry, authored by the current
+   * agent unless `a` is given, and mark the resource for saving. The entry
+   * travels in the next commit's `loroUpdate` like any other change.
+   * Returns the entry key, or undefined when Loro is not loaded.
+   */
+  public addChatLogEntry(entry: NewChatLogEntry): string | undefined {
+    const doc = this.getLoroDoc();
+    const author = entry.a ?? this.store.getAgent()?.subject;
+
+    if (!doc || !author) return undefined;
+
+    this.armStagedCommitToken();
+    const key = addChatLogEntry(doc, {
+      ...entry,
+      a: author,
+      c: entry.c ?? Date.now(),
+    });
+    this.markDirty();
+
+    return key;
+  }
+
+  /** Replace the chat log entry under `key` (an edit). Only its author may. */
+  public putChatLogEntry(key: string, entry: ChatLogEntry): void {
+    const doc = this.getLoroDoc();
+
+    if (!doc) return;
+
+    this.armStagedCommitToken();
+    putChatLogEntry(doc, key, entry);
+    this.markDirty();
+  }
+
+  /** Remove the chat log entry under `key`. Only its author or a writer of the chat may. */
+  public removeChatLogEntry(key: string): void {
+    const doc = this.getLoroDoc();
+
+    if (!doc) return;
+
+    this.armStagedCommitToken();
+    removeChatLogEntry(doc, key);
+    this.markDirty();
+  }
+
+  /** The chat log entry under `key`, if the page holds it. */
+  public getChatLogEntry(key: string): ChatLogEntry | undefined {
+    const doc = this.getLoroDoc();
+
+    return doc ? getChatLogEntry(doc, key) : undefined;
+  }
+
+  /** How many entries the chat log page holds. */
+  public countChatLogEntries(): number {
+    const doc = this.getLoroDoc();
+
+    return doc ? countChatLogEntries(doc) : 0;
+  }
+
+  /** The chat log entries, oldest first. */
+  public listChatLogEntries(): { key: string; entry: ChatLogEntry }[] {
+    const doc = this.getLoroDoc();
+
+    return doc ? listChatLogEntries(doc) : [];
   }
 
   /** Returns a Collection with all children of this resource

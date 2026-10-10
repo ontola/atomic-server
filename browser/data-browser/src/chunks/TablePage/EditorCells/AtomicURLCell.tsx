@@ -23,6 +23,7 @@ import { styled } from 'styled-components';
 import { FileDropzoneInput } from '@components/forms/FileDropzone/FileDropzoneInput';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles'; ////
 import { getIconForClass } from '@helpers/iconMap';
+import { asSubject } from '@helpers/formatPlainValue';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 import { useResourceSearch } from './useResourceSearch';
 import { IconButton } from '@components/IconButton/IconButton';
@@ -60,7 +61,7 @@ function AtomicURLCellEdit({
   resource: row,
 }: EditCellProps<JSONValue>): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
-  const cell = useResource(value as string);
+  const cell = useResource(asSubject(value));
   const { classType, hasClassType } = useClassType(property, row.getClasses());
   const [title] = useTitle(cell);
   // `defaultOpen` only seeds the *initial* isOpen state — if this component
@@ -218,6 +219,7 @@ function AtomicURLCellDisplay({
     return <></>;
   }
 
+  // A non-string value is shown as text by ResourceCell itself.
   return <ResourceCell subject={value as string} />;
 }
 
