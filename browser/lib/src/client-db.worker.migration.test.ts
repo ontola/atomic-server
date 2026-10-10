@@ -5,6 +5,8 @@ const db = vi.hoisted(() => ({
   migrateIndexKeysStep: vi.fn(),
   messageMigrationPending: vi.fn(),
   migrateMessagesStep: vi.fn(),
+  aiChatMigrationPending: vi.fn(),
+  migrateAiChatsStep: vi.fn(),
 }));
 vi.mock('./client-db-open.js', () => ({
   openClientDb: async () => ({ db }),
@@ -156,4 +158,45 @@ it('writes no pages when no drive is known to be local-only: it only cleans up',
   // already have their entry (the Rust side of this is
   // `a_cache_of_a_hosted_drive_only_drops_messages_that_have_their_entry`).
   expect(db.migrateMessagesStep).toHaveBeenCalledWith(500, '[]');
+});
+
+it('moves the messages of AI chats after the group chats, with the same drives', async () => {
+  db.indexMigrationPending.mockReturnValue(false);
+  db.messageMigrationPending.mockReturnValue(false);
+  db.aiChatMigrationPending.mockReturnValue(true);
+  db.migrateAiChatsStep.mockResolvedValue(
+    JSON.stringify({ done: 40, total: 40, finished: true }),
+  );
+
+  const posted: Array<Record<string, unknown>> = [];
+  const worker = {
+    onmessage: null as unknown as (event: unknown) => void,
+    postMessage: vi.fn((value: Record<string, unknown>) => posted.push(value)),
+  };
+  vi.stubGlobal('self', worker);
+  await import('./client-db.worker.js');
+
+  worker.onmessage({
+    data: {
+      id: 1,
+      type: 'init',
+      wasmUrl: 'data:text/javascript,export default async function() {}',
+      localOnlyDrives: ['did:ad:local'],
+    },
+  });
+  await vi.waitFor(() => expect(posted.some(m => m.id === 1)).toBe(true));
+
+  expect(db.migrateMessagesStep).not.toHaveBeenCalled();
+  expect(db.migrateAiChatsStep).toHaveBeenCalledWith(
+    500,
+    JSON.stringify(['did:ad:local']),
+  );
+  expect(
+    posted
+      .filter(m => m.type === 'migration-progress')
+      .map(m => [m.phase, m.done, m.total, m.finished]),
+  ).toEqual([
+    ['messages', 0, 0, false],
+    ['messages', 40, 40, true],
+  ]);
 });

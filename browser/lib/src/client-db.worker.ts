@@ -724,8 +724,9 @@ async function migrateIndexKeys(opened: WasmModule): Promise<void> {
 const MESSAGE_MIGRATION_SLICE = 500;
 
 /**
- * Moves old chat `Message` resources into chat log pages
- * (`planning/chat-log.md`). Pages are written for the drives that exist only in
+ * Moves old chat messages into chat log pages (`planning/chat-log.md`): the
+ * `Message` resources of group chats and comments, then the `ai-message`
+ * resources of AI chats. Pages are written for the drives that exist only in
  * this browser; for a drive a server hosts the server makes them and this only
  * drops cached messages that already have their entry. Progress goes to the page
  * as `migration-progress` messages, like the index rebuild. Runs inside
@@ -735,7 +736,21 @@ async function migrateMessages(
   opened: WasmModule,
   localOnlyDrives: string[],
 ): Promise<void> {
-  if (!opened.messageMigrationPending?.()) return;
+  const drives = JSON.stringify(localOnlyDrives);
+
+  await runChatMigration(opened.messageMigrationPending?.(), () =>
+    opened.migrateMessagesStep(MESSAGE_MIGRATION_SLICE, drives),
+  );
+  await runChatMigration(opened.aiChatMigrationPending?.(), () =>
+    opened.migrateAiChatsStep(MESSAGE_MIGRATION_SLICE, drives),
+  );
+}
+
+async function runChatMigration(
+  pending: boolean | undefined,
+  step: () => Promise<string>,
+): Promise<void> {
+  if (!pending) return;
 
   const report = (done: number, total: number, finished: boolean) =>
     self.postMessage({
@@ -745,17 +760,14 @@ async function migrateMessages(
       total,
       finished,
     });
-  const drives = JSON.stringify(localOnlyDrives);
 
   report(0, 0, false);
 
   for (;;) {
-    const step = JSON.parse(
-      await opened.migrateMessagesStep(MESSAGE_MIGRATION_SLICE, drives),
-    );
-    report(step.done, step.total, step.finished);
+    const result = JSON.parse(await step());
+    report(result.done, result.total, result.finished);
 
-    if (step.finished) return;
+    if (result.finished) return;
 
     await new Promise(resolve => setTimeout(resolve, 0));
   }
