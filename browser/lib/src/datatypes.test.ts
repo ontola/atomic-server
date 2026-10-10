@@ -175,6 +175,12 @@ describe('datatypeTag', () => {
 
     // Plain string and scalars stay untagged (the default).
     expect(datatypeTag(Datatype.STRING, 'hello')).toBeUndefined();
+    expect(datatypeTag(Datatype.STRING, '["track","parameter"]')).toBe(
+      'string',
+    );
+    expect(datatypeTag(Datatype.STRING, '{"text":"literal"}')).toBe('string');
+    expect(datatypeTag(Datatype.STRING, 'atomic:literal')).toBe('string');
+    expect(datatypeTag(Datatype.STRING, 'https://example.com')).toBe('string');
     expect(datatypeTag(Datatype.INTEGER, 5)).toBeUndefined();
     expect(datatypeTag(Datatype.BOOLEAN, true)).toBeUndefined();
   });

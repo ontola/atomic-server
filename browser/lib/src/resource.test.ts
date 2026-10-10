@@ -376,6 +376,19 @@ describe('resource.ts', () => {
     expect(newListId).toBe(originalListId);
   });
 
+  it('keeps JSON null inside nested list items', async ({ expect }) => {
+    const prop = 'https://atomicdata.dev/ontology/canvas/strokeData';
+    const resource = new Resource('https://example.com/json-null');
+    resource.pushListItem(prop, { a: null, b: [1, null, { c: null }] });
+
+    const doc = resource.getLoroDoc()!;
+    const stored = doc.getMap('properties').toJSON() as Record<
+      string,
+      unknown[]
+    >;
+    expect(stored[prop].at(-1)).toEqual({ a: null, b: [1, null, { c: null }] });
+  });
+
   it('replaceListItems only rewrites the changed part of a list', async ({
     expect,
   }) => {
