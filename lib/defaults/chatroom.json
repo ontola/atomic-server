@@ -33,6 +33,16 @@
     "https://atomicdata.dev/properties/shortname": "about"
   },
   {
+    "@id": "https://atomicdata.dev/properties/demo/speaker",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Which demo persona a scripted guest-demo message is shown as. Presentation only: the message is still signed by the visitor's own identity.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "demo-speaker"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/commentsFolder",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Folder",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",

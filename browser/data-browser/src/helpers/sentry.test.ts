@@ -12,6 +12,7 @@ import {
 } from './sentry';
 vi.mock('@sentry/react', () => ({
   init: vi.fn(),
+  browserSessionIntegration: vi.fn(() => ({ name: 'BrowserSession' })),
   isEnabled: vi.fn(() => true),
   captureMessage: vi.fn(),
   getClient: vi.fn(() => undefined),
@@ -60,8 +61,12 @@ describe('Sentry configuration', () => {
         release: 'atomic-data-browser@test+abc123',
         sendDefaultPii: false,
         tracesSampleRate: 0,
+        integrations: [{ name: 'BrowserSession' }],
       }),
     );
+    expect(Sentry.browserSessionIntegration).toHaveBeenCalledWith({
+      lifecycle: 'page',
+    });
   });
   it('relays through the tunnel the server injects', () => {
     vi.stubGlobal('window', {
