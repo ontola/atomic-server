@@ -12880,4 +12880,11 @@ msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
+
+#: src/components/ConnectDevice.tsx
+msgid "Could not reach that address."
+msgstr ""
+
+#: src/components/ConnectDevice.tsx
+msgid "That address answers, but it is not an AtomicServer."
 msgstr ""
