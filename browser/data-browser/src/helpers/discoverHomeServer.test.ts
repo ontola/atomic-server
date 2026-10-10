@@ -30,7 +30,6 @@ function setup(overrides: Partial<DiscoveryDeps> = {}) {
     hasEmbeddedNode: () => false,
     hasDriveData: async () => false,
     resolveOrigins: async () => ['https://a.example', 'https://b.example'],
-    probe: async () => 'node',
     verifyGenesis: async () => true,
     ...overrides,
   };
@@ -41,8 +40,7 @@ function setup(overrides: Partial<DiscoveryDeps> = {}) {
 describe('discoverHomeServer', () => {
   it('connects to the first announced origin that is a node', async () => {
     const { store, persist, deps } = setup({
-      probe: async origin =>
-        origin === 'https://a.example' ? 'not-node' : 'node',
+      verifyGenesis: async origin => origin === 'https://b.example',
     });
 
     expect(await discoverHomeServer(store, DRIVE, persist, deps)).toBe(true);
@@ -89,11 +87,10 @@ describe('discoverHomeServer', () => {
     expect(store.setServerUrl).not.toHaveBeenCalled();
   });
 
-  it('stays put when no origin is announced or none is a node', async () => {
+  it('stays put when no origin is announced or none verifies', async () => {
     for (const overrides of [
       { resolveOrigins: async () => [] },
-      { probe: async () => 'unreachable' as const },
-      { probe: async () => 'not-node' as const },
+      { verifyGenesis: async () => false },
     ]) {
       const { store, persist, deps } = setup(overrides);
 
@@ -104,14 +101,14 @@ describe('discoverHomeServer', () => {
   });
 
   it('skips the origin it is already on', async () => {
-    const probe = vi.fn(async () => 'node' as const);
+    const verifyGenesis = vi.fn(async () => true);
     const { store, persist, deps } = setup({
       resolveOrigins: async () => ['https://app.example'],
-      probe,
+      verifyGenesis,
     });
 
     expect(await discoverHomeServer(store, DRIVE, persist, deps)).toBe(false);
-    expect(probe).not.toHaveBeenCalled();
+    expect(verifyGenesis).not.toHaveBeenCalled();
   });
 
   it('swallows failures', async () => {
@@ -147,10 +144,10 @@ describe('discoverHomeServer', () => {
     let chosen = false;
     const { store, persist, deps } = setup({
       wasExplicitlyChosen: () => chosen,
-      probe: async () => {
+      verifyGenesis: async () => {
         chosen = true;
 
-        return 'node';
+        return true;
       },
     });
 
@@ -235,7 +232,6 @@ describe('discoverHomeServerForApp', () => {
         wasExplicitlyChosen: () => false,
         hasEmbeddedNode: () => false,
         resolveOrigins: async () => ['https://a.example'],
-        probe: async () => 'node',
         verifyGenesis: async () => true,
       },
     );

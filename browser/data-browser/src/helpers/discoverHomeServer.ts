@@ -5,7 +5,6 @@ import {
   resolveDriveOrigins,
   verifyGenesisCert,
 } from '@tomic/lib';
-import { probeServer } from './probeServer';
 import { serverURLStorage } from './serverURLStorage';
 import { isRunningInTauri } from './tauri';
 
@@ -90,7 +89,6 @@ export type DiscoveryDeps = {
   /** Whether the server in use already serves this drive. */
   hasDriveData: (drive: string) => Promise<boolean>;
   resolveOrigins: (drive: string) => Promise<string[]>;
-  probe: (origin: string) => Promise<'node' | 'not-node' | 'unreachable'>;
   /** The origin serves the drive's genesis and it verifies against the DID. */
   verifyGenesis: (origin: string, drive: string) => Promise<boolean>;
 };
@@ -102,7 +100,6 @@ const defaultDeps = (
   hasEmbeddedNode: () => isRunningInTauri(),
   hasDriveData,
   resolveOrigins: drive => resolveDriveOrigins(drive),
-  probe: origin => probeServer(origin),
   verifyGenesis: (origin, drive) => serverServesGenesis(origin, drive),
 });
 
@@ -117,14 +114,14 @@ function sameOrigin(a: string | undefined, b: string): boolean {
 /**
  * After a secret sign-in on a device that knows no server for the person's
  * drive, ask pkarr which servers announced it and move the app to the first
- * one that really is a node. No account and no typed address are involved:
+ * one that serves the drive's verified genesis. No account and no typed address are involved:
  * the drive DID is enough to find the record.
  *
  * Does nothing (returns `false`) when
  *  - the person chose a server themselves, or the desktop shell runs its own,
  *  - the server in use already has the drive (an already restored session
  *    must not be switched),
- *  - pkarr names no origin that is a node serving a genesis that verifies
+ *  - pkarr names no origin that serves a genesis that verifies
  *    against the DID (the record is public; naming a server proves nothing),
  *  - or anything fails or takes longer than the deadline.
  *
@@ -152,14 +149,11 @@ export async function discoverHomeServer(
       .slice(0, MAX_CANDIDATES);
 
     // Check together so one dead origin does not eat the whole deadline, but
-    // keep the announced order when several pass. Being a node is not enough:
-    // it has to serve this drive's genesis, signed for this DID.
+    // keep the announced order when several pass. A genesis certificate that
+    // verifies against the DID already proves the origin is a node holding
+    // this drive, so no separate `/server` probe is needed.
     const ok = await Promise.all(
-      origins.map(
-        async origin =>
-          (await deps.probe(origin)) === 'node' &&
-          (await deps.verifyGenesis(origin, drive)),
-      ),
+      origins.map(origin => deps.verifyGenesis(origin, drive)),
     );
 
     return origins.find((_, i) => ok[i]);
