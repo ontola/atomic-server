@@ -1,15 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { conversations } from '@tomic/react';
+import { conversations, core } from '@tomic/react';
 import { healRefusedDrive } from './refusedDrive';
 import { setManagedDeviceToken } from './api';
 
 const DRIVE = 'did:ad:W2Q3';
+const ME = 'did:ad:agent:me';
+const OTHER = 'did:ad:agent:other';
 
 /** What `store.getResource` resolves for a drive, as far as the decision reads. */
-function resource(classes: string[] = [], error?: Error, ready = true) {
+function resource(
+  classes: string[] = [],
+  error?: Error,
+  ready = true,
+  read?: unknown,
+) {
   return {
     error,
     isReady: () => ready,
+    get: (property: string) =>
+      property === core.properties.read ? read : undefined,
     hasClasses: (...wanted: string[]) =>
       wanted.every(klass => classes.includes(klass)),
   };
@@ -18,6 +27,7 @@ function resource(classes: string[] = [], error?: Error, ready = true) {
 function setup(local = false, found: unknown = resource()) {
   return {
     getResource: vi.fn(async () => found as never),
+    getAgent: () => ({ subject: ME }) as never,
     isLocalOnlyDrive: vi.fn(() => local),
     normalizeSubject: (subject: string) =>
       subject.replace(/^did:ad:/, 'atomic:'),
@@ -152,6 +162,75 @@ describe('a drive the node refuses as not enrolled', () => {
     expect(await healRefusedDrive(store, DRIVE, lookup)).toBe(false);
     expect(store.makeDriveLocal).not.toHaveBeenCalled();
     expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it('moves a conversation with only yourself, a note to self', async () => {
+    const store = setup(
+      false,
+      resource([conversations.classes.conversation], undefined, true, [ME]),
+    );
+
+    expect(await healRefusedDrive(store, DRIVE, async () => [])).toBe(true);
+    expect(store.makeDriveLocal).toHaveBeenCalledExactlyOnceWith(DRIVE);
+  });
+
+  it('still asks what the account hosts before moving a note to self', async () => {
+    const store = setup(
+      false,
+      resource([conversations.classes.conversation], undefined, true, [ME]),
+    );
+
+    expect(
+      await healRefusedDrive(store, DRIVE, async () => [
+        { drive_subject: DRIVE, status: 'Active' },
+      ]),
+    ).toBe(false);
+    expect(store.makeDriveLocal).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['with someone else', [ME, OTHER]],
+    ['of someone else only', [OTHER]],
+    ['whose members are unreadable', undefined],
+    ['with no members', []],
+  ])('does not move a conversation %s', async (_, read) => {
+    const store = setup(
+      false,
+      resource([conversations.classes.conversation], undefined, true, read),
+    );
+    const lookup = vi.fn(async () => []);
+
+    expect(await healRefusedDrive(store, DRIVE, lookup)).toBe(false);
+    expect(store.makeDriveLocal).not.toHaveBeenCalled();
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it('does not move a note to self when nobody is signed in', async () => {
+    const store = {
+      ...setup(
+        false,
+        resource([conversations.classes.conversation], undefined, true, [ME]),
+      ),
+      getAgent: () => undefined,
+    };
+
+    expect(await healRefusedDrive(store, DRIVE, async () => [])).toBe(false);
+    expect(store.makeDriveLocal).not.toHaveBeenCalled();
+  });
+
+  it('does not move a conversation that cannot be read here, even one of yours', async () => {
+    const store = setup(
+      false,
+      resource(
+        [conversations.classes.conversation],
+        new Error('Not found'),
+        true,
+        [ME],
+      ),
+    );
+
+    expect(await healRefusedDrive(store, DRIVE, async () => [])).toBe(false);
+    expect(store.makeDriveLocal).not.toHaveBeenCalled();
   });
 
   it('moves a plain drive that is readable here', async () => {
