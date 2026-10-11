@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared by browser/lib/src/datatypes.test.ts and lib/src/loro.rs (datatype_tag, via include_str), the same pattern as authentication_v2_vectors.json. tagged = a plain string value gets the `string` datatype tag, because the untagged reader heuristic would reinterpret it as JSON or a reference. `atomic://` links are not references to that heuristic (is_atomic_identifier excludes them), so they stay untagged.",
+  "_comment": "Shared by lib/src/loro.rs (datatype_tag) and browser/lib/src/datatypes.test.ts (datatypeTag), like the other Rust/TS fixtures in lib/tests/fixtures (mounted into the Dagger lib container). tagged = a plain string value gets the `string` datatype tag, because the untagged reader heuristic would reinterpret it as JSON or a reference. `atomic://` links are not references to that heuristic (is_atomic_identifier excludes them), so they stay untagged.",
   "cases": [
     { "value": "[", "tagged": true },
     { "value": "[\"a\",\"b\"]", "tagged": true },
