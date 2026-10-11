@@ -1321,8 +1321,8 @@ impl Resource {
         &mut self,
         store: &impl Storelike,
         commit: crate::Commit,
+        agent: &crate::agents::Agent,
     ) -> AtomicResult<CommitResponse> {
-        let agent = store.get_default_agent()?;
         let opts = CommitOpts {
             validate_schema: true,
             validate_constraints: true,
@@ -1409,7 +1409,7 @@ impl Resource {
         if should_post {
             crate::client::post_commit(&commit, store).await?;
         }
-        self.apply_signed_commit(store, commit).await
+        self.apply_signed_commit(store, commit, agent).await
     }
 
     /// Saves the resource (with all the changes) to the store by creating a Commit.
@@ -1429,7 +1429,7 @@ impl Resource {
             .clone()
             .sign(&agent, store, self)
             .await?;
-        self.apply_signed_commit(store, commit).await
+        self.apply_signed_commit(store, commit, &agent).await
     }
 
     /// Saves the resource as a new DID-native resource.

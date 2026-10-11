@@ -379,3 +379,55 @@ async fn migrating_an_ai_chat_shrinks_the_store() {
     );
     assert!(after < before, "{before} -> {after}");
 }
+
+/// A server opens its store before it loads its agent. Opening a store with an
+/// old AI chat must migrate it without a default agent (node1 crashed on
+/// "No agent set" here).
+#[tokio::test]
+async fn opening_a_store_without_an_agent_migrates_ai_chats() {
+    let w = world("ai_chat_migration_open").await;
+    let chat = old_chat(&w).await;
+    let first = old_ai_message(&w, &chat, "user", "first", 0).await;
+    let second = old_ai_message(&w, &chat, "assistant", "second", 1).await;
+    set_list(&w.db, &chat, MESSAGES, &[first.clone(), second.clone()]).await;
+    // As a store from before: not marked done.
+    w.db.kv.remove(Tree::PluginMeta, AI_DONE_KEY).unwrap();
+    w.db.kv.flush().unwrap();
+    drop(w);
+
+    let path = std::path::Path::new(".temp/db/ai_chat_migration_open");
+    let uploads = std::path::Path::new(".temp/db/ai_chat_migration_open/uploads");
+    let mut reopened = None;
+    let mut last_err = String::new();
+    // The file lock can outlive the drop by a moment.
+    for _ in 0..50 {
+        match Db::init_redb_file(path, Some("https://localhost".into()), uploads).await {
+            Ok(db) => {
+                reopened = Some(db);
+                break;
+            }
+            Err(e) => {
+                last_err = e.to_string();
+                // Only the file lock is worth waiting for.
+                assert!(
+                    !last_err.contains("No agent set"),
+                    "opening needs no agent: {last_err}"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await
+            }
+        }
+    }
+    let db = reopened.unwrap_or_else(|| panic!("the store reopens: {last_err}"));
+    assert!(db.get_default_agent().is_err(), "opened without an agent");
+    assert!(!db.ai_chat_migration_pending().unwrap());
+    let found = pages_of(&db, &chat).await;
+    assert_eq!(found.iter().map(|(_, e)| e.len()).sum::<usize>(), 2);
+    assert!(!exists(&db, &first).await);
+    assert!(!exists(&db, &second).await);
+    assert!(db
+        .get_resource(&chat.as_str().into())
+        .await
+        .unwrap()
+        .get(MESSAGES)
+        .is_err());
+}
