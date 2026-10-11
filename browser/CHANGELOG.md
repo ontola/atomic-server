@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+## [v0.41.0-beta.8] - 2026-10-10
+
 - Phones: the chat view no longer scrolls sideways by a few pixels, the "more" menu no longer opens the on-screen keyboard, and the Back button closes an open dropdown menu.
 - Schemas (#2151): `ensureOntology` creates or updates an ontology with content-addressed properties, classes and class constraints, and running it twice writes nothing; `ensureSchema` is now a deprecated alias. `ontologyFromJsonSchema` and `ontologyToJsonSchema` convert JSON Schema draft 2020-12 to and from that input. New: `propertyId`, `getEffectiveConstraint`, `setClassConstraint`, `useEffectiveConstraint`, `ensureLens`, `loadLenses`, and `store.newResource({ contentAddressedProperty: true })`.
 - `ad-generate ontology push | lock | check` writes the same lockfile as `atomic-cli schema` (#2151).
