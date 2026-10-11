@@ -4,6 +4,11 @@ import { Button } from '../Button';
 import { CARD_SUB_FONT } from '../cardSurface';
 import { formatBytes } from '../../helpers/formatBytes';
 import {
+  ConfirmationDialog,
+  ConfirmationDialogTheme,
+} from '../ConfirmationDialog';
+import {
+  type CompactResult,
   freeUpVaultStorage,
   getVaultUsage,
   type VaultUsage,
@@ -21,15 +26,29 @@ export function VaultStorage({
   drivePseudonym,
   onChanged,
   onClose,
+  busy: parentBusy = false,
+  suspended = false,
+  onCompact,
 }: {
   drivePseudonym: string;
+  /** A backup, restore or other pass is running somewhere else in the row. */
+  busy?: boolean;
+  /** A suspended vault refuses new uploads, and compressing needs one. */
+  suspended?: boolean;
+  /**
+   * Take a fresh full checkpoint, then free what it replaced. Resolves to null
+   * when it failed; the host reports why.
+   */
+  onCompact?: (includeUndoWindow: boolean) => Promise<CompactResult | null>;
   /** Called after storage was freed, so the host can refresh its numbers. */
   onChanged?: () => void;
   /** Closes the panel. The row's "Manage storage" action opens it. */
   onClose: () => void;
 }) {
   const [usage, setUsage] = useState<VaultUsage | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [working, setWorking] = useState(false);
+  const busy = working || parentBusy;
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Reading can fail for reasons that are nobody's fault (the account does not
@@ -51,7 +70,7 @@ export function VaultStorage({
   }, [load]);
 
   async function free(includeUndoWindow: boolean) {
-    setBusy(true);
+    setWorking(true);
     setMessage(null);
     setError(null);
 
@@ -71,7 +90,33 @@ export function VaultStorage({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not free storage.');
     } finally {
-      setBusy(false);
+      setWorking(false);
+    }
+  }
+
+  async function compact(includeUndoWindow: boolean) {
+    if (!onCompact) return;
+
+    setWorking(true);
+    setMessage(null);
+    setError(null);
+
+    try {
+      // The host owns the busy state and the error text for this one: it runs
+      // a backup pass, which can fail for reasons only it can name.
+      const result = await onCompact(includeUndoWindow);
+
+      if (result) {
+        setMessage(
+          result.freed.bytes_reclaimed > 0
+            ? `Freed ${formatBytes(result.freed.bytes_reclaimed)}. The new snapshot uses ${formatBytes(result.checkpointBytes)}.`
+            : 'Nothing to free.',
+        );
+      }
+
+      await load();
+    } finally {
+      setWorking(false);
     }
   }
 
@@ -152,6 +197,47 @@ export function VaultStorage({
             </Block>
           )}
 
+          {onCompact && historyBytes(usage) > 0 && (
+            <Block data-testid='vault-history'>
+              <strong>Backup history</strong>
+              <span>
+                Replace the backup&apos;s chain of changes with one fresh
+                snapshot. Your workspace is not touched, and recently deleted
+                items stay recoverable.
+              </span>
+              <Button
+                data-testid='vault-compress'
+                subtle
+                onClick={() => void compact(false)}
+                disabled={busy || suspended}
+              >
+                Compress now
+              </Button>
+              {(busy || suspended) && (
+                <Muted data-testid='vault-history-disabled'>
+                  {suspended
+                    ? 'Backups are paused, so the backup cannot be compressed.'
+                    : 'Wait for the current backup to finish.'}
+                </Muted>
+              )}
+              {discardGain(usage) > 0 && (
+                <>
+                  <span>
+                    {`Or remove older backup copies and recently deleted items, about ${formatBytes(discardGain(usage))}. The backup keeps only the current state of your workspace, without its edit history. This cannot be undone.`}
+                  </span>
+                  <Button
+                    data-testid='vault-discard-history'
+                    subtle
+                    onClick={() => setConfirmDiscard(true)}
+                    disabled={busy || suspended}
+                  >
+                    Discard history
+                  </Button>
+                </>
+              )}
+            </Block>
+          )}
+
           {usage.reclaimable_bytes === 0 && usage.undo_window_bytes === 0 && (
             <Muted data-testid='vault-storage-nothing'>
               Nothing extra is stored. This is what your workspace needs.
@@ -160,10 +246,49 @@ export function VaultStorage({
         </>
       )}
       {message && <Muted data-testid='vault-storage-message'>{message}</Muted>}
+      {usage && (
+        <ConfirmationDialog
+          show={confirmDiscard}
+          bindShow={setConfirmDiscard}
+          title='Discard backup history?'
+          confirmLabel='Discard history'
+          theme={ConfirmationDialogTheme.Alert}
+          onConfirm={() => void compact(true)}
+        >
+          <p data-testid='vault-discard-warning'>
+            {`The backup will keep only its newest snapshot, and about ${formatBytes(discardGain(usage))} will be freed.`}
+          </p>
+          <p>
+            Older backup copies are removed, and so is the edit history of the
+            backup: it keeps only the current state of every item. Restoring
+            from it brings back your workspace as it is now, without its version
+            history. Items you deleted recently can no longer be recovered from
+            the backup. Your devices keep their own edit history and your
+            workspace is not changed.
+          </p>
+          <p>This cannot be undone.</p>
+        </ConfirmationDialog>
+      )}
       <Button subtle onClick={onClose} data-testid='vault-storage-hide'>
         Hide
       </Button>
     </Wrapper>
+  );
+}
+
+/** What discarding history would free: old history plus the undo window. */
+function discardGain(usage: VaultUsage): number {
+  return usage.reclaimable_bytes + usage.undo_window_bytes;
+}
+
+/** Bytes in the backup's change chain and old snapshots: what compressing can replace. */
+function historyBytes(usage: VaultUsage): number {
+  return (
+    usage.reclaimable_bytes +
+    usage.undo_window_bytes +
+    usage.by_kind
+      .filter(row => row.kind === 'pack')
+      .reduce((sum, row) => sum + row.bytes, 0)
   );
 }
 

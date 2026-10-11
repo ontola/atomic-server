@@ -1088,6 +1088,49 @@ describe('getLoroHistory', () => {
   });
 
   /**
+   * A drive restored from a "Discard history" backup holds shallow docs: the
+   * current state without the edit history before it. The History page must
+   * list what exists (here only the present) and never throw, and later edits
+   * must show up as new versions on top.
+   */
+  it('copes with a shallow doc and records later edits', async ({ expect }) => {
+    const source = new Resource('https://example.com/history-shallow');
+    await source.set(name, 'one', false);
+    source.getLoroDoc()!.commit({ message: 'a' });
+    await source.set(name, 'two', false);
+    source.getLoroDoc()!.commit({ message: 'b' });
+    const full = source.getLoroDoc()!;
+    const bytes = full.export({
+      mode: 'shallow-snapshot',
+      frontiers: full.frontiers(),
+    });
+
+    const shallow = new LoroLoader.Loro.LoroDoc();
+    shallow.import(bytes);
+    const r = new Resource('https://example.com/history-shallow');
+    vi.spyOn(r, 'getLoroDoc').mockReturnValue(shallow);
+
+    let before: ReturnType<Resource['getLoroHistory']> = [];
+    expect(() => {
+      before = r.getLoroHistory();
+    }).not.toThrow();
+    expect(before.length).toBeLessThan(full.getAllChanges().size + 3);
+
+    // A device with the full history can still send ops to the shallow doc
+    // and receive its own back.
+    shallow.getMap('properties').set(name, 'three');
+    shallow.commit({ message: 'c' });
+    full.import(shallow.export({ mode: 'update', from: full.version() }));
+    expect(full.getMap('properties').get(name)).toBe('three');
+
+    full.getMap('properties').set(name, 'four');
+    full.commit({ message: 'd' });
+    shallow.import(full.export({ mode: 'update', from: shallow.version() }));
+    expect(shallow.getMap('properties').get(name)).toBe('four');
+    expect(() => r.getLoroHistory()).not.toThrow();
+  });
+
+  /**
    * The undo control needs to know whether anything older than "now" exists,
    * and that question was answered by materializing the entire history —
    * seconds of work on canvas open for a boolean nobody may ever act on.

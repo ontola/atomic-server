@@ -60,6 +60,10 @@ export function initSentry(): void {
     // No performance tracing or session replay. Explicit feedback is sent
     // only when the user submits the sidebar form.
     tracesSampleRate: 0,
+    // One release-health session per page load. The default ('route') starts
+    // a new session on every in-app navigation, which sent two requests to the
+    // tunnel each time.
+    integrations: [Sentry.browserSessionIntegration({ lifecycle: 'page' })],
   });
 
   // Runs before the Dedupe integration and before any `beforeSend`, so it sees

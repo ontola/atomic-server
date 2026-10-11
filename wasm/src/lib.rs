@@ -16,7 +16,7 @@ use atomic_lib::{
     vault::store::{MemoryVaultStore, VaultObjectStore},
     vault::sync::{
         commit_lane_state, drive_prefix, export_vault_segment, import_vault_batch,
-        CheckpointPolicy, SegmentKind,
+        CheckpointPolicy, HistoryKeep, SegmentKind,
     },
     Db, Resource, Subject, Value,
 };
@@ -1416,6 +1416,36 @@ pub fn conversation_open(
         .collect())
 }
 
+/// Encrypts an attachment for `conversation` under a fresh random key.
+/// Returns `{ key, ciphertext }`: the base64url file key (to put inside the
+/// sealed message that references the file) and the bytes to upload.
+#[wasm_bindgen(js_name = "conversationSealFile")]
+pub fn conversation_seal_file(conversation: &str, plaintext: &[u8]) -> Result<JsValue, JsError> {
+    let (key, ciphertext) =
+        atomic_lib::conversation::seal_file(conversation, plaintext).map_err(to_js_err)?;
+    let sealed = js_sys::Object::new();
+    js_sys::Reflect::set(&sealed, &"key".into(), &JsValue::from_str(&key))
+        .map_err(|_| JsError::new("could not build the sealed file"))?;
+    js_sys::Reflect::set(
+        &sealed,
+        &"ciphertext".into(),
+        &js_sys::Uint8Array::from(ciphertext.as_slice()).into(),
+    )
+    .map_err(|_| JsError::new("could not build the sealed file"))?;
+    Ok(sealed.into())
+}
+
+/// Decrypts what `conversationSealFile` produced. Throws when the key is wrong,
+/// the bytes were altered, or the file belongs to another conversation.
+#[wasm_bindgen(js_name = "conversationOpenFile")]
+pub fn conversation_open_file(
+    conversation: &str,
+    key: &str,
+    ciphertext: &[u8],
+) -> Result<Vec<u8>, JsError> {
+    atomic_lib::conversation::open_file(conversation, key, ciphertext).map_err(to_js_err)
+}
+
 /// The proof must be a 64-byte Ed25519 signature.
 ///
 /// Not the private key: the browser's `CryptoProvider` exposes signing rather
@@ -1464,6 +1494,10 @@ impl ClientDb {
     /// segments predate the anchor; pass an empty object when it is unavailable
     /// and the anchor simply orders every segment after itself.
     ///
+    /// `current_state_only` makes a checkpoint carry each resource as a shallow
+    /// snapshot (current values, no edit history) and no signed envelopes.
+    /// It only matters when this pass is a checkpoint. Omit for the default.
+    ///
     /// The returned bytes are already encrypted: the control plane and the
     /// bucket only ever see ciphertext.
     #[wasm_bindgen(js_name = "vaultExport")]
@@ -1479,6 +1513,7 @@ impl ClientDb {
         checkpoint_n: u64,
         drive_has_checkpoint: bool,
         observed_lanes: JsValue,
+        current_state_only: Option<bool>,
     ) -> Result<JsValue, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
         let subject = Subject::from_raw(drive_subject, self.db().get_base_domain().as_deref());
@@ -1502,7 +1537,14 @@ impl ClientDb {
             checkpoint_n,
             drive_has_checkpoint,
             &observed,
-            CheckpointPolicy::default(),
+            CheckpointPolicy {
+                history: if current_state_only.unwrap_or(false) {
+                    HistoryKeep::CurrentStateOnly
+                } else {
+                    HistoryKeep::Full
+                },
+                ..CheckpointPolicy::default()
+            },
         )
         .await
         .map_err(to_js_err)?;

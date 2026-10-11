@@ -13,9 +13,30 @@ import {
   registerPerfPage,
 } from './perf-attach';
 import { installEmptyDiscoveryRoom } from './fixtures';
+import type { DiagnosticCollector } from './diagnostic-collector';
 
 /** Playwright tag for the light CI gate (`pnpm test-e2e:light` / `--grep @smoke`). */
 export const smoke = { tag: '@smoke' } as const;
+
+/**
+ * A secret signed in on a server that has none of its data makes the app ask
+ * the pkarr relay which server hosts the drive. The relay answers 404 when no
+ * record exists, which is the normal case for a throwaway identity, and the
+ * browser logs every 404 as a console error. Optional: offline or sandboxed
+ * runs never get that far. Two calls at most: the home and a derived retry.
+ */
+export function expectPkarrLookupMiss(
+  browserDiagnostics: Pick<DiagnosticCollector, 'expect'>,
+): void {
+  browserDiagnostics.expect(
+    'error',
+    /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/,
+    'The pkarr relay has no record for a drive nobody announced.',
+    2,
+    /^https:\/\/dns\.iroh\.link\/pkarr\/[a-z0-9]+$/,
+    { optional: true },
+  );
+}
 
 export const PROPERTIES = {
   isA: 'https://atomicdata.dev/properties/isA',

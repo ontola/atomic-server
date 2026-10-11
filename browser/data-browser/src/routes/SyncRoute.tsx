@@ -11,6 +11,7 @@ import {
   driveHostedByNode,
   currentDriveValue,
   hasHostedDriveConnection,
+  shouldAutoEnroll,
   type ScopedDriveValue,
   type NodeStatus,
 } from '../helpers/driveSyncStatus';
@@ -719,6 +720,11 @@ function SyncPage() {
   // `managed:false` and no portal link is shown; anything plan/billing-specific
   // lives behind the link, on the operator's portal.
   const [managedInfo, setManagedInfo] = useState<ManagedInfo>(EMPTY_NODE_INFO);
+  // Which server `managedInfo` was actually read from; `EMPTY_NODE_INFO` is
+  // also what an unanswered poll looks like.
+  const [managedInfoServer, setManagedInfoServer] = useState<string | null>(
+    null,
+  );
 
   // Cloud Vault. Assembling its prerequisites (wasm key ops, this install's
   // lane id, the signing agent) lives in the hook, which the wiped-device
@@ -962,7 +968,10 @@ function SyncPage() {
 
     const poll = () =>
       fetchManagedInfo(serverUrl).then(info => {
-        if (!cancelled) setManagedInfo(prev => sameInfo(prev, info));
+        if (cancelled) return;
+
+        setManagedInfo(prev => sameInfo(prev, info));
+        setManagedInfoServer(serverUrl);
       });
 
     void poll();
@@ -1527,10 +1536,12 @@ function SyncPage() {
     !!managedAccount &&
     // The account's own enrollment: a member of someone else's hosted drive
     // has nothing to start.
-    (accountEnrolled === true ||
-      (accountEnrolled === false &&
-        planActive &&
-        subscriptionSource === 'stripe'));
+    shouldAutoEnroll({
+      accountEnrolled,
+      nodeInfoLoaded: managedInfoServer === status.serverUrl,
+      currentServerManaged: managedInfo.managed,
+      paidPlanActive: planActive && subscriptionSource === 'stripe',
+    });
   /**
    * The one case that still asks: a plan that was not bought, such as Cloud
    * Server added by hand by an operator. Hosting stores the drive readable on

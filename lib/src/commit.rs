@@ -1789,9 +1789,25 @@ impl CommitBuilder {
         // Skip when `set`/`remove` are pending — sign_at must merge those onto
         // `existing_loro_snapshot`. Exporting the live doc here would freeze a
         // stale snapshot and ignore commitbuilder.set (e.g. gallery folderId).
+        //
+        // The delta base is derived from the resource's *persisted* state
+        // (`loroUpdate` propval), not the live doc: the live doc already holds
+        // this commit's pending edits, so its own version would yield an empty
+        // delta. See `AtomicLoroDoc::tokened_base_vv` for why not its full vv.
+        let persisted_base: Option<Vec<u8>> = match resource.get(urls::LORO_UPDATE) {
+            Ok(Value::LoroDoc(snapshot)) if !snapshot.is_empty() => Some(snapshot.clone()),
+            _ => None,
+        };
+        let base_vv = persisted_base
+            .as_deref()
+            .and_then(|s| crate::loro::AtomicLoroDoc::from_snapshot(s).ok())
+            .and_then(|d| d.tokened_base_vv());
         if self.loro_update.is_none() && self.set.is_empty() && self.remove.is_empty() {
-            if let Some(snapshot) = resource.export_open_state() {
-                self.loro_update = Some(snapshot);
+            let delta = base_vv
+                .as_ref()
+                .and_then(|vv| resource.export_open_delta(vv));
+            if let Some(update) = delta.or_else(|| resource.export_open_state()) {
+                self.loro_update = Some(update);
             }
         }
 
@@ -1816,7 +1832,15 @@ impl CommitBuilder {
                 });
 
         let now = crate::utils::now();
-        sign_at(self, agent, now, store, existing_snapshot.as_deref()).await
+        sign_at(
+            self,
+            agent,
+            now,
+            store,
+            existing_snapshot.as_deref(),
+            base_vv,
+        )
+        .await
     }
 
     /// Set a property value. On sign, this gets converted to a Loro update.
@@ -1863,9 +1887,12 @@ impl CommitBuilder {
 
 /// Signs a CommitBuilder at a specific unix timestamp.
 /// `existing_loro_snapshot` is the resource's current Loro state, if any.
-/// When provided, the set/remove operations are applied on top of it and
-/// an incremental update is exported. Without it, a full snapshot is created
-/// (appropriate for genesis commits or when no prior state exists).
+/// When provided, the set/remove operations are applied on top of it.
+/// `base_vv` is what the receiver is
+/// assumed to hold (`AtomicLoroDoc::tokened_base_vv` of the persisted state;
+/// `existing_loro_snapshot` may extend that with pending live edits): when
+/// given, the signed payload is the delta since it. Without it, a full snapshot
+/// is created (appropriate for genesis commits or when no prior state exists).
 #[tracing::instrument(skip_all)]
 async fn sign_at(
     commitbuilder: CommitBuilder,
@@ -1873,6 +1900,7 @@ async fn sign_at(
     sign_date: i64,
     store: &impl Storelike,
     existing_loro_snapshot: Option<&[u8]>,
+    base_vv: Option<::loro::VersionVector>,
 ) -> AtomicResult<Commit> {
     // Build the Loro payload: merge set/remove onto existing state when present.
     // If both `loro_update` and set/remove are set, apply set/remove on top of the
@@ -1904,7 +1932,13 @@ async fn sign_at(
             crate::utils::now(),
             crate::utils::random_string(6)
         ));
-        Some(doc.export_snapshot())
+        match base_vv {
+            // Existing state: ship only what this commit added, so the
+            // envelope does not grow with the document.
+            Some(vv) => Some(doc.export_updates_since(&vv)),
+            // Genesis / no prior state: the snapshot is the whole history.
+            None => Some(doc.export_snapshot()),
+        }
     } else {
         commitbuilder.loro_update
     };
@@ -2113,7 +2147,7 @@ mod test {
         let property2 = crate::urls::SHORTNAME;
         let value2 = Value::new("someval", &DataType::String).unwrap();
         commitbuilder.set(property2.into(), value2);
-        let commit = sign_at(commitbuilder, &agent, 0, &store, None)
+        let commit = sign_at(commitbuilder, &agent, 0, &store, None, None)
             .await
             .unwrap();
         let serialized = commit

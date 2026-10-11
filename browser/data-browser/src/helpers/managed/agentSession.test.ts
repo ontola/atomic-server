@@ -16,7 +16,10 @@ import { readManagedAccountBinding } from './binding';
 import { canHoldProviderCookie } from './deviceLink';
 import { readCachedBackups } from './recovery';
 
-vi.mock('./session', () => ({ getManagedAccount: vi.fn() }));
+vi.mock('./session', () => ({
+  getManagedAccount: vi.fn(),
+  noteManagedSessionChanged: vi.fn(),
+}));
 vi.mock('./api', () => ({
   getManagedApiBase: vi.fn(),
   getManagedDeviceToken: vi.fn(),
