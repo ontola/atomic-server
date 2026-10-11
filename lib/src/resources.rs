@@ -593,6 +593,11 @@ impl Resource {
         None
     }
 
+    /// The open doc's changes since `base`, if a doc is open.
+    pub(crate) fn export_open_delta(&self, base: &::loro::VersionVector) -> Option<Vec<u8>> {
+        self.loro.as_ref().map(|doc| doc.export_updates_since(base))
+    }
+
     pub(crate) fn export_open_state(&self) -> Option<Vec<u8>> {
         self.loro.as_ref().map(|doc| doc.export_snapshot())
     }
@@ -1297,7 +1302,11 @@ impl Resource {
         };
         let update = if let Some(ref snapshot) = base {
             let base_doc = crate::loro::AtomicLoroDoc::from_snapshot(snapshot)?;
-            doc.export_updates_since(&base_doc.oplog_vv())
+            doc.export_updates_since(
+                &base_doc
+                    .tokened_base_vv()
+                    .unwrap_or_else(|| base_doc.oplog_vv()),
+            )
         } else {
             doc.export_snapshot()
         };

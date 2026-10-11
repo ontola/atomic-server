@@ -2385,7 +2385,16 @@ export class Resource<C extends OptionalClass = any> {
     // where containers tracked in the plugin's mapping may not yet have a
     // `children` field, crashing in `absolutePositionToCursor`. The fork has
     // its own state and no subscribers, so checkouts here are isolated.
-    const doc = liveDoc.fork();
+    // A doc restored from a "Discard history" backup is shallow: its edit
+    // history before the restore is gone, so there is little to list and
+    // forking it can be refused. Show what we can rather than throwing.
+    let doc: LoroDoc;
+
+    try {
+      doc = liveDoc.fork();
+    } catch {
+      return [];
+    }
 
     // Loro merges sequential same-peer ops into a single Change whose
     // `length` is the operation count. Iterating only over Changes therefore

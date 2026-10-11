@@ -24,11 +24,17 @@ import { server as serverOnt } from '../src/ontologies/server.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const wasmPath = path.resolve(here, '../../../wasm/pkg/atomic_wasm_bg.wasm');
 
+/** Every store the tests opened, closed in `afterAll`: a store left connected
+ * logs "Server disconnected" (and its outbox retries) after the server stops,
+ * and a log that lands in the worker's teardown fails the run. */
+const openStores: Store[] = [];
+
 async function storeFor(url: string, agent: Agent): Promise<Store> {
   const clientDb = new NodeClientDb({ wasmPath, baseUrl: url });
   await clientDb.init();
   const store = new Store({ serverUrl: url, agent });
   store.setClientDb(clientDb as unknown as ClientDbWorker);
+  openStores.push(store);
   await delay(500);
 
   return store;
@@ -50,6 +56,12 @@ describe('agent profile across servers', () => {
   }, 180_000);
 
   afterAll(async () => {
+    for (const store of openStores) {
+      store.disconnect();
+      store.setServerConnected(false);
+    }
+
+    await delay(500);
     await a?.stop();
     await b?.stop();
   });

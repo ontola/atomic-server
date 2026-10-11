@@ -11271,6 +11271,7 @@ msgid "Freed {0}."
 msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
+#: src/components/Vault/VaultStorage.tsx
 msgid "Nothing to free."
 msgstr ""
 
@@ -12768,6 +12769,117 @@ msgstr ""
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "Chat messages are being packed into compact logs. This is needed once after an update and can take a while for a big chat. Keep this tab open."
 msgstr ""
+
+#. 0: formatBytes(result.freed.bytes_reclaimed); 1: formatBytes(result.checkpointBytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freed {0}. The new snapshot uses {1}."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Backups are paused, so the backup cannot be compressed."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Wait for the current backup to finish."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+#: src/components/Vault/VaultStorage.tsx
+msgid "Discard history"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Backup history"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Replace the backup's chain of changes with one fresh snapshot. Your workspace is not touched, and recently deleted items stay recoverable."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Compress now"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "This cannot be undone."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Discard backup history?"
+msgstr ""
+
+#. 0: formatBytes(discardGain(usage))
+#: src/components/Vault/VaultStorage.tsx
+msgid "The backup will keep only its newest snapshot, and about {0} will be freed."
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backup saved to this device."
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Nothing is backed up yet."
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Download backup"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restore from file"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backup file"
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This is not an Atomic vault backup file. Pick a file ending in .atomic-vault."
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "Atomic vault backup"
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file is incomplete. Download it again."
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "The header of this backup file is damaged."
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file was made by a newer version of the app. Update the app to restore it."
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file has extra data at the end and cannot be trusted."
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file is damaged: an object does not match its checksum."
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file is from a different workspace than the one you are restoring."
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "This backup file was sealed under a different encryption key than this workspace uses now, so it cannot be opened."
+msgstr ""
+
+#: src/helpers/managed/vaultFile.ts
+msgid "The list of objects and their contents do not match."
+msgstr ""
+
+#. 0: formatBytes(discardGain(usage))
+#: src/components/Vault/VaultStorage.tsx
+msgid "Or remove older backup copies and recently deleted items, about {0}. The backup keeps only the current state of your workspace, without its edit history. This cannot be undone."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 
 #: src/components/ConnectDevice.tsx
 msgid "Could not reach that address."

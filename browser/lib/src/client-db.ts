@@ -1277,6 +1277,7 @@ export class ClientDbWorker {
     checkpointN: number,
     driveHasCheckpoint: boolean,
     observedLanes: Record<string, number>,
+    currentStateOnly = false,
   ): Promise<{
     objectKey: string;
     sealed: Uint8Array;
@@ -1297,6 +1298,7 @@ export class ClientDbWorker {
       checkpointN,
       driveHasCheckpoint,
       observedLanes,
+      currentStateOnly,
     });
 
     return (r ?? null) as {

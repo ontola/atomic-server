@@ -572,3 +572,22 @@ mod tests {
         assert_eq!(bootstrap(&store).await.unwrap(), BootstrapOutcome::UpToDate);
     }
 }
+
+#[cfg(all(test, feature = "db"))]
+mod bundled_demo_speaker_tests {
+    use crate::Storelike;
+
+    /// The guest demo stamps messages with this property. It must resolve from
+    /// the bundled defaults: a miss is an HTTP fetch of atomicdata.dev.
+    #[tokio::test]
+    async fn demo_speaker_is_bundled() {
+        let store = crate::Db::init_temp("bundled_demo_speaker").await.unwrap();
+        let property = store
+            .get_property("https://atomicdata.dev/properties/demo/speaker")
+            .await
+            .unwrap();
+
+        assert_eq!(property.shortname, "demo-speaker");
+        assert_eq!(property.data_type, crate::datatype::DataType::String);
+    }
+}
