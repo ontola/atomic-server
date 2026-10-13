@@ -83,6 +83,7 @@ export {
   lockfileFromEnsured,
   lockfileFromInput,
   parseLockfile,
+  schemaFingerprint,
   serializeLockfile,
   type Lockfile,
 } from './schema-lockfile.js';
