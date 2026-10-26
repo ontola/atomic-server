@@ -13219,6 +13219,7 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Not hosted yet"
+msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Move..."
@@ -13251,4 +13252,17 @@ msgstr ""
 
 #: src/helpers/moveResource.ts
 msgid "Moving to another drive is not supported yet."
+msgstr ""
+
+#: src/components/SyncProblemBanner.tsx
+msgid "Open in the app"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "You opened a server, not the app"
+msgstr ""
+
+#. 0: serverLabel(window.location.origin)
+#: src/routes/SyncRoute.tsx
+msgid "{0} is a server. Your atomic.place sign-in does not reach it, so Cloud Vault and sign-in cannot work here. Open the app to continue with this server."
 msgstr ""

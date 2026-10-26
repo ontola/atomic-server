@@ -6,7 +6,8 @@ export type SyncProblemAction =
   | 'try-again'
   | 'connect-device'
   | 'review-sync'
-  | 'storage';
+  | 'storage'
+  | 'open-app';
 
 /**
  * Something that stops this drive from syncing, in words for the person.

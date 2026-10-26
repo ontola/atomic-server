@@ -34,12 +34,15 @@ export function SyncProblemBanner({
   notified,
   retrying,
   onTryAgain,
+  openAppUrl,
 }: {
   problem: SyncProblem;
   /** Error reporting is on, so "we have been notified" is true. */
   notified: boolean;
   retrying: boolean;
   onTryAgain: () => void;
+  /** For the `open-app` action: the shared app this page should have been on. */
+  openAppUrl?: string;
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -102,6 +105,16 @@ export function SyncProblemBanner({
                   return (
                     <Button key={action} subtle onClick={reviewSync}>
                       Turn off server sync
+                    </Button>
+                  );
+                case 'open-app':
+                  return (
+                    <Button
+                      key={action}
+                      data-testid='sync-problem-open-app'
+                      onClick={() => window.location.assign(openAppUrl ?? '/')}
+                    >
+                      Open in the app
                     </Button>
                   );
                 case 'storage':

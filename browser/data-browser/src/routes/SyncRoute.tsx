@@ -81,7 +81,8 @@ import {
 } from '../components/Cloud/ServiceRow';
 import { CloudServerDetails } from '../components/Cloud/CloudServerDetails';
 import { SyncProblemBanner } from '../components/SyncProblemBanner';
-import { describeSyncProblem } from '../helpers/syncProblem';
+import { describeSyncProblem, type SyncProblem } from '../helpers/syncProblem';
+import { sharedAppUrl } from '../helpers/managed/sharedApp';
 import { isErrorReportingEnabled, reportSyncProblem } from '../helpers/sentry';
 import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
 import { isDeviceLinked } from '../helpers/managed/deviceLink';
@@ -1915,9 +1916,24 @@ function SyncPage() {
     serverName: serverLabel(status.serverUrl ?? ''),
     driveOf: (subject: string) => store.driveOfSubject(subject),
   };
-  const syncProblem = localOnlyDrive
-    ? null
-    : describeSyncProblem(syncProblemInput);
+  // Opened on a managed node's own address: the portal cannot be reached from
+  // here, which no sync status explains. Outranks them, as it is the cause.
+  const sharedApp =
+    !isRunningInTauri() && managedInfo.managed
+      ? sharedAppUrl(window.location, managedInfo.portalUrl)
+      : undefined;
+  const syncProblem = sharedApp
+    ? ({
+        key: 'wrong-origin',
+        cause: 'you',
+        title: 'You opened a server, not the app',
+        body: `${serverLabel(window.location.origin)} is a server. Your atomic.place sign-in does not reach it, so Cloud Vault and sign-in cannot work here. Open the app to continue with this server.`,
+        actions: ['open-app'],
+        reported: true,
+      } satisfies SyncProblem)
+    : localOnlyDrive
+      ? null
+      : describeSyncProblem(syncProblemInput);
   const syncProblemKey = syncProblem?.key;
   const syncProblemOurs = syncProblem?.cause === 'ours';
   const syncProblemReported = syncProblem?.reported ?? true;
@@ -1999,6 +2015,7 @@ function SyncPage() {
             notified={isErrorReportingEnabled()}
             retrying={syncRetrying}
             onTryAgain={() => void tryAgainSync()}
+            openAppUrl={sharedApp}
           />
         )}
         {/* Everything our paid services own, in one card.
