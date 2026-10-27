@@ -15,6 +15,8 @@ import 'assistant_api.dart';
 import 'conversation_screen.dart';
 import 'embed_server.dart';
 import 'follow_controller.dart';
+import 'live_meeting_banner.dart';
+import 'meeting_lead.dart';
 import 'models.dart';
 import 'native_views.dart';
 import 'page_swipe.dart';
@@ -140,6 +142,10 @@ class _ResourceViewState extends State<ResourceView>
   PresenceWatch? _watch;
   late final FollowController _follow;
 
+  /// The meeting this device leads (the app's, see [MeetingLead]); announced
+  /// as the entry's `session` and pushed into the page as its active meeting.
+  late final MeetingLead _lead;
+
   /// What the web page owns of this device's presence entry (`presence` from
   /// the page): the cursor of its view, the thread being typed in, the
   /// meeting it leads. Merged into every announcement; the app keeps
@@ -152,6 +158,7 @@ class _ResourceViewState extends State<ResourceView>
   /// read does not wake it.
   String? _pushedPresence;
   String? _pushedFollow;
+  String? _pushedMeeting;
 
   /// The avatar sheet is open: it covers this page without leaving it.
   bool _sheetOpen = false;
@@ -201,6 +208,8 @@ class _ResourceViewState extends State<ResourceView>
     WidgetsBinding.instance.addObserver(this);
     _follow = ShellScope.maybeOf(context)?.follow ?? FollowController();
     _follow.addListener(_followChanged);
+    _lead = ShellScope.maybeOf(context)?.lead ?? MeetingLead();
+    _lead.addListener(_leadChanged);
     AppSidebarIcons.show.addListener(_tellSidebarIcons);
     _changes = widget.api.resourceChanges?.listen(_tellChanged);
     widget.api.storeChanges?.addListener(_storeChanged);
@@ -519,6 +528,7 @@ class _ResourceViewState extends State<ResourceView>
       ..addListener(_watchChanged);
     watch.start();
     _announce();
+    _trail();
     _pushPresence(force: true);
     setState(() {});
   }
@@ -528,7 +538,7 @@ class _ResourceViewState extends State<ResourceView>
         .announcePresence(widget.drive,
             resource: widget.subject,
             following: _follow.agent,
-            session: _pageSession,
+            session: _lead.meetingIn(widget.drive) ?? _pageSession,
             extra: {
               if (_pageData != null) 'data': _pageData,
               if (_pageTyping != null) 'typing': _pageTyping,
@@ -560,6 +570,64 @@ class _ResourceViewState extends State<ResourceView>
           .catchError((Object _) {}));
     }
     _pushFollow(force: force);
+    _pushMeeting(force: force);
+  }
+
+  /// Tells the page which meeting this device leads on its drive (null:
+  /// none), so its Start / End buttons and `activeMeeting` follow the app.
+  void _pushMeeting({bool force = false}) {
+    final page = _page;
+    if (page == null || _announcer != this || _menuOnly) return;
+    final meeting = jsonEncode(_lead.meetingIn(widget.drive));
+    if (!force && meeting == _pushedMeeting) return;
+    _pushedMeeting = meeting;
+    unawaited(page
+        .runJavaScript('window.atomicEmbed?.setMeeting($meeting)')
+        .catchError((Object _) {}));
+  }
+
+  /// The meeting changed (started, ended, or read back after a restart): the
+  /// entry says so, the page hears it, and the page shown is trailed.
+  void _leadChanged() {
+    if (_lead.meetingIn(widget.drive) == null) _pageSession = null;
+    if (_announcer == this) {
+      _announce();
+      _trail();
+    }
+    _pushMeeting();
+    if (mounted) setState(() {});
+  }
+
+  /// While this device leads a meeting, the page now shown goes in the
+  /// meeting's chat as a "Viewing [title](subject)" line, once per resource
+  /// per meeting (the web's `postTrailMessage`). The page does not post it
+  /// when embedded: the app does.
+  void _trail() {
+    final meeting = _lead.meetingIn(widget.drive);
+    if (meeting == null || _announcer != this || !_announces) return;
+    if (!_lead.markTrailed(widget.subject)) return;
+    final title = widget.title.trim().isEmpty ? widget.subject : widget.title;
+    widget.api
+        .sendChatRoomMessage(meeting, 'Viewing [$title](${widget.subject})')
+        .catchError((Object e) => debugPrint('[meeting] trail not posted: $e'));
+  }
+
+  /// Join on the live meeting strip: follow the leader and open the meeting.
+  /// Following goes on from there (the leader's page replaces it).
+  void _joinLive(LiveMeeting live) {
+    _follow.follow(live.leader.agent, session: live.leader.sessionId);
+    if (live.meeting == widget.subject) {
+      _leaderMoved();
+      return;
+    }
+    _replacing = true;
+    widget.api.noteOpened(widget.drive, live.meeting);
+    final split = ShellScope.maybeOf(context)?.split ?? false;
+    unawaited(Navigator.of(context).pushReplacement(SlideBackRoute<void>(
+      instant: split,
+      builder: (_) => openResourceView(
+          api: widget.api, drive: widget.drive, subject: live.meeting),
+    )));
   }
 
   void _pushFollow({bool force = false}) {
@@ -611,7 +679,8 @@ class _ResourceViewState extends State<ResourceView>
     final drive = widget.drive;
     (background
             ? widget.api.clearPresence(drive)
-            : widget.api.announcePresence(drive, following: _follow.agent))
+            : widget.api.announcePresence(drive,
+                following: _follow.agent, session: _lead.meetingIn(drive)))
         .catchError((Object e) => debugPrint('[presence] not cleared: $e'));
   }
 
@@ -735,6 +804,7 @@ class _ResourceViewState extends State<ResourceView>
     _hidePresence();
     _watch?.dispose();
     _follow.removeListener(_followChanged);
+    _lead.removeListener(_leadChanged);
     // Left by hand (a swipe back, the system back), not replaced by follow.
     // (After the tree is torn down: other pages listen to it.)
     if (!_replacing) scheduleMicrotask(_follow.stop);
@@ -880,6 +950,26 @@ class _ResourceViewState extends State<ResourceView>
     }
     if (method == 'joinCall') {
       await _answerJoinCall(id, request['args']);
+      return;
+    }
+    if (method == 'meetingStarted' || method == 'meetingEnded') {
+      // The page started or ended a meeting (its resources are written): the
+      // app owns that this device leads it, so it survives this page.
+      final args = request['args'];
+      final meeting = args is List && args.isNotEmpty && args.first is String
+          ? args.first as String
+          : '';
+      if (meeting.isNotEmpty) {
+        if (method == 'meetingStarted') {
+          _lead.start(widget.drive, meeting);
+        } else {
+          _lead.end(meeting);
+        }
+      }
+      try {
+        await _page?.runJavaScript(
+            'window.__atomicReply($id,true,${jsonEncode('true')})');
+      } catch (_) {}
       return;
     }
     if (method == 'presence' || method == 'follow' || method == 'unfollow') {
@@ -1122,58 +1212,72 @@ class _ResourceViewState extends State<ResourceView>
             bottom: false,
             child: _error != null
                 ? Center(child: ErrorText('$_error', color: c.alert))
-                : Stack(children: [
-                    if (page != null && _inTree) page.build(),
-                    if (!_skeletonGone)
-                      Positioned.fill(
-                        // The page's header is the page's own: once it is
-                        // painted, only what is under it stays covered.
-                        top: _headerShown ? kEmbedNavBarHeight : 0,
-                        child: AnimatedOpacity(
-                          opacity: _revealed ? 0 : 1,
-                          duration: ResourceView.revealFade,
-                          onEnd: () {
-                            if (_revealed && mounted) {
-                              setState(() => _skeletonGone = true);
-                            }
-                          },
-                          child: const ResourceSkeleton(),
-                        ),
-                      ),
-                    // Next to the list the bar has no room for the resource's
-                    // menu: it sits in the pane's top right corner.
-                    if (widget.path == null &&
-                        ShellScope.maybeOf(context) != null &&
-                        ShellScope.layoutOf(context) == ShellLayout.split)
-                      Positioned(
-                        top: 0,
-                        right: kEmbedNavBarTrailingInset,
-                        child: const ResourceMoreButton(),
-                      ),
-                    // Who else has this resource open, in the page's top right
-                    // corner (before the more button where the pane has it).
+                : Column(children: [
+                    // A meeting is happening in this drive and this device is
+                    // not in it: one tap to join.
                     if (_watch != null && _announces)
-                      Positioned(
-                        top: 0,
-                        right: kEmbedNavBarTrailingInset +
-                            (ShellScope.maybeOf(context) != null &&
-                                    ShellScope.layoutOf(context) ==
-                                        ShellLayout.split
-                                ? kEmbedNavBarHeight
-                                : 8),
-                        height: kEmbedNavBarHeight,
-                        child: Center(
-                          child: PresenceFacepile(
-                              watch: _watch!,
-                              follow: _follow,
-                              subject: widget.subject,
-                              onTap: _avatarTapped),
+                      LiveMeetingBanner(
+                          api: widget.api,
+                          drive: widget.drive,
+                          watch: _watch,
+                          lead: _lead,
+                          follow: _follow,
+                          hideWhenJoinedOn: widget.subject,
+                          onJoin: _joinLive),
+                    Expanded(
+                        child: Stack(children: [
+                        if (page != null && _inTree) page.build(),
+                        if (!_skeletonGone)
+                          Positioned.fill(
+                            // The page's header is the page's own: once it is
+                            // painted, only what is under it stays covered.
+                            top: _headerShown ? kEmbedNavBarHeight : 0,
+                            child: AnimatedOpacity(
+                              opacity: _revealed ? 0 : 1,
+                              duration: ResourceView.revealFade,
+                              onEnd: () {
+                                if (_revealed && mounted) {
+                                  setState(() => _skeletonGone = true);
+                                }
+                              },
+                              child: const ResourceSkeleton(),
+                            ),
+                          ),
+                        // Next to the list the bar has no room for the resource's
+                        // menu: it sits in the pane's top right corner.
+                        if (widget.path == null &&
+                            ShellScope.maybeOf(context) != null &&
+                            ShellScope.layoutOf(context) == ShellLayout.split)
+                          Positioned(
+                            top: 0,
+                            right: kEmbedNavBarTrailingInset,
+                            child: const ResourceMoreButton(),
+                          ),
+                        // Who else has this resource open, in the page's top right
+                        // corner (before the more button where the pane has it).
+                        if (_watch != null && _announces)
+                          Positioned(
+                            top: 0,
+                            right: kEmbedNavBarTrailingInset +
+                                (ShellScope.maybeOf(context) != null &&
+                                        ShellScope.layoutOf(context) ==
+                                            ShellLayout.split
+                                    ? kEmbedNavBarHeight
+                                    : 8),
+                            height: kEmbedNavBarHeight,
+                            child: Center(
+                              child: PresenceFacepile(
+                                  watch: _watch!,
+                                  follow: _follow,
+                                  subject: widget.subject,
+                                  onTap: _avatarTapped),
+                            ),
+                          ),
+                        // The swipe back over the web view, which takes the touches.
+                        Positioned.fill(
+                          child: PageSwipe(blocked: () => _horizontal),
                         ),
-                      ),
-                    // The swipe back over the web view, which takes the touches.
-                    Positioned.fill(
-                      child: PageSwipe(blocked: () => _horizontal),
-                    ),
+                        ])),
                   ]),
           ),
         ));

@@ -1,11 +1,12 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
-import { useCurrentAgent, useDrivePresence, useResource } from '@tomic/react';
+import { lazy, Suspense, useState } from 'react';
+import { useResource } from '@tomic/react';
 import { styled } from 'styled-components';
 import { FaNoteSticky, FaVideo } from 'react-icons/fa6';
 import { RightPanel } from '../RightPanel/RightPanel';
 import { useContextualPanel } from '../RightPanel/useContextualPanel';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useFollow } from './FollowContext';
+import { useMeetingParticipants } from './useMeetingParticipants';
 import { PresenceAvatarMenu } from './PresenceAvatarMenu';
 import { ChatRoomView } from '../../views/ChatRoom/ChatRoomView';
 import { EditableTitle } from '../EditableTitle';
@@ -60,11 +61,10 @@ export function FollowSessionChat({
   trailing?: React.ReactNode;
 }) {
   const chatroom = useResource(subject);
-  const { followedAgent, follow, unfollow, activeMeeting, endMeeting } =
-    useFollow();
+  const { followedAgent, follow, unfollow, endMeeting } = useFollow();
   const { setPanelOpen } = useRightPanel();
-  const presence = useDrivePresence();
-  const [agent] = useCurrentAgent();
+  const { participants, leaderAgent, leading } =
+    useMeetingParticipants(subject);
   const [ending, setEnding] = useState(false);
   const [inCall, setInCall] = useState(false);
   // The app answered false to a call: the button is no use here.
@@ -72,35 +72,7 @@ export function FollowSessionChat({
 
   // The panel header's action: the leader ends the meeting; a joined
   // attendee leaves it.
-  const leading = activeMeeting === subject;
   const label = leading ? 'End' : 'Leave';
-
-  // Who else is in the meeting: the leader (whoever announces this
-  // meeting as their `session`) plus everyone following that leader,
-  // plus me when I'm taking part.
-  const leaderAgent = leading
-    ? agent?.subject
-    : presence.find(item => item.session === subject)?.agent;
-
-  const participants = useMemo(() => {
-    const set = new Set<string>();
-
-    if (leaderAgent) set.add(leaderAgent);
-
-    for (const item of presence) {
-      if (item.session === subject) set.add(item.agent);
-      if (leaderAgent && item.following === leaderAgent) set.add(item.agent);
-    }
-
-    if (
-      agent?.subject &&
-      (leading || (!!leaderAgent && followedAgent === leaderAgent))
-    ) {
-      set.add(agent.subject);
-    }
-
-    return [...set];
-  }, [presence, subject, leaderAgent, agent, leading, followedAgent]);
 
   async function handleAction() {
     if (leading) {

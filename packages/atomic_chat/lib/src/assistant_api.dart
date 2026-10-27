@@ -265,6 +265,10 @@ abstract class AssistantApi {
       String? session,
       Map<String, Object?>? extra}) async {}
 
+  /// The meetings listed on [drive] as live (its `currentMeetings`); null when
+  /// the host cannot tell, and an announced meeting then counts on its own.
+  Future<Set<String>?> currentMeetings(String drive) async => null;
+
   /// Takes this device's entry off [drive]'s presence channel (the app went
   /// to the background).
   Future<void> clearPresence(String drive) async {}

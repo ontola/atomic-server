@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'covered_insets_freeze.dart';
 import 'follow_controller.dart';
+import 'meeting_lead.dart';
 import 'app_bottom_bar.dart';
 import 'models.dart';
 import 'assistant_api.dart';
@@ -245,6 +246,9 @@ class ShellController extends ChangeNotifier {
 
   /// Whom the app follows (see [FollowController]).
   final follow = FollowController();
+
+  /// The meeting this device leads, if any (see [MeetingLead]).
+  final lead = MeetingLead();
 
   /// Opens the user's page; the home sets it (it handles sign-out). Without
   /// one the bar opens [profile].
@@ -549,6 +553,7 @@ class ShellController extends ChangeNotifier {
     _disposed = true;
     _settling?.cancel();
     _identityTimer?.cancel();
+    lead.dispose();
     drive.dispose();
     identity.dispose();
     list.dispose();
@@ -757,6 +762,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           ..warmUp();
     _shell.call = _call;
     _shell.loadListPrefs();
+    _shell.lead.load();
     warmDriveVisits();
     _shell.identityLoader = widget.api.ownIdentity;
     _shell.refreshIdentity();

@@ -126,6 +126,20 @@ export function hostUnfollow(): void {
   host?.call('unfollow', []).catch(() => undefined);
 }
 
+/**
+ * Tells the app this device started leading `meeting` (the page wrote the
+ * resources). The app keeps the lead, announces it as the presence `session`,
+ * posts the "Viewing" trail and pushes it back in with `atomicEmbed.setMeeting`.
+ */
+export function hostMeetingStarted(meeting: string): void {
+  host?.call('meetingStarted', [meeting]).catch(() => undefined);
+}
+
+/** Tells the app the meeting this device led has ended. */
+export function hostMeetingEnded(meeting: string): void {
+  host?.call('meetingEnded', [meeting]).catch(() => undefined);
+}
+
 /** Whether the page runs in an app that can answer its calls (not the
  *  desktop mock, not a plain browser). */
 export function hasActionsHost(): boolean {

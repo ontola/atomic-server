@@ -223,10 +223,62 @@ nothing appeared. Decision:
   overlay drawn inside it.
 - **Back**: the overlay registers in `src/embed/overlayBack.ts`;
   `atomicEmbed.back()` closes the topmost overlay first and returns true.
-- **Start meeting**: hidden in the embed (`showMeetingStart` in
-  `src/embed/settings.ts`). It starts a presence session over the server
-  connection (the embed has none), which the page does not have. "End
-  meeting" only shows for a meeting started on the page, so it follows.
+- **Start / End meeting**: shown in the embed, and the app leads (see
+  "Leading a meeting" below). The page still writes the resources
+  (`meetingStartedAt`, `meetingLeader`, the drive's `currentMeetings`, the
+  "Started" / "ended" chat lines: commit transport, works in the embed), then
+  tells the app with the host calls `meetingStarted(subject)` /
+  `meetingEnded(subject)` (`hostMeetingStarted` / `hostMeetingEnded` in
+  `hostActions.ts`).
+
+### Leading a meeting
+
+"I'm leading meeting X on drive D" is the app's, not a page's: a page is
+replaced when following and recycled in the warm pool, and the web's
+`sessionStorage` copy went with it.
+
+- **`MeetingLead`** (`packages/atomic_chat/lib/src/meeting_lead.dart`, one per
+  shell: `ShellController.lead`): drive + meeting, saved in SharedPreferences
+  (`meetingLead`) so it survives page recycling and restarts, loaded by the
+  shell. It also remembers which resources the trail already holds (`markTrailed`,
+  once per resource per meeting; the meeting page itself counts as done at
+  start, so the "Started the meeting." line stays first).
+- **Announce**: `ResourceView._announce` sends `session: X` for the drive the
+  meeting belongs to (a meeting led on another drive is not announced here);
+  the page's own `session` relay is only a fallback and is cleared when the
+  lead ends. A page hidden for another keeps announcing it.
+- **Page**: `atomicEmbed.setMeeting(subject|null)` (pushed with presence and
+  follow, only the meeting of the page's drive) feeds `useHostMeeting`
+  (`presenceBridge.ts`); in the embed `FollowContext.activeMeeting` is that
+  value, not `sessionStorage`. `startMeeting` / `endMeeting` set it at once
+  and tell the app; the app pushes the same value back.
+- **Trail**: while leading, the app posts `Viewing [title](subject)` in the
+  meeting's chat when the leader's page changes (`ResourceView._trail`), once
+  per resource per meeting. It uses `AssistantApi.sendChatRoomMessage`; the
+  page still skips it when embedded. **Rust, unverified**:
+  `host::chat_rooms::send_message` marks a text of the form
+  `Viewing [title](subject)` as a `FollowEvent` entry (as the web writes it),
+  so it reads back as an event line; test
+  `a_sent_trail_line_is_a_follow_event`. It was not compiled in the session
+  that wrote it (no cargo build, disk).
+- **Live strip**: `LiveMeetingBanner` (`live_meeting_banner.dart`), "Live
+  meeting - name - Join", on the home (above the drive tree) and above resource
+  pages. A meeting is live as in the web's `MeetingBanner`: listed in the
+  drive's `currentMeetings` (`AssistantApi.currentMeetings`, read through
+  `embedCall('getResource')`, null = unknown so the announcement counts alone)
+  and carried by a presence entry's `session`; the freshest wins. Not shown
+  while this device leads. Join follows the leader (that session) and opens the
+  meeting, replacing the page; following then goes where the leader is. When
+  already following, the strip says Open (and hides on the meeting page).
+- **Meeting page**: shows who is in a live meeting (`MeetingAttendees`, the
+  same participants as the chat panel: `useMeetingParticipants`).
+
+Not done: "Joined / Left the meeting." chat lines for a joiner in the embed
+(the web page writes them from `sessionStorage`), and ending a stale lead
+after a crash other than by End on the meeting page.
+
+Tests: `FollowContext.test.tsx`, `hostActions.test.ts`,
+`packages/atomic_chat/test/meeting_lead_test.dart`.
 
 ### Calls
 

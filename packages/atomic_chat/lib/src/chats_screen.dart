@@ -13,6 +13,7 @@ import 'app_sidebar_icons.dart';
 import 'app_top_bar.dart';
 import 'home_sections.dart';
 import 'home_sections_dialog.dart';
+import 'live_meeting_banner.dart';
 
 import 'models.dart';
 import 'slide_back_route.dart';
@@ -574,6 +575,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
       noteDriveVisited(drive);
     });
     if (mounted && _changesData(screen)) _reload();
+  }
+
+  /// Join on the live meeting strip: follow the leader and open the meeting.
+  void _joinLive(LiveMeeting live) {
+    final shell = _shell;
+    if (shell == null) return;
+    shell.follow.follow(live.leader.agent, session: live.leader.sessionId);
+    _visit(
+        openResourceView(
+            api: widget.api, drive: _drive, subject: live.meeting),
+        drive: _drive,
+        subject: live.meeting);
   }
 
   WidgetBuilder? get _profile => widget.profile ?? _shell?.profile;
@@ -1248,6 +1261,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           }
                         }
                         return Column(children: [
+                          if (_shell != null && _drive.isNotEmpty)
+                            LiveMeetingBanner(
+                                api: widget.api,
+                                drive: _drive,
+                                lead: _shell!.lead,
+                                follow: _shell!.follow,
+                                onJoin: _joinLive),
                           // The tree takes what the panels leave; it scrolls itself.
                           Expanded(child: _driveTree()),
                           // Bottom-anchored panels, just above the bottom bar.

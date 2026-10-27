@@ -11,7 +11,6 @@ import {
 } from '@testing-library/react';
 import { MeetingChatOverlay } from './MeetingChatOverlay';
 import { closeAllOverlays, closeTopOverlay } from './overlayBack';
-import { showMeetingStart } from './settings';
 import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../styling';
 
@@ -157,9 +156,4 @@ it('closes the panel and forgets a decline when the host opens a resource', asyn
   expect(state.closePanel).toHaveBeenCalledWith('followSession');
   // A declined chat no longer counts: the panel asks the app again.
   await vi.waitFor(() => expect(host.openNative).toHaveBeenCalledTimes(2));
-});
-
-it('hides "Start meeting" only embedded', () => {
-  expect(showMeetingStart(true)).toBe(false);
-  expect(showMeetingStart(false)).toBe(true);
 });

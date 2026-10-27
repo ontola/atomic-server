@@ -144,6 +144,37 @@ export function setHostFollow(agent: string | null | undefined): void {
   for (const listener of followListeners) listener();
 }
 
+// The meeting this device leads, as the app last said. The app owns it (a page
+// is recycled, so a page-side `sessionStorage` forgets it); the page only asks
+// to start or end one (`hostMeetingStarted` / `hostMeetingEnded`).
+let hostMeeting: string | undefined;
+const meetingListeners = new Set<() => void>();
+
+/** The app says which meeting this device leads on the page's drive (null:
+ *  none). */
+export function setHostMeeting(meeting: string | null | undefined): void {
+  const next = meeting || undefined;
+
+  if (next === hostMeeting) return;
+
+  hostMeeting = next;
+
+  for (const listener of meetingListeners) listener();
+}
+
+/** The meeting this device leads, as the app keeps it. */
+export function useHostMeeting(): string | undefined {
+  return useSyncExternalStore(
+    (callback) => {
+      meetingListeners.add(callback);
+
+      return () => meetingListeners.delete(callback);
+    },
+    () => hostMeeting,
+    () => undefined,
+  );
+}
+
 /** The agent the app is following; undefined when it follows nobody. */
 export function useHostFollow(): string | undefined {
   return useSyncExternalStore(

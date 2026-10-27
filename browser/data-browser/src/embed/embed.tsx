@@ -87,6 +87,7 @@ import {
   createPresenceBridge,
   relayLocalPresence,
   setHostFollow,
+  setHostMeeting,
 } from './presenceBridge';
 import { useNativeChatRoom } from './useNativeChatRoom';
 import { embedTouchCss } from './touchStyle';
@@ -171,6 +172,9 @@ declare global {
       presence(drive: string, items: PresenceItem[]): void;
       /** Who the app is following now (null: nobody); the app navigates. */
       setFollow(agent: string | null): void;
+      /** The meeting this device leads on the page's drive (null: none); the
+       * app keeps it. */
+      setMeeting(meeting: string | null): void;
       /** `anchor`: the app's "more" button (right edge, top), in page px. */
       openMenu(anchor?: { x: number; y: number }): void;
       /** The app's native screen asks for its "more" menu over itself: this
@@ -511,6 +515,9 @@ window.atomicEmbed = {
   },
   setFollow(agent) {
     setHostFollow(agent);
+  },
+  setMeeting(meeting) {
+    setHostMeeting(meeting);
   },
   /** One step back in the page's own history; false when there is none. */
   back() {

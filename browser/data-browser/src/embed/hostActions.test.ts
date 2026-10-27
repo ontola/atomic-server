@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   hasActionsHost,
   hostFollow,
+  hostMeetingEnded,
+  hostMeetingStarted,
   joinCall,
   leaveCall,
   hostUnfollow,
@@ -137,6 +139,23 @@ it('hands the app the presence fields, follow and unfollow', () => {
     ['follow', ['did:ad:agent:a']],
     ['unfollow', []],
   ]);
+});
+
+it('tells the app a meeting started and ended, and not knowing the call is fine', () => {
+  const call = vi.fn().mockResolvedValue(true);
+
+  setActionsHost({ call });
+  hostMeetingStarted('did:ad:meeting');
+  hostMeetingEnded('did:ad:meeting');
+  expect(call.mock.calls).toEqual([
+    ['meetingStarted', ['did:ad:meeting']],
+    ['meetingEnded', ['did:ad:meeting']],
+  ]);
+
+  setActionsHost({ call: vi.fn().mockRejectedValue(new Error('unknown')) });
+  expect(() => hostMeetingStarted('m')).not.toThrow();
+  setActionsHost(undefined);
+  expect(() => hostMeetingEnded('m')).not.toThrow();
 });
 
 it('does nothing for presence and follow without an app, or when it declines', () => {

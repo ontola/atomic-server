@@ -94,6 +94,23 @@ class AtomicAssistantApi extends AssistantApi {
   @override
   Future<void> clearPresence(String drive) => AtomicClient.clearPresence(drive);
   @override
+  Future<Set<String>?> currentMeetings(String drive) async {
+    // The drive's `currentMeetings`, read the way the page reads a resource.
+    final raw = await AtomicClient.embedCall(
+        'getResource', jsonEncode([drive]));
+    final json = jsonDecode(raw);
+    if (json is! Map) return null;
+    final list = json['https://atomicdata.dev/properties/currentMeetings'];
+    return {
+      if (list is List)
+        for (final e in list)
+          if (e is String)
+            e
+          else if (e is Map && e['@id'] is String)
+            e['@id'] as String
+    };
+  }
+  @override
   Future<ProfileIdentity?> identityOf(String agent) async {
     final name = await AtomicClient.getProperty(
             agent, 'https://atomicdata.dev/properties/name')

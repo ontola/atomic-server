@@ -4,7 +4,7 @@ import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
 import { FollowProvider, useFollow } from "./FollowContext";
-import { setHostFollow } from "../../embed/presenceBridge";
+import { setHostFollow, setHostMeeting } from "../../embed/presenceBridge";
 
 const state = vi.hoisted(() => ({
   embedded: false,
@@ -12,6 +12,8 @@ const state = vi.hoisted(() => ({
   navigate: vi.fn(),
   hostFollow: vi.fn(),
   hostUnfollow: vi.fn(),
+  hostMeetingStarted: vi.fn(),
+  hostMeetingEnded: vi.fn(),
   sendChatMessage: vi.fn(async () => undefined),
   patchLocal: vi.fn(),
   subject: "did:ad:here" as string | undefined,
@@ -25,6 +27,8 @@ vi.mock("../../helpers/embedMode", () => ({
 vi.mock("../../embed/hostActions", () => ({
   hostFollow: (...a: unknown[]) => state.hostFollow(...a),
   hostUnfollow: (...a: unknown[]) => state.hostUnfollow(...a),
+  hostMeetingStarted: (...a: unknown[]) => state.hostMeetingStarted(...a),
+  hostMeetingEnded: (...a: unknown[]) => state.hostMeetingEnded(...a),
 }));
 vi.mock("../../hooks/useNavigateWithTransition", () => ({
   useNavigateWithTransition: () => state.navigate,
@@ -39,7 +43,12 @@ vi.mock("../../views/ChatRoom/ChatRoomView", () => ({
 vi.mock("@tomic/react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tomic/react")>()),
   useStore: () => ({
-    getResource: async () => ({ get: () => undefined, title: "T" }),
+    getResource: async () => ({
+      get: () => undefined,
+      set: async () => {},
+      save: async () => {},
+      title: "T",
+    }),
     newResource: async () => ({
       subject: "did:ad:meeting",
       save: async () => {},
@@ -83,6 +92,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   setHostFollow(null);
+  setHostMeeting(null);
   state.embedded = false;
   vi.clearAllMocks();
 });
@@ -164,12 +174,60 @@ it("posts the Viewing trail from the page on the web, not when embedded", async 
   }
 });
 
-it("mirrors the meeting it leads into the presence entry", () => {
-  state.embedded = true;
+it("on the web: mirrors the meeting it leads into the presence entry", () => {
   sessionStorage.setItem("atomic.activeMeeting:did:ad:drive", "did:ad:meeting");
   mount();
 
   expect(state.patchLocal).toHaveBeenLastCalledWith(
     expect.objectContaining({ session: "did:ad:meeting" }),
+  );
+});
+
+it("embedded: the active meeting is the app’s, not sessionStorage", () => {
+  state.embedded = true;
+  sessionStorage.setItem("atomic.activeMeeting:did:ad:drive", "did:ad:stale");
+  mount();
+  expect(probe.follow.activeMeeting).toBeUndefined();
+
+  act(() => setHostMeeting("did:ad:meeting"));
+  expect(probe.follow.activeMeeting).toBe("did:ad:meeting");
+  expect(state.patchLocal).toHaveBeenLastCalledWith(
+    expect.objectContaining({ session: "did:ad:meeting" }),
+  );
+
+  act(() => setHostMeeting(null));
+  expect(probe.follow.activeMeeting).toBeUndefined();
+});
+
+it("embedded: starting and ending a meeting tell the app", async () => {
+  state.embedded = true;
+  mount();
+
+  await act(async () => {
+    await probe.follow.startMeeting(undefined, "did:ad:meeting");
+  });
+  expect(state.hostMeetingStarted).toHaveBeenCalledWith("did:ad:meeting");
+  // Shown at once, before the app has pushed it back.
+  expect(probe.follow.activeMeeting).toBe("did:ad:meeting");
+  expect(sessionStorage.getItem("atomic.activeMeeting:did:ad:drive")).toBe(
+    null,
+  );
+
+  await act(async () => {
+    await probe.follow.endMeeting();
+  });
+  expect(state.hostMeetingEnded).toHaveBeenCalledWith("did:ad:meeting");
+  expect(probe.follow.activeMeeting).toBeUndefined();
+});
+
+it("on the web: starting a meeting stays in the tab, the app is not told", async () => {
+  mount();
+
+  await act(async () => {
+    await probe.follow.startMeeting(undefined, "did:ad:meeting");
+  });
+  expect(state.hostMeetingStarted).not.toHaveBeenCalled();
+  expect(sessionStorage.getItem("atomic.activeMeeting:did:ad:drive")).toBe(
+    "did:ad:meeting",
   );
 });
