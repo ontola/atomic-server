@@ -818,6 +818,20 @@ the **chunk, not its contents**: individual entries may still be skipped
 (tombstoned locally, unreadable, a failed Loro import). A sender that needs
 proof re-probes.
 
+The Rust receiver stages the admitted resources in each chunk, merges repeated
+subjects in wire order, and writes their projections, Loro snapshots and indexes
+in one transaction. Resources with `localId` participate in that batch too.
+Accepted signed envelopes are verified and retained individually using the
+normal history policy. After the `LAST` chunk, including an empty terminator, one explicit
+database flush makes preceding chunks and their envelopes durable before the
+final acknowledgement. Database startup is independent of this import work.
+
+An intermediate chunk acknowledgement is a receipt, not a completed-transfer
+durability guarantee. A storage or final-flush failure returns `SYNC_REJECTED`
+without acknowledging that chunk; earlier chunks or writes may already be
+present. The receiving replication client propagates these failures rather than
+reporting success. Periodic database flushing can still run independently.
+
 The Rust drive-replication client counts all chunk acknowledgements before
 re-probing. On a WebSocket peer advertising `keepalive`, it then sends a
 `KEEPALIVE` and reads through the echo to drain blob requests queued after
@@ -830,8 +844,8 @@ sets the replication result's `in_sync` flag.
 A push refused **as a whole** is answered with `ERROR`, `request_id = 0`,
 code `SYNC_REJECTED (6)`, message
 `SYNC_PUSH rejected for drive <drive>: <reason>`, and **no `SYNC_OK`**.
-Nothing from it landed. The two reasons are that the sending agent has no
-write right on the drive, or that the node's sync policy does not admit it
+Admission rejection occurs before importing the chunk. The two reasons are that
+the sending agent has no write right on the drive, or that the node's sync policy does not admit it
 (not enrolled, or over quota). A drive that does not exist locally yet may be
 enrolled on the spot if the policy allows it, which is what keeps ordinary
 first sync working on an open node.

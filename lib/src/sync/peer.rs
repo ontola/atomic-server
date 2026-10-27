@@ -2085,25 +2085,14 @@ pub async fn sync_drive_with_peer_using_outcome(
                 let mut last_chunk = false;
                 if let Some(push) = super::protocol::decode_sync_push(payload) {
                     last_chunk = push.last;
-                    if !same_drive(store, &push.drive, drive) {
-                        // We asked for one drive; owner trust below is for that
-                        // drive only. A push claiming another drive is judged
-                        // as if the peer had dialed us: on its own rights.
+                    let trust_owned = same_drive(store, &push.drive, drive);
+                    if !trust_owned {
+                        // Owner trust is scoped to the drive we requested.
                         tracing::warn!(
                             "SYNC_PUSH for {} while syncing {}: applying without owner trust",
                             push.drive,
                             drive
                         );
-                        if let Ok((count, _)) =
-                            super::engine::import_sync_push(&push, store, &remote_agent, false)
-                                .await
-                        {
-                            total_imported += count;
-                        }
-                        if last_chunk {
-                            break;
-                        }
-                        continue;
                     }
                     // Import with the identity the peer proved via auth-back,
                     // NOT Sudo — dialing a peer never established the peer's
@@ -2115,25 +2104,36 @@ pub async fn sync_drive_with_peer_using_outcome(
                     // admission gate. A drive that does not exist locally is
                     // enrolled only when the policy allows it (OQ5); Public
                     // never creates one.
-                    match super::engine::import_sync_push(&push, store, &remote_agent, true).await {
+                    match super::engine::import_sync_push(&push, store, &remote_agent, trust_owned)
+                        .await
+                    {
                         Ok((count, blob_requests)) => {
                             total_imported += count;
 
-                            // Send blob requests if any
-                            for req_frame in blob_requests {
-                                send.write_u32(req_frame.len() as u32)
-                                    .await
-                                    .map_err(io_err)?;
-                                send.write_all(&req_frame).await.map_err(io_err)?;
+                            // Unsolicited drives keep their existing path: import
+                            // on the peer's rights, without requesting their blobs.
+                            if trust_owned {
+                                for req_frame in blob_requests {
+                                    send.write_u32(req_frame.len() as u32)
+                                        .await
+                                        .map_err(io_err)?;
+                                    send.write_all(&req_frame).await.map_err(io_err)?;
+                                }
                             }
                         }
                         // We dialed this peer and asked for its state; the
-                        // refusal is our own admission gate saying no to what
-                        // came back. Nothing landed, and there is nothing to
-                        // tell the peer — it did not ask us for anything.
+                        // rejection can be admission/rights, persistence, or
+                        // the LAST durability barrier. Propagate it instead
+                        // of reporting this sync as successful.
                         Err(rejected) => {
-                            tracing::warn!("[sync] dropped incoming push: {rejected}");
+                            return Err(format!("Dropped incoming SYNC_PUSH: {rejected}").into())
                         }
+                    }
+                    if !trust_owned {
+                        if last_chunk {
+                            break;
+                        }
+                        continue;
                     }
                 }
                 // SYNC_PUSH is chunked: keep reading until the LAST flag fires.

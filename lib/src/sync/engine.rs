@@ -1799,7 +1799,9 @@ pub(crate) async fn may_accept_drive_write(
     false
 }
 
-/// Why a `SYNC_PUSH` was refused as a whole. Distinct from "imported zero
+/// Why a `SYNC_PUSH` could not be acknowledged. Admission failures precede
+/// writes; persistence or durability failures may follow partial writes.
+/// Distinct from "imported zero
 /// entries" (every entry tombstoned or malformed), which is still a
 /// successful import from the protocol's point of view.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1871,6 +1873,28 @@ pub(crate) fn admit_unknown_drive(
     }
 }
 
+/// Resolve a parent's drive from accepted state in this frame before storage.
+async fn staged_parent_drive(
+    store: &Db,
+    parent: &crate::Subject,
+    staged: &[(crate::Resource, Option<Vec<u8>>)],
+    by_subject: &std::collections::HashMap<String, usize>,
+) -> Option<String> {
+    let stored;
+    let resource = if let Some(index) = by_subject.get(&parent.pure_id()) {
+        &staged[*index].0
+    } else {
+        stored = store.get_resource(parent).await.ok()?;
+        &stored
+    };
+    Some(
+        resource
+            .get(crate::urls::DRIVE_PROP)
+            .map(|value| value.to_string())
+            .unwrap_or_else(|_| parent.to_string()),
+    )
+}
+
 /// Import resources from a SYNC_PUSH message into the local store.
 ///
 /// `for_agent` is the identity the sending peer proved. `trust_owned` is true
@@ -1879,10 +1903,10 @@ pub(crate) fn admit_unknown_drive(
 /// [`may_accept_drive_write`]). When importing locally, pass `Sudo`.
 ///
 /// `Ok((imported, blob_requests))` when the push was admitted — `imported`
-/// may still be 0 if every entry was skipped. `Err` when the push was refused
-/// as a whole: the agent may not write the drive, or the sync policy does not
-/// admit it. Nothing is written in the `Err` case, and the caller must answer
-/// with the rejection's `ERROR` frame, never `SYNC_OK`.
+/// may still be 0 if every entry was skipped. Admission failures happen before
+/// any projection is written. A later persistence or final durability-barrier
+/// failure can follow a committed batch, so the caller must propagate every
+/// `Err` rather than acknowledging it with `SYNC_OK`.
 pub async fn import_sync_push(
     push: &protocol::DecodedSyncPush,
     store: &Db,
@@ -1946,13 +1970,32 @@ pub async fn import_sync_push(
         });
     }
 
-    let mut count = 0;
-    let mut blob_requests = Vec::new();
-    let mut imported: std::collections::HashSet<String> = std::collections::HashSet::new();
-
     let base_domain = store.get_base_domain();
     let normalize = |s: &str| crate::Subject::from_raw(s, base_domain.as_deref()).pure_id();
     let admitted_drive = normalize(&push.drive);
+    // A SYNC_PUSH is one atomic projection write. Lock every subject in a
+    // stable order before reading any snapshot, then hold those locks until
+    // the batch is committed: otherwise a local commit can land between two
+    // entries and be overwritten by the stale snapshot this push started
+    // from. Db takes import-identity locks afterwards, matching signed commit
+    // ordering and avoiding lock inversion.
+    let mut subject_keys: Vec<String> =
+        push.entries.iter().map(|e| normalize(&e.subject)).collect();
+    subject_keys.sort();
+    subject_keys.dedup();
+    let mut _subject_guards = Vec::with_capacity(subject_keys.len());
+    for key in &subject_keys {
+        _subject_guards.push(store.subject_locks.lock(key).await);
+    }
+
+    let mut count = 0;
+    let mut blob_requests = Vec::new();
+    let mut imported: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut existing_resources: std::collections::HashMap<String, Option<crate::Resource>> =
+        std::collections::HashMap::new();
+    let mut staged: Vec<(crate::Resource, Option<Vec<u8>>)> = Vec::new();
+    let mut staged_by_subject: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
 
     for entry in &push.entries {
         if super::tombstones::is_tombstoned(store, &entry.subject) {
@@ -1966,39 +2009,40 @@ pub async fn import_sync_push(
         let snapshot_key =
             crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref()).pure_id();
 
-        // Same read-modify-write as `ws_apply::persist_update`, so the same
-        // exclusion: everything from the read below to `add_resource_opts` at
-        // the end of this iteration must not interleave with a commit, or one
-        // silently replaces the other's snapshot. Held per entry, released at
-        // the end of each iteration.
-        let _subject_guard = store.subject_locks.lock(&snapshot_key).await;
-
         // Admission above was for `push.drive` as a whole. Each entry names
         // its own subject, so an existing resource must actually live in
         // that drive, or a peer admitted for one drive could overwrite any
         // resource on this node (its ACLs included) by listing it here. Its
         // stored `drive` stamp is authoritative and is read BEFORE the
         // incoming delta is merged (mirrors `ws_apply::persist_update`).
-        let existing_resource = store
-            .get_resource(&crate::Subject::from_raw(
-                &snapshot_key,
-                base_domain.as_deref(),
-            ))
-            .await
-            .ok();
-        if let Some(existing) = &existing_resource {
+        if !existing_resources.contains_key(&snapshot_key) {
+            let existing = store
+                .get_resource(&crate::Subject::from_raw(
+                    &snapshot_key,
+                    base_domain.as_deref(),
+                ))
+                .await
+                .ok();
+            existing_resources.insert(snapshot_key.clone(), existing);
+        }
+        let cached_resource = existing_resources
+            .get(&snapshot_key)
+            .expect("existing resource was cached");
+        // A repeated entry is a continuation of the accepted state staged by
+        // this frame. Its own drive/parent checks must use that state before
+        // falling back to the pre-import DB row.
+        let staged_resource = staged_by_subject
+            .get(&snapshot_key)
+            .map(|index| &staged[*index].0);
+        let existing_resource = staged_resource.or(cached_resource.as_ref());
+        if let Some(existing) = existing_resource {
             let stored_drive = if let Ok(drive) = existing.get(crate::urls::DRIVE_PROP) {
                 drive.to_string()
             } else if let Ok(parent) = existing.get(crate::urls::PARENT) {
                 let parent_subject = crate::Subject::from(parent.to_string());
-                if let Ok(parent_resource) = store.get_resource(&parent_subject).await {
-                    parent_resource
-                        .get(crate::urls::DRIVE_PROP)
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|_| parent_subject.to_string())
-                } else {
-                    existing.get_subject().to_string()
-                }
+                staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject)
+                    .await
+                    .unwrap_or_else(|| existing.get_subject().to_string())
             } else {
                 existing.get_subject().to_string()
             };
@@ -2014,7 +2058,16 @@ pub async fn import_sync_push(
         }
 
         // Load existing doc or create new
-        let doc = if let Ok(Some(existing)) =
+        let doc = if let Some(index) = staged_by_subject.get(&snapshot_key) {
+            let snapshot = staged[*index]
+                .1
+                .as_ref()
+                .expect("sync snapshots are explicit");
+            match AtomicLoroDoc::from_snapshot(snapshot) {
+                Ok(d) if d.import_update(&entry.loro_bytes).is_ok() => d,
+                _ => continue,
+            }
+        } else if let Ok(Some(existing)) =
             store.kv.get(Tree::LoroSnapshots, snapshot_key.as_bytes())
         {
             match AtomicLoroDoc::from_snapshot(&existing) {
@@ -2057,10 +2110,14 @@ pub async fn import_sync_push(
 
         // No `get_resource` — `apply_state_doc` rebuilds propvals from the
         // merged doc, so the read would be discarded. Sync builds directly.
+        let snapshot = doc.export_snapshot();
         let subject = crate::Subject::from_raw(&snapshot_key, store.get_base_domain().as_deref());
         let mut resource = crate::Resource::new(subject.to_string());
 
-        if resource.apply_state_doc(doc).is_err() {
+        if resource
+            .apply_state_doc_with_snapshot(doc, snapshot.clone())
+            .is_err()
+        {
             continue;
         }
 
@@ -2076,11 +2133,10 @@ pub async fn import_sync_push(
                 .unwrap_or_else(|_| resource.get_subject().to_string());
             if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
                 let parent_subject = crate::Subject::from(parent_val.to_string());
-                if let Ok(parent_res) = store.get_resource(&parent_subject).await {
-                    claimed = parent_res
-                        .get(crate::urls::DRIVE_PROP)
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|_| parent_subject.to_string());
+                if let Some(drive) =
+                    staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject).await
+                {
+                    claimed = drive;
                 }
             }
             if normalize(&claimed) != admitted_drive {
@@ -2108,13 +2164,12 @@ pub async fn import_sync_push(
             has_strokes,
         );
 
-        store
-            .persist_replicated_resource(&resource)
-            .await
-            .map_err(|error| SyncPushRejected {
-                drive: push.drive.clone(),
-                reason: format!("Failed to persist {}: {error}", entry.subject),
-            })?;
+        if let Some(index) = staged_by_subject.get(&snapshot_key).copied() {
+            staged[index] = (resource.clone(), Some(snapshot));
+        } else {
+            staged_by_subject.insert(snapshot_key.clone(), staged.len());
+            staged.push((resource.clone(), Some(snapshot)));
+        }
         count += 1;
         imported.insert(snapshot_key.clone());
 
@@ -2124,6 +2179,16 @@ pub async fn import_sync_push(
             blob_requests.push(request);
         }
     }
+
+    let post_commit = store
+        .persist_replicated_resources_prepared(staged, false, Some(&push.drive))
+        .await
+        .map_err(|error| SyncPushRejected {
+            drive: push.drive.clone(),
+            reason: format!("Failed to persist SYNC_PUSH batch: {error}"),
+        })?;
+    drop(_subject_guards);
+    store.finish_replicated_resources(post_commit).await;
 
     // Envelopes ride with the entries they sign. Only a subject imported
     // above may receive one (same admission as its entry), and each is
@@ -2140,6 +2205,16 @@ pub async fn import_sync_push(
                 &envelope.subject[..envelope.subject.len().min(30)]
             );
         }
+    }
+
+    // A LAST chunk is the completed transfer's durability boundary. Make the preceding
+    // projection and its accepted envelopes durable before the caller sends
+    // SYNC_OK; this also covers an empty terminator chunk.
+    if push.last {
+        store.flush().map_err(|error| SyncPushRejected {
+            drive: push.drive.clone(),
+            reason: format!("Failed to durably flush SYNC_PUSH: {error}"),
+        })?;
     }
 
     tracing::info!(
