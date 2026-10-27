@@ -2,7 +2,7 @@ use crate::{
     appstate::AppState, errors::AtomicServerResult, helpers::get_client_agent_for_signed_url,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
-use atomic_lib::{Storelike, Subject};
+use atomic_lib::{errors::AtomicError, Storelike, Subject};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -47,6 +47,35 @@ fn clean_manager_label(label: Option<String>) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
+/// Authenticates the caller and enforces read access on the drive itself (raw
+/// fetch + check, not the extender path — these are read-only stats, not a
+/// resource render).
+///
+/// These endpoints report on drives hosted on this node. A drive hosted
+/// elsewhere (the sync page asks about every drive it knows) answers 404
+/// *before* `get_resource`, which would otherwise fetch the caller-supplied
+/// external URL over HTTP: an outbound request per call, and an upstream 401
+/// that surfaced as a 500 in Sentry.
+async fn check_drive_readable(
+    appstate: &AppState,
+    req: &HttpRequest,
+    subject: &str,
+) -> AtomicServerResult<()> {
+    let store = &appstate.store;
+    let for_agent = get_client_agent_for_signed_url(req, appstate).await?;
+
+    if !Subject::from_raw(subject, store.get_base_domain().as_deref()).is_local() {
+        return Err(AtomicError::not_found(format!(
+            "This drive is not hosted on this node: {subject}"
+        ))
+        .into());
+    }
+
+    let drive = store.get_resource(&Subject::from(subject)).await?;
+    atomic_lib::hierarchy::check_read(store, &drive, &for_agent).await?;
+    Ok(())
+}
+
 /// `GET /drive-usage?subject=<drive>` — per-drive storage (resource count, blob
 /// bytes, Loro-snapshot bytes) for the sync page's usage display. Generic to any
 /// atomic-server, desktop included. Signed and read-checked: the caller must be
@@ -60,12 +89,7 @@ pub async fn handle_drive_usage(
     let store = &appstate.store;
     let subject = params.subject.clone();
 
-    let for_agent = get_client_agent_for_signed_url(&req, &appstate).await?;
-
-    // Enforce read access on the drive itself (raw fetch + check, not the
-    // extender path — this is a read-only stat, not a resource render).
-    let drive = store.get_resource(&Subject::from(subject.as_str())).await?;
-    atomic_lib::hierarchy::check_read(store, &drive, &for_agent).await?;
+    check_drive_readable(&appstate, &req, &subject).await?;
 
     let usage = store
         .per_drive_usage(std::slice::from_ref(&subject))
@@ -107,10 +131,7 @@ pub async fn handle_drive_usage_breakdown(
     let store = &appstate.store;
     let subject = params.subject.clone();
 
-    let for_agent = get_client_agent_for_signed_url(&req, &appstate).await?;
-
-    let drive = store.get_resource(&Subject::from(subject.as_str())).await?;
-    atomic_lib::hierarchy::check_read(store, &drive, &for_agent).await?;
+    check_drive_readable(&appstate, &req, &subject).await?;
 
     let rows = store.drive_usage_breakdown(&subject).await?;
 
