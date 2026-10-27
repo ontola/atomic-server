@@ -1247,6 +1247,16 @@ impl Db {
             .await
     }
 
+    /// Open an adapter-supplied backend through the normal initialization path.
+    pub(crate) async fn init_with_store(
+        kv: Arc<dyn KvStore>,
+        base_domain: Option<String>,
+    ) -> AtomicResult<Db> {
+        Db::from_kv(std::path::PathBuf::new(), kv, base_domain)
+            .open()
+            .await
+    }
+
     /// Creates a Db backed by redb with file-based persistent storage.
     /// Works on all native targets (not WASM — use init_redb_opfs for that).
     ///

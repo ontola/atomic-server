@@ -13,10 +13,12 @@
 //! 2026-09-04; the seam stays, and grows again when a second adapter binds
 //! to it (`planning/atomic-lib-runtime.md`).
 
+use std::sync::Arc;
+
 use crate::{
     agents::Agent,
     commit::{Commit, CommitOpts, CommitResponse},
-    db::Db,
+    db::{kv_store::KvStore, Db},
     errors::AtomicResult,
     storelike::{Query, QueryResult},
     sync::engine::{ingest_commit, CommitIngestOpts},
@@ -63,6 +65,25 @@ pub struct AtomicNode {
 }
 
 impl AtomicNode {
+    /// Open a node over an application-supplied storage backend.
+    ///
+    /// Runs the same migrations, embedded-model bootstrap, compression wrapper,
+    /// and index initialization as the built-in database constructors. The
+    /// backend must satisfy [`KvStore`]'s ordering and atomic-batch contract and
+    /// provide the required durability policy. Install a signing agent with
+    /// [`Self::set_agent`] before making local writes.
+    ///
+    /// Clones of the returned node share their runtime state. Independently
+    /// opening the same backend does not coordinate concurrent node writers.
+    pub async fn open_with_store(
+        store: Arc<dyn KvStore>,
+        base_domain: Option<String>,
+    ) -> AtomicResult<Self> {
+        Ok(Self::from_db(
+            Db::init_with_store(store, base_domain).await?,
+        ))
+    }
+
     /// Wrap an already-opened store. Adapters construct `Db` themselves
     /// (the WASM `ClientDb`, the server's `AppState`) and bind here.
     pub fn from_db(db: Db) -> Self {
@@ -193,9 +214,116 @@ impl AtomicNode {
 #[cfg(all(test, feature = "db"))]
 mod tests {
     use super::*;
+    use crate::db::{
+        kv_store::KvIter,
+        redb_store::RedbStore,
+        trees::{Operation, Tree},
+    };
     use crate::{
         agents::ForAgent, client::commit_to_wire_json, db::DbEvent, urls, Resource, Subject, Value,
     };
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct SuppliedStore {
+        inner: RedbStore,
+        batches: AtomicUsize,
+    }
+
+    impl KvStore for SuppliedStore {
+        fn get(&self, tree: Tree, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
+            self.inner.get(tree, key)
+        }
+        fn insert(&self, tree: Tree, key: &[u8], value: &[u8]) -> AtomicResult<()> {
+            self.inner.insert(tree, key, value)
+        }
+        fn remove(&self, tree: Tree, key: &[u8]) -> AtomicResult<()> {
+            self.inner.remove(tree, key)
+        }
+        fn contains_key(&self, tree: Tree, key: &[u8]) -> AtomicResult<bool> {
+            self.inner.contains_key(tree, key)
+        }
+        fn scan_prefix(&self, tree: Tree, prefix: &[u8]) -> KvIter {
+            self.inner.scan_prefix(tree, prefix)
+        }
+        fn range(&self, tree: Tree, start: Vec<u8>, end: Vec<u8>, reverse: bool) -> KvIter {
+            self.inner.range(tree, start, end, reverse)
+        }
+        fn iter_tree(&self, tree: Tree) -> KvIter {
+            self.inner.iter_tree(tree)
+        }
+        fn clear_tree(&self, tree: Tree) -> AtomicResult<()> {
+            self.inner.clear_tree(tree)
+        }
+        fn apply_batch(&self, operations: &[Operation]) -> AtomicResult<()> {
+            self.batches.fetch_add(1, Ordering::SeqCst);
+            self.inner.apply_batch(operations)
+        }
+        fn flush(&self) -> AtomicResult<()> {
+            self.inner.flush()
+        }
+        fn begin_batch(&self) {
+            self.inner.begin_batch();
+        }
+        fn commit_batch(&self) -> AtomicResult<()> {
+            self.inner.commit_batch()
+        }
+        fn len(&self, tree: Tree) -> AtomicResult<usize> {
+            self.inner.len(tree)
+        }
+    }
+
+    #[tokio::test]
+    async fn open_with_store_bootstraps_and_reopens_persisted_resources() {
+        let store = Arc::new(SuppliedStore {
+            inner: RedbStore::new_memory().unwrap(),
+            batches: AtomicUsize::new(0),
+        });
+        let node = AtomicNode::open_with_store(store.clone(), Some("https://localhost".into()))
+            .await
+            .unwrap();
+        assert!(node.db().get_resource(&urls::NAME.into()).await.is_ok());
+        assert!(store.len(Tree::Resources).unwrap() > 0);
+        assert!(store.batches.load(Ordering::SeqCst) > 0);
+
+        let (agent, drive) = node.db().setup("Custom backend").await.unwrap();
+        let subject = node
+            .db()
+            .create_resource(urls::FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let name = "A persisted orchid ".repeat(200);
+        let mut resource = node
+            .db()
+            .get_resource(&subject.as_str().into())
+            .await
+            .unwrap();
+        resource
+            .set(urls::NAME.into(), Value::String(name.clone()), node.db())
+            .await
+            .unwrap();
+        node.save_locally(&mut resource).await.unwrap();
+        assert!(node.outbox().has_pending(&subject));
+        drop(node);
+
+        let reopened = AtomicNode::open_with_store(store, Some("https://localhost".into()))
+            .await
+            .unwrap();
+        reopened.set_agent(agent);
+        let result = reopened
+            .query(&Query {
+                property: Some(urls::NAME.into()),
+                value: Some(Value::String(name)),
+                for_agent: ForAgent::Sudo,
+                ..Query::new()
+            })
+            .await
+            .unwrap();
+        assert!(result
+            .resources
+            .iter()
+            .any(|resource| resource.get_subject().pure_id() == subject));
+        assert!(reopened.outbox().has_pending(&subject));
+    }
 
     async fn open_test_node(label: &str) -> AtomicNode {
         let db = Db::init_redb(Some("https://localhost".into()))
