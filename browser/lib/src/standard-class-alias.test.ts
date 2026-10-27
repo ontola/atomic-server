@@ -11,6 +11,9 @@ it('resolves standard class names using canonical ontology identifiers', () => {
   expect(standardClassAlias('document-v2')).toBe(
     dataBrowser.classes.documentV2,
   );
+  for (const name of ['documentV2', 'DocumentV2', 'Document V2', 'document_v2'])
+    expect(standardClassAlias(name)).toBe(dataBrowser.classes.documentV2);
+  expect(standardClassAlias('Meeting')).toBe(dataBrowser.classes.meeting);
   expect(standardClassAlias('Class')).toBe(core.classes.class);
   expect(standardClassAlias('property')).toBe(core.classes.property);
   expect(standardClassAlias('products')).toBeUndefined();

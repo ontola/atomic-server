@@ -983,7 +983,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.CREATE_RESOURCE]: tool({
         description:
-          'Create one or more new resources from compact JSON-AD. Provide one object, or an ARRAY of objects to create many resources (e.g. table rows) in a single call — always prefer one batched call over multiple calls. Each object needs "@class" (class shortname or URL) and "@parent" (subject), plus property shortnames as keys, e.g. {"@class": "deal", "@parent": "did:ad:…", "name": "Acme", "status": "Lead"}. Full property URLs also work as keys. DO NOT include an @id, it is auto generated.',
+          'Create one or more new resources from compact JSON-AD. To create a document use "@class": "document" (a document-v2, the only kind edit_document_resource can fill). Provide one object, or an ARRAY of objects to create many resources (e.g. table rows) in a single call — always prefer one batched call over multiple calls. Each object needs "@class" (class shortname or URL) and "@parent" (subject), plus property shortnames as keys, e.g. {"@class": "deal", "@parent": "did:ad:…", "name": "Acme", "status": "Lead"}. Full property URLs also work as keys. DO NOT include an @id, it is auto generated.',
         inputSchema: z.object({
           jsonAD: z
             .string()
@@ -1005,7 +1005,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
 
           if (!Array.isArray(data)) {
             try {
-              const { subject, resolved } = await createOne(
+              const { subject, resolved, classes } = await createOne(
                 data as Record<string, JSONValue>,
               );
 
@@ -1017,7 +1017,9 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
                   ? `Resolved properties: ${JSON.stringify(resolved)}\n`
                   : '';
 
-              return `${resolvedLine}Created new resource with subject ${shortenSubject(subject)}`;
+              // The class it really got: a document that came out as another
+              // class cannot be edited, and the model should see that here.
+              return `${resolvedLine}Class: ${classes.join(', ')}\nCreated new resource with subject ${shortenSubject(subject)}`;
             } catch (err) {
               return `Error creating resource: ${err}`;
             }
