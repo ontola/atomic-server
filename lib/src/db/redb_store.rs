@@ -61,6 +61,9 @@ pub struct RedbStore {
     /// durable-flush tick skip the fsync (and the sentinel write) when nothing
     /// changed, which is most ticks on an idle node or a phone in a pocket.
     dirty: AtomicBool,
+    /// Serializes `flush`, so a second caller waits for the first one's
+    /// durable commit instead of seeing a cleared `dirty` and returning early.
+    flush_lock: std::sync::Mutex<()>,
 }
 
 /// Per-tree map of pending operations. Used for fast read-your-writes lookups.
@@ -182,6 +185,7 @@ impl RedbStore {
                 db: Arc::new(db),
                 batch_buffer: std::sync::Mutex::new(None),
                 dirty: AtomicBool::new(false),
+                flush_lock: std::sync::Mutex::new(()),
             },
             compaction,
         ))
@@ -209,6 +213,7 @@ impl RedbStore {
             db: Arc::new(db),
             batch_buffer: std::sync::Mutex::new(None),
             dirty: AtomicBool::new(false),
+            flush_lock: std::sync::Mutex::new(()),
         })
     }
 
@@ -253,6 +258,7 @@ impl RedbStore {
             db: Arc::new(db),
             batch_buffer: std::sync::Mutex::new(None),
             dirty: AtomicBool::new(false),
+            flush_lock: std::sync::Mutex::new(()),
         })
     }
 }
@@ -568,43 +574,28 @@ impl KvStore for RedbStore {
     }
 
     fn flush(&self) -> AtomicResult<()> {
+        // Hold the lock for the whole flush, including the commit. A second
+        // caller then waits for the first one's durable commit instead of
+        // seeing `dirty == false` and acknowledging durability too early; once
+        // it gets the lock it either finds nothing left to do or flushes again.
+        let _guard = self
+            .flush_lock
+            .lock()
+            .map_err(|e| format!("redb flush lock poisoned: {e}"))?;
         // Nothing committed since the last durable point: skip. A write that
         // lands between this swap and the commit below sets the flag again
         // and is picked up by the next flush.
         if !self.dirty.swap(false, Ordering::SeqCst) {
             return Ok(());
         }
-        // Per-commit writes use Durability::None (no fsync) for throughput.
-        // redb only persists those to disk once a *subsequent* Immediate
-        // commit lands, so this flush — a quick Immediate commit — is what
-        // actually makes recent commits durable. The server calls it on a
-        // periodic tick (see `serve.rs`), amortizing one fsync across many
-        // commits instead of paying one per commit. `set_quick_repair`
-        // persists redb's allocator state so an unclean shutdown still boots
-        // fast.
-        let mut tx = self
-            .db
-            .begin_write()
-            .map_err(|e| format!("redb flush begin_write: {e}"))?;
-        tx.set_quick_repair(true);
-        // Touch a sentinel key so the transaction is non-empty and redb
-        // definitely writes (and, at Immediate durability, fsyncs) a new
-        // commit point that persists all prior Durability::None commits.
-        {
-            let mut table = tx
-                .open_table(table_def(Tree::DriveMapping))
-                .map_err(|e| format!("redb flush open table: {e}"))?;
-            table
-                .insert(b"__flush_sentinel__".as_slice(), b"".as_slice())
-                .map_err(|e| format!("redb flush sentinel: {e}"))?;
-        }
-        // Immediate is the default durability; committing flushes + fsyncs all
-        // prior Durability::None commits.
-        if let Err(e) = tx.commit() {
+        // The flag is already cleared, so any failure must put it back or the
+        // next tick would skip the fsync. Never clear it unconditionally
+        // afterwards: concurrent writes set it and must keep it.
+        let result = self.flush_commit();
+        if result.is_err() {
             self.dirty.store(true, Ordering::SeqCst);
-            return Err(format!("redb flush commit: {e}").into());
         }
-        Ok(())
+        result
     }
 
     fn len(&self, tree: Tree) -> AtomicResult<usize> {
@@ -664,6 +655,39 @@ impl KvStore for RedbStore {
         }
         tx.commit().map_err(|e| format!("redb commit batch: {e}"))?;
         self.dirty.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+impl RedbStore {
+    /// Per-commit writes use Durability::None (no fsync) for throughput.
+    /// redb only persists those to disk once a *subsequent* Immediate
+    /// commit lands, so this flush — a quick Immediate commit — is what
+    /// actually makes recent commits durable. The server calls it on a
+    /// periodic tick (see `serve.rs`), amortizing one fsync across many
+    /// commits instead of paying one per commit. `set_quick_repair`
+    /// persists redb's allocator state so an unclean shutdown still boots
+    /// fast.
+    fn flush_commit(&self) -> AtomicResult<()> {
+        let mut tx = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("redb flush begin_write: {e}"))?;
+        tx.set_quick_repair(true);
+        // Touch a sentinel key so the transaction is non-empty and redb
+        // definitely writes (and, at Immediate durability, fsyncs) a new
+        // commit point that persists all prior Durability::None commits.
+        {
+            let mut table = tx
+                .open_table(table_def(Tree::DriveMapping))
+                .map_err(|e| format!("redb flush open table: {e}"))?;
+            table
+                .insert(b"__flush_sentinel__".as_slice(), b"".as_slice())
+                .map_err(|e| format!("redb flush sentinel: {e}"))?;
+        }
+        // Immediate is the default durability; committing flushes + fsyncs all
+        // prior Durability::None commits.
+        tx.commit().map_err(|e| format!("redb flush commit: {e}"))?;
         Ok(())
     }
 }
@@ -797,6 +821,63 @@ mod tests {
             std::fs::metadata(&path).unwrap().len(),
             size_after_first_flush
         );
+        drop(store);
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn concurrent_flushes_all_succeed_and_leave_store_clean() {
+        let path = temp_path("concurrent_flush");
+        let store = Arc::new(RedbStore::new_file(&path).unwrap());
+        let n = 8;
+        let barrier = Arc::new(std::sync::Barrier::new(n));
+        let handles: Vec<_> = (0..n)
+            .map(|i| {
+                let store = store.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    store
+                        .insert(Tree::PluginMeta, format!("k{i}").as_bytes(), b"v")
+                        .unwrap();
+                    store.flush()
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap().expect("every flush must return Ok");
+        }
+        store.flush().unwrap();
+        assert!(!store.dirty.load(Ordering::SeqCst));
+        drop(store);
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn flush_waits_while_another_flush_holds_the_lock() {
+        let path = temp_path("flush_lock");
+        let store = Arc::new(RedbStore::new_file(&path).unwrap());
+        store.insert(Tree::PluginMeta, b"k", b"v").unwrap();
+
+        let guard = store.flush_lock.lock().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker = {
+            let store = store.clone();
+            std::thread::spawn(move || {
+                tx.send(store.flush()).ok();
+            })
+        };
+        assert!(
+            rx.recv_timeout(std::time::Duration::from_millis(200))
+                .is_err(),
+            "flush must not return while another flush holds the lock"
+        );
+        drop(guard);
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .expect("flush must finish once the lock is released")
+            .unwrap();
+        worker.join().unwrap();
+        assert!(!store.dirty.load(Ordering::SeqCst));
         drop(store);
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
