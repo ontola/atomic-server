@@ -52,6 +52,7 @@ import { ResourceLinkNavigationContext } from '../ResourceLinkNavigationContext'
 import { PublicAccess } from './PublicAccess';
 import { RoleSwitch, type ShareRole } from './RoleSelect';
 import { useShareRights } from './useShareRights';
+import { usePendingInvites } from './usePendingInvites';
 import { useClassLabel } from './useClassLabel';
 import { inviteLinkPrefix, useCreateInviteLink } from './useCreateInviteLink';
 import {
@@ -211,6 +212,7 @@ function ShareOverview({
   const inheritedRights = useInheritedRights(resource);
   const createInviteLink = useCreateInviteLink(resource);
   const editorSeats = useEditorSeats(resource);
+  const pending = usePendingInvites(resource.subject);
   const agentDetail = useCurrentAgentDetail(agent?.subject, isSaas);
   const agentResource = useResource(agent?.subject);
   const [agentName] = useTitle(agentResource);
@@ -265,6 +267,11 @@ function ShareOverview({
         inviterName: agentName,
         message: message.trim(),
       });
+      const sent = Array.from(new Set(recipients));
+      // The invites are out; failing to note them must not read as a failed send.
+      await pending
+        .record(sent, emailRole)
+        .catch(error => store.notifyError(error as Error));
       toast.success(
         recipients.length === 1
           ? `Invite sent to ${recipients[0]}`
@@ -341,6 +348,8 @@ function ShareOverview({
                   )}
                   currentAgentDetail={agentDetail}
                   onSetRole={canWrite ? setRole : undefined}
+                  invites={pending.invites}
+                  onRemoveInvite={pending.remove}
                 />
               </ResourceLinkNavigationContext.Provider>
               <PublicAccess
