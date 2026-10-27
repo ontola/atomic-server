@@ -96,6 +96,44 @@ void main() {
     });
   });
 
+  group('models', () {
+    test('lists the catalogue with prices and context', () async {
+      final seen = <http.BaseRequest>[];
+      final models = await _linked(
+              200,
+              {
+                'models': [
+                  {
+                    'id': 'a/small',
+                    'label': 'Small',
+                    'max_prompt': 0.5,
+                    'max_completion': 3.0,
+                    'context': 1048576,
+                  },
+                  {'id': 'b/plain'},
+                  {'label': 'no id'},
+                ]
+              },
+              seen)
+          .aiModels();
+      expect(seen.single.url.path, '/api/ai/models');
+      expect(models!.map((m) => m.id), ['a/small', 'b/plain']);
+      expect(models.first.context, 1048576);
+      expect(models.first.maxCompletion, 3);
+      expect(models.last.context, 0);
+    });
+
+    test('null on 404 and 401', () async {
+      expect(await _linked(404, {}, []).aiModels(), isNull);
+      expect(await _linked(401, {}, []).aiModels(), isNull);
+    });
+
+    test('status reads all_models', () {
+      expect(AtomicAiCredits.fromJson({'all_models': true}).allModels, isTrue);
+      expect(AtomicAiCredits.fromJson({}).allModels, isFalse);
+    });
+  });
+
   group('completions', () {
     Future<http.BaseRequest> sent({String? chat}) async {
       final seen = <http.BaseRequest>[];

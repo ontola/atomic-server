@@ -186,8 +186,8 @@ void main() {
     expect(find.text('Visitor phone'), findsOneWidget);
     // Nameless: the short node id is the title.
     expect(find.text('001122334455…'), findsOneWidget);
-    expect(find.textContaining('Connected to you · not saved'),
-        findsNWidgets(2));
+    expect(
+        find.textContaining('Connected to you · not saved'), findsNWidgets(2));
     expect(find.byTooltip('Remove'), findsNothing);
   });
 
@@ -647,6 +647,47 @@ void main() {
       expect(find.text('Small'), findsOneWidget);
     });
 
+    testWidgets(
+        'all models: one curated model still gets a row and a stored '
+        'outside choice shows its label', (tester) async {
+      tall(tester);
+      SharedPreferences.setMockInitialValues({
+        HostedAi.modelKey: 'x/other',
+        HostedAi.modelLabelKey: 'Other',
+      });
+      await tester.pumpWidget(_app(SyncScreen(
+        backend: _Backend(servers: _Servers(managed: true)),
+        loadAccount: (_) async => AccountSummary(
+          address: 'joep@example.org',
+          portal: Uri.parse('https://portal.example'),
+        ),
+        loadCredits: () async => shared.AtomicAiCredits(
+          enabled: true,
+          allowanceMicros: 10000,
+          remainingMicros: 6000,
+          model: 'a/small',
+          models: [models.first],
+          allModels: true,
+        ),
+        loadModels: () async => const [
+          shared.AtomicAiModel(id: 'x/other', label: 'Other'),
+          shared.AtomicAiModel(id: 'y/third', label: 'Third'),
+        ],
+      )));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('AI model'), 300);
+      expect(find.text('Other'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('ai-model-row')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('ai-model-all')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('ai-model-y/third')));
+      await tester.pumpAndSettle();
+      expect(find.text('Third'), findsOneWidget);
+      expect(await HostedAi.storedModel(), 'y/third');
+      expect(await HostedAi.storedModelLabel(), 'Third');
+    });
+
     testWidgets('no model row without a choice', (tester) async {
       await tester.pumpWidget(app(credits(models: const [])));
       await tester.pumpAndSettle();
@@ -1019,8 +1060,8 @@ void main() {
                   .evaluate()
                   .isEmpty) {
                 // Rounded: a scroll offset at a fraction adds float noise.
-                singleLineHeights.add(
-                    (rect.height * 100).roundToDouble() / 100);
+                singleLineHeights
+                    .add((rect.height * 100).roundToDouble() / 100);
               }
               // Everything stays inside the card's inner 16 dp.
               expect(rect.left, cardRect.left + 1);

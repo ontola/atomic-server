@@ -404,6 +404,15 @@ class AtomicAccountClient {
     return AtomicAiUsage.fromJson(_object(response));
   }
 
+  /// Every model the account may choose (`ai/models`): the curated ones
+  /// first, then the provider's whole catalogue. Null when the portal offers
+  /// none (404, an older portal) or the session is not valid (401).
+  Future<List<AtomicAiModel>?> aiModels() async {
+    final response = await _request('GET', 'ai/models');
+    if (response.statusCode == 404 || response.statusCode == 401) return null;
+    return AtomicAiModel.listFrom(_object(response)['models']);
+  }
+
   /// Accept the included-AI terms for this account.
   Future<Map<String, dynamic>> aiConsent() async =>
       _object(await _request('POST', 'ai/consent', body: {'accepted': true}));
@@ -687,6 +696,7 @@ class AtomicAiModel {
     this.label = '',
     this.maxPrompt = 0,
     this.maxCompletion = 0,
+    this.context = 0,
   });
 
   factory AtomicAiModel.fromJson(Map<String, dynamic> json) => AtomicAiModel(
@@ -694,6 +704,7 @@ class AtomicAiModel {
         label: json['label'] as String? ?? '',
         maxPrompt: (json['max_prompt'] as num?)?.toDouble() ?? 0,
         maxCompletion: (json['max_completion'] as num?)?.toDouble() ?? 0,
+        context: (json['context'] as num?)?.toInt() ?? 0,
       );
 
   /// The models of a status' `models`; empty when it lists none.
@@ -707,6 +718,9 @@ class AtomicAiModel {
   final String id;
   final String label;
   final double maxPrompt, maxCompletion;
+
+  /// The context window in tokens, 0 when not given.
+  final int context;
 
   /// The name to show: the label, else the id.
   String get name => label.isEmpty ? id : label;
@@ -734,6 +748,7 @@ class AtomicAiCredits {
     this.grantedMicros = 0,
     this.model = '',
     this.models = const [],
+    this.allModels = false,
   });
 
   factory AtomicAiCredits.fromJson(Map<String, dynamic> json) {
@@ -752,6 +767,7 @@ class AtomicAiCredits {
       grantedMicros: n('granted_micros'),
       model: json['model'] as String? ?? '',
       models: AtomicAiModel.listFrom(json['models']),
+      allModels: json['all_models'] == true,
     );
   }
 
@@ -772,6 +788,10 @@ class AtomicAiCredits {
   /// portal does not say: only the default).
   final String model;
   final List<AtomicAiModel> models;
+
+  /// Whether any model of the provider may be chosen (see
+  /// [AtomicAccountClient.aiModels]), not only [models].
+  final bool allModels;
 
   /// Whole credits left, as the web app shows them.
   int get remaining => remainingMicros ~/ 1000;

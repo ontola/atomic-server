@@ -194,6 +194,22 @@ class AccountStore {
     }
   }
 
+  /// Every model the linked account may choose; null when no account is
+  /// linked or the portal has no list (older portals). Throws when the portal
+  /// cannot be reached.
+  static Future<List<shared.AtomicAiModel>?> aiModels() async {
+    final saved = await _secure.read(key: _key);
+    if (saved == null) return null;
+    final origin = shared.AtomicAccountClient.sessionOrigin(saved);
+    final client = shared.AtomicAccountClient(origin.toString())
+      ..restoreSession(saved);
+    try {
+      return await client.aiModels();
+    } finally {
+      client.close();
+    }
+  }
+
   /// The linked account's state for [drive]; null when no account is linked.
   /// Throws when it is linked but the portal cannot be read, so a failed read
   /// is not shown as "not linked".

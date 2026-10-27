@@ -102,6 +102,9 @@ class SyncScreen extends StatefulWidget {
   /// The account's AI usage report; [AccountStore.aiUsage] by default.
   final Future<shared.AtomicAiUsage?> Function()? loadUsage;
 
+  /// Every model that may be chosen; [AccountStore.aiModels] by default.
+  final Future<List<shared.AtomicAiModel>?> Function()? loadModels;
+
   /// The portal sign-in cookie for the web view; [AccountStore.portalCookie]
   /// by default.
   final Future<String?> Function(Uri portal)? portalCookie;
@@ -137,6 +140,7 @@ class SyncScreen extends StatefulWidget {
     this.linkAccount,
     this.loadCredits,
     this.loadUsage,
+    this.loadModels,
     this.portalCookie,
     this.portalPage,
     this.profilePage,
@@ -266,6 +270,7 @@ class _SyncScreenState extends State<SyncScreen> {
               linkAccount: widget.linkAccount,
               loadCredits: widget.loadCredits,
               loadUsage: widget.loadUsage,
+              loadModels: widget.loadModels,
               portalCookie: widget.portalCookie,
               portalPage: widget.portalPage,
             ),
@@ -316,6 +321,7 @@ class _AccountSection extends StatefulWidget {
   final Future<void> Function(BuildContext context, String portal)? linkAccount;
   final Future<shared.AtomicAiCredits?> Function()? loadCredits;
   final Future<shared.AtomicAiUsage?> Function()? loadUsage;
+  final Future<List<shared.AtomicAiModel>?> Function()? loadModels;
   final Future<String?> Function(Uri portal)? portalCookie;
   final Widget Function(ResourceWebView page)? portalPage;
 
@@ -326,6 +332,7 @@ class _AccountSection extends StatefulWidget {
     this.linkAccount,
     this.loadCredits,
     this.loadUsage,
+    this.loadModels,
     this.portalCookie,
     this.portalPage,
   });
@@ -345,7 +352,7 @@ class _AccountSectionState extends State<_AccountSection> {
 
   /// The model chosen for the included AI (the default while none is), and
   /// whether chats show their token usage.
-  String? _model;
+  String? _model, _modelLabel;
   bool _showUsage = true;
 
   /// Where the active server is administered, when it is a managed one: the
@@ -426,30 +433,46 @@ class _AccountSectionState extends State<_AccountSection> {
       failed = true;
     }
     final stored = await HostedAi.storedModel();
+    final storedLabel = await HostedAi.storedModelLabel();
     if (!mounted) return;
     setState(() {
       _model = stored;
+      _modelLabel = storedLabel;
       _credits = credits;
       _creditsLoading = false;
       _creditsFailed = failed;
     });
   }
 
-  /// The model in use: the stored choice while the account allows it, else
-  /// its default.
+  /// The model in use: the stored choice while the account allows it (any
+  /// id when it offers all models), else its default.
   shared.AtomicAiModel? get _chosenModel {
     final models = _credits?.models ?? const <shared.AtomicAiModel>[];
-    return models.where((m) => m.id == _model).firstOrNull ??
-        models.firstOrNull;
+    final listed = models.where((m) => m.id == _model).firstOrNull;
+    if (listed != null) return listed;
+    final stored = _model;
+    if (_credits?.allModels == true && stored != null && stored.isNotEmpty) {
+      return shared.AtomicAiModel(id: stored, label: _modelLabel ?? '');
+    }
+    return models.firstOrNull;
   }
 
   Future<void> _pickModel() async {
-    final models = _credits?.models ?? const <shared.AtomicAiModel>[];
-    final id = await showAiModelPicker(context,
-        models: models, selected: _chosenModel?.id ?? '');
-    if (id == null) return;
-    await HostedAi.storeModel(id);
-    if (mounted) setState(() => _model = id);
+    final credits = _credits;
+    final picked = await showAiModelPicker(context,
+        models: credits?.models ?? const <shared.AtomicAiModel>[],
+        selected: _chosenModel?.id ?? '',
+        loadAll: credits?.allModels == true
+            ? (widget.loadModels ?? AccountStore.aiModels)
+            : null);
+    if (picked == null) return;
+    await HostedAi.storeModel(picked.id, label: picked.name);
+    if (mounted) {
+      setState(() {
+        _model = picked.id;
+        _modelLabel = picked.name;
+      });
+    }
   }
 
   void _openUsage() => Navigator.of(context).push(MaterialPageRoute<void>(
@@ -607,7 +630,7 @@ class _AccountSectionState extends State<_AccountSection> {
                 onPressed: _loadCredits),
       ),
       if (_credits != null) ...[
-        if (_credits!.models.length > 1)
+        if (_credits!.allModels || _credits!.models.length > 1)
           shared.SyncRow(
             key: const Key('ai-model-row'),
             icon: Icons.tune,

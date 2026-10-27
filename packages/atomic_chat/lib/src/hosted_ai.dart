@@ -167,6 +167,7 @@ class HostedAi {
     this.voiceStatus,
     this.acceptsImages = false,
     this.portal,
+    this.loadModels,
   })  : assert(
             stream != null || completions != null || chatCompletions != null),
         _stream = stream,
@@ -188,6 +189,10 @@ class HostedAi {
   /// Whether images may be sent to the model. The account's included AI
   /// takes text and tools only (it refuses image and file parts).
   final bool acceptsImages;
+
+  /// Every model the account may choose (see
+  /// [shared.AtomicAccountClient.aiModels]); null when not offered.
+  final Future<List<shared.AtomicAiModel>?> Function()? loadModels;
 
   /// The account portal's origin, where credits are bought; null when not
   /// known.
@@ -251,6 +256,9 @@ class HostedAi {
   /// SharedPreferences key: the model the person chose.
   static const modelKey = 'ai_model';
 
+  /// SharedPreferences key: the label of that model.
+  static const modelLabelKey = 'ai_model_label';
+
   /// The model the account offers by default (`model`, else the first of
   /// `models`).
   String get defaultModel =>
@@ -261,33 +269,50 @@ class HostedAi {
   List<shared.AtomicAiModel> get models =>
       shared.AtomicAiModel.listFrom(status['models']);
 
+  /// Whether any model may be chosen, not only [models] (`all_models`).
+  bool get allModels => status['all_models'] == true;
+
   /// Whether there is a choice of models.
-  bool get canChoose => models.length > 1;
+  bool get canChoose => allModels || models.length > 1;
 
   String? _chosen;
+  String? _chosenLabel;
+
+  bool _allowed(String id) =>
+      id.isNotEmpty &&
+      (allModels || id == defaultModel || models.any((m) => m.id == id));
 
   /// The model used: the chosen one while the account still allows it, else
   /// the default.
   String get model {
     final chosen = _chosen;
-    final allowed = chosen != null &&
-        (chosen == defaultModel || models.any((m) => m.id == chosen));
-    return allowed ? chosen : defaultModel;
+    return chosen != null && _allowed(chosen) ? chosen : defaultModel;
   }
 
-  /// The name of [model] as the portal labels it.
-  String get modelLabel =>
-      models.where((m) => m.id == model).firstOrNull?.name ?? model;
+  /// The name of [model] as the portal labels it; for a model outside
+  /// [models], the label stored with the choice, else its id.
+  String get modelLabel {
+    final listed = models.where((m) => m.id == model).firstOrNull;
+    if (listed != null) return listed.name;
+    final label = _chosenLabel;
+    return model == _chosen && label != null && label.isNotEmpty
+        ? label
+        : model;
+  }
 
   /// Reads the stored choice (see [storedModel]).
-  Future<void> restoreChoice() async => _chosen = await storedModel();
+  Future<void> restoreChoice() async {
+    _chosen = await storedModel();
+    _chosenLabel = await storedModelLabel();
+  }
 
-  /// Uses [id] from now on and remembers it; ignored when the account does
-  /// not allow it.
-  Future<void> choose(String id) async {
-    if (id != defaultModel && !models.any((m) => m.id == id)) return;
+  /// Uses [id] from now on and remembers it (and its [label]); ignored when
+  /// the account does not allow it.
+  Future<void> choose(String id, {String? label}) async {
+    if (!_allowed(id)) return;
     _chosen = id;
-    await storeModel(id);
+    _chosenLabel = label;
+    await storeModel(id, label: label);
   }
 
   /// The model id the person chose on this device, if any.
@@ -299,9 +324,25 @@ class HostedAi {
     }
   }
 
-  static Future<void> storeModel(String id) async {
+  /// The label stored with the chosen model, for one the portal's short list
+  /// does not carry.
+  static Future<String?> storedModelLabel() async {
     try {
-      await (await SharedPreferences.getInstance()).setString(modelKey, id);
+      return (await SharedPreferences.getInstance()).getString(modelLabelKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> storeModel(String id, {String? label}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(modelKey, id);
+      if (label == null || label.isEmpty) {
+        await prefs.remove(modelLabelKey);
+      } else {
+        await prefs.setString(modelLabelKey, label);
+      }
     } catch (_) {}
   }
 
@@ -434,8 +475,8 @@ class HostedAi {
         // The page adds web search once its MCP server connects, which can
         // be after it was first read: read it again before going without.
         _refreshWeb(bridge!);
-        final fresh = await webState.future
-            .timeout(webRetryGrace, onTimeout: () => null);
+        final fresh =
+            await webState.future.timeout(webRetryGrace, onTimeout: () => null);
         if (fresh != null) web = fresh;
       }
       if (web != null) {
@@ -819,6 +860,7 @@ class HostedAi {
       transcribe: (wav, {language}) =>
           client.transcribe(wav, language: language),
       voiceStatus: client.voiceStatus,
+      loadModels: client.aiModels,
       portal: origin,
     );
     await ai.restoreChoice();

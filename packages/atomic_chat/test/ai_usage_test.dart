@@ -1,4 +1,5 @@
 import 'package:atomic_chat/atomic_chat.dart';
+import 'package:atomic_flutter/atomic_flutter.dart' show AtomicAiModel;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,8 +57,10 @@ HostedAi _ai(
   List<({String model, String? chat})> asked,
   List<Map<String, dynamic>> chunks, {
   Map<String, dynamic> status = const {},
+  Future<List<AtomicAiModel>?> Function()? loadModels,
 }) =>
     HostedAi(
+      loadModels: loadModels,
       status: {
         'enabled': true,
         'consent': true,
@@ -158,6 +161,99 @@ void main() {
 
       await _ask(tester, 'Hello');
       expect(asked.single.model, 'b/big');
+    });
+
+    test('with all_models any id is accepted, also a stored one', () async {
+      SharedPreferences.setMockInitialValues({
+        HostedAi.modelKey: 'x/other',
+        HostedAi.modelLabelKey: 'Other',
+      });
+      final ai = _ai([], const [], status: {
+        'all_models': true,
+        'models': [_models.first],
+      });
+      expect(ai.canChoose, isTrue);
+      await ai.restoreChoice();
+      expect(ai.model, 'x/other');
+      expect(ai.modelLabel, 'Other');
+      await ai.choose('y/new', label: 'New');
+      expect(ai.model, 'y/new');
+      expect(ai.modelLabel, 'New');
+      expect(await HostedAi.storedModel(), 'y/new');
+      await ai.choose('');
+      expect(ai.model, 'y/new');
+      await ai.choose('z/noname');
+      expect(ai.modelLabel, 'z/noname');
+    });
+
+    test('without all_models an id outside the list is refused', () async {
+      SharedPreferences.setMockInitialValues({HostedAi.modelKey: 'x/other'});
+      final ai = _ai([], const [], status: {'models': _models});
+      await ai.restoreChoice();
+      expect(ai.model, 'a/small');
+      await ai.choose('x/other');
+      expect(ai.model, 'a/small');
+      expect(await HostedAi.storedModel(), 'x/other');
+      final off = _ai([], const [], status: {
+        'all_models': false,
+        'models': [_models.first],
+      });
+      expect(off.canChoose, isFalse);
+    });
+
+    testWidgets('All models searches the full list and picks from it',
+        (tester) async {
+      final asked = <({String model, String? chat})>[];
+      final ai = _ai(asked, [_text('Hi')],
+          status: {
+            'all_models': true,
+            'models': [_models.first],
+          },
+          loadModels: () async => const [
+                AtomicAiModel(
+                    id: 'a/small',
+                    label: 'Small',
+                    maxPrompt: 0.5,
+                    maxCompletion: 3),
+                AtomicAiModel(id: 'meta/llama-3', label: 'Llama 3'),
+                AtomicAiModel(
+                    id: 'zed/model-z',
+                    label: 'Zed',
+                    maxPrompt: 1,
+                    maxCompletion: 2),
+              ]);
+      await _open(tester, _Api(ai), subject: 'did:ad:chat');
+      await tester.tap(find.byKey(const Key('chat-header-subtitle')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('ai-model-all')));
+      await tester.pumpAndSettle();
+      expect(find.text('Llama 3'), findsOneWidget);
+      expect(find.text('Zed'), findsOneWidget);
+      expect(find.textContaining(r'$1 in, $2 out'), findsOneWidget);
+
+      await tester.enterText(
+          find.byKey(const Key('ai-model-search')), 'MODEL-z');
+      await tester.pumpAndSettle();
+      expect(find.text('Zed'), findsOneWidget);
+      expect(find.text('Llama 3'), findsNothing);
+      await tester.enterText(find.byKey(const Key('ai-model-search')), 'llama');
+      await tester.pumpAndSettle();
+      expect(find.text('Zed'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('ai-model-meta/llama-3')));
+      await tester.pumpAndSettle();
+      expect(find.text('Llama 3'), findsOneWidget);
+      expect(await HostedAi.storedModel(), 'meta/llama-3');
+      await _ask(tester, 'Hello');
+      expect(asked.single.model, 'meta/llama-3');
+    });
+
+    testWidgets('no All models row without all_models', (tester) async {
+      final ai = _ai([], const [], status: {'models': _models});
+      await _open(tester, _Api(ai), subject: 'did:ad:chat');
+      await tester.tap(find.byKey(const Key('chat-header-subtitle')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('ai-model-all')), findsNothing);
     });
 
     testWidgets('without a choice the subtitle stays AI assistant',

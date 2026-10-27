@@ -370,10 +370,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _pickModel() async {
     final ai = _ai;
     if (ai == null || !ai.canChoose || _sending) return;
-    final id =
-        await showAiModelPicker(context, models: ai.models, selected: ai.model);
-    if (id == null) return;
-    await ai.choose(id);
+    final picked = await showAiModelPicker(context,
+        models: ai.models,
+        selected: ai.model,
+        loadAll: ai.allModels ? ai.loadModels : null);
+    if (picked == null) return;
+    await ai.choose(picked.id, label: picked.name);
     if (mounted) setState(() {});
   }
 

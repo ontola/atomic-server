@@ -114,16 +114,19 @@ class ChatUsageStore {
 }
 
 /// Asks which of [models] to use: a sheet with a row for each, the price
-/// ceiling under its name when the portal gives one. Returns the picked id,
-/// null when it is dismissed.
-Future<String?> showAiModelPicker(
+/// ceiling under its name when the portal gives one. With [loadAll] (the
+/// account may use any model) it ends with an "All models…" row that opens
+/// the whole list to search. Returns the picked model, null when dismissed.
+Future<shared.AtomicAiModel?> showAiModelPicker(
   BuildContext context, {
   required List<shared.AtomicAiModel> models,
   required String selected,
+  Future<List<shared.AtomicAiModel>?> Function()? loadAll,
 }) =>
-    showModalBottomSheet<String>(
+    showModalBottomSheet<shared.AtomicAiModel>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: loadAll != null,
       builder: (sheet) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -134,10 +137,125 @@ Future<String?> showAiModelPicker(
                 title: Text(m.name),
                 subtitle: m.priceHint.isEmpty ? null : Text(m.priceHint),
                 trailing: m.id == selected ? const Icon(Icons.check) : null,
-                onTap: () => Navigator.pop(sheet, m.id),
+                onTap: () => Navigator.pop(sheet, m),
+              ),
+            if (loadAll != null)
+              ListTile(
+                key: const Key('ai-model-all'),
+                title: const Text('All models…'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  final picked = await Navigator.of(sheet).push(
+                    MaterialPageRoute<shared.AtomicAiModel>(
+                      builder: (_) =>
+                          AllAiModelsPage(load: loadAll, selected: selected),
+                    ),
+                  );
+                  if (picked != null && sheet.mounted) {
+                    Navigator.pop(sheet, picked);
+                  }
+                },
               ),
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
+
+/// Whether [m] matches the search [query] on its label or id.
+bool aiModelMatches(shared.AtomicAiModel m, String query) {
+  final q = query.trim().toLowerCase();
+  return q.isEmpty ||
+      m.label.toLowerCase().contains(q) ||
+      m.id.toLowerCase().contains(q);
+}
+
+/// The whole list of models, filtered as the person types. Pops the picked
+/// model.
+class AllAiModelsPage extends StatefulWidget {
+  const AllAiModelsPage({super.key, required this.load, this.selected = ''});
+
+  final Future<List<shared.AtomicAiModel>?> Function() load;
+  final String selected;
+
+  @override
+  State<AllAiModelsPage> createState() => _AllAiModelsPageState();
+}
+
+class _AllAiModelsPageState extends State<AllAiModelsPage> {
+  List<shared.AtomicAiModel>? _all;
+  bool _failed = false;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    List<shared.AtomicAiModel>? all;
+    try {
+      all = await widget.load();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _all = all;
+      _failed = all == null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final all = _all;
+    final shown = [
+      if (all != null)
+        for (final m in all)
+          if (aiModelMatches(m, _query)) m,
+    ];
+    return Scaffold(
+      appBar: AppBar(title: const Text('All models')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: TextField(
+              key: const Key('ai-model-search'),
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Search models',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          Expanded(
+            child: all == null && !_failed
+                ? const Center(child: CircularProgressIndicator())
+                : _failed
+                    ? const Center(child: Text('Could not load the models.'))
+                    : ListView.builder(
+                        itemCount: shown.length,
+                        itemBuilder: (_, i) {
+                          final m = shown[i];
+                          return ListTile(
+                            key: Key('ai-model-${m.id}'),
+                            title: Text(m.name),
+                            subtitle: Text([
+                              m.id,
+                              if (m.priceHint.isNotEmpty) m.priceHint,
+                            ].join('\n')),
+                            isThreeLine: m.priceHint.isNotEmpty,
+                            trailing: m.id == widget.selected
+                                ? const Icon(Icons.check)
+                                : null,
+                            onTap: () => Navigator.pop(context, m),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+}
