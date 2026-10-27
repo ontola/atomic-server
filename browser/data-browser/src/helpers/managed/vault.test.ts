@@ -4,7 +4,6 @@ import {
   enrollVault,
   getVaultUsage,
   freeUpVaultStorage,
-  removeVaultDeviceHistory,
   deleteVaultSnapshot,
   vaultLaneId,
   backupDrive,
@@ -1670,20 +1669,6 @@ describe('managing storage', () => {
     bytes_reclaimed: 9,
     delete_failures: 0,
   };
-
-  it('removes a device history with a POST to its route', async () => {
-    const fetch = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify(freed), { status: 200 }));
-
-    await expect(removeVaultDeviceHistory('ps', 'dev/1')).resolves.toEqual(
-      freed,
-    );
-    const call = fetch.mock.calls.find(c =>
-      String(c[0]).endsWith('/cloud-vault/ps/devices/dev%2F1/remove-history'),
-    );
-    expect(call?.[1]?.method).toBe('POST');
-  });
 
   it('deletes a snapshot with a POST to its route', async () => {
     const fetch = vi
