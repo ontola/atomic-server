@@ -27,3 +27,26 @@ export function closeTopOverlay(): boolean {
 
   return true;
 }
+
+const navigationListeners = new Set<() => void>();
+
+/** Runs when the host moves the page to another resource. */
+export function onHostNavigate(listener: () => void): () => void {
+  navigationListeners.add(listener);
+
+  return () => {
+    navigationListeners.delete(listener);
+  };
+}
+
+/**
+ * The host opened or showed a resource: no overlay (or the panel behind it)
+ * of the previous one stays, so a reused page never starts with a chat open.
+ */
+export function closeAllOverlays(): void {
+  while (closeTopOverlay()) {
+    // closeTopOverlay pops each one.
+  }
+
+  for (const listener of [...navigationListeners]) listener();
+}

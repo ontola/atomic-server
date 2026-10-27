@@ -10,7 +10,7 @@ import {
   screen,
 } from '@testing-library/react';
 import { MeetingChatOverlay } from './MeetingChatOverlay';
-import { closeTopOverlay } from './overlayBack';
+import { closeAllOverlays, closeTopOverlay } from './overlayBack';
 import { showMeetingStart } from './settings';
 import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../styling';
@@ -19,12 +19,15 @@ const state = vi.hoisted(() => ({
   selected: 'https://x/meeting' as string | undefined,
   open: true,
   closePanel: vi.fn(),
+  meeting: false,
+  activePanel: 'followSession' as string | null,
 }));
 
 vi.mock('../components/RightPanel/RightPanelContext', () => ({
   useRightPanel: () => ({
     selectedMeeting: state.selected,
     closePanel: state.closePanel,
+    activePanel: state.activePanel,
   }),
 }));
 const host = vi.hoisted(() => ({ handled: false, openNative: vi.fn() }));
@@ -40,10 +43,22 @@ vi.mock('../components/Presence/FollowContext', () => ({
 }));
 vi.mock('@tomic/react', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/react')>()),
-  useResource: () => ({}),
+  useResource: () => ({
+    loading: false,
+    hasClasses: () => state.meeting,
+  }),
 }));
 vi.mock('../views/ChatRoom/ChatRoomView', () => ({
   ChatRoomView: () => <div>chat</div>,
+}));
+vi.mock('../components/Presence/FollowSessionPanelContainer', () => ({
+  FollowSessionPanelContainer: () => null,
+  FollowSessionChat: (props: { embedded?: boolean; trailing?: unknown }) => (
+    <div data-embedded={String(!!props.embedded)}>
+      meeting panel
+      {props.trailing as React.ReactNode}
+    </div>
+  ),
 }));
 vi.mock('../components/EditableTitle', () => ({
   EditableTitle: () => <h1>Title</h1>,
@@ -57,6 +72,8 @@ afterEach(() => {
   host.openNative.mockReset();
   state.closePanel.mockClear();
   state.open = true;
+  state.meeting = false;
+  state.activePanel = 'followSession';
 });
 
 const renderOverlay = () =>
@@ -117,6 +134,29 @@ it('falls back to the overlay when the app declines', async () => {
   expect(await screen.findByTestId('meeting-chat-overlay')).toBeTruthy();
   expect(host.openNative).toHaveBeenCalledTimes(1);
   expect(state.closePanel).not.toHaveBeenCalled();
+});
+
+it('shows the web meeting panel for a meeting, without asking the app', async () => {
+  state.meeting = true;
+  renderOverlay();
+  expect(await screen.findByTestId('meeting-chat-overlay')).toBeTruthy();
+  expect(screen.getByText('meeting panel')).toBeTruthy();
+  expect(screen.getByTestId('meeting-chat-overlay').innerHTML).toContain(
+    'data-embedded="true"',
+  );
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(host.openNative).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByTitle('Close chat'));
+  expect(state.closePanel).toHaveBeenCalledWith('followSession');
+});
+
+it('closes the panel and forgets a decline when the host opens a resource', async () => {
+  renderOverlay();
+  await screen.findByTestId('meeting-chat-overlay');
+  act(() => closeAllOverlays());
+  expect(state.closePanel).toHaveBeenCalledWith('followSession');
+  // A declined chat no longer counts: the panel asks the app again.
+  await vi.waitFor(() => expect(host.openNative).toHaveBeenCalledTimes(2));
 });
 
 it('hides "Start meeting" only embedded', () => {

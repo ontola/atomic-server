@@ -66,7 +66,7 @@ import {
   registerEmbedActions,
 } from './embedStore';
 import { installTouchGestures, setGestures } from './gestures';
-import { closeTopOverlay } from './overlayBack';
+import { closeAllOverlays, closeTopOverlay } from './overlayBack';
 import {
   reportShown,
   setActionsHost,
@@ -432,10 +432,12 @@ const router = createRouter({
 
 window.atomicEmbed = {
   show(subject, hint) {
+    closeAllOverlays();
     setCrumbHint(subject, hint);
     void router.navigate({ to: '/app/show', search: { subject } });
   },
   open(subject, hint) {
+    closeAllOverlays();
     setCrumbHint(subject, hint);
     // The warm-up showed other resources here (`show`); none of them is a
     // place back goes to.

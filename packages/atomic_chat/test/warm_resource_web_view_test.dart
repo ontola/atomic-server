@@ -163,6 +163,20 @@ void main() {
     expect(page.scripts.single, 'window.__atomicReply(4,true,null)');
   });
 
+  test('a spare asking to open a native screen is told no', () async {
+    pool = makePool()..warmUp();
+    await pumpEventQueue();
+    final page = pages.single;
+    page.send(jsonEncode({
+      'id': 5,
+      'method': 'openNative',
+      'args': ['https://atomicdata.dev/classes/ChatRoom', 'https://x/m', 'M']
+    }));
+    await pumpEventQueue();
+    // The page's reply is the string "false", as the resource view's is.
+    expect(page.scripts.single, 'window.__atomicReply(5,true,"false")');
+  });
+
   test('a spare reporting the saved theme sets the app\'s', () async {
     SharedPreferences.setMockInitialValues({});
     addTearDown(() => AppThemeMode.mode.value = ThemeMode.system);

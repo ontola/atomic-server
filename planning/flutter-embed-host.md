@@ -196,21 +196,31 @@ verified without a device: the transparent web view background in dark mode.
 follow-session side panel; the embed renders no side panels except comments, so
 nothing appeared. Decision:
 
-- **Open chat**: the page asks the app to show the chat in its own screen
-  (`openNative('chatroom', subject, title)`, `src/embed/hostActions.ts`, a call
-  on the AtomicFlutter channel answered `true` when the app opened it). The
+- **Open chat on a meeting**: a meeting opens as the meeting page, and its chat
+  is the web meeting panel, never the native screen.
+  `src/embed/MeetingChatOverlay.tsx` shows `FollowSessionChat` (exported from
+  `components/Presence/FollowSessionPanelContainer.tsx`: title, who is here,
+  chat, End / Leave) full screen with a close button. In the embed
+  (`embedded`) the video call and Notes buttons are left out: no microphone or
+  camera in the web view, and the page is the meeting.
+- **Open chat on a plain ChatRoom**: the page asks the app to show the chat in
+  its own screen (`openNative('chatroom', subject, title)`,
+  `src/embed/hostActions.ts`, answered `true` when the app opened it). The
   app's `ResourceView` handles it (`openNative` in `resource_view.dart`): when
-  `nativeViews` has the kind it pushes `ChatRoomScreen` over the page and
-  answers true. A meeting is a chat room of its own (the log sits under the
-  meeting), so the same screen shows both. A link to a `ChatRoom` inside the
-  page does the same (`useNativeChatRoom`), and the page goes back to where the
-  link was. `ChatRoom` is also in the native views registry, so opening one from
-  a list or search skips the web page.
-- **Fallback**: `src/embed/MeetingChatOverlay.tsx` shows the meeting's chat
-  (the web app's `ChatRoomView`: messages and composer, writing through the
-  commit transport like every other write) full screen, with a close button,
-  when the app answers false or does not know the call (desktop mock, an older
-  app). The call and the presence list of the web panel are left out.
+  `nativeViews` has the kind it pushes `ChatRoomScreen` over the page. A link
+  to a `ChatRoom` inside the page does the same (`useNativeChatRoom`). If the
+  app answers false (or does not know the call: desktop mock, older app) the
+  overlay shows the chat room's `ChatRoomView` instead.
+- **A reused page starts clean**: `atomicEmbed.open` and `show` (also
+  `show("")` from giving a page back) call `closeAllOverlays()`
+  (`overlayBack.ts`): open overlays close, the right panel closes and the
+  overlay forgets a declined chat. The panel state lives in `RightPanelProvider`
+  and survives moving to another resource in a warm page, so without this
+  "going back into a meeting" showed the chat.
+- **Hidden spare**: the warm pool (`warm_resource_web_view.dart`, `_answer`)
+  answers `openNative` with `false`: nobody holds the spare, so it must not
+  push a screen, and it must not be left thinking the app declined with an
+  overlay drawn inside it.
 - **Back**: the overlay registers in `src/embed/overlayBack.ts`;
   `atomicEmbed.back()` closes the topmost overlay first and returns true.
 - **Start meeting**: hidden in the embed (`showMeetingStart` in

@@ -8,36 +8,57 @@ import { useFollow } from '../components/Presence/FollowContext';
 import { ChatRoomView } from '../views/ChatRoom/ChatRoomView';
 import { EditableTitle } from '../components/EditableTitle';
 import { IconButton } from '../components/IconButton/IconButton';
-import { registerOverlay } from './overlayBack';
+import { FollowSessionChat } from '../components/Presence/FollowSessionPanelContainer';
+import { onHostNavigate, registerOverlay } from './overlayBack';
 import { openNative } from './hostActions';
 
 /**
- * The meeting's chat in the embed, over the whole page. The web app shows it in
- * the follow-session side panel, which also holds the live call and the
- * presence list; neither works in the app's web view (no connection to a
- * server, no microphone or camera), so only the chat is shown. Closed with the
- * button or the host's Back.
+ * The chat panel in the embed, over the whole page. For a meeting it is the
+ * web app's meeting panel (title, who is here, chat, Leave), full screen; the
+ * video call and Notes buttons are left out (no microphone or camera in the
+ * app's web view, and the page is the meeting). Closed with the button or the
+ * host's Back.
  *
- * The app has a native chat screen of its own: it is asked to open that first
- * (`openNative`), and this overlay is the fallback for when it does not.
+ * A plain chat room has a native screen in the app: it is asked to open that
+ * first (`openNative`), and this overlay is the fallback for when it does not.
+ * A meeting is never sent to the native screen.
  */
 export function MeetingChatOverlay(): React.JSX.Element | null {
-  const { selectedMeeting, closePanel } = useRightPanel();
+  const { selectedMeeting, closePanel, activePanel } = useRightPanel();
   const { followedSession, activeMeeting } = useFollow();
   const subject = selectedMeeting ?? followedSession ?? activeMeeting;
   const isOpen = useContextualPanel('followSession', subject);
   const resource = useResource(subject ?? unknownSubject);
   const title = resource.title;
+  // Not known to be a meeting until the resource has loaded.
+  const isMeeting = resource.hasClasses(dataBrowser.classes.meeting);
+  const settled = !resource.loading;
+
+  const closeAny = () => {
+    if (activePanel) closePanel(activePanel);
+  };
+
   // The meeting the app declined to show natively: the overlay is for that.
   const [declined, setDeclined] = useState<string>();
   // Kept out of the effect's dependencies: a changing identity of either must
   // not ask the app a second time (a second screen).
-  const latest = useRef({ closePanel, title });
+  const latest = useRef({ closePanel, title, closeAny });
 
-  latest.current = { closePanel, title };
+  latest.current = { closePanel, title, closeAny };
+
+  // The host moved the page to another resource: nothing stays open.
+  useEffect(
+    () =>
+      onHostNavigate(() => {
+        latest.current.closeAny();
+        setDeclined(undefined);
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!isOpen || !subject || declined === subject) return;
+    if (isMeeting || !settled) return;
     let cancelled = false;
 
     void openNative(
@@ -57,9 +78,10 @@ export function MeetingChatOverlay(): React.JSX.Element | null {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, subject, declined]);
+  }, [isOpen, subject, declined, isMeeting, settled]);
 
-  const showOverlay = isOpen && !!subject && declined === subject;
+  const showOverlay =
+    isOpen && !!subject && (isMeeting || declined === subject);
 
   useEffect(() => {
     if (!showOverlay) return;
@@ -70,18 +92,44 @@ export function MeetingChatOverlay(): React.JSX.Element | null {
   if (!showOverlay || !subject) return null;
 
   return (
-    <Overlay subject={subject} onClose={() => closePanel('followSession')} />
+    <Overlay
+      subject={subject}
+      meeting={isMeeting}
+      onClose={() => closePanel('followSession')}
+    />
   );
 }
 
 function Overlay({
   subject,
+  meeting,
   onClose,
 }: {
   subject: string;
+  meeting: boolean;
   onClose: () => void;
 }) {
   const chatroom = useResource(subject);
+
+  if (meeting) {
+    return (
+      <Screen
+        data-testid='meeting-chat-overlay'
+        role='dialog'
+        aria-modal='true'
+      >
+        <FollowSessionChat
+          subject={subject}
+          embedded
+          trailing={
+            <IconButton title='Close chat' onClick={onClose} size='1.25em'>
+              <FaXmark />
+            </IconButton>
+          }
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen data-testid='meeting-chat-overlay' role='dialog' aria-modal='true'>

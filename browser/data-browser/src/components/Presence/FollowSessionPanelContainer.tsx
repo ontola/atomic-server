@@ -40,7 +40,22 @@ export const FollowSessionPanelContainer: React.FC = () => {
   );
 };
 
-function FollowSessionChat({ subject }: { subject: string }) {
+/**
+ * The meeting panel's content: title, who is here, chat, and End / Leave.
+ * `embedded` is for the Flutter app's web view, which cannot place a video
+ * call (no microphone or camera) and is already on the meeting page, so the
+ * call and Notes buttons are left out; `trailing` adds an action (a close
+ * button) after the others.
+ */
+export function FollowSessionChat({
+  subject,
+  embedded = false,
+  trailing,
+}: {
+  subject: string;
+  embedded?: boolean;
+  trailing?: React.ReactNode;
+}) {
   const chatroom = useResource(subject);
   const { followedAgent, unfollow, activeMeeting, endMeeting } = useFollow();
   const { setPanelOpen } = useRightPanel();
@@ -126,28 +141,33 @@ function FollowSessionChat({ subject }: { subject: string }) {
             with space between them made the header the loudest part of the
             panel. */}
         <ButtonRow center gap='0'>
-          <IconButton
-            color={inCall ? 'main' : 'textLight'}
-            onClick={() => setInCall(current => !current)}
-            title={inCall ? 'Leave video call' : 'Start video call'}
-          >
-            <FaVideo />
-          </IconButton>
-          <IconButton
-            color='textLight'
-            title='Notes'
-            onClick={() => navigate(constructOpenURL(subject))}
-          >
-            <FaNoteSticky />
-          </IconButton>
+          {!embedded && (
+            <IconButton
+              color={inCall ? 'main' : 'textLight'}
+              onClick={() => setInCall(current => !current)}
+              title={inCall ? 'Leave video call' : 'Start video call'}
+            >
+              <FaVideo />
+            </IconButton>
+          )}
+          {!embedded && (
+            <IconButton
+              color='textLight'
+              title='Notes'
+              onClick={() => navigate(constructOpenURL(subject))}
+            >
+              <FaNoteSticky />
+            </IconButton>
+          )}
           {showAction && (
             <TextAction type='button' onClick={handleAction} disabled={ending}>
               {ending ? 'Ending…' : label}
             </TextAction>
           )}
+          {trailing}
         </ButtonRow>
       </PanelHeader>
-      {inCall && (
+      {inCall && !embedded && (
         <Suspense fallback={<CallFallback>Connecting to call…</CallFallback>}>
           <ConferenceRoom subject={subject} onLeave={() => setInCall(false)} />
         </Suspense>

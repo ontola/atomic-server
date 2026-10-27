@@ -590,6 +590,13 @@ class WarmResourceWebView with WidgetsBindingObserver, ChangeNotifier {
         await page.runJavaScript('window.__atomicReply($id,true,null)');
         return;
       }
+      // A hidden spare opens no native screen over nobody: false makes the
+      // page draw the resource itself, if it ever asks.
+      if (method == 'openNative') {
+        await page.runJavaScript(
+            'window.__atomicReply($id,true,${jsonEncode('false')})');
+        return;
+      }
       // The page reports the saved theme as it boots, before anyone holds it.
       final icons =
           method == 'sidebarIcons' ? AppSidebarIcons.parse(args) : null;
