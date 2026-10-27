@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
@@ -156,6 +157,13 @@ class AtomicAccountClient {
 
   void close() => _http.close();
 
+  /// Why a request got no answer, without the exception's text (it can
+  /// carry the polling URL with its device_code): it took too long, or the
+  /// connection failed (offline, DNS, TLS), named by the exception's kind.
+  static String unreachable(Object error) => error is TimeoutException
+      ? 'The account provider took too long to answer'
+      : 'Could not reach the account provider (${error.runtimeType})';
+
   Future<http.Response> _request(String method, String path,
       {Map<String, dynamic>? body,
       Map<String, String>? query,
@@ -175,9 +183,9 @@ class AtomicAccountClient {
       return await (() async =>
               http.Response.fromStream(await _http.send(req)))()
           .timeout(timeout);
-    } catch (_) {
+    } catch (e) {
       // Network exceptions can contain the polling URL, including device_code.
-      throw StateError('Could not reach the account provider');
+      throw StateError(unreachable(e));
     }
   }
 
@@ -481,8 +489,8 @@ class AtomicAccountClient {
     final http.StreamedResponse response;
     try {
       response = await _http.send(request).timeout(const Duration(seconds: 30));
-    } catch (_) {
-      throw StateError('Could not reach the account provider');
+    } catch (e) {
+      throw StateError(unreachable(e));
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = await response.stream.bytesToString();
