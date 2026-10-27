@@ -626,6 +626,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 colors: c,
                 row: _chatRow,
                 onNew: () => _openChat(null),
+                // Also the store's own ticks: a chat saved after the
+                // home's reload still comes in.
+                changed: Listenable.merge(
+                    [_feedChanged, widget.api.storeChanges]),
               ));
 
   void _openPage(HomeSection id, WidgetBuilder page) {
@@ -1974,6 +1978,10 @@ class _ChatsPage extends StatefulWidget {
   /// Starts a new chat (the bar's + New).
   final VoidCallback onNew;
 
+  /// Fires when the home read its lists again (a chat opened from here, or a
+  /// new one, was closed): the first page is read again.
+  final Listenable? changed;
+
   const _ChatsPage({
     required this.title,
     required this.api,
@@ -1981,6 +1989,7 @@ class _ChatsPage extends StatefulWidget {
     required this.colors,
     required this.row,
     required this.onNew,
+    this.changed,
   });
 
   @override
@@ -1997,8 +2006,35 @@ class _ChatsPageState extends State<_ChatsPage> {
   @override
   void initState() {
     super.initState();
+    widget.changed?.addListener(_refresh);
     WidgetsBinding.instance.addPostFrameCallback((_) => Perf.span(
         'chats all painted ${_chats.length}', _opened.elapsedMilliseconds));
+  }
+
+  @override
+  void dispose() {
+    widget.changed?.removeListener(_refresh);
+    super.dispose();
+  }
+
+  /// Reads the first page again: a new chat comes in on top, a renamed or
+  /// newly answered one moves; the pages read after it stay.
+  Future<void> _refresh() async {
+    try {
+      final fresh = await widget.api.chats();
+      if (!mounted) return;
+      final known = {for (final c in fresh) c.subject};
+      setState(() {
+        _chats = [
+          ...fresh,
+          for (final c in _chats)
+            if (known.add(c.subject)) c
+        ];
+        _entries = _entriesOf(_chats);
+      });
+    } catch (_) {
+      // Keep what is shown.
+    }
   }
 
   late List<ChatSummary> _chats = widget.first;

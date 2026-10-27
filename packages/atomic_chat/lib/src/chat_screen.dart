@@ -1582,13 +1582,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       appBar: AppTopBar(
                         compact: true,
                         title: _headerTitle,
-                        // A new chat is not saved yet: no place in the drive.
-                        bottom: _chat == null
-                            ? null
-                            : ResourceBreadcrumbs(
-                                api: widget.api,
-                                drive: widget.drive,
-                                subject: _chat!),
                         actions: const [ResourceMoreButton()],
                         titleWidget: InkWell(
                           key: const Key('chat-title'),
