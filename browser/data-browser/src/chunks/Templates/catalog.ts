@@ -102,7 +102,7 @@ export const TEMPLATE_CATALOG: TemplateDefinition[] = [
       {
         key: 'welcome',
         kind: 'document',
-        name: 'Welcome to Atomic',
+        name: 'Start here',
         text: [
           'Welcome to Atomic. This is a small drive to play in, at your own pace. There is nothing you have to do.',
           '# Try it',

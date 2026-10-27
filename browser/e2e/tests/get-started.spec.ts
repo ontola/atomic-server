@@ -37,15 +37,10 @@ test('Get started opens a workspace of your own, without an account', async ({
   await expect(card.getByRole('button', { name: 'Invite' })).toBeDisabled();
   await expect(card).toContainText('Start a project first');
   await expect(
-    page.getByRole('link', { name: 'Welcome to Atomic' }).first(),
+    page.getByRole('link', { name: 'Start here' }).first(),
   ).toBeVisible();
   const items = page.locator('[data-sidebar-id]');
-  await expect(items).toHaveText([
-    'Welcome to Atomic',
-    'Notes',
-    'Tasks',
-    'Sketch',
-  ]);
+  await expect(items).toHaveText(['Start here', 'Notes', 'Tasks', 'Sketch']);
 
   // Not a disposable guest: the agent has a personal drive of its own.
   await expect

@@ -80,7 +80,7 @@ describe('welcome template', () => {
 
     expect(plan.title).toBe('Welcome to Atomic');
     expect(plan.parts.map(p => [p.kind, p.name])).toEqual([
-      ['document', 'Welcome to Atomic'],
+      ['document', 'Start here'],
       ['document', 'Notes'],
       ['table', 'Tasks'],
       ['canvas', 'Sketch'],
