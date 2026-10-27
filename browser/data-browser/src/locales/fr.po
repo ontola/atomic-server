@@ -269,6 +269,7 @@ msgstr "Compacte automatiquement la conversation lorsque les jetons d'entrée d�
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -3221,6 +3222,7 @@ msgstr "Rechercher"
 
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
+#: src/helpers/connectableDrives.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
@@ -12547,7 +12549,6 @@ msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/Vault/VaultStorage.tsx
-#: src/components/Vault/VaultStorage.tsx
 msgid "This cannot be undone."
 msgstr ""
 
@@ -13135,52 +13136,11 @@ msgid "Waiting for permission"
 msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
-msgid "Each browser or app's share is listed below, where you can remove it."
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
 msgid "Delete"
 msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
 msgid "Older snapshots are removed automatically."
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "· This browser"
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Remove its history…"
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Browsers and apps backing up here"
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Every browser or app you signed in on sends its own changes to this backup. Old or unused ones can pile up."
-msgstr ""
-
-#. 0: formatBytes(removeDevice.pack_bytes); 1: deviceLabel(removeDevice.device_pubkey)
-#: src/components/Vault/VaultStorage.tsx
-msgid "About {0} of saved history from {1} will be removed."
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "This deletes the changes it sent to your backup. Edits made only there, and never synced anywhere else, are lost. Your workspace and your other browsers are not touched."
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Remove the saved history of this browser or app?"
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Remove history"
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Could not remove the history."
 msgstr ""
 
 #. 0: formatBytes(deleteSnapshot.bytes)
@@ -13198,15 +13158,6 @@ msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
 msgid "Could not delete the snapshot."
-msgstr ""
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Latest changes from 1 browser or app"
-msgstr ""
-
-#. 0: h.lanes
-#: src/components/Vault/VaultStorage.tsx
-msgid "Latest changes from each of {0} browsers and apps"
 msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
@@ -13341,4 +13292,40 @@ msgstr ""
 
 #: src/views/getting-started/WorkspaceLoading.tsx
 msgid "Setting up your workspace on this device…"
+msgstr ""
+
+#: src/components/ConnectDrivePicker.tsx
+msgid "Only on your devices"
+msgstr ""
+
+#. 0: titles; 1: app; 2: node
+#: src/helpers/connectableDrives.ts
+msgid "{0} only lives on your devices, so {1} cannot reach it through {2}. Deselect it, or turn on Cloud Server for that drive."
+msgstr ""
+
+#. 0: app; 1: titles; 2: text(other[0].error)
+#: src/helpers/connectableDrives.ts
+msgid "Could not give {0} access to {1}: {2}"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "A drive"
+msgstr ""
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Invited"
+msgstr ""
+
+#. 0: invite.email
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Remove invite for {0}"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Latest changes"
+msgstr ""
+
+#. 0: subject
+#: src/views/OntologyPage/sortSubjectList.ts
+msgid "Timed out fetching {0}"
 msgstr ""
