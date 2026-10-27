@@ -831,6 +831,7 @@ impl Db {
         let mut transaction = Transaction::new();
         let mut batched: Vec<&Resource> = Vec::new();
         let mut events = Vec::new();
+        let mut rules = Default::default();
         for (i, (resource, snapshot)) in entries.iter().enumerate() {
             let key = self.normalize_subject(resource.get_subject()).pure_id();
             if last.get(&key) != Some(&i) {
@@ -840,6 +841,7 @@ impl Db {
                 self.persist_replicated(resource, snapshot.clone()).await?;
                 continue;
             }
+            crate::class_constraints::warn_replicated_violations(self, resource, &mut rules).await;
             let before = transaction.len();
             let changed = self
                 .build_projection_tx(
@@ -900,6 +902,12 @@ impl Db {
         } else {
             None
         };
+        crate::class_constraints::warn_replicated_violations(
+            self,
+            resource,
+            &mut Default::default(),
+        )
+        .await;
         self.persist_resource_projection(resource, false, true, true, snapshot)
             .await
     }

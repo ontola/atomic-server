@@ -1358,6 +1358,20 @@ impl Commit {
         if opts.validate_schema && opts.validate_constraints {
             crate::class_constraints::validate_constraints_prop(&applied.resource_new)?;
             crate::class_constraints::check_resource(store, &applied.resource_new).await?;
+            crate::class_constraints::check_changed_properties(
+                store,
+                &applied.resource_new,
+                &applied.changed_props,
+            )
+            .await?;
+        } else if opts.validate_schema {
+            // Peer transport: keep what another node accepted, but flag it.
+            crate::class_constraints::warn_replicated_violations(
+                store,
+                &applied.resource_new,
+                &mut Default::default(),
+            )
+            .await;
         }
 
         let commit_resource: Resource = commit.into_resource(store).await?;
@@ -3571,6 +3585,185 @@ mod test {
         )
         .await
         .unwrap();
+    }
+
+    /// A client commit is refused when a property it changes breaks its
+    /// Property's datatype or `allowsOnly`; untouched bad data does not block
+    /// an edit, and replicated state is kept (and only flagged).
+    #[cfg(feature = "db")]
+    #[tokio::test]
+    async fn property_datatype_and_allows_only_are_enforced_on_client_commits() {
+        let store = crate::Db::init_temp("property_rules_on_commits")
+            .await
+            .unwrap();
+        let agent = store.get_default_agent().unwrap();
+        let opts = CommitOpts {
+            validate_schema: true,
+            validate_constraints: true,
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_loro_causality: false,
+            validate_rights: false,
+            validate_for_agent: None,
+            update_index: true,
+            source_id: None,
+        };
+        let count_prop = "https://localhost/properties/count";
+        let color_prop = "https://localhost/properties/color";
+        let notes_prop = "https://localhost/properties/notes";
+        let red = "https://localhost/colors/red";
+        let blue = "https://localhost/colors/blue";
+
+        let mut props = vec![
+            (count_prop, "count", crate::urls::INTEGER, None),
+            (
+                color_prop,
+                "color",
+                crate::urls::ATOMIC_URL,
+                Some(vec![red.to_string()]),
+            ),
+            (notes_prop, "notes", crate::urls::MARKDOWN, None),
+        ];
+        for (subject, name, datatype, allows) in props.drain(..) {
+            let mut p = Resource::new(subject.into());
+            p.set_unsafe(
+                crate::urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::urls::PROPERTY.to_string().into()]),
+            )
+            .unwrap();
+            p.set_unsafe(crate::urls::SHORTNAME.into(), Value::String(name.into()))
+                .unwrap();
+            p.set_unsafe(
+                crate::urls::DESCRIPTION.into(),
+                Value::String("desc".into()),
+            )
+            .unwrap();
+            p.set_unsafe(
+                crate::urls::DATATYPE_PROP.into(),
+                Value::AtomicUrl(datatype.into()),
+            )
+            .unwrap();
+            if let Some(allows) = allows {
+                p.set_unsafe(
+                    crate::urls::ALLOWS_ONLY.into(),
+                    Value::ResourceArray(allows.into_iter().map(Into::into).collect()),
+                )
+                .unwrap();
+            }
+            store.add_resource(&p).await.unwrap();
+        }
+
+        async fn commit_doc(
+            store: &crate::Db,
+            agent: &crate::agents::Agent,
+            subject: &str,
+            props: &[(&str, Value)],
+            opts: &CommitOpts,
+        ) -> AtomicResult<()> {
+            let doc = crate::loro::AtomicLoroDoc::new();
+            for (prop, value) in props {
+                doc.set_property(prop, value)?;
+            }
+            let mut builder = CommitBuilder::new(subject.into());
+            builder.set_loro_update(doc.export_snapshot());
+            let commit = builder
+                .sign(agent, store, &Resource::new(subject.into()))
+                .await?;
+            store.apply_commit(commit, opts).await.map(|_| ())
+        }
+        let name = |n: &str| (crate::urls::NAME, Value::String(n.into()));
+
+        // Valid.
+        commit_doc(
+            &store,
+            &agent,
+            "https://localhost/ok",
+            &[
+                name("ok"),
+                (count_prop, Value::Integer(3)),
+                (color_prop, Value::AtomicUrl(red.into())),
+                (notes_prop, Value::Markdown("# hi".into())),
+            ],
+            &opts,
+        )
+        .await
+        .unwrap();
+
+        // Wrong datatype: a string into an Integer property.
+        let err = commit_doc(
+            &store,
+            &agent,
+            "https://localhost/wrong_type",
+            &[name("x"), (count_prop, Value::String("three".into()))],
+            &opts,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.contains("Value for count")
+                && err.contains("breaks datatype")
+                && err.contains("wrong_type"),
+            "{err}"
+        );
+
+        // Outside allowsOnly.
+        let err = commit_doc(
+            &store,
+            &agent,
+            "https://localhost/wrong_choice",
+            &[name("x"), (color_prop, Value::AtomicUrl(blue.into()))],
+            &opts,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.contains("Value for color") && err.contains("breaks allowsOnly"),
+            "{err}"
+        );
+
+        // A peer-style apply keeps the bad value.
+        let peer_opts = CommitOpts {
+            validate_constraints: false,
+            ..opts.clone()
+        };
+        commit_doc(
+            &store,
+            &agent,
+            "https://localhost/legacy",
+            &[name("legacy"), (count_prop, Value::String("three".into()))],
+            &peer_opts,
+        )
+        .await
+        .unwrap();
+
+        // Replicated persist keeps it too, without erroring.
+        let mut replica = Resource::new("https://localhost/replica".into());
+        replica
+            .set_unsafe(count_prop.into(), Value::String("three".into()))
+            .unwrap();
+        store
+            .persist_replicated_resource(&replica)
+            .await
+            .expect("replicated state with a bad value is accepted");
+        assert!(store
+            .get_resource(&"https://localhost/replica".into())
+            .await
+            .is_ok());
+
+        // A client edit that does not touch the bad property still passes.
+        let legacy = store
+            .get_resource(&"https://localhost/legacy".into())
+            .await
+            .unwrap();
+        let doc = legacy.build_state_doc().unwrap();
+        doc.set_property(crate::urls::NAME, &Value::String("renamed".into()))
+            .unwrap();
+        let mut builder = CommitBuilder::new("https://localhost/legacy".into());
+        builder.set_loro_update(doc.export_snapshot());
+        let commit = builder.sign(&agent, &store, &legacy).await.unwrap();
+        store.apply_commit(commit, &opts).await.unwrap();
     }
 
     /// A commit whose Loro delta depends on ops the server never received

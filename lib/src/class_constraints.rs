@@ -981,6 +981,187 @@ async fn shortname_of(store: &impl Storelike, prop: &str) -> String {
     prop.to_string()
 }
 
+/// What a Property says about its values: the datatype and the legacy
+/// `allowsOnly`/`min`/`max` fields as a [`Constraint`].
+#[derive(Clone, Debug)]
+pub struct PropertyRules {
+    datatype: crate::datatype::DataType,
+    constraint: Constraint,
+}
+
+/// Rules per property subject. `None` marks a property the store can not
+/// fetch, which is never checked. Lets a bulk caller fetch each property once.
+pub type PropertyRulesCache = std::collections::HashMap<String, Option<PropertyRules>>;
+
+/// A value that breaks the datatype or `allowsOnly`/`min`/`max` of its Property.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PropertyViolation {
+    pub subject: String,
+    /// Subject of the property as written on the resource.
+    pub property: String,
+    pub property_name: String,
+    /// `datatype`, `allowsOnly`, or the failed JSON Schema keyword.
+    pub rule: String,
+    pub detail: String,
+}
+
+impl std::fmt::Display for PropertyViolation {
+    /// `Value for <shortname> (<property>) on <subject> breaks <rule>: <detail>`
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Value for {} ({}) on {} breaks {}: {}",
+            self.property_name, self.property, self.subject, self.rule, self.detail
+        )
+    }
+}
+
+/// Whether a materialized value is acceptable for a Property's datatype.
+/// Lenient where Loro does not tell variants apart: the cosmetic datatypes
+/// (markdown, slug, date, uri) collapse to a string, a timestamp to an integer,
+/// and an untagged URL-shaped string materializes as a link.
+fn datatype_accepts(datatype: &crate::datatype::DataType, value: &Value) -> bool {
+    use crate::datatype::DataType as D;
+    match datatype {
+        D::String | D::Markdown | D::Slug | D::Uri | D::Date => matches!(
+            value,
+            Value::String(_)
+                | Value::Markdown(_)
+                | Value::Slug(_)
+                | Value::Uri(_)
+                | Value::Date(_)
+                | Value::AtomicUrl(_)
+        ),
+        D::Integer | D::Timestamp => matches!(value, Value::Integer(_) | Value::Timestamp(_)),
+        D::Float => matches!(
+            value,
+            Value::Float(_) | Value::Integer(_) | Value::Timestamp(_)
+        ),
+        D::Boolean => matches!(value, Value::Boolean(_)),
+        D::AtomicUrl => matches!(
+            value,
+            Value::AtomicUrl(_) | Value::NestedResource(_) | Value::String(_)
+        ),
+        D::ResourceArray => matches!(value, Value::ResourceArray(_)),
+        D::LocalizedText => matches!(value, Value::LocalizedText(_) | Value::Json(_)),
+        // Free-form or unknown to this build: nothing to compare.
+        D::Json | D::LoroDoc | D::Unsupported(_) => true,
+    }
+}
+
+async fn rules_of<'a>(
+    store: &impl Storelike,
+    cache: &'a mut PropertyRulesCache,
+    property: &str,
+) -> Option<&'a PropertyRules> {
+    if !cache.contains_key(property) {
+        let rules = match store.get_resource(&property.into()).await {
+            Ok(p) => p
+                .get(urls::DATATYPE_PROP)
+                .ok()
+                .map(|d| crate::datatype::match_datatype(&d.to_string()))
+                .map(|datatype| PropertyRules {
+                    datatype,
+                    constraint: legacy_constraint(&p),
+                }),
+            Err(_) => None,
+        };
+        cache.insert(property.to_string(), rules);
+    }
+    cache.get(property).and_then(|r| r.as_ref())
+}
+
+/// Checks the values of `properties` on `resource` against the datatype and the
+/// `allowsOnly`/`min`/`max` of their Properties. Properties the resource does
+/// not hold, or the store can not fetch, are skipped.
+pub async fn property_violations<'p>(
+    store: &impl Storelike,
+    resource: &Resource,
+    properties: impl IntoIterator<Item = &'p String>,
+    cache: &mut PropertyRulesCache,
+) -> Vec<PropertyViolation> {
+    let mut found = Vec::new();
+    for prop in properties {
+        let Some(value) = resource.get(prop).ok().or_else(|| {
+            resource
+                .get(&crate::identifiers::to_legacy_scheme(prop))
+                .ok()
+        }) else {
+            continue;
+        };
+        let Some(rules) = rules_of(store, cache, prop).await else {
+            continue;
+        };
+        let broken = if !datatype_accepts(&rules.datatype, value) {
+            Some((
+                "datatype".to_string(),
+                format!("expected {:?}, got {:?}", rules.datatype, value.datatype()),
+            ))
+        } else {
+            match check_value(&rules.constraint, value) {
+                Ok(()) => None,
+                Err(e) => Some((
+                    match e.keyword {
+                        "enum" => "allowsOnly".to_string(),
+                        other => other.to_string(),
+                    },
+                    e.detail,
+                )),
+            }
+        };
+        if let Some((rule, detail)) = broken {
+            found.push(PropertyViolation {
+                subject: resource.get_subject().to_string(),
+                property: prop.clone(),
+                property_name: shortname_of(store, prop).await,
+                rule,
+                detail,
+            });
+        }
+    }
+    found
+}
+
+/// Rejects a client's commit when a property it changed breaks its Property's
+/// datatype or `allowsOnly`/`min`/`max`. Only `changed` is checked, so legacy
+/// bad data elsewhere does not block an unrelated edit.
+pub async fn check_changed_properties(
+    store: &impl Storelike,
+    resource: &Resource,
+    changed: &std::collections::HashSet<String>,
+) -> AtomicResult<()> {
+    let mut cache = PropertyRulesCache::new();
+    let mut props: Vec<&String> = changed.iter().collect();
+    props.sort();
+    match property_violations(store, resource, props, &mut cache)
+        .await
+        .into_iter()
+        .next()
+    {
+        Some(v) => Err(v.to_string().into()),
+        None => Ok(()),
+    }
+}
+
+/// For replicated state: another node already accepted it, so it is kept, but
+/// every value that breaks its Property is logged with subject, property and
+/// rule.
+pub async fn warn_replicated_violations(
+    store: &impl Storelike,
+    resource: &Resource,
+    cache: &mut PropertyRulesCache,
+) {
+    let props: Vec<String> = resource.get_propvals().keys().cloned().collect();
+    for v in property_violations(store, resource, &props, cache).await {
+        tracing::warn!(
+            subject = %v.subject,
+            property = %v.property,
+            rule = %v.rule,
+            "Replicated value breaks its Property: {v}"
+        );
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
