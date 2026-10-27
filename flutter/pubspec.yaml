@@ -3,7 +3,11 @@ description: Atomic Canvas - infinite drawing canvas
 
 publish_to: 'none'
 
-version: 1.0.0+1
+# Release version without the pre-release suffix (iOS accepts only x.y.z);
+# scripts/bump-version.mjs keeps it in step with the repo version. The part
+# after `+` is the build number, which must keep increasing in App Store
+# Connect (TestFlight is at 13).
+version: 0.41.0+14
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
