@@ -109,5 +109,5 @@ it('names the class of a resource that cannot be edited as a document', async ()
 
   expect(result).toMatch(/^Error: /);
   expect(result).toContain('Folder');
-  expect(result).toContain('"@class": "document"');
+  expect(result).toContain(dataBrowser.classes.documentV2);
 });

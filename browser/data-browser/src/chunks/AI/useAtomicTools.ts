@@ -7,6 +7,7 @@ import { listAppSetups } from '../../components/AppSetup/registry';
 import { previewEventSchema, previewTrigger } from './previewTrigger';
 import {
   core,
+  dataBrowser,
   createResourceFromCompact,
   expandSubject,
   getClassesOnDrive,
@@ -983,7 +984,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.CREATE_RESOURCE]: tool({
         description:
-          'Create one or more new resources from compact JSON-AD. To create a document use "@class": "document" (a document-v2, the only kind edit_document_resource can fill). Provide one object, or an ARRAY of objects to create many resources (e.g. table rows) in a single call — always prefer one batched call over multiple calls. Each object needs "@class" (class shortname or URL) and "@parent" (subject), plus property shortnames as keys, e.g. {"@class": "deal", "@parent": "did:ad:…", "name": "Acme", "status": "Lead"}. Full property URLs also work as keys. DO NOT include an @id, it is auto generated.',
+          `Create one or more new resources from compact JSON-AD. Give "@class" as the class URL. To create a document use "@class": "${dataBrowser.classes.documentV2}" (a document-v2, the only kind edit_document_resource can fill; ${dataBrowser.classes.document} is an old kind without an editable body). Provide one object, or an ARRAY of objects to create many resources (e.g. table rows) in a single call — always prefer one batched call over multiple calls. Each object needs "@class" (the class URL) and "@parent" (subject), plus property shortnames as keys, e.g. {"@class": "<class URL>", "@parent": "did:ad:…", "name": "Acme", "status": "Lead"}. Full property URLs also work as keys. DO NOT include an @id, it is auto generated.`,
         inputSchema: z.object({
           jsonAD: z
             .string()

@@ -2,7 +2,12 @@
 import { generateText, type LanguageModel } from 'ai';
 import { applyPatch } from 'fast-json-patch';
 import type { Operation } from 'fast-json-patch';
-import { getClassNames, useStore, type Store } from '@tomic/react';
+import {
+  dataBrowser,
+  getClassNames,
+  useStore,
+  type Store,
+} from '@tomic/react';
 import type { JSONContent } from '@tiptap/core';
 import { z } from 'zod';
 import { useGetModel } from './useModel';
@@ -241,7 +246,7 @@ export async function runDocumentEdit(
   if (!hasDocumentContent(resource)) {
     const classes = await getClassNames(resource, store);
 
-    return `Error: Resource ${subject} has no editable document content: it is ${classes ? `a ${classes}` : 'not a known class'}, and only a document-v2 or a meeting has a body. To write a document, create one with create_resource using "@class": "document" and edit that.`;
+    return `Error: Resource ${subject} has no editable document content: it is ${classes ? `a ${classes}` : 'not a known class'}, and only a document-v2 or a meeting has a body. To write a document, create one with create_resource using "@class": "${dataBrowser.classes.documentV2}" and edit that.`;
   }
 
   const model = getModel(editModel);
