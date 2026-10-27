@@ -279,3 +279,57 @@ describe('a poisoned wasm module', () => {
     }
   });
 });
+
+describe('relaying presence through a host', () => {
+  beforeAll(async () => {
+    await enableLoro();
+  });
+
+  it('keeps an injected entry’s own updatedAt, so a refresh changes nothing', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const drive = 'did:ad:test-drive-relay';
+    store.registerLocalOnlyDrive(drive);
+
+    const manager = store.getPresence(drive);
+    const unsubscribe = manager.subscribe(() => {});
+
+    manager.injectEntry('app-1', { agent: 'did:ad:agent:x', updatedAt: 1234 });
+    const first = manager.getSnapshot();
+
+    manager.injectEntry('app-1', { agent: 'did:ad:agent:x', updatedAt: 1234 });
+
+    expect(first.find(i => i.sessionId === 'app-1')?.updatedAt).toBe(1234);
+    expect(manager.getSnapshot()).toBe(first);
+    unsubscribe();
+  });
+
+  it('tells onLocalPresence about every write of our own entry', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const drive = 'did:ad:test-drive-local';
+    store.registerLocalOnlyDrive(drive);
+
+    const seen: unknown[] = [];
+    const off = store.onLocalPresence((d, entry) => seen.push([d, entry]));
+    const manager = store.getPresence(drive);
+
+    // Not subscribed (no Loro store yet): still reported.
+    manager.patchLocal({ typing: 'did:ad:room' });
+    manager.patchLocal({ data: { cell: 'a1' } });
+    manager.setLocal(undefined);
+    off();
+    manager.patchLocal({ typing: 'ignored' });
+
+    expect(seen).toEqual([
+      [drive, expect.objectContaining({ typing: 'did:ad:room' })],
+      [
+        drive,
+        expect.objectContaining({ typing: 'did:ad:room', data: { cell: 'a1' } }),
+      ],
+      [drive, undefined],
+    ]);
+  });
+});

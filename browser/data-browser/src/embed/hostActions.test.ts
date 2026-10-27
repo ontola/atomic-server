@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  hostFollow,
+  hostUnfollow,
+  reportPresence,
   openNative,
   reportShown,
   reportSidebarIcons,
@@ -116,4 +119,28 @@ it('reports the sidebar icons choice to the app, which may not know the call', (
   setActionsHost({ call: vi.fn().mockRejectedValue(new Error('unknown')) });
   expect(() => reportSidebarIcons(true)).not.toThrow();
   expect(SHOW_SIDEBAR_ICONS_KEY).toBe('showSidebarIcons');
+});
+
+it('hands the app the presence fields, follow and unfollow', () => {
+  const call = vi.fn().mockResolvedValue(true);
+
+  setActionsHost({ call });
+  reportPresence({ data: { x: 1 }, typing: null, session: 'did:ad:meeting' });
+  hostFollow('did:ad:agent:a');
+  hostUnfollow();
+
+  expect(call.mock.calls).toEqual([
+    ['presence', [{ data: { x: 1 }, typing: null, session: 'did:ad:meeting' }]],
+    ['follow', ['did:ad:agent:a']],
+    ['unfollow', []],
+  ]);
+});
+
+it('does nothing for presence and follow without an app, or when it declines', () => {
+  reportPresence({ data: null, typing: null, session: null });
+  hostFollow('a');
+  hostUnfollow();
+
+  setActionsHost({ call: vi.fn().mockRejectedValue(new Error('unknown')) });
+  expect(() => hostFollow('a')).not.toThrow();
 });

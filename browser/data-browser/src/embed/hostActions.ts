@@ -91,3 +91,37 @@ export const SHOW_SIDEBAR_ICONS_KEY = 'showSidebarIcons';
 export function reportSidebarIcons(show: boolean): void {
   host?.call('sidebarIcons', [show]).catch(() => undefined);
 }
+
+/**
+ * What the page owns of this session's presence entry. The app owns the rest
+ * (`resource`, `following`) and merges these into the entry it announces.
+ * `null` clears a field.
+ */
+export interface HostPresenceFields {
+  /** The view's own payload: a cursor inside a document, a table cell. */
+  data: unknown;
+  /** The thread or chat room being typed in. */
+  typing: string | null;
+  /** The Meeting this session leads, so joiners open its chat. */
+  session: string | null;
+}
+
+/**
+ * Hands the app the presence fields the page owns (`HostPresenceFields`), to
+ * announce with its own. An app that does not know the call keeps announcing
+ * without them.
+ */
+export function reportPresence(fields: HostPresenceFields): void {
+  host?.call('presence', [fields]).catch(() => undefined);
+}
+
+/** Asks the app to follow `agent`: the app navigates, the page only learns it
+ *  through `atomicEmbed.setFollow`. */
+export function hostFollow(agent: string): void {
+  host?.call('follow', [agent]).catch(() => undefined);
+}
+
+/** Asks the app to stop following. */
+export function hostUnfollow(): void {
+  host?.call('unfollow', []).catch(() => undefined);
+}

@@ -256,8 +256,14 @@ abstract class AssistantApi {
   /// Tells [drive] what this device is looking at: [resource] (null: nothing
   /// that others should see) and, in follow mode, the agent it [following].
   /// The host keeps the entry alive while the app is in the foreground.
+  /// [session] is the Meeting this device leads and [extra] more fields of the
+  /// web's entry (`data`, `typing`) that the page owns; null values are left
+  /// out, and [extra] never overrides [resource] or [following].
   Future<void> announcePresence(String drive,
-      {String? resource, String? following}) async {}
+      {String? resource,
+      String? following,
+      String? session,
+      Map<String, Object?>? extra}) async {}
 
   /// Takes this device's entry off [drive]'s presence channel (the app went
   /// to the background).

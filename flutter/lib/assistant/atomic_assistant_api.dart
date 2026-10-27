@@ -81,9 +81,16 @@ class AtomicAssistantApi extends AssistantApi {
   Listenable? get presenceChanges => AtomicClient.presenceRevision;
   @override
   Future<void> announcePresence(String drive,
-          {String? resource, String? following}) =>
-      AtomicClient.setPresence(
-          drive, {'resource': resource, 'following': following});
+          {String? resource,
+          String? following,
+          String? session,
+          Map<String, Object?>? extra}) =>
+      AtomicClient.setPresence(drive, {
+        ...?extra,
+        'resource': resource,
+        'following': following,
+        'session': session,
+      });
   @override
   Future<void> clearPresence(String drive) => AtomicClient.clearPresence(drive);
   @override

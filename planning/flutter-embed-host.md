@@ -229,6 +229,43 @@ nothing appeared. Decision:
   camera, which the host does not grant the web view. "End meeting" only shows
   for a meeting started on the page, so it follows.
 
+### Presence and follow in the embed
+
+The page has no websocket, so the app is the page's presence channel (Rust
+`lib/src/host/presence.rs`, which passes every field of the web's
+`PresenceEntry` through). One follow implementation: the app navigates.
+
+- **App to page**: `ResourceView` (`_pushPresence`, `_pushFollow`) runs
+  `atomicEmbed.presence(drive, items)` (the other sessions of its
+  `PresenceWatch`, `PresenceItem.toJson`: `resource`, `following`, `session`,
+  `allowFollow`, `data`, `typing`, `updatedAt`) whenever the list changes, when
+  the page is shown and when it says `header`/`revealed`; and
+  `atomicEmbed.setFollow(agent|null)` on follow changes and on show.
+  `src/embed/presenceBridge.ts` (`createPresenceBridge`) injects the list into
+  the store's `DrivePresenceManager` (`injectEntry`/`removeEntry`, keeping the
+  entry's `updatedAt`), and re-sets it every 8 s so it outlives the 30 s TTL.
+  So `useDrivePresence`, facepiles, table/document cursors, typing hints and
+  `FollowSessionChat` participants work unchanged. Only the drive's manager is
+  fed; a shared-resource channel (`presenceScope`) gets nothing yet.
+- **Page to app**: `Store.onLocalPresence` (new, `browser/lib`) reports every
+  write of the page's own entry; `relayLocalPresence` sends `data`, `typing`
+  and `session` (null clears) as the `presence` call, at most every 120 ms, and
+  only on change. The app keeps them (`_pageData/_pageTyping/_pageSession`) and
+  merges them into each `announcePresence(session:, extra:)`; `resource` and
+  `following` stay the app's.
+- **Follow**: `FollowContext` in the embed calls `follow`/`unfollow` on the app
+  (`hostFollow`/`hostUnfollow`), which sets its `FollowController` and goes to
+  the leader (`_leaderMoved`); `followedAgent` mirrors `setFollow`
+  (`useHostFollow`). The page's own navigate-to-leader and "leader went away"
+  effects are off (the app does both); it only asks the app to stop when the
+  leader turned `allowFollow` off. The "Viewing" trail line is not posted from
+  the embedded page (neither on start nor per resource): nothing in the app
+  posts it yet, so a meeting led from the app has no trail until it does.
+
+Tests: `presenceBridge.test.ts`, `FollowContext.test.tsx`, `hostActions.test.ts`,
+`browser/lib/src/presence.test.ts`, `packages/atomic_chat/test/presence_test.dart`.
+Not verified on a device.
+
 The native chat: `lib/src/host/chat_rooms.rs` reads the room's `ChatLog` entries
 plus old `Message` resources (an old message that has its entry is left out) as
 `text` or `event` lines (entry kind `FollowEvent`; a "Viewing [title](subject)"

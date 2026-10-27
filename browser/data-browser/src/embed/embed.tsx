@@ -39,7 +39,12 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { enableLoro, StoreContext, type NativeChannel } from '@tomic/react';
+import {
+  enableLoro,
+  StoreContext,
+  type NativeChannel,
+  type PresenceItem,
+} from '@tomic/react';
 import {
   enableEmbedMode,
   setHostColorScheme,
@@ -68,11 +73,17 @@ import {
 import { installTouchGestures, setGestures } from './gestures';
 import { closeAllOverlays, closeTopOverlay } from './overlayBack';
 import {
+  reportPresence,
   reportShown,
   setActionsHost,
   SHOW_SIDEBAR_ICONS_KEY,
 } from './hostActions';
 import { setLocalStorageValue } from '../hooks/useLocalStorage';
+import {
+  createPresenceBridge,
+  relayLocalPresence,
+  setHostFollow,
+} from './presenceBridge';
 import { useNativeChatRoom } from './useNativeChatRoom';
 import { embedTouchCss } from './touchStyle';
 import { EmbedMenu } from './EmbedMenu';
@@ -150,6 +161,11 @@ declare global {
       show(subject: string, hint?: CrumbHint): void;
       open(subject: string, hint?: CrumbHint): void;
       changed(subjects: string[]): void;
+      /** The other sessions in `drive`, as the app's presence channel has
+       * them (`presenceBridge.ts`). The whole list, every time. */
+      presence(drive: string, items: PresenceItem[]): void;
+      /** Who the app is following now (null: nobody); the app navigates. */
+      setFollow(agent: string | null): void;
       /** `anchor`: the app's "more" button (right edge, top), in page px. */
       openMenu(anchor?: { x: number; y: number }): void;
       /** The app's native screen asks for its "more" menu over itself: this
@@ -189,6 +205,14 @@ setActionsHost(window.atomicHost || window.AtomicFlutter ? channel : undefined);
 const { store, db } = await createEmbedStore(channel);
 
 const flush = createFlush(store, db);
+
+// Presence goes through the app, not a websocket: its list comes in with
+// `atomicEmbed.presence`, and what the page writes to its own entry goes out.
+const presenceBridge = createPresenceBridge(store);
+
+if (window.atomicHost || window.AtomicFlutter) {
+  relayLocalPresence(store, reportPresence);
+}
 
 // The app going to the background, or the page being torn down: whatever is
 // still in a debounce timer goes now. (Leaving a page, the app also asks for
@@ -469,6 +493,12 @@ window.atomicEmbed = {
         })
         .catch(() => undefined);
     }
+  },
+  presence(drive, items) {
+    presenceBridge.feed(drive, Array.isArray(items) ? items : []);
+  },
+  setFollow(agent) {
+    setHostFollow(agent);
   },
   /** One step back in the page's own history; false when there is none. */
   back() {

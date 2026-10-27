@@ -140,6 +140,19 @@ class _ResourceViewState extends State<ResourceView>
   PresenceWatch? _watch;
   late final FollowController _follow;
 
+  /// What the web page owns of this device's presence entry (`presence` from
+  /// the page): the cursor of its view, the thread being typed in, the
+  /// meeting it leads. Merged into every announcement; the app keeps
+  /// `resource` and `following`.
+  Object? _pageData;
+  String? _pageTyping;
+  String? _pageSession;
+
+  /// The last list and follow state pushed into the page, so an unchanged
+  /// read does not wake it.
+  String? _pushedPresence;
+  String? _pushedFollow;
+
   /// The avatar sheet is open: it covers this page without leaving it.
   bool _sheetOpen = false;
 
@@ -503,17 +516,90 @@ class _ResourceViewState extends State<ResourceView>
     if (ModalRoute.of(context)?.isCurrent == false) return;
     _announcer = this;
     final watch = _watch ??= PresenceWatch(widget.api, widget.drive)
-      ..addListener(_leaderMoved);
+      ..addListener(_watchChanged);
     watch.start();
     _announce();
+    _pushPresence(force: true);
     setState(() {});
   }
 
   void _announce() {
     widget.api
         .announcePresence(widget.drive,
-            resource: widget.subject, following: _follow.agent)
+            resource: widget.subject,
+            following: _follow.agent,
+            session: _pageSession,
+            extra: {
+              if (_pageData != null) 'data': _pageData,
+              if (_pageTyping != null) 'typing': _pageTyping,
+            })
         .catchError((Object e) => debugPrint('[presence] not announced: $e'));
+  }
+
+  void _watchChanged() {
+    _pushPresence();
+    _leaderMoved();
+  }
+
+  /// Hands the page the others in the drive and who the app follows, so its
+  /// facepiles, cursors and follow controls show what the app knows (the page
+  /// has no connection of its own). [force]: even when nothing changed since
+  /// the last push (the page was just shown, or loaded after the last one).
+  void _pushPresence({bool force = false}) {
+    final page = _page;
+    final watch = _watch;
+    if (page == null || watch == null || _announcer != this || _menuOnly) {
+      return;
+    }
+    final items = jsonEncode([for (final i in watch.items) i.toJson()]);
+    if (force || items != _pushedPresence) {
+      _pushedPresence = items;
+      unawaited(page
+          .runJavaScript('window.atomicEmbed?.presence('
+              '${jsonEncode(widget.drive)},$items)')
+          .catchError((Object _) {}));
+    }
+    _pushFollow(force: force);
+  }
+
+  void _pushFollow({bool force = false}) {
+    final page = _page;
+    if (page == null || _announcer != this || _menuOnly) return;
+    final agent = jsonEncode(_follow.agent);
+    if (!force && agent == _pushedFollow) return;
+    _pushedFollow = agent;
+    unawaited(page
+        .runJavaScript('window.atomicEmbed?.setFollow($agent)')
+        .catchError((Object _) {}));
+  }
+
+  /// The page's `presence` call: the fields it owns of the entry. Only the
+  /// fields it names change; a null clears one.
+  void _pagePresence(Object? args) {
+    final fields = args is List && args.isNotEmpty ? args.first : null;
+    if (fields is! Map) return;
+    var changed = false;
+    if (fields.containsKey('data') && fields['data'] != _pageData) {
+      _pageData = fields['data'];
+      changed = true;
+    }
+    if (fields.containsKey('typing')) {
+      final typing = fields['typing'];
+      final next = typing is String && typing.isNotEmpty ? typing : null;
+      if (next != _pageTyping) {
+        _pageTyping = next;
+        changed = true;
+      }
+    }
+    if (fields.containsKey('session')) {
+      final session = fields['session'];
+      final next = session is String && session.isNotEmpty ? session : null;
+      if (next != _pageSession) {
+        _pageSession = next;
+        changed = true;
+      }
+    }
+    if (changed && _announcer == this) _announce();
   }
 
   /// This page is no longer shown: the entry keeps who we follow but no
@@ -532,6 +618,7 @@ class _ResourceViewState extends State<ResourceView>
   /// Following started or stopped: the entry says so.
   void _followChanged() {
     if (_announcer == this) _announce();
+    _pushFollow();
     if (mounted) setState(() {});
   }
 
@@ -755,12 +842,16 @@ class _ResourceViewState extends State<ResourceView>
       return;
     }
     if (request['method'] == 'header') {
+      // The page is up: what the app knows of presence and following was
+      // pushed before it could listen.
+      _pushPresence(force: true);
       if (request['subject'] == widget.subject && !_headerShown && mounted) {
         setState(() => _headerShown = true);
       }
       return;
     }
     if (request['method'] == 'revealed') {
+      _pushPresence(force: true);
       final why = request['why'];
       if (why is String && why.isNotEmpty) {
         debugPrint('[warm] revealed after ${request['ms']} ms, waited on $why');
@@ -785,6 +876,25 @@ class _ResourceViewState extends State<ResourceView>
     }
     if (method == 'openNative') {
       await _answerOpenNative(id, request['args']);
+      return;
+    }
+    if (method == 'presence' || method == 'follow' || method == 'unfollow') {
+      // The page's presence fields, and its follow buttons: the app keeps the
+      // one follow state and does the navigating (`_leaderMoved`).
+      final args = request['args'];
+      if (method == 'presence') {
+        _pagePresence(args);
+      } else if (method == 'unfollow') {
+        _follow.stop();
+      } else if (args is List && args.isNotEmpty && '${args.first}'.isNotEmpty) {
+        _follow.follow('${args.first}');
+        // Go to where they are right away.
+        _leaderMoved();
+      }
+      try {
+        await _page?.runJavaScript(
+            'window.__atomicReply($id,true,${jsonEncode('true')})');
+      } catch (_) {}
       return;
     }
     if (method == 'sidebarIcons') {
