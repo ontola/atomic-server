@@ -15,6 +15,8 @@ import { IconButton } from '../IconButton/IconButton';
 import { transition } from '../../helpers/transition';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { hasActionsHost } from '../../embed/hostActions';
+import { startHostCall } from '../../embed/joinCall';
 
 const ConferenceRoom = lazy(
   () => import('../../chunks/Conference/ConferenceRoom'),
@@ -42,10 +44,11 @@ export const FollowSessionPanelContainer: React.FC = () => {
 
 /**
  * The meeting panel's content: title, who is here, chat, and End / Leave.
- * `embedded` is for the Flutter app's web view, which cannot place a video
- * call (no microphone or camera) and is already on the meeting page, so the
- * call and Notes buttons are left out; `trailing` adds an action (a close
- * button) after the others.
+ * `embedded` is for the Flutter app's web view: it is already on the meeting
+ * page, so Notes is left out, and the call is not placed here but by the app
+ * (a call page of its own that outlives this one, `joinCall` in
+ * `embed/hostActions.ts`); the video button is shown only when the app takes
+ * it. `trailing` adds an action (a close button) after the others.
  */
 export function FollowSessionChat({
   subject,
@@ -57,12 +60,15 @@ export function FollowSessionChat({
   trailing?: React.ReactNode;
 }) {
   const chatroom = useResource(subject);
-  const { followedAgent, unfollow, activeMeeting, endMeeting } = useFollow();
+  const { followedAgent, follow, unfollow, activeMeeting, endMeeting } =
+    useFollow();
   const { setPanelOpen } = useRightPanel();
   const presence = useDrivePresence();
   const [agent] = useCurrentAgent();
   const [ending, setEnding] = useState(false);
   const [inCall, setInCall] = useState(false);
+  // The app answered false to a call: the button is no use here.
+  const [hostCallRefused, setHostCallRefused] = useState(false);
 
   // The panel header's action: the leader ends the meeting; a joined
   // attendee leaves it.
@@ -109,6 +115,19 @@ export function FollowSessionChat({
     setPanelOpen('followSession', false);
   }
 
+  // Placing the call is the app's: it also joins the meeting, as Join does.
+  async function handleHostCall() {
+    const started = await startHostCall({
+      meeting: subject,
+      leader: leaderAgent,
+      leading,
+      followed: followedAgent,
+      follow,
+    });
+
+    if (!started) setHostCallRefused(true);
+  }
+
   // Only leader / joined attendee gets the End / Leave action.
   const showAction = leading || followedAgent === leaderAgent;
   const navigate = useNavigateWithTransition();
@@ -146,6 +165,15 @@ export function FollowSessionChat({
               color={inCall ? 'main' : 'textLight'}
               onClick={() => setInCall(current => !current)}
               title={inCall ? 'Leave video call' : 'Start video call'}
+            >
+              <FaVideo />
+            </IconButton>
+          )}
+          {embedded && hasActionsHost() && !hostCallRefused && (
+            <IconButton
+              color='textLight'
+              onClick={() => void handleHostCall()}
+              title='Start video call'
             >
               <FaVideo />
             </IconButton>

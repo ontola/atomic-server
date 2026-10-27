@@ -878,6 +878,10 @@ class _ResourceViewState extends State<ResourceView>
       await _answerOpenNative(id, request['args']);
       return;
     }
+    if (method == 'joinCall') {
+      await _answerJoinCall(id, request['args']);
+      return;
+    }
     if (method == 'presence' || method == 'follow' || method == 'unfollow') {
       // The page's presence fields, and its follow buttons: the app keeps the
       // one follow state and does the navigating (`_leaderMoved`).
@@ -1036,6 +1040,31 @@ class _ResourceViewState extends State<ResourceView>
           '${jsonEncode(jsonEncode(handled))})');
     } catch (e) {
       debugPrint('[embed] reply to openNative not delivered: $e');
+    }
+  }
+
+  /// The page asks for the call of a meeting (`joinCall(meeting)`). The call
+  /// is not this page's: it is the shell's ([ShellController.call], a web
+  /// view of its own shown as a floating tile), so it goes on when this page
+  /// is replaced by following the leader. Answers whether the app took it
+  /// (not without a shell), and the page hides its call button when not.
+  Future<void> _answerJoinCall(int id, Object? args) async {
+    final call = ShellScope.maybeOf(context)?.call;
+    final meeting = args is List && args.isNotEmpty && args.first is String
+        ? args.first as String
+        : '';
+    var handled = false;
+    if (mounted && call != null && meeting.isNotEmpty) {
+      handled = true;
+      final scheme =
+          Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
+      unawaited(call.start(meeting, scheme: scheme));
+    }
+    try {
+      await _page?.runJavaScript('window.__atomicReply($id,true,'
+          '${jsonEncode(jsonEncode(handled))})');
+    } catch (e) {
+      debugPrint('[embed] reply to joinCall not delivered: $e');
     }
   }
 

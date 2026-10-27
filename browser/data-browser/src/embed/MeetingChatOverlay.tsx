@@ -15,8 +15,8 @@ import { openNative } from './hostActions';
 /**
  * The chat panel in the embed, over the whole page. For a meeting it is the
  * web app's meeting panel (title, who is here, chat, Leave), full screen; the
- * video call and Notes buttons are left out (no microphone or camera in the
- * app's web view, and the page is the meeting). Closed with the button or the
+ * Notes button is left out (the page is the meeting) and the video button
+ * asks the app to place the call (`joinCall`). Closed with the button or the
  * host's Back.
  *
  * A plain chat room has a native screen in the app: it is asked to open that

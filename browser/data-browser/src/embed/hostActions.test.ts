@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  hasActionsHost,
   hostFollow,
+  joinCall,
+  leaveCall,
   hostUnfollow,
   reportPresence,
   openNative,
@@ -143,4 +146,34 @@ it('does nothing for presence and follow without an app, or when it declines', (
 
   setActionsHost({ call: vi.fn().mockRejectedValue(new Error('unknown')) });
   expect(() => hostFollow('a')).not.toThrow();
+});
+
+describe('calls', () => {
+  it('joinCall asks the app and reports its answer', async () => {
+    const call = vi.fn().mockResolvedValue(true);
+
+    setActionsHost({ call });
+    expect(await joinCall('did:ad:meeting')).toBe(true);
+    expect(call).toHaveBeenCalledWith('joinCall', ['did:ad:meeting']);
+  });
+
+  it('joinCall is false without an app, when it declines or does not know the call', async () => {
+    expect(await joinCall('did:ad:meeting')).toBe(false);
+    expect(hasActionsHost()).toBe(false);
+
+    setActionsHost({ call: vi.fn().mockResolvedValue(false) });
+    expect(hasActionsHost()).toBe(true);
+    expect(await joinCall('did:ad:meeting')).toBe(false);
+
+    setActionsHost({ call: vi.fn().mockRejectedValue(new Error('unknown')) });
+    expect(await joinCall('did:ad:meeting')).toBe(false);
+  });
+
+  it('leaveCall tells the app', () => {
+    const call = vi.fn().mockResolvedValue(null);
+
+    setActionsHost({ call });
+    leaveCall();
+    expect(call).toHaveBeenCalledWith('leaveCall', []);
+  });
 });

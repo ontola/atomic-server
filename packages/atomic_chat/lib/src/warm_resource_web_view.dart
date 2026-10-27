@@ -9,8 +9,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'assistant_api.dart';
+import 'call_permissions.dart';
 import 'resource_view.dart';
 import 'app_sidebar_icons.dart';
 import 'app_theme.dart';
@@ -80,16 +82,36 @@ class WebViewEmbedPage implements WarmPage {
   int get age => _created.elapsedMilliseconds;
 
   /// Loads [url] (the bundled page) into a new web view. Only pages of
-  /// [url]'s own origin are ever shown in it.
+  /// [url]'s own origin are ever shown in it. With [mediaPermissions] the
+  /// page may ask for the microphone and camera (the call page).
   static Future<WebViewEmbedPage> create(
     Uri url, {
     void Function(String message)? onMessage,
     VoidCallback? onLoaded,
     bool pollReady = false,
+    CallPermissions? mediaPermissions,
   }) async {
     late final WebViewEmbedPage page;
     final origin = url.origin;
-    final controller = WebViewController()
+    // Only the call page gets a microphone and camera (and, on iOS, plays
+    // video inline and without a tap).
+    final media = mediaPermissions;
+    final controller = (media == null
+        ? WebViewController()
+        : WebViewController.fromPlatformCreationParams(
+            Platform.isIOS || Platform.isMacOS
+                ? WebKitWebViewControllerCreationParams(
+                    allowsInlineMediaPlayback: true,
+                    mediaTypesRequiringUserAction: const {},
+                  )
+                : const PlatformWebViewControllerCreationParams(),
+            onPermissionRequest: (request) => answerPermissionRequest(
+              types: request.types,
+              grant: request.grant,
+              deny: request.deny,
+              permissions: media,
+            ),
+          ))
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel('AtomicFlutter', onMessageReceived: (m) {
         // The page's own "I am up" is not a call.
@@ -591,8 +613,9 @@ class WarmResourceWebView with WidgetsBindingObserver, ChangeNotifier {
         return;
       }
       // A hidden spare opens no native screen over nobody: false makes the
-      // page draw the resource itself, if it ever asks.
-      if (method == 'openNative') {
+      // page draw the resource itself, if it ever asks. (Nor does it start a
+      // call: false hides the page's call button.)
+      if (method == 'openNative' || method == 'joinCall') {
         await page.runJavaScript(
             'window.__atomicReply($id,true,${jsonEncode('false')})');
         return;

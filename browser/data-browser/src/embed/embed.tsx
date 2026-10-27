@@ -19,6 +19,10 @@
  *   startWelcome(id, personalDrive)  the app's first run: build the Welcome
  *                     drive (answered as a `welcomeResult` message)
  *
+ * Call mode: `embed.html?call=<meeting>` renders only the meeting's call
+ * (`CallPage.tsx`); the page asks the app for one with `joinCall(meeting)` and
+ * ends it with `leaveCall()` (`hostActions.ts`).
+ *
  * Page to host, besides the store's calls: `openNative(classUrl, subject, title)`
  * (`hostActions.ts`) asks the app to show the chat of a meeting or chat room in
  * its own screen; the answer is whether it did. `opened(subject)` tells the app
@@ -87,6 +91,7 @@ import {
 import { useNativeChatRoom } from './useNativeChatRoom';
 import { embedTouchCss } from './touchStyle';
 import { EmbedMenu } from './EmbedMenu';
+import { CallPage } from './CallPage';
 
 enableEmbedMode();
 registerEmbedActions();
@@ -210,7 +215,11 @@ const flush = createFlush(store, db);
 // `atomicEmbed.presence`, and what the page writes to its own entry goes out.
 const presenceBridge = createPresenceBridge(store);
 
-if (window.atomicHost || window.AtomicFlutter) {
+// The call page (`?call=`) has no presence of its own to report.
+if (
+  (window.atomicHost || window.AtomicFlutter) &&
+  !new URLSearchParams(location.search).has('call')
+) {
   relayLocalPresence(store, reportPresence);
 }
 
@@ -226,6 +235,9 @@ window.addEventListener('pagehide', () => void flush());
 // tools (`?ai=1&drive=<subject>`).
 const aiParams = new URLSearchParams(location.search);
 const aiMode = aiParams.get('ai') === '1';
+// The app's call page (`?call=<meeting subject>`): only that meeting's
+// audio/video call, kept by the app across navigation (`CallPage.tsx`).
+const callMeeting = aiParams.get('call') || undefined;
 // The AI SDK and the web chat's tools are only for the app's AI chat: a lazy
 // chunk keeps them out of the first resource's load.
 const AiToolsHost = lazy(() =>
@@ -240,7 +252,7 @@ const rootRoute = createRootRoute({
           <AiToolsHost drive={aiParams.get('drive') ?? undefined} />
         </Suspense>
       )}
-      <Outlet />
+      {callMeeting ? <CallPage meeting={callMeeting} /> : <Outlet />}
     </Providers>
   ),
 });

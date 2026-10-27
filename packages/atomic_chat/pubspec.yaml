@@ -19,6 +19,8 @@ dependencies:
   speech_to_text: ^7.5.0
   flutter_tts: ^4.2.5
   record: ^7.1.2
+  permission_handler: ^13.0.2
+  webview_flutter_wkwebview: ^3.26.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

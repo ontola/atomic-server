@@ -25,6 +25,8 @@ import 'search_screen.dart';
 import 'new_document_sheet.dart' show warmDriveVisits;
 import 'native_views.dart';
 import 'warm_resource_web_view.dart';
+import 'meeting_call.dart';
+import 'meeting_call_overlay.dart';
 import 'slide_back_route.dart';
 import 'home_sections.dart' show HomeSection, HomeSectionEntry;
 import 'list_and_field.dart' show readableHorizontalPadding;
@@ -255,6 +257,11 @@ class ShellController extends ChangeNotifier {
   /// The web page kept loaded for the next resource (see
   /// [WarmResourceWebView]); null where there is none.
   WarmResourceWebView? warm;
+
+  /// The running audio/video call of a meeting, if any; it lives here, not in
+  /// a resource page, so it survives the pages being replaced. Set by the
+  /// shell.
+  MeetingCall? call;
 
   /// Who the person is, for the bar's profile button; null until loaded (the
   /// button then shows a person icon). Kept once loaded: a failed refresh
@@ -678,6 +685,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final ShellController _shell =
       ShellController(drive: widget.drive, profile: widget.profile);
   late final _TopObserver _observer = _TopObserver(_shell);
+  late final MeetingCall _call = MeetingCall(api: widget.api);
 
   /// The home keeps its state wherever it is shown: as the first page, or in
   /// the list pane next to the pages.
@@ -747,6 +755,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         (widget.warmPool ?? WarmResourceWebView.forPlatform)(widget.api)
           ?..showAhead = _likelyNext
           ..warmUp();
+    _shell.call = _call;
     _shell.loadListPrefs();
     warmDriveVisits();
     _shell.identityLoader = widget.api.ownIdentity;
@@ -819,6 +828,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     HardwareKeyboard.instance.removeHandler(_onKey);
     WidgetsBinding.instance.removeObserver(this);
     _shell.warm?.dispose();
+    _shell.call = null;
+    _call.dispose();
     _shell.dispose();
     _barHeight.dispose();
     super.dispose();
@@ -897,23 +908,30 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           child: child!,
         ),
         // Android back pops the pages first and leaves the app on the home.
-        child: NavigatorPopHandler(
-          onPopWithResult: (_) {
-            // Back closes an open New (or Search) list before a page.
-            if (HoldFan.dismissOpenMenu()) return;
-            _shell.navigatorKey.currentState?.maybePop();
-          },
-          child: layout == ShellLayout.split
-              // The bar is under the list pane only (see _SplitPanes).
-              ? pages
-              : Column(children: [
-                  // The bar stays laid out at full height; the keyboard covers
-                  // it and the pages get the keyboard minus the bar's height.
-                  Expanded(
-                      child: _PagesInset(barHeight: _barHeight, child: pages)),
-                  _bar,
-                ]),
-        ),
+        child: Stack(fit: StackFit.expand, children: [
+          NavigatorPopHandler(
+            onPopWithResult: (_) {
+              // Back closes an open New (or Search) list before a page.
+              if (HoldFan.dismissOpenMenu()) return;
+              _shell.navigatorKey.currentState?.maybePop();
+            },
+            child: layout == ShellLayout.split
+                // The bar is under the list pane only (see _SplitPanes).
+                ? pages
+                : Column(children: [
+                    // The bar stays laid out at full height; the keyboard
+                    // covers it and the pages get the keyboard minus the
+                    // bar's height.
+                    Expanded(
+                        child: _PagesInset(
+                            barHeight: _barHeight, child: pages)),
+                    _bar,
+                  ]),
+          ),
+          // The call floats over every page and survives their being
+          // replaced.
+          MeetingCallOverlay(call: _call),
+        ]),
       ),
     );
   }

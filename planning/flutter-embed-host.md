@@ -201,8 +201,8 @@ nothing appeared. Decision:
   `src/embed/MeetingChatOverlay.tsx` shows `FollowSessionChat` (exported from
   `components/Presence/FollowSessionPanelContainer.tsx`: title, who is here,
   chat, End / Leave) full screen with a close button. In the embed
-  (`embedded`) the video call and Notes buttons are left out: no microphone or
-  camera in the web view, and the page is the meeting.
+  (`embedded`) Notes is left out (the page is the meeting) and the video
+  button asks the app to place the call (see "Calls" below).
 - **Open chat on a plain ChatRoom**: the page asks the app to show the chat in
   its own screen (`openNative('chatroom', subject, title)`,
   `src/embed/hostActions.ts`, answered `true` when the app opened it). The
@@ -225,9 +225,51 @@ nothing appeared. Decision:
   `atomicEmbed.back()` closes the topmost overlay first and returns true.
 - **Start meeting**: hidden in the embed (`showMeetingStart` in
   `src/embed/settings.ts`). It starts a presence session over the server
-  connection (the embed has none) and a WebRTC call needing microphone and
-  camera, which the host does not grant the web view. "End meeting" only shows
-  for a meeting started on the page, so it follows.
+  connection (the embed has none), which the page does not have. "End
+  meeting" only shows for a meeting started on the page, so it follows.
+
+### Calls
+
+Audio/video in a meeting is the web's `ConferenceRoom` (WebRTC over the
+trystero/nostr public relays, signaling included): one implementation, nothing
+of it in Dart. The resource page cannot hold it: following the leader replaces
+the `ResourceView`, and warm pages are recycled, which would hang up. So:
+
+- **Call page**: `embed.html?call=<meeting>&scheme=` renders only
+  `ConferenceRoom` (`src/embed/CallPage.tsx`; same native store and crypto as
+  every embed page, no presence relay). Its width picks `compact` (<= 240 px,
+  the floating tile: the others first, no controls) or the full room with
+  mute / camera / leave. Leave posts `leaveCall` to the app.
+- **`MeetingCall`** (`packages/atomic_chat/lib/src/meeting_call.dart`): one per
+  `AppShell` (`ShellController.call`), owning ONE dedicated web view (made with
+  `WebViewEmbedPage.create(mediaPermissions:)`, not from the warm pool). Its
+  web view gets `onPermissionRequest` (`call_permissions.dart`: only
+  microphone/camera are granted, after the runtime permission on Android via
+  `permission_handler`; on iOS the grant itself makes the system ask) and, on
+  iOS, `allowsInlineMediaPlayback` and no tap needed to play. The permission
+  layer sits behind `CallPermissions`, so tests need no plugin.
+- **`MeetingCallOverlay`** (`meeting_call_overlay.dart`, a child of the
+  shell's `Stack`): a small draggable tile (tap: expand; red button: leave)
+  or the larger view (minimize / leave, the page's own controls). One widget
+  in the tree between the two, so the web view is resized, not made again; it
+  stays across pages being pushed, popped or replaced.
+- **Wiring**: with a host (`hasActionsHost`) `FollowSessionChat embedded`
+  shows the video button again. Pressing it calls `joinCall(meeting)`
+  (`hostActions.ts`), handled in `ResourceView` (`_answerJoinCall`) by
+  `MeetingCall.start`, and, as the web's Join does, `startHostCall`
+  (`joinCall.ts`) follows the leader through the existing `follow` call
+  unless the session leads or already follows. An answer of false (no shell;
+  the warm spare, older app, desktop mock has no host) hides the button.
+- **Native**: Android `MODIFY_AUDIO_SETTINGS` (with CAMERA, RECORD_AUDIO),
+  iOS usage texts now name the meeting calls.
+
+Tests: `CallPage.test.tsx`, `joinCall.test.ts`, `hostActions.test.ts`,
+`packages/atomic_chat/test/meeting_call_test.dart` (controller, permission
+mapping, tile and survival across navigation in the shell).
+Not verified on a device: getUserMedia in the iOS/Android web views, the
+runtime permission prompt, audio route and the call continuing with the app in
+the background (no foreground service / background audio mode yet), TURN-less
+WebRTC across restrictive networks.
 
 ### Presence and follow in the embed
 

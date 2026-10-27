@@ -125,3 +125,32 @@ export function hostFollow(agent: string): void {
 export function hostUnfollow(): void {
   host?.call('unfollow', []).catch(() => undefined);
 }
+
+/** Whether the page runs in an app that can answer its calls (not the
+ *  desktop mock, not a plain browser). */
+export function hasActionsHost(): boolean {
+  return !!host;
+}
+
+/**
+ * Asks the app to start the audio/video call of `meeting`. The web view of
+ * this page is replaced when the app navigates (following the leader), so the
+ * call lives in a page of its own that the app keeps (`?call=`, see
+ * `CallPage.tsx`). Resolves true when the app took the call, false when it
+ * cannot (an older app, the desktop mock, no microphone permission yet
+ * decided against): the page then hides its call button.
+ */
+export async function joinCall(meeting: string): Promise<boolean> {
+  if (!host) return false;
+
+  try {
+    return (await host.call('joinCall', [meeting])) === true;
+  } catch {
+    return false;
+  }
+}
+
+/** The call page's Leave button: the app ends the call (and its tile). */
+export function leaveCall(): void {
+  host?.call('leaveCall', []).catch(() => undefined);
+}

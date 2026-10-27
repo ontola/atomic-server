@@ -177,6 +177,19 @@ void main() {
     expect(page.scripts.single, 'window.__atomicReply(5,true,"false")');
   });
 
+  test('a spare asking for a call is told no', () async {
+    pool = makePool()..warmUp();
+    await pumpEventQueue();
+    final page = pages.single;
+    page.send(jsonEncode({
+      'id': 6,
+      'method': 'joinCall',
+      'args': ['https://x/m']
+    }));
+    await pumpEventQueue();
+    expect(page.scripts.single, 'window.__atomicReply(6,true,"false")');
+  });
+
   test('a spare reporting the saved theme sets the app\'s', () async {
     SharedPreferences.setMockInitialValues({});
     addTearDown(() => AppThemeMode.mode.value = ThemeMode.system);
