@@ -1,4 +1,5 @@
-import type { PropsWithChildren } from 'react';
+import { useEffect, useState, type PropsWithChildren } from 'react';
+import { useStore } from '@tomic/react';
 import { styled } from 'styled-components';
 import { Button } from './Button';
 import { Margin } from './Card';
@@ -11,6 +12,12 @@ import { RadioInput } from './forms/RadioInput';
 import { useAccountDriveCatalog } from '../hooks/useAccountDriveCatalog';
 import { usePrivateDrive } from '../hooks/usePrivateDrive';
 import { useSavedDrives } from '../hooks/useSavedDrives';
+import { unreachableDrives } from '../helpers/connectableDrives';
+import { fetchManagedInfo } from '../helpers/managedServer';
+import {
+  getManagedEnrollments,
+  type ManagedEnrollmentSummary,
+} from '../helpers/managed/enrollmentApi';
 
 /** The drives a person can hand to an app, and the home drive its grant is remembered in. */
 export function useConnectableDrives() {
@@ -20,7 +27,47 @@ export function useConnectableDrives() {
     privateDrive ? [privateDrive, ...savedDrives] : savedDrives,
   );
 
-  return { privateDrive, homeLoading, catalog };
+  const store = useStore();
+  const [enrollments, setEnrollments] =
+    useState<
+      Pick<
+        ManagedEnrollmentSummary,
+        'drive_subject' | 'status' | 'http_origin'
+      >[]
+    >();
+
+  useEffect(() => {
+    let stopped = false;
+
+    // Enrollments only say what a managed node hosts; a self-hosted node holds
+    // drives no enrollment names. Strict: no session or a failed lookup
+    // throws, and then every drive stays available. Only a successful answer
+    // from a managed node can make one unavailable.
+    fetchManagedInfo(store.getServerUrl())
+      .then(info => {
+        if (!info.managed) throw new Error('Not a managed node');
+
+        return getManagedEnrollments(true);
+      })
+      .then(
+        list => !stopped && setEnrollments(list),
+        () => !stopped && setEnrollments(undefined),
+      );
+
+    return () => {
+      stopped = true;
+    };
+  }, [store]);
+
+  const unavailable = unreachableDrives(
+    store,
+    catalog.subjects,
+    enrollments,
+    store.getServerUrl(),
+  );
+  const available = catalog.subjects.filter(s => !unavailable.includes(s));
+
+  return { privateDrive, homeLoading, catalog, available, unavailable };
 }
 
 /** Narrow page shell shared by the connect-an-app routes. */
@@ -45,6 +92,8 @@ export const toggleSubject = (
 interface ConnectAppFormProps {
   /** Subjects of the drives that can be picked. */
   subjects: string[];
+  /** Drives shown but not selectable: the node cannot reach them. */
+  unavailable?: string[];
   selected: string[];
   onToggle: (subject: string, on: boolean) => void;
   onToggleAll: (on: boolean) => void;
@@ -67,6 +116,7 @@ interface ConnectAppFormProps {
  */
 export function ConnectAppForm({
   subjects,
+  unavailable,
   selected,
   onToggle,
   onToggleAll,
@@ -84,6 +134,7 @@ export function ConnectAppForm({
       <Heading>What it can reach</Heading>
       <ConnectDrivePicker
         subjects={subjects}
+        unavailable={unavailable}
         selected={selected}
         onToggle={onToggle}
         onToggleAll={onToggleAll}
