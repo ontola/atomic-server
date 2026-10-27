@@ -5092,7 +5092,8 @@ export class Store {
   private async fetchHistoryAttributionFromServer(
     subject: string,
   ): Promise<HistoryAttribution | null> {
-    if (!this.serverUrl) return null;
+    // A drive that stays on this device has no history on the server.
+    if (!this.serverUrl || this.isLocalOnlySubject(subject)) return null;
 
     try {
       const url = new URL('/history-attribution', this.serverUrl);

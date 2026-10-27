@@ -1366,6 +1366,7 @@ msgstr "Texte alternatif"
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -1494,7 +1495,6 @@ msgstr "JSON-LD"
 msgid "Turtle / N-triples / N3"
 msgstr "Turtle / N-triples / N3"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr "Créer un compte"
@@ -2793,6 +2793,7 @@ msgstr "Vide"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Masquer"
 
@@ -3487,6 +3488,7 @@ msgid "Click to add a value"
 msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Rename"
 msgstr ""
 
@@ -3931,10 +3933,6 @@ msgstr ""
 
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Join"
-msgstr ""
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Try the live demo"
 msgstr ""
 
 #: src/routes/DemoRoute.tsx
@@ -5510,9 +5508,11 @@ msgstr ""
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
+#. 0: doneCount; 1: steps.length
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr ""
 
@@ -6641,6 +6641,7 @@ msgstr ""
 
 #: src/chunks/Templates/TemplateChat.tsx
 #: src/chunks/Templates/TemplateChat.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Set up AI"
 msgstr ""
 
@@ -8449,6 +8450,7 @@ msgstr ""
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr ""
 
@@ -9119,6 +9121,7 @@ msgid "Back to the preview"
 msgstr ""
 
 #: src/routes/NewDriveRoute.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Name your drive"
 msgstr ""
 
@@ -11032,6 +11035,7 @@ msgid "Data"
 msgstr ""
 
 #: src/components/MetaSetter.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr ""
 
@@ -13268,4 +13272,73 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Not hosted yet"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Give your drive a name: a project, company, team or household"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a project"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Pick a template for a team, a class or yourself"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "New project"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Talk to the AI"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Ask it to find, write or organize things in your drive"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a chat"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Invite someone"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Share your project with a teammate or a friend"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Invite"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Save your work"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Sign up with your email, save your secret or connect a device"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Getting started"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a project first"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Needs an AI source: your own key or Ollama"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Not done yet"
+msgstr ""
+
+#: src/views/getting-started/WorkspaceLoading.tsx
+msgid "Setting up your workspace on this device…"
 msgstr ""
