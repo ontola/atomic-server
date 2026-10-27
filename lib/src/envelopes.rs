@@ -28,7 +28,7 @@
 
 use crate::db::trees::{Method, Operation, Transaction, Tree};
 use crate::errors::AtomicResult;
-use crate::{commit::CommitResponse, Db};
+use crate::{commit::CommitResponse, Db, Storelike};
 
 /// Which envelopes a node keeps per resource.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -619,6 +619,266 @@ pub fn for_subjects<'a>(
     out
 }
 
+/// A verified envelope ready for retention decisions under the subject lock.
+pub(crate) struct VerifiedEnvelope {
+    commit: crate::Commit,
+    json: String,
+}
+
+pub(crate) async fn verify_envelope(
+    store: &impl crate::Storelike,
+    expected_subject: &str,
+    json: &str,
+) -> AtomicResult<VerifiedEnvelope> {
+    let resource = crate::parse::parse_json_ad_commit_resource(json, store).await?;
+    let commit = crate::commit::Commit::from_resource(resource)?;
+    let expected = crate::Subject::from_raw(expected_subject, None).pure_id();
+    let actual = commit.subject.pure_id();
+    if actual != expected {
+        return Err(format!("envelope is about {actual}, not {expected}").into());
+    }
+    commit.validate_signature(store).await?;
+    Ok(VerifiedEnvelope {
+        commit,
+        json: json.to_string(),
+    })
+}
+
+/// Retention sees staged resources and their ancestors before the transaction lands.
+fn resolve_staged_retention(
+    store: &Db,
+    staged: &std::collections::HashMap<String, crate::Resource>,
+    subject: &crate::Subject,
+) -> Resolved {
+    let read = |subject: &crate::Subject| {
+        staged
+            .get(&store.normalize_subject(subject).pure_id())
+            .cloned()
+            .or_else(|| store.get_resource_shallow(subject).ok())
+    };
+    let Some(start) = read(subject) else {
+        return Resolved::Unknown;
+    };
+    if is_audit(&start) {
+        return Resolved::Audit;
+    }
+    let mut parent = parent_of(&start);
+    for _ in 0..MAX_PARENT_DEPTH {
+        let Some(subject) = parent else {
+            return Resolved::Compact;
+        };
+        let Some(ancestor) = read(&subject) else {
+            return Resolved::Unknown;
+        };
+        if is_audit(&ancestor) {
+            return Resolved::Audit;
+        }
+        parent = parent_of(&ancestor);
+    }
+    Resolved::Compact
+}
+
+fn envelopes_checked_staged(
+    store: &Db,
+    staged: &std::collections::HashMap<String, crate::Resource>,
+    subject: &str,
+) -> Retained {
+    // Outer Option distinguishes a staged row (even if corrupt) from no
+    // staged row, so an overwritten DB commit is never consulted.
+    let from_staged = |signature: &str| -> Option<Option<StoredEnvelope>> {
+        let id = crate::identifiers::commit_subject(signature);
+        let row = staged.get(
+            &store
+                .normalize_subject(&crate::Subject::from_raw(&id, None))
+                .pure_id(),
+        )?;
+        Some((|| {
+            Some(StoredEnvelope {
+                subject: subject.to_string(),
+                created_at: row.get(crate::urls::CREATED_AT).ok()?.to_int().ok()?,
+                signature: signature.to_string(),
+                json: row.to_json_ad(None).ok()?,
+            })
+        })())
+    };
+    let mut out = Retained {
+        rows: Vec::new(),
+        unreadable: 0,
+        newest_unreadable: false,
+    };
+    for (key, value) in store
+        .kv
+        .scan_prefix(Tree::Envelopes, &prefix(subject))
+        .filter_map(|item| item.ok())
+    {
+        let decoded = if value.first() == Some(&GENESIS_ROW) {
+            match parse_key(&key) {
+                Some((key_subject, created_at, signature)) => match from_staged(&signature) {
+                    Some(Some(mut row)) => {
+                        row.subject = key_subject;
+                        row.created_at = created_at;
+                        Some(Decoded::Row(row))
+                    }
+                    Some(None) => Some(Decoded::Unreadable),
+                    None => decode(store, &key, value),
+                },
+                None => None,
+            }
+        } else {
+            decode(store, &key, value)
+        };
+        match decoded {
+            Some(Decoded::Row(row)) => {
+                out.rows.push(row);
+                out.newest_unreadable = false;
+            }
+            _ => {
+                out.unreadable += 1;
+                out.newest_unreadable = true;
+            }
+        }
+    }
+    if out.rows.is_empty() && out.unreadable == 0 {
+        let genesis =
+            genesis_signature(subject).and_then(|signature| match from_staged(&signature) {
+                Some(row) => row,
+                None => genesis_envelope_from_row(store, subject),
+            });
+        if let Some(row) = genesis {
+            out.rows.push(row);
+        }
+    }
+    out
+}
+
+/// Stage in wire order. The caller holds all subject locks through apply.
+pub(crate) fn stage_verified_envelopes(
+    store: &Db,
+    staged: &std::collections::HashMap<String, crate::Resource>,
+    verified: Vec<VerifiedEnvelope>,
+) -> AtomicResult<Transaction> {
+    struct Pending {
+        rows: Vec<StoredEnvelope>,
+        keys: std::collections::BTreeMap<Vec<u8>, bool>,
+    }
+    let mut changes: std::collections::HashMap<Vec<u8>, bool> = Default::default();
+    let mut pending: std::collections::HashMap<String, Pending> = Default::default();
+    let mut unscanned: std::collections::HashMap<String, Vec<StoredEnvelope>> = Default::default();
+    let mut ops = Transaction::new();
+    for envelope in verified {
+        let commit = envelope.commit;
+        let subject = commit.subject.pure_id();
+        let signature = commit
+            .signature
+            .as_deref()
+            .ok_or("envelope has no signature")?;
+        let new_key = key(&subject, commit.created_at, signature);
+        let already_present = match changes.get(&new_key) {
+            Some(present) => *present,
+            None => store.kv.contains_key(Tree::Envelopes, &new_key)?,
+        };
+        if already_present {
+            continue;
+        }
+        let may_prune = store.envelope_retention() == EnvelopeRetention::Latest
+            && resolve_staged_retention(store, staged, &commit.subject) == Resolved::Compact;
+        if may_prune {
+            if !pending.contains_key(&subject) {
+                let found = envelopes_checked_staged(store, staged, &subject);
+                let readable: std::collections::HashSet<Vec<u8>> = found
+                    .rows
+                    .iter()
+                    .map(|row| key(&row.subject, row.created_at, &row.signature))
+                    .collect();
+                let keys = store
+                    .kv
+                    .scan_prefix(Tree::Envelopes, &prefix(&subject))
+                    .filter_map(|entry| entry.ok())
+                    .map(|(key, _)| {
+                        let is_readable = readable.contains(&key);
+                        (key, is_readable)
+                    })
+                    .collect();
+                let mut state = Pending {
+                    rows: found.rows,
+                    keys,
+                };
+                let earlier = unscanned.remove(&subject).unwrap_or_default();
+                // Once a queued row exists, sequential reads no longer use
+                // the implicit genesis fallback for an otherwise empty tree.
+                if !earlier.is_empty() && state.keys.is_empty() {
+                    state.rows.clear();
+                }
+                for row in earlier {
+                    state
+                        .keys
+                        .insert(key(&row.subject, row.created_at, &row.signature), true);
+                    state.rows.push(row);
+                }
+                state
+                    .rows
+                    .sort_by_key(|row| key(&row.subject, row.created_at, &row.signature));
+                pending.insert(subject.clone(), state);
+            }
+            let state = pending.get_mut(&subject).expect("inserted above");
+            let newest_unreadable = state
+                .keys
+                .last_key_value()
+                .is_some_and(|(_, readable)| !readable);
+            if !newest_unreadable {
+                if state
+                    .rows
+                    .iter()
+                    .any(|row| row.created_at > commit.created_at)
+                {
+                    continue;
+                }
+                if let Some(old) = state.rows.pop() {
+                    let old_key = key(&old.subject, old.created_at, &old.signature);
+                    changes.insert(old_key.clone(), false);
+                    state.keys.remove(&old_key);
+                    ops.push(Operation {
+                        tree: Tree::Envelopes,
+                        method: Method::Delete,
+                        key: old_key,
+                        val: None,
+                    });
+                }
+            }
+        }
+        changes.insert(new_key.clone(), true);
+        if let Some(state) = pending.get_mut(&subject) {
+            state.keys.insert(new_key.clone(), true);
+        }
+        ops.push(Operation {
+            tree: Tree::Envelopes,
+            method: Method::Insert,
+            key: new_key,
+            val: Some(value_for(
+                &subject,
+                commit.created_at,
+                signature,
+                envelope.json.clone(),
+            )),
+        });
+        let row = StoredEnvelope {
+            subject: subject.clone(),
+            created_at: commit.created_at,
+            signature: signature.to_string(),
+            json: envelope.json,
+        };
+        if let Some(state) = pending.get_mut(&subject) {
+            state.rows.push(row);
+            state
+                .rows
+                .sort_by_key(|row| key(&row.subject, row.created_at, &row.signature));
+        } else {
+            unscanned.entry(subject).or_default().push(row);
+        }
+    }
+    Ok(ops)
+}
+
 /// Keep an envelope that arrived with a bulk push or a vault pack.
 ///
 /// It is verified the way apply verifies a commit (the signature, by the
@@ -628,66 +888,14 @@ pub fn for_subjects<'a>(
 /// survives, which may be one already here. Idempotent for a row already
 /// stored.
 pub async fn import_envelope(store: &Db, expected_subject: &str, json: &str) -> AtomicResult<()> {
-    let resource = crate::parse::parse_json_ad_commit_resource(json, store).await?;
-    let commit = crate::commit::Commit::from_resource(resource)?;
-    let expected = crate::Subject::from_raw(expected_subject, None).pure_id();
-    let actual = commit.subject.pure_id();
-    if actual != expected {
-        return Err(format!("envelope is about {actual}, not {expected}").into());
+    let verified = verify_envelope(store, expected_subject, json).await?;
+    let subject = store.normalize_subject(&verified.commit.subject).pure_id();
+    let _guard = store.subject_locks.lock(&subject).await;
+    let ops = stage_verified_envelopes(store, &Default::default(), vec![verified])?;
+    if !ops.is_empty() {
+        store.kv.apply_batch(&ops)?;
     }
-    commit.validate_signature(store).await?;
-    let signature = commit
-        .signature
-        .as_deref()
-        .ok_or("envelope has no signature")?;
-    let new_key = key(commit.subject.as_str(), commit.created_at, signature);
-    if store.kv.contains_key(Tree::Envelopes, &new_key)? {
-        return Ok(());
-    }
-
-    let mut ops = Vec::new();
-    let local = store.get_resource_shallow(&commit.subject).ok();
-    // An ancestor that is not held yet may be the one asking for audit, and a
-    // dropped envelope cannot be fetched again, so only a fully read chain
-    // allows pruning.
-    let may_prune = store.envelope_retention() == EnvelopeRetention::Latest
-        && resolve_retention(store, local.as_ref()) == Resolved::Compact;
-    if may_prune {
-        let found = envelopes_checked(store, commit.subject.as_str());
-        let existing = found.rows;
-        if found.newest_unreadable {
-            // The newest row cannot be compared or safely superseded: keep
-            // it and add the incoming one beside it.
-            tracing::warn!(
-                "{}: newest kept commit row unreadable, importing without pruning",
-                commit.subject.as_str()
-            );
-        } else if existing.iter().any(|e| e.created_at > commit.created_at) {
-            // A newer envelope is already the latest; the incoming one is
-            // history this node chose not to keep.
-            return Ok(());
-        }
-        if let Some(old) = existing.last().filter(|_| !found.newest_unreadable) {
-            ops.push(Operation {
-                tree: Tree::Envelopes,
-                method: Method::Delete,
-                key: key(&old.subject, old.created_at, &old.signature),
-                val: None,
-            });
-        }
-    }
-    ops.push(Operation {
-        tree: Tree::Envelopes,
-        method: Method::Insert,
-        key: new_key,
-        val: Some(value_for(
-            commit.subject.as_str(),
-            commit.created_at,
-            signature,
-            json.to_string(),
-        )),
-    });
-    store.kv.apply_batch(&ops)
+    Ok(())
 }
 
 /// Drop every retained envelope of a resource. Not called on destroy: the
@@ -1189,6 +1397,117 @@ mod tests {
             .unwrap()
             .to_string();
         assert_eq!(kept.last().unwrap().commit_id(), stamp);
+    }
+
+    #[tokio::test]
+    async fn staged_genesis_row_takes_precedence_over_persisted_row() {
+        let db = Db::init_temp("staged_genesis_lookup").await.unwrap();
+        let (_, drive) = db.setup("Alice").await.unwrap();
+        let original_subject = child(&db, &drive).await;
+        let genesis = latest_envelope(&db, original_subject.as_str()).unwrap();
+        // Legacy resource identifiers derive directly from the commit signature.
+        let subject =
+            crate::Subject::from(crate::identifiers::resource_subject(&genesis.signature));
+        let id = genesis.commit_id();
+        let row = db.get_resource_shallow(&id.clone().into()).unwrap();
+        let mut staged = std::collections::HashMap::new();
+        staged.insert(id.clone(), row);
+        clear_envelopes(&db, subject.as_str());
+        db.kv.remove(Tree::Resources, id.as_bytes()).unwrap();
+        let found = envelopes_checked_staged(&db, &staged, subject.as_str());
+        assert_eq!(
+            found.rows.len(),
+            1,
+            "staged commit supplies implicit genesis"
+        );
+        db.kv
+            .insert(
+                Tree::Envelopes,
+                &key(subject.as_str(), 42, &genesis.signature),
+                &[GENESIS_ROW],
+            )
+            .unwrap();
+        let found = envelopes_checked_staged(&db, &staged, subject.as_str());
+        assert_eq!(
+            found.rows[0].created_at, 42,
+            "physical key supplies the row timestamp"
+        );
+        let stored = staged.get(&id).unwrap().clone();
+        db.kv
+            .insert(
+                Tree::Resources,
+                id.as_bytes(),
+                &crate::db::encoding::encode_propvals(stored.get_propvals()).unwrap(),
+            )
+            .unwrap();
+        staged.insert(id.clone(), crate::Resource::new(id));
+        let found = envelopes_checked_staged(&db, &staged, subject.as_str());
+        assert!(found.rows.is_empty());
+        assert!(
+            found.newest_unreadable,
+            "a bad staged replacement must not fall back to the old row"
+        );
+    }
+
+    #[tokio::test]
+    async fn staged_retention_detects_unreadable_row_exposed_by_replacement() {
+        let db = Db::init_temp("staged_unreadable_exposed").await.unwrap();
+        let (_, drive) = db.setup("Alice").await.unwrap();
+        let subject = child(&db, &drive).await;
+        let original = latest_envelope(&db, subject.as_str()).unwrap();
+        clear_envelopes(&db, subject.as_str());
+        // The row between the replacement keys cannot be decoded. Deleting
+        // the previous newest row exposes it until a newer key is inserted.
+        db.kv
+            .insert(
+                Tree::Envelopes,
+                &key(subject.as_str(), 100, "m"),
+                &[GENESIS_ROW],
+            )
+            .unwrap();
+        db.kv
+            .insert(Tree::Envelopes, &key(subject.as_str(), 100, "z"), b"{}")
+            .unwrap();
+        let parsed = verify_envelope(&db, subject.as_str(), &original.json)
+            .await
+            .unwrap();
+        let mut first = parsed.commit.clone();
+        first.created_at = 100;
+        first.signature = Some("a".into());
+        let mut second = first.clone();
+        second.signature = Some("b".into());
+        let ops = stage_verified_envelopes(
+            &db,
+            &Default::default(),
+            vec![
+                VerifiedEnvelope {
+                    commit: first,
+                    json: "{}".into(),
+                },
+                VerifiedEnvelope {
+                    commit: second,
+                    json: "{}".into(),
+                },
+            ],
+        )
+        .unwrap();
+        db.kv.apply_batch(&ops).unwrap();
+        assert!(db
+            .kv
+            .contains_key(Tree::Envelopes, &key(subject.as_str(), 100, "a"))
+            .unwrap());
+        assert!(db
+            .kv
+            .contains_key(Tree::Envelopes, &key(subject.as_str(), 100, "b"))
+            .unwrap());
+        assert!(db
+            .kv
+            .contains_key(Tree::Envelopes, &key(subject.as_str(), 100, "m"))
+            .unwrap());
+        assert!(!db
+            .kv
+            .contains_key(Tree::Envelopes, &key(subject.as_str(), 100, "z"))
+            .unwrap());
     }
 
     /// A receiver keeps a pushed envelope only after verifying it: a

@@ -17,6 +17,120 @@ use crate::{Db, Storelike};
 
 use super::protocol;
 
+/// Read-through verification view. Fetches are cached here and never write to
+/// the backing Db while subject locks are held.
+struct EnvelopeOverlay<'a> {
+    db: &'a Db,
+    staged: std::collections::HashMap<String, crate::Resource>,
+    fetched: std::sync::Mutex<std::collections::HashMap<String, crate::Resource>>,
+}
+
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+impl Storelike for EnvelopeOverlay<'_> {
+    async fn add_atoms(&self, _: Vec<crate::Atom>) -> crate::errors::AtomicResult<()> {
+        Err("read-only envelope overlay".into())
+    }
+    fn add_drive_mapping(&self, _: &str, _: &crate::Value) -> crate::errors::AtomicResult<()> {
+        Err("read-only envelope overlay".into())
+    }
+    fn remove_drive_mapping(&self, _: &str) -> crate::errors::AtomicResult<()> {
+        Err("read-only envelope overlay".into())
+    }
+    fn get_base_domain(&self) -> Option<String> {
+        self.db.get_base_domain()
+    }
+    fn get_server_url(&self) -> String {
+        self.db.get_server_url()
+    }
+    fn get_default_agent(&self) -> crate::errors::AtomicResult<crate::agents::Agent> {
+        self.db.get_default_agent()
+    }
+    fn lens_index(&self) -> Option<std::sync::Arc<crate::lens::LensIndex>> {
+        self.db.lens_index()
+    }
+    async fn add_resource_opts(
+        &self,
+        resource: &crate::Resource,
+        check: bool,
+        _: bool,
+        overwrite: bool,
+    ) -> crate::errors::AtomicResult<()> {
+        if check {
+            resource.check_required_props(self).await?;
+        }
+        let key = self.normalize_subject(resource.get_subject()).pure_id();
+        let mut cache = self.fetched.lock().map_err(|_| "overlay cache poisoned")?;
+        if overwrite || !cache.contains_key(&key) {
+            cache.insert(key, resource.clone());
+        }
+        Ok(())
+    }
+    fn all_resources(&self, _: bool) -> Box<dyn Iterator<Item = crate::Resource> + Send> {
+        Box::new(std::iter::empty())
+    }
+    async fn get_resource(
+        &self,
+        subject: &crate::Subject,
+    ) -> crate::errors::AtomicResult<crate::Resource> {
+        let normalized = self.normalize_subject(subject);
+        let key = normalized.pure_id();
+        if let Some(resource) = self.staged.get(&key) {
+            return Ok(resource.clone());
+        }
+        if let Some(resource) = self
+            .fetched
+            .lock()
+            .map_err(|_| "overlay cache poisoned")?
+            .get(&key)
+            .cloned()
+        {
+            return Ok(resource);
+        }
+        if let Ok(resource) = self.db.get_resource_shallow(&normalized) {
+            return Ok(resource);
+        }
+        let origin = self
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".into());
+        let resolved = normalized.resolve(&origin);
+        let path = normalized.path();
+        let same_authority = self.get_base_domain().as_deref().is_some_and(|base| {
+            let strip = |s: &str| {
+                s.trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .trim_end_matches('/')
+                    .to_string()
+            };
+            let base = strip(base);
+            let target = strip(&resolved);
+            target == base || target.starts_with(&format!("{base}/"))
+        });
+        if normalized.is_did()
+            || crate::identifiers::is_identifier_resolution_path(&path)
+            || crate::identifiers::is_atomic_identifier(&resolved)
+            || crate::Subject::from_raw(&resolved, self.get_base_domain().as_deref()).is_local()
+            || same_authority
+        {
+            return Err(crate::errors::AtomicError::not_found(format!(
+                "Resource {resolved} not found locally"
+            )));
+        }
+        self.fetch_resource(&resolved, self.get_default_agent().ok().as_ref())
+            .await
+    }
+    async fn remove_resource(&self, _: &crate::Subject) -> crate::errors::AtomicResult<()> {
+        Err("read-only envelope overlay".into())
+    }
+    async fn query(
+        &self,
+        _: &crate::storelike::Query,
+    ) -> crate::errors::AtomicResult<crate::storelike::QueryResult> {
+        Err("read-only envelope overlay".into())
+    }
+    fn set_default_agent(&self, _: crate::agents::Agent) {}
+}
+
 /// What an `AUTH` frame's `requestedSubject` has to name for this session.
 ///
 /// The signature covers `"{requestedSubject} {timestamp}"`, so the subject
@@ -2094,8 +2208,47 @@ pub async fn import_sync_push(
         }
     }
 
+    let lenses = store.lenses();
+    let staged_resources = staged
+        .iter()
+        .map(|(resource, _)| {
+            let mut projected = resource.clone();
+            if !lenses.is_empty()
+                && projected
+                    .get_propvals()
+                    .keys()
+                    .any(|prop| lenses.touches(prop))
+            {
+                projected.apply_lenses(&lenses);
+            }
+            (normalize(resource.get_subject().as_str()), projected)
+        })
+        .collect();
+    let overlay = EnvelopeOverlay {
+        db: store,
+        staged: staged_resources,
+        fetched: Default::default(),
+    };
+    let mut verified = Vec::new();
+    for envelope in &push.envelopes {
+        if !imported.contains(&normalize(&envelope.subject)) {
+            continue;
+        }
+        match crate::envelopes::verify_envelope(&overlay, &envelope.subject, &envelope.json).await {
+            Ok(envelope) => verified.push(envelope),
+            Err(e) => tracing::warn!(
+                "import_sync_push: envelope for {} rejected: {e}",
+                &envelope.subject[..envelope.subject.len().min(30)]
+            ),
+        }
+    }
+    let envelope_ops = crate::envelopes::stage_verified_envelopes(store, &overlay.staged, verified)
+        .map_err(|error| SyncPushRejected {
+            drive: push.drive.clone(),
+            reason: format!("Failed to stage SYNC_PUSH envelopes: {error}"),
+        })?;
     let post_commit = store
-        .persist_replicated_resources_prepared(staged)
+        .persist_replicated_resources_with_envelopes(staged, envelope_ops)
         .await
         .map_err(|error| SyncPushRejected {
             drive: push.drive.clone(),
@@ -2103,23 +2256,6 @@ pub async fn import_sync_push(
         })?;
     drop(_subject_guards);
     store.finish_replicated_resources(post_commit).await;
-
-    // Envelopes ride with the entries they sign. Only a subject imported
-    // above may receive one (same admission as its entry), and each is
-    // verified before it is kept; a bad one is dropped, never the push.
-    for envelope in &push.envelopes {
-        if !imported.contains(&normalize(&envelope.subject)) {
-            continue;
-        }
-        if let Err(e) =
-            crate::envelopes::import_envelope(store, &envelope.subject, &envelope.json).await
-        {
-            tracing::warn!(
-                "import_sync_push: envelope for {} rejected: {e}",
-                &envelope.subject[..envelope.subject.len().min(30)]
-            );
-        }
-    }
 
     // A LAST chunk is the completed transfer's durability boundary. Make the preceding
     // projection and its accepted envelopes durable before the caller sends
