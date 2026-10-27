@@ -88,6 +88,12 @@ export interface ProxyHost {
   connections(platform: string): Promise<ConnectionReference[]>;
   /** The configured proxy's origin: the only place `proxyFetch` may go. */
   origin: string;
+  /**
+   * Takes this app's delegation off its `platform` connections, and off
+   * `also` (connection ids the host knows about, such as an Installation's
+   * recorded one). Never deletes a connection. Returns the connection ids.
+   */
+  disconnect(platform: string, also?: readonly string[]): Promise<string[]>;
 }
 
 /** An error the proxy returned: `{error, message}` and the HTTP status. */
@@ -436,6 +442,38 @@ export class ProxyConnections {
     );
   }
 
+  /**
+   * Takes `appAgent`'s delegation off every `platform` connection delegated
+   * to it, and off `also`, one `DELETE /connections/{id}/agents/{agent}`
+   * each. Only this app loses access: the connection stays, with any other
+   * app's delegation, because deleting it is the person's call on a page, not
+   * an app's. A delegation the proxy no longer has (404) counts as gone.
+   * Returns the connection ids it was taken off.
+   */
+  async disconnectApp(
+    appAgent: string,
+    platform: string,
+    also: readonly string[] = [],
+  ): Promise<string[]> {
+    if (!isPlatformId(platform)) throw new Error('Invalid platform');
+    const ids = [
+      ...new Set([
+        ...(await this.delegated(appAgent, platform)).map(r => r.connectionId),
+        ...also,
+      ]),
+    ];
+
+    for (const id of ids) {
+      try {
+        await this.undelegate(id, appAgent);
+      } catch (e) {
+        if (!(e instanceof ProxyError && e.status === 404)) throw e;
+      }
+    }
+
+    return ids;
+  }
+
   /** Deletes a connection at the proxy, and with it every delegation. */
   async revoke(connectionId: string) {
     await this.call(
@@ -503,6 +541,8 @@ export class ProxyConnections {
       capability: async request =>
         this.mintCapability({ ...request, appAgent: await appAgent() }),
       connections: async platform => this.delegated(await appAgent(), platform),
+      disconnect: async (platform, also) =>
+        this.disconnectApp(await appAgent(), platform, also),
     };
   }
 }

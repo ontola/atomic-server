@@ -184,6 +184,7 @@ it('carries the proxy ops; the relay op is gone', () => {
     'proxyFetch',
     'proxyConnections',
     'proxyConnect',
+    'proxyDisconnect',
   ] as const)
     expect(isViewRequest(viewRequest(1, op, { platform: 'pets' }))).toBe(true);
   expect(isViewRequest({ ...viewRequest(1, 'get'), op: 'proxy' })).toBe(false);
@@ -192,11 +193,13 @@ it('carries the proxy ops; the relay op is gone', () => {
   const store = generatedStore(f);
   void store.proxy.connections({ platform: 'pets' });
   void store.proxy.connect({ platform: 'pets' });
+  void store.proxy.disconnect({ platform: 'pets' });
   const sent = f.parent.postMessage.mock.calls.map(([m]) => m);
   expect(sent.every(isViewRequest)).toBe(true);
   expect(sent.map(m => [m.op, m.args.platform])).toEqual([
     ['proxyConnections', 'pets'],
     ['proxyConnect', 'pets'],
+    ['proxyDisconnect', 'pets'],
   ]);
 });
 
@@ -564,3 +567,120 @@ it('knows whether the host is light or dark, before and after a theme message', 
   style('dark');
   expect(seen).toEqual([{ colorScheme: 'dark' }, { colorScheme: 'light' }]);
 });
+
+it('forgets its capabilities for a platform once disconnected', async () => {
+  const f = frame();
+  const store = generatedStore(f);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('[]', { status: 200 })),
+  );
+  const answer = (id: unknown, result: unknown) =>
+    f.reply({ type: 'atomic.view.response', version: 1, id, result });
+  const capability = {
+    capability: 'cap',
+    aud: 'https://proxy.example',
+    exp: Math.floor(Date.now() / 1000) + 600,
+  };
+  const call = () =>
+    store.proxy.request({ platform: 'pets', connectionId: 'c1', path: '/' });
+  const asks = () =>
+    f.parent.postMessage.mock.calls.filter(([m]) => m.op === 'proxyCapability')
+      .length;
+
+  let pending = call();
+  await settle();
+  answer(f.parent.postMessage.mock.calls.at(-1)![0].id, capability);
+  await settle();
+  answer(f.parent.postMessage.mock.calls.at(-1)![0].id, {
+    status: 200,
+    body: [],
+  });
+  await pending;
+  // Cached: a second call mints nothing.
+  const cached = call();
+  await settle();
+  answer(f.parent.postMessage.mock.calls.at(-1)![0].id, {
+    status: 200,
+    body: [],
+  });
+  await cached;
+  expect(asks()).toBe(1);
+
+  const disconnected = store.proxy.disconnect({ platform: 'pets' });
+  const ask = f.parent.postMessage.mock.calls.at(-1)![0];
+  expect(ask).toMatchObject({
+    op: 'proxyDisconnect',
+    args: { platform: 'pets' },
+  });
+  answer(ask.id, {
+    status: 'disconnected',
+    platform: 'pets',
+    connectionIds: ['c1'],
+  });
+  expect(await disconnected).toEqual({
+    status: 'disconnected',
+    platform: 'pets',
+    connectionIds: ['c1'],
+  });
+
+  // The next call asks the host again, which now refuses it.
+  pending = call();
+  await settle();
+  expect(asks()).toBe(2);
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: f.parent.postMessage.mock.calls.at(-1)![0].id,
+    error: 'No pets connection c1 is delegated to this app. Connect again.',
+  });
+  await expect(pending).rejects.toThrow('delegated to this app');
+});
+
+it.each(['packaged', 'generated'])(
+  'confirmed navigation waits for the person: %s',
+  async kind => {
+    vi.useFakeTimers();
+    const f = frame();
+    vi.stubGlobal('window', f.window);
+    const { ViewStore } = await import('./store');
+    const store = kind === 'packaged' ? new ViewStore() : generatedStore(f);
+    const external = store.openExternal('https://example.com/path');
+    const resource = store.openResource('atomic:row');
+    const importer = store.importer.run();
+    const requests = f.parent.postMessage.mock.calls.map(
+      ([request]) => request,
+    );
+    expect(requests.map(request => request.op)).toEqual([
+      'openExternal',
+      'openResourceConfirmed',
+      'runImporter',
+    ]);
+    expect(requests.every(isViewRequest)).toBe(true);
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    f.reply({
+      type: 'atomic.view.response',
+      version: 1,
+      id: requests[0].id,
+      result: { status: 'cancelled' },
+    });
+    f.reply({
+      type: 'atomic.view.response',
+      version: 1,
+      id: requests[1].id,
+      result: { status: 'opened', subject: 'atomic:row' },
+    });
+    f.reply({
+      type: 'atomic.view.response',
+      version: 1,
+      id: requests[2].id,
+      result: { status: 'cancelled', importer: 'atomic:importer' },
+    });
+    expect(await importer).toEqual({
+      status: 'cancelled',
+      importer: 'atomic:importer',
+    });
+    expect(await external).toEqual({ status: 'cancelled' });
+    expect(await resource).toEqual({ status: 'opened', subject: 'atomic:row' });
+  },
+);

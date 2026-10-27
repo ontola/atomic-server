@@ -1,3 +1,29 @@
+Bounded WebSocket reads: `browser/lib/src/store.read-fallback.test.ts` covers a stalled OPEN socket recovering over authenticated HTTP, local/remote authority budgets, concurrent read deduplication, healthy sockets avoiding duplicate requests, explicit authorization refusal, fallback failure settling loading, and POST using HTTP once. `websockets.test.ts` covers abort during authentication, abort after GET, rejection of a late GET response, and continued subscription pushes. These are library and binary-frame tests; they do not establish a browser paint time for the private SyncD drive. Bulk GET_MANY uses a separate timeout.
+
+Confirmed app navigation: mounted `HostUI/hostNavigation.test.tsx` covers
+no opening/navigation before confirmation, cancellation, punycode display,
+safe new-tab flags, unreadable and non-resource refusal, late-read
+supersession, and compatibility of `store.ui.openResource`. External URL
+validation has scheme/credential/length tests. `viewProtocol.test.ts` covers
+both SDKs waiting for confirmed navigation/importer operations. The focused
+`apps.spec.ts` browser journey covers host confirmation, popup isolation and
+desktop/mobile screenshots.
+
+App-run imports: `appImporter.test.ts` checks the table-owned importer,
+configuration, file limits, foreign importer refusal, text-only boundary and
+summary. `plugin-destination.test.ts` checks actual destination ownership.
+`AppImporterRun.test.tsx` checks that preview starts only after confirmation,
+and the reply waits for the review callback, plus cancellation and refusal.
+`app-importer.spec.ts` is the browser journey for preview/review/apply, host
+picker cancellation and foreign importer refusal.
+
+App-only proxy disconnection: `proxyConnections.test.ts` verifies every v2
+signature, removal of only the app's delegations, preservation of shared
+connections and another app's delegation, invalid-platform refusal and
+already-gone delegation handling. `hostStore.test.ts` covers the frame entry
+point and refusals. `viewProtocol.test.ts` checks the wire operation and the
+generated client's capability-cache invalidation before a subsequent refusal.
+
 Resource.set(undefined) (#2315): `browser/lib/src/resource.set-undefined.test.ts` covers removing optional string/date values with default and known-datatype validation, avoiding unnecessary Property reads, exactly one LocalChange event, removal in an exported/reopened Loro snapshot, and rejection of invalid non-undefined values. These are library unit checks; no server is required.
 
 Chat log entries (2026-10-09, `planning/chat-log.md`): `lib/tests/chat_log.rs` applies signed commits through the real rights path for a `ChatLog` page: an author adds, edits and deletes own entries; a member cannot touch another's entry, claim or forge one, or change page properties; a writer on the chat moderates; page genesis grants no `write` and refuses a self-granted one; entries more than ten minutes ahead of the server clock are rejected. `lib/src/db/test.rs` checks entries reach no propval, index or search row, and `measure_chat_log_entry_bytes` (ignored) prints bytes per message. `browser/lib/src/chat-log.test.ts` covers the TS helpers and that entry changes ride in a saved commit's `loroUpdate`. Step 2 (group chat and comments in the log): `browser/lib/tests/chat-log.integration.test.ts` runs two agents against a real server (an appender adds, edits and removes own entries, is refused on another's, a writer moderates). `helpers/chatLog.test.ts` covers entry ids, the merge and window of old messages and entries, and the page choice; `messageNotification.test.ts` covers entry notifications. Playwright: `chat-log.spec.ts` (entry, edit, reply, copy link, delete, reload, a second member seeing entries and edits live and no edit buttons on another's), `e2e.spec.ts` chatroom, `offline-chatroom.spec.ts`, `chat-mention.spec.ts`, `table-row-comments.spec.ts` (comment and count as entries) and `notifications.spec.ts` (chat, reply and comment toasts for entries, unseen badge). Migration of existing messages (`planning/chat-log.md`, "Existing messages"): `lib/src/db/chat_migration_test.rs` checks grouping by chat and by commented item, the split at 256 with the oldest on the first page, authors and times kept, deterministic keys, replies mapped across pages and left alone for an outside target, follow events keeping their kind, an edited message getting `e`, the old resource and its genesis commit row, snapshot, envelopes and indexes gone, a re-run being a no-op, a run that stopped after the pages and a straggler arriving meanwhile, the slices resuming from the stored state, a member editing own migrated entry and not another's while the chat owner can, a cache of a hosted drive only dropping rows that have their entry, opening a store migrating it, and the bytes per message before and after (`migrating_a_chat_shrinks_the_store`). `client-db.worker.migration.test.ts` covers the worker running the message slices after the index rebuild with progress and the local-only drives; `migratedEntryKey` has one test vector in Rust and TS; `helpers/chatLog.test.ts` covers hiding migrated old messages. Playwright: `chat-log-migration.spec.ts` shows old Message resources, then the same chat once their entries exist (stale copies hidden, one without an entry still listed, order kept); `meetings.spec.ts` covers follow events as entries. Not covered: the browser worker migrating a local-only drive end to end (WASM and OPFS), a real server restart with old messages in an e2e run, and an edited message's genesis commit row (kept). Not covered: concurrent edits of one entry by two members, a chat past one page (256 entries) in the browser, scrolling to a linked entry (not built), and DMs (later step).
@@ -561,8 +587,9 @@ Two things worth knowing about the runners:
 
 | Flow | Where |
 |---|---|
-| Two Iroh nodes reconcile (bulk + live) | `lib/src/sync/iroh_e2e.rs` (13 tests, real QUIC) |
+| Two Iroh nodes reconcile (bulk + live) | `lib/src/sync/iroh_e2e.rs` (18 tests, real QUIC) |
 | Stroke appended after sync propagates | `lib/src/sync/iroh_e2e.rs` |
+| Iroh initiator probes first: level drives end on `SYNC_OK` (`probe_hit`), a miss falls back to the full sparse `SYNC` and reconciles both ways; both ends reach live mode | `lib/src/sync/iroh_e2e.rs` (`e2e_probe_*`). Not covered: a responder without `sync-probe` / `sparse-sync` (no cheap way to hide a capability) |
 | A peer only receives what its agent may read | `iroh_e2e.rs`, `peer.rs` |
 | A peer cannot forge a third agent's resource | `iroh_e2e.rs` |
 | Relayed write accepted only for a drive we own and dialled | `peer.rs` |
@@ -574,6 +601,9 @@ Two things worth knowing about the runners:
 | Legacy `set`/`push`/`remove` commit rejection is on the parsed commit's properties: a signed commit carrying `set` is refused under hub and peer policy, a value quoting the deprecated URLs applies, a commit *on* the `set` Property reaches the ownership gate | `lib/src/sync/tests.rs` (`ingest_commit_rejects_legacy_field_commits`, `ingest_commit_accepts_values_that_mention_legacy_fields`) |
 | A fresh server store gets the core models without `--initialize` (`Db` open seeds them) | `server/src/tests.rs` (`fresh_store_gets_core_models_without_initialize`) |
 | Missing-drive bootstrap (OQ5): `Public` never creates a drive, Owner mode enrolls only the owner, open node admits an authenticated first-sync | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`), `peer.rs` (`live_write_admission_tests`) |
+| Hash-first initial upload: permitted absent drive requests full reconciliation and persists root/child; stored private, tombstoned, non-resource and policy-denied probes remain refused; policy preview does not enroll or start grace | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`), `lib/src/sync/policy.rs` |
+| A refused current hash probe exits client sync progress; legacy subject spelling resolves; stale and unrelated subscription refusals do not fail the current drive | `browser/lib/src/websockets.test.ts` |
+| A read-only bootstrap preview uses the canonical drive key, so alternate DID or HTTP spellings cannot bypass an enrolled drive's quota or start grace | `lib/src/sync/policy.rs` (`probe_preview_cannot_bypass_quota_by_respelling_a_drive`) |
 | Engine-owned `SUB`/`UNSUB`: granted `SUB` is a session command, unreadable `SUB` answers `ERROR UNAUTHORIZED_READ` | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`) |
 | Signed `SYNC_DIFF.removeCommits`: envelope applies regardless of connection agent, tampered envelope does not delete, envelope only handed to drive readers, replay after re-creation refused | `lib/src/sync/peer.rs` (`initiator_trust_tests`), `engine.rs` (`bootstrap_and_sub_tests`), `tombstones.rs`, `protocol.rs` |
 | `SyncSession` over an in-process `AtomicTransport` holds `AUTH` across frames | `lib/src/sync/session.rs` |
@@ -1423,6 +1453,10 @@ are covered by the follow-up checks below.
 - `lib/tests/import_durability.rs` aborts a child process after an acknowledged
   DID import, reopens redb and verifies identity lookup plus continued nested writes.
   Removing the commit flush reproduces loss; restoring it passes.
+- Its `sync_last_survives_process_kill_with_indexes_snapshot_and_envelope`
+  case imports a non-final chunk followed by an empty LAST, aborts without
+  running database destructors, then verifies resource data, localId and parent
+  indexes, CRDT snapshot and retained signed envelope after reopening redb.
 - Schema unit tests recover unattached saved terms. The resumable-installation
   helper reuses saved logical steps while preserving repeated identical rows.
   `installation-recovery.spec.ts` injects a lost table-class receipt and checks
@@ -2735,9 +2769,13 @@ resources), the `parent` authority check, ID mismatch and identity
 immutability; `lens.test.ts` covers `ensureLens`, activation, and
 re-materializing a loaded resource when a Lens arrives.
 
-Not covered: lens application on the Iroh and WebSocket sync import paths (they
-share `persist_replicated_*`, which is covered through `build_projection_tx`
-only by reasoning, not a test), a browser reload with lenses loaded through
+`lens_values_are_indexed_for_synced_resources` imports a Lens and its target
+row in the same engine `SYNC_PUSH`, checking activation, backfill and the value
+index under a timeout. It exercises releasing the batch's subject guards before
+lens activation reacquires a target's guard.
+
+Not covered: lens application over a real Iroh or WebSocket connection, a
+browser reload with lenses loaded through
 `loadLenses`, and the data-browser flows that mint a lens (datatype change,
 form question shortname) end to end.
 
@@ -2767,3 +2805,27 @@ Installation scopes (2026-10-16, host ABI step 2): `server/src/plugins/host_abi/
 ## Agent page
 
 `browser/e2e/tests/agent-page.spec.ts` (full suite, not `@smoke`) opens another agent's page: the conversation started from its Send message button is listed, a private note typed there survives a reload and is not on the other agent's own page, and a resource that agent created in a shared folder shows under Created (as a resource row), and favoriting the agent from its page menu lists it in the sidebar Favorites. Your own agent page has no messages and no notes. `hasMember` is unit tested in `conversations.test.ts`. Not covered: the Created list is by creator, not by last editor (no index of who edited what, see `planning/auditability-loro-history.md` "Secondary indexes"), and the note's `PlainText` also shows in the private drive's resource list.
+
+Sync probe hash cache: Rust unit tests in `lib/src/db/write_log.rs` check that an unchanged drive is served from the cache (hit counter) and equals a cold computation, and that an edit, a new child, a move out of and into the drive, a ring overflow, `clear_tree` and a committed batch each force a recompute, while a write in another drive and an uncommitted batch do not. Agents keep separate entries (Public and a stranger still get an error after the owner is cached). Not covered: a change to a `drive`-stamp resource outside the drive, and the HTTP-URL drive path (never cached).
+
+## Batched SYNC_PUSH persistence
+
+`db::test::sync_push_batches_local_ids_and_flushes_only_at_last` uses a counting
+KV adapter to verify that localId resources share one projection transaction,
+non-final chunks do not flush, and LAST flushes once. The test-only copy fails
+on the pre-batch implementation (two unexpected per-resource flushes).
+`sync_push_last_reports_a_durable_flush_failure_even_when_empty` injects a flush
+failure and asserts rejection. `sync_push_staged_parent_accepts_an_unstamped_childs_second_delta`
+checks a parent and repeated child arriving in the same batch. Existing sync
+admission and envelope-retention tests cover rejected snapshots and envelope
+subject/signature checks; the offline-duplicate identity test covers preserving
+replica duplicates while rejecting a newly authored duplicate.
+`sync_push_merges_independent_same_subject_deltas_and_keeps_history` merges two
+independent updates onto staged state and verifies the stored replayable
+snapshot. The watched scoped/sorted query regression adds its later 17 rows as
+one replica batch; the public bulk helper's counting test checks that its
+localId durability contract still uses one flush.
+
+Manual acceptance measurements and their limits are recorded in PR #2361.
+The private-dataset harness is kept outside the repository; it is not a CI
+speed assertion. Crash durability is covered by the abort test above.

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { core, dataBrowser } from './index.js';
 import {
   destinationTablesFor,
+  destinationOwnerOf,
   provisionDestination,
 } from './plugin-destination.js';
 import { pluginSchema } from './plugin-log.js';
@@ -239,6 +240,53 @@ describe('destinationTablesFor', () => {
     ).toBeUndefined();
     expect(
       await destinationTablesFor(store, 'drive', 'elsewhere'),
+    ).toBeUndefined();
+  });
+});
+
+describe('destinationOwnerOf', () => {
+  it('names the importer whose Set up created the table, single or keyed', async () => {
+    const { store } = setup();
+    const single = await provisionDestination(
+      store,
+      'drive',
+      'plugin',
+      destinationOf('v2-accepts-destination.json'),
+      'statements',
+    );
+    expect(await destinationOwnerOf(store, 'drive', single.table!)).toBe(
+      'plugin',
+    );
+
+    const multi = await provisionDestination(
+      store,
+      'drive',
+      'plugin',
+      destinationOf('v2-destination-tables-only.json'),
+      undefined,
+    );
+    expect(
+      await destinationOwnerOf(store, 'drive', multi.tables!.statements.table),
+    ).toBe('plugin');
+  });
+
+  it('names nobody for a table the parent never set up', async () => {
+    const { store, resources } = setup();
+    await provisionDestination(
+      store,
+      'drive',
+      'plugin',
+      destinationOf('v2-accepts-destination.json'),
+      'statements',
+    );
+    // Beneath the importer, but not one of its destination tables: an app
+    // cannot borrow an importer by parking a table under it.
+    resources.set('stray', { [core.properties.parent]: 'plugin' });
+    resources.set('elsewhere', { [core.properties.parent]: 'drive' });
+
+    expect(await destinationOwnerOf(store, 'drive', 'stray')).toBeUndefined();
+    expect(
+      await destinationOwnerOf(store, 'drive', 'elsewhere'),
     ).toBeUndefined();
   });
 });

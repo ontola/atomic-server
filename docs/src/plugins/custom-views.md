@@ -130,7 +130,40 @@ A plugin whose view edits schema (a form builder, a table editor) can declare th
 
 Drive apps follow a stricter rule: they read what the signed-in person can read, and write only under their own app resource, signed by the app's own agent.
 
+### Confirmed app navigation and file imports
+
+`await store.openExternal(url)` asks in host UI before opening an absolute
+HTTP(S) link in a new tab. The host names the complete destination host and
+URL, refuses credentials in the URL, and opens with `noopener,noreferrer`.
+It returns `{ status: 'opened' | 'cancelled' }`; the frame gains no popup
+permission.
+
+`await store.openResource(subject)` first reads the resource through the
+person's store, then asks before leaving the app. It refuses non-resource
+identifiers and returns `{ status: 'opened' | 'cancelled', subject }`.
+These confirmed operations share HostUI's one-question rule. The existing
+`store.ui.openResource(subject)` API keeps its immediate navigation behavior.
+
+An app shown as a view of a table can call `await store.importer.run()` to
+ask the host to choose a file, or pass `{ file: { name, mediaType?, text } }`.
+The host resolves the importer whose Set up created the table, checks its
+stored configuration and file-size limit, then shows a confirmation and the
+ordinary import review. Only applying that review writes anything. The result
+reports `applied` counts, `cancelled`, `nothing`, or `blocked` with errors.
+An app on its own page cannot pick another importer to run. This host's
+`accepts` contract is text-only; a base64/binary request is refused before
+preview. Confirmation and review requests wait for the person without a
+one-minute timeout.
+
 ### Host UI
+
+An app may call `await store.proxy.disconnect({ platform })` to give up its
+own delegation for that platform. The host signs the delegation removals as
+the connection owner. The result is `{ status: 'disconnected', platform,
+connectionIds }`. Shared connections and other apps' delegations remain;
+deleting a connection is a separate action in the connection-management page.
+The generated frame client drops cached capabilities for the platform and
+must ask the host again before its next provider request.
 
 Some things a frame cannot do well on its own: a menu is cut off at the frame's edge, and a share dialog or a confirmation should look like the rest of Atomic. `store.ui` asks the Data Browser to draw them with its own components. Each one names your plugin to the person, so a prompt can never pass as the Data Browser's own. One question is open at a time: asking a new one answers the open one as cancelled.
 

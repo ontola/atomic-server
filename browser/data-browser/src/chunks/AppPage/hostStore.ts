@@ -1,7 +1,7 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
 import { HostError, toHostErrorCode } from '@tomic/plugin';
-import type { ProxyHost } from '@helpers/proxyConnections';
+import { isPlatformId, type ProxyHost } from '@helpers/proxyConnections';
 import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
 import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
@@ -39,6 +39,9 @@ export interface HostRequest {
   propVals?: Record<string, unknown>;
   /** `save`: properties the view removed, sent apart from `propVals`. */
   remove?: string[];
+  /** `runImporter`: untrusted frame data, validated before a preview. */
+  file?: unknown;
+  importer?: string;
   // `proxyCapability` / `proxyConnections`
   platform?: string;
   connectionId?: string;
@@ -316,6 +319,22 @@ export async function handleRequest(
       return proxy
         ? await proxy.connections(required(request.platform, 'platform'))
         : [];
+
+    // A frame may give up its own delegation, never delete a shared connection.
+    case 'proxyDisconnect': {
+      if (!proxy)
+        throw new Error('This host cannot reach the integration proxy.');
+      const platform = required(request.platform, 'platform');
+      if (!isPlatformId(platform)) throw new Error('Invalid platform');
+      const connectionIds = await proxy.disconnect(platform);
+
+      return { status: 'disconnected', platform, connectionIds };
+    }
+
+    case 'runImporter':
+      throw new Error(
+        'Running an importer needs host confirmation and review.',
+      );
 
     // Subscriptions are wired by the caller, which owns the frame it has to
     // post back to.

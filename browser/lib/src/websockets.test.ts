@@ -597,6 +597,92 @@ describe('WSClient legacy scheme sync', () => {
     vi.restoreAllMocks();
   });
 
+  it.each(['atomic:drive', 'did:ad:drive'])(
+    'a probe refusal for %s ends the pending drive sync',
+    async drive => {
+      const { client, socket, store } = await connectedClient();
+      const internal = client as unknown as {
+        _pendingSyncState: Map<string, unknown>;
+      };
+      internal._pendingSyncState.set('atomic:drive', {
+        state: {},
+        current: () => true,
+      });
+      store.startDriveSync();
+      const failure = vi.spyOn(store, 'failDriveSync');
+      const reason =
+        drive === 'did:ad:drive'
+          ? 'This server does not host new Drives.\n\nUse another server.'
+          : 'not readable';
+      const message = `SYNC refused for ${drive}: ${reason}`;
+      socket.receive(encodeError(0, ErrorCode.UNAUTHORIZED_READ, message));
+      assert(failure).toHaveBeenCalledWith('atomic:drive', message);
+      assert(store.getSyncStatus().syncInProgress).toBe(false);
+      assert(store.getSyncStatus().lastDriveSyncError).toMatchObject({
+        drive: 'atomic:drive',
+        message,
+      });
+      assert(internal._pendingSyncState.size).toBe(0);
+      socket.receive(encodeSyncResend(drive));
+      assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(0);
+      client.close();
+    },
+  );
+
+  it('subscription refusals leave sync, presence and pending requests alone', async () => {
+    const { client, socket, store } = await connectedClient();
+    const internal = client as unknown as {
+      _pendingSyncState: Map<string, unknown>;
+    };
+    internal._pendingSyncState.set('atomic:drive', {
+      state: {},
+      current: () => true,
+    });
+    store.startDriveSync();
+    const failure = vi.spyOn(store, 'failDriveSync');
+    const notify = vi.spyOn(store, 'notifyError');
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    for (const message of [
+      'SUB refused for atomic:drive: not readable',
+      'PRESENCE_SUBSCRIBE refused for atomic:drive: not readable',
+      'SYNC refused for atomic:unrelated: not readable',
+    ]) {
+      socket.receive(encodeError(0, ErrorCode.UNAUTHORIZED_READ, message));
+    }
+
+    assert(warning).toHaveBeenCalled();
+    assert(failure).not.toHaveBeenCalled();
+    assert(notify).not.toHaveBeenCalled();
+    assert(store.getSyncStatus().syncInProgress).toBe(true);
+    assert(internal._pendingSyncState.size).toBe(1);
+    client.close();
+  });
+
+  it('ignores a probe refusal invalidated by an identity or drive switch', async () => {
+    const { client, socket, store } = await connectedClient();
+    const internal = client as unknown as {
+      _pendingSyncState: Map<string, unknown>;
+    };
+    internal._pendingSyncState.set('atomic:drive', {
+      state: {},
+      current: () => false,
+    });
+    store.startDriveSync();
+    const failure = vi.spyOn(store, 'failDriveSync');
+    socket.receive(
+      encodeError(
+        0,
+        ErrorCode.UNAUTHORIZED_READ,
+        'SYNC refused for did:ad:drive: not readable',
+      ),
+    );
+    assert(failure).not.toHaveBeenCalled();
+    assert(store.getSyncStatus().syncInProgress).toBe(true);
+    assert(internal._pendingSyncState.size).toBe(0);
+    client.close();
+  });
+
   it('uses legacy nested subjects in the full sync', async () => {
     const { client, socket } = await connectedClient();
     const internal = client as unknown as {
@@ -1397,6 +1483,73 @@ describe('WSClient.fetchMany', () => {
 
   const requestIdOf = (frame: Uint8Array) =>
     new DataView(frame.buffer, frame.byteOffset).getUint16(1);
+
+  it('cancels a GET waiting for authentication without sending it later', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    let finish!: () => void;
+    vi.spyOn(client, 'authenticate').mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        }),
+    );
+    const controller = new AbortController();
+    const read = client.fetch('atomic:cancelled', {
+      signal: controller.signal,
+    });
+    const rejected = expect(read).rejects.toBeDefined();
+    controller.abort();
+    await rejected;
+    finish();
+    await Promise.resolve();
+    expect(framesWithTag(socket, Tag.GET)).toHaveLength(0);
+    client.close();
+  });
+
+  it('ignores a cancelled GET response and still admits subscription pushes', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    vi.spyOn(client, 'authenticate').mockResolvedValue(undefined);
+    const controller = new AbortController();
+    const read = client.fetch('atomic:cancelled', {
+      signal: controller.signal,
+    });
+    const rejected = expect(read).rejects.toBeDefined();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.GET)).toHaveLength(1),
+    );
+    const requestId = requestIdOf(framesWithTag(socket, Tag.GET)[0]);
+    controller.abort();
+    await rejected;
+    const ingress = vi.spyOn(store, 'applyIncoming');
+    socket.receive(
+      updateFrame(requestId, 'atomic:cancelled', new Uint8Array()),
+    );
+    expect(ingress).not.toHaveBeenCalled();
+    const { LoroDoc } = LoroLoader.Loro;
+    const doc = new LoroDoc();
+    doc
+      .getMap('properties')
+      .set('https://atomicdata.dev/properties/name', 'Live update');
+    doc.commit();
+    const push = updateFrame(
+      0,
+      'atomic:cancelled',
+      doc.export({ mode: 'snapshot' }),
+    );
+    push[1] |= Flags.PUSH;
+    socket.receive(push);
+    expect(ingress).toHaveBeenCalledOnce();
+    expect(
+      store
+        .getResourceLoading('atomic:cancelled')
+        .get('https://atomicdata.dev/properties/name'),
+    ).toBe('Live update');
+    client.close();
+  });
 
   it('sends one GET_MANY and settles every entry in order', async ({
     expect,

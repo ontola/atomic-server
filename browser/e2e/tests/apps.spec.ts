@@ -18,6 +18,79 @@ import { createFromCatalog, before, waitForSynced } from './test-utils';
 test.describe('apps', () => {
   test.beforeEach(before);
 
+  test('an app confirms external and resource navigation in host UI', async ({
+    page,
+    context,
+  }) => {
+    await page.route(
+      url =>
+        url.pathname === '/plugin-ui' &&
+        url.searchParams.get('format') === 'client',
+      route =>
+        route.fulfill({
+          body: readFileSync(
+            resolve(
+              __dirname,
+              '../../../server/src/plugins/assets/view-client.js',
+            ),
+            'utf8',
+          ),
+          contentType: 'application/javascript',
+          headers: { 'Access-Control-Allow-Origin': '*' },
+        }),
+    );
+    await context.route('https://example.com/**', route =>
+      route.fulfill({ body: '<title>External destination</title>' }),
+    );
+    await newApp(page);
+    const original = page.url();
+    await setAppSource(page, NAVIGATION_APP);
+    await page.reload();
+    const app = page.frameLocator('iframe[title="App"]');
+    await expect(
+      app.getByRole('button', { name: 'External link' }),
+    ).toBeVisible({ timeout: 60_000 });
+    await app.getByRole('button', { name: 'External link' }).click();
+    await expect(page.getByRole('dialog')).toContainText('example.com');
+    expect(context.pages()).toHaveLength(1);
+    expect(page.url()).toBe(original);
+
+    if (process.env.HOST_PORT_SHOTS) {
+      for (const [label, width] of [
+        ['desktop', 1280],
+        ['mobile', 390],
+      ] as const) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.screenshot({
+          path: resolve(
+            process.env.HOST_PORT_SHOTS,
+            `host-external-${label}.png`,
+          ),
+        });
+      }
+
+      await page.setViewportSize({ width: 1200, height: 800 });
+    }
+
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(app.getByRole('status')).toHaveText('cancelled');
+    await app.getByRole('button', { name: 'External link' }).click();
+    const opened = context.waitForEvent('page');
+    await page.getByRole('button', { name: 'Open link', exact: true }).click();
+    const popup = await opened;
+    await popup.waitForLoadState();
+    expect(await popup.evaluate(() => window.opener)).toBeNull();
+    await popup.close();
+    await app.getByRole('button', { name: 'Open this resource' }).click();
+    await expect(page.getByRole('dialog')).toContainText('leaving the app');
+    expect(page.url()).toBe(original);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(app.getByRole('status')).toHaveText('cancelled');
+    await app.getByRole('button', { name: 'Open this resource' }).click();
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
   for (const client of ['served', 'v1 fixture'] as const) {
     test(`an app renders in its frame and writes its own data (${client})`, async ({
       page,
@@ -445,6 +518,18 @@ async function setAppSource(
  * An app that asks the host for UI and says what came back, so the test can
  * read the answer from inside the frame.
  */
+const NAVIGATION_APP = `export async function view({ root, store }) {
+  const said = document.createElement('p'); said.setAttribute('role', 'status');
+  const button = (label, action) => {
+    const b = document.createElement('button'); b.textContent = label;
+    b.onclick = async () => { said.textContent = (await action()).status; };
+    root.append(b);
+  };
+  button('External link', () => store.openExternal('https://example.com/docs'));
+  button('Open this resource', async () => store.openResource((await store.getContext()).subject));
+  root.append(said);
+}`;
+
 const HOST_UI_APP = `export async function view({ root, store }) {
   const said = document.createElement('p');
   said.setAttribute('role', 'status');

@@ -288,19 +288,14 @@ const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
   // Four browser workers total, one per shard/server. At eight, full develop
   // runs repeatedly exhausted settings-save and app-creation waits while the
   // same journeys passed in focused runs. The full local suite also passed
-  // with two workers and no retries. Keep browser headroom alongside the
-  // Rust, WASM and frontend jobs instead of widening every interaction wait.
+  // with two workers and no retries. `ci()` builds the shared E2E binary
+  // alongside the other checks, then starts browsers after those checks.
   mancave: {
     e2eShardCount: 4,
     e2ePlaywrightWorkers: '1',
-    // Back to the suite's own documented default (playwright.config.ts): three
-    // attempts catch a genuinely flaky path while a real regression still
-    // fails all three. This branch dropped it to 1 for runtime, and that trade
-    // stopped paying: what remains red here rotates run to run — a click that
-    // did not land, a menu that did not open — which is the shape of a
-    // contended host, not of a broken test. Mitigation, not a fix; the fix is
-    // headroom, and `ci()` still runs these browsers alongside clippy,
-    // nextest, flutter and two vitest suites.
+    // Keep the suite's documented default (playwright.config.ts): three
+    // attempts. CI phase ordering provides browser headroom without changing
+    // these retries or the individual interaction budgets.
     e2ePlaywrightRetries: '2',
     // Measured 2026-09-15 on a 15-minute smoke run (24 threads, 31 GiB): the
     // engine sat at 14 to 20 cores while compiling, but only 7 to 13 cores for
@@ -318,10 +313,8 @@ const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
   //
   // Only the *build* widths move. Rust compilation is the dominant cost here
   // and scales cleanly with cores. The test widths stay where they are on
-  // purpose: `ci()` runs endToEnd concurrently with clippy, nextest, flutter
-  // and vitest, so raising those would stack more browsers and more test
-  // threads onto the same four cores — the starvation the mancave notes
-  // above describe. Build jobs mostly occupy phases the tests are not in.
+  // purpose. `ci()` separates browser interactions from the other checks;
+  // that is not a reason to increase either phase's existing concurrency.
   //
   // This profile is not the fallback it reads as: `CI_RUNNER` has been set to
   // `["ubuntu-latest"]` since 2026-09-08, and `pick` treats that as an
@@ -438,8 +431,14 @@ export class AtomicServer {
     return (
       container
         .withExec([
-          'rustup', 'toolchain', 'install', RUST_VERSION,
-          '--profile', 'minimal', '--component', 'rustfmt,clippy',
+          'rustup',
+          'toolchain',
+          'install',
+          RUST_VERSION,
+          '--profile',
+          'minimal',
+          '--component',
+          'rustfmt,clippy',
         ])
         .withEnvVariable('RUSTUP_TOOLCHAIN', RUST_VERSION)
         .withMountedCache(
@@ -543,10 +542,7 @@ export class AtomicServer {
         )
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
         // `flutter/pubspec.yaml` points at ../packages/atomic_flutter.
-        .withDirectory(
-          '/workspace/packages',
-          this.source.directory('packages'),
-        )
+        .withDirectory('/workspace/packages', this.source.directory('packages'))
         .withWorkdir('/workspace/flutter')
         .withExec([
           'bash',
@@ -618,22 +614,21 @@ export class AtomicServer {
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
     await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
 
-    // Rust clippy/test still share the `rust-target` cache mount — keep
+    // Rust clippy/test share the `rust-checks-target` cache mount — keep
     // them serialized (parallel cargo contended the target lock for
-    // ~16 minutes and exited 101). Everything else is independent.
+    // ~16 minutes and exited 101).
+    //
+    // Compile the E2E server in parallel, using the same graph as
+    // atomicService(true). Dagger reuses that result when the browser phase
+    // starts. Defer browser interactions until the other checks finish.
+    // Fresh-drive setup repeatedly reached its 30s limit while four shards
+    // overlapped nextest's twelve threads and JS/Flutter in run 40482227107.
+    // Preserve the suite, workers, retries and interaction budgets while
+    // removing that same-pipeline overlap.
     await Promise.all([
       this.docsPublish(netlifyAuthToken, publishDocs),
       this.typedocPublish(netlifyAuthToken, publishDocs),
-      this.endToEnd(
-        netlifyAuthToken,
-        playwrightMode,
-        playwrightWorkers,
-        playwrightShards,
-        playwrightRetries,
-        '',
-        playwrightCloneSessions,
-        resultsKey,
-      ),
+      this.rustBuild(false, 'x86_64-unknown-linux-musl', true).sync(),
       this.jsTest(),
       this.jsTestIntegration(),
       this.flutterTest(),
@@ -642,6 +637,17 @@ export class AtomicServer {
         await this.rustTest();
       })(),
     ]);
+
+    await this.endToEnd(
+      netlifyAuthToken,
+      playwrightMode,
+      playwrightWorkers,
+      playwrightShards,
+      playwrightRetries,
+      '',
+      playwrightCloneSessions,
+      resultsKey,
+    );
 
     return 'CI pipeline completed successfully';
   }
@@ -811,16 +817,14 @@ export class AtomicServer {
           'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi',
         ])
         .withExec([
-          'sh', '-c',
+          'sh',
+          '-c',
           `${pathPrefix}; rustup toolchain install ${RUST_VERSION} --profile minimal`,
         ])
         .withDirectory('/workspace/lib', this.source.directory('lib'))
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
         // `flutter/pubspec.yaml` points at ../packages/atomic_flutter.
-        .withDirectory(
-          '/workspace/packages',
-          this.source.directory('packages'),
-        )
+        .withDirectory('/workspace/packages', this.source.directory('packages'))
         .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
           sharing: CacheSharingMode.Locked,
         })
@@ -913,7 +917,10 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         // The host ABI's WIT, read by the server's and the examples' bindgen.
-        .withDirectory('/code/atomic-host', this.source.directory('atomic-host'))
+        .withDirectory(
+          '/code/atomic-host',
+          this.source.directory('atomic-host'),
+        )
         .withDirectory('/code/tools', this.source.directory('tools'))
         .withMountedCache(
           '/code/target',
@@ -977,16 +984,24 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         // The host ABI's WIT, read by the server's and the examples' bindgen.
-        .withDirectory('/code/atomic-host', this.source.directory('atomic-host'))
+        .withDirectory(
+          '/code/atomic-host',
+          this.source.directory('atomic-host'),
+        )
         .withDirectory('/code/tools', this.source.directory('tools'))
         // `server/src/forms.rs` pins its validation verdicts to the cases the
         // browser form renderer shares (`include_str!`), so the Rust tests need
         // this one file from `browser/`.
         .withFile(
           '/code/browser/form-renderer/shared/validation-cases.json',
-          this.source.file('browser/form-renderer/shared/validation-cases.json'),
+          this.source.file(
+            'browser/form-renderer/shared/validation-cases.json',
+          ),
         )
-        .withMountedCache('/code/target', this.targetCache('rust-slim-target-v3'))
+        .withMountedCache(
+          '/code/target',
+          this.targetCache('rust-slim-target-v3'),
+        )
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
@@ -1596,7 +1611,15 @@ export class AtomicServer {
     // at an optimisation level where commit round-trips stop dominating, and
     // cheap enough to compile that Playwright is not left waiting on LTO.
     const buildArgs = e2e
-      ? ['cargo', 'build', '--locked', '--profile', 'e2e', '-p', 'atomic-server']
+      ? [
+          'cargo',
+          'build',
+          '--locked',
+          '--profile',
+          'e2e',
+          '-p',
+          'atomic-server',
+        ]
       : release
         ? ['cargo', 'build', '--locked', '--release', '-p', 'atomic-server']
         : ['cargo', 'build', '--locked', '-p', 'atomic-server'];
@@ -1796,7 +1819,10 @@ export class AtomicServer {
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/atomic-host', source.directory('atomic-host'))
         .withDirectory('/code/tools', source.directory('tools'))
-        .withMountedCache('/code/target', this.targetCache('rust-checks-target-v3'))
+        .withMountedCache(
+          '/code/target',
+          this.targetCache('rust-checks-target-v3'),
+        )
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
@@ -2368,7 +2394,7 @@ export class AtomicServer {
         grep: playwrightGrep,
       };
     console.info(
-      `E2E budget: ${this.e2eRun.shardCount} shards x ${this.e2eRun.workers} workers = ${this.e2eRun.shardCount * Number(this.e2eRun.workers)} browser workers; retries=${this.e2eRun.retries}; cloned profiles=${this.e2eCloneSessions}; concurrent CI cargo jobs=${this.hostKnobs.cargoBuildJobs}, nextest threads=${this.hostKnobs.nextestTestThreads}. JS/Flutter jobs also share this host.`,
+      `E2E budget: ${this.e2eRun.shardCount} shards x ${this.e2eRun.workers} workers = ${this.e2eRun.shardCount * Number(this.e2eRun.workers)} browser workers; retries=${this.e2eRun.retries}; cloned profiles=${this.e2eCloneSessions}; CI cargo jobs=${this.hostKnobs.cargoBuildJobs}, nextest threads=${this.hostKnobs.nextestTestThreads}. ci() finishes its other checks before starting browser interactions.`,
     );
     const shardCount = this.e2eRun.shardCount;
     const base = this.e2eBaseContainer();
@@ -2467,7 +2493,10 @@ export class AtomicServer {
         .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'));
 
       for (const r of failed) {
-        container = container.withDirectory(`/in/shard-${r.shard}`, r.testResults);
+        container = container.withDirectory(
+          `/in/shard-${r.shard}`,
+          r.testResults,
+        );
       }
 
       await container

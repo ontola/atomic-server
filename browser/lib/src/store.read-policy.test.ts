@@ -122,7 +122,9 @@ describe('store read policy', () => {
     const resource = await store.getResource('did:ad:elsewhere');
 
     expect(resource.subject).toBe('atomic:elsewhere');
-    expect(socket.fetch).toHaveBeenCalledWith('atomic:elsewhere');
+    expect(socket.fetch).toHaveBeenCalledWith('atomic:elsewhere', {
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('resolves a missing subject to a resource carrying the error', async ({
@@ -334,8 +336,12 @@ describe('local hydration batching', () => {
         String(message).includes('OPFS lookup failed'),
       ),
     ).toHaveLength(1);
-    expect(socket.fetch).toHaveBeenCalledWith('atomic:x');
-    expect(socket.fetch).toHaveBeenCalledWith('atomic:y');
+    expect(socket.fetch).toHaveBeenCalledWith('atomic:x', {
+      signal: expect.any(AbortSignal),
+    });
+    expect(socket.fetch).toHaveBeenCalledWith('atomic:y', {
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('splits a very large batch into worker-sized chunks', async ({

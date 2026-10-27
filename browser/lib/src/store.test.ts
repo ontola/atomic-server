@@ -924,6 +924,7 @@ describe('Store', () => {
     expect,
   }) => {
     const store = new Store({ serverUrl: 'https://myserver.dev' });
+    await bootstrapCoreVocab(store);
 
     const resource = await store.newResource({ did: false });
 

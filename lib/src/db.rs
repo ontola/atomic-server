@@ -32,6 +32,7 @@ pub(crate) mod prop_val_sub_index;
 mod query_index;
 pub mod redb_store;
 pub mod website;
+pub mod write_log;
 /// The set of drives [`Db::migrate_messages_step`] may write chat log pages
 /// for, from the drives' subjects in any spelling.
 pub fn chat_migration_drive_set(drives: Vec<String>) -> std::collections::HashSet<String> {
@@ -412,9 +413,14 @@ pub const DURABLE_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::fro
 
 type PendingBlobRequests = HashMap<[u8; 32], (String, web_time::Instant)>;
 
-/// The Db is a persistent on-disk Atomic Data store.
+/// **Internal:** embedded Atomic Data storage with indexed queries and persistence.
+///
+/// This implementation remains reachable as `atomic_lib::Db` for first-party
+/// consumers and compatibility. It is outside the application API contract;
+/// the documentation label does not change its Rust visibility or behavior.
 /// It's an implementation of [Storelike].
-/// It uses a [KvStore] backend for key-value storage (sled, BTreeMap, etc.).
+/// It uses a [KvStore] backend: redb over a native file, memory, or browser OPFS;
+/// optional sled support provides legacy-store compatibility and migration.
 /// It stores [Resource]s as [PropVals]s by their subject as key.
 /// It builds a value index for performant [Query]s.
 /// It keeps track of Queries and updates their index when [crate::Commit]s are applied.
@@ -425,6 +431,9 @@ pub struct Db {
     /// The key-value store backend. Abstracted behind a trait so different
     /// backends (sled, BTreeMap, etc.) can be used interchangeably.
     pub kv: Arc<dyn KvStore>,
+    /// Which subjects `kv` wrote, in order; see [`write_log`].
+    write_log: Arc<write_log::WriteLog>,
+    probe_cache: Arc<write_log::ProbeCache>,
     /// Optional remote file storage. Configure before sharing this Db.
     pub blob_backend: Option<Arc<dyn blob_backend::BlobBackend>>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
@@ -576,13 +585,24 @@ impl Db {
         }
     }
 
+    pub fn write_log(&self) -> &Arc<write_log::WriteLog> {
+        &self.write_log
+    }
+
+    pub fn probe_cache(&self) -> &Arc<write_log::ProbeCache> {
+        &self.probe_cache
+    }
+
     /// A `Db` over `kv` with every other field at its default. Not usable
     /// until [`Db::open`] has run.
     fn from_kv(path: std::path::PathBuf, kv: Arc<dyn KvStore>, base_domain: Option<String>) -> Db {
+        let write_log = Arc::new(write_log::WriteLog::default());
         Db {
             path,
             blob_backend: None,
-            kv: Arc::new(compressed_kv::CompressedKv::new(kv)),
+            kv: Arc::new(compressed_kv::CompressedKv::with_log(kv, write_log.clone())),
+            write_log,
+            probe_cache: Default::default(),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
             endpoints: vec![],
@@ -806,9 +826,9 @@ impl Db {
     /// parent's member list, the name index) is written once instead of once
     /// per resource. A large first sync is bound by that cost.
     ///
-    /// A resource named twice keeps its last entry. One with an import
-    /// identity goes through the single-resource path, which serialises on the
-    /// identity lock and flushes.
+    /// A resource named twice keeps its last entry. Import identities share
+    /// the same projection transaction under sorted identity locks; this
+    /// public wrapper makes their receipt durable with one flush afterwards.
     pub async fn persist_replicated_resources(
         &self,
         entries: Vec<(Resource, Option<Vec<u8>>)>,
@@ -824,51 +844,110 @@ impl Db {
         entries: Vec<(Resource, Option<Vec<u8>>)>,
         defer_search: bool,
     ) -> AtomicResult<()> {
+        let has_import_identity = entries
+            .iter()
+            .any(|(resource, _)| crate::import_identity::identity(resource).is_some());
+        let resources = self
+            .persist_replicated_resources_prepared(entries, defer_search, None)
+            .await?;
+        self.finish_replicated_resources(resources).await;
+        // The public batch API is also used by live UPDATE imports, whose
+        // localId receipts must survive a process kill before acknowledgement.
+        // One flush covers the whole batch.
+        if has_import_identity {
+            self.flush()?;
+        }
+        Ok(())
+    }
+
+    /// Apply a replicated batch while its caller holds any subject locks that
+    /// protect the snapshots it resolved. The returned resources still need
+    /// lens activation and change notifications; callers that also hold locks
+    /// must release them before [`Self::finish_replicated_resources`].
+    pub(crate) async fn persist_replicated_resources_prepared(
+        &self,
+        entries: Vec<(Resource, Option<Vec<u8>>)>,
+        defer_search: bool,
+        admitted_drive: Option<&str>,
+    ) -> AtomicResult<Vec<Resource>> {
         let mut last: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
         for (i, (resource, _)) in entries.iter().enumerate() {
             last.insert(self.normalize_subject(resource.get_subject()).pure_id(), i);
         }
-        let mut transaction = Transaction::new();
-        let mut batched: Vec<&Resource> = Vec::new();
-        let mut events = Vec::new();
-        for (i, (resource, snapshot)) in entries.iter().enumerate() {
-            let key = self.normalize_subject(resource.get_subject()).pure_id();
-            if last.get(&key) != Some(&i) {
-                continue;
+        // Import review holds these same locks while reading every copy. Take
+        // them in a stable order, after sync's subject locks, so a batch never
+        // exposes a half-written localId group and concurrent batches cannot
+        // deadlock each other.
+        let mut identity_keys: Vec<String> = entries
+            .iter()
+            .enumerate()
+            .filter(|(i, (resource, _))| {
+                last.get(&self.normalize_subject(resource.get_subject()).pure_id()) == Some(i)
+            })
+            .filter_map(|(_, (resource, _))| {
+                crate::import_identity::identity(resource)
+                    .map(|(parent, id)| crate::import_identity::lock_key(&parent, &id))
+            })
+            .collect();
+        identity_keys.sort();
+        identity_keys.dedup();
+
+        let batched: Vec<Resource> = {
+            let mut _identity_guards = Vec::with_capacity(identity_keys.len());
+            for key in &identity_keys {
+                _identity_guards.push(self.subject_locks.lock(key).await);
             }
-            if crate::import_identity::identity(resource).is_some() {
-                self.persist_replicated(resource, snapshot.clone()).await?;
-                continue;
+
+            let mut transaction = Transaction::new();
+            let mut batched = Vec::new();
+            let mut events = Vec::new();
+            for (i, (resource, snapshot)) in entries.iter().enumerate() {
+                let key = self.normalize_subject(resource.get_subject()).pure_id();
+                if last.get(&key) != Some(&i) {
+                    continue;
+                }
+                let before = transaction.len();
+                let changed = self
+                    .build_projection_tx(
+                        resource,
+                        false,
+                        true,
+                        true,
+                        snapshot.clone(),
+                        &mut transaction,
+                    )
+                    .await?;
+                if defer_search {
+                    let mut added = transaction.split_off(before);
+                    added.retain(|op| !crate::search::is_search_op(op));
+                    transaction.extend(added);
+                    transaction.push(crate::search::pending_marker(&key));
+                }
+                if let Some(changed) = changed {
+                    events.extend(
+                        drive_events::PendingEvent::new_for_drive(
+                            self,
+                            resource,
+                            false,
+                            changed,
+                            admitted_drive,
+                        )
+                        .await,
+                    );
+                }
+                batched.push(resource.clone());
             }
-            let before = transaction.len();
-            let changed = self
-                .build_projection_tx(
-                    resource,
-                    false,
-                    true,
-                    true,
-                    snapshot.clone(),
-                    &mut transaction,
-                )
-                .await?;
-            if defer_search {
-                let mut added = transaction.split_off(before);
-                added.retain(|op| !crate::search::is_search_op(op));
-                transaction.extend(added);
-                transaction.push(crate::search::pending_marker(&key));
+            if !batched.is_empty() {
+                self.apply_transaction_with_source(&mut transaction, None, events)?;
             }
-            if let Some(changed) = changed {
-                events
-                    .extend(drive_events::PendingEvent::new(self, resource, false, changed).await);
-            }
-            batched.push(resource);
-        }
-        if batched.is_empty() {
-            return Ok(());
-        }
-        self.apply_transaction_with_source(&mut transaction, None, events)?;
-        for resource in batched {
-            self.note_lens_related(resource).await;
+            batched
+        };
+        Ok(batched)
+    }
+
+    pub(crate) async fn finish_replicated_resources(&self, resources: Vec<Resource>) {
+        for resource in resources {
+            self.note_lens_related(&resource).await;
             let _ = self.db_events.send(DbEvent::Changed {
                 subject: resource.get_subject().without_params(),
                 delta: None,
@@ -877,7 +956,6 @@ impl Db {
                 from_commit: false,
             });
         }
-        Ok(())
     }
 
     async fn persist_replicated(
@@ -891,10 +969,7 @@ impl Db {
         {
             Some(
                 self.subject_locks
-                    .lock(&format!(
-                        "import-identity:{}",
-                        serde_json::to_string(&(parent.pure_id(), &id))?
-                    ))
+                    .lock(&crate::import_identity::lock_key(&parent, &id))
                     .await,
             )
         } else {
@@ -1173,6 +1248,16 @@ impl Db {
     pub async fn init_redb(base_domain: Option<String>) -> AtomicResult<Db> {
         let redb_store = redb_store::RedbStore::new_memory()?;
         Db::from_kv(std::path::PathBuf::new(), Arc::new(redb_store), base_domain)
+            .open()
+            .await
+    }
+
+    /// Open an adapter-supplied backend through the normal initialization path.
+    pub(crate) async fn init_with_store(
+        kv: Arc<dyn KvStore>,
+        base_domain: Option<String>,
+    ) -> AtomicResult<Db> {
+        Db::from_kv(std::path::PathBuf::new(), kv, base_domain)
             .open()
             .await
     }
@@ -4734,10 +4819,7 @@ impl Storelike for Db {
         let _import_guard = if let Some((parent, id)) = crate::import_identity::identity(resource) {
             let guard = self
                 .subject_locks
-                .lock(&format!(
-                    "import-identity:{}",
-                    serde_json::to_string(&(parent.pure_id(), &id))?
-                ))
+                .lock(&crate::import_identity::lock_key(&parent, &id))
                 .await;
             if let Some(found) = crate::import_identity::find_existing(self, &parent, &id).await? {
                 if Subject::from(found).pure_id() != resource.get_subject().pure_id() {
@@ -4821,10 +4903,7 @@ impl Storelike for Db {
             if let Some((parent, id)) = crate::import_identity::identity(new) {
                 let guard = self
                     .subject_locks
-                    .lock(&format!(
-                        "import-identity:{}",
-                        serde_json::to_string(&(parent.pure_id(), &id))?
-                    ))
+                    .lock(&crate::import_identity::lock_key(&parent, &id))
                     .await;
                 if let Some(found) = crate::import_identity::validate_candidate(
                     self,

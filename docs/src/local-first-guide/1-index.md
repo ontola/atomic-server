@@ -8,6 +8,9 @@ It uses `@tomic/lib` directly, so what you learn applies to React, Svelte, Astro
 The app is a reading list: a Drive that holds Book resources with a title and a note.
 It is deliberately tiny; the interesting part is where the data lives.
 
+Before adapting it to your own app, read [choosing transports and designing for offline edits](7-design-decisions.md).
+If your app already uses a relational backend, see [migrating from PostgreSQL](8-from-postgres.md).
+
 ## What you will end up with
 
 1. An identity that is a keypair, minted in the browser, with nothing registered anywhere.

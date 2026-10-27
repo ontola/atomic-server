@@ -1690,6 +1690,10 @@ pub struct PeerSyncOutcome {
     /// and nothing needed to: the difference between "up to date" and "failed"
     /// is invisible in a count alone.
     pub in_sync: bool,
+    /// The hash-first probe (`sync-probe`) found both sides level, so no
+    /// version-vector table was sent. False when the probe missed, or the
+    /// peer predates the capability and got the full `SYNC` straight away.
+    pub probe_hit: bool,
     pub peer_name: Option<String>,
 }
 
@@ -1734,6 +1738,7 @@ pub async fn sync_drive_with_peer_using_outcome(
             count: 0,
             pushed: 0,
             in_sync: true,
+            probe_hit: false,
             peer_name: None,
         });
     }
@@ -1867,41 +1872,83 @@ pub async fn sync_drive_with_peer_using_outcome(
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
     let drive_subjects = super::engine::collect_drive_subjects(store, &drive_subject).await;
     let vvs = super::engine::build_drive_vvs(store, &drive_subjects);
-    let drive_hash = super::engine::compute_drive_hash(&vvs);
-
-    // Build compact peer/resource representation
-    let mut peer_set = std::collections::BTreeSet::new();
-    for vv in vvs.values() {
-        for peer_id in vv.keys() {
-            peer_set.insert(peer_id.clone());
-        }
-    }
-    let peers: Vec<String> = peer_set.into_iter().collect();
-    let peer_index: std::collections::HashMap<&str, usize> = peers
+    let sparse = peer_caps
         .iter()
-        .enumerate()
-        .map(|(i, p)| (p.as_str(), i))
-        .collect();
+        .any(|c| c == super::protocol::CAP_SPARSE_SYNC);
+    let probed = peer_caps
+        .iter()
+        .any(|c| c == super::protocol::CAP_SYNC_PROBE);
+    // Version vectors in the peer's subject spelling, which is what it hashes.
+    let wire_vvs =
+        || -> std::collections::HashMap<String, std::collections::HashMap<String, i32>> {
+            vvs.iter()
+                .map(|(subject, vv)| (wire.subject(subject), vv.clone()))
+                .collect()
+        };
 
-    let mut resources: std::collections::HashMap<String, Vec<i32>> =
-        std::collections::HashMap::new();
-    for (subject, vv) in &vvs {
-        let mut counters = vec![0i32; peers.len()];
-        for (pid, &counter) in vv {
-            if let Some(&idx) = peer_index.get(pid.as_str()) {
-                counters[idx] = counter;
+    // The full `SYNC`: sparse vectors and hash v2 for a peer that speaks
+    // `sparse-sync`, else the dense peer table and hash v1 (R x R numbers).
+    let build_full_sync = || -> Vec<u8> {
+        if sparse {
+            let wire_vvs = wire_vvs();
+            let hash = super::engine::compute_drive_hash_v2(&wire_vvs);
+            return super::protocol::encode_sync_sparse(&wire.subject(drive), &hash, &wire_vvs);
+        }
+
+        let drive_hash = super::engine::compute_drive_hash(&vvs);
+
+        // Build compact peer/resource representation
+        let mut peer_set = std::collections::BTreeSet::new();
+        for vv in vvs.values() {
+            for peer_id in vv.keys() {
+                peer_set.insert(peer_id.clone());
             }
         }
-        resources.insert(wire.subject(subject), counters);
-    }
+        let peers: Vec<String> = peer_set.into_iter().collect();
+        let peer_index: std::collections::HashMap<&str, usize> = peers
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.as_str(), i))
+            .collect();
 
-    // Send SYNC frame
-    let sync_frame =
-        super::protocol::encode_sync(&wire.subject(drive), &drive_hash, &peers, &resources);
-    send.write_u32(sync_frame.len() as u32)
+        let mut resources: std::collections::HashMap<String, Vec<i32>> =
+            std::collections::HashMap::new();
+        for (subject, vv) in &vvs {
+            let mut counters = vec![0i32; peers.len()];
+            for (pid, &counter) in vv {
+                if let Some(&idx) = peer_index.get(pid.as_str()) {
+                    counters[idx] = counter;
+                }
+            }
+            resources.insert(wire.subject(subject), counters);
+        }
+
+        super::protocol::encode_sync(&wire.subject(drive), &drive_hash, &peers, &resources)
+    };
+
+    // Hash first when the peer can answer a probe: one hash instead of the
+    // drive's version vectors. `SYNC_OK` ends it; `SYNC_RESEND` makes us send
+    // the full `SYNC` (read loop below). The peer hashes what our identity
+    // may read, we hash everything we hold, so a miss is expected whenever we
+    // hold more than it may show us. Peers without `sync-probe` get the full
+    // `SYNC` straight away.
+    let mut full_sync_sent = !probed;
+    let first_frame = if probed {
+        let wire_vvs = wire_vvs();
+        if sparse {
+            let hash = super::engine::compute_drive_hash_v2(&wire_vvs);
+            super::protocol::encode_sync_probe_v2(&wire.subject(drive), &hash)
+        } else {
+            let hash = super::engine::compute_drive_hash(&wire_vvs);
+            super::protocol::encode_sync_probe(&wire.subject(drive), &hash)
+        }
+    } else {
+        build_full_sync()
+    };
+    send.write_u32(first_frame.len() as u32)
         .await
         .map_err(io_err)?;
-    send.write_all(&sync_frame).await.map_err(io_err)?;
+    send.write_all(&first_frame).await.map_err(io_err)?;
 
     // Read response frames
     let mut total_imported = 0;
@@ -1960,6 +2007,17 @@ pub async fn sync_drive_with_peer_using_outcome(
                 tracing::info!("Peer says drive {drive} is in sync");
                 acked_in_sync = true;
                 break;
+            }
+            super::protocol::tag::SYNC_RESEND => {
+                // Our probe missed: send the full state, once.
+                if !full_sync_sent {
+                    full_sync_sent = true;
+                    tracing::info!("Peer says drive {drive} differs, sending full SYNC");
+                    let frame = build_full_sync();
+                    send.write_u32(frame.len() as u32).await.map_err(io_err)?;
+                    send.write_all(&frame).await.map_err(io_err)?;
+                }
+                continue;
             }
             super::protocol::tag::SYNC_DIFF => {
                 if let Some(diff) = super::protocol::decode_sync_diff(payload) {
@@ -2027,25 +2085,14 @@ pub async fn sync_drive_with_peer_using_outcome(
                 let mut last_chunk = false;
                 if let Some(push) = super::protocol::decode_sync_push(payload) {
                     last_chunk = push.last;
-                    if !same_drive(store, &push.drive, drive) {
-                        // We asked for one drive; owner trust below is for that
-                        // drive only. A push claiming another drive is judged
-                        // as if the peer had dialed us: on its own rights.
+                    let trust_owned = same_drive(store, &push.drive, drive);
+                    if !trust_owned {
+                        // Owner trust is scoped to the drive we requested.
                         tracing::warn!(
                             "SYNC_PUSH for {} while syncing {}: applying without owner trust",
                             push.drive,
                             drive
                         );
-                        if let Ok((count, _)) =
-                            super::engine::import_sync_push(&push, store, &remote_agent, false)
-                                .await
-                        {
-                            total_imported += count;
-                        }
-                        if last_chunk {
-                            break;
-                        }
-                        continue;
                     }
                     // Import with the identity the peer proved via auth-back,
                     // NOT Sudo — dialing a peer never established the peer's
@@ -2057,25 +2104,36 @@ pub async fn sync_drive_with_peer_using_outcome(
                     // admission gate. A drive that does not exist locally is
                     // enrolled only when the policy allows it (OQ5); Public
                     // never creates one.
-                    match super::engine::import_sync_push(&push, store, &remote_agent, true).await {
+                    match super::engine::import_sync_push(&push, store, &remote_agent, trust_owned)
+                        .await
+                    {
                         Ok((count, blob_requests)) => {
                             total_imported += count;
 
-                            // Send blob requests if any
-                            for req_frame in blob_requests {
-                                send.write_u32(req_frame.len() as u32)
-                                    .await
-                                    .map_err(io_err)?;
-                                send.write_all(&req_frame).await.map_err(io_err)?;
+                            // Unsolicited drives keep their existing path: import
+                            // on the peer's rights, without requesting their blobs.
+                            if trust_owned {
+                                for req_frame in blob_requests {
+                                    send.write_u32(req_frame.len() as u32)
+                                        .await
+                                        .map_err(io_err)?;
+                                    send.write_all(&req_frame).await.map_err(io_err)?;
+                                }
                             }
                         }
                         // We dialed this peer and asked for its state; the
-                        // refusal is our own admission gate saying no to what
-                        // came back. Nothing landed, and there is nothing to
-                        // tell the peer — it did not ask us for anything.
+                        // rejection can be admission/rights, persistence, or
+                        // the LAST durability barrier. Propagate it instead
+                        // of reporting this sync as successful.
                         Err(rejected) => {
-                            tracing::warn!("[sync] dropped incoming push: {rejected}");
+                            return Err(format!("Dropped incoming SYNC_PUSH: {rejected}").into())
                         }
+                    }
+                    if !trust_owned {
+                        if last_chunk {
+                            break;
+                        }
+                        continue;
                     }
                 }
                 // SYNC_PUSH is chunked: keep reading until the LAST flag fires.
@@ -2274,6 +2332,7 @@ pub async fn sync_drive_with_peer_using_outcome(
         count: total_imported,
         pushed: total_pushed,
         in_sync: acked_in_sync,
+        probe_hit: acked_in_sync && probed && !full_sync_sent,
         peer_name: peer_display_name,
     })
 }

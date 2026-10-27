@@ -38,6 +38,7 @@ export * from './ontologies/ai.js';
 export * from './ontologies/canvas.js';
 export * from './ontologies/forks.js';
 export * from './ontologies/notifications.js';
+export * from './ontologies/contacts.js';
 export * from './ontologies/conversations.js';
 export * from './ontologies/i18n.js';
 export * from './ontologies/forms.js';
@@ -54,6 +55,7 @@ export * from './genesis.js';
 export * from './commit.js';
 export * from './error.js';
 export * from './withDeadline.js';
+export { isLoopbackHost } from './loopback.js';
 export * from './pkarr.js';
 export * from './datatypes.js';
 export * from './class-constraints.js';
@@ -383,6 +385,7 @@ export * from './import-reference-review.js';
 
 export {
   destinationTablesFor,
+  destinationOwnerOf,
   provisionDestination,
   type DestinationConfig,
   type DestinationTable,

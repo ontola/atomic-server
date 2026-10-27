@@ -1,6 +1,14 @@
 //! Persistent import identity shared by JSON-AD and sandbox import proposals.
 use crate::{agents::ForAgent, errors::AtomicResult, urls, Resource, Storelike, Subject, Value};
 
+/// Shared lock namespace for import review, authored writes, and replicas.
+pub(crate) fn lock_key(parent: &Subject, local_id: &str) -> String {
+    format!(
+        "import-identity:{}",
+        serde_json::to_string(&(parent.pure_id(), local_id)).expect("string identity key")
+    )
+}
+
 /// Match the immediate destination, not arbitrary descendants. Ambiguity is an
 /// error: returning the first result would update an unrelated resource.
 pub async fn find_existing(

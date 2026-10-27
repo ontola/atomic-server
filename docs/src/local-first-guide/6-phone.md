@@ -49,7 +49,7 @@ What crosses the link is decided by the rights on each Resource, the same check 
 Add a Book on the phone in a tunnel.
 It is signed, saved locally, and queued.
 When the phone next sees the server or the laptop, the commit travels, the browser's `store.subscribe` callback fires, and the list updates.
-Edit the same Book on both devices while apart and the two edits merge; nobody is asked to pick a winner.
+Accepted edits to the same Book merge automatically. Your application decides when the result needs human review; merging does not guarantee that business rules are satisfied.
 
 ## What you have
 
@@ -59,6 +59,8 @@ That is the whole local-first story, in one small app.
 
 ## Where to go from here
 
+- Choose your app's [transports, availability model and offline conflict policy](7-design-decisions.md).
+- Plan an incremental [migration from PostgreSQL](8-from-postgres.md) if you have an existing backend.
 - Model your own data with the [ontology editor](../atomicserver/gui.md) and generate types with [`@tomic/cli`](../js-cli.md).
 - Use [`@tomic/react`](../usecases/react.md) or [`@tomic/svelte`](../svelte.md) instead of raw `store.subscribe` calls.
 - Read [Atomic Sync](../sync.md) for what the engine does under the hood, and [URLs and identifiers](../urls.md) for every identifier you met along the way.

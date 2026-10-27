@@ -42,13 +42,14 @@ pub fn destroy_envelope(store: &Db, subject: &str) -> Option<String> {
 
 /// True if we previously destroyed this subject here (do not re-import from peers).
 pub fn is_tombstoned(store: &Db, subject: &str) -> bool {
+    try_is_tombstoned(store, subject).unwrap_or(false)
+}
+
+/// Fallible lookup for admission checks: a storage failure is not evidence
+/// that a subject has never been destroyed here.
+pub fn try_is_tombstoned(store: &Db, subject: &str) -> crate::errors::AtomicResult<bool> {
     let key = tombstone_key(subject);
-    store
-        .kv
-        .get(Tree::PluginMeta, &key)
-        .ok()
-        .flatten()
-        .is_some()
+    Ok(store.kv.get(Tree::PluginMeta, &key)?.is_some())
 }
 
 /// Clear a tombstone — the subject was legitimately re-created (F11,

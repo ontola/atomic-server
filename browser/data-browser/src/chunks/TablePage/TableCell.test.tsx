@@ -15,12 +15,14 @@ import {
 import { ThemeProvider } from 'styled-components';
 import {
   Datatype,
+  core,
+  commits,
   type JSONValue,
   LoroLoader,
   Store,
   StoreContext,
   type Property,
-  type Resource,
+  Resource,
 } from '@tomic/react';
 import { FancyTable } from '@chunks/TableEditor';
 import { buildTheme } from '../../styling';
@@ -87,6 +89,24 @@ async function renderCell(
   stored: JSONValue,
 ): Promise<Resource> {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
+
+  // Editing also sets createdAt. Keep both Property definitions in cache so
+  // committing a cell never waits on a public vocabulary or example server.
+  for (const definition of [
+    property,
+    {
+      subject: commits.properties.createdAt,
+      datatype: Datatype.TIMESTAMP,
+      shortname: 'created-at',
+    },
+  ]) {
+    const resource = new Resource(definition.subject);
+    await resource.set(core.properties.isA, [core.classes.property], false);
+    await resource.set(core.properties.datatype, definition.datatype, false);
+    await resource.set(core.properties.shortname, definition.shortname, false);
+    store.addResource(resource);
+  }
+
   // A `_new:` row stays local, so nothing here reaches for a server.
   const row = await store.newResource({
     subject: '_new:day-row',

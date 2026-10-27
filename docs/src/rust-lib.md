@@ -1,19 +1,21 @@
-{{#title atomic-lib: Rust library for Atomic Data}}
-# atomic-lib: Rust library for Atomic Data
+{{#title atomic_lib: local-first data engine}}
+# atomic_lib: local-first data engine
 
-Library that powers `atomic-server`, `atomic-cli`, the WASM build inside the web app and the [Flutter SDK](flutter.md). Features:
+`atomic_lib` is the embeddable local-first engine that powers AtomicServer,
+Atomic CLI, the browser WASM build, and the [Flutter SDK](flutter.md).
 
-- A persistent local store (redb on native, OPFS in the browser through WASM) and an in-memory store
-- Parsing (JSON-AD) / Serialization (JSON-AD, JSON-LD, TTL, N-Triples)
-- Agents, `atomic:` identifiers and signing
-- Loro CRDT documents per Resource, with history
-- Commit validation and processing
-- The transport-agnostic [sync engine](sync.md), with WebSocket and Iroh peer transports behind feature flags
-- Full-text search index
-- Constructing Collections
-- Path traversal
-- Schema validation
+The [crate README](https://github.com/ontola/atomic-server/blob/develop/lib/README.md)
+is the source for the application API boundary, internal extensions, storage
+backends, Cargo features, and compatibility policy. Rustdoc includes that same
+README as the crate overview, alongside the reference for each type and method.
 
-[docs.rs](https://docs.rs/atomic_lib/latest/atomic_lib/)
+Generate a local reference with the database and native transports enabled:
 
-[repository + issue tracker](https://github.com/ontola/atomic-server).
+```sh
+cargo doc --locked -p atomic_lib --no-deps --features db,iroh,ws,discovery
+```
+
+The [published API reference](https://docs.rs/atomic_lib/latest/atomic_lib/)
+describes the released version, which may differ from the current checkout.
+
+[Repository and issue tracker](https://github.com/ontola/atomic-server).

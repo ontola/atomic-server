@@ -22,7 +22,10 @@ export interface SideBarPanelProps {
   /** Stable, untranslated key for the section's height preference. */
   heightStorageKey: string;
   initialHeight?: number;
-  actions?: React.ReactNode;
+  /** Header buttons; a function gets `openPanel` to unfold a closed section. */
+  actions?:
+    | React.ReactNode
+    | ((api: { openPanel: () => void }) => React.ReactNode);
   /** When false, section starts collapsed */
   defaultOpen?: boolean;
   /** When set, a context menu on the header lists the panels to show or hide. */
@@ -141,6 +144,12 @@ export function SideBarPanel({
     setOpen(!open);
   };
 
+  const openPanel = () => {
+    if (open) return;
+    setSize(storedHeight);
+    setOpen(true);
+  };
+
   return (
     <Wrapper $embedded={embedded} data-testid={dataTestId}>
       <HeaderRow>
@@ -189,7 +198,7 @@ export function SideBarPanel({
             $dragging={isDragging || openingDrag}
           />
         </HeaderButton>
-        {actions}
+        {typeof actions === 'function' ? actions({ openPanel }) : actions}
       </HeaderRow>
       {panel && menuPoint && (
         <DropdownMenu

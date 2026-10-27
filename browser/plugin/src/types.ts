@@ -132,3 +132,71 @@ export interface PageContext {
   /** Subject of the user's agent */
   agent?: string;
 }
+
+/** This app gave up a platform's delegations; the connections still exist. */
+export interface ProxyDisconnectResult {
+  status: 'disconnected';
+  platform: string;
+  connectionIds: string[];
+}
+
+export interface OpenExternalResult {
+  status: 'opened' | 'cancelled';
+}
+
+export interface OpenResourceResult extends OpenExternalResult {
+  subject: string;
+}
+
+export interface ImporterFile {
+  name: string;
+  mediaType?: string;
+  /** The file's text. The host checks it against the importer's `accepts`. */
+  text: string;
+}
+
+/** `store.importer.run(args)`. */
+export interface ImporterRunArgs {
+  /** Omit to have the host ask the person to choose a file. */
+  file?: ImporterFile;
+  /**
+   * The importer the app expects, as a check. The host resolves the importer
+   * itself, from the table the app is a view of, and refuses any other.
+   */
+  importer?: string;
+}
+
+/**
+ * What `store.importer.run()` resolves to. Nothing is written unless the
+ * person applies the reviewed changes, so `cancelled`, `nothing` and `blocked`
+ * all mean the drive is unchanged.
+ */
+export type ImporterRunResult =
+  | {
+      status: 'applied';
+      importer: string;
+      /** Changes applied, by kind. */
+      created: number;
+      updated: number;
+      destroyed: number;
+      /** Changes that failed; the drive keeps what did apply. */
+      failed: number;
+      /** One message per failed change. */
+      errors: string[];
+    }
+  | {
+      /** The person closed the picker or the review without applying. */
+      status: 'cancelled';
+      importer: string;
+    }
+  | {
+      /** The importer proposed no changes: everything was imported before. */
+      status: 'nothing';
+      importer: string;
+    }
+  | {
+      /** The importer refused the file; `errors` says why. */
+      status: 'blocked';
+      importer: string;
+      errors: string[];
+    };

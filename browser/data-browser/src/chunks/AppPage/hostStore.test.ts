@@ -320,6 +320,7 @@ describe('integration-proxy capabilities', () => {
     capability: vi.fn(async () => minted),
     connections: vi.fn(async () => [{ connectionId: 'c1', platform: 'pets' }]),
     origin: 'https://proxy.example',
+    disconnect: vi.fn(async () => ['c1']),
   };
 
   it('mints a capability for the frame key, never touching the server', async () => {
@@ -400,6 +401,48 @@ describe('integration-proxy capabilities', () => {
     ).rejects.toThrow('publicKey is required');
   });
 
+  it('disconnects the current app only, without writing local resources', async () => {
+    const store = fakeStore();
+    expect(
+      await handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: 'pets' }),
+        undefined,
+        proxy,
+      ),
+    ).toEqual({
+      status: 'disconnected',
+      platform: 'pets',
+      connectionIds: ['c1'],
+    });
+    expect(proxy.disconnect).toHaveBeenCalledWith('pets');
+  });
+
+  it('refuses disconnect without a proxy or with an invalid platform', async () => {
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: 'pets' }),
+      ),
+    ).rejects.toThrow('cannot reach');
+    proxy.disconnect.mockClear();
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: '../other' }),
+        undefined,
+        proxy,
+      ),
+    ).rejects.toThrow('Invalid platform');
+    expect(proxy.disconnect).not.toHaveBeenCalled();
+  });
+
   it('no longer relays proxy calls through the page', async () => {
     await expect(
       handleRequest(
@@ -419,6 +462,7 @@ describe('proxyFetch', () => {
     capability: vi.fn(),
     connections: vi.fn(),
     origin: 'https://proxy.example',
+    disconnect: vi.fn(async () => ['c1']),
   };
   const call = (extra: Record<string, unknown>) =>
     handleRequest(

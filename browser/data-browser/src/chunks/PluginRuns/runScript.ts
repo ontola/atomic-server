@@ -259,10 +259,7 @@ export function usePluginManifest(source: string | undefined): PluginManifest {
 
     let cancelled = false;
 
-    void describePlugin(source, {
-      createWorker: () => new PluginWorker() as never,
-      timeoutMs: 5000,
-    }).then(found => {
+    void describePluginSource(source).then(found => {
       if (!cancelled) setManifest(found);
     });
 
@@ -272,6 +269,14 @@ export function usePluginManifest(source: string | undefined): PluginManifest {
   }, [source]);
 
   return manifest;
+}
+
+/** A plugin's manifest, read from its source in the existing sandboxed worker. */
+export function describePluginSource(source: string): Promise<PluginManifest> {
+  return describePlugin(source, {
+    createWorker: () => new PluginWorker() as never,
+    timeoutMs: 5000,
+  });
 }
 
 export interface PreparedRun {

@@ -1,4 +1,5 @@
 import { core } from './ontologies/core.js';
+import { isLoopbackHost } from './loopback.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 import { Datatype } from './datatypes.js';
 import {
@@ -63,8 +64,6 @@ export interface CatalogApp {
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 
-const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
-
 /**
  * Where a module may be fetched from: HTTPS, or HTTP on this machine for
  * development. A relative URL is resolved against the catalog it came from.
@@ -74,7 +73,7 @@ export function resolveModuleUrl(value: string, catalogUrl: string): string {
 
   if (
     url.protocol !== 'https:' &&
-    !(url.protocol === 'http:' && LOOPBACK.has(url.hostname))
+    !(url.protocol === 'http:' && isLoopbackHost(url.hostname))
   ) {
     throw new Error(`An app module must be served over HTTPS: ${url.href}`);
   }

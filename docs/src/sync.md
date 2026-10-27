@@ -15,7 +15,8 @@ Every edit was a round trip, and no connection meant no work.
 In the [local-first](local-first.md) model each device keeps a full copy of the Drives it uses.
 Edits are applied to that local copy first, immediately, and are signed by the Agent making them.
 Sync is what happens afterwards: the device tells its peers what it changed and asks what it missed.
-Because every Resource is a [Loro CRDT](https://loro.dev) document, two devices that edited the same Resource while apart merge without conflicts and without a coordinator.
+Because every Resource is a [Loro CRDT](https://loro.dev) document, accepted edits to the same Resource merge automatically without a coordinator.
+Convergence does not guarantee that the combined result satisfies the application's business rules; applications decide when changes need human review.
 
 The pieces:
 
@@ -56,7 +57,7 @@ Not everything a device holds travels, and not everything that travels is kept.
 2. The change is written to the laptop's local store and shows up in the UI at once. The laptop signs a commit for it and puts it in the outbox.
 3. Back online, the laptop opens a WebSocket to your always-on device, proves who it is, and drains the outbox. The server verifies the signature and your write right, applies the Loro delta, and pushes the update to every other subscribed client.
 4. Your phone, paired to the laptop directly, dials it over Iroh the next time both are awake. They compare version vectors, exchange only what differs, and end up identical.
-5. Meanwhile a colleague edited the same table from a browser tab. Their commit and yours merge in the CRDT. Nobody sees a conflict dialog.
+5. Meanwhile a colleague edited the same table from a browser tab. If you edited the same row, accepted changes merge automatically in that Resource's CRDT. Your application decides when the result needs human review.
 
 ## Where the code lives
 

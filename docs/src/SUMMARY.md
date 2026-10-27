@@ -67,6 +67,8 @@
   - [Step 3: persist across reloads](local-first-guide/4-persist.md)
   - [Step 4: sync to an always-on device](local-first-guide/5-sync-server.md)
   - [Step 5: the same Drive on a phone](local-first-guide/6-phone.md)
+  - [Choose transports and design for offline edits](local-first-guide/7-design-decisions.md)
+  - [Migrating from PostgreSQL](local-first-guide/8-from-postgres.md)
 - [Build a portfolio using Astro and Atomic Server](astro-guide/1-index.md)
   - [Setup](astro-guide/2-setup.md)
   - [Frontend setup](astro-guide/3-frontend-setup.md)

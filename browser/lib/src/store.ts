@@ -54,6 +54,7 @@ import { core } from './ontologies/core.js';
 import * as trashOps from './trash.js';
 import { server, type Server } from './ontologies/server.js';
 import { notifications } from './ontologies/notifications.js';
+import { contacts } from './ontologies/contacts.js';
 import { conversations } from './ontologies/conversations.js';
 import { forms } from './ontologies/forms.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
@@ -74,6 +75,7 @@ import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { LoroLoader } from './loro-loader.js';
 import { withDeadline } from './withDeadline.js';
+import { isLoopbackHost } from './loopback.js';
 
 /** How long a connected store waits on its local database before asking the server. */
 const LOCAL_READ_DEADLINE_MS = 1_000;
@@ -576,6 +578,9 @@ const embeddedVocabulary = new Set<string>([
   // lib/defaults/notifications.json, likewise not on the catalog yet.
   ...Object.values(notifications.classes),
   ...Object.values(notifications.properties),
+  // lib/defaults/contacts.json, likewise.
+  ...Object.values(contacts.classes),
+  ...Object.values(contacts.properties),
   // lib/defaults/conversations.json, likewise.
   ...Object.values(conversations.classes),
   ...Object.values(conversations.properties),
@@ -4844,31 +4849,54 @@ export class Store {
 
     const ws = this.getWebSocketForSubject(fetchSubject);
 
+    let useHttp = true;
+
     if (
+      (!opts.method || opts.method === 'GET') &&
       !opts.fromProxy &&
       !opts.noWebSocket &&
       supportsWebSockets() &&
       ws?.readyState === WebSocket.OPEN
     ) {
+      // OPEN is not proof that the peer can answer: a blocked sync worker or
+      // a half-open connection used to hold every table query for ten seconds.
+      // Give a healthy local socket one round trip, then use the existing
+      // authenticated HTTP read path. Remote nodes get a normal WAN budget.
+      const controller = new AbortController();
+      let expired = false;
+      const timer = setTimeout(() => {
+        expired = true;
+        controller.abort(
+          new RequestCancelledError('WebSocket read yielded to HTTP'),
+        );
+      }, this.webSocketReadDeadlineMs(fetchSubject));
+
       try {
-        await ws.fetch(fetchSubject);
+        await ws.fetch(fetchSubject, { signal: controller.signal });
+        useHttp = false;
       } catch (error) {
-        // A hook may already have installed a loading placeholder. Settle it
-        // so concurrent getResource callers receive the failure, not a timeout.
-        const pending = this.getResolved(subject);
+        // Only our own deadline enables fallback. An explicit refusal (401,
+        // 404, etc.) is an answer and must retain its original meaning.
+        if (!expired) {
+          const pending = this.getResolved(subject);
 
-        if (pending && !this.hasRenderableContent(pending)) {
-          this.failResource(
-            subject,
-            error instanceof Error ? error : new Error(String(error)),
-          );
+          if (pending && !this.hasRenderableContent(pending)) {
+            this.failResource(
+              subject,
+              error instanceof Error ? error : new Error(String(error)),
+            );
 
-          return pending as Resource<C>;
+            return pending as Resource<C>;
+          }
+
+          throw error;
         }
-
-        throw error;
+      } finally {
+        clearTimeout(timer);
       }
-    } else {
+    }
+
+    if (useHttp) {
       const signInfo = this.agent
         ? { agent: this.agent, serverURL: this.getServerUrl() }
         : undefined;
@@ -5982,6 +6010,16 @@ export class Store {
     return this._driveSyncInProgress
       ? LOCAL_READ_DEADLINE_DURING_SYNC_MS
       : LOCAL_READ_DEADLINE_MS;
+  }
+
+  /** How long an individual WebSocket GET waits before yielding to HTTP.
+   * Override alongside localReadDeadlineMs when adapting read budgets. */
+  public webSocketReadDeadlineMs(subject: string): number {
+    const hostname = new URL(
+      /^https?:/.test(subject) ? subject : this.getServerUrl(),
+    ).hostname;
+
+    return isLoopbackHost(hostname) ? 50 : 1_000;
   }
 
   /** True once a drive sync has finished FOR THIS DRIVE in this session.

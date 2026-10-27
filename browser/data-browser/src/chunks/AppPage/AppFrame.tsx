@@ -39,6 +39,9 @@ import { appAgentOf } from './appAgent';
 import { ConnectDialog } from './ConnectDialog';
 import { useHostUI } from '@components/HostUI/hostUI';
 import type { ViewChanges } from '@helpers/extensions/viewApply';
+import { AppImporterRun, type ImporterAsk } from './AppImporterRun';
+import { resolveAppImporter } from './appImporter';
+import { describePluginSource } from '@chunks/PluginRuns/runScript';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -96,6 +99,8 @@ function AppFrameSession({
   // An app asking to connect a proxy platform. Drawn by this page, not the
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
+  const [importerAsk, setImporterAsk] = useState<ImporterAsk>();
+  const importerPending = useRef<{ ask?: ImporterAsk } | undefined>(undefined);
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
   const [appTitle] = useTitle(useResource(app));
   const { askAI } = useAISidebar();
@@ -257,6 +262,41 @@ function AppFrameSession({
         return;
       }
 
+      if (data.op === 'runImporter') {
+        if (importerPending.current) {
+          session.post({
+            id: data.id,
+            error: 'An import from this app is already waiting for you.',
+          });
+
+          return;
+        }
+
+        const pending: { ask?: ImporterAsk } = {};
+        importerPending.current = pending;
+        resolveAppImporter(
+          store,
+          drive,
+          table,
+          data,
+          describePluginSource,
+        ).then(
+          resolved => {
+            if (importerPending.current !== pending) return;
+            const ask = { id: data.id, resolved, reply: session.post };
+            pending.ask = ask;
+            setImporterAsk(ask);
+          },
+          (error: Error) => {
+            if (importerPending.current !== pending) return;
+            importerPending.current = undefined;
+            session.post({ id: data.id, error: error.message });
+          },
+        );
+
+        return;
+      }
+
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
         session.watch(subject, () =>
@@ -281,6 +321,13 @@ function AppFrameSession({
     bridgeRef.current = bridge;
 
     return () => {
+      const previous = importerPending.current?.ask;
+      previous?.reply({
+        id: previous.id,
+        result: { status: 'cancelled', importer: previous.resolved.importer },
+      });
+      importerPending.current = undefined;
+      setImporterAsk(undefined);
       bridge.close();
       bridgeRef.current = undefined;
     };
@@ -399,6 +446,17 @@ function AppFrameSession({
             </Button>
           </Row>
         </ErrorBar>
+      )}
+      {importerAsk && (
+        <AppImporterRun
+          key={String(importerAsk.id)}
+          ask={importerAsk}
+          drive={drive}
+          onDone={() => {
+            importerPending.current = undefined;
+            setImporterAsk(undefined);
+          }}
+        />
       )}
       {hostUI.element}
       {connectAsk && (
