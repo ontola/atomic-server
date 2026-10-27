@@ -1,6 +1,6 @@
-import { core } from "./ontologies/core.js";
-import { dataBrowser } from "./ontologies/dataBrowser.js";
-import { server } from "./ontologies/server.js";
+import { core } from './ontologies/core.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
+import { server } from './ontologies/server.js';
 
 const aliases: Record<string, string> = {
   file: server.classes.file,
@@ -21,7 +21,7 @@ const normalize = (name: string): string =>
   name
     .trim()
     .toLowerCase()
-    .replace(/[\s_-]+/g, "");
+    .replace(/[\s_-]+/g, '');
 
 export const standardClassAlias = (name: string): string | undefined => {
   const key = normalize(name);

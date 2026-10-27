@@ -2,12 +2,7 @@
 import { generateText, type LanguageModel } from 'ai';
 import { applyPatch } from 'fast-json-patch';
 import type { Operation } from 'fast-json-patch';
-import {
-  dataBrowser,
-  getClassNames,
-  useStore,
-  type Store,
-} from '@tomic/react';
+import { dataBrowser, getClassNames, useStore, type Store } from '@tomic/react';
 import type { JSONContent } from '@tiptap/core';
 import { z } from 'zod';
 import { useGetModel } from './useModel';

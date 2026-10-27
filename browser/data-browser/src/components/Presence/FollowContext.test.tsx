@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
-import React from "react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { act, cleanup, render } from "@testing-library/react";
-import { FollowProvider, useFollow } from "./FollowContext";
-import { setHostFollow, setHostMeeting } from "../../embed/presenceBridge";
+import React from 'react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { act, cleanup, render } from '@testing-library/react';
+import { FollowProvider, useFollow } from './FollowContext';
+import { setHostFollow, setHostMeeting } from '../../embed/presenceBridge';
 
 const state = vi.hoisted(() => ({
   embedded: false,
@@ -16,51 +16,51 @@ const state = vi.hoisted(() => ({
   hostMeetingEnded: vi.fn(),
   sendChatMessage: vi.fn(async () => undefined),
   patchLocal: vi.fn(),
-  subject: "did:ad:here" as string | undefined,
+  subject: 'did:ad:here' as string | undefined,
 }));
 
 const manager = { patchLocal: state.patchLocal };
 
-vi.mock("../../helpers/embedMode", () => ({
+vi.mock('../../helpers/embedMode', () => ({
   isEmbedded: () => state.embedded,
 }));
-vi.mock("../../embed/hostActions", () => ({
+vi.mock('../../embed/hostActions', () => ({
   hostFollow: (...a: unknown[]) => state.hostFollow(...a),
   hostUnfollow: (...a: unknown[]) => state.hostUnfollow(...a),
   hostMeetingStarted: (...a: unknown[]) => state.hostMeetingStarted(...a),
   hostMeetingEnded: (...a: unknown[]) => state.hostMeetingEnded(...a),
 }));
-vi.mock("../../hooks/useNavigateWithTransition", () => ({
+vi.mock('../../hooks/useNavigateWithTransition', () => ({
   useNavigateWithTransition: () => state.navigate,
 }));
-vi.mock("../../helpers/useCurrentSubject", () => ({
+vi.mock('../../helpers/useCurrentSubject', () => ({
   useCurrentSubject: () => [state.subject],
 }));
-vi.mock("../../views/ChatRoom/ChatRoomView", () => ({
+vi.mock('../../views/ChatRoom/ChatRoomView', () => ({
   sendChatMessage: (...a: unknown[]) =>
     (state.sendChatMessage as (...x: unknown[]) => unknown)(...a),
 }));
-vi.mock("@tomic/react", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@tomic/react")>()),
+vi.mock('@tomic/react', async importOriginal => ({
+  ...(await importOriginal<typeof import('@tomic/react')>()),
   useStore: () => ({
     getResource: async () => ({
       get: () => undefined,
       set: async () => {},
       save: async () => {},
-      title: "T",
+      title: 'T',
     }),
     newResource: async () => ({
-      subject: "did:ad:meeting",
+      subject: 'did:ad:meeting',
       save: async () => {},
     }),
   }),
-  useDrive: () => ["did:ad:drive"],
-  useCurrentAgent: () => [{ subject: "did:ad:agent:me" }],
+  useDrive: () => ['did:ad:drive'],
+  useCurrentAgent: () => [{ subject: 'did:ad:agent:me' }],
   useDrivePresence: () => state.presence,
   useDrivePresenceManager: () => manager,
 }));
 
-const leader = "did:ad:agent:leader";
+const leader = 'did:ad:agent:leader';
 const probe = vi.hoisted(() => ({
   follow: undefined as unknown as ReturnType<typeof useFollow>,
 }));
@@ -78,15 +78,15 @@ function Probe({
 const mount = () =>
   render(
     <FollowProvider>
-      <Probe onValue={(v) => (probe.follow = v)} />
+      <Probe onValue={v => (probe.follow = v)} />
     </FollowProvider>,
   );
 
 beforeEach(() => {
   state.presence = [
-    { sessionId: "s1", agent: leader, resource: "did:ad:there", updatedAt: 1 },
+    { sessionId: 's1', agent: leader, resource: 'did:ad:there', updatedAt: 1 },
   ];
-  state.subject = "did:ad:here";
+  state.subject = 'did:ad:here';
   sessionStorage.clear();
 });
 afterEach(() => {
@@ -97,7 +97,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it("on the web: follows locally and navigates to the leader", () => {
+it('on the web: follows locally and navigates to the leader', () => {
   mount();
   act(() => probe.follow.follow(leader));
 
@@ -110,7 +110,7 @@ it("on the web: follows locally and navigates to the leader", () => {
   expect(state.hostUnfollow).not.toHaveBeenCalled();
 });
 
-it("embedded: follow and unfollow go to the app, the page does not navigate", () => {
+it('embedded: follow and unfollow go to the app, the page does not navigate', () => {
   state.embedded = true;
   mount();
 
@@ -121,7 +121,7 @@ it("embedded: follow and unfollow go to the app, the page does not navigate", ()
 
   act(() => setHostFollow(leader));
   expect(probe.follow.followedAgent).toBe(leader);
-  expect(probe.follow.followedResource).toBe("did:ad:there");
+  expect(probe.follow.followedResource).toBe('did:ad:there');
   expect(state.navigate).not.toHaveBeenCalled();
 
   act(() => probe.follow.unfollow());
@@ -132,13 +132,13 @@ it("embedded: follow and unfollow go to the app, the page does not navigate", ()
   expect(probe.follow.followedAgent).toBeUndefined();
 });
 
-it("embedded: asks the app to stop when the leader opts out of followers", () => {
+it('embedded: asks the app to stop when the leader opts out of followers', () => {
   state.embedded = true;
   state.presence = [
     {
-      sessionId: "s1",
+      sessionId: 's1',
       agent: leader,
-      resource: "did:ad:there",
+      resource: 'did:ad:there',
       allowFollow: false,
     },
   ];
@@ -148,7 +148,7 @@ it("embedded: asks the app to stop when the leader opts out of followers", () =>
   expect(state.hostUnfollow).toHaveBeenCalled();
 });
 
-it("embedded: a leader missing from the list is the app’s to handle", () => {
+it('embedded: a leader missing from the list is the app’s to handle', () => {
   state.embedded = true;
   state.presence = [];
   mount();
@@ -158,13 +158,13 @@ it("embedded: a leader missing from the list is the app’s to handle", () => {
   expect(probe.follow.followedAgent).toBe(leader);
 });
 
-it("posts the Viewing trail from the page on the web, not when embedded", async () => {
+it('posts the Viewing trail from the page on the web, not when embedded', async () => {
   for (const embedded of [false, true]) {
     state.embedded = embedded;
     state.sendChatMessage.mockClear();
     sessionStorage.setItem(
-      "atomic.activeMeeting:did:ad:drive",
-      "did:ad:meeting",
+      'atomic.activeMeeting:did:ad:drive',
+      'did:ad:meeting',
     );
     const view = mount();
 
@@ -174,60 +174,60 @@ it("posts the Viewing trail from the page on the web, not when embedded", async 
   }
 });
 
-it("on the web: mirrors the meeting it leads into the presence entry", () => {
-  sessionStorage.setItem("atomic.activeMeeting:did:ad:drive", "did:ad:meeting");
+it('on the web: mirrors the meeting it leads into the presence entry', () => {
+  sessionStorage.setItem('atomic.activeMeeting:did:ad:drive', 'did:ad:meeting');
   mount();
 
   expect(state.patchLocal).toHaveBeenLastCalledWith(
-    expect.objectContaining({ session: "did:ad:meeting" }),
+    expect.objectContaining({ session: 'did:ad:meeting' }),
   );
 });
 
-it("embedded: the active meeting is the app’s, not sessionStorage", () => {
+it('embedded: the active meeting is the app’s, not sessionStorage', () => {
   state.embedded = true;
-  sessionStorage.setItem("atomic.activeMeeting:did:ad:drive", "did:ad:stale");
+  sessionStorage.setItem('atomic.activeMeeting:did:ad:drive', 'did:ad:stale');
   mount();
   expect(probe.follow.activeMeeting).toBeUndefined();
 
-  act(() => setHostMeeting("did:ad:meeting"));
-  expect(probe.follow.activeMeeting).toBe("did:ad:meeting");
+  act(() => setHostMeeting('did:ad:meeting'));
+  expect(probe.follow.activeMeeting).toBe('did:ad:meeting');
   expect(state.patchLocal).toHaveBeenLastCalledWith(
-    expect.objectContaining({ session: "did:ad:meeting" }),
+    expect.objectContaining({ session: 'did:ad:meeting' }),
   );
 
   act(() => setHostMeeting(null));
   expect(probe.follow.activeMeeting).toBeUndefined();
 });
 
-it("embedded: starting and ending a meeting tell the app", async () => {
+it('embedded: starting and ending a meeting tell the app', async () => {
   state.embedded = true;
   mount();
 
   await act(async () => {
-    await probe.follow.startMeeting(undefined, "did:ad:meeting");
+    await probe.follow.startMeeting(undefined, 'did:ad:meeting');
   });
-  expect(state.hostMeetingStarted).toHaveBeenCalledWith("did:ad:meeting");
+  expect(state.hostMeetingStarted).toHaveBeenCalledWith('did:ad:meeting');
   // Shown at once, before the app has pushed it back.
-  expect(probe.follow.activeMeeting).toBe("did:ad:meeting");
-  expect(sessionStorage.getItem("atomic.activeMeeting:did:ad:drive")).toBe(
+  expect(probe.follow.activeMeeting).toBe('did:ad:meeting');
+  expect(sessionStorage.getItem('atomic.activeMeeting:did:ad:drive')).toBe(
     null,
   );
 
   await act(async () => {
     await probe.follow.endMeeting();
   });
-  expect(state.hostMeetingEnded).toHaveBeenCalledWith("did:ad:meeting");
+  expect(state.hostMeetingEnded).toHaveBeenCalledWith('did:ad:meeting');
   expect(probe.follow.activeMeeting).toBeUndefined();
 });
 
-it("on the web: starting a meeting stays in the tab, the app is not told", async () => {
+it('on the web: starting a meeting stays in the tab, the app is not told', async () => {
   mount();
 
   await act(async () => {
-    await probe.follow.startMeeting(undefined, "did:ad:meeting");
+    await probe.follow.startMeeting(undefined, 'did:ad:meeting');
   });
   expect(state.hostMeetingStarted).not.toHaveBeenCalled();
-  expect(sessionStorage.getItem("atomic.activeMeeting:did:ad:drive")).toBe(
-    "did:ad:meeting",
+  expect(sessionStorage.getItem('atomic.activeMeeting:did:ad:drive')).toBe(
+    'did:ad:meeting',
   );
 });

@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from "react";
-import type { PresenceItem, Store } from "@tomic/react";
-import type { HostPresenceFields } from "./hostActions";
+import { useSyncExternalStore } from 'react';
+import type { PresenceItem, Store } from '@tomic/react';
+import type { HostPresenceFields } from './hostActions';
 
 /**
  * Presence in the Flutter app's embed. The page has no websocket, so the app
@@ -42,8 +42,8 @@ export function createPresenceBridge(store: Store) {
     feed(drive: string, items: PresenceItem[]): void {
       const next = new Map(
         items
-          .filter((item) => item.sessionId && item.agent)
-          .map((item) => [item.sessionId, item] as const),
+          .filter(item => item.sessionId && item.agent)
+          .map(item => [item.sessionId, item] as const),
       );
       const manager = store.getPresence(drive);
 
@@ -165,7 +165,7 @@ export function setHostMeeting(meeting: string | null | undefined): void {
 /** The meeting this device leads, as the app keeps it. */
 export function useHostMeeting(): string | undefined {
   return useSyncExternalStore(
-    (callback) => {
+    callback => {
       meetingListeners.add(callback);
 
       return () => meetingListeners.delete(callback);
@@ -178,7 +178,7 @@ export function useHostMeeting(): string | undefined {
 /** The agent the app is following; undefined when it follows nobody. */
 export function useHostFollow(): string | undefined {
   return useSyncExternalStore(
-    (callback) => {
+    callback => {
       followListeners.add(callback);
 
       return () => followListeners.delete(callback);

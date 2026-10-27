@@ -327,7 +327,10 @@ describe('relaying presence through a host', () => {
       [drive, expect.objectContaining({ typing: 'did:ad:room' })],
       [
         drive,
-        expect.objectContaining({ typing: 'did:ad:room', data: { cell: 'a1' } }),
+        expect.objectContaining({
+          typing: 'did:ad:room',
+          data: { cell: 'a1' },
+        }),
       ],
       [drive, undefined],
     ]);
