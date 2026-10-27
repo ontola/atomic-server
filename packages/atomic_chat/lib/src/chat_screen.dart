@@ -30,6 +30,7 @@ import 'tool_step.dart';
 import 'toast.dart';
 import 'native_views.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'ai_usage.dart';
 import 'hosted_ai.dart';
 import 'hosted_voice.dart';
 import 'voice.dart';
@@ -233,6 +234,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   HostedAi? _ai;
   bool _aiLooked = false;
 
+  /// What the AI used in this chat, and whether to show it (the setting).
+  ChatUsage _usage = const ChatUsage();
+  bool _showUsage = true;
+
   /// The answer's parts as they stream in; null when none is coming.
   List<ChatPart>? _partial;
 
@@ -336,6 +341,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _input.addListener(_inputChanged);
     _outputInst = widget.speechOutput;
     _chat = widget.subject;
+    _readUsage();
     _readMessages();
     _lookUpAi();
     if (_chat == null) _readPicker();
@@ -347,6 +353,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ShellScope.maybeOf(context)?.onReselect(route, _focusInput);
       }
     });
+  }
+
+  Future<void> _readUsage() async {
+    final show = await ChatUsageStore.shown();
+    final chat = _chat;
+    final usage = chat == null ? null : await ChatUsageStore.load(chat);
+    if (!mounted) return;
+    setState(() {
+      _showUsage = show;
+      if (usage != null) _usage = usage;
+    });
+  }
+
+  /// Which model answers: a sheet with the account's models.
+  Future<void> _pickModel() async {
+    final ai = _ai;
+    if (ai == null || !ai.canChoose || _sending) return;
+    final id =
+        await showAiModelPicker(context, models: ai.models, selected: ai.model);
+    if (id == null) return;
+    await ai.choose(id);
+    if (mounted) setState(() {});
   }
 
   bool _hadText = false;
@@ -1146,7 +1174,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       // The chat exists once its first message is saved.
       await _persistTail;
-      final title = await ai.title(question, answer);
+      final title = await ai.title(question, answer, chat: _chat);
       if (title == null) return;
       await _rename(title);
     } catch (e) {
@@ -1365,6 +1393,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     String? spoken;
     // The answer's parts as they arrive: text, and tool calls in between.
     final parts = <ChatPart>[];
+    var used = const ChatUsage();
     var stopped = false;
     var failed = false;
     try {
@@ -1378,7 +1407,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final bridge = ai.supportsTools ? _toolBridge() : null;
       _sub = ai
           .run(asked,
-              context: context, tools: tools ?? const [], bridge: bridge)
+              context: context,
+              tools: tools ?? const [],
+              bridge: bridge,
+              chat: () => _chat)
           .listen(
         (event) {
           if (first) {
@@ -1393,6 +1425,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 parts.add(TextPart(text));
               }
               _showLater(parts);
+            case AiUsage():
+              used = used.plus(event);
             case AiNotice(:final text):
               parts.add(TextPart('_${text}_\n\n'));
               _showNow(parts);
@@ -1456,6 +1490,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         if (mounted) _window.add(reply);
         // The saved answer takes the streamed one's place (and its key).
         _answerId = reply.id;
+      }
+      // Stopped or failed answers used tokens too.
+      if (!used.isEmpty) {
+        _persist('usage', () async {
+          final chat = _chat;
+          if (chat == null) return;
+          final total = await ChatUsageStore.add(chat, used);
+          if (mounted) setState(() => _usage = total);
+        });
       }
       if (mounted) {
         setState(() {
@@ -1588,7 +1631,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           onTap: _chat == null ? null : _askRename,
                           child: ChatHeader(
                             title: _headerTitle,
-                            subtitle: 'AI assistant',
+                            subtitle: _ai?.canChoose == true
+                                ? _ai!.modelLabel
+                                : 'AI assistant',
+                            onSubtitleTap:
+                                _ai?.canChoose == true ? _pickModel : null,
                             icon: Icons.auto_awesome_outlined,
                           ),
                         ),
@@ -2308,6 +2355,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           if (_runError != null) _runErrorBar(c, ai),
           if (_runError == null && ai != null && ai.remaining == 0)
             _creditsBar(c, ai),
+          if (_showUsage && !_usage.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(_usage.line,
+                  key: const Key('chat-usage'),
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: ChatTextStyles.metaSize)),
+            ),
           if (_files.isNotEmpty ||
               (_attached.isNotEmpty &&
                   (_messages.isNotEmpty ||

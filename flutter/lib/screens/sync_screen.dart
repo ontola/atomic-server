@@ -17,6 +17,9 @@ import 'package:atomic_chat/atomic_chat.dart'
         openResourceView,
         BackgroundActivity,
         BackgroundState,
+        ChatUsageStore,
+        HostedAi,
+        showAiModelPicker,
         timeAgo,
         ToastScope;
 
@@ -24,6 +27,7 @@ import '../assistant/atomic_assistant_api.dart';
 import '../atomic/account_store.dart';
 import '../atomic/settings_backend.dart';
 import 'account_link_dialog.dart';
+import 'ai_usage_screen.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 
@@ -95,6 +99,9 @@ class SyncScreen extends StatefulWidget {
   /// The account's AI credits; [AccountStore.aiCredits] by default.
   final Future<shared.AtomicAiCredits?> Function()? loadCredits;
 
+  /// The account's AI usage report; [AccountStore.aiUsage] by default.
+  final Future<shared.AtomicAiUsage?> Function()? loadUsage;
+
   /// The portal sign-in cookie for the web view; [AccountStore.portalCookie]
   /// by default.
   final Future<String?> Function(Uri portal)? portalCookie;
@@ -129,6 +136,7 @@ class SyncScreen extends StatefulWidget {
     this.loadAccount,
     this.linkAccount,
     this.loadCredits,
+    this.loadUsage,
     this.portalCookie,
     this.portalPage,
     this.profilePage,
@@ -257,6 +265,7 @@ class _SyncScreenState extends State<SyncScreen> {
               loadAccount: widget.loadAccount,
               linkAccount: widget.linkAccount,
               loadCredits: widget.loadCredits,
+              loadUsage: widget.loadUsage,
               portalCookie: widget.portalCookie,
               portalPage: widget.portalPage,
             ),
@@ -306,6 +315,7 @@ class _AccountSection extends StatefulWidget {
   final Future<AccountSummary?> Function(String? drive)? loadAccount;
   final Future<void> Function(BuildContext context, String portal)? linkAccount;
   final Future<shared.AtomicAiCredits?> Function()? loadCredits;
+  final Future<shared.AtomicAiUsage?> Function()? loadUsage;
   final Future<String?> Function(Uri portal)? portalCookie;
   final Widget Function(ResourceWebView page)? portalPage;
 
@@ -315,6 +325,7 @@ class _AccountSection extends StatefulWidget {
     this.loadAccount,
     this.linkAccount,
     this.loadCredits,
+    this.loadUsage,
     this.portalCookie,
     this.portalPage,
   });
@@ -332,6 +343,11 @@ class _AccountSectionState extends State<_AccountSection> {
   bool _creditsLoading = false;
   bool _creditsFailed = false;
 
+  /// The model chosen for the included AI (the default while none is), and
+  /// whether chats show their token usage.
+  String? _model;
+  bool _showUsage = true;
+
   /// Where the active server is administered, when it is a managed one: the
   /// only place an account can be linked from.
   String? _portal;
@@ -341,6 +357,9 @@ class _AccountSectionState extends State<_AccountSection> {
   void initState() {
     super.initState();
     _loadAccount();
+    ChatUsageStore.shown().then((v) {
+      if (mounted) setState(() => _showUsage = v);
+    });
   }
 
   @override
@@ -406,13 +425,37 @@ class _AccountSectionState extends State<_AccountSection> {
     } catch (_) {
       failed = true;
     }
+    final stored = await HostedAi.storedModel();
     if (!mounted) return;
     setState(() {
+      _model = stored;
       _credits = credits;
       _creditsLoading = false;
       _creditsFailed = failed;
     });
   }
+
+  /// The model in use: the stored choice while the account allows it, else
+  /// its default.
+  shared.AtomicAiModel? get _chosenModel {
+    final models = _credits?.models ?? const <shared.AtomicAiModel>[];
+    return models.where((m) => m.id == _model).firstOrNull ??
+        models.firstOrNull;
+  }
+
+  Future<void> _pickModel() async {
+    final models = _credits?.models ?? const <shared.AtomicAiModel>[];
+    final id = await showAiModelPicker(context,
+        models: models, selected: _chosenModel?.id ?? '');
+    if (id == null) return;
+    await HostedAi.storeModel(id);
+    if (mounted) setState(() => _model = id);
+  }
+
+  void _openUsage() => Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => AiUsageScreen(
+            loadCredits: widget.loadCredits, loadUsage: widget.loadUsage),
+      ));
 
   String _creditsLine() {
     final credits = _credits;
@@ -563,6 +606,36 @@ class _AccountSectionState extends State<_AccountSection> {
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                 onPressed: _loadCredits),
       ),
+      if (_credits != null) ...[
+        if (_credits!.models.length > 1)
+          shared.SyncRow(
+            key: const Key('ai-model-row'),
+            icon: Icons.tune,
+            title: 'AI model',
+            subtitle: _chosenModel?.name,
+            onTap: _pickModel,
+          ),
+        shared.SyncRow(
+          key: const Key('ai-usage-row'),
+          icon: Icons.bar_chart,
+          title: 'AI usage',
+          subtitle: 'Credits, models and chats this month',
+          onTap: _openUsage,
+        ),
+        shared.SyncRow(
+          icon: Icons.numbers,
+          title: 'Show token usage',
+          subtitle: 'In each AI chat',
+          trailing: Switch(
+            key: const Key('ai-show-usage'),
+            value: _showUsage,
+            onChanged: (v) {
+              setState(() => _showUsage = v);
+              ChatUsageStore.setShown(v);
+            },
+          ),
+        ),
+      ],
       if (_credits?.purchasesEnabled == true)
         shared.SyncRow(
           icon: Icons.add_card_outlined,

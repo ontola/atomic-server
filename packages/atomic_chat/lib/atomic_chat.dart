@@ -18,6 +18,7 @@ export 'src/models.dart';
 export 'src/chat_parts.dart';
 export 'src/chat_window.dart';
 export 'src/scroll_to_bottom_button.dart';
+export 'src/ai_usage.dart';
 export 'src/hosted_ai.dart';
 export 'src/ai_tools.dart';
 export 'src/web_tool_bridge.dart';

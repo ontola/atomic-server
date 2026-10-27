@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'chat_parts.dart';
 import 'models.dart';
@@ -36,6 +37,15 @@ typedef CompletionChunks = Stream<Map<String, dynamic>> Function(
   List<Map<String, dynamic>> messages,
   String model,
   List<Map<String, dynamic>>? tools,
+);
+
+/// [CompletionChunks] for the chat the answer belongs to: [chat] is its
+/// subject (sent to the provider as `X-Atomic-Chat`), null when there is none.
+typedef ChatCompletionChunks = Stream<Map<String, dynamic>> Function(
+  List<Map<String, dynamic>> messages,
+  String model,
+  List<Map<String, dynamic>>? tools,
+  String? chat,
 );
 
 /// A function the model may call while it answers; this app runs it and
@@ -103,6 +113,28 @@ class AiTextDelta extends AiEvent {
   const AiTextDelta(this.text);
 }
 
+/// What a model request used, from the `usage` chunk that ends its stream.
+/// One answer can have several (one per round of tool calls).
+class AiUsage extends AiEvent {
+  final int promptTokens;
+  final int completionTokens;
+
+  /// What it cost, in the provider's micros; null when the chunk gives none.
+  final int? costMicros;
+  const AiUsage(this.promptTokens, this.completionTokens, {this.costMicros});
+
+  /// The usage of a chunk's `usage` object (`prompt_tokens`,
+  /// `completion_tokens`, `cost` in USD); null when it says nothing.
+  static AiUsage? fromJson(Map usage) {
+    final prompt = (usage['prompt_tokens'] as num?)?.toInt() ?? 0;
+    final completion = (usage['completion_tokens'] as num?)?.toInt() ?? 0;
+    final cost = usage['cost'];
+    final micros = cost is num ? (cost * 1000000).round() : null;
+    if (prompt == 0 && completion == 0 && micros == null) return null;
+    return AiUsage(prompt, completion, costMicros: micros);
+  }
+}
+
 /// Something the person should know about this answer (shown in the chat,
 /// not sent to the model): the web tools could not be used.
 class AiNotice extends AiEvent {
@@ -129,14 +161,20 @@ class HostedAi {
     required this.status,
     Stream<String> Function(List<Map<String, String>>, String model)? stream,
     CompletionChunks? completions,
+    ChatCompletionChunks? chatCompletions,
     required Future<Map<String, dynamic>> Function() enable,
     this.transcribe,
     this.voiceStatus,
     this.acceptsImages = false,
     this.portal,
-  })  : assert(stream != null || completions != null),
+  })  : assert(
+            stream != null || completions != null || chatCompletions != null),
         _stream = stream,
-        _completions = completions,
+        _chatCompletions = chatCompletions,
+        _completions = completions ??
+            (chatCompletions == null
+                ? null
+                : (m, model, tools) => chatCompletions(m, model, tools, null)),
         _enable = enable;
 
   /// Speech to text through the account's Whisper (a 16-bit mono PCM WAV and
@@ -198,6 +236,7 @@ class HostedAi {
   final Stream<String> Function(List<Map<String, String>>, String model)?
       _stream;
   final CompletionChunks? _completions;
+  final ChatCompletionChunks? _chatCompletions;
   final Future<Map<String, dynamic>> Function() _enable;
 
   /// The provider offers AI to this account and it is switched on.
@@ -209,7 +248,71 @@ class HostedAi {
   /// Whether the model can be given tools (the stream reports tool calls).
   bool get supportsTools => _completions != null;
 
-  String get model => status['model'] as String? ?? '';
+  /// SharedPreferences key: the model the person chose.
+  static const modelKey = 'ai_model';
+
+  /// The model the account offers by default (`model`, else the first of
+  /// `models`).
+  String get defaultModel =>
+      status['model'] as String? ?? models.firstOrNull?.id ?? '';
+
+  /// The models the account allows, the default first; empty when the portal
+  /// lists none (only the default can be used).
+  List<shared.AtomicAiModel> get models =>
+      shared.AtomicAiModel.listFrom(status['models']);
+
+  /// Whether there is a choice of models.
+  bool get canChoose => models.length > 1;
+
+  String? _chosen;
+
+  /// The model used: the chosen one while the account still allows it, else
+  /// the default.
+  String get model {
+    final chosen = _chosen;
+    final allowed = chosen != null &&
+        (chosen == defaultModel || models.any((m) => m.id == chosen));
+    return allowed ? chosen : defaultModel;
+  }
+
+  /// The name of [model] as the portal labels it.
+  String get modelLabel =>
+      models.where((m) => m.id == model).firstOrNull?.name ?? model;
+
+  /// Reads the stored choice (see [storedModel]).
+  Future<void> restoreChoice() async => _chosen = await storedModel();
+
+  /// Uses [id] from now on and remembers it; ignored when the account does
+  /// not allow it.
+  Future<void> choose(String id) async {
+    if (id != defaultModel && !models.any((m) => m.id == id)) return;
+    _chosen = id;
+    await storeModel(id);
+  }
+
+  /// The model id the person chose on this device, if any.
+  static Future<String?> storedModel() async {
+    try {
+      return (await SharedPreferences.getInstance()).getString(modelKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> storeModel(String id) async {
+    try {
+      await (await SharedPreferences.getInstance()).setString(modelKey, id);
+    } catch (_) {}
+  }
+
+  Stream<Map<String, dynamic>> _complete(
+    List<Map<String, dynamic>> messages,
+    List<Map<String, dynamic>>? tools,
+    String? chat,
+  ) =>
+      _chatCompletions != null
+          ? _chatCompletions(messages, model, tools, chat)
+          : _completions!(messages, model, tools);
 
   /// Credits left, in the provider's unit; null when it does not say.
   int? get remaining => (status['remaining_micros'] as num?)?.toInt();
@@ -237,7 +340,7 @@ class HostedAi {
 
   /// A short title for a chat that begins with [question] and [answer], from
   /// the model; null when it gives none.
-  Future<String?> title(String question, String answer) async {
+  Future<String?> title(String question, String answer, {String? chat}) async {
     String clip(String s) => s.length > 600 ? s.substring(0, 600) : s;
     final conversation = jsonEncode([
       {'role': 'user', 'text': clip(question)},
@@ -248,10 +351,10 @@ class HostedAi {
     final text = StringBuffer();
     final completions = _completions;
     if (completions != null) {
-      await for (final chunk in completions([
+      await for (final chunk in _complete([
         {'role': 'system', 'content': _titlePrompt},
         {'role': 'user', 'content': prompt},
-      ], model, null)) {
+      ], null, chat)) {
         final choices = chunk['choices'];
         if (choices is! List || choices.isEmpty) continue;
         final delta = (choices.first as Map)['delta'];
@@ -298,6 +401,10 @@ class HostedAi {
   /// [context], when given, is sent as a second system message ahead of the
   /// history: resources the person attached. It is not part of the chat.
   ///
+  /// [chat] gives the subject of the chat the answer is for, read at each
+  /// request (a new chat only has one once its first message is saved, which
+  /// the request does not wait for).
+  ///
   /// With a [bridge], the tools and the system prompt are the web app's (its
   /// tool list is read at the start of each answer; [tools] are then only
   /// the ones the web app lacks, or all of them when the web app cannot be
@@ -307,6 +414,7 @@ class HostedAi {
     String? context,
     List<AiTool> tools = const [],
     WebToolBridge? bridge,
+    String? Function()? chat,
   }) async* {
     final clock = Stopwatch()..start();
     final recent = _recent(history);
@@ -391,10 +499,14 @@ class HostedAi {
         debugPrint(
             '[ai-perf] step $step request sent +${clock.elapsedMilliseconds}ms '
             '(web tools ${usedWeb ? 'on' : webReady ? 'on' : 'off'})');
-        await for (final chunk in completions(messages, model, defs)) {
+        await for (final chunk in _complete(messages, defs, chat?.call())) {
           if (chunks++ == 0) {
             debugPrint('[ai-perf] first chunk +${clock.elapsedMilliseconds}ms');
           }
+          // The last chunk has no choices, only what the request used.
+          final usage = chunk['usage'];
+          final used = usage is Map ? AiUsage.fromJson(usage) : null;
+          if (used != null) yield used;
           final choices = chunk['choices'];
           if (choices is! List || choices.isEmpty) continue;
           final delta = (choices.first as Map)['delta'];
@@ -698,16 +810,19 @@ class HostedAi {
       client.close();
       return null;
     }
-    return HostedAi(
+    final ai = HostedAi(
       status: status,
-      completions: (messages, model, tools) =>
-          client.chatCompletionChunks(messages, model: model, tools: tools),
+      chatCompletions: (messages, model, tools, chat) =>
+          client.chatCompletionChunks(messages,
+              model: model, tools: tools, chat: chat),
       enable: client.aiConsent,
       transcribe: (wav, {language}) =>
           client.transcribe(wav, language: language),
       voiceStatus: client.voiceStatus,
       portal: origin,
     );
+    await ai.restoreChoice();
+    return ai;
   }
 }
 

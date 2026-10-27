@@ -395,6 +395,15 @@ class AtomicAccountClient {
     return credits.enabled ? credits : null;
   }
 
+  /// The account's AI usage this period: totals per model and per chat, and
+  /// the latest requests. Null when the portal offers none (404) or the
+  /// session is not valid (401).
+  Future<AtomicAiUsage?> aiUsage() async {
+    final response = await _request('GET', 'ai/usage');
+    if (response.statusCode == 404 || response.statusCode == 401) return null;
+    return AtomicAiUsage.fromJson(_object(response));
+  }
+
   /// Accept the included-AI terms for this account.
   Future<Map<String, dynamic>> aiConsent() async =>
       _object(await _request('POST', 'ai/consent', body: {'accepted': true}));
@@ -463,12 +472,14 @@ class AtomicAccountClient {
   /// `chat/completions` stream (`choices[0].delta` with `content` and
   /// `tool_calls`, `finish_reason`, `usage`). [messages] may carry tool calls
   /// and results, [tools] the functions the model may call (the portal
-  /// passes them on; the caller runs them). Throws with the portal's own
+  /// passes them on; the caller runs them). [chat], the subject of the chat
+  /// it is for, is sent as `X-Atomic-Chat`. Throws with the portal's own
   /// message when it refuses, and on an error chunk.
   Stream<Map<String, dynamic>> chatCompletionChunks(
     List<Map<String, dynamic>> messages, {
     required String model,
     List<Map<String, dynamic>>? tools,
+    String? chat,
   }) async* {
     if (!linked) throw StateError('Sign in first');
     final request =
@@ -476,6 +487,9 @@ class AtomicAccountClient {
           ..followRedirects = false
           ..headers['Content-Type'] = 'application/json'
           ..headers['Accept'] = 'text/event-stream'
+          // The chat this answer belongs to, for the portal's usage per chat.
+          ..headers.addAll(
+              chat == null ? const {} : {'X-Atomic-Chat': Uri.encodeFull(chat)})
           ..body = jsonEncode({
             'model': model,
             'messages': messages,
@@ -664,6 +678,48 @@ class AtomicRecoveredIdentity {
   final String? drive;
 }
 
+/// A model the account may use for the included AI, as `ai/status` lists it
+/// in `models` (the first is the default). Prices are the provider ceilings
+/// in USD per million tokens, 0 when not given.
+class AtomicAiModel {
+  const AtomicAiModel({
+    required this.id,
+    this.label = '',
+    this.maxPrompt = 0,
+    this.maxCompletion = 0,
+  });
+
+  factory AtomicAiModel.fromJson(Map<String, dynamic> json) => AtomicAiModel(
+        id: json['id'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        maxPrompt: (json['max_prompt'] as num?)?.toDouble() ?? 0,
+        maxCompletion: (json['max_completion'] as num?)?.toDouble() ?? 0,
+      );
+
+  /// The models of a status' `models`; empty when it lists none.
+  static List<AtomicAiModel> listFrom(Object? raw) => [
+        if (raw is List)
+          for (final m in raw)
+            if (m is Map && m['id'] is String && (m['id'] as String).isNotEmpty)
+              AtomicAiModel.fromJson(Map<String, dynamic>.from(m)),
+      ];
+
+  final String id;
+  final String label;
+  final double maxPrompt, maxCompletion;
+
+  /// The name to show: the label, else the id.
+  String get name => label.isEmpty ? id : label;
+
+  /// `$0.5 in, $3 out per 1M tokens`; empty when no price is given.
+  String get priceHint {
+    if (maxPrompt <= 0 && maxCompletion <= 0) return '';
+    String usd(double v) =>
+        '\$${v.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '')}';
+    return '${usd(maxPrompt)} in, ${usd(maxCompletion)} out per 1M tokens';
+  }
+}
+
 /// The account's included-AI credits, as the portal's `ai/status` reports
 /// them. Amounts are micros; one credit is 1000 micros.
 class AtomicAiCredits {
@@ -674,6 +730,10 @@ class AtomicAiCredits {
     this.purchasedMicros = 0,
     this.purchasesEnabled = false,
     this.resetsAt,
+    this.usedMicros = 0,
+    this.grantedMicros = 0,
+    this.model = '',
+    this.models = const [],
   });
 
   factory AtomicAiCredits.fromJson(Map<String, dynamic> json) {
@@ -688,6 +748,10 @@ class AtomicAiCredits {
       resetsAt: resets == null
           ? null
           : DateTime.fromMillisecondsSinceEpoch(resets * 1000, isUtc: true),
+      usedMicros: n('used_micros'),
+      grantedMicros: n('granted_micros'),
+      model: json['model'] as String? ?? '',
+      models: AtomicAiModel.listFrom(json['models']),
     );
   }
 
@@ -700,8 +764,68 @@ class AtomicAiCredits {
   final bool purchasesEnabled;
   final DateTime? resetsAt;
 
+  /// Used this period, and granted this period (the allowance and what was
+  /// given on top of it).
+  final int usedMicros, grantedMicros;
+
+  /// The default model, and the ones that may be chosen (empty when the
+  /// portal does not say: only the default).
+  final String model;
+  final List<AtomicAiModel> models;
+
   /// Whole credits left, as the web app shows them.
   int get remaining => remainingMicros ~/ 1000;
   int get allowance => allowanceMicros ~/ 1000;
   int get purchased => purchasedMicros ~/ 1000;
+  int get used => usedMicros ~/ 1000;
+}
+
+/// Tokens and cost of one model or one chat in a period (`ai/usage`).
+class AtomicAiUsageTotal {
+  const AtomicAiUsageTotal({
+    required this.id,
+    this.requests = 0,
+    this.costMicros = 0,
+    this.pendingMicros = 0,
+    this.promptTokens = 0,
+    this.completionTokens = 0,
+  });
+
+  factory AtomicAiUsageTotal.fromJson(Map<String, dynamic> json) {
+    int n(String key) => (json[key] as num?)?.toInt() ?? 0;
+    return AtomicAiUsageTotal(
+      id: json['id'] as String? ?? '',
+      requests: n('requests'),
+      costMicros: n('cost_micros'),
+      pendingMicros: n('pending_micros'),
+      promptTokens: n('prompt_tokens'),
+      completionTokens: n('completion_tokens'),
+    );
+  }
+
+  /// The model id or the chat's subject.
+  final String id;
+  final int requests, costMicros, pendingMicros;
+  final int promptTokens, completionTokens;
+
+  /// Whole credits spent (settled requests only).
+  int get credits => costMicros ~/ 1000;
+}
+
+/// The portal's `ai/usage`: totals per model and per chat for the period.
+class AtomicAiUsage {
+  const AtomicAiUsage({this.models = const [], this.chats = const []});
+
+  factory AtomicAiUsage.fromJson(Map<String, dynamic> json) {
+    List<AtomicAiUsageTotal> totals(Object? raw) => [
+          if (raw is List)
+            for (final t in raw)
+              if (t is Map)
+                AtomicAiUsageTotal.fromJson(Map<String, dynamic>.from(t)),
+        ];
+    return AtomicAiUsage(
+        models: totals(json['models']), chats: totals(json['chats']));
+  }
+
+  final List<AtomicAiUsageTotal> models, chats;
 }

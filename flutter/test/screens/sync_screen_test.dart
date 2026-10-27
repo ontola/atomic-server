@@ -4,8 +4,15 @@ import 'dart:convert';
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:atomic_flutter/atomic_flutter.dart' show SyncCard;
 import 'package:atomic_chat/atomic_chat.dart'
-    show BackgroundActivity, BackgroundState, ProfileAvatar, ResourceWebView;
+    show
+        BackgroundActivity,
+        BackgroundState,
+        ChatUsageStore,
+        HostedAi,
+        ProfileAvatar,
+        ResourceWebView;
 import 'package:atomic_app/atomic/account_store.dart';
+import 'package:atomic_app/screens/ai_usage_screen.dart';
 import 'package:atomic_app/screens/sync_screen.dart';
 import 'package:atomic_app/theme.dart';
 import 'package:flutter/material.dart';
@@ -156,6 +163,9 @@ Widget _app(Widget home) => MaterialApp(
     );
 
 void main() {
+  // The account section reads the AI settings from the preferences.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('lists unpaired connected devices, display only', (tester) async {
     // The This device card has grown (storage, background activity): give the
     // page room so the Devices section is built.
@@ -571,6 +581,130 @@ void main() {
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('AI credits'), 300);
       expect(find.text('—'), findsOneWidget);
+    });
+  });
+
+  group('AI model and usage', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    const models = [
+      shared.AtomicAiModel(
+          id: 'a/small', label: 'Small', maxPrompt: 0.5, maxCompletion: 3),
+      shared.AtomicAiModel(id: 'b/big', label: 'Big'),
+    ];
+    shared.AtomicAiCredits credits(
+            {List<shared.AtomicAiModel> models = models}) =>
+        shared.AtomicAiCredits(
+          enabled: true,
+          allowanceMicros: 10000,
+          remainingMicros: 6000,
+          usedMicros: 4000,
+          purchasedMicros: 2000,
+          model: 'a/small',
+          models: models,
+        );
+
+    // Room for the whole page, so the rows are on screen to tap.
+    void tall(WidgetTester tester) {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+    }
+
+    Widget app(shared.AtomicAiCredits value,
+            {Future<shared.AtomicAiUsage?> Function()? usage}) =>
+        _app(SyncScreen(
+          backend: _Backend(servers: _Servers(managed: true)),
+          loadAccount: (_) async => AccountSummary(
+            address: 'joep@example.org',
+            portal: Uri.parse('https://portal.example'),
+          ),
+          loadCredits: () async => value,
+          loadUsage: usage,
+        ));
+
+    testWidgets('the model row picks a model and remembers it', (tester) async {
+      tall(tester);
+      await tester.pumpWidget(app(credits()));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('AI model'), 300);
+      expect(find.text('Small'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('ai-model-row')));
+      await tester.pumpAndSettle();
+      expect(find.text(r'$0.5 in, $3 out per 1M tokens'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('ai-model-b/big')));
+      await tester.pumpAndSettle();
+      expect(find.text('Big'), findsOneWidget);
+      expect(await HostedAi.storedModel(), 'b/big');
+    });
+
+    testWidgets('a stored model the account dropped shows the default',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({HostedAi.modelKey: 'gone/x'});
+      await tester.pumpWidget(app(credits()));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('AI model'), 300);
+      expect(find.text('Small'), findsOneWidget);
+    });
+
+    testWidgets('no model row without a choice', (tester) async {
+      await tester.pumpWidget(app(credits(models: const [])));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('AI credits'), 300);
+      expect(find.byKey(const Key('ai-model-row')), findsNothing);
+      expect(find.text('AI usage'), findsOneWidget);
+    });
+
+    testWidgets('the token usage switch is on by default and is stored',
+        (tester) async {
+      tall(tester);
+      await tester.pumpWidget(app(credits()));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Show token usage'), 300);
+      final toggle = find.byKey(const Key('ai-show-usage'));
+      expect(tester.widget<Switch>(toggle).value, isTrue);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Switch>(toggle).value, isFalse);
+      expect(await ChatUsageStore.shown(), isFalse);
+    });
+
+    testWidgets('the usage page shows credits, models and chats',
+        (tester) async {
+      tall(tester);
+      await tester.pumpWidget(app(credits(),
+          usage: () async => const shared.AtomicAiUsage(models: [
+                shared.AtomicAiUsageTotal(
+                    id: 'a/small',
+                    requests: 3,
+                    costMicros: 2500,
+                    promptTokens: 900,
+                    completionTokens: 40),
+              ], chats: [
+                shared.AtomicAiUsageTotal(
+                    id: 'did:ad:chat', requests: 1, promptTokens: 5),
+              ])));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+          find.byKey(const Key('ai-usage-row')), 300);
+      await tester.tap(find.byKey(const Key('ai-usage-row')));
+      await tester.pumpAndSettle();
+      expect(find.text('4 of 10 credits'), findsOneWidget);
+      expect(find.text('900 in, 40 out · 2.5 credits · 3 requests'),
+          findsOneWidget);
+      expect(
+          find.byKey(const Key('ai-usage-chat-did:ad:chat')), findsOneWidget);
+      expect(find.byKey(const Key('ai-usage-unavailable')), findsNothing);
+    });
+
+    testWidgets('the usage page without a report shows only the credits',
+        (tester) async {
+      await tester.pumpWidget(_app(AiUsageScreen(
+          loadCredits: () async => credits(), loadUsage: () async => null)));
+      await tester.pumpAndSettle();
+      expect(find.text('4 of 10 credits'), findsOneWidget);
+      expect(find.text('Models'), findsNothing);
+      expect(find.byKey(const Key('ai-usage-unavailable')), findsOneWidget);
     });
   });
 
