@@ -1138,9 +1138,10 @@ class _ResourceViewState extends State<ResourceView>
     }
   }
 
-  /// The page asks the assistant for help (`askAssistant(prompt, subject)`,
-  /// the "Fix it" of an app that hit an error): a new chat opens on top with
-  /// the prompt as its first message, and the page is told it was taken.
+  /// The page asks the assistant (`askAssistant(prompt, subject)`: the "Fix
+  /// it" of an app that hit an error, or any of the page's "ask AI" actions):
+  /// a new chat opens on top with the prompt as its first message and the
+  /// resource it is about attached, and the page is told it was taken.
   Future<void> _answerAskAssistant(int id, Object? args) async {
     var handled = false;
     if (args is List && args.isNotEmpty && args.first is String) {
@@ -1150,7 +1151,7 @@ class _ResourceViewState extends State<ResourceView>
           : '';
       if (mounted && prompt.isNotEmpty) {
         handled = true;
-        if (subject.isNotEmpty) prompt = '$prompt\n\nApp: $subject';
+        if (subject.isNotEmpty) prompt = '$prompt\n\nAbout: $subject';
         unawaited(Navigator.of(context).push(SlideBackRoute<void>(
           builder: (_) => ChatScreen(
             api: widget.api,
@@ -1160,8 +1161,10 @@ class _ResourceViewState extends State<ResourceView>
                 ? null
                 : (
                     subject: subject,
-                    title: subject,
-                    className: 'App',
+                    title: subject == widget.subject && widget.title.isNotEmpty
+                        ? widget.title
+                        : subject,
+                    className: '',
                     emoji: null
                   ),
           ),

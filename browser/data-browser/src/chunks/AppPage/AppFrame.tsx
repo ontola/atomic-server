@@ -43,7 +43,6 @@ import {
 } from './appFrameDocument';
 import { appAgentOf } from './appAgent';
 import { ConnectDialog } from './ConnectDialog';
-import { askAssistant, hasActionsHost } from '../../embed/hostActions';
 import { useHostUI } from '@components/HostUI/hostUI';
 import type { ViewChanges } from '@helpers/extensions/viewApply';
 
@@ -425,13 +424,6 @@ function AppFrameSession({
       `Error (${appError.phase === 'load' ? 'while opening the app' : 'while using it'}): ${appError.message}`,
       ...(appError.stack ? ['', 'Stack:', appError.stack] : []),
     ].join('\n');
-
-    // In the Flutter app there is no AI sidebar: its own assistant takes it.
-    if (hasActionsHost()) {
-      void askAssistant(prompt, app);
-
-      return;
-    }
 
     askAI({
       prompt,

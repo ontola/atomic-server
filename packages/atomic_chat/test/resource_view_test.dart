@@ -119,7 +119,7 @@ void main() {
     final chat = tester.widget<ChatScreen>(find.byType(ChatScreen));
     expect(chat.subject, isNull);
     expect(chat.initialPrompt, contains('Fix the app'));
-    expect(chat.initialPrompt, contains('App: did:ad:app'));
+    expect(chat.initialPrompt, contains('About: did:ad:app'));
     expect(chat.initialContext?.subject, 'did:ad:app');
     expect(page.scripts, contains('window.__atomicReply(8,true,"true")'));
     await tester.pumpWidget(const SizedBox());
