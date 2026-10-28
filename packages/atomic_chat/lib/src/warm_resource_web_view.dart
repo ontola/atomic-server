@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
@@ -88,6 +89,12 @@ class WebViewEmbedPage implements WarmPage {
   /// instead of making it again.
   final _hostKey = GlobalKey(debugLabel: 'embed page');
   final _ready = Completer<void>();
+
+  /// What the page shows full screen (Android hands the web view's own
+  /// fullscreen view to the host); null when it is not. [FullscreenHost]
+  /// puts it over the app.
+  final fullscreen = ValueNotifier<Widget?>(null);
+  VoidCallback? _onHidden;
   final _created = Stopwatch()..start();
   void Function(String message)? _onMessage;
   VoidCallback? _onLoaded;
@@ -186,6 +193,21 @@ class WebViewEmbedPage implements WarmPage {
     if (!kReleaseMode && controller.platform is AndroidWebViewController) {
       await AndroidWebViewController.enableDebugging(true);
     }
+    // Android's WebView only shows HTML fullscreen (an app's
+    // `requestFullscreen()`) when the host brings the view up itself.
+    final platform = controller.platform;
+    if (platform is AndroidWebViewController) {
+      unawaited(platform.setCustomWidgetCallbacks(
+        onShowCustomWidget: (widget, onHidden) {
+          page._onHidden = onHidden;
+          page.fullscreen.value = widget;
+        },
+        onHideCustomWidget: () {
+          page._onHidden = null;
+          page.fullscreen.value = null;
+        },
+      ));
+    }
     unawaited(controller.loadRequest(withChannelToken(url, token)));
     return page;
   }
@@ -228,11 +250,15 @@ class WebViewEmbedPage implements WarmPage {
   @override
   Widget build() => KeyedSubtree(
         key: _hostKey,
-        child: WebViewWidget(
-          controller: controller,
-          gestureRecognizers: const {
-            Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
-          },
+        child: FullscreenHost(
+          fullscreen: fullscreen,
+          onExit: () => _onHidden?.call(),
+          child: WebViewWidget(
+            controller: controller,
+            gestureRecognizers: const {
+              Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+            },
+          ),
         ),
       );
 
@@ -242,6 +268,8 @@ class WebViewEmbedPage implements WarmPage {
     _released = true;
     _onMessage = null;
     _onLoaded = null;
+    _onHidden = null;
+    fullscreen.value = null;
     _fail('released');
     // webview_flutter has no dispose: leave the page empty so its memory
     // (the store, the WASM) can go.
@@ -250,6 +278,95 @@ class WebViewEmbedPage implements WarmPage {
         .then((_) => controller.loadHtmlString(''))
         .catchError((_) {}));
   }
+}
+
+/// Shows [child], and whatever [fullscreen] holds on a black route over the
+/// whole app (root navigator, immersive). Back calls [onExit] (the page's
+/// `onHidden`); when [fullscreen] goes null again (the page left fullscreen
+/// itself) the route is closed without it.
+class FullscreenHost extends StatefulWidget {
+  const FullscreenHost({
+    super.key,
+    required this.fullscreen,
+    required this.onExit,
+    required this.child,
+  });
+
+  final ValueListenable<Widget?> fullscreen;
+  final VoidCallback onExit;
+  final Widget child;
+
+  @override
+  State<FullscreenHost> createState() => _FullscreenHostState();
+}
+
+class _FullscreenHostState extends State<FullscreenHost> {
+  Route<void>? _route;
+  NavigatorState? _navigator;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.fullscreen.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(FullscreenHost old) {
+    super.didUpdateWidget(old);
+    if (old.fullscreen != widget.fullscreen) {
+      old.fullscreen.removeListener(_changed);
+      widget.fullscreen.addListener(_changed);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.fullscreen.removeListener(_changed);
+    _close();
+    super.dispose();
+  }
+
+  void _changed() {
+    if (widget.fullscreen.value == null) {
+      _close();
+    } else if (_route == null && mounted) {
+      _open();
+    }
+  }
+
+  void _open() {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = PageRouteBuilder<void>(
+      pageBuilder: (_, __, ___) => Scaffold(
+        backgroundColor: Colors.black,
+        body: ValueListenableBuilder<Widget?>(
+          valueListenable: widget.fullscreen,
+          builder: (_, view, __) => view ?? const SizedBox.shrink(),
+        ),
+      ),
+    );
+    _navigator = navigator;
+    _route = route;
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    unawaited(navigator.push(route).then((_) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      // Popped by back, not by the page leaving fullscreen: tell the page.
+      if (identical(_route, route)) {
+        _route = null;
+        widget.onExit();
+      }
+    }));
+  }
+
+  void _close() {
+    final route = _route;
+    if (route == null) return;
+    _route = null;
+    if (route.isActive) _navigator?.removeRoute(route);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Keeps one embedded page loaded and hidden (booted, Loro compiled), so

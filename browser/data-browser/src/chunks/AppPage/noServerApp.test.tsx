@@ -101,6 +101,7 @@ it('runs an app in a srcdoc frame without signing when the store has no server',
 
   expect(frame?.getAttribute('srcdoc')).toContain("connect-src 'none'");
   expect(frame?.getAttribute('sandbox')).toBe('allow-scripts allow-modals');
+  expect(frame?.getAttribute('allow')).toBe('fullscreen');
   expect(frame?.hasAttribute('src')).toBe(false);
   expect(pending).toBeDefined();
   expect(refused).toEqual([]);

@@ -472,6 +472,10 @@ function AppFrameSession({
         // no allow-same-origin, so the frame stays null-origin and cannot
         // touch this page.
         sandbox='allow-scripts allow-modals'
+        // So an app can go full screen (`element.requestFullscreen()`); a
+        // frame is not allowed to without it.
+        allow='fullscreen'
+        allowFullScreen
         title='App'
       />
     </Wrapper>
