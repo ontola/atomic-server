@@ -51,17 +51,20 @@ class _Api extends UnimplementedApi {
   Future<void> renameResource(String subject, String name) async {}
 }
 
-class _SwitchApi extends _Api {
-  _SwitchApi(super.ai);
-  bool own = false;
+/// Opens no page: records what the chat handed over and picks a model, as
+/// the settings would.
+class _SettingsApi extends _Api {
+  _SettingsApi(super.ai);
+  AiChatSettings? opened;
 
   @override
-  bool get canSwitchAiSource => true;
+  bool get canOpenAiSettings => true;
   @override
-  Future<bool> usesOwnAi() async => own;
-  @override
-  Future<void> setUsesOwnAi(BuildContext context, bool value) async =>
-      own = value;
+  Future<void> openAiSettings(BuildContext context,
+      {AiChatSettings? chat}) async {
+    opened = chat;
+    await ai.choose('b/big', label: 'Big');
+  }
 }
 
 /// An AI that answers every question with [chunks]; [asked] gets the model
@@ -156,21 +159,18 @@ void main() {
       expect(ai.model, 'a/small');
     });
 
-    testWidgets('the header names the model and the subtitle picks another',
+    testWidgets('the header names the model; the AI settings change it',
         (tester) async {
       final asked = <({String model, String? chat})>[];
       final ai = _ai(asked, [_text('Hi')], status: {'models': _models});
-      await _open(tester, _Api(ai), subject: 'did:ad:chat');
+      final api = _SettingsApi(ai);
+      await _open(tester, api, subject: 'did:ad:chat');
       expect(find.text('Small'), findsOneWidget);
       expect(find.text('AI assistant'), findsNothing);
 
       await tester.tap(find.byKey(const Key('chat-header-subtitle')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('chat-ai-model')));
-      await tester.pumpAndSettle();
-      expect(find.text(r'$10 in, $30 out per 1M tokens'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('ai-model-b/big')));
-      await tester.pumpAndSettle();
+      expect(api.opened, isNotNull);
       expect(find.text('Big'), findsOneWidget);
       expect(await HostedAi.storedModel(), 'b/big');
 
@@ -214,65 +214,6 @@ void main() {
         'models': [_models.first],
       });
       expect(off.canChoose, isFalse);
-    });
-
-    testWidgets('All models searches the full list and picks from it',
-        (tester) async {
-      final asked = <({String model, String? chat})>[];
-      final ai = _ai(asked, [_text('Hi')],
-          status: {
-            'all_models': true,
-            'models': [_models.first],
-          },
-          loadModels: () async => const [
-                AtomicAiModel(
-                    id: 'a/small',
-                    label: 'Small',
-                    maxPrompt: 0.5,
-                    maxCompletion: 3),
-                AtomicAiModel(id: 'meta/llama-3', label: 'Llama 3'),
-                AtomicAiModel(
-                    id: 'zed/model-z',
-                    label: 'Zed',
-                    maxPrompt: 1,
-                    maxCompletion: 2),
-              ]);
-      await _open(tester, _Api(ai), subject: 'did:ad:chat');
-      await tester.tap(find.byKey(const Key('chat-header-subtitle')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('chat-ai-model')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('ai-model-all')));
-      await tester.pumpAndSettle();
-      expect(find.text('Llama 3'), findsOneWidget);
-      expect(find.text('Zed'), findsOneWidget);
-      expect(find.textContaining(r'$1 in, $2 out'), findsOneWidget);
-
-      await tester.enterText(
-          find.byKey(const Key('ai-model-search')), 'MODEL-z');
-      await tester.pumpAndSettle();
-      expect(find.text('Zed'), findsOneWidget);
-      expect(find.text('Llama 3'), findsNothing);
-      await tester.enterText(find.byKey(const Key('ai-model-search')), 'llama');
-      await tester.pumpAndSettle();
-      expect(find.text('Zed'), findsNothing);
-
-      await tester.tap(find.byKey(const Key('ai-model-meta/llama-3')));
-      await tester.pumpAndSettle();
-      expect(find.text('Llama 3'), findsOneWidget);
-      expect(await HostedAi.storedModel(), 'meta/llama-3');
-      await _ask(tester, 'Hello');
-      expect(asked.single.model, 'meta/llama-3');
-    });
-
-    testWidgets('no All models row without all_models', (tester) async {
-      final ai = _ai([], const [], status: {'models': _models});
-      await _open(tester, _Api(ai), subject: 'did:ad:chat');
-      await tester.tap(find.byKey(const Key('chat-header-subtitle')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('chat-ai-model')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('ai-model-all')), findsNothing);
     });
 
     testWidgets('without a choice the subtitle stays AI assistant',
@@ -358,9 +299,9 @@ void main() {
       expect(asked.last.chat, 'did:ad:chat');
     });
 
-    testWidgets('the line is off by default; the AI sheet has the total',
+    testWidgets('the line is off by default; the AI settings get the total',
         (tester) async {
-      final api = _Api(_ai([], [_text('Hi'), _usage(120, 30)]));
+      final api = _SettingsApi(_ai([], [_text('Hi'), _usage(120, 30)]));
       await _open(tester, api);
       await _ask(tester, 'Hello');
       expect(find.byKey(const Key('chat-usage-line')), findsNothing);
@@ -369,40 +310,26 @@ void main() {
 
       await tester.tap(find.byKey(const Key('chat-ai-button')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('chat-ai-sheet')), findsOneWidget);
-      expect(find.text('Tokens: 120 in, 30 out'), findsOneWidget);
+      expect(api.opened!.usage, 'Tokens: 120 in, 30 out');
+      expect(api.opened!.onReport, isNotNull);
     });
 
-    testWidgets('the top bar AI button opens the sheet with the switcher',
+    testWidgets('an opened chat hands over what it used before',
         (tester) async {
-      final api = _SwitchApi(_ai([], const [],
-          status: {'models': _models, 'remaining_micros': 12600}));
+      await ChatUsageStore.add('did:ad:chat',
+          const ChatUsage(inputTokensUsed: 7, outputTokensUsed: 3));
+      final api = _SettingsApi(_ai([], const []));
       await _open(tester, api, subject: 'did:ad:chat');
       await tester.tap(find.byKey(const Key('chat-ai-button')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('chat-ai-included')), findsOneWidget);
-      expect(find.byKey(const Key('chat-ai-own')), findsOneWidget);
-      expect(
-          find.descendant(
-              of: find.byKey(const Key('chat-ai-model')),
-              matching: find.text('Small')),
-          findsOneWidget);
-      expect(find.text('13 credits'), findsOneWidget);
-      expect(find.text('Nothing used yet'), findsOneWidget);
-
-      await tester.tap(find.byKey(const Key('chat-ai-own')));
-      await tester.pumpAndSettle();
-      expect(api.own, isTrue);
-      expect(find.byKey(const Key('chat-ai-sheet')), findsOneWidget);
+      expect(api.opened!.usage, 'Tokens: 7 in, 3 out');
+      // Nothing to report in a chat without messages.
+      expect(api.opened!.onReport, isNull);
     });
 
-    testWidgets('an opened chat shows what it used before', (tester) async {
-      await ChatUsageStore.add('did:ad:chat',
-          const ChatUsage(inputTokensUsed: 7, outputTokensUsed: 3));
+    testWidgets('no AI button without AI settings', (tester) async {
       await _open(tester, _Api(_ai([], const [])), subject: 'did:ad:chat');
-      await tester.tap(find.byKey(const Key('chat-ai-button')));
-      await tester.pumpAndSettle();
-      expect(find.text('Tokens: 7 in, 3 out'), findsOneWidget);
+      expect(find.byKey(const Key('chat-ai-button')), findsNothing);
     });
   });
 }

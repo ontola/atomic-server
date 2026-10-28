@@ -16,6 +16,9 @@ const voiceEngineKey = 'voice_engine';
 /// absent means auto-detect.
 const voiceLanguageKey = 'voice_language';
 
+/// SharedPreferences key: the recogniser language the person picked.
+const voiceLocaleKey = 'voice_locale';
+
 const voiceEngineAccount = 'account';
 const voiceEngineDevice = 'device';
 

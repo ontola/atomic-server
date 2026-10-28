@@ -1,14 +1,20 @@
 import 'package:atomic_chat/atomic_chat.dart'
     show
+        AiChatSettings,
         AppTopBar,
         ChatUsageStore,
         HostedAi,
+        HostedAvailability,
+        SpeechInput,
+        VoiceSettings,
+        accountVoiceAvailability,
         readableHorizontalPadding,
         showAiModelPicker;
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../assistant/atomic_assistant_api.dart';
 import '../atomic/account_store.dart';
 import '../atomic/own_ai.dart';
 import '../theme.dart';
@@ -17,7 +23,8 @@ import 'ai_usage_screen.dart';
 /// Everything about the AI in one place, as the web app's AI settings: which
 /// AI answers (the included AI of the atomic.place account, or the person's
 /// own OpenRouter key), the credits and where to buy more, the model, and
-/// whether chats show their token usage.
+/// whether chats show their token usage; the voice input; and, when opened
+/// from a chat, what that chat used and Report this chat.
 class AiSettingsScreen extends StatefulWidget {
   /// The account's credits; [AccountStore.aiCredits] by default.
   final Future<shared.AtomicAiCredits?> Function()? loadCredits;
@@ -35,8 +42,22 @@ class AiSettingsScreen extends StatefulWidget {
   /// default.
   final Future<Uri?> Function()? loadPortal;
 
+  /// The chat these settings were opened from, if any.
+  final AiChatSettings? chat;
+
+  /// The device's speech recogniser, for the voice language list; the
+  /// platform's by default.
+  final SpeechInput? speechInput;
+
+  /// Whether the account can transcribe; looked up from the linked account by
+  /// default.
+  final Future<HostedAvailability> Function()? voiceAvailability;
+
   const AiSettingsScreen({
     super.key,
+    this.chat,
+    this.speechInput,
+    this.voiceAvailability,
     this.loadCredits,
     this.loadUsage,
     this.loadModels,
@@ -205,6 +226,9 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     ].join(' · ');
   }
 
+  Future<HostedAvailability> _voiceAvailability() async =>
+      accountVoiceAvailability(await const AtomicAssistantApi().hostedAi());
+
   Widget _radio(bool on) =>
       Icon(on ? Icons.radio_button_checked : Icons.radio_button_unchecked,
           size: 24);
@@ -222,6 +246,23 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
         builder: (context, box) => ListView(
           padding: readableHorizontalPadding(box.maxWidth),
           children: [
+            if (widget.chat != null)
+              shared.SyncSection(title: 'This chat', children: [
+                shared.SyncRow(
+                  key: const Key('chat-usage'),
+                  icon: Icons.data_usage,
+                  title: 'Used in this chat',
+                  subtitle: widget.chat!.usage,
+                ),
+                if (widget.chat!.onReport != null)
+                  shared.SyncRow(
+                    key: const Key('chat-report'),
+                    icon: Icons.flag_outlined,
+                    title: 'Report this chat',
+                    subtitle: 'Tell us what went wrong',
+                    onTap: widget.chat!.onReport,
+                  ),
+              ]),
             shared.SyncSection(title: 'AI provider', children: [
               shared.SyncRow(
                 key: const Key('ai-mode-included'),
@@ -312,6 +353,10 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 ),
               ),
             ]),
+            VoiceSettings(
+              input: widget.speechInput,
+              availability: widget.voiceAvailability ?? _voiceAvailability,
+            ),
           ],
         ),
       ),

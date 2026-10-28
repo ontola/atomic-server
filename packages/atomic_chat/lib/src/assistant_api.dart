@@ -1,11 +1,19 @@
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show Listenable;
+import 'package:flutter/foundation.dart' show Listenable, VoidCallback;
 import 'package:flutter/widgets.dart' show BuildContext;
 import 'chat_parts.dart';
 import 'chat_window.dart';
 import 'hosted_ai.dart';
 import 'models.dart';
+
+/// What the AI settings show about the chat they were opened from: what it
+/// used, and Report this chat ([onReport] null: nothing to report yet).
+class AiChatSettings {
+  final String usage;
+  final VoidCallback? onReport;
+  const AiChatSettings({required this.usage, this.onReport});
+}
 
 /// What the assistant screens read and write: the seam between this package
 /// and the host's store. The host implements it over its own client (the
@@ -145,13 +153,15 @@ abstract class AssistantApi {
   /// then links to it from its header and from the out-of-credits notice.
   bool get canOpenAiSettings => false;
 
-  /// Opens the AI settings (mode, credits, model); completes when the person
-  /// leaves them, after which the chat looks the AI up again.
-  Future<void> openAiSettings(BuildContext context) async {}
+  /// Opens the AI settings (mode, credits, model, voice); completes when the
+  /// person leaves them, after which the chat looks the AI up again. [chat]
+  /// when opened from a chat, which adds a section about it.
+  Future<void> openAiSettings(BuildContext context,
+      {AiChatSettings? chat}) async {}
 
   /// Whether this host lets the person switch the AI between the included one
-  /// and their own key ([usesOwnAi], [setUsesOwnAi]); the chat's AI sheet then
-  /// offers the switch.
+  /// and their own key ([usesOwnAi], [setUsesOwnAi]); the AI settings then
+  /// offer the switch.
   bool get canSwitchAiSource => false;
 
   /// Whether the AI in use is the person's own key.

@@ -48,7 +48,9 @@ class _SettingsApi extends _Api {
   @override
   bool get canOpenAiSettings => true;
   @override
-  Future<void> openAiSettings(BuildContext context) async => opened++;
+  Future<void> openAiSettings(BuildContext context,
+          {AiChatSettings? chat}) async =>
+      opened++;
 }
 
 /// An AI whose answers are [answer]'s results in turn; a title request gets

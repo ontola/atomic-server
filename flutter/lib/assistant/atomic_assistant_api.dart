@@ -217,8 +217,9 @@ class AtomicAssistantApi extends AssistantApi {
   @override
   bool get canOpenAiSettings => true;
   @override
-  Future<void> openAiSettings(BuildContext context) => Navigator.of(context)
-      .push(MaterialPageRoute<void>(builder: (_) => const AiSettingsScreen()));
+  Future<void> openAiSettings(BuildContext context, {AiChatSettings? chat}) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => AiSettingsScreen(chat: chat)));
 
   @override
   bool get canSwitchAiSource => true;

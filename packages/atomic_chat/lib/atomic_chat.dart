@@ -65,6 +65,7 @@ export 'src/row_leading.dart';
 // Voice.
 export 'src/voice.dart';
 export 'src/hosted_voice.dart';
+export 'src/voice_settings.dart';
 
 // Small widgets.
 export 'src/markdown_view.dart';

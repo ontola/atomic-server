@@ -1,4 +1,5 @@
-import 'package:atomic_chat/atomic_chat.dart' show ChatUsageStore, HostedAi;
+import 'package:atomic_chat/atomic_chat.dart'
+    show AiChatSettings, ChatUsageStore, HostedAi, HostedAvailability;
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:atomic_app/atomic/own_ai.dart';
 import 'package:atomic_app/screens/ai_settings_screen.dart';
@@ -43,8 +44,11 @@ Widget _screen(
         Future<List<shared.AtomicAiModel>?> Function()? loadModels,
         Future<List<shared.AtomicAiModel>?> Function()? loadOwnModels,
         Future<shared.AtomicAiUsage?> Function()? usage,
-        Uri? portal}) =>
+        Uri? portal,
+        AiChatSettings? chat}) =>
     _app(AiSettingsScreen(
+      chat: chat,
+      voiceAvailability: () async => const HostedAvailability.available(),
       loadCredits: load ?? () async => credits ?? _credits(),
       loadUsage: usage,
       loadModels: loadModels,
@@ -100,6 +104,32 @@ void main() {
     expect(find.text('Small'), findsOneWidget);
     expect(tester.widget<Switch>(find.byKey(const Key('ai-show-usage'))).value,
         isFalse);
+  });
+
+  testWidgets('opened from a chat: what it used, and Report this chat',
+      (tester) async {
+    tall(tester);
+    var reported = 0;
+    await tester.pumpWidget(_screen(
+        chat: AiChatSettings(
+            usage: 'Tokens: 7 in, 3 out', onReport: () => reported++)));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-usage')), findsOneWidget);
+    expect(find.text('Tokens: 7 in, 3 out'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-report')));
+    expect(reported, 1);
+  });
+
+  testWidgets('no chat section outside a chat; the voice section is there',
+      (tester) async {
+    tall(tester);
+    await tester.pumpWidget(_screen());
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-usage')), findsNothing);
+    expect(find.byKey(const Key('chat-report')), findsNothing);
+    expect(find.byKey(const Key('engine-account')), findsOneWidget);
+    expect(find.byKey(const Key('engine-device')), findsOneWidget);
+    expect(find.byKey(const Key('voice-language-row')), findsOneWidget);
   });
 
   testWidgets('Buy credits only with a portal', (tester) async {

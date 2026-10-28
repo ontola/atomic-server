@@ -38,11 +38,6 @@ import 'list_and_field.dart';
 import 'resource_chrome.dart';
 import 'report_chat_dialog.dart';
 
-/// SharedPreferences key: speak each new answer aloud.
-
-/// SharedPreferences key: the recogniser language the person picked.
-const voiceLocaleKey = 'voice_locale';
-
 /// A resource the person attached to a new chat as context.
 typedef _Attached = ContextResource;
 
@@ -367,142 +362,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  /// Which model answers: a sheet with the account's models.
-  Future<void> _pickModel() async {
-    final ai = _ai;
-    if (ai == null || !ai.canChoose || _sending) return;
-    final picked = await showAiModelPicker(context,
-        models: ai.models,
-        selected: ai.model,
-        loadAll: ai.allModels ? ai.loadModels : null);
-    if (picked == null) return;
-    await ai.choose(picked.id, label: picked.name);
-    if (mounted) setState(() {});
-  }
-
   /// The AI settings page; the AI is looked up again after it, as the mode
   /// or the key may have changed.
   Future<void> _openAiSettings() async {
-    await widget.api.openAiSettings(context);
+    await widget.api.openAiSettings(context,
+        chat: AiChatSettings(
+          usage: _usage.isEmpty ? 'Nothing used yet' : _usage.line,
+          onReport: _messages.isEmpty
+              ? null
+              : () => showReportChatDialog(context,
+                  api: widget.api, title: _title, messages: _messages),
+        ));
     if (mounted) await _lookUpAi(quiet: true);
-  }
-
-  bool get _hasAiSheet =>
-      widget.api.canSwitchAiSource ||
-      widget.api.canOpenAiSettings ||
-      _ai != null;
-
-  /// The AI of this chat in a sheet: which source answers (included or the
-  /// person's own key), the model, the credits left and what this chat used.
-  Future<void> _aiSheet() async {
-    final c = context.appColors;
-    final canSwitch = widget.api.canSwitchAiSource;
-    var own = canSwitch && await widget.api.usesOwnAi();
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheet) => StatefulBuilder(builder: (sheet, setSheet) {
-        final ai = _ai;
-        final remaining = ai?.remaining;
-        final url = ai?.creditsUrl;
-        Future<void> switchTo(bool value) async {
-          if (value == own) return;
-          await widget.api.setUsesOwnAi(context, value);
-          own = await widget.api.usesOwnAi();
-          if (mounted) await _lookUpAi(quiet: true);
-          if (sheet.mounted) setSheet(() {});
-        }
-
-        void close(VoidCallback f) {
-          Navigator.pop(sheet);
-          f();
-        }
-
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              key: const Key('chat-ai-sheet'),
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (canSwitch)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: SegmentedButton<bool>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(
-                            value: false,
-                            label: Text('Included AI',
-                                key: Key('chat-ai-included'))),
-                        ButtonSegment(
-                            value: true,
-                            label:
-                                Text('Own key', key: Key('chat-ai-own'))),
-                      ],
-                      selected: {own},
-                      onSelectionChanged: (v) => switchTo(v.first),
-                    ),
-                  ),
-                if (ai != null)
-                  ListTile(
-                    key: const Key('chat-ai-model'),
-                    leading: Icon(Icons.auto_awesome_outlined, color: c.main),
-                    title: const Text('Model'),
-                    subtitle: Text(ai.modelLabel),
-                    trailing:
-                        ai.canChoose ? const Icon(Icons.expand_more) : null,
-                    onTap: ai.canChoose && !_sending
-                        ? () => close(_pickModel)
-                        : null,
-                  ),
-                if (remaining != null)
-                  ListTile(
-                    key: const Key('chat-ai-credits'),
-                    leading: Icon(Icons.account_balance_wallet_outlined,
-                        color: c.main),
-                    title: const Text('Credits left'),
-                    subtitle: Text(formatCredits(remaining)),
-                    trailing: url == null
-                        ? null
-                        : TextButton(
-                            key: const Key('chat-buy-credits'),
-                            onPressed: () => close(() => _openLink('$url')),
-                            child: const Text('Buy credits'),
-                          ),
-                  ),
-                ListTile(
-                  leading: Icon(Icons.data_usage, color: c.main),
-                  title: const Text('Used in this chat'),
-                  subtitle: Text(
-                      _usage.isEmpty ? 'Nothing used yet' : _usage.line,
-                      key: const Key('chat-usage')),
-                ),
-                if (_messages.isNotEmpty)
-                  ListTile(
-                    key: const Key('chat-report'),
-                    leading: Icon(Icons.flag_outlined, color: c.main),
-                    title: const Text('Report this chat'),
-                    subtitle: const Text('Tell us what went wrong'),
-                    onTap: () => close(() => showReportChatDialog(context,
-                        api: widget.api,
-                        title: _title,
-                        messages: _messages)),
-                  ),
-                if (widget.api.canOpenAiSettings)
-                  ListTile(
-                    key: const Key('chat-ai-settings-all'),
-                    leading: Icon(Icons.settings_outlined, color: c.main),
-                    title: const Text('All AI settings'),
-                    onTap: () => close(_openAiSettings),
-                  ),
-              ],
-            ),
-          ),
-        );
-      }),
-    );
   }
 
   bool _hadText = false;
@@ -950,31 +821,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
-  /// Long-press on the mic: pick the engine and its language.
-  Future<void> _openVoiceSheet() async {
+  /// Long-press on the mic: the AI settings, where the voice engine and its
+  /// language are.
+  Future<void> _openVoiceSettings() async {
     _stopListening();
-    final input = _inputInst ??= PluginSpeechInput();
-    final all = await input.locales();
-    final system = await input.systemLocale();
-    final prefs = await _prefs();
-    if (!mounted) return;
-    final availability = _hosted.availability().catchError(
-          (Object _) => const HostedAvailability.unavailable(
-              'Could not reach your account.'),
-        );
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _VoiceSheet(
-        locales: all,
-        systemId: system,
-        currentLocale: prefs?.getString(voiceLocaleKey) ?? system,
-        availability: availability,
-        engine: prefs?.getString(voiceEngineKey),
-        language: prefs?.getString(voiceLanguageKey),
-        languageHints: widget.accountLanguageHints,
-      ),
-    );
+    await _openAiSettings();
     if (mounted) setState(() => _noSpeechHint = false);
   }
 
@@ -1754,12 +1605,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         compact: true,
                         title: _headerTitle,
                         actions: [
-                          if (_hasAiSheet)
+                          if (widget.api.canOpenAiSettings)
                             IconButton(
                               key: const Key('chat-ai-button'),
                               tooltip: 'AI',
                               icon: const Icon(Icons.tune),
-                              onPressed: _aiSheet,
+                              onPressed: _openAiSettings,
                             ),
                           const ResourceMoreButton(),
                         ],
@@ -1771,7 +1622,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             subtitle: _ai?.canChoose == true
                                 ? _ai!.modelLabel
                                 : 'AI assistant',
-                            onSubtitleTap: _hasAiSheet ? _aiSheet : null,
+                            onSubtitleTap: widget.api.canOpenAiSettings
+                                ? _openAiSettings
+                                : null,
                             icon: Icons.auto_awesome_outlined,
                           ),
                         ),
@@ -2549,8 +2402,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 level: _level,
                 locale: _activeLocale,
                 transcribing: _transcribing,
-                onLongPress:
-                    ai == null || _transcribing ? null : _openVoiceSheet,
+                onLongPress: ai == null ||
+                        _transcribing ||
+                        !widget.api.canOpenAiSettings
+                    ? null
+                    : _openVoiceSettings,
                 onPressed: ai == null ? null : _toggleListening,
               ),
               if (_sending)
@@ -2840,262 +2696,6 @@ class _Waveform extends StatelessWidget {
                 ),
               ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The voice input sheet: which engine transcribes, and its language. The
-/// device engine lists the recogniser's languages (suggested ones first, with
-/// a search field); the account engine detects the language by itself, with
-/// an optional hint when the server takes one. Choices are saved as they are
-/// made.
-class _VoiceSheet extends StatefulWidget {
-  final List<SpeechLocale> locales;
-  final String? systemId;
-  final String? currentLocale;
-  final Future<HostedAvailability> availability;
-  final String? engine;
-  final String? language;
-  final bool languageHints;
-
-  const _VoiceSheet({
-    required this.locales,
-    required this.systemId,
-    required this.currentLocale,
-    required this.availability,
-    required this.engine,
-    required this.language,
-    required this.languageHints,
-  });
-
-  @override
-  State<_VoiceSheet> createState() => _VoiceSheetState();
-}
-
-class _VoiceSheetState extends State<_VoiceSheet> {
-  String _query = '';
-  HostedAvailability? _avail;
-  String? _engine;
-  String? _language;
-
-  @override
-  void initState() {
-    super.initState();
-    _engine = widget.engine;
-    _language = widget.language;
-    widget.availability.then((a) {
-      if (mounted) setState(() => _avail = a);
-    });
-  }
-
-  /// The engine in effect: the chosen one, else the account's when usable;
-  /// the account's is never in effect while unusable.
-  String get _effective {
-    if (_engine == voiceEngineDevice) return voiceEngineDevice;
-    return _avail?.ok == true ? voiceEngineAccount : voiceEngineDevice;
-  }
-
-  Future<void> _save(String key, String? value) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (value == null) {
-        await prefs.remove(key);
-      } else {
-        await prefs.setString(key, value);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _pickEngine(String engine) async {
-    setState(() => _engine = engine);
-    await _save(voiceEngineKey, engine);
-  }
-
-  Future<void> _pickLocale(String id) async {
-    await _save(voiceLocaleKey, id);
-    if (mounted) Navigator.pop(context);
-  }
-
-  Future<void> _pickLanguage(String? code) async {
-    await _save(voiceLanguageKey, code);
-    if (mounted) Navigator.pop(context);
-  }
-
-  bool _match(SpeechLocale l) {
-    final q = _query.trim().toLowerCase();
-    return q.isEmpty ||
-        l.name.toLowerCase().contains(q) ||
-        l.id.toLowerCase().contains(q);
-  }
-
-  Widget _heading(String t) {
-    final c = context.appColors;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
-      child: Text(t, style: TextStyle(color: c.textSecondary, fontSize: 12)),
-    );
-  }
-
-  Widget _engineTile({
-    required Key key,
-    required String engine,
-    required String title,
-    required String subtitle,
-    String? reason,
-    bool enabled = true,
-  }) {
-    final c = context.appColors;
-    final on = _effective == engine;
-    return ListTile(
-      key: key,
-      dense: true,
-      enabled: enabled,
-      leading: Icon(
-        on ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-        color: on ? c.main : null,
-      ),
-      title: Text(title),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(subtitle),
-          if (reason != null)
-            Text(reason, style: TextStyle(color: c.alert, fontSize: 12)),
-        ],
-      ),
-      selected: on,
-      onTap: enabled ? () => _pickEngine(engine) : null,
-    );
-  }
-
-  Widget _deviceLanguages() {
-    final c = context.appColors;
-    final byId = {for (final l in widget.locales) l.id: l};
-    final suggested = <SpeechLocale>[];
-    for (final id in [widget.systemId, 'nl_NL', 'en_US', 'en_GB']) {
-      final l = id == null ? null : byId[id];
-      if (l != null && !suggested.contains(l)) suggested.add(l);
-    }
-    final rest = [
-      for (final l in widget.locales)
-        if (!suggested.contains(l)) l,
-    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    Widget tile(SpeechLocale l) => ListTile(
-          dense: true,
-          title: Text(l.name),
-          subtitle: Text(l.id),
-          selected: l.id == widget.currentLocale,
-          onTap: () => _pickLocale(l.id),
-        );
-    final sug = suggested.where(_match).toList();
-    final others = rest.where(_match).toList();
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-          child: TextField(
-            key: const Key('locale-search'),
-            decoration: const InputDecoration(
-              hintText: 'Search language',
-              prefixIcon: Icon(Icons.search),
-            ),
-            onChanged: (v) => setState(() => _query = v),
-          ),
-        ),
-        Expanded(
-          child: widget.locales.isEmpty
-              ? Center(
-                  child: Text(
-                    'No languages available.',
-                    style: TextStyle(color: c.textSecondary),
-                  ),
-                )
-              : ListView(children: [
-                  if (sug.isNotEmpty) _heading('Suggested'),
-                  for (final l in sug) tile(l),
-                  if (sug.isNotEmpty && others.isNotEmpty)
-                    _heading('All languages'),
-                  for (final l in others) tile(l),
-                ]),
-        ),
-      ],
-    );
-  }
-
-  Widget _accountLanguages() {
-    final auto = _language == null || _language!.isEmpty;
-    return ListView(children: [
-      ListTile(
-        key: const Key('language-auto'),
-        dense: true,
-        title: const Text('Auto-detect'),
-        subtitle: widget.languageHints
-            ? null
-            : const Text('Whisper recognises the language by itself.'),
-        selected: auto,
-        onTap: () => _pickLanguage(null),
-      ),
-      if (widget.languageHints)
-        for (final (code, name) in hostedLanguages)
-          ListTile(
-            key: Key('language-$code'),
-            dense: true,
-            title: Text(name),
-            subtitle: Text(code),
-            selected: _language == code,
-            onTap: () => _pickLanguage(code),
-          ),
-    ]);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final avail = _avail;
-    final accountOk = avail?.ok == true;
-    return SafeArea(
-      child: Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: SizedBox(
-          height: MediaQuery.sizeOf(context).height * 0.75,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Text('Voice input',
-                    style: Theme.of(context).textTheme.titleMedium),
-              ),
-              _heading('Engine'),
-              _engineTile(
-                key: const Key('engine-account'),
-                engine: voiceEngineAccount,
-                title: 'atomic.place account',
-                subtitle: 'Whisper, any language, uses credits',
-                enabled: accountOk,
-                reason: avail == null
-                    ? 'Checking your account…'
-                    : avail.ok
-                        ? null
-                        : avail.reason,
-              ),
-              _engineTile(
-                key: const Key('engine-device'),
-                engine: voiceEngineDevice,
-                title: 'This device',
-                subtitle: 'Google speech recognition, free, live words',
-              ),
-              const Divider(height: 8),
-              _heading('Language'),
-              Expanded(
-                child: _effective == voiceEngineAccount
-                    ? _accountLanguages()
-                    : _deviceLanguages(),
-              ),
-            ],
-          ),
         ),
       ),
     );

@@ -2087,21 +2087,11 @@ void main() {
         expect(find.text('en-US'), findsOneWidget);
       });
 
-      testWidgets('a language chosen in the sheet is used and remembered',
+      testWidgets('the language chosen in the AI settings is used',
           (tester) async {
+        SharedPreferences.setMockInitialValues({'voice_locale': 'nl_NL'});
         final input = FakeSpeechInput();
         await open(tester, input, FakeSpeechOutput());
-        await tester.longPress(find.byIcon(Icons.mic));
-        await tester.pumpAndSettle();
-        expect(find.text('Suggested'), findsOneWidget);
-        await tester.enterText(find.byKey(const Key('locale-search')), 'dutch');
-        await tester.pumpAndSettle();
-        expect(find.text('German (Germany)'), findsNothing);
-        await tester.tap(find.text('Dutch (Netherlands)'));
-        await tester.pumpAndSettle();
-        expect(
-            (await SharedPreferences.getInstance()).getString('voice_locale'),
-            'nl_NL');
         await tester.tap(find.byIcon(Icons.mic));
         await tester.pump();
         expect(input.lastLocale, 'nl_NL');
