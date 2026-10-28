@@ -10,6 +10,15 @@ frozen `did:ad:` schemas is in flight in PR #1262 (open, branch
 schema is the write-path policy; #1251 becomes a frozen ontology
 ([`completed/schema-routes-decision.md`](./completed/schema-routes-decision.md)).
 
+**Superseded in part (2026-10-28):** `did:ad:frozen` (#1262) and
+`atomic:frozen:` (#2045) are closed and dead. "Frozen" now means
+content-addressed `atomic:prop:{hex}` (merged in #2151, see
+[`docs/src/schema/property-identity.md`](../docs/src/schema/property-identity.md))
+plus `atomic:class:{hex}` (see
+[`content-addressed-schemas.md`](./content-addressed-schemas.md)). The optional
+schema write-path policy stands. Where this document says `did:ad:frozen`,
+`freezeSchema`, `Tree::Frozen` or `PUT /frozen`, read it as history.
+
 ## Goal
 
 Make Atomic usable by app developers who want to define their data model in

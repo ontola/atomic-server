@@ -103,6 +103,7 @@ pub mod parse;
 pub mod plugins;
 pub mod website;
 
+pub mod class_identity;
 pub mod lens;
 pub mod populate;
 pub mod property_identity;

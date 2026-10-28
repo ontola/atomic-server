@@ -29,7 +29,7 @@ now live in [`completed/`](./completed/):
 - [`authority-unit-decision.md`](./completed/authority-unit-decision.md) — the drive stays the unit of authority; the zone chain is hybrid/additive.
 - [`commit-retention-floor-decision.md`](./completed/commit-retention-floor-decision.md) — envelope-on-resource; amended 2026-09-05, `Tree::Envelopes` shipped in #1313.
 - [`trust-model-decision.md`](./completed/trust-model-decision.md) — the node that owns the URL is trusted with plaintext; anything that only stores is blind.
-- [`schema-routes-decision.md`](./completed/schema-routes-decision.md) — `did:ad:frozen` is the on-ramp, optional schema is the write-path policy.
+- [`schema-routes-decision.md`](./completed/schema-routes-decision.md) — optional schema is the write-path policy. Its `did:ad:frozen` on-ramp was superseded by content-addressed `atomic:prop:` ids (#2151) on 2026-10-28; see [`content-addressed-schemas.md`](./content-addressed-schemas.md).
 
 ## Biggest gaps (reconciled against code 2026-09-18)
 
@@ -66,9 +66,11 @@ fork review diff) are recorded in their owning plans, not here.
    `lib/src/sync/policy.rs`) and nothing reaps drives that never enroll.
    [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) item 4,
    [`foss-public-host-mode.md`](./foss-public-host-mode.md) Phase 3.
-7. **Code-first schemas live only in an unmergeable PR.** `defineSchema` and
-   frozen `did:ad:` schemas are in #1262, a draft with conflicts last touched
-   2026-09-01; nothing of it is on `develop`. The plugin model itself is no
+7. **Code-first schemas live only in an unmergeable PR.** `defineSchema` is in
+   #1262, a draft with conflicts last touched 2026-09-01; nothing of it is on
+   `develop`. Its `did:ad:frozen` identity was superseded on 2026-10-28 by
+   content-addressed `atomic:prop:` (#2151) and `atomic:class:` ids
+   ([`content-addressed-schemas.md`](./content-addressed-schemas.md)). The plugin model itself is no
    longer in this position: #1500 (merged 2026-09-17) carried it onto
    `develop`, and #1307 is now behind `develop`. [`json-schema-code-first.md`](./json-schema-code-first.md),
    [`plugins.md`](./plugins.md).
@@ -108,7 +110,8 @@ browser flow; standalone recovery remains self-managed.
 | [`plugin-view-contract.md`](./plugin-view-contract.md) | **In progress.** What plugin views need to be as capable as the table editor or Kanban: data, host services, environment, UI kit. Host services for drive apps landed first. |
 | [`plugin-model-review.md`](./plugin-model-review.md) | **In progress.** Implemented authority/manifest checks, immutable releases, recovery journals and store UI; remaining connection lifecycle and provider certification. |
 | [`connector-scale.md`](./connector-scale.md) | **Partly moved (PR #1549).** Discovery, install, authorization transport and host retrieval stay here; the GitHub and other providers, offline evidence and certification moved to [atomic-plugins](https://github.com/ontola/atomic-plugins). SaaS deployment, live OAuth/canaries, migrations and third-party evidence remain open. |
-| [`schema-catalog.md`](./schema-catalog.md) | **Pilot in progress; catalog proposed.** Shared task properties in templates and GitHub table selection; schema discovery, contribution and evolution; connects frozen releases, templates, import mappings, and JSON Schema compatibility. |
+| [`schema-catalog.md`](./schema-catalog.md) | **Pilot in progress; catalog proposed.** Shared task properties in templates and GitHub table selection; schema discovery, contribution and evolution; connects pinned releases, templates, import mappings, and JSON Schema compatibility. |
+| [`content-addressed-schemas.md`](./content-addressed-schemas.md) | **Approved 2026-10-28; P0 to P2 in progress.** "Frozen" schemas as content-addressed `atomic:prop:` (shipped, #2151) and `atomic:class:` ids, release pinning by fingerprint (#2239), vocabulary bundles instead of GitHub Pages. Replaces the `did:ad:frozen` / `atomic:frozen:` stack. |
 | [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Carries the single **Remaining work (2026-09-03)** checklist for every open sync item across these plans. The 2026-07 audit history is in [`completed/unified-sync-audit-2026-07.md`](./completed/unified-sync-audit-2026-07.md). |
 | [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: require envelopes on every `remove[]` (`Tree::Envelopes` exists; nothing blocks it). `AtomicTransport` / `SyncSession::serve` first slice landed 2026-09-05 with only `ChannelTransport`; outbox port and the four `sync_drive_with_peer*` variants are open. |
 | [`foss-public-host-mode.md`](./foss-public-host-mode.md) | **Partial.** Phase 1–2 built; OQ5 library path closed 2026-09-05 (`admit_unknown_drive`: Public never creates, Owner enrolls only the owner). Phase 3 (rate limits, Iroh stream refusal) is untouched. |
@@ -139,7 +142,7 @@ browser flow; standalone recovery remains self-managed.
 | [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | **Superseded.** Envelope-on-resource replaced the retention design; Phase 1 and 2.5 shipped. Only the `stateHash` certificate and per-resource `retention` propval remain from this document. |
 | [`s3-blob-storage.md`](./s3-blob-storage.md) | **Partial.** Server-wide S3, verified migration and SaaS enforcement implemented. The backend trait is `get/put/size` only: streaming, delete/GC, per-tenant configuration and encrypted Vault attachments remain. |
 | [`plugins.md`](./plugins.md) | **Partial, on `develop` since #1500** (2026-09-17) — one plugin model (`run` end to end, per-app agents, unattended runs): `browser/plugin`, `browser/lib/src/plugin-run.ts`, `integrations/`, the `wasm-plugins` server routes. PR #1307 is still open but behind `develop` (one file only on that branch). Remaining work is the list in #1307 and `extension-architecture.md`. |
-| [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; nothing on `develop`. `defineSchema` + frozen `did:ad:` schemas are in PR #1262, a draft last touched 2026-09-01. |
+| [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; nothing on `develop`. `defineSchema` is in PR #1262, a draft last touched 2026-09-01; its `did:ad:frozen` identity was superseded by `atomic:prop:` / `atomic:class:` ids on 2026-10-28. |
 | [`class-constraints-and-forms.md`](./class-constraints-and-forms.md) | **Proposal** (2026-10-08). Allowed values, limits and linked classes move from Properties to a JSON Schema-style constraints map on the class; what that means for forms, tables and kanban. Nothing built. |
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Nothing built. Supersedes `on-device-atomic-daemon.md`. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
