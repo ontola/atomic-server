@@ -151,7 +151,11 @@ void main() {
     final ai = HostedAi(
       status: {'enabled': true, 'consent': true, 'model': 'm'},
       completions: (messages, model, tools) {
-        requests.add([for (final m in messages) Map<String, dynamic>.from(m)]);
+        final copy = [for (final m in messages) Map<String, dynamic>.from(m)];
+        // A new chat also asks for its title: not a message of the chat.
+        final title = '${copy.last['content']}'
+            .startsWith('Generate a title for the following conversation');
+        if (!title) requests.add(copy);
         return Stream.value(_text('On it'));
       },
       enable: () async => {},
