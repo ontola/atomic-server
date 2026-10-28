@@ -66,7 +66,11 @@ import { CalculatedPageHeight } from '../globalCssVars';
 import { goToFirstEntry } from './resetHistory';
 import { actionPages } from './actionPages';
 import { styled } from 'styled-components';
-import { createFlutterHost, lockFlutterChannel } from './flutterHost';
+import {
+  createFlutterHost,
+  flutterChannel,
+  lockFlutterChannel,
+} from './flutterHost';
 import { createMockHost } from './mockHost';
 import { createFlush } from './flush';
 import {
@@ -209,9 +213,7 @@ lockFlutterChannel();
 
 const channel: NativeChannel =
   window.atomicHost ??
-  (window.AtomicFlutter
-    ? createFlutterHost(window.AtomicFlutter)
-    : createMockHost());
+  (flutterChannel() ? createFlutterHost(flutterChannel()!) : createMockHost());
 // Only the app can open its own screens; the mock host answers nothing to that.
 setActionsHost(window.atomicHost || window.AtomicFlutter ? channel : undefined);
 
@@ -381,7 +383,7 @@ const showRoute = createRoute({
 
       let frame = requestAnimationFrame(() => {
         frame = requestAnimationFrame(() =>
-          window.AtomicFlutter?.postMessage(
+          flutterChannel()?.postMessage(
             JSON.stringify({ method: 'header', subject }),
           ),
         );
@@ -548,7 +550,7 @@ window.atomicEmbed = {
   setGestures,
   aiCall(id, method, args) {
     void import('./aiTools').then(({ aiCall }) =>
-      aiCall(m => window.AtomicFlutter?.postMessage(m), id, method, args),
+      aiCall(m => flutterChannel()?.postMessage(m), id, method, args),
     );
   },
   startWelcome(id, personalDrive) {
@@ -557,7 +559,7 @@ window.atomicEmbed = {
         {
           store,
           flush: () => flush(),
-          post: m => window.AtomicFlutter?.postMessage(m),
+          post: m => flutterChannel()?.postMessage(m),
         },
         id,
         personalDrive,
@@ -604,4 +606,4 @@ createRoot(document.getElementById('root')!).render(
 
 // Tells the host the page is up, so it can keep one loaded and hidden and show
 // a resource in it with `open(subject)` instead of loading a page.
-window.AtomicFlutter?.postMessage(JSON.stringify({ method: 'ready' }));
+flutterChannel()?.postMessage(JSON.stringify({ method: 'ready' }));
