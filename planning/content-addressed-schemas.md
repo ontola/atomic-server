@@ -88,13 +88,31 @@ hex = BLAKE3.derive_key("atomic class identity v1", jcs)
 - Members of `requires`: `atomic:prop:` ids (`did:ad:prop:` is rewritten), or an https
   core term as is (core stays https per the schema-routes decision). Sorted by byte
   order; a duplicate member is rejected, as is any other kind of identifier.
-- Not hashed: `recommends`, name, description, translations, constraints (incl. `class`
+- Not hashed: per-property default values (#2385), views and their configuration
+  (#2386), `recommends`, name, description, translations, constraints (incl. `class`
   links), `deprecatedProperties`, order, widgets, and a future `replaces`. Editable
   presentation, optional fields and value rules never mint ids, same rule as property
   identity.
 - Shortname keeps the kit's `-v1` suffix; a changed `requires` set changes the id.
 - Vectors: `lib/tests/fixtures/class-identity.json`, asserted by Rust and TS like
   `schema-lockfile.json`.
+
+### Related issues (checked 2026-10-28)
+
+- #2385 (schema-level defaults) proposes a `default` in the per-property class
+  constraints map or a separate Class-level defaults map. Both live outside the class
+  hash, so adding or changing a default never mints a class. No conflict.
+- #2386 (split table templates into schema and custom views): schema owns types,
+  requiredness, cardinality, constraints and defaults; views own presentation. Views
+  reference stable property ids and sit outside the hash, so a class gains views without
+  a new id. Note for that discussion: "requiredness" is `requires`, which is hashed, so
+  making a field required later is a new class (by design); defaults, enums and
+  cardinality are not.
+- #2243 (shared identities across drives) asks whether the namespace should stay the
+  drive-local `parent`. Class identity uses the same `ontology` input as properties
+  (`parent`), so a table-local row class still gets a drive-specific id. If #2243 changes
+  how the namespace is derived for properties, the class recipe must follow in the same
+  change; this plan does not decide that.
 
 ## 4. Cross references and cycles
 

@@ -74,8 +74,12 @@ id  = "atomic:class:" + hex
 - **`recommends`.** Optional Properties can be added or removed without changing the Class.
 - Labels, descriptions and translations.
 - Constraints: allowed values, bounds, and `classtype` / linked `class` rules for a Property. These are value rules the Class holds for each Property, outside the hash. A Class that constrains a Property to link back to the same Class therefore does not create a cycle: the hash never depends on the content of another Class.
+- Per-property **default values** used to initialize new records. A default describes record creation, not the shape of the Class, and is kept with the Class's per-property constraints or a separate defaults map, outside the hash.
+- **Views** and all other presentation: view kind and configuration, default view, default sort order, filters, grouping, column order, aggregates, calculated columns and actions.
 - `deprecatedProperties`, ordering and widget hints.
 - Any future `replaces` link to an older term.
+
+The identity is exactly `ontology` + `shortname` + sorted `requires` and nothing else. A Class can therefore gain defaults, views, recommended Properties, constraints or a new description without getting a new `atomic:class:` ID. Only changing the set of required Properties (or the namespace or shortname) does.
 
 Descriptions and constraints can change while the ID stays, so a host may show different prose for a pinned ID, and a pinned ID proves the shape of the Class, not who published it. Provenance is the signer of the namespace Ontology.
 
