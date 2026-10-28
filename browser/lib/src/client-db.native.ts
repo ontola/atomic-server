@@ -29,6 +29,31 @@ export interface NativeChannel {
   call(method: string, args: unknown[]): Promise<unknown>;
 }
 
+/** The agent an app acts as on this device. */
+export interface NativeAppAgent {
+  agent: string;
+  createdAt: number;
+}
+
+/** A write as the app: the body of `/app-write` without `drive` and `app`. */
+export interface NativeAppWrite {
+  op: 'create' | 'save' | 'remove' | 'destroy';
+  subject?: string;
+  parent?: string;
+  isA?: string[];
+  propVals?: Record<string, unknown>;
+  properties?: string[];
+}
+
+/** The native host behind a store, or undefined for a store with another database. */
+export function nativeHostOf(store: {
+  getClientDb(): unknown;
+}): NativeClientDb | undefined {
+  const db = store.getClientDb();
+
+  return db instanceof NativeClientDb ? db : undefined;
+}
+
 type VersionVectors = Record<string, Record<string, number>>;
 
 const bytes = (b64: unknown): Uint8Array | null =>
@@ -242,6 +267,48 @@ export class NativeClientDb {
     durable: boolean,
   ): Promise<void> {
     await this.channel.call('outboxWrite', [write, durable]);
+  }
+
+  /* ------------------------------ App agents ------------------------------- */
+
+  /**
+   * Gives the host an app's key, once. The host answers who the app acts as,
+   * never the secret. Needs write on the app.
+   */
+  async setAppAgent(
+    drive: string,
+    app: string,
+    secret: string,
+  ): Promise<NativeAppAgent> {
+    return (await this.channel.call('setAppAgent', [
+      drive,
+      app,
+      secret,
+    ])) as NativeAppAgent;
+  }
+
+  /** The agent an app acts as on this device, or null when it has no key here. */
+  async appAgent(drive: string, app: string): Promise<NativeAppAgent | null> {
+    return (
+      ((await this.channel.call('appAgent', [
+        drive,
+        app,
+      ])) as NativeAppAgent | null) ?? null
+    );
+  }
+
+  /**
+   * One write as the app, signed by the host with the app's key. What
+   * `/app-write` takes, minus `drive` and `app`. Answers the written subject.
+   */
+  async appWrite(
+    drive: string,
+    app: string,
+    request: NativeAppWrite,
+  ): Promise<{ subject: string }> {
+    return (await this.channel.call('appWrite', [drive, app, request])) as {
+      subject: string;
+    };
   }
 }
 

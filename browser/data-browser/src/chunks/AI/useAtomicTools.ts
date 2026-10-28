@@ -1343,7 +1343,10 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             // The node needs the key to write as this app when nobody is
             // present. Reported rather than thrown: the app exists and works
             // either way, it just cannot act on its own yet.
-            let unattended = true;
+            // Only a node runs apps with nobody present; the phone's host
+            // holds the key (so the app writes while you use it) but nothing
+            // runs there on its own.
+            let unattended = !store.noServer;
             let keyProblem: string | undefined;
 
             try {

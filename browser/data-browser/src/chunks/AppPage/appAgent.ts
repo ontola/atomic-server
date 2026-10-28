@@ -3,10 +3,11 @@ import {
   signRequest,
   type Store,
 } from '@tomic/react';
-import { requireServer } from './noServer';
+import { noServerHost } from './noServer';
 
 /**
- * Hands an app's freshly minted key to the node, once.
+ * Hands an app's freshly minted key to the node (or, in a page with no
+ * server, the device's host), once.
  *
  * The node needs it because an app that imports at 3am has nobody to ask for
  * a credential — whatever signs its writes has to be openable unattended. It
@@ -21,7 +22,17 @@ export async function handOverAppKey(
   store: Store,
   options: { drive: string; app: string; secret: string },
 ): Promise<void> {
-  requireServer(store);
+  // No server: the device's host keeps the key.
+  if (store.noServer) {
+    await noServerHost(store).setAppAgent(
+      options.drive,
+      options.app,
+      options.secret,
+    );
+
+    return;
+  }
+
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to give an app its key');
@@ -65,24 +76,29 @@ export async function appAgentOf(
   store: Store,
   options: { drive: string; app: string },
 ): Promise<string> {
-  requireServer(store);
-  const agent = store.getAgent();
+  let info: { agent?: unknown } | null;
 
-  if (!agent) throw new Error('Sign in to use integration connections.');
+  if (store.noServer) {
+    info = await noServerHost(store).appAgent(options.drive, options.app);
+  } else {
+    const agent = store.getAgent();
 
-  const url = new URL('/app-agent', store.getServerUrl());
-  url.searchParams.set('drive', options.drive);
-  url.searchParams.set('app', options.app);
-  const headers = await signRequest(url.href, agent, {});
-  const response = await fetch(url.href, { headers });
+    if (!agent) throw new Error('Sign in to use integration connections.');
 
-  if (!response.ok) {
-    throw new Error(
-      errorMessageFromResponse(await response.text(), response.status),
-    );
+    const url = new URL('/app-agent', store.getServerUrl());
+    url.searchParams.set('drive', options.drive);
+    url.searchParams.set('app', options.app);
+    const headers = await signRequest(url.href, agent, {});
+    const response = await fetch(url.href, { headers });
+
+    if (!response.ok) {
+      throw new Error(
+        errorMessageFromResponse(await response.text(), response.status),
+      );
+    }
+
+    info = (await response.json()) as { agent?: unknown } | null;
   }
-
-  const info = (await response.json()) as { agent?: unknown } | null;
 
   if (typeof info?.agent !== 'string' || !info.agent) {
     throw new Error(

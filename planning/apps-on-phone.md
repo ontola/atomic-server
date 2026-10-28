@@ -20,19 +20,19 @@ embedded page has a `noServer` store and the Rust node as host. Unattended runs,
 
 ## Steps
 
-- [ ] 1. Lock the native channel to the main page: a per-page token in the URL
+- [x] 1. Lock the native channel to the main page: a per-page token in the URL
   fragment, checked on every message; subframes may only navigate to
   `about:srcdoc` / `about:blank`. Android injects `addJavascriptInterface` into
   every frame, so without this an app frame could call the host.
-- [ ] 2. srcdoc shell for noServer stores (`appFrameDocument.ts`, port of
+- [x] 2. srcdoc shell for noServer stores (`appFrameDocument.ts`, port of
   `render_drive_plugin_ui_html_with`); `verifyApp` runs the view. Read-only apps
   work after this.
-- [ ] 3. EmbedHost `setAppAgent` / `appAgent` (Rust).
-- [ ] 4. EmbedHost `appWrite` (`lib/src/host/app_write.rs`, port of
+- [x] 3. EmbedHost `setAppAgent` / `appAgent` (Rust).
+- [x] 4. EmbedHost `appWrite` (`lib/src/host/app_write.rs`, port of
   `StoreApplyHost`; `json_to_value` moves to atomic_lib).
-- [ ] 5. Per-signer outbox so app-agent commits are queued and synced
+- [x] 5. Per-signer outbox so app-agent commits are queued and synced
   (`Outbox::for_signer`, `drain_all`).
-- [ ] 6. Page wiring: `NativeClientDb.appWrite/appAgent/setAppAgent`,
+- [x] 6. Page wiring: `NativeClientDb.appWrite/appAgent/setAppAgent`,
   `writeAsApp` / `handOverAppKey` use them; `refresh()` re-reads from the host.
 - [ ] 7. Later: let a server-made app write from this phone (an extra app agent
   per device).

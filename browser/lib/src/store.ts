@@ -4820,9 +4820,14 @@ export class Store {
     // the server" is a read from it.
     if (this.noServer || this.isLocalOnlySubject(normalizedSubject)) {
       const local = this.resources.get(normalizedSubject);
-      if (local?.isReady()) return local as Resource<C>;
+      // An override asks for what the database holds now: the host wrote
+      // behind this page's back (a write as an app), so the copy kept here is
+      // the one from before it.
+      const reread = this.noServer && opts.forceOverride;
+      if (local?.isReady() && !reread) return local as Resource<C>;
       const stored = await this.fetchResourceFromClientDb(normalizedSubject);
       if (stored) return stored as Resource<C>;
+      if (local?.isReady()) return local as Resource<C>;
       throw this.noServer
         ? new AtomicError(
             notInHostStoreMessage(normalizedSubject),

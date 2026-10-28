@@ -1,9 +1,9 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
-import type { Store } from '@tomic/react';
+import type { NativeAppWrite, Store } from '@tomic/react';
 import { HostError, toHostErrorCode } from '@tomic/plugin';
 import type { ProxyHost } from '@helpers/proxyConnections';
 import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
-import { requireServer } from './noServer';
+import { noServerHost } from './noServer';
 import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import {
@@ -386,7 +386,8 @@ export function appChanges(
 }
 
 /**
- * Asks the server to perform a write as the app.
+ * Asks the server to perform a write as the app (or, in a page with no
+ * server, the device's host, which holds the app's key).
  *
  * Not done in the page, because a commit is signed by whoever's key is here —
  * the user's. A write signed by the person is authored by the person and
@@ -402,9 +403,13 @@ async function writeAsApp(
   store: Store,
   drive: string,
   app: string,
-  request: Record<string, unknown>,
+  request: NativeAppWrite,
 ): Promise<{ subject: string }> {
-  requireServer(store);
+  // No server: the device's host holds the app's key and signs the write.
+  if (store.noServer) {
+    return await noServerHost(store).appWrite(drive, app, request);
+  }
+
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to use this app');
@@ -516,7 +521,10 @@ async function callExport(
   fn: string,
   args: unknown,
 ): Promise<unknown> {
-  requireServer(store);
+  // Another app's export runs on a node; the device host has none to ask.
+  if (store.noServer)
+    throw new HostError('unsupported', 'Calling another app needs a server');
+
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to call an app');
