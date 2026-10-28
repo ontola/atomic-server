@@ -288,9 +288,11 @@ class FakeSpeechInput implements SpeechInput {
   @override
   Future<void> stop() async {
     stops++;
+    // A recogniser that already stopped delivers no second final result.
+    final wasOn = _on;
     _on = false;
     final text = finalOnStop;
-    if (text != null) {
+    if (text != null && wasOn) {
       if (finalDelay > Duration.zero) await Future<void>.delayed(finalDelay);
       onText?.call(text, true);
     }
