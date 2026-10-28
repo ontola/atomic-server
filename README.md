@@ -5,8 +5,8 @@
 
 [![crates.io](https://img.shields.io/crates/v/atomic-server)](https://crates.io/crates/atomic-server)
 [![Discord chat](https://img.shields.io/discord/723588174747533393.svg?logo=discord)](https://discord.gg/a72Rv2P)
-[![MIT licensed](https://img.shields.io/github/license/atomicdata-dev/atomic-server.svg?color=blue&logo=github&logoColor=blue)](./LICENSE)
-[![github](https://img.shields.io/github/stars/atomicdata-dev/atomic-server?style=social)](https://github.com/atomicdata-dev/atomic-server)
+[![MIT licensed](https://img.shields.io/github/license/ontola/atomic-server.svg?color=blue&logo=github&logoColor=blue)](./LICENSE)
+[![github](https://img.shields.io/github/stars/ontola/atomic-server?style=social)](https://github.com/ontola/atomic-server)
 
 **atomic.place is a local-first workspace for documents, tables, files, chat and apps.**
 It works on your device and can sync through a self-hosted AtomicServer or the hosted service at

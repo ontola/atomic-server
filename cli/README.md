@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/atomic-cli)](https://crates.io/crates/atomic-cli)
 [![Discord chat](https://img.shields.io/discord/723588174747533393.svg?logo=discord)](https://discord.gg/a72Rv2P)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![github](https://img.shields.io/github/stars/atomicdata-dev/atomic-server?style=social)](https://github.com/joepio/aget_basetomic)
+[![github](https://img.shields.io/github/stars/ontola/atomic-server?style=social)](https://github.com/ontola/atomic-server)
 
 _Status: Beta. [Breaking changes](../CHANGELOG.md) are expected until 1.0._
 
@@ -49,7 +49,7 @@ cargo install atomic-cli
 ### Build from source
 
 ```sh
-git clone git@github.com:atomicdata-dev/atomic-server.git
+git clone git@github.com:ontola/atomic-server.git
 cd atomic/cli
 # Install atomic to path
 cargo install --path ./

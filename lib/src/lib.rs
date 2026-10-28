@@ -1,118 +1,78 @@
-/*!
-`atomic_lib` helps you to get, store, serialize, parse and validate Atomic Data.
-
-See the [Atomic Data Docs](https://docs.atomicdata.dev) for more information.
-
-## Features
-
-- Two stores for Atomic Data:
-  - **In-memory** [Store] for getting / setting data. Useful for client applications.
-  - **On disk** [Db], powered by Sled. Useful for applications that persist Atomic Data, such as [`atomic-server`](https://crates.io/crates/atomic-server).
-- [serialize] and [parse] tools for [JSON-AD](https://docs.atomicdata.dev/core/json-ad.html), plain JSON, RDF, Turtle, N-Triples and JSON-LD.
-- [Resource] with getters, setters and a `.save` function that creates Commits.
-- [Value] converts Atomic Data to Rust native types
-- Validate [Atomic Schema](https://docs.atomicdata.dev/schema/intro.html)
-- [Commit]s (transactions / delta's / changes / updates / versioning / history).
-- [plugins] system (although not very mature)
-- [collections] (pagination, sorting, filtering)
-- Querying (using triple pattern fragments) (see [storelike::Query])
-- [plugins::invite] for sharing
-- [hierarchy] for authorization
-- [crate::endpoints::Endpoint] for custom API endpoints
-- [config::Config] files.
-
-## Getting started
-
-```
-// Import the `Storelike` trait to get access to most functions
-use atomic_lib::Storelike;
-
-tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
-    // Start with initializing the in-memory store
-    let store = atomic_lib::Store::init().await.unwrap();
-    store.set_base_url("http://localhost");
-    // Pre-load the default Atomic Data Atoms (from atomicdata.dev),
-    // this is not necessary, but will probably make your project a bit faster
-    store.populate().await.unwrap();
-    // We can create a new Resource, linked to the store.
-    // Note that since this store only exists in memory, it's data cannot be accessed from the internet.
-    // Let's make a new Property instance! Let's create "age".
-    let mut new_property = atomic_lib::Resource::new_instance("https://atomicdata.dev/classes/Property", &store).await.unwrap();
-    // And add a description for that Property
-    new_property.set_shortname("description", "the age of a person", &store).await.unwrap();
-    // A subject URL for the new resource has been created automatically.
-    let subject = new_property.get_subject().clone();
-    // Now we need to make sure these changes are also applied to the store.
-    // In order to change things in the store, we should use Commits,
-    // which are signed pieces of data that contain state changes.
-    // Because these are signed, we need an Agent, which has a private key to sign Commits.
-    let agent = store.create_agent(Some("my_agent")).await.unwrap();
-    store.set_default_agent(agent);
-    let _fails   = new_property.save_locally(&store).await;
-    // But.. when we commit, we get an error!
-    // Because we haven't set all the properties required for the Property class.
-    // We still need to set `shortname` and `datatype`.
-    new_property.set_shortname("shortname", "age", &store).await.unwrap()
-      .set_shortname("datatype", atomic_lib::urls::INTEGER, &store).await.unwrap()
-      .save_locally(&store).await.unwrap();
-    // Now the changes to the resource applied to the store, and we can fetch the newly created resource!
-    let fetched_new_resource = store.get_resource(&subject).await.unwrap();
-    assert!(fetched_new_resource.get_shortname("description", &store).await.unwrap().to_string() == "the age of a person");
-});
-```
-*/
+#![doc = include_str!("../README.md")]
 
 pub mod agents;
+/// **Internal:** aggregation helpers; outside the application API contract.
 pub mod aggregate;
 pub mod atoms;
 pub mod authentication;
+/// **Internal:** chat log models; outside the application API contract.
 pub mod chat_log;
+/// **Internal:** schema constraints; outside the application API contract.
 pub mod class_constraints;
 #[cfg(feature = "db")]
+/// **Internal:** schema extension helpers; outside the application API contract.
 pub mod class_extender;
 pub mod client;
+/// **Internal:** collection helpers; outside the application API contract.
 pub mod collections;
 pub mod commit;
 #[cfg(feature = "config")]
+/// **Internal:** filesystem configuration; outside the application API contract.
 pub mod config;
 #[cfg(feature = "db")]
+/// **Internal:** conversation models; outside the application API contract.
 pub mod conversation;
 pub mod datatype;
 #[cfg(feature = "db")]
+/// **Internal:** database implementation and storage helpers; outside the application API contract.
 pub mod db;
 #[cfg(feature = "discovery")]
 pub mod discovery;
 #[doc(hidden)]
+/// **Internal:** document rendering; outside the application API contract.
 pub mod document_markdown;
 #[cfg(feature = "db")]
+/// **Internal:** application endpoints; outside the application API contract.
 pub mod endpoints;
 #[cfg(feature = "db")]
 pub mod envelopes;
 pub mod errors;
+/// **Internal:** formula evaluation; outside the application API contract.
 pub mod expression;
 pub mod genesis;
 pub mod hierarchy;
 pub mod history;
 pub mod identifiers;
+/// **Internal:** identity import helpers; outside the application API contract.
 pub mod import_identity;
 pub mod loro;
+/// **Internal:** mapping helpers; outside the application API contract.
 pub mod mapping;
+/// **Internal:** instrumentation; outside the application API contract.
 pub mod metrics;
+/// **Internal:** parsing helpers; outside the application API contract.
 pub mod parse;
 #[cfg(feature = "db")]
+/// **Internal:** plugin models and helpers; outside the application API contract.
 pub mod plugins;
+/// **Internal:** website helpers; outside the application API contract.
 pub mod website;
 
+/// **Internal:** lens implementation; outside the application API contract.
 pub mod lens;
+/// **Internal:** built-in data population; outside the application API contract.
 pub mod populate;
+/// **Internal:** property identity helpers; outside the application API contract.
 pub mod property_identity;
 pub mod resources;
 /// The node runtime boundary (`AtomicNode`). Wraps `Db`, so it needs `db`.
 #[cfg(feature = "db")]
 pub mod runtime;
+/// **Internal:** schema implementation; outside the application API contract.
 pub mod schema;
 #[cfg(feature = "db")]
 pub mod search;
+/// **Internal:** interchange helpers; outside the application API contract.
 pub mod serialize;
 pub mod store;
 pub mod storelike;
@@ -121,13 +81,18 @@ pub mod subject;
 #[cfg(feature = "db")]
 pub(crate) mod subject_lock;
 pub mod sync;
+/// **Internal:** test support; outside the application API contract.
 pub mod test_utils;
 #[cfg(feature = "db")]
+/// **Internal:** trash implementation; outside the application API contract.
 pub mod trash;
 pub mod urls;
+/// **Internal:** implementation utilities; outside the application API contract.
 pub mod utils;
+/// **Internal:** schema validation helpers; outside the application API contract.
 pub mod validate;
 pub mod values;
+/// **Internal:** vault and recovery helpers; outside the application API contract.
 pub mod vault;
 
 pub use atoms::Atom;
