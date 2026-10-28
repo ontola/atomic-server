@@ -227,6 +227,25 @@ export default defineConfig(({ mode }) => {
         },
       },
       {
+        // mdast-util-gfm-autolink-literal finds emails with a lookbehind,
+        // which Safari before 16.4 rejects (see the check below). Its
+        // `findEmail` checks the previous character itself, so the
+        // lookbehind can go. A transform, not a pnpm patch: pnpm applies a
+        // new patch to a fresh install only, and an existing node_modules
+        // keeps the unpatched file in the patched package's folder.
+        name: 'autolink-email-without-lookbehind',
+        enforce: 'pre',
+        transform(code, id) {
+          if (!id.includes('mdast-util-gfm-autolink-literal')) return;
+
+          const lookbehind = '/(?<=^|\\s|\\p{P}|\\p{S})([-.\\w+]+)@';
+
+          if (!code.includes(lookbehind)) return;
+
+          return code.replace(lookbehind, '/([-.\\w+]+)@');
+        },
+      },
+      {
         // Safari before 16.4 (iOS 16.3 and older) throws a SyntaxError on a
         // regex literal with a lookbehind, `(?<=` or `(?<!`, and then loads
         // none of the bundle: a blank page that never reaches Sentry. The
