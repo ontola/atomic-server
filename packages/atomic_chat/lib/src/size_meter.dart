@@ -24,9 +24,8 @@ class MeasuredSize extends SingleChildRenderObjectWidget {
       _RenderMeasuredSize(meter);
 
   @override
-  void updateRenderObject(
-      BuildContext context, covariant _RenderMeasuredSize renderObject) {
-    renderObject.meter = meter;
+  void updateRenderObject(BuildContext context, RenderObject renderObject) {
+    (renderObject as _RenderMeasuredSize).meter = meter;
   }
 }
 

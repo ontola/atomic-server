@@ -19,7 +19,9 @@ void main() {
           fix = 0;
           return f;
         }));
-    var count = 20;
+    // The newest row (index 0, at the bottom) grows, like a streaming
+    // answer.
+    var newest = 100.0;
     late StateSetter set;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -28,8 +30,9 @@ void main() {
           return ListView.builder(
             reverse: true,
             controller: keeper.controller,
-            itemCount: count,
-            itemBuilder: (_, i) => SizedBox(height: 100, child: Text('i$i')),
+            itemCount: 20,
+            itemBuilder: (_, i) =>
+                SizedBox(height: i == 0 ? newest : 100, child: Text('i$i')),
           );
         }),
       ),
@@ -38,14 +41,14 @@ void main() {
     final top = tester.getTopLeft(find.text('i5')).dy;
     var scrolls = 0;
     keeper.controller.addListener(() => scrolls++);
-    // The content grows below the eye and the offset follows in layout.
+    // The newest row grows by 300 and the offset follows in layout.
     fix = 300;
-    set(() => count = 21);
+    set(() => newest = 400);
     await tester.pump();
     expect(keeper.controller.position.pixels, 300);
-    // Older items move down as the offset grows (a reversed list), in this
-    // very frame.
-    expect(tester.getTopLeft(find.text('i5')).dy, top + 300);
+    // The growth would push older rows up by 300; the correction moves them
+    // back down by as much, in this very frame, so they stay put.
+    expect(tester.getTopLeft(find.text('i5')).dy, top);
     expect(scrolls, 0, reason: 'a layout correction is not a scroll event');
     expect(keeper.away.value, isTrue);
   });
