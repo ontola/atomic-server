@@ -95,6 +95,7 @@ export * from './forks.js';
 export * from './copy.js';
 export * from './store.js';
 export * from './property-identity.js';
+export * from './class-identity.js';
 export { getOrCreateDriveLocation } from './drive-location.js';
 export { readTrashFolder, type IsTrashedOptions } from './trash.js';
 export * from './lens.js';

@@ -2,6 +2,13 @@
 
 **Status:** Catalog architecture remains a proposal. A built-in task/template reuse pilot is in implementation (2026-09-07); frozen package distribution remains open.
 
+**Note (2026-10-28):** "Frozen" below means content-addressed `atomic:prop:` (#2151)
+and `atomic:class:` ids, not `did:ad:frozen` or `atomic:frozen:` (closed). Release
+pinning, cycles and distribution are specified in
+[`content-addressed-schemas.md`](./content-addressed-schemas.md): a release is a
+JSON-AD bundle plus a fingerprint, and cycles do not arise because class identity
+hashes names and required properties, not whole content.
+
 Atomic's interoperability promise needs shared meaning, stable contracts, and
 distribution through everyday workflows. Build a curated central catalog whose
 releases remain independently usable, cacheable, and mirrorable. Start with a
@@ -18,8 +25,9 @@ SaaS acquisition verticals.
 - [Motivation](../docs/src/motivation.md) makes property reuse and cheaper
   standardization explicit goals. [Schema](../docs/src/schema/intro.md) ties
   property identity to both datatype and human-readable meaning.
-- [Schema routes](completed/schema-routes-decision.md) already accepts frozen
-  definitions plus optional schema on the write path. This proposal adds
+- [Schema routes](completed/schema-routes-decision.md) accepted frozen
+  definitions (since realised as content-addressed ids, see the note above) plus
+  optional schema on the write path. This proposal adds
   discovery and governance; it does not replace that decision.
 - [Code-first schema](json-schema-code-first.md) contains conflicting guidance:
   its accepted-decision header says frozen, while Identity Model, registration,

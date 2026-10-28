@@ -231,20 +231,48 @@ fn verify_property_genesis(
     crate::property_identity::verify_property_id(subject, &parent, &shortname, &datatype)
 }
 
-/// True for the content-addressed kinds: Property and Lens IDs name no
-/// signature and carry no genesis certificate.
-fn is_content_addressed_id(subject: &str) -> bool {
-    crate::identifiers::is_prop_id(subject) || crate::identifiers::is_lens_id(subject)
+/// The `requires` of a Class as subject strings. A Class without `requires`
+/// requires nothing.
+fn required_subjects(propvals: &crate::resources::PropVals) -> AtomicResult<Vec<String>> {
+    propvals
+        .get(urls::REQUIRES)
+        .map(|v| v.to_subjects(None))
+        .unwrap_or_else(|| Ok(Vec::new()))
 }
 
-/// Check a content-addressed ID (`atomic:prop:` or `atomic:lens:`) against the
-/// fields in the propvals it names.
+/// Check a Class ID against the namespace, shortname and `requires` in the
+/// propvals of the resource it names. `recommends` is not part of the ID.
+fn verify_class_genesis(subject: &str, propvals: &crate::resources::PropVals) -> AtomicResult<()> {
+    let field = |prop: &str, name: &str| -> AtomicResult<String> {
+        propvals
+            .get(prop)
+            .map(|v| v.to_string())
+            .ok_or_else(|| format!("Class {subject} has no {name}; its ID is derived from parent, shortname and requires").into())
+    };
+    let parent = field(urls::PARENT, "parent")?;
+    let shortname = field(urls::SHORTNAME, "shortname")?;
+    let requires = required_subjects(propvals)?;
+    crate::class_identity::verify_class_id(subject, &parent, &shortname, &requires)
+}
+
+/// True for the content-addressed kinds: Property, Class and Lens IDs name no
+/// signature and carry no genesis certificate.
+fn is_content_addressed_id(subject: &str) -> bool {
+    crate::identifiers::is_prop_id(subject)
+        || crate::identifiers::is_class_id(subject)
+        || crate::identifiers::is_lens_id(subject)
+}
+
+/// Check a content-addressed ID (`atomic:prop:`, `atomic:class:` or
+/// `atomic:lens:`) against the fields in the propvals it names.
 fn verify_content_addressed_genesis(
     subject: &str,
     propvals: &crate::resources::PropVals,
 ) -> AtomicResult<()> {
     if crate::identifiers::is_lens_id(subject) {
         crate::lens::verify_lens_genesis(subject, propvals)
+    } else if crate::identifiers::is_class_id(subject) {
+        verify_class_genesis(subject, propvals)
     } else {
         verify_property_genesis(subject, propvals)
     }
@@ -309,6 +337,36 @@ fn check_property_identity_unchanged(old: &Resource, new: &Resource) -> AtomicRe
             )
             .into());
         }
+    }
+    Ok(())
+}
+
+/// A Class's identity is hashed into its ID, so `parent`, `shortname` and the
+/// set of `requires` can never change after creation. `recommends` can.
+fn check_class_identity_unchanged(old: &Resource, new: &Resource) -> AtomicResult<()> {
+    let norm = |r: &Resource, prop: &str| {
+        r.get(prop)
+            .ok()
+            .map(|v| crate::identifiers::canonicalize_scheme(&v.to_string()))
+    };
+    for (prop, name) in [(urls::PARENT, "parent"), (urls::SHORTNAME, "shortname")] {
+        if norm(old, prop) != norm(new, prop) {
+            return Err(format!(
+                "Cannot change the {name} of class {}: a class's identity cannot change",
+                new.get_subject()
+            )
+            .into());
+        }
+    }
+    let requires = |r: &Resource| {
+        crate::class_identity::normalize_requires(&required_subjects(r.get_propvals())?)
+    };
+    if requires(old)? != requires(new)? {
+        return Err(format!(
+            "Cannot change the requires of class {}: a class's identity cannot change",
+            new.get_subject()
+        )
+        .into());
     }
     Ok(())
 }
@@ -578,7 +636,7 @@ impl Commit {
                     .loro_update
                     .as_ref()
                     .and_then(|u| crate::Resource::propvals_from_loro_update(u))
-                    .ok_or("A property or lens genesis commit must carry its fields")?;
+                    .ok_or("A property, class or lens genesis commit must carry its fields")?;
                 return verify_content_addressed_genesis(commit.subject.as_str(), &propvals);
             }
             let subject_val = crate::identifiers::identifier_body(commit.subject.as_str())
@@ -708,6 +766,13 @@ impl Commit {
             if crate::identifiers::is_prop_id(&pure_id) {
                 if !crate::property_identity::is_property_id(&pure_id) {
                     return Err("Invalid property ID: expected 64 lowercase hex characters".into());
+                }
+            } else if crate::identifiers::is_class_id(&pure_id) {
+                if !crate::class_identity::is_class_id(&pure_id) {
+                    return Err(
+                        "Invalid class ID: expected atomic:class: and 64 lowercase hex characters"
+                            .into(),
+                    );
                 }
             } else if crate::identifiers::is_lens_id(&pure_id) {
                 if !crate::lens::is_lens_id(&pure_id) {
@@ -864,6 +929,8 @@ impl Commit {
                     &applied.resource_old,
                     &applied.resource_new,
                 )?;
+            } else if crate::identifiers::is_class_id(commit.subject.as_str()) {
+                check_class_identity_unchanged(&applied.resource_old, &applied.resource_new)?;
             } else {
                 check_property_identity_unchanged(&applied.resource_old, &applied.resource_new)?;
             }

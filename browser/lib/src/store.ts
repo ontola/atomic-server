@@ -103,6 +103,10 @@ import {
 } from './subject.js';
 import { propertyId } from './property-identity.js';
 import {
+  contentAddressedMismatch,
+  isVerifiableSubject,
+} from './content-addressed-verify.js';
+import {
   LensIndex,
   lensId,
   parseTransform,
@@ -504,6 +508,16 @@ export type ChangeSource =
   | 'local-post'
   | 'offline-replay'
   | 'peer-sync';
+
+/** Sources that deliver state another party wrote: a server or a peer. */
+const REMOTE_SOURCES: ReadonlySet<ChangeSource> = new Set([
+  'ws-pending-get',
+  'ws-sub-push',
+  'ws-sync-push',
+  'ws-query-update',
+  'http-fetch',
+  'peer-sync',
+]);
 
 /** One authoritative-or-local resource update. Either `loroBytes`
  * (WS paths) or `resource` (HTTP/local/offline) must be set. */
@@ -2826,6 +2840,44 @@ export class Store {
   }
 
   /**
+   * A server or peer delivered a Property or Class whose `atomic:prop:` /
+   * `atomic:class:` subject is not the hash of its own fields. Such a resource
+   * is not what its ID promises (see `docs/src/schema/class-identity.md`), so
+   * it is refused: the placeholder waiting for it fails, and a copy the store
+   * already holds is kept. True when the change must not be applied.
+   */
+  private rejectUnverified(
+    change: IncomingChange,
+    resource: Resource,
+    keptContent: boolean,
+  ): boolean {
+    if (
+      !REMOTE_SOURCES.has(change.source) ||
+      !isVerifiableSubject(resource.subject) ||
+      resource.get(core.properties.incomplete)
+    ) {
+      return false;
+    }
+
+    const problem = contentAddressedMismatch(resource.subject, resource);
+
+    if (!problem) return false;
+
+    console.warn(
+      `[Store] refused ${resource.subject} from ${change.source}: ${problem}`,
+    );
+
+    if (!keptContent) {
+      this.failResource(
+        resource.subject,
+        new AtomicError(problem, ErrorType.Server),
+      );
+    }
+
+    return true;
+  }
+
+  /**
    * Single ingress for resource state from any source: subject
    * normalisation, commit-id dedup, Loro hydration, atomic OPFS
    * persist, one `notify` — in that order.
@@ -2856,6 +2908,18 @@ export class Store {
         // The server acknowledgement proves that this resource now exists.
         change.resource.error = undefined;
         change.resource.loading = false;
+      }
+
+      const held = this.resources.get(this.normalizeSubject(change.subject));
+
+      if (
+        this.rejectUnverified(
+          change,
+          change.resource,
+          !!held && this.hasRenderableContent(held),
+        )
+      ) {
+        return 'invalid';
       }
 
       const alias =
@@ -2946,6 +3010,7 @@ export class Store {
     // deliberately does NOT gate the OPPOSITE decision (whether to
     // hydrate at all) on this same durable bit — this is a different,
     // narrower gate: only whether a destructive replace is safe.
+    const hadContent = !!existing && this.hasRenderableContent(existing);
     const replace =
       !!change.replaceLoroDocsFromRemote &&
       !isCommitSubject(subject) &&
@@ -3001,6 +3066,8 @@ export class Store {
 
       return 'invalid';
     }
+
+    if (this.rejectUnverified(change, resource, hadContent)) return 'invalid';
 
     if (change.commitId) resource.setLastCommitValue(change.commitId);
     // A successful read/update supersedes an earlier failed lookup (including

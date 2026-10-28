@@ -6374,3 +6374,207 @@ async fn stored_envelope_bytes_per_small_edit_stay_small() {
         edits.iter().sum::<usize>()
     );
 }
+
+// --- Classes: content-addressed `atomic:class:` IDs ---
+
+mod content_addressed_classes {
+    use super::*;
+    use crate::class_identity::class_id;
+    use crate::commit::{CommitBuilder, CommitOpts};
+    use crate::property_identity::property_id;
+    use crate::Resource;
+
+    const PARENT: &str = "atomic:ontologyclass0";
+
+    fn opts() -> CommitOpts {
+        CommitOpts {
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        }
+    }
+
+    async fn make_property(db: &Db, agent: &crate::agents::Agent, shortname: &str) -> String {
+        let id = property_id(PARENT, shortname, urls::STRING).unwrap();
+        let mut b = CommitBuilder::new(id.as_str().into());
+        b.is_genesis = true;
+        b.set(urls::PARENT.into(), Value::AtomicUrl(PARENT.into()));
+        b.set(urls::SHORTNAME.into(), Value::Slug(shortname.into()));
+        b.set(
+            urls::DATATYPE_PROP.into(),
+            Value::AtomicUrl(urls::STRING.into()),
+        );
+        b.set(urls::DESCRIPTION.into(), Value::Markdown(shortname.into()));
+        let commit = b.sign(agent, db, &Resource::new(id.clone())).await.unwrap();
+        db.apply_commit(commit, &opts()).await.unwrap();
+        id
+    }
+
+    /// A genesis commit for `subject` carrying the given fields.
+    async fn class_commit(
+        db: &Db,
+        agent: &crate::agents::Agent,
+        subject: &str,
+        shortname: &str,
+        requires: &[String],
+        recommends: &[String],
+    ) -> AtomicResult<crate::commit::CommitResponse> {
+        let mut b = CommitBuilder::new(subject.into());
+        b.is_genesis = true;
+        b.set(
+            urls::IS_A.into(),
+            Value::from(vec![urls::CLASS.to_string()]),
+        );
+        b.set(urls::PARENT.into(), Value::AtomicUrl(PARENT.into()));
+        b.set(urls::SHORTNAME.into(), Value::Slug(shortname.into()));
+        b.set(urls::DESCRIPTION.into(), Value::Markdown("A class".into()));
+        if !requires.is_empty() {
+            b.set(urls::REQUIRES.into(), Value::from(requires.to_vec()));
+        }
+        if !recommends.is_empty() {
+            b.set(urls::RECOMMENDS.into(), Value::from(recommends.to_vec()));
+        }
+        let commit = b
+            .sign(agent, db, &Resource::new(subject.to_string()))
+            .await?;
+        db.apply_commit(commit, &opts()).await
+    }
+
+    #[tokio::test]
+    #[timeout(120000)]
+    async fn genesis_must_match_the_hash_of_its_fields() {
+        let db = Db::init_temp("class_genesis").await.unwrap();
+        let agent = db.get_default_agent().unwrap();
+        let a = make_property(&db, &agent, "a").await;
+        let b = make_property(&db, &agent, "b").await;
+
+        let id = class_id(PARENT, "task", std::slice::from_ref(&a)).unwrap();
+        class_commit(
+            &db,
+            &agent,
+            &id,
+            "task",
+            std::slice::from_ref(&a),
+            std::slice::from_ref(&b),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            db.get_resource(&Subject::from(id.as_str()))
+                .await
+                .unwrap()
+                .get(urls::SHORTNAME)
+                .unwrap()
+                .to_string(),
+            "task"
+        );
+
+        // The id of another shortname, other requires, or random hex.
+        let other_name = class_id(PARENT, "todo", std::slice::from_ref(&a)).unwrap();
+        assert!(class_commit(
+            &db,
+            &agent,
+            &other_name,
+            "task",
+            std::slice::from_ref(&a),
+            &[]
+        )
+        .await
+        .is_err());
+        let other_requires = class_id(PARENT, "task", &[a.clone(), b.clone()]).unwrap();
+        assert!(class_commit(
+            &db,
+            &agent,
+            &other_requires,
+            "task",
+            std::slice::from_ref(&a),
+            &[]
+        )
+        .await
+        .is_err());
+        let random = format!("atomic:class:{}", "ab".repeat(32));
+        assert!(
+            class_commit(&db, &agent, &random, "task", std::slice::from_ref(&a), &[])
+                .await
+                .is_err()
+        );
+        // A malformed id and the (non-existent) legacy spelling.
+        assert!(class_commit(
+            &db,
+            &agent,
+            "atomic:class:xyz",
+            "task",
+            std::slice::from_ref(&a),
+            &[]
+        )
+        .await
+        .is_err());
+        let legacy = id.replace("atomic:class:", "did:ad:class:");
+        assert!(
+            class_commit(&db, &agent, &legacy, "task", std::slice::from_ref(&a), &[])
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    #[timeout(120000)]
+    async fn recommends_and_description_are_editable_but_identity_is_not() {
+        let db = Db::init_temp("class_edit").await.unwrap();
+        let agent = db.get_default_agent().unwrap();
+        let a = make_property(&db, &agent, "a").await;
+        let b = make_property(&db, &agent, "b").await;
+        let id = class_id(PARENT, "task", std::slice::from_ref(&a)).unwrap();
+        class_commit(&db, &agent, &id, "task", std::slice::from_ref(&a), &[])
+            .await
+            .unwrap();
+        let subject = Subject::from(id.as_str());
+
+        // Adding a recommended field and editing the description is fine.
+        let mut edit = db.get_resource(&subject).await.unwrap();
+        edit.set(urls::RECOMMENDS.into(), Value::from(vec![b.clone()]), &db)
+            .await
+            .unwrap();
+        edit.set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown("Better".into()),
+            &db,
+        )
+        .await
+        .unwrap();
+        edit.save_locally(&db).await.unwrap();
+
+        // Changing the shortname or the required set is not.
+        let mut edit = db.get_resource(&subject).await.unwrap();
+        edit.set(urls::SHORTNAME.into(), Value::Slug("other".into()), &db)
+            .await
+            .unwrap();
+        assert!(edit.save_locally(&db).await.is_err());
+
+        let mut edit = db.get_resource(&subject).await.unwrap();
+        edit.set(
+            urls::REQUIRES.into(),
+            Value::from(vec![a.clone(), b.clone()]),
+            &db,
+        )
+        .await
+        .unwrap();
+        assert!(edit.save_locally(&db).await.is_err());
+
+        let read = db.get_resource(&subject).await.unwrap();
+        assert_eq!(read.get(urls::SHORTNAME).unwrap().to_string(), "task");
+        assert_eq!(read.get(urls::DESCRIPTION).unwrap().to_string(), "Better");
+    }
+
+    #[tokio::test]
+    #[timeout(120000)]
+    async fn class_cannot_be_trashed() {
+        let db = Db::init_temp("class_trash").await.unwrap();
+        let (agent, drive) = db.setup("Class trash").await.unwrap();
+        let id = class_id(PARENT, "task", &[] as &[&str]).unwrap();
+        class_commit(&db, &agent, &id, "task", &[], &[])
+            .await
+            .unwrap();
+        let err = crate::trash::trash(&db, &id, &drive).await.unwrap_err();
+        assert!(err.to_string().contains("trash"), "{err}");
+    }
+}

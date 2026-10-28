@@ -90,6 +90,7 @@
     - [Classes](schema/classes.md)
     - [Datatypes](schema/datatypes.md)
     - [Property identity](schema/property-identity.md)
+    - [Class identity](schema/class-identity.md)
     - [Lenses](schema/lenses.md)
     - [JSON Schema](schema/json-schema.md)
     - [Translations & Localization](schema/translations.md)

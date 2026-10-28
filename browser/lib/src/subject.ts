@@ -32,6 +32,8 @@ export const ATOMIC_COMMIT_PREFIX = 'atomic:commit:';
 export const ATOMIC_BLOB_PREFIX = 'atomic:blob:';
 export const ATOMIC_NODE_PREFIX = 'atomic:node:';
 export const ATOMIC_PROPERTY_PREFIX = 'atomic:prop:';
+/** Newer than the rename: there is no `did:ad:class:` spelling. */
+export const ATOMIC_CLASS_PREFIX = 'atomic:class:';
 export const ATOMIC_LENS_PREFIX = 'atomic:lens:';
 
 /** Legacy scheme, accepted forever. New code emits {@link ATOMIC_PREFIX}. */
@@ -52,6 +54,7 @@ export type IdentifierKind =
   | 'blob'
   | 'node'
   | 'property'
+  | 'class'
   | 'lens'
   | 'other';
 
@@ -131,6 +134,11 @@ export const CAP_CANONICAL_SCHEME = 'canonical-scheme';
 
 /** Rewrite `atomic:` → `did:ad:` for a peer that predates the rename. */
 export function toLegacyScheme(raw: string): string {
+  // Classes are newer than the rename and have no legacy spelling.
+  if (raw.startsWith(ATOMIC_CLASS_PREFIX)) {
+    return raw;
+  }
+
   if (startsWithAtomicScheme(raw)) {
     return DID_AD_PREFIX + raw.slice(ATOMIC_PREFIX.length);
   }
@@ -187,6 +195,10 @@ export function identifierKind(raw: string): IdentifierKind | undefined {
     return body.length > 'prop:'.length ? 'property' : 'other';
   }
 
+  if (body.startsWith('class:')) {
+    return body.length > 'class:'.length ? 'class' : 'other';
+  }
+
   if (body.startsWith('lens:')) {
     return body.length > 'lens:'.length ? 'lens' : 'other';
   }
@@ -212,6 +224,10 @@ export function isNodeSubject(raw: string): boolean {
 
 export function isPropertySubject(raw: string): boolean {
   return identifierKind(raw) === 'property';
+}
+
+export function isClassSubject(raw: string): boolean {
+  return identifierKind(raw) === 'class';
 }
 
 export function isLensSubject(raw: string): boolean {
@@ -256,6 +272,10 @@ export function nodeId(raw: string): string | undefined {
 
 export function propertySubject(hashHex: string): string {
   return ATOMIC_PROPERTY_PREFIX + hashHex;
+}
+
+export function classSubject(hashHex: string): string {
+  return ATOMIC_CLASS_PREFIX + hashHex;
 }
 
 export function lensSubject(hashHex: string): string {
