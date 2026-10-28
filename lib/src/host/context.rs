@@ -57,7 +57,8 @@ async fn property_label(store: &Db, property: &str) -> String {
         .to_string()
 }
 
-async fn children_titles(store: &Db, subject: &str) -> AtomicResult<Vec<String>> {
+/// Title and subject of each child, so the reader can open one.
+async fn children_titles(store: &Db, subject: &str) -> AtomicResult<Vec<(String, String)>> {
     let found = store
         .query(&Query::new_prop_val(urls::PARENT, subject))
         .await?;
@@ -65,11 +66,12 @@ async fn children_titles(store: &Db, subject: &str) -> AtomicResult<Vec<String>>
     for child in found.subjects.iter().take(MAX_CHILDREN) {
         if let Ok(r) = store.get_resource(child).await {
             let title = name_of(&r);
-            titles.push(if title.is_empty() {
+            let title = if title.is_empty() {
                 "Untitled".to_string()
             } else {
                 title
-            });
+            };
+            titles.push((title, child.to_string()));
         }
     }
     Ok(titles)
@@ -82,6 +84,14 @@ fn document_text(resource: &Resource) -> String {
         .unwrap_or_default()
 }
 
+/// Whether `subject` has a scheme we resolve. Anything else (`#abc`, `abc`,
+/// `/path`) would be resolved against localhost and fetched over the network.
+fn is_absolute_subject(subject: &str) -> bool {
+    ["atomic:", "did:", "internal:", "http://", "https://"]
+        .iter()
+        .any(|scheme| subject.starts_with(scheme))
+}
+
 /// Readable text for the resource `subject` from the local store: title, class,
 /// description, simple properties, the titles of the children of a folder or
 /// drive, and the text of a document. At most `max_chars` characters.
@@ -90,6 +100,12 @@ pub async fn read_resource_text(
     subject: &str,
     max_chars: usize,
 ) -> AtomicResult<String> {
+    if !is_absolute_subject(subject) {
+        return Err(format!(
+            "'{subject}' is not a subject. Use a subject from the semantic_search results or from a folder's \"Contains\" list."
+        )
+        .into());
+    }
     let resource = store.get_resource(&Subject::from(subject)).await?;
     let mut out = String::new();
     let title = name_of(&resource);
@@ -126,8 +142,8 @@ pub async fn read_resource_text(
         let titles = children_titles(store, subject).await?;
         if !titles.is_empty() {
             out.push_str("Contains:\n");
-            for t in titles {
-                out.push_str(&format!("- {t}\n"));
+            for (title, child) in titles {
+                out.push_str(&format!("- {title} ({child})\n"));
             }
         }
     }
@@ -156,14 +172,26 @@ mod tests {
     async fn folder_text_lists_title_class_and_children() {
         let d = Device::new().await;
         let parent = folder(&d, &d.drive, "Ctx parent").await;
-        folder(&d, &parent, "Ctx child one").await;
+        let child_one = folder(&d, &parent, "Ctx child one").await;
         folder(&d, &parent, "Ctx child two").await;
 
         let text = read_resource_text(&d.store, &parent, 4000).await.unwrap();
         assert!(text.starts_with("Ctx parent\n"), "{text}");
         assert!(text.to_lowercase().contains("class: folder"), "{text}");
-        assert!(text.contains("- Ctx child one"), "{text}");
-        assert!(text.contains("- Ctx child two"), "{text}");
+        assert!(
+            text.contains("- Ctx child one (") && text.contains(&format!("({child_one})")),
+            "{text}"
+        );
+        assert!(text.contains("- Ctx child two ("), "{text}");
+    }
+
+    #[tokio::test]
+    async fn relative_input_is_not_a_subject() {
+        let d = Device::new().await;
+        let err = read_resource_text(&d.store, "#5UDnqor5", 4000)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("is not a subject"), "{err}");
     }
 
     #[tokio::test]
