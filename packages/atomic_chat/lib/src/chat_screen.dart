@@ -36,6 +36,7 @@ import 'hosted_voice.dart';
 import 'voice.dart';
 import 'list_and_field.dart';
 import 'resource_chrome.dart';
+import 'report_chat_dialog.dart';
 
 /// SharedPreferences key: speak each new answer aloud.
 
@@ -478,6 +479,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       _usage.isEmpty ? 'Nothing used yet' : _usage.line,
                       key: const Key('chat-usage')),
                 ),
+                if (_messages.isNotEmpty)
+                  ListTile(
+                    key: const Key('chat-report'),
+                    leading: Icon(Icons.flag_outlined, color: c.main),
+                    title: const Text('Report this chat'),
+                    subtitle: const Text('Tell us what went wrong'),
+                    onTap: () => close(() => showReportChatDialog(context,
+                        api: widget.api,
+                        title: _title,
+                        messages: _messages)),
+                  ),
                 if (widget.api.canOpenAiSettings)
                   ListTile(
                     key: const Key('chat-ai-settings-all'),

@@ -173,6 +173,16 @@ abstract class AssistantApi {
   Future<void> signUpForAi(String email) async =>
       throw UnsupportedError('This host cannot create an account');
 
+  /// Whether this host can send feedback ([sendFeedback]); the chat's "Report
+  /// this chat" dialog then offers Send report, else only Copy.
+  bool get canSendFeedback => false;
+
+  /// Sends a report the person reviewed to the team: [message], an optional
+  /// reply [email] and where it came from ([source]). Throws when it fails.
+  Future<void> sendFeedback(
+          {required String message, String? email, String source = 'app'}) =>
+      throw UnsupportedError('AssistantApi.sendFeedback');
+
   /// Starts an AI chat named [name]; returns its subject.
   Future<String> newChat(String name);
 

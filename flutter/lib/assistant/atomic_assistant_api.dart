@@ -16,6 +16,10 @@ import 'package:atomic_store_flutter/bridge/api/assistant.dart'
 import 'package:atomic_store_flutter/bridge/api/simple/drive.dart'
     as ffi_simple;
 import 'fake_ai.dart';
+import 'sentry_feedback.dart';
+
+/// Where reports go (`--dart-define=SENTRY_DSN=...`); none: no sending.
+const _sentryDsn = String.fromEnvironment('SENTRY_DSN');
 
 /// The app's [AssistantApi]: the local node through [AtomicClient] (the Rust
 /// bridge), and the linked account from [AccountStore].
@@ -234,6 +238,17 @@ class AtomicAssistantApi extends AssistantApi {
   bool get canSignUpForAi => !fakeAiEnabled;
   @override
   Future<void> signUpForAi(String email) => AccountStore.signUpWithAgent(email);
+
+  @override
+  bool get canSendFeedback => parseSentryDsn(_sentryDsn) != null;
+  @override
+  Future<void> sendFeedback(
+      {required String message, String? email, String source = 'app'}) {
+    final dsn = parseSentryDsn(_sentryDsn);
+    if (dsn == null) throw StateError('Feedback is not set up in this build');
+    return postSentryFeedback(dsn,
+        message: message, email: email, source: 'flutter-$source');
+  }
 
   @override
   Future<String> newChat(String name) => AtomicClient.createAiChat(name);
