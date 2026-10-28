@@ -6,7 +6,8 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb, ValueListenable;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, kIsWeb, visibleForTesting;
 import 'dart:math' as math;
 
 import 'app_top_bar.dart';
@@ -1600,17 +1601,27 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// Opens a link of a message: a resource in the app, anything else
   /// outside it.
   void _openLink(String url) {
-    if (url.startsWith('atomic:') || url.startsWith('did:ad:')) {
+    final subject = linkSubject(url);
+    if (subject != null) {
       openFromList<void>(
         context,
-        (_) => openResourceView(api: widget.api, drive: '', subject: url),
-        subject: url,
+        (_) => openResourceView(api: widget.api, drive: '', subject: subject),
+        subject: subject,
       );
       return;
     }
     final uri = Uri.tryParse(url);
-    if (uri == null || !uri.hasScheme) return;
-    launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (uri == null || !uri.hasScheme) return _linkFailed(url);
+    launchUrl(uri, mode: LaunchMode.externalApplication).then((ok) {
+      if (!ok) _linkFailed(url);
+    }, onError: (Object _) => _linkFailed(url));
+  }
+
+  /// A tap on a link always shows something: what could not be opened.
+  void _linkFailed(String url) {
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('Could not open $url')));
   }
 
   /// The chat exists now: in the shell this page is no longer the bar's
@@ -2841,4 +2852,15 @@ class _ReviewSheet extends StatelessWidget {
       },
     );
   }
+}
+
+/// The resource a chat link points to: a subject itself, or the web app's
+/// `…?subject=` link to one. Null for anything else.
+@visibleForTesting
+String? linkSubject(String url) {
+  bool isSubject(String s) =>
+      s.startsWith('atomic:') || s.startsWith('did:ad:');
+  if (isSubject(url)) return url;
+  final inQuery = Uri.tryParse(url)?.queryParameters['subject'];
+  return inQuery != null && isSubject(inQuery) ? inQuery : null;
 }
