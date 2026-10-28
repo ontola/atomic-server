@@ -25,6 +25,7 @@ import 'resource_row.dart';
 import 'chat_parts.dart';
 import 'chat_window.dart';
 import 'scroll_to_bottom_button.dart';
+import 'size_meter.dart';
 import 'markdown_view.dart';
 import 'chat_bubbles.dart';
 import 'chat_text_styles.dart';
@@ -168,6 +169,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _listKey = GlobalKey();
   final _sentKey = GlobalKey();
   final _answerKey = GlobalKey();
+
+  /// The answer's height, recorded by the answer's own layout.
+  final _answerMeter = SizeMeter();
+
+  /// The list's padding at the bottom (where the newest message sits) and at
+  /// the top; answers are held [_holdLine] below the list's top.
+  static const _listPadding = 8.0;
+  static const _holdLine = 16.0;
 
   /// The question just sent and the answer to it (`partial` while it
   /// streams), or on opening the chat its newest answer.
@@ -947,7 +956,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   (RenderBox, double)? _listBox() {
     final list = _listKey.currentContext?.findRenderObject();
     if (list is! RenderBox || !list.hasSize || !list.attached) return null;
-    return (list, list.localToGlobal(Offset.zero).dy + 16);
+    return (list, list.localToGlobal(Offset.zero).dy + _holdLine);
   }
 
   RenderBox? _boxOf(GlobalKey key) {
@@ -996,19 +1005,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// upside-down list a growing last message pushes everything up). Returns
   /// how far the offset must move; the list lays out again at once.
   double _holdCorrection(double pixels, double min, double max) {
-    if (!_sending) return 0;
-    final list = _listBox();
-    final answer = _boxOf(_answerKey);
-    if (list == null || answer == null) return 0;
-    final h = answer.size.height;
+    // Nothing but the scroll metrics and the answer's own recorded height
+    // is read: other boxes may not be asked for their size or transform
+    // while the list lays out. The list is upside down and the answer is
+    // its newest row, so it spans [_listPadding, _listPadding + h] from the
+    // bottom of the content, and its top is that far above the bottom of the
+    // list, less the offset.
+    final h = _answerMeter.height;
+    if (!_sending || h == null || !_keeper.controller.hasClients) return 0;
+    final position = _keeper.controller.position;
+    if (!position.hasViewportDimension) return 0;
     final grew = _answerHeight == null ? 0.0 : h - _answerHeight!;
     _answerHeight = h;
     double want = 0;
     if (_follow && !_pinned) {
-      final top = answer.localToGlobal(Offset.zero).dy;
-      if (top < list.$2 - 0.5) {
+      final top = position.viewportDimension - _listPadding - h + pixels;
+      if (top < _holdLine - 0.5) {
         _pinned = true;
-        want = list.$2 - top;
+        want = _holdLine - top;
       }
     } else if (grew.abs() > 0.01 && pixels > 0.5) {
       want = grew;
@@ -1764,7 +1778,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: readableHorizontalPadding(box.maxWidth,
                   gutter: ChatTextStyles.gutter)
-              .copyWith(top: 8, bottom: 8),
+              .copyWith(top: _listPadding, bottom: _listPadding),
           itemCount: shown.length + (_window.hasOlder ? 1 : 0),
           findChildIndexCallback: (key) => reversedIndexOf(key, ids, at),
           itemBuilder: (context, i) {
@@ -1829,9 +1843,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             final keyed = m.id == _answerId
                 ? KeyedSubtree(
                     key: _answerKey,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: room),
-                      child: bubble,
+                    child: MeasuredSize(
+                      meter: _answerMeter,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: room),
+                        child: bubble,
+                      ),
                     ))
                 : m.id == _sentId
                     ? KeyedSubtree(key: _sentKey, child: bubble)
