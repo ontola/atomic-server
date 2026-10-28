@@ -1,7 +1,9 @@
 # Content-addressed schemas: build plan
 
 **Status:** Approved by Joep on 2026-10-28. P0 to P2 in progress (docs, vector
-fixture, Rust identity); P3 onward not started. Written against `origin/develop`
+fixture, Rust identity); P3 half done (TS identity and receipt verification in
+`Store.applyIncoming`, branch `claude/content-addressed-classes-ts`; lookup order and
+ClientDb persistence of bundled terms remain); P4 onward not started. Written against `origin/develop`
 of atomic-server (49d21e08) and the atomic-plugins and atomic-education
 checkouts. "(unverified)" marks things not run or not read to the line.
 

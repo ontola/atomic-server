@@ -3,7 +3,7 @@ import { core } from './ontologies/core.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 import type { Resource } from './resource.js';
 import type { Store } from './store.js';
-import { isPropertySubject } from './subject.js';
+import { isClassSubject, isPropertySubject } from './subject.js';
 
 /** The drive's Trash folder, if one was ever created. */
 export const readTrashFolder = (drive: Resource): string | undefined =>
@@ -98,6 +98,13 @@ export async function moveToTrash(
   // A content-addressed property's parent is part of its ID: it cannot move.
   if (isPropertySubject(subject)) {
     throw new Error("A property can't be moved to the trash.");
+  }
+
+  // Likewise a class: its parent is hashed into its ID.
+  if (isClassSubject(subject)) {
+    throw new Error(
+      "A class with a content-addressed ID can't be moved to the trash.",
+    );
   }
 
   const trash = await getOrCreateTrashFolder(store, drive);

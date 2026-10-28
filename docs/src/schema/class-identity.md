@@ -91,7 +91,7 @@ A verifier given a subject, an ontology, a shortname and the required Properties
 
 ## Test vectors
 
-The shared fixture is [`lib/tests/fixtures/class-identity.json`](https://github.com/ontola/atomic-server/blob/develop/lib/tests/fixtures/class-identity.json). Every implementation must reproduce it (the Rust one does; the TypeScript twin follows). It also lists inputs that must be rejected. The required Properties are the `name` (string) and `name` (slug) test vectors of [Property identity](property-identity.md).
+The shared fixture is [`lib/tests/fixtures/class-identity.json`](https://github.com/ontola/atomic-server/blob/develop/lib/tests/fixtures/class-identity.json). Every implementation must reproduce it (the Rust one and the TypeScript twin `browser/lib/src/class-identity.ts` do). It also lists inputs that must be rejected. The required Properties are the `name` (string) and `name` (slug) test vectors of [Property identity](property-identity.md).
 
 | Case | Ontology | Shortname | Requires | ID |
 | --- | --- | --- | --- | --- |
