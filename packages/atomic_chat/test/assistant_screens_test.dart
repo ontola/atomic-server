@@ -1842,10 +1842,13 @@ void main() {
           await tester.tap(find.byTooltip('Stop and send'));
           await tester.pump(const Duration(milliseconds: 1000));
           expect(api.added, isEmpty);
+          // Past the final result, then past every wait of the send.
+          await tester.pump(const Duration(milliseconds: 600));
           await tester.pumpAndSettle();
           expect(api.added.where((m) => m.$2 == 'user').toList(), [
             ('did:ad:new-chat', 'user', 'hello there'),
           ]);
+          await tester.pump(const Duration(seconds: 3));
         });
 
         testWidgets('uses the latest partial when no final arrives',
