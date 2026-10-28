@@ -313,6 +313,26 @@ describe('describeApp / updateApp', () => {
     expect(described.rowName).toBe('Feeding session');
   });
 
+  it('reads an app back on a device that has not read the drive’s schema', async () => {
+    const { store, resources } = fakeStore();
+
+    const created = await createApp(store, {
+      drive: 'drive',
+      name: '3D Tic-Tac-Toe',
+      source: SOURCE,
+    });
+
+    // A phone holding part of the drive: the app and its view, but not the
+    // drive's ontology. Its terms are still known by their shortnames.
+    resources.set('drive', {});
+
+    const described = await describeApp(store, 'drive', created.app);
+
+    expect(described.entrypoint).toBe(created.entrypoint);
+    expect(described.data).toBe(created.data);
+    expect(described.source).toBe(SOURCE);
+  });
+
   it('replaces the source without disturbing the app’s data', async () => {
     const { store, resources } = fakeStore();
 

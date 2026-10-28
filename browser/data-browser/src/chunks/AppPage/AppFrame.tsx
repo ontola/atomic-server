@@ -9,7 +9,7 @@ import {
   useStore,
   useTitle,
 } from '@tomic/react';
-import { appSourceOf, findSchema, pluginSchema } from '@tomic/lib';
+import { appSourceOf, readSchema, schemaValue } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
 import {
   appChanges,
@@ -138,17 +138,16 @@ function AppFrameSession({
     let cancelled = false;
 
     (async () => {
-      const schema = await findSchema(store, drive, pluginSchema());
-      const property = schema.properties?.entrypoint;
+      const schema = await readSchema(store, drive);
       // Read through the store rather than from a passed resource, so this
       // depends on a subject string instead of a proxy whose identity churns.
       const resource = await store.getResource(app);
-      const found = property
-        ? (resource.get(property) as string | undefined)
-        : undefined;
+      const value = await schemaValue(store, schema, resource, 'entrypoint');
+      const found = typeof value === 'string' ? value : undefined;
 
       if (!cancelled) setEntrypoint(found ?? null);
-    })().catch(() => {
+    })().catch(e => {
+      console.warn('Could not read the entry point of', app, e);
       if (!cancelled) setEntrypoint(null);
     });
 

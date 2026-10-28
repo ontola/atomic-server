@@ -13,7 +13,7 @@ import { AppFrame } from './AppFrame';
 
 vi.mock('@tomic/lib', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/lib')>()),
-  findSchema: async () => ({ properties: { entrypoint: 'urn:entrypoint' } }),
+  readSchema: async () => ({ properties: { entrypoint: 'urn:entrypoint' } }),
   appSourceOf: async () => 'export const view = () => {};',
 }));
 
