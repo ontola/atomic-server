@@ -45,6 +45,7 @@ Widget _screen(
         Future<List<shared.AtomicAiModel>?> Function()? loadOwnModels,
         Future<shared.AtomicAiUsage?> Function()? usage,
         Uri? portal,
+        OwnKeyUsage? keyUsage,
         AiChatSettings? chat}) =>
     _app(AiSettingsScreen(
       chat: chat,
@@ -54,6 +55,7 @@ Widget _screen(
       loadModels: loadModels,
       loadOwnModels: loadOwnModels,
       loadPortal: () async => portal,
+      loadKeyUsage: () async => keyUsage,
     ));
 
 /// A secure storage that keeps what is written in memory.
@@ -241,6 +243,20 @@ void main() {
     expect(find.text('4 of 10 credits'), findsOneWidget);
     expect(
         find.text('900 in, 40 out · 2.5 credits · 3 requests'), findsOneWidget);
+  });
+
+  testWidgets('shows what the own key has spent', (tester) async {
+    tall(tester);
+    await tester.pumpWidget(_screen(
+        keyUsage: const OwnKeyUsage(used: 4.5, thisMonth: 1.2, left: 8.8)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai-mode-own')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('ai-key-field')), 'sk-or-1');
+    await tester.tap(find.byKey(const Key('ai-key-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Key saved · \$1.20 this month · \$8.80 left'),
+        findsOneWidget);
   });
 
   testWidgets('switching to an own OpenRouter key, and back', (tester) async {

@@ -38,6 +38,9 @@ class AiSettingsScreen extends StatefulWidget {
   /// Every model of the own provider; [OwnAi.models] by default.
   final Future<List<shared.AtomicAiModel>?> Function()? loadOwnModels;
 
+  /// What the own OpenRouter key has spent; [OwnAi.keyUsage] by default.
+  final Future<OwnKeyUsage?> Function()? loadKeyUsage;
+
   /// The account portal, where credits are bought; [AccountStore.portal] by
   /// default.
   final Future<Uri?> Function()? loadPortal;
@@ -63,6 +66,7 @@ class AiSettingsScreen extends StatefulWidget {
     this.loadModels,
     this.loadOwnModels,
     this.loadPortal,
+    this.loadKeyUsage,
   });
 
   @override
@@ -72,6 +76,7 @@ class AiSettingsScreen extends StatefulWidget {
 class _AiSettingsScreenState extends State<AiSettingsScreen> {
   bool _own = false, _hasKey = false, _showUsage = false;
   shared.AtomicAiCredits? _credits;
+  OwnKeyUsage? _keyUsage;
   Uri? _portal;
   bool _loading = false, _failed = false;
   String? _model, _modelLabel;
@@ -100,6 +105,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     }
     if (!mounted) return;
     setState(() {
+      if (!hasKey) _keyUsage = null;
       _own = own;
       _hasKey = hasKey;
       _showUsage = show;
@@ -110,6 +116,12 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       _failed = failed;
       _loading = false;
     });
+    // OpenRouter is a second round trip; the screen does not wait for it.
+    if (hasKey) {
+      final usage = await (widget.loadKeyUsage ?? OwnAi.keyUsage)()
+          .catchError((Object _) => null);
+      if (mounted) setState(() => _keyUsage = usage);
+    }
   }
 
   Future<void> _useIncluded() async {
@@ -165,7 +177,13 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       setState(() {
         _hasKey = key.isNotEmpty;
         _own = key.isNotEmpty;
+        _keyUsage = null;
       });
+    }
+    if (key.isNotEmpty) {
+      final usage = await (widget.loadKeyUsage ?? OwnAi.keyUsage)()
+          .catchError((Object _) => null);
+      if (mounted) setState(() => _keyUsage = usage);
     }
   }
 
@@ -278,7 +296,11 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                 key: const Key('ai-mode-own'),
                 icon: Icons.key_outlined,
                 title: 'Your own OpenRouter key',
-                subtitle: _hasKey ? 'Key saved' : 'Add an API key',
+                subtitle: !_hasKey
+                    ? 'Add an API key'
+                    : _keyUsage == null
+                        ? 'Key saved'
+                        : 'Key saved · ${_keyUsage!.line}',
                 trailing: _radio(_own),
                 onTap: _useOwn,
               ),

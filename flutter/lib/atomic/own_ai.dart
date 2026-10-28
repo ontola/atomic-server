@@ -76,6 +76,45 @@ class OwnAi {
     } catch (_) {}
   }
 
+  /// What the saved key has spent, in dollars, from OpenRouter; null without
+  /// a key or when OpenRouter can't be reached.
+  static Future<OwnKeyUsage?> keyUsage(
+      {String? key, http.Client? client}) async {
+    key ??= await apiKey();
+    if (key == null) return null;
+    final http_ = client ?? http.Client();
+    final headers = {'Authorization': 'Bearer $key'};
+    Future<Map?> data(String path) async {
+      try {
+        final response =
+            await http_.get(Uri.parse('$origin$path'), headers: headers);
+        if (response.statusCode != 200) return null;
+        return (jsonDecode(response.body) as Map)['data'] as Map?;
+      } catch (e) {
+        debugPrint('Reading $path from OpenRouter failed: $e');
+        return null;
+      }
+    }
+
+    try {
+      // The key's own spending, and the account's balance it draws from.
+      final [keyData, credits] =
+          await Future.wait([data('/api/v1/key'), data('/api/v1/credits')]);
+      if (keyData == null && credits == null) return null;
+      double? number(Object? value) => value is num ? value.toDouble() : null;
+      final total = number(credits?['total_credits']);
+      final spent = number(credits?['total_usage']);
+      return OwnKeyUsage(
+        used: number(keyData?['usage']) ?? spent ?? 0,
+        thisMonth: number(keyData?['usage_monthly']),
+        left: number(keyData?['limit_remaining']) ??
+            (total != null && spent != null ? total - spent : null),
+      );
+    } finally {
+      if (client == null) http_.close();
+    }
+  }
+
   /// The AI when the own provider is in use, else null.
   static Future<HostedAi?> hostedAi({http.Client? client}) async {
     final key = await apiKey();
@@ -245,4 +284,30 @@ class OwnAi {
       if (client == null) http_.close();
     }
   }
+}
+
+/// What an OpenRouter key has spent, in dollars.
+class OwnKeyUsage {
+  /// Everything the key has spent.
+  final double used;
+
+  /// What it spent this calendar month, when OpenRouter says.
+  final double? thisMonth;
+
+  /// What it can still spend: its own limit's remainder, else the account's
+  /// balance.
+  final double? left;
+
+  const OwnKeyUsage({required this.used, this.thisMonth, this.left});
+
+  /// One line for a settings row, such as "\$1.20 this month · \$8.80 left".
+  String get line => [
+        if (thisMonth != null)
+          '${_dollars(thisMonth!)} this month'
+        else
+          '${_dollars(used)} used',
+        if (left != null) '${_dollars(left!)} left',
+      ].join(' · ');
+
+  static String _dollars(double value) => '\$${value.toStringAsFixed(2)}';
 }
