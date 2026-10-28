@@ -2,17 +2,18 @@
 import type { Store } from '@tomic/react';
 
 /**
- * Why an app cannot run in a page that has no server (the embedded renderer).
+ * Why an app cannot write as itself or call other apps in a page that has no
+ * server (the embedded renderer).
  *
- * An app runs on a node: its view is served from the node's `/plugin-ui`, its
- * writes and key go through the node's `/app-write` and `/app-agent`, and each
- * of those requests is signed with the agent. A `noServer` store's agent lives
- * in the host app, which signs commits of that agent and nothing else, so
- * signing such a request fails with "only commits are signed". Say so up
- * front instead.
+ * An app's view runs in the page (a `srcdoc` frame, `appFrameDocument.ts`),
+ * but its writes and key go through the node's `/app-write` and `/app-agent`,
+ * and each of those requests is signed with the agent. A `noServer` store's
+ * agent lives in the host app, which signs commits of that agent and nothing
+ * else, so signing such a request fails with "only commits are signed". Say so
+ * up front instead.
  */
 export const NO_SERVER_APP_MESSAGE =
-  'Apps run on a server, and this page has none (it is the embedded app). Open the app from a drive on a server to run it.';
+  'Writing as the app and calling other apps need a server, and this page has none (it is the embedded app).';
 
 /** Throws before anything is signed, when the store has no server to ask. */
 export function requireServer(store: Pick<Store, 'noServer'>): void {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'dart:math' show Random;
 
 import 'package:atomic_flutter/atomic_flutter.dart' show Perf;
 import 'package:flutter/foundation.dart';
@@ -42,6 +43,32 @@ abstract class WarmPage implements EmbedPage, ReleasablePage {
   /// Called each time the page finished loading.
   set onLoaded(VoidCallback? handler);
 }
+
+/// A fresh secret for one web view's channel: 128 random bits, in hex.
+String newChannelToken([Random? random]) {
+  final r = random ?? Random.secure();
+  return [
+    for (var i = 0; i < 16; i++)
+      r.nextInt(256).toRadixString(16).padLeft(2, '0')
+  ].join();
+}
+
+/// [url] with `ch=[token]` in its fragment (next to anything already there).
+/// The page reads it once and removes it (`lockFlutterChannel`).
+Uri withChannelToken(Uri url, String token) => url.replace(
+    fragment: url.fragment.isEmpty ? 'ch=$token' : '${url.fragment}&ch=$token');
+
+/// True when [raw] comes from the page that was given [expected]: its
+/// messages are JSON objects that start with `"token"`. Android hands the
+/// channel to every frame of the web view, so an embedded app's frame can
+/// post to it too, but it was never given the token.
+bool acceptsChannelMessage(String expected, String raw) =>
+    expected.isNotEmpty && raw.startsWith('{"token":${jsonEncode(expected)},');
+
+/// The page's own "I am up" (`{"method":"ready"}`) as [acceptsChannelMessage]
+/// accepts it.
+String channelReadyMessage(String token) =>
+    '{"token":${jsonEncode(token)},"method":"ready"}';
 
 /// Makes a [WarmPage] that sends its messages to [onMessage] from the start
 /// (the page asks the store for the agent while it boots).
@@ -93,6 +120,7 @@ class WebViewEmbedPage implements WarmPage {
   }) async {
     late final WebViewEmbedPage page;
     final origin = url.origin;
+    final token = newChannelToken();
     // Only the call page gets a microphone and camera (and, on iOS, plays
     // video inline and without a tap).
     final media = mediaPermissions;
@@ -114,8 +142,10 @@ class WebViewEmbedPage implements WarmPage {
           ))
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel('AtomicFlutter', onMessageReceived: (m) {
+        // Not from the page: a frame in it (an app) has no token.
+        if (!acceptsChannelMessage(token, m.message)) return;
         // The page's own "I am up" is not a call.
-        if (m.message.contains('"method":"ready"') && m.message.length < 40) {
+        if (m.message == channelReadyMessage(token)) {
           page._markReady();
           return;
         }
@@ -123,9 +153,17 @@ class WebViewEmbedPage implements WarmPage {
       })
       ..setOnConsoleMessage((m) => debugPrint('[embed:js] ${m.message}'))
       ..setNavigationDelegate(NavigationDelegate(
-        onNavigationRequest: (request) => request.url.startsWith(origin)
-            ? NavigationDecision.navigate
-            : NavigationDecision.prevent,
+        onNavigationRequest: (request) {
+          // Frames in the page (an app's sandboxed srcdoc) stay inline.
+          if (!request.isMainFrame) {
+            return request.url == 'about:srcdoc' || request.url == 'about:blank'
+                ? NavigationDecision.navigate
+                : NavigationDecision.prevent;
+          }
+          return request.url.startsWith(origin)
+              ? NavigationDecision.navigate
+              : NavigationDecision.prevent;
+        },
         onPageFinished: (_) {
           debugPrint('[embed] page loaded after ${page.age} ms');
           page._onLoaded?.call();
@@ -148,7 +186,7 @@ class WebViewEmbedPage implements WarmPage {
     if (!kReleaseMode && controller.platform is AndroidWebViewController) {
       await AndroidWebViewController.enableDebugging(true);
     }
-    unawaited(controller.loadRequest(url));
+    unawaited(controller.loadRequest(withChannelToken(url, token)));
     return page;
   }
 

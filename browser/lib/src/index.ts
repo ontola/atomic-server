@@ -249,6 +249,7 @@ export {
 export * from './agent-grants.js';
 export * from './issue-access-agent.js';
 export {
+  appSourceOf,
   createApp,
   describeApp,
   updateApp,

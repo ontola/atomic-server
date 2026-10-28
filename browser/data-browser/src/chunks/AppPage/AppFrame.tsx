@@ -9,7 +9,7 @@ import {
   useStore,
   useTitle,
 } from '@tomic/react';
-import { findSchema, pluginSchema } from '@tomic/lib';
+import { appSourceOf, findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
 import {
   appChanges,
@@ -36,6 +36,11 @@ import {
   type ProxyConnection,
 } from '@helpers/proxyConnections';
 import { NO_SERVER_APP_MESSAGE } from './noServer';
+import {
+  VIEW_CLIENT_SOURCE,
+  appFrameDocument,
+  newFrameNonce,
+} from './appFrameDocument';
 import { appAgentOf } from './appAgent';
 import { ConnectDialog } from './ConnectDialog';
 import { useHostUI } from '@components/HostUI/hostUI';
@@ -60,6 +65,13 @@ export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
  * in the URL. Loading via `src` rather than `srcdoc` matters for the same
  * reason it does for installed plugins: a `srcdoc`, `blob:` or `data:` frame
  * inherits this page's CSP and the app's script would be blocked.
+ *
+ * A page with no server (`store.noServer`, the embedded renderer) has nothing
+ * to mint a token with or to load from. There the page already holds the
+ * source, so it builds the same shell as a `srcdoc` (`appFrameDocument`), whose
+ * meta CSP narrows the inherited one to the server's directives. Same sandbox,
+ * so the frame is still null-origin. Writing as the app and calling other apps
+ * still need a server.
  */
 function AppFrameSession({
   app,
@@ -91,6 +103,7 @@ function AppFrameSession({
 }): React.JSX.Element {
   const store = useStore();
   const [src, setSrc] = useState<string>();
+  const [srcDoc, setSrcDoc] = useState<string>();
   const [entrypoint, setEntrypoint] = useState<string | null>();
   const [problem, setProblem] = useState<string>();
   const [appError, setAppError] = useState<AppError>();
@@ -148,6 +161,36 @@ function AppFrameSession({
     if (!entrypoint) return;
 
     let cancelled = false;
+
+    if (store.noServer) {
+      appSourceOf(store, drive, entrypoint)
+        .then(source => {
+          if (cancelled) return;
+
+          if (source === undefined) {
+            setProblem(
+              /* @wc-ignore */ 'This app has no source, so there is nothing to run.',
+            );
+
+            return;
+          }
+
+          setSrcDoc(
+            appFrameDocument({
+              source,
+              client: VIEW_CLIENT_SOURCE,
+              nonce: newFrameNonce(),
+            }),
+          );
+        })
+        .catch((e: Error) => {
+          if (!cancelled) setProblem(e.message);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }
 
     mintViewToken(store, drive, entrypoint)
       .then(result => {
@@ -226,6 +269,12 @@ function AppFrameSession({
       }
 
       if (data.op === 'proxyConnect') {
+        if (store.noServer) {
+          session.post({ id: data.id, error: NO_SERVER_APP_MESSAGE });
+
+          return;
+        }
+
         if (!isPlatformId(data.platform)) {
           session.post({ id: data.id, error: 'platform is required' });
 
@@ -285,11 +334,11 @@ function AppFrameSession({
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src, handleUI, forwardKey]);
+  }, [store, app, drive, table, src, srcDoc, handleUI, forwardKey]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`, colorScheme);
-  }, [stylesheet, colorScheme, src]);
+  }, [stylesheet, colorScheme, src, srcDoc]);
 
   // The app never got as far as running: no token, no entry point, no source.
   // Reported as a failure like any other, so a caller waiting on an outcome
@@ -319,7 +368,7 @@ function AppFrameSession({
     );
   }
 
-  if (src === undefined) {
+  if (src === undefined && srcDoc === undefined) {
     return <LoaderBlock />;
   }
 
@@ -416,6 +465,7 @@ function AppFrameSession({
       <Frame
         ref={frameRef}
         src={src}
+        srcDoc={srcDoc}
         // `allow-modals` because confirm() and alert() are the first things
         // an app reaches for to guard a delete, and without it they return
         // false silently — the button does nothing and nothing says why. Still
@@ -512,7 +562,7 @@ function proxyHost(
   app: string,
   drive: string,
 ) {
-  return store.getAgent()
+  return store.getAgent() && !store.noServer
     ? proxyConnections(store).host(() => cachedAppAgent(store, drive, app))
     : undefined;
 }
@@ -572,8 +622,6 @@ async function mintViewToken(
   drive: string,
   plugin: string,
 ): Promise<MintResult> {
-  if (store.noServer) return { ok: false, error: NO_SERVER_APP_MESSAGE };
-
   const agent = store.getAgent();
 
   if (!agent) return { ok: false, error: 'Sign in to open this app.' };

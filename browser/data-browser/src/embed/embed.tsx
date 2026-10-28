@@ -66,7 +66,7 @@ import { CalculatedPageHeight } from '../globalCssVars';
 import { goToFirstEntry } from './resetHistory';
 import { actionPages } from './actionPages';
 import { styled } from 'styled-components';
-import { createFlutterHost } from './flutterHost';
+import { createFlutterHost, lockFlutterChannel } from './flutterHost';
 import { createMockHost } from './mockHost';
 import { createFlush } from './flush';
 import {
@@ -202,6 +202,10 @@ declare global {
     };
   }
 }
+
+// First, before anything reads `window.AtomicFlutter`: every message carries
+// the app's token from here on.
+lockFlutterChannel();
 
 const channel: NativeChannel =
   window.atomicHost ??

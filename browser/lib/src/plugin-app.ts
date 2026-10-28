@@ -297,6 +297,25 @@ export interface AppDescription {
 }
 
 /**
+ * The source of an app's entry point (its `plugin-source`), or undefined when
+ * the drive has no plugin schema or the entry point has none.
+ */
+export async function appSourceOf(
+  store: SchemaStore,
+  drive: string,
+  entrypoint: string,
+): Promise<string | undefined> {
+  const schema = await findSchema(store, drive, pluginSchema());
+  const sourceProp = schema.properties?.['plugin-source'];
+
+  if (!sourceProp) return undefined;
+
+  const script = await store.getResource(entrypoint);
+
+  return asString(script.get(sourceProp));
+}
+
+/**
  * Reads an app back, source included.
  *
  * An app that cannot be read cannot be revised, and the only repair for a
@@ -327,11 +346,12 @@ export async function describeApp(
     data: asString(data),
   };
 
-  const sourceProp = schema.properties?.['plugin-source'];
-
-  if (description.entrypoint && sourceProp) {
-    const script = await store.getResource(description.entrypoint);
-    description.source = asString(script.get(sourceProp));
+  if (description.entrypoint) {
+    description.source = await appSourceOf(
+      store,
+      drive,
+      description.entrypoint,
+    );
   }
 
   if (description.data) {

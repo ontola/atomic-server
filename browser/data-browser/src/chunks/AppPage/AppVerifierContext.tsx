@@ -8,8 +8,6 @@ import {
   type PropsWithChildren,
 } from 'react';
 import { styled } from 'styled-components';
-import { useStore } from '@tomic/react';
-import { NO_SERVER_APP_MESSAGE } from './noServer';
 import { AppFrame, type AppOutcome } from './AppFrame';
 
 /**
@@ -58,7 +56,6 @@ export const useAppVerifier = () => useContext(AppVerifierContext);
 export function AppVerifierProvider({
   children,
 }: PropsWithChildren): React.JSX.Element {
-  const store = useStore();
   const [running, setRunning] = useState<{ app: string; drive: string }>();
   const settle = useRef<(verdict: AppVerdict) => void>(undefined);
 
@@ -71,15 +68,6 @@ export function AppVerifierProvider({
 
   const verifyApp = useCallback(
     (app: string, drive: string): Promise<AppVerdict> => {
-      // Running an app takes a server to serve it. Without one the run could
-      // only fail on signing, and that is not the app's fault.
-      if (store.noServer) {
-        return Promise.resolve({
-          verdict: 'unknown' as const,
-          message: NO_SERVER_APP_MESSAGE,
-        });
-      }
-
       // One at a time. The alternative is a frame per call, and a model that
       // creates three apps would run three at once for no benefit.
       if (settle.current) {
@@ -106,7 +94,7 @@ export function AppVerifierProvider({
         setRunning({ app, drive });
       });
     },
-    [finish, store],
+    [finish],
   );
 
   const onOutcome = useCallback(

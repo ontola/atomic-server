@@ -2,11 +2,20 @@
 // @wc-ignore-file
 import { createElement, useEffect } from 'react';
 import { act, render } from '@testing-library/react';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { ThemeProvider } from 'styled-components';
+import { buildTheme } from '../../styling';
 import { StoreContext, type NativeChannel } from '@tomic/react';
 import { createEmbedStore } from '../../embed/embedStore';
 import { handOverAppKey, appAgentOf } from './appAgent';
 import { AppVerifierProvider, useAppVerifier } from './AppVerifierContext';
+import { AppFrame } from './AppFrame';
+
+vi.mock('@tomic/lib', async importOriginal => ({
+  ...(await importOriginal<typeof import('@tomic/lib')>()),
+  findSchema: async () => ({ properties: { entrypoint: 'urn:entrypoint' } }),
+  appSourceOf: async () => 'export const view = () => {};',
+}));
 
 const AGENT = 'atomic:agent:pZyZYvKoOcwczHXJoYvYctgrHXn2pZ7qfeWMyoUfQ_8';
 
@@ -39,12 +48,32 @@ function host() {
   return { channel, refused };
 }
 
-// Seen after `create_app` in the Flutter app: the run check failed with
-// "only commits are signed", because the app's view token request was signed
-// through the host.
-it('checks an app without signing a request when the store has no server', async () => {
+/** Renders `children` in a store with no server, and the host that refuses signing. */
+async function noServerPage(children: React.ReactNode) {
   const { channel, refused } = host();
   const { store } = await createEmbedStore(channel);
+
+  vi.spyOn(store, 'getResource').mockResolvedValue({
+    get: () => 'urn:script',
+    title: 'App',
+  } as never);
+
+  const theme = buildTheme(false, '#1b50d8');
+  const view = render(
+    createElement(
+      StoreContext.Provider,
+      { value: store },
+      createElement(ThemeProvider, { theme }, children),
+    ),
+  );
+
+  return { ...view, refused };
+}
+
+// Seen after `create_app` in the Flutter app: the run check failed with
+// "only commits are signed", because the app's view token request was signed
+// through the host. The view now runs in a srcdoc frame, nothing is signed.
+it('runs an app in a srcdoc frame without signing when the store has no server', async () => {
   let verify: ReturnType<typeof useAppVerifier>['verifyApp'] | undefined;
 
   const Probe = () => {
@@ -56,23 +85,23 @@ it('checks an app without signing a request when the store has no server', async
     return null;
   };
 
-  render(
-    createElement(
-      StoreContext.Provider,
-      { value: store },
-      createElement(AppVerifierProvider, null, createElement(Probe)),
-    ),
+  const { refused, container } = await noServerPage(
+    createElement(AppVerifierProvider, null, createElement(Probe)),
   );
 
-  let verdict: Awaited<ReturnType<NonNullable<typeof verify>>> | undefined;
+  let pending: ReturnType<NonNullable<typeof verify>> | undefined;
   await act(async () => {
-    verdict = await verify!('atomic:app', 'atomic:drive');
+    pending = verify!('atomic:app', 'atomic:drive');
   });
 
-  expect(verdict?.verdict).toBe('unknown');
-  expect(verdict && 'message' in verdict && verdict.message).toMatch(
-    /Apps run on a server/,
-  );
+  // jsdom runs no iframe, so the verdict stays open; what is testable is the
+  // frame that was made for the run.
+  const frame = container.ownerDocument.querySelector('iframe');
+
+  expect(frame?.getAttribute('srcdoc')).toContain("connect-src 'none'");
+  expect(frame?.getAttribute('sandbox')).toBe('allow-scripts allow-modals');
+  expect(frame?.hasAttribute('src')).toBe(false);
+  expect(pending).toBeDefined();
   expect(refused).toEqual([]);
 });
 
@@ -86,5 +115,19 @@ it('does not sign the app key hand-over or lookup when the store has no server',
   await expect(appAgentOf(store, { drive: 'd', app: 'a' })).rejects.toThrow(
     /no/i,
   );
+  expect(refused).toEqual([]);
+});
+
+it('renders a sandboxed srcdoc frame for an app, with no allow-same-origin', async () => {
+  const { refused } = await noServerPage(
+    createElement(AppFrame, { app: 'urn:app', drive: 'urn:drive' }),
+  );
+
+  await act(async () => {});
+  const frame = document.querySelector('iframe');
+
+  expect(frame).not.toBeNull();
+  expect(frame!.getAttribute('sandbox')).not.toContain('allow-same-origin');
+  expect(frame!.getAttribute('srcdoc')).toContain('export const view');
   expect(refused).toEqual([]);
 });
