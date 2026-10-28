@@ -3,6 +3,7 @@ import {
   signRequest,
   type Store,
 } from '@tomic/react';
+import { requireServer } from './noServer';
 
 /**
  * Hands an app's freshly minted key to the node, once.
@@ -20,6 +21,7 @@ export async function handOverAppKey(
   store: Store,
   options: { drive: string; app: string; secret: string },
 ): Promise<void> {
+  requireServer(store);
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to give an app its key');
@@ -63,6 +65,7 @@ export async function appAgentOf(
   store: Store,
   options: { drive: string; app: string },
 ): Promise<string> {
+  requireServer(store);
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to use integration connections.');

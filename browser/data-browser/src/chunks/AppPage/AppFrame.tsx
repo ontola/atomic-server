@@ -35,6 +35,7 @@ import {
   ProxyConnections,
   type ProxyConnection,
 } from '@helpers/proxyConnections';
+import { NO_SERVER_APP_MESSAGE } from './noServer';
 import { appAgentOf } from './appAgent';
 import { ConnectDialog } from './ConnectDialog';
 import { useHostUI } from '@components/HostUI/hostUI';
@@ -571,6 +572,8 @@ async function mintViewToken(
   drive: string,
   plugin: string,
 ): Promise<MintResult> {
+  if (store.noServer) return { ok: false, error: NO_SERVER_APP_MESSAGE };
+
   const agent = store.getAgent();
 
   if (!agent) return { ok: false, error: 'Sign in to open this app.' };

@@ -3,6 +3,7 @@ import type { Store } from '@tomic/react';
 import { HostError, toHostErrorCode } from '@tomic/plugin';
 import type { ProxyHost } from '@helpers/proxyConnections';
 import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
+import { requireServer } from './noServer';
 import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import {
@@ -403,6 +404,7 @@ async function writeAsApp(
   app: string,
   request: Record<string, unknown>,
 ): Promise<{ subject: string }> {
+  requireServer(store);
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to use this app');
@@ -514,6 +516,7 @@ async function callExport(
   fn: string,
   args: unknown,
 ): Promise<unknown> {
+  requireServer(store);
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to call an app');
