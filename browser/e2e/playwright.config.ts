@@ -103,6 +103,9 @@ const seededStorage = [
 ];
 
 const config: PlaywrightTestConfig = {
+  // docs-screenshots/ has its own config (`pnpm docs:screenshots`) and is not
+  // part of the e2e suite.
+  testIgnore: '**/docs-screenshots/**',
   // Default `expect` timeout. Playwright's built-in is 5s; bump to 10s
   // so retrying assertions match the action timeout below. Tests that
   // need a longer specific budget still pass `{ timeout: ... }` directly.
