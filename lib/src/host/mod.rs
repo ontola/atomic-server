@@ -12,6 +12,7 @@
 //!
 //! - [`activity_status`]: what runs in the background now (a count by kind
 //!   for a small "busy" mark in the UI).
+//! - [`app_write`]: an app writing as its own agent, on behalf of the person.
 //! - [`rows`]: one resource as a list row (title, class name, emoji), read
 //!   from local propvals only.
 //! - [`lists`]: the home lists (AI chats, favorites, recently opened, activity),
@@ -47,6 +48,7 @@
 //! Native only: hosts run a tokio runtime; the browser has its own store.
 
 pub mod activity_status;
+pub mod app_write;
 pub mod chat_rooms;
 pub mod chats;
 pub mod context;

@@ -3423,6 +3423,37 @@ impl Db {
         Ok(Some(f(&agent)))
     }
 
+    /// The signing agent of every app that has a live key on this node,
+    /// revoked ones skipped. A key that cannot be opened is skipped too (with
+    /// a warning): one bad row must not stop the others from syncing.
+    ///
+    /// For a caller that signs on the apps' behalf in bulk (the outbox drain),
+    /// never one that hands the agents on. Two apps given the same key appear
+    /// once.
+    pub fn app_agent_keys(&self) -> Vec<crate::agents::Agent> {
+        let mut agents: Vec<crate::agents::Agent> = Vec::new();
+        for (_, bin) in self.kv.scan_prefix(Tree::AppAgent, b"").flatten() {
+            let Ok(stored) = AppAgent::from_bytes(&bin) else {
+                continue;
+            };
+            if stored.revoked {
+                continue;
+            }
+            let agent = self
+                .unwrap_secret(&stored.secret)
+                .and_then(|secret| crate::agents::Agent::from_secret(&secret));
+            match agent {
+                Ok(agent) => {
+                    if !agents.iter().any(|a| a.subject == agent.subject) {
+                        agents.push(agent);
+                    }
+                }
+                Err(e) => tracing::warn!("[app-agent] skipping a key that cannot be opened: {e}"),
+            }
+        }
+        agents
+    }
+
     pub fn delete_app_agent(&self, key: &AppAgentKey) -> AtomicResult<()> {
         // Replace the encrypted key and state in one KV write. Keep no secret,
         // but remember that this installation must not use the legacy signer.
