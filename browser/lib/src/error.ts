@@ -72,6 +72,10 @@ export const NOT_AVAILABLE_SERVER_UNREACHABLE_MESSAGE =
 /** A store with no server (`StoreOpts.noServer`) whose host does not have it. */
 export const NOT_IN_HOST_STORE_MESSAGE = "Not found in this device's store.";
 
+/** {@link NOT_IN_HOST_STORE_MESSAGE}, naming what was missing. Starts with the constant minus its full stop. */
+export const notInHostStoreMessage = (subject: string): string =>
+  `${NOT_IN_HOST_STORE_MESSAGE.slice(0, -1)}: ${subject}`;
+
 export const LOCAL_ONLY_NOT_FOUND_MESSAGE =
   'This resource belongs to a local-only drive but was not found in local storage.';
 

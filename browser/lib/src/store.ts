@@ -43,7 +43,7 @@ import {
   ErrorType,
   isTransportError,
   LOCAL_ONLY_NOT_FOUND_MESSAGE,
-  NOT_IN_HOST_STORE_MESSAGE,
+  notInHostStoreMessage,
   NOT_AVAILABLE_LOCALLY_MESSAGE,
   NOT_AVAILABLE_SERVER_UNREACHABLE_MESSAGE,
 } from './error.js';
@@ -3823,13 +3823,34 @@ export class Store {
     parent: string,
     localId: string,
   ): Promise<Resource | undefined> {
-    const { readConnectionSubjects } = await import('./plugin-connection.js');
-    const subjects = await readConnectionSubjects(
-      this,
-      drive,
-      core.properties.localId,
-      localId,
-    );
+    let subjects: string[];
+
+    if (this.noServer) {
+      // No server to answer `/query`: the host's database is the authority.
+      const local = await this.queryLocalDb({
+        drive,
+        property: core.properties.localId,
+        value: localId,
+        limit: 1000,
+      });
+
+      if (!local) {
+        throw new Error(
+          'Local database unavailable; refusing to infer that nothing has this localId',
+        );
+      }
+
+      subjects = local.subjects;
+    } else {
+      const { readConnectionSubjects } = await import('./plugin-connection.js');
+      subjects = await readConnectionSubjects(
+        this,
+        drive,
+        core.properties.localId,
+        localId,
+      );
+    }
+
     const matches: Resource[] = [];
 
     for (const subject of subjects) {
@@ -4533,7 +4554,10 @@ export class Store {
         this.failResource(
           subject,
           this.noServer
-            ? new AtomicError(NOT_IN_HOST_STORE_MESSAGE, ErrorType.NotFound)
+            ? new AtomicError(
+                notInHostStoreMessage(subject),
+                ErrorType.NotFound,
+              )
             : new AtomicError(
                 LOCAL_ONLY_NOT_FOUND_MESSAGE,
                 ErrorType.Transport,
@@ -4800,7 +4824,10 @@ export class Store {
       const stored = await this.fetchResourceFromClientDb(normalizedSubject);
       if (stored) return stored as Resource<C>;
       throw this.noServer
-        ? new AtomicError(NOT_IN_HOST_STORE_MESSAGE, ErrorType.NotFound)
+        ? new AtomicError(
+            notInHostStoreMessage(normalizedSubject),
+            ErrorType.NotFound,
+          )
         : new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport);
     }
 
