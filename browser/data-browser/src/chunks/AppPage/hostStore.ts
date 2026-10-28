@@ -10,10 +10,9 @@ import {
   core,
   destinationTablesFor,
   errorMessageFromResponse,
-  findSchema,
-  pluginSchema,
   signRequest,
 } from '@tomic/react';
+import { readSchema, schemaValue } from '@tomic/lib';
 
 /**
  * Answers the data requests an app's view makes.
@@ -133,10 +132,9 @@ export async function handleRequest(
       // app can be its own thing on its own page and a view of someone
       // else's rows on a table tab, without knowing which it is.
       const resource = await store.getResource(app);
-      const schema = await findSchema(store, drive, pluginSchema());
-      const own = schema.properties?.['app-data']
-        ? (resource.get(schema.properties['app-data']) as string | undefined)
-        : undefined;
+      const schema = await readSchema(store, drive);
+      const value = await schemaValue(store, schema, resource, 'app-data');
+      const own = typeof value === 'string' && value ? value : undefined;
       const subject = table ?? own;
 
       if (!subject) return undefined;

@@ -182,3 +182,49 @@ it('refuses to call another app without a server', async () => {
   expect(err).toBeInstanceOf(HostError);
   expect((err as HostError).code).toBe('unsupported');
 });
+
+it('finds the app’s table on a device that has not read the drive’s schema', async () => {
+  const h = host();
+  const appData = 'atomic:app-data-property';
+  const table = 'atomic:table';
+  const rowClass = 'atomic:row-class';
+  const app = 'atomic:app';
+  const rows = new Map<string, Record<string, unknown>>([
+    [app, { '@id': app, [appData]: table }],
+    [
+      appData,
+      {
+        '@id': appData,
+        'https://atomicdata.dev/properties/shortname': 'app-data',
+      },
+    ],
+    [
+      table,
+      { '@id': table, 'https://atomicdata.dev/properties/classtype': rowClass },
+    ],
+  ]);
+  const call = h.channel.call.bind(h.channel);
+  h.channel.call = async (method, args) => {
+    const subject = args[0] as string;
+
+    if (method === 'getResource' && rows.has(subject))
+      return JSON.stringify(rows.get(subject));
+
+    if (method === 'getResourcesWithSnapshots')
+      return (args[0] as string[]).map(s => ({
+        jsonAd: rows.has(s) ? JSON.stringify(rows.get(s)) : null,
+        snapshot: null,
+      }));
+
+    return call(method, args);
+  };
+  const { store } = await createEmbedStore(h.channel);
+
+  const data = await handleRequest(store, app, DRIVE, {
+    __atomic: true,
+    id: 1,
+    op: 'data',
+  });
+
+  expect(data).toEqual({ table, rowClass });
+});
