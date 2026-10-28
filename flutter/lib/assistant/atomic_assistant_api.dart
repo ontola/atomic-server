@@ -3,10 +3,14 @@ import 'dart:typed_data';
 
 import 'package:atomic_chat/atomic_chat.dart';
 import 'package:flutter/foundation.dart' show Listenable, debugPrint;
+import 'package:flutter/material.dart'
+    show BuildContext, MaterialPageRoute, Navigator;
 
 import '../atomic/account_store.dart';
 import '../atomic/atomic_client.dart';
+import '../atomic/own_ai.dart';
 import '../atomic/own_profile.dart';
+import '../screens/ai_settings_screen.dart';
 import 'package:atomic_store_flutter/bridge/api/assistant.dart'
     as ffi_assistant;
 import 'package:atomic_store_flutter/bridge/api/simple/drive.dart'
@@ -110,6 +114,7 @@ class AtomicAssistantApi extends AssistantApi {
             e['@id'] as String
     };
   }
+
   @override
   Future<ProfileIdentity?> identityOf(String agent) async {
     final name = await AtomicClient.getProperty(
@@ -192,6 +197,9 @@ class AtomicAssistantApi extends AssistantApi {
   @override
   Future<HostedAi?> hostedAi() async {
     if (fakeAiEnabled) return fakeHostedAi();
+    // The person's own provider, when they switched to it.
+    final own = await OwnAi.hostedAi();
+    if (own != null) return own;
     var saved = await AccountStore.read();
     if (saved == null && await AccountStore.signInWithAgent()) {
       saved = await AccountStore.read();
@@ -199,6 +207,12 @@ class AtomicAssistantApi extends AssistantApi {
     if (saved == null) return null;
     return HostedAi.forSession(saved);
   }
+
+  @override
+  bool get canOpenAiSettings => true;
+  @override
+  Future<void> openAiSettings(BuildContext context) => Navigator.of(context)
+      .push(MaterialPageRoute<void>(builder: (_) => const AiSettingsScreen()));
 
   @override
   bool get canSignUpForAi => !fakeAiEnabled;

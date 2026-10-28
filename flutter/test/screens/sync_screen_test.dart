@@ -4,15 +4,8 @@ import 'dart:convert';
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:atomic_flutter/atomic_flutter.dart' show SyncCard;
 import 'package:atomic_chat/atomic_chat.dart'
-    show
-        BackgroundActivity,
-        BackgroundState,
-        ChatUsageStore,
-        HostedAi,
-        ProfileAvatar,
-        ResourceWebView;
+    show BackgroundActivity, BackgroundState, ProfileAvatar, ResourceWebView;
 import 'package:atomic_app/atomic/account_store.dart';
-import 'package:atomic_app/screens/ai_usage_screen.dart';
 import 'package:atomic_app/screens/sync_screen.dart';
 import 'package:atomic_app/theme.dart';
 import 'package:flutter/material.dart';
@@ -529,223 +522,46 @@ void main() {
     expect(page!.cookies, isEmpty);
   });
 
-  group('AI credits', () {
-    Widget app(Future<shared.AtomicAiCredits?> Function() load) =>
-        _app(SyncScreen(
+  group('AI settings row', () {
+    Widget app({bool linked = true}) => _app(SyncScreen(
           backend: _Backend(servers: _Servers(managed: true)),
-          loadAccount: (_) async => AccountSummary(
-            address: 'joep@example.org',
-            portal: Uri.parse('https://portal.example'),
-          ),
-          loadCredits: load,
+          loadAccount: (_) async => linked
+              ? AccountSummary(
+                  address: 'joep@example.org',
+                  portal: Uri.parse('https://portal.example'),
+                )
+              : null,
+          loadCredits: () async => const shared.AtomicAiCredits(
+              enabled: true, allowanceMicros: 10000, remainingMicros: 4000),
         ));
 
-    testWidgets('shows the balance and refreshes on demand', (tester) async {
-      var remaining = 5000;
-      await tester.pumpWidget(app(() async => shared.AtomicAiCredits(
-            enabled: true,
-            allowanceMicros: 10000,
-            remainingMicros: remaining,
-            purchasedMicros: 2000,
-            purchasesEnabled: true,
-          )));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI credits'), 300);
-      expect(find.text('5 of 10 this month · 2 purchased'), findsOneWidget);
-      expect(find.text('Get more credits'), findsOneWidget);
-      remaining = 3000;
-      await tester.tap(find.byTooltip('Refresh AI credits'));
-      await tester.pumpAndSettle();
-      expect(find.text('3 of 10 this month · 2 purchased'), findsOneWidget);
-    });
-
-    testWidgets('offline keeps the last known balance', (tester) async {
-      var fail = false;
-      await tester.pumpWidget(app(() async {
-        if (fail) throw StateError('offline');
-        return const shared.AtomicAiCredits(
-            enabled: true, allowanceMicros: 10000, remainingMicros: 4000);
-      }));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI credits'), 300);
-      fail = true;
-      await tester.tap(find.byTooltip('Refresh AI credits'));
-      await tester.pumpAndSettle();
-      expect(find.text('4 of 10 this month · offline, last known'),
-          findsOneWidget);
-      expect(find.text('Get more credits'), findsNothing);
-    });
-
-    testWidgets('shows a dash before anything is known', (tester) async {
-      await tester.pumpWidget(app(() async => null));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI credits'), 300);
-      expect(find.text('—'), findsOneWidget);
-    });
-  });
-
-  group('AI model and usage', () {
-    setUp(() => SharedPreferences.setMockInitialValues({}));
-
-    const models = [
-      shared.AtomicAiModel(
-          id: 'a/small', label: 'Small', maxPrompt: 0.5, maxCompletion: 3),
-      shared.AtomicAiModel(id: 'b/big', label: 'Big'),
-    ];
-    shared.AtomicAiCredits credits(
-            {List<shared.AtomicAiModel> models = models}) =>
-        shared.AtomicAiCredits(
-          enabled: true,
-          allowanceMicros: 10000,
-          remainingMicros: 6000,
-          usedMicros: 4000,
-          purchasedMicros: 2000,
-          model: 'a/small',
-          models: models,
-        );
-
-    // Room for the whole page, so the rows are on screen to tap.
-    void tall(WidgetTester tester) {
-      tester.view.physicalSize = const Size(800, 3000);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-    }
-
-    Widget app(shared.AtomicAiCredits value,
-            {Future<shared.AtomicAiUsage?> Function()? usage}) =>
-        _app(SyncScreen(
-          backend: _Backend(servers: _Servers(managed: true)),
-          loadAccount: (_) async => AccountSummary(
-            address: 'joep@example.org',
-            portal: Uri.parse('https://portal.example'),
-          ),
-          loadCredits: () async => value,
-          loadUsage: usage,
-        ));
-
-    testWidgets('the model row picks a model and remembers it', (tester) async {
-      tall(tester);
-      await tester.pumpWidget(app(credits()));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI model'), 300);
-      expect(find.text('Small'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('ai-model-row')));
-      await tester.pumpAndSettle();
-      expect(find.text(r'$0.5 in, $3 out per 1M tokens'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('ai-model-b/big')));
-      await tester.pumpAndSettle();
-      expect(find.text('Big'), findsOneWidget);
-      expect(await HostedAi.storedModel(), 'b/big');
-    });
-
-    testWidgets('a stored model the account dropped shows the default',
+    testWidgets('one row opens the AI settings; the old rows moved there',
         (tester) async {
-      SharedPreferences.setMockInitialValues({HostedAi.modelKey: 'gone/x'});
-      await tester.pumpWidget(app(credits()));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI model'), 300);
-      expect(find.text('Small'), findsOneWidget);
-    });
-
-    testWidgets(
-        'all models: one curated model still gets a row and a stored '
-        'outside choice shows its label', (tester) async {
-      tall(tester);
-      SharedPreferences.setMockInitialValues({
-        HostedAi.modelKey: 'x/other',
-        HostedAi.modelLabelKey: 'Other',
-      });
-      await tester.pumpWidget(_app(SyncScreen(
-        backend: _Backend(servers: _Servers(managed: true)),
-        loadAccount: (_) async => AccountSummary(
-          address: 'joep@example.org',
-          portal: Uri.parse('https://portal.example'),
-        ),
-        loadCredits: () async => shared.AtomicAiCredits(
-          enabled: true,
-          allowanceMicros: 10000,
-          remainingMicros: 6000,
-          model: 'a/small',
-          models: [models.first],
-          allModels: true,
-        ),
-        loadModels: () async => const [
-          shared.AtomicAiModel(id: 'x/other', label: 'Other'),
-          shared.AtomicAiModel(id: 'y/third', label: 'Third'),
-        ],
-      )));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI model'), 300);
-      expect(find.text('Other'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('ai-model-row')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('ai-model-all')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('ai-model-y/third')));
-      await tester.pumpAndSettle();
-      expect(find.text('Third'), findsOneWidget);
-      expect(await HostedAi.storedModel(), 'y/third');
-      expect(await HostedAi.storedModelLabel(), 'Third');
-    });
-
-    testWidgets('no model row without a choice', (tester) async {
-      await tester.pumpWidget(app(credits(models: const [])));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI credits'), 300);
-      expect(find.byKey(const Key('ai-model-row')), findsNothing);
-      expect(find.text('AI usage'), findsOneWidget);
-    });
-
-    testWidgets('the token usage switch is on by default and is stored',
-        (tester) async {
-      tall(tester);
-      await tester.pumpWidget(app(credits()));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Show token usage'), 300);
-      final toggle = find.byKey(const Key('ai-show-usage'));
-      expect(tester.widget<Switch>(toggle).value, isTrue);
-      await tester.tap(toggle);
-      await tester.pumpAndSettle();
-      expect(tester.widget<Switch>(toggle).value, isFalse);
-      expect(await ChatUsageStore.shown(), isFalse);
-    });
-
-    testWidgets('the usage page shows credits, models and chats',
-        (tester) async {
-      tall(tester);
-      await tester.pumpWidget(app(credits(),
-          usage: () async => const shared.AtomicAiUsage(models: [
-                shared.AtomicAiUsageTotal(
-                    id: 'a/small',
-                    requests: 3,
-                    costMicros: 2500,
-                    promptTokens: 900,
-                    completionTokens: 40),
-              ], chats: [
-                shared.AtomicAiUsageTotal(
-                    id: 'did:ad:chat', requests: 1, promptTokens: 5),
-              ])));
+      // The AI settings read the own provider's key from the keychain.
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+              const MethodChannel(
+                  'plugins.it_nomads.com/flutter_secure_storage'),
+              (call) async => null);
+      await tester.pumpWidget(app());
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-          find.byKey(const Key('ai-usage-row')), 300);
-      await tester.tap(find.byKey(const Key('ai-usage-row')));
+          find.byKey(const Key('ai-settings-row')), 300);
+      expect(find.text('AI credits'), findsNothing);
+      expect(find.byKey(const Key('ai-model-row')), findsNothing);
+      expect(find.byKey(const Key('ai-show-usage')), findsNothing);
+      await tester.tap(find.byKey(const Key('ai-settings-row')));
       await tester.pumpAndSettle();
-      expect(find.text('4 of 10 credits'), findsOneWidget);
-      expect(find.text('900 in, 40 out · 2.5 credits · 3 requests'),
-          findsOneWidget);
-      expect(
-          find.byKey(const Key('ai-usage-chat-did:ad:chat')), findsOneWidget);
-      expect(find.byKey(const Key('ai-usage-unavailable')), findsNothing);
+      expect(find.byKey(const Key('ai-credits-row')), findsOneWidget);
     });
 
-    testWidgets('the usage page without a report shows only the credits',
+    testWidgets('without a linked account the row is still there',
         (tester) async {
-      await tester.pumpWidget(_app(AiUsageScreen(
-          loadCredits: () async => credits(), loadUsage: () async => null)));
+      await tester.pumpWidget(app(linked: false));
       await tester.pumpAndSettle();
-      expect(find.text('4 of 10 credits'), findsOneWidget);
-      expect(find.text('Models'), findsNothing);
-      expect(find.byKey(const Key('ai-usage-unavailable')), findsOneWidget);
+      await tester.scrollUntilVisible(
+          find.byKey(const Key('ai-settings-row')), 300);
+      expect(find.text('Link your account'), findsOneWidget);
     });
   });
 

@@ -162,6 +162,14 @@ class AccountStore {
     }
   }
 
+  /// The linked account's portal origin; null when none is linked.
+  static Future<Uri?> portal() async {
+    final saved = await read();
+    return saved == null
+        ? null
+        : shared.AtomicAccountClient.sessionOrigin(saved);
+  }
+
   /// The linked account's AI credits; null when no account is linked or the
   /// portal offers no included AI. Throws when the portal cannot be reached,
   /// so the caller can keep showing the last known balance.

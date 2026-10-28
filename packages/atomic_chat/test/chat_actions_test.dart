@@ -42,6 +42,15 @@ class _Api extends UnimplementedApi {
       renamed.add((subject, name));
 }
 
+class _SettingsApi extends _Api {
+  _SettingsApi(super.ai);
+  int opened = 0;
+  @override
+  bool get canOpenAiSettings => true;
+  @override
+  Future<void> openAiSettings(BuildContext context) async => opened++;
+}
+
 /// An AI whose answers are [answer]'s results in turn; a title request gets
 /// [title] (it throws when that is null).
 HostedAi _ai(
@@ -210,6 +219,21 @@ void main() {
       expect(find.byKey(const Key('chat-retry')), findsOneWidget);
     });
 
+    testWidgets('out of credits offers Buy credits and AI settings',
+        (tester) async {
+      final api = _SettingsApi(_ai([],
+          answer: (n) => Stream.error(StateError('Not enough AI credits')),
+          status: {'purchases_enabled': false},
+          portal: Uri.parse('https://atomic.place')));
+      await _open(tester, api);
+      await _ask(tester, 'Hello');
+      expect(find.byKey(const Key('chat-buy-credits')), findsOneWidget);
+      expect(find.text('Buy credits'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('chat-ai-settings')));
+      await tester.pumpAndSettle();
+      expect(api.opened, 1);
+    });
+
     testWidgets('no credits left is said before sending, with the link',
         (tester) async {
       final api = _Api(_ai([],
@@ -221,7 +245,8 @@ void main() {
       expect(find.byKey(const Key('chat-buy-credits')), findsOneWidget);
     });
 
-    test('credits url is the portal dashboard when purchases are on', () {
+    test('credits url is the portal dashboard, also when purchases are off',
+        () {
       HostedAi make(bool on, Uri? portal) => HostedAi(
             status: {'enabled': true, 'purchases_enabled': on},
             portal: portal,
@@ -230,7 +255,8 @@ void main() {
           );
       expect(make(true, Uri.parse('https://atomic.place')).creditsUrl,
           Uri.parse('https://atomic.place/dashboard'));
-      expect(make(false, Uri.parse('https://atomic.place')).creditsUrl, isNull);
+      expect(make(false, Uri.parse('https://atomic.place')).creditsUrl,
+          Uri.parse('https://atomic.place/dashboard'));
       expect(make(true, null).creditsUrl, isNull);
     });
   });

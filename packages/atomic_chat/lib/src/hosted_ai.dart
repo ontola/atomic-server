@@ -359,11 +359,9 @@ class HostedAi {
   int? get remaining => (status['remaining_micros'] as num?)?.toInt();
 
   /// Where more credits are bought (the portal's dashboard, as the web app
-  /// links it); null when the account cannot buy any or the portal is not
-  /// known.
-  Uri? get creditsUrl => status['purchases_enabled'] == true && portal != null
-      ? portal!.replace(path: '/dashboard')
-      : null;
+  /// links it); null when the portal is not known. Offered even when
+  /// `purchases_enabled` is false: the dashboard then explains why.
+  Uri? get creditsUrl => portal?.replace(path: '/dashboard');
 
   /// Whether [error] says the account has no credits left (the portal's own
   /// words, as the web app matches them).

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show Listenable;
+import 'package:flutter/widgets.dart' show BuildContext;
 import 'chat_parts.dart';
 import 'chat_window.dart';
 import 'hosted_ai.dart';
@@ -140,6 +141,14 @@ abstract class AssistantApi {
 
   /// The AI of the linked account; null when none is linked.
   Future<HostedAi?> hostedAi();
+
+  /// Whether this host has an AI settings page ([openAiSettings]): the chat
+  /// then links to it from its header and from the out-of-credits notice.
+  bool get canOpenAiSettings => false;
+
+  /// Opens the AI settings (mode, credits, model); completes when the person
+  /// leaves them, after which the chat looks the AI up again.
+  Future<void> openAiSettings(BuildContext context) async {}
 
   /// Whether this host can create the AI account for the identity this device
   /// already has ([signUpForAi]); the AI notice then offers it.

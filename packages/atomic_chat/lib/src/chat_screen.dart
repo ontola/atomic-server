@@ -379,6 +379,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
+  /// The AI settings page; the AI is looked up again after it, as the mode
+  /// or the key may have changed.
+  Future<void> _openAiSettings() async {
+    await widget.api.openAiSettings(context);
+    if (mounted) await _lookUpAi(quiet: true);
+  }
+
   bool _hadText = false;
 
   void _inputChanged() {
@@ -1636,8 +1643,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             subtitle: _ai?.canChoose == true
                                 ? _ai!.modelLabel
                                 : 'AI assistant',
-                            onSubtitleTap:
-                                _ai?.canChoose == true ? _pickModel : null,
+                            onSubtitleTap: widget.api.canOpenAiSettings
+                                ? _openAiSettings
+                                : _ai?.canChoose == true
+                                    ? _pickModel
+                                    : null,
                             icon: Icons.auto_awesome_outlined,
                           ),
                         ),
@@ -2218,21 +2228,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 constraints: const BoxConstraints(maxWidth: 360),
                 child: _signUpStep(c),
               ),
+              if (widget.api.canOpenAiSettings) _settingsButton(),
             ],
           ),
         ),
       );
 
-  /// Buy AI credits, when the account can.
+  /// Buy AI credits (the portal's dashboard), and switch AI in the settings.
   Widget _buyCredits(HostedAi? ai) {
     final url = ai?.creditsUrl;
-    if (url == null) return const SizedBox.shrink();
-    return TextButton(
-      key: const Key('chat-buy-credits'),
-      onPressed: () => _openLink('$url'),
-      child: const Text('Buy AI credits'),
-    );
+    return Wrap(children: [
+      if (url != null)
+        TextButton(
+          key: const Key('chat-buy-credits'),
+          onPressed: () => _openLink('$url'),
+          child: const Text('Buy credits'),
+        ),
+      if (widget.api.canOpenAiSettings) _settingsButton(),
+    ]);
   }
+
+  Widget _settingsButton() => TextButton(
+        key: const Key('chat-ai-settings'),
+        onPressed: _openAiSettings,
+        child: const Text('AI settings'),
+      );
 
   /// The credits are gone before a question is sent (the web app's notice).
   Widget _creditsBar(AppColors c, HostedAi ai) => Padding(
@@ -2269,7 +2289,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             Text(_noCredits,
                 style: TextStyle(
                     color: c.textSecondary, fontSize: ChatTextStyles.metaSize)),
-          Row(children: [
+          Wrap(children: [
             if (HostedAi.isOutOfCredits(error)) _buyCredits(ai),
             TextButton(
               key: const Key('chat-retry'),

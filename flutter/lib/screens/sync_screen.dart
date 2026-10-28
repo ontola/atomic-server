@@ -17,9 +17,6 @@ import 'package:atomic_chat/atomic_chat.dart'
         openResourceView,
         BackgroundActivity,
         BackgroundState,
-        ChatUsageStore,
-        HostedAi,
-        showAiModelPicker,
         timeAgo,
         ToastScope;
 
@@ -27,7 +24,7 @@ import '../assistant/atomic_assistant_api.dart';
 import '../atomic/account_store.dart';
 import '../atomic/settings_backend.dart';
 import 'account_link_dialog.dart';
-import 'ai_usage_screen.dart';
+import 'ai_settings_screen.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 
@@ -345,16 +342,6 @@ class _AccountSectionState extends State<_AccountSection> {
   AccountSummary? _account;
   String? _accountError;
 
-  /// Last known AI credits, kept when a refresh fails (offline).
-  shared.AtomicAiCredits? _credits;
-  bool _creditsLoading = false;
-  bool _creditsFailed = false;
-
-  /// The model chosen for the included AI (the default while none is), and
-  /// whether chats show their token usage.
-  String? _model, _modelLabel;
-  bool _showUsage = true;
-
   /// Where the active server is administered, when it is a managed one: the
   /// only place an account can be linked from.
   String? _portal;
@@ -364,9 +351,6 @@ class _AccountSectionState extends State<_AccountSection> {
   void initState() {
     super.initState();
     _loadAccount();
-    ChatUsageStore.shown().then((v) {
-      if (mounted) setState(() => _showUsage = v);
-    });
   }
 
   @override
@@ -419,79 +403,22 @@ class _AccountSectionState extends State<_AccountSection> {
       _accountError = accountError;
       _portal = portal;
     });
-    if (account != null) unawaited(_loadCredits());
   }
 
-  Future<void> _loadCredits() async {
-    if (_creditsLoading) return;
-    setState(() => _creditsLoading = true);
-    var failed = false;
-    shared.AtomicAiCredits? credits = _credits;
-    try {
-      credits = await (widget.loadCredits ?? AccountStore.aiCredits)();
-    } catch (_) {
-      failed = true;
-    }
-    final stored = await HostedAi.storedModel();
-    final storedLabel = await HostedAi.storedModelLabel();
-    if (!mounted) return;
-    setState(() {
-      _model = stored;
-      _modelLabel = storedLabel;
-      _credits = credits;
-      _creditsLoading = false;
-      _creditsFailed = failed;
-    });
-  }
-
-  /// The model in use: the stored choice while the account allows it (any
-  /// id when it offers all models), else its default.
-  shared.AtomicAiModel? get _chosenModel {
-    final models = _credits?.models ?? const <shared.AtomicAiModel>[];
-    final listed = models.where((m) => m.id == _model).firstOrNull;
-    if (listed != null) return listed;
-    final stored = _model;
-    if (_credits?.allModels == true && stored != null && stored.isNotEmpty) {
-      return shared.AtomicAiModel(id: stored, label: _modelLabel ?? '');
-    }
-    return models.firstOrNull;
-  }
-
-  Future<void> _pickModel() async {
-    final credits = _credits;
-    final picked = await showAiModelPicker(context,
-        models: credits?.models ?? const <shared.AtomicAiModel>[],
-        selected: _chosenModel?.id ?? '',
-        loadAll: credits?.allModels == true
-            ? (widget.loadModels ?? AccountStore.aiModels)
-            : null);
-    if (picked == null) return;
-    await HostedAi.storeModel(picked.id, label: picked.name);
-    if (mounted) {
-      setState(() {
-        _model = picked.id;
-        _modelLabel = picked.name;
-      });
-    }
-  }
-
-  void _openUsage() => Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => AiUsageScreen(
-            loadCredits: widget.loadCredits, loadUsage: widget.loadUsage),
+  void _openAiSettings() => Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => AiSettingsScreen(
+            loadCredits: widget.loadCredits,
+            loadUsage: widget.loadUsage,
+            loadModels: widget.loadModels),
       ));
 
-  String _creditsLine() {
-    final credits = _credits;
-    if (credits == null) return _creditsFailed ? 'Could not load' : '—';
-    return [
-      if (credits.allowance > 0)
-        '${credits.remaining} of ${credits.allowance} this month'
-      else
-        '${credits.remaining} left',
-      if (credits.purchased > 0) '${credits.purchased} purchased',
-      if (_creditsFailed) 'offline, last known',
-    ].join(' · ');
-  }
+  Widget get _aiSettingsRow => shared.SyncRow(
+        key: const Key('ai-settings-row'),
+        icon: Icons.auto_awesome_outlined,
+        title: 'AI settings',
+        subtitle: 'Provider, credits, model and usage',
+        onTap: _openAiSettings,
+      );
 
   void _fail(String what, Object e) =>
       shared.showErrorSnack(context, '$what: $e');
@@ -525,8 +452,6 @@ class _AccountSectionState extends State<_AccountSection> {
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => widget.portalPage?.call(page) ?? page,
     ));
-    // Credits may have been bought or used while away.
-    if (mounted) unawaited(_loadCredits());
   }
 
   /// In the system browser: it is where the emailed sign-in link will open,
@@ -617,55 +542,7 @@ class _AccountSectionState extends State<_AccountSection> {
         subtitle:
             server == null ? 'Off for ${_driveLabel()}' : _serverLine(server),
       ),
-      shared.SyncRow(
-        icon: Icons.auto_awesome_outlined,
-        title: 'AI credits',
-        subtitle: _creditsLine(),
-        trailing: _creditsLoading
-            ? const shared.SyncSpinner()
-            : IconButton(
-                tooltip: 'Refresh AI credits',
-                icon: const Icon(Icons.refresh, size: 24),
-                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-                onPressed: _loadCredits),
-      ),
-      if (_credits != null) ...[
-        if (_credits!.allModels || _credits!.models.length > 1)
-          shared.SyncRow(
-            key: const Key('ai-model-row'),
-            icon: Icons.tune,
-            title: 'AI model',
-            subtitle: _chosenModel?.name,
-            onTap: _pickModel,
-          ),
-        shared.SyncRow(
-          key: const Key('ai-usage-row'),
-          icon: Icons.bar_chart,
-          title: 'AI usage',
-          subtitle: 'Credits, models and chats this month',
-          onTap: _openUsage,
-        ),
-        shared.SyncRow(
-          icon: Icons.numbers,
-          title: 'Show token usage',
-          subtitle: 'In each AI chat',
-          trailing: Switch(
-            key: const Key('ai-show-usage'),
-            value: _showUsage,
-            onChanged: (v) {
-              setState(() => _showUsage = v);
-              ChatUsageStore.setShown(v);
-            },
-          ),
-        ),
-      ],
-      if (_credits?.purchasesEnabled == true)
-        shared.SyncRow(
-          icon: Icons.add_card_outlined,
-          title: 'Get more credits',
-          onTap: () => _openInBrowser(account.portal
-              .replace(path: '/dashboard', query: null, fragment: null)),
-        ),
+      _aiSettingsRow,
       shared.SyncRow(
         icon: Icons.open_in_new,
         title: 'Manage in the portal',
@@ -714,6 +591,7 @@ class _AccountSectionState extends State<_AccountSection> {
               'Show Cloud Vault and Cloud Server from ${Uri.tryParse(portal)?.host ?? portal}',
           onTap: () => _link(portal),
         ),
+        _aiSettingsRow,
       ]);
 }
 
