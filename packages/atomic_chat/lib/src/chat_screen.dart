@@ -372,10 +372,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _readUsage();
     _readMessages();
     final prompt = widget.initialPrompt?.trim() ?? '';
-    final context = widget.initialContext;
-    if (_chat == null && context != null) {
-      _attached.add(context);
-      _fromDrive.add(context.subject);
+    final attached = widget.initialContext;
+    if (_chat == null && attached != null) {
+      _attached.add(attached);
+      _fromDrive.add(attached.subject);
     }
     if (_chat == null && prompt.isNotEmpty) {
       _input.text = prompt;
