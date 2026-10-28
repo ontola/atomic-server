@@ -71,6 +71,7 @@ export function appFrameDocument({
 <meta http-equiv="Content-Security-Policy" content="${frameCsp(nonce)}" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Plugin</title>
+<style>html,body{margin:0;padding:0;height:100%}#root{height:100%}</style>
 <style id="__atomic_theme"></style>
 <script type="application/json" id="__atomic_sources">${scriptJson({ source, client })}</script>
 <script type="module" nonce="${nonce}">

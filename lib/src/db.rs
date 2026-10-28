@@ -2552,6 +2552,16 @@ impl Db {
     }
 
     /// Every host → Drive mapping in this store, sorted by host.
+    /// The first stored subject that starts with `prefix`, if any. For the
+    /// short refs an AI writes (`#<start of the subject>`), see
+    /// `browser/lib/src/subject-refs.ts`.
+    pub fn subject_with_prefix(&self, prefix: &str) -> Option<String> {
+        self.kv
+            .scan_prefix(Tree::Resources, prefix.as_bytes())
+            .flatten()
+            .find_map(|(key, _)| String::from_utf8(key.to_vec()).ok())
+    }
+
     pub fn list_drive_mappings(&self) -> AtomicResult<Vec<(String, String)>> {
         let mut out = Vec::new();
 

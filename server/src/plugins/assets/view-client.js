@@ -1,3 +1,4 @@
+// @wc-ignore-file
 /**
  * The data API a view gets, and the only one it should need.
  *

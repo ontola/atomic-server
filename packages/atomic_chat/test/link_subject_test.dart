@@ -18,4 +18,11 @@ void main() {
     expect(linkSubject('https://example.com/?subject=x'), isNull);
     expect(linkSubject('https://example.com/page'), isNull);
   });
+
+  test('a short ref is recognised, nothing else is', () {
+    expect(isShortRef('#RbGIlHy6'), isTrue);
+    expect(isShortRef('#short'), isFalse);
+    expect(isShortRef('#has space1'), isFalse);
+    expect(isShortRef('atomic:RbGIlHy6'), isFalse);
+  });
 }

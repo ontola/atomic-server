@@ -157,6 +157,7 @@ fn render_plugin_ui_html(nonce: &str) -> String {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Plugin</title>
+<style>html,body{{margin:0;padding:0;height:100%}}#root{{height:100%}}</style>
 <style id="__atomic_theme"></style>
 <script nonce="{nonce}">
 var loaded = false;
@@ -261,6 +262,7 @@ try {{
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Plugin</title>
 {css_link}
+<style>html,body{{margin:0;padding:0;height:100%}}#root{{height:100%}}</style>
 <style id="__atomic_theme"></style>
 {script}
 <script nonce="{nonce}">

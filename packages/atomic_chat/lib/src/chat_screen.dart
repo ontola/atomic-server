@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart'
     show ValueListenable, kIsWeb, visibleForTesting;
@@ -1610,11 +1611,30 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
       return;
     }
+    if (isShortRef(url)) {
+      _openShortRef(url);
+      return;
+    }
     final uri = Uri.tryParse(url);
     if (uri == null || !uri.hasScheme) return _linkFailed(url);
     launchUrl(uri, mode: LaunchMode.externalApplication).then((ok) {
       if (!ok) _linkFailed(url);
     }, onError: (Object _) => _linkFailed(url));
+  }
+
+  /// An AI's short ref (`#RbGIlHy6`, the start of a subject): the device's
+  /// store finds the resource it stands for.
+  Future<void> _openShortRef(String ref) async {
+    String? subject;
+    try {
+      final answer =
+          await widget.api.embedCall('expandRef', jsonEncode([ref]));
+      final found = jsonDecode(answer);
+      if (found is String && found.isNotEmpty) subject = found;
+    } catch (_) {}
+    if (!mounted) return;
+    if (subject == null) return _linkFailed(ref);
+    _openLink(subject);
   }
 
   /// A tap on a link always shows something: what could not be opened.
@@ -2853,6 +2873,11 @@ class _ReviewSheet extends StatelessWidget {
     );
   }
 }
+
+/// Whether [url] is an AI's short ref to a resource: `#` and the first 8 or
+/// more characters of its subject (see `browser/lib/src/subject-refs.ts`).
+@visibleForTesting
+bool isShortRef(String url) => RegExp(r'^#[A-Za-z0-9_-]{8,}$').hasMatch(url);
 
 /// The resource a chat link points to: a subject itself, or the web app's
 /// `…?subject=` link to one. Null for anything else.

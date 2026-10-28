@@ -208,6 +208,22 @@ async fn query(store: &Db, opts: &Json) -> Result<Json, String> {
     }))
 }
 
+/// The subject a short ref (`#<8+ chars>`, with or without the `#`) stands
+/// for: the stored resource whose subject body starts with it.
+fn expand_ref(store: &Db, reference: &str) -> Option<String> {
+    let body = reference.strip_prefix('#').unwrap_or(reference);
+    if body.len() < 8
+        || !body
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return None;
+    }
+    ["atomic:", "did:ad:"]
+        .iter()
+        .find_map(|scheme| store.subject_with_prefix(&format!("{scheme}{body}")))
+}
+
 fn search(store: &Db, args: &[Json]) -> Result<Json, String> {
     let q = str_arg(args, 0)?;
     let opts = args.get(1).cloned().unwrap_or(Json::Null);
@@ -459,6 +475,8 @@ impl EmbedHost {
                 .map(|b| b64(&b))),
             "query" => query(store, args.first().unwrap_or(&Json::Null)).await?,
             "search" => search(store, &args)?,
+            // An AI's short ref (`#RbGIlHy6`): the start of a subject's body.
+            "expandRef" => json!(expand_ref(store, str_arg(&args, 0)?)),
             "allSubjects" => json!(store
                 .all_resources(true)
                 .map(|r| r.get_subject().to_string())
@@ -644,6 +662,27 @@ mod tests {
             ask(&host(&d), "opened", json!(["x", d.drive])).await,
             json!(false)
         );
+    }
+
+    #[tokio::test]
+    async fn a_short_ref_expands_to_its_subject() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let folder = d
+            .store
+            .create_resource(urls::FOLDER, &d.drive, "Ref folder", None)
+            .await
+            .unwrap();
+        let body = folder.split_once(':').unwrap().1;
+        let body = body.strip_prefix("ad:").unwrap_or(body);
+        let reference = format!("#{}", &body[..8]);
+
+        assert_eq!(
+            ask(&h, "expandRef", json!([reference])).await,
+            json!(folder)
+        );
+        assert_eq!(ask(&h, "expandRef", json!(["#zzzzzzzz"])).await, Json::Null);
+        assert_eq!(ask(&h, "expandRef", json!(["#short"])).await, Json::Null);
     }
 
     #[tokio::test]
