@@ -100,8 +100,8 @@ class AtomicAssistantApi extends AssistantApi {
   @override
   Future<Set<String>?> currentMeetings(String drive) async {
     // The drive's `currentMeetings`, read the way the page reads a resource.
-    final raw = await AtomicClient.embedCall(
-        'getResource', jsonEncode([drive]));
+    final raw =
+        await AtomicClient.embedCall('getResource', jsonEncode([drive]));
     final json = jsonDecode(raw);
     if (json is! Map) return null;
     final list = json['https://atomicdata.dev/properties/currentMeetings'];
@@ -122,13 +122,14 @@ class AtomicAssistantApi extends AssistantApi {
         .catchError((Object _) => '');
     return name.isEmpty ? null : ProfileIdentity(name: name, subject: agent);
   }
+
   /// The existing direct conversation with [agent]. Starting a new one
   /// needs the conversation keys the app cannot make yet, so none is created.
   @override
   Future<String?> conversationWith(String agent) async {
     String key(String s) => s.replaceFirst(RegExp(r'^(atomic|did:ad):'), '');
-    final rows = jsonDecode(await ffi_assistant.listConversations(limit: 200))
-        as List;
+    final rows =
+        jsonDecode(await ffi_assistant.listConversations(limit: 200)) as List;
     for (final row in rows.cast<Map<String, dynamic>>()) {
       final peer = row['peer'];
       if (peer is Map && key('${peer['subject']}') == key(agent)) {
@@ -137,6 +138,7 @@ class AtomicAssistantApi extends AssistantApi {
     }
     return null;
   }
+
   @override
   Stream<List<String>>? get resourceChanges =>
       AtomicClient.resourceChanges.stream;
@@ -213,6 +215,20 @@ class AtomicAssistantApi extends AssistantApi {
   @override
   Future<void> openAiSettings(BuildContext context) => Navigator.of(context)
       .push(MaterialPageRoute<void>(builder: (_) => const AiSettingsScreen()));
+
+  @override
+  bool get canSwitchAiSource => true;
+  @override
+  Future<bool> usesOwnAi() => OwnAi.enabled();
+  @override
+  Future<void> setUsesOwnAi(BuildContext context, bool own) async {
+    if (own && await OwnAi.apiKey() == null) {
+      // No key yet: the settings page asks for it and switches on saving.
+      if (context.mounted) await openAiSettings(context);
+      return;
+    }
+    await OwnAi.setEnabled(own);
+  }
 
   @override
   bool get canSignUpForAi => !fakeAiEnabled;

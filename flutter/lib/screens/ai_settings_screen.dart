@@ -49,7 +49,7 @@ class AiSettingsScreen extends StatefulWidget {
 }
 
 class _AiSettingsScreenState extends State<AiSettingsScreen> {
-  bool _own = false, _hasKey = false, _showUsage = true;
+  bool _own = false, _hasKey = false, _showUsage = false;
   shared.AtomicAiCredits? _credits;
   Uri? _portal;
   bool _loading = false, _failed = false;

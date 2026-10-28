@@ -99,7 +99,7 @@ void main() {
     expect(find.byKey(const Key('ai-model-row')), findsOneWidget);
     expect(find.text('Small'), findsOneWidget);
     expect(tester.widget<Switch>(find.byKey(const Key('ai-show-usage'))).value,
-        isTrue);
+        isFalse);
   });
 
   testWidgets('Buy credits only with a portal', (tester) async {
@@ -182,7 +182,7 @@ void main() {
     expect(find.text('AI usage'), findsOneWidget);
   });
 
-  testWidgets('the token usage switch is on by default and is stored',
+  testWidgets('the token usage switch is off by default and is stored',
       (tester) async {
     tall(tester);
     await tester.pumpWidget(_screen());
@@ -190,8 +190,8 @@ void main() {
     final toggle = find.byKey(const Key('ai-show-usage'));
     await tester.tap(toggle);
     await tester.pumpAndSettle();
-    expect(tester.widget<Switch>(toggle).value, isFalse);
-    expect(await ChatUsageStore.shown(), isFalse);
+    expect(tester.widget<Switch>(toggle).value, isTrue);
+    expect(await ChatUsageStore.shown(), isTrue);
   });
 
   testWidgets('the usage row opens the usage page', (tester) async {

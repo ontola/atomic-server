@@ -111,9 +111,8 @@ abstract class AssistantApi {
       {ActivityEntry? before,
       int limit = activityPageSize,
       bool includeOwn = false}) async {
-    final all = includeOwn
-        ? await activityWithMine(100000)
-        : await activity(100000);
+    final all =
+        includeOwn ? await activityWithMine(100000) : await activity(100000);
     final i = before == null
         ? -1
         : all.indexWhere(
@@ -149,6 +148,19 @@ abstract class AssistantApi {
   /// Opens the AI settings (mode, credits, model); completes when the person
   /// leaves them, after which the chat looks the AI up again.
   Future<void> openAiSettings(BuildContext context) async {}
+
+  /// Whether this host lets the person switch the AI between the included one
+  /// and their own key ([usesOwnAi], [setUsesOwnAi]); the chat's AI sheet then
+  /// offers the switch.
+  bool get canSwitchAiSource => false;
+
+  /// Whether the AI in use is the person's own key.
+  Future<bool> usesOwnAi() async => false;
+
+  /// Switches to the person's own key ([own]) or back to the included AI.
+  /// Switching to the own key without a saved one may open the host's
+  /// settings to enter it; read [usesOwnAi] afterwards for what took effect.
+  Future<void> setUsesOwnAi(BuildContext context, bool own) async {}
 
   /// Whether this host can create the AI account for the identity this device
   /// already has ([signUpForAi]); the AI notice then offers it.

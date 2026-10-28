@@ -73,15 +73,15 @@ class ChatUsage {
 /// The web app does not store usage in the chat log, so there is nothing to
 /// read back from the chat itself; each answer's usage is added here.
 class ChatUsageStore {
-  /// SharedPreferences key: show the usage of a chat (default on).
+  /// SharedPreferences key: show the usage of a chat (default off).
   static const showKey = 'ai_show_usage';
   static String _key(String chat) => 'ai_usage:$chat';
 
   static Future<bool> shown() async {
     try {
-      return (await SharedPreferences.getInstance()).getBool(showKey) ?? true;
+      return (await SharedPreferences.getInstance()).getBool(showKey) ?? false;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 

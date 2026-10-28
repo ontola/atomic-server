@@ -236,7 +236,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   /// What the AI used in this chat, and whether to show it (the setting).
   ChatUsage _usage = const ChatUsage();
-  bool _showUsage = true;
+  bool _showUsage = false;
 
   /// The answer's parts as they stream in; null when none is coming.
   List<ChatPart>? _partial;
@@ -384,6 +384,113 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _openAiSettings() async {
     await widget.api.openAiSettings(context);
     if (mounted) await _lookUpAi(quiet: true);
+  }
+
+  bool get _hasAiSheet =>
+      widget.api.canSwitchAiSource ||
+      widget.api.canOpenAiSettings ||
+      _ai != null;
+
+  /// The AI of this chat in a sheet: which source answers (included or the
+  /// person's own key), the model, the credits left and what this chat used.
+  Future<void> _aiSheet() async {
+    final c = context.appColors;
+    final canSwitch = widget.api.canSwitchAiSource;
+    var own = canSwitch && await widget.api.usesOwnAi();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheet) => StatefulBuilder(builder: (sheet, setSheet) {
+        final ai = _ai;
+        final remaining = ai?.remaining;
+        final url = ai?.creditsUrl;
+        Future<void> switchTo(bool value) async {
+          if (value == own) return;
+          await widget.api.setUsesOwnAi(context, value);
+          own = await widget.api.usesOwnAi();
+          if (mounted) await _lookUpAi(quiet: true);
+          if (sheet.mounted) setSheet(() {});
+        }
+
+        void close(VoidCallback f) {
+          Navigator.pop(sheet);
+          f();
+        }
+
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              key: const Key('chat-ai-sheet'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (canSwitch)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: SegmentedButton<bool>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                            value: false,
+                            label: Text('Included AI',
+                                key: const Key('chat-ai-included'))),
+                        ButtonSegment(
+                            value: true,
+                            label:
+                                Text('Own key', key: const Key('chat-ai-own'))),
+                      ],
+                      selected: {own},
+                      onSelectionChanged: (v) => switchTo(v.first),
+                    ),
+                  ),
+                if (ai != null)
+                  ListTile(
+                    key: const Key('chat-ai-model'),
+                    leading: Icon(Icons.auto_awesome_outlined, color: c.main),
+                    title: const Text('Model'),
+                    subtitle: Text(ai.modelLabel),
+                    trailing:
+                        ai.canChoose ? const Icon(Icons.expand_more) : null,
+                    onTap: ai.canChoose && !_sending
+                        ? () => close(_pickModel)
+                        : null,
+                  ),
+                if (remaining != null)
+                  ListTile(
+                    key: const Key('chat-ai-credits'),
+                    leading: Icon(Icons.account_balance_wallet_outlined,
+                        color: c.main),
+                    title: const Text('Credits left'),
+                    subtitle: Text(formatCredits(remaining)),
+                    trailing: url == null
+                        ? null
+                        : TextButton(
+                            key: const Key('chat-buy-credits'),
+                            onPressed: () => close(() => _openLink('$url')),
+                            child: const Text('Buy credits'),
+                          ),
+                  ),
+                ListTile(
+                  leading: Icon(Icons.data_usage, color: c.main),
+                  title: const Text('Used in this chat'),
+                  subtitle: Text(
+                      _usage.isEmpty ? 'Nothing used yet' : _usage.line,
+                      key: const Key('chat-usage')),
+                ),
+                if (widget.api.canOpenAiSettings)
+                  ListTile(
+                    key: const Key('chat-ai-settings-all'),
+                    leading: Icon(Icons.settings_outlined, color: c.main),
+                    title: const Text('All AI settings'),
+                    onTap: () => close(_openAiSettings),
+                  ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
   }
 
   bool _hadText = false;
@@ -1634,7 +1741,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       appBar: AppTopBar(
                         compact: true,
                         title: _headerTitle,
-                        actions: const [ResourceMoreButton()],
+                        actions: [
+                          if (_hasAiSheet)
+                            IconButton(
+                              key: const Key('chat-ai-button'),
+                              tooltip: 'AI',
+                              icon: const Icon(Icons.tune),
+                              onPressed: _aiSheet,
+                            ),
+                          const ResourceMoreButton(),
+                        ],
                         titleWidget: InkWell(
                           key: const Key('chat-title'),
                           onTap: _chat == null ? null : _askRename,
@@ -1643,11 +1759,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             subtitle: _ai?.canChoose == true
                                 ? _ai!.modelLabel
                                 : 'AI assistant',
-                            onSubtitleTap: widget.api.canOpenAiSettings
-                                ? _openAiSettings
-                                : _ai?.canChoose == true
-                                    ? _pickModel
-                                    : null,
+                            onSubtitleTap: _hasAiSheet ? _aiSheet : null,
                             icon: Icons.auto_awesome_outlined,
                           ),
                         ),
@@ -2381,7 +2493,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Text(_usage.line,
-                  key: const Key('chat-usage'),
+                  key: const Key('chat-usage-line'),
                   style: TextStyle(
                       color: c.textSecondary,
                       fontSize: ChatTextStyles.metaSize)),

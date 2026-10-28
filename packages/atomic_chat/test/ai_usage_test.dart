@@ -51,6 +51,19 @@ class _Api extends UnimplementedApi {
   Future<void> renameResource(String subject, String name) async {}
 }
 
+class _SwitchApi extends _Api {
+  _SwitchApi(super.ai);
+  bool own = false;
+
+  @override
+  bool get canSwitchAiSource => true;
+  @override
+  Future<bool> usesOwnAi() async => own;
+  @override
+  Future<void> setUsesOwnAi(BuildContext context, bool value) async =>
+      own = value;
+}
+
 /// An AI that answers every question with [chunks]; [asked] gets the model
 /// and chat of each request.
 HostedAi _ai(
@@ -153,6 +166,8 @@ void main() {
 
       await tester.tap(find.byKey(const Key('chat-header-subtitle')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('chat-ai-model')));
+      await tester.pumpAndSettle();
       expect(find.text(r'$10 in, $30 out per 1M tokens'), findsOneWidget);
       await tester.tap(find.byKey(const Key('ai-model-b/big')));
       await tester.pumpAndSettle();
@@ -225,6 +240,8 @@ void main() {
       await _open(tester, _Api(ai), subject: 'did:ad:chat');
       await tester.tap(find.byKey(const Key('chat-header-subtitle')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('chat-ai-model')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('ai-model-all')));
       await tester.pumpAndSettle();
       expect(find.text('Llama 3'), findsOneWidget);
@@ -252,6 +269,8 @@ void main() {
       final ai = _ai([], const [], status: {'models': _models});
       await _open(tester, _Api(ai), subject: 'did:ad:chat');
       await tester.tap(find.byKey(const Key('chat-header-subtitle')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('chat-ai-model')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('ai-model-all')), findsNothing);
     });
@@ -320,10 +339,11 @@ void main() {
 
     testWidgets('an answer\'s usage is stored and shown under the chat',
         (tester) async {
+      SharedPreferences.setMockInitialValues({ChatUsageStore.showKey: true});
       final asked = <({String model, String? chat})>[];
       final api = _Api(_ai(asked, [_text('Hi'), _usage(120, 30, 0.00042)]));
       await _open(tester, api);
-      expect(find.byKey(const Key('chat-usage')), findsNothing);
+      expect(find.byKey(const Key('chat-usage-line')), findsNothing);
 
       await _ask(tester, 'Hello');
       expect(
@@ -338,20 +358,50 @@ void main() {
       expect(asked.last.chat, 'did:ad:chat');
     });
 
-    testWidgets('the setting hides the total', (tester) async {
-      SharedPreferences.setMockInitialValues({ChatUsageStore.showKey: false});
+    testWidgets('the line is off by default; the AI sheet has the total',
+        (tester) async {
       final api = _Api(_ai([], [_text('Hi'), _usage(120, 30)]));
       await _open(tester, api);
       await _ask(tester, 'Hello');
-      expect(find.byKey(const Key('chat-usage')), findsNothing);
+      expect(find.byKey(const Key('chat-usage-line')), findsNothing);
       // It was still counted.
       expect((await ChatUsageStore.load('did:ad:chat')).outputTokensUsed, 30);
+
+      await tester.tap(find.byKey(const Key('chat-ai-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('chat-ai-sheet')), findsOneWidget);
+      expect(find.text('Tokens: 120 in, 30 out'), findsOneWidget);
+    });
+
+    testWidgets('the top bar AI button opens the sheet with the switcher',
+        (tester) async {
+      final api = _SwitchApi(_ai([], const [],
+          status: {'models': _models, 'remaining_micros': 12600}));
+      await _open(tester, api, subject: 'did:ad:chat');
+      await tester.tap(find.byKey(const Key('chat-ai-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('chat-ai-included')), findsOneWidget);
+      expect(find.byKey(const Key('chat-ai-own')), findsOneWidget);
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('chat-ai-model')),
+              matching: find.text('Small')),
+          findsOneWidget);
+      expect(find.text('13 credits'), findsOneWidget);
+      expect(find.text('Nothing used yet'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('chat-ai-own')));
+      await tester.pumpAndSettle();
+      expect(api.own, isTrue);
+      expect(find.byKey(const Key('chat-ai-sheet')), findsOneWidget);
     });
 
     testWidgets('an opened chat shows what it used before', (tester) async {
       await ChatUsageStore.add('did:ad:chat',
           const ChatUsage(inputTokensUsed: 7, outputTokensUsed: 3));
       await _open(tester, _Api(_ai([], const [])), subject: 'did:ad:chat');
+      await tester.tap(find.byKey(const Key('chat-ai-button')));
+      await tester.pumpAndSettle();
       expect(find.text('Tokens: 7 in, 3 out'), findsOneWidget);
     });
   });
