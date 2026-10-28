@@ -32,6 +32,7 @@ patchedDependencies:
   '@reactflow/core': 935d9637d2c27d9e60fa127023cedd926c1aa26549a352ac28662c5f5f9bca8e
   '@wuchale/jsx@0.12.5': c62a6c8ae50964c9b52a44a8f50a85ccd1e7bd003758e3143f2e985b9051e8e6
   loro-prosemirror@0.4.3: cfeb56b4474c59fdd4a3feb56f010825ca89494fca7a5bb422aef1a84e626bf8
+  mdast-util-gfm-autolink-literal@2.0.1: da7c0524454fce118d6bf2ffb3ebe1474a4f4193419ee4bb293c2b52d342ba8b
   playwright-core@1.63.0: 51ccaaf15d34f7f1a82e936ef746184b5ff972a17b05ddff80d43daf6d89d86b
   wuchale@0.25.6: 3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9
 
@@ -2576,12 +2577,14 @@ packages:
   '@opentelemetry/sdk-trace-base@2.7.1':
     resolution: {integrity: sha512-NAYIlsF8MPUsKqJMiDQJTMPOmlbawC1Iz/omMLygZ1C9am8fTKYjTaI+OZM+WTY3t3Glo0wnOg/6/pac6RGPPw==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.3.0 <1.10.0'
 
   '@opentelemetry/sdk-trace-node@2.7.1':
     resolution: {integrity: sha512-pCpQxU68lV+I9s9svqMyVu5iHdDDUnqUpSxqwyCU8A9ejEsSnMPCbearwsUO4yk08ZJzAIUCFuReMdVQvHrdvg==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.0.0 <1.10.0'
 
@@ -17923,7 +17926,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  mdast-util-gfm-autolink-literal@2.0.1:
+  mdast-util-gfm-autolink-literal@2.0.1(patch_hash=da7c0524454fce118d6bf2ffb3ebe1474a4f4193419ee4bb293c2b52d342ba8b):
     dependencies:
       '@types/mdast': 4.0.4
       ccount: 2.0.1
@@ -17971,7 +17974,7 @@ snapshots:
   mdast-util-gfm@3.1.0:
     dependencies:
       mdast-util-from-markdown: 2.0.3
-      mdast-util-gfm-autolink-literal: 2.0.1
+      mdast-util-gfm-autolink-literal: 2.0.1(patch_hash=da7c0524454fce118d6bf2ffb3ebe1474a4f4193419ee4bb293c2b52d342ba8b)
       mdast-util-gfm-footnote: 2.1.0
       mdast-util-gfm-strikethrough: 2.0.0
       mdast-util-gfm-table: 2.0.0

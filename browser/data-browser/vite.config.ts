@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, parseAstAsync } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { oxcReactCompiler } from './oxcReactCompilerPlugin';
@@ -223,6 +223,42 @@ export default defineConfig(({ mode }) => {
         async handleHotUpdate({ file }) {
           if (/Website\/runtime\/[^/]+\.ts$/.test(file)) {
             await buildWebsiteRuntime();
+          }
+        },
+      },
+      {
+        // Safari before 16.4 (iOS 16.3 and older) throws a SyntaxError on a
+        // regex literal with a lookbehind, `(?<=` or `(?<!`, and then loads
+        // none of the bundle: a blank page that never reaches Sentry. The
+        // build target doesn't lower regexes, so fail the build instead.
+        name: 'no-lookbehind-regex-literals',
+        apply: 'build',
+        async generateBundle(_options, bundle) {
+          const found: string[] = [];
+
+          const walk = (node: unknown, file: string) => {
+            if (!node || typeof node !== 'object') return;
+
+            const regex = (node as { regex?: { pattern: string } }).regex;
+
+            if (regex && /\(\?<[=!]/.test(regex.pattern)) {
+              found.push(`${file}: /${regex.pattern.slice(0, 80)}/`);
+            }
+
+            for (const child of Object.values(node)) walk(child, file);
+          };
+
+          for (const item of Object.values(bundle)) {
+            if (item.type === 'chunk') {
+              walk(await parseAstAsync(item.code), item.fileName);
+            }
+          }
+
+          if (found.length > 0) {
+            this.error(
+              `Lookbehind regex literals break Safari < 16.4; rewrite them ` +
+                `(or patch the dependency):\n${found.join('\n')}`,
+            );
           }
         },
       },

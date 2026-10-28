@@ -64,3 +64,4 @@ patchedDependencies:
   loro-prosemirror@0.4.3: patches/loro-prosemirror@0.4.3.patch
   wuchale@0.25.6: patches/wuchale@0.25.6.patch
   '@wuchale/jsx@0.12.5': patches/@wuchale__jsx@0.12.5.patch
+  mdast-util-gfm-autolink-literal@2.0.1: patches/mdast-util-gfm-autolink-literal@2.0.1.patch
