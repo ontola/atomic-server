@@ -177,6 +177,19 @@ void main() {
     expect(page.scripts.single, 'window.__atomicReply(5,true,"false")');
   });
 
+  test('a spare asking the assistant is told no', () async {
+    pool = makePool()..warmUp();
+    await pumpEventQueue();
+    final page = pages.single;
+    page.send(jsonEncode({
+      'id': 8,
+      'method': 'askAssistant',
+      'args': ['Fix it', 'did:ad:app']
+    }));
+    await pumpEventQueue();
+    expect(page.scripts.single, 'window.__atomicReply(8,true,"false")');
+  });
+
   test('a spare asking for a call is told no', () async {
     pool = makePool()..warmUp();
     await pumpEventQueue();

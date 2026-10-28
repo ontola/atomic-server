@@ -107,10 +107,21 @@ class ChatScreen extends StatefulWidget {
           ? WebViewToolBridge(api: api, drive: drive)
           : null;
 
+  /// Sent as the first message when this screen opens a new chat (a null
+  /// [subject]), once, as if the person had typed it and pressed send. When
+  /// the AI is not available it stays in the field instead.
+  final String? initialPrompt;
+
+  /// A resource attached to the chat as context from the start, like one
+  /// picked with the attach button.
+  final ContextResource? initialContext;
+
   const ChatScreen({
     super.key,
     required this.api,
     this.subject,
+    this.initialPrompt,
+    this.initialContext,
     this.drive = '',
     this.title = '',
     this.speechInput,
@@ -268,6 +279,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// What the person attached, in the order they picked it; sent to the AI
   /// with every message of this screen, never stored in the chat.
   final List<_Attached> _attached = [];
+
+  /// [ChatScreen.initialPrompt] was handed to [_send].
+  bool _initialPromptSent = false;
   final Map<String, String> _attachedText = {};
 
   /// Resources added with the attach button (not one of the pills): their
@@ -357,7 +371,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _chat = widget.subject;
     _readUsage();
     _readMessages();
-    _lookUpAi();
+    final prompt = widget.initialPrompt?.trim() ?? '';
+    final context = widget.initialContext;
+    if (_chat == null && context != null) {
+      _attached.add(context);
+      _fromDrive.add(context.subject);
+    }
+    if (_chat == null && prompt.isNotEmpty) {
+      _input.text = prompt;
+      _lookUpAi().then((_) {
+        if (!mounted || _initialPromptSent) return;
+        _initialPromptSent = true;
+        // Without an AI the prompt waits in the field for the person.
+        if (_ai != null) _send();
+      });
+    } else {
+      _lookUpAi();
+    }
     if (_chat == null) _readPicker();
     // New on a new chat that is still empty: its field gets the cursor.
     WidgetsBinding.instance.addPostFrameCallback((_) {

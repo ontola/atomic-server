@@ -12,6 +12,7 @@ import 'app_shell.dart';
 import 'app_sidebar_icons.dart';
 import 'app_theme.dart';
 import 'assistant_api.dart';
+import 'chat_screen.dart';
 import 'conversation_screen.dart';
 import 'embed_server.dart';
 import 'follow_controller.dart';
@@ -948,6 +949,10 @@ class _ResourceViewState extends State<ResourceView>
       await _answerOpenNative(id, request['args']);
       return;
     }
+    if (method == 'askAssistant') {
+      await _answerAskAssistant(id, request['args']);
+      return;
+    }
     if (method == 'joinCall') {
       await _answerJoinCall(id, request['args']);
       return;
@@ -1130,6 +1135,44 @@ class _ResourceViewState extends State<ResourceView>
           '${jsonEncode(jsonEncode(handled))})');
     } catch (e) {
       debugPrint('[embed] reply to openNative not delivered: $e');
+    }
+  }
+
+  /// The page asks the assistant for help (`askAssistant(prompt, subject)`,
+  /// the "Fix it" of an app that hit an error): a new chat opens on top with
+  /// the prompt as its first message, and the page is told it was taken.
+  Future<void> _answerAskAssistant(int id, Object? args) async {
+    var handled = false;
+    if (args is List && args.isNotEmpty && args.first is String) {
+      var prompt = (args.first as String).trim();
+      final subject = args.length > 1 && args[1] is String
+          ? (args[1] as String).trim()
+          : '';
+      if (mounted && prompt.isNotEmpty) {
+        handled = true;
+        if (subject.isNotEmpty) prompt = '$prompt\n\nApp: $subject';
+        unawaited(Navigator.of(context).push(SlideBackRoute<void>(
+          builder: (_) => ChatScreen(
+            api: widget.api,
+            drive: widget.drive,
+            initialPrompt: prompt,
+            initialContext: subject.isEmpty
+                ? null
+                : (
+                    subject: subject,
+                    title: subject,
+                    className: 'App',
+                    emoji: null
+                  ),
+          ),
+        )));
+      }
+    }
+    try {
+      await _page?.runJavaScript('window.__atomicReply($id,true,'
+          '${jsonEncode(jsonEncode(handled))})');
+    } catch (e) {
+      debugPrint('[embed] reply to askAssistant not delivered: $e');
     }
   }
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  askAssistant,
   hasActionsHost,
   hostFollow,
   hostMeetingEnded,
@@ -53,6 +54,28 @@ it('is false when the app declines or does not know the call', async () => {
   expect(
     await openNative('https://atomicdata.dev/classes/ChatRoom', 'did:ad:room'),
   ).toBe(false);
+});
+
+describe('askAssistant', () => {
+  it('is false without an app', async () => {
+    expect(await askAssistant('Fix it', 'did:ad:app')).toBe(false);
+  });
+
+  it('asks the app and reports its answer', async () => {
+    const call = vi.fn().mockResolvedValue(true);
+
+    setActionsHost({ call });
+    expect(await askAssistant('Fix it', 'did:ad:app')).toBe(true);
+    expect(call).toHaveBeenCalledWith('askAssistant', ['Fix it', 'did:ad:app']);
+  });
+
+  it('is false when the app declines or does not know the call', async () => {
+    setActionsHost({ call: vi.fn().mockResolvedValue(false) });
+    expect(await askAssistant('Fix it', 'did:ad:app')).toBe(false);
+
+    setActionsHost({ call: vi.fn().mockRejectedValue(new Error('unknown')) });
+    expect(await askAssistant('Fix it', 'did:ad:app')).toBe(false);
+  });
 });
 
 describe('reportShown', () => {

@@ -145,6 +145,43 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('initialPrompt is sent once as the first message of a new chat',
+      (tester) async {
+    final requests = <List<Map<String, dynamic>>>[];
+    final ai = HostedAi(
+      status: {'enabled': true, 'consent': true, 'model': 'm'},
+      completions: (messages, model, tools) {
+        requests.add([for (final m in messages) Map<String, dynamic>.from(m)]);
+        return Stream.value(_text('On it'));
+      },
+      enable: () async => {},
+    );
+    final api = _Api(ai, Future.value());
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(extensions: [AppColors.light]),
+      home: ChatScreen(
+          api: api, initialPrompt: 'Fix the app\n\nApp: did:ad:app'),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(1));
+    expect(requests.single.last['content'].toString(), contains('Fix the app'));
+    expect(find.textContaining('On it'), findsWidgets);
+    // Sent, not left in the field.
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty);
+    expect(api.saved, contains('user'));
+
+    // A rebuild does not send it again.
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(extensions: [AppColors.light]),
+      home: ChatScreen(
+          api: api, initialPrompt: 'Fix the app\n\nApp: did:ad:app'),
+    ));
+    await tester.pumpAndSettle();
+    expect(requests, hasLength(1));
+  });
+
   group('HostedAi with a bridge that is still starting', () {
     test('the request goes out after the grace; the web tools join the next '
         'step', () async {

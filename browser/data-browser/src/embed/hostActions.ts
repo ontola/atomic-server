@@ -37,6 +37,26 @@ export async function openNative(
   }
 }
 
+/**
+ * Asks the app to open its assistant on a new chat that starts with `prompt`
+ * (the "Fix it" of an app that hit an error), with `subject` as the resource
+ * it is about. Resolves true when the app did, false when it has no
+ * assistant, does not know the call (an older app, the desktop mock) or there
+ * is no app: then the page has to ask the assistant itself.
+ */
+export async function askAssistant(
+  prompt: string,
+  subject: string,
+): Promise<boolean> {
+  if (!host) return false;
+
+  try {
+    return (await host.call('askAssistant', [prompt, subject])) === true;
+  } catch {
+    return false;
+  }
+}
+
 /** How long a page has to stay on a resource before the app hears of it. */
 export const SHOWN_DELAY_MS = 800;
 

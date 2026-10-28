@@ -43,6 +43,7 @@ import {
 } from './appFrameDocument';
 import { appAgentOf } from './appAgent';
 import { ConnectDialog } from './ConnectDialog';
+import { askAssistant, hasActionsHost } from '../../embed/hostActions';
 import { useHostUI } from '@components/HostUI/hostUI';
 import type { ViewChanges } from '@helpers/extensions/viewApply';
 
@@ -415,16 +416,25 @@ function AppFrameSession({
   const fixIt = () => {
     if (!appError) return;
 
+    // Written as what the user would say, because it becomes the first
+    // message of the chat and they have to be able to read it back.
+    const prompt = /* @wc-ignore */ [
+      'The app I have open just hit an error. Read its source with',
+      'describe_app, work out what went wrong, and fix it with update_app.',
+      '',
+      `Error (${appError.phase === 'load' ? 'while opening the app' : 'while using it'}): ${appError.message}`,
+      ...(appError.stack ? ['', 'Stack:', appError.stack] : []),
+    ].join('\n');
+
+    // In the Flutter app there is no AI sidebar: its own assistant takes it.
+    if (hasActionsHost()) {
+      void askAssistant(prompt, app);
+
+      return;
+    }
+
     askAI({
-      // Written as what the user would say, because it becomes the first
-      // message of the chat and they have to be able to read it back.
-      prompt: /* @wc-ignore */ [
-        'The app I have open just hit an error. Read its source with',
-        'describe_app, work out what went wrong, and fix it with update_app.',
-        '',
-        `Error (${appError.phase === 'load' ? 'while opening the app' : 'while using it'}): ${appError.message}`,
-        ...(appError.stack ? ['', 'Stack:', appError.stack] : []),
-      ].join('\n'),
+      prompt,
       context: [
         newContextItem<AIAtomicResourceMessageContext>({
           type: 'atomic-resource',

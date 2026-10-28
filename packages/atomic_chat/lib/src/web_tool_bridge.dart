@@ -300,8 +300,13 @@ class WebViewToolBridge implements WebToolBridge, ReviewableBridge {
     String reply;
     try {
       // Nothing here is shown or opened: the page's reports are acknowledged.
-      final answer = const {'opened', 'theme', 'sidebarIcons', 'openNative'}
-              .contains(method)
+      final answer = const {
+        'opened',
+        'theme',
+        'sidebarIcons',
+        'openNative',
+        'askAssistant',
+      }.contains(method)
           ? 'false'
           : await api.embedCall(
               method, jsonEncode(request['args'] ?? const []));

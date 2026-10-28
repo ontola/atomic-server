@@ -769,8 +769,11 @@ class WarmResourceWebView with WidgetsBindingObserver, ChangeNotifier {
       }
       // A hidden spare opens no native screen over nobody: false makes the
       // page draw the resource itself, if it ever asks. (Nor does it start a
-      // call: false hides the page's call button.)
-      if (method == 'openNative' || method == 'joinCall') {
+      // call: false hides the page's call button, and no chat: false makes
+      // "Fix it" fall back to the page's own handling.)
+      if (method == 'openNative' ||
+          method == 'joinCall' ||
+          method == 'askAssistant') {
         await page.runJavaScript(
             'window.__atomicReply($id,true,${jsonEncode('false')})');
         return;

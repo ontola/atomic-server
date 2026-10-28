@@ -104,6 +104,45 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
   });
 
+  testWidgets('askAssistant opens a new chat with the prompt and says true',
+      (tester) async {
+    await open(tester);
+    page.scripts.clear();
+
+    page.send(jsonEncode({
+      'id': 8,
+      'method': 'askAssistant',
+      'args': ['Fix the app', 'did:ad:app'],
+    }));
+    await tester.pumpAndSettle();
+
+    final chat = tester.widget<ChatScreen>(find.byType(ChatScreen));
+    expect(chat.subject, isNull);
+    expect(chat.initialPrompt, contains('Fix the app'));
+    expect(chat.initialPrompt, contains('App: did:ad:app'));
+    expect(chat.initialContext?.subject, 'did:ad:app');
+    expect(page.scripts, contains('window.__atomicReply(8,true,"true")'));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('askAssistant without a prompt says false', (tester) async {
+    await open(tester);
+    page.scripts.clear();
+
+    page.send(jsonEncode({
+      'id': 9,
+      'method': 'askAssistant',
+      'args': ['  ', 'did:ad:app'],
+    }));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatScreen), findsNothing);
+    expect(page.scripts, contains('window.__atomicReply(9,true,"false")'));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 6));
+  });
+
   testWidgets('a theme chosen on the page becomes the app\'s', (tester) async {
     SharedPreferences.setMockInitialValues({});
     addTearDown(() => AppThemeMode.mode.value = ThemeMode.system);
