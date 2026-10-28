@@ -434,11 +434,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         ButtonSegment(
                             value: false,
                             label: Text('Included AI',
-                                key: const Key('chat-ai-included'))),
+                                key: Key('chat-ai-included'))),
                         ButtonSegment(
                             value: true,
                             label:
-                                Text('Own key', key: const Key('chat-ai-own'))),
+                                Text('Own key', key: Key('chat-ai-own'))),
                       ],
                       selected: {own},
                       onSelectionChanged: (v) => switchTo(v.first),
