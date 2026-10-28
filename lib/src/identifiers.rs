@@ -24,6 +24,11 @@ pub const ATOMIC_BLOB_PREFIX: &str = "atomic:blob:";
 /// Prefix for Property identifiers: `atomic:prop:`.
 pub const ATOMIC_PROP_PREFIX: &str = "atomic:prop:";
 
+/// Prefix for Class identifiers: `atomic:class:`. There is no `did:ad:class:`
+/// alias: the kind is newer than the rename, so [`to_legacy_scheme`] leaves it
+/// alone.
+pub const ATOMIC_CLASS_PREFIX: &str = "atomic:class:";
+
 /// Prefix for Lens identifiers: `atomic:lens:`.
 pub const ATOMIC_LENS_PREFIX: &str = "atomic:lens:";
 
@@ -119,6 +124,8 @@ pub fn canonicalize_scheme(raw: &str) -> String {
 /// Rewrite `atomic:` → `did:ad:` for a peer that predates the rename.
 pub fn to_legacy_scheme(raw: &str) -> String {
     match identifier_rest(raw) {
+        // Classes are newer than the rename and have no legacy spelling.
+        _ if raw.starts_with(ATOMIC_CLASS_PREFIX) => raw.to_string(),
         Some(rest) if starts_with_atomic_scheme(raw) => format!("{DID_AD_PREFIX}{rest}"),
         _ => raw.to_string(),
     }
@@ -174,6 +181,13 @@ pub fn identifier_kind(raw: &str) -> Option<DidKind> {
             DidKind::Property
         });
     }
+    if let Some(rest) = body.strip_prefix("class:") {
+        return Some(if rest.is_empty() {
+            DidKind::Other
+        } else {
+            DidKind::Class
+        });
+    }
     if let Some(rest) = body.strip_prefix("lens:") {
         return Some(if rest.is_empty() {
             DidKind::Other
@@ -205,6 +219,10 @@ pub fn is_commit_id(raw: &str) -> bool {
 
 pub fn is_prop_id(raw: &str) -> bool {
     identifier_kind(raw) == Some(DidKind::Property)
+}
+
+pub fn is_class_id(raw: &str) -> bool {
+    identifier_kind(raw) == Some(DidKind::Class)
 }
 
 pub fn is_lens_id(raw: &str) -> bool {
@@ -244,6 +262,13 @@ pub fn blob_hash_hex(raw: &str) -> Option<&str> {
 pub fn prop_hash_hex(raw: &str) -> Option<&str> {
     identifier_body(raw)?
         .strip_prefix("prop:")
+        .filter(|s| !s.is_empty())
+}
+
+/// Hex BLAKE3 of an `atomic:class:` identifier.
+pub fn class_hash_hex(raw: &str) -> Option<&str> {
+    identifier_body(raw)?
+        .strip_prefix("class:")
         .filter(|s| !s.is_empty())
 }
 
@@ -306,6 +331,10 @@ pub fn prop_subject(hash_hex: &str) -> String {
     format!("{ATOMIC_PROP_PREFIX}{hash_hex}")
 }
 
+pub fn class_subject(hash_hex: &str) -> String {
+    format!("{ATOMIC_CLASS_PREFIX}{hash_hex}")
+}
+
 pub fn node_subject(node_id: &str) -> String {
     format!("{ATOMIC_NODE_PREFIX}{node_id}")
 }
@@ -349,6 +378,18 @@ mod tests {
         assert_eq!(identifier_kind("https://example.com"), None);
         assert_eq!(identifier_kind("did:key:abc"), None);
         assert_eq!(identifier_kind("atomic://pair?v=1"), None);
+    }
+
+    #[test]
+    fn class_identifier_helpers() {
+        assert!(is_class_id("atomic:class:ab"));
+        assert!(!is_class_id("atomic:class:"));
+        assert!(!is_class_id("atomic:prop:ab"));
+        assert_eq!(class_hash_hex("atomic:class:ab"), Some("ab"));
+        assert_eq!(class_subject("ab"), "atomic:class:ab");
+        // No legacy spelling is ever emitted.
+        assert_eq!(to_legacy_scheme("atomic:class:ab"), "atomic:class:ab");
+        assert_eq!(to_legacy_scheme("atomic:prop:ab"), "did:ad:prop:ab");
     }
 
     #[test]
