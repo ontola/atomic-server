@@ -81,9 +81,12 @@ void _memoryKeychain() {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
     _memoryKeychain();
+    // OwnAi also keeps the key in memory, which would carry it to the next
+    // test.
+    await OwnAi.setApiKey(null);
   });
 
   // Room for the whole page, so the rows are on screen to tap.
