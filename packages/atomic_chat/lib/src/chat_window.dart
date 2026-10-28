@@ -387,9 +387,20 @@ class ChatScrollKeeper {
   final int edge;
 
   ChatScrollKeeper(this.window, {this.edge = 15, ScrollController? controller})
-      : controller = controller ?? ScrollController() {
+      : controller = controller ?? ChatScrollController() {
     this.controller.addListener(_scrolled);
+    final own = this.controller;
+    if (own is ChatScrollController) own.onMetrics = measure;
   }
+
+  /// Whether the list is scrolled up past [showButtonDistance]. Updated on
+  /// every scroll and, because a list can grow or shrink without a scroll
+  /// event (a streaming answer, a resized viewport), after every frame in
+  /// which the scrollable's content or viewport size changed.
+  final ValueNotifier<bool> away = ValueNotifier(false);
+
+  /// Re-reads [away] from the scroll position.
+  void measure() => away.value = farFromBottom;
 
   /// Within this many pixels of the bottom counts as at the bottom.
   static const bottomSlack = 80.0;
@@ -417,6 +428,7 @@ class ChatScrollKeeper {
   }
 
   void _scrolled() {
+    measure();
     if (!controller.hasClients) return;
     final pos = controller.position;
     if (pos.pixels <= bottomSlack) {
@@ -469,7 +481,77 @@ class ChatScrollKeeper {
         duration: const Duration(milliseconds: 200), curve: Curves.easeOut));
   }
 
-  void dispose() => controller.dispose();
+  void dispose() {
+    away.dispose();
+    controller.dispose();
+  }
+}
+
+/// The [ScrollController] of a chat list. Its position can correct its own
+/// offset while the list is laid out ([correction]), so the correction is in
+/// the very frame whose layout needed it, and it reports changes of content
+/// or viewport size, which are not scroll events ([onMetrics]).
+class ChatScrollController extends ScrollController {
+  /// Asked during layout, after the list's children were measured, with the
+  /// current offset and the new scroll extents. Returns how far to move the
+  /// offset (0 for none); the list then lays out again at the new offset
+  /// before anything is painted. Must be 0 once nothing changed.
+  final double Function(double pixels, double min, double max)? correction;
+
+  /// Called after a frame in which the content or viewport size changed.
+  VoidCallback? onMetrics;
+
+  ChatScrollController({this.correction});
+
+  @override
+  ScrollPosition createScrollPosition(ScrollPhysics physics,
+          ScrollContext context, ScrollPosition? oldPosition) =>
+      _ChatScrollPosition(
+        owner: this,
+        physics: physics,
+        context: context,
+        initialPixels: initialScrollOffset,
+        keepScrollOffset: keepScrollOffset,
+        oldPosition: oldPosition,
+        debugLabel: debugLabel,
+      );
+}
+
+class _ChatScrollPosition extends ScrollPositionWithSingleContext {
+  _ChatScrollPosition({
+    required this.owner,
+    required super.physics,
+    required super.context,
+    super.initialPixels,
+    super.keepScrollOffset,
+    super.oldPosition,
+    super.debugLabel,
+  });
+
+  final ChatScrollController owner;
+  bool _metricsQueued = false;
+
+  @override
+  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    final fix = hasPixels
+        ? owner.correction?.call(pixels, minScrollExtent, maxScrollExtent)
+        : null;
+    if (fix != null && fix.abs() > 0.01) {
+      // The viewport lays its children out again at the new offset, in this
+      // same layout pass (the way a sliver's scrollOffsetCorrection does).
+      correctBy(fix);
+      return false;
+    }
+    final ok = super.applyContentDimensions(minScrollExtent, maxScrollExtent);
+    if (!_metricsQueued) {
+      _metricsQueued = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _metricsQueued = false;
+        owner.onMetrics?.call();
+      });
+    }
+    return ok;
+  }
 }
 
 /// Wraps a chat row. The newest row may fade and slide in over 150 ms

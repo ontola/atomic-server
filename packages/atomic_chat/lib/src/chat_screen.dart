@@ -158,7 +158,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     idOf: (m) => m.id,
     onOlderPage: (ms, n) => Perf.span('chat older page $n', ms),
   );
-  late final _keeper = ChatScrollKeeper(_window);
+  late final _keeper = ChatScrollKeeper(_window,
+      controller: ChatScrollController(correction: _holdCorrection));
 
   // Following an answer as it streams in (see [_settle]): the list follows
   // the growing answer at the bottom while the answer's top is in view;
@@ -976,34 +977,44 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   /// After each frame while an answer streams in: make room below it so the
-  /// question sits at the top; follow it at the bottom while its top is in
-  /// view; then hold its top there. When the person scrolled away (or the
-  /// top is held), what is on screen stays put as the answer grows (in an
-  /// upside-down list a growing last message pushes everything up).
+  /// question sits at the top (the sent height is measured here, it needs a
+  /// rebuild).
   void _settle() {
     _settleQueued = false;
-    if (!mounted || !_keeper.controller.hasClients) return;
-    final list = _listBox();
-    final answer = _boxOf(_answerKey);
-    if (list == null || answer == null) return;
-    final pos = _keeper.controller.position;
-    final h = answer.size.height;
-    final grew = _answerHeight == null ? 0.0 : h - _answerHeight!;
-    _answerHeight = h;
+    if (!mounted) return;
     final sent = _boxOf(_sentKey);
     if (sent != null && (sent.size.height - _sentHeight).abs() > 0.5) {
       setState(() => _sentHeight = sent.size.height);
-      return;
     }
+  }
+
+  /// Asked by the list while it lays out (see
+  /// [ChatScrollController.correction]), so a correction is never a frame
+  /// late: follow the answer at the bottom while its top is in view; then
+  /// hold its top at the top of the list. When the person scrolled away (or
+  /// the top is held), what is on screen stays put as the answer grows (in an
+  /// upside-down list a growing last message pushes everything up). Returns
+  /// how far the offset must move; the list lays out again at once.
+  double _holdCorrection(double pixels, double min, double max) {
+    if (!_sending) return 0;
+    final list = _listBox();
+    final answer = _boxOf(_answerKey);
+    if (list == null || answer == null) return 0;
+    final h = answer.size.height;
+    final grew = _answerHeight == null ? 0.0 : h - _answerHeight!;
+    _answerHeight = h;
+    double want = 0;
     if (_follow && !_pinned) {
       final top = answer.localToGlobal(Offset.zero).dy;
       if (top < list.$2 - 0.5) {
         _pinned = true;
-        pos.jumpTo(pos.pixels + list.$2 - top);
+        want = list.$2 - top;
       }
-    } else if (grew.abs() > 0.01 && pos.pixels > 0.5) {
-      pos.jumpTo(math.min(pos.maxScrollExtent, pos.pixels + grew));
+    } else if (grew.abs() > 0.01 && pixels > 0.5) {
+      want = grew;
     }
+    if (want == 0) return 0;
+    return math.min(max, math.max(min, pixels + want)) - pixels;
   }
 
   /// A drag by the person ends following the answer.
