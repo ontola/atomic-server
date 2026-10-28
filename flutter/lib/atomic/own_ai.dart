@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:atomic_chat/atomic_chat.dart' show HostedAi;
+import 'package:atomic_chat/atomic_chat.dart'
+    show HostedAi, VoiceTranscribeError;
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
@@ -19,6 +21,13 @@ class OwnAi {
 
   /// The model used until one is chosen.
   static const defaultModel = 'openrouter/auto';
+
+  /// The model that transcribes voice input: it takes audio and answers with
+  /// text.
+  static const transcriptionModel = 'google/gemini-2.5-flash';
+
+  static const _transcribePrompt = 'Transcribe this audio verbatim. Reply '
+      'with only the transcript, no commentary.';
 
   static final _secure = createSecureStorage();
 
@@ -82,6 +91,11 @@ class OwnAi {
           completions(key, messages, model, tools, client: client),
       loadModels: () => models(client: client),
       enable: () async => {},
+      // Voice goes through the same key and costs no account credits.
+      transcribe: (wav, {language}) =>
+          transcribeWav(key, wav, language: language, client: client),
+      voiceStatus: () async => {'enabled': true},
+      ownKey: true,
     );
     await ai.restoreChoice();
     return ai;
@@ -129,6 +143,82 @@ class OwnAi {
       }
       yield* shared.AtomicAccountClient.parseCompletionChunks(
           response.stream.transform(utf8.decoder));
+    } finally {
+      if (client == null) http_.close();
+    }
+  }
+
+  /// The text of the speech in [wav] (16-bit mono PCM WAV), transcribed by
+  /// [transcriptionModel]. [language] is an ISO-639-1 hint. Throws a
+  /// [VoiceTranscribeError] with OpenRouter's message when it refuses.
+  static Future<String> transcribeWav(String key, Uint8List wav,
+      {String? language, http.Client? client}) async {
+    final http_ = client ?? http.Client();
+    try {
+      final hint = language == null || language.isEmpty
+          ? ''
+          : ' The language is "$language".';
+      final http.Response response;
+      try {
+        response = await http_.post(
+          Uri.parse('$origin/api/v1/chat/completions'),
+          headers: {
+            'Authorization': 'Bearer $key',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': transcriptionModel,
+            'messages': [
+              {
+                'role': 'user',
+                'content': [
+                  {'type': 'text', 'text': '$_transcribePrompt$hint'},
+                  {
+                    'type': 'input_audio',
+                    'input_audio': {
+                      'data': base64Encode(wav),
+                      'format': 'wav',
+                    },
+                  },
+                ],
+              },
+            ],
+          }),
+        );
+      } catch (_) {
+        throw const VoiceTranscribeError(
+            'No internet connection for voice input.');
+      }
+      Object? body;
+      try {
+        body = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {}
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        var message = 'OpenRouter failed (${response.statusCode})';
+        final error = body is Map ? body['error'] : null;
+        if (error is Map && error['message'] is String) {
+          message = error['message'] as String;
+        }
+        if (response.statusCode == 401) message = 'OpenRouter rejected the key';
+        throw VoiceTranscribeError(message);
+      }
+      final choices = body is Map ? body['choices'] : null;
+      final first = choices is List && choices.isNotEmpty ? choices[0] : null;
+      final message = first is Map ? first['message'] : null;
+      final content = message is Map ? message['content'] : null;
+      if (content is String) return content.trim();
+      if (content is List) {
+        return [
+          for (final part in content)
+            if (part is Map && part['text'] is String) part['text'] as String,
+        ].join().trim();
+      }
+      // An error inside a 200 answer.
+      final error = body is Map ? body['error'] : null;
+      if (error is Map && error['message'] is String) {
+        throw VoiceTranscribeError(error['message'] as String);
+      }
+      throw const VoiceTranscribeError('OpenRouter returned no transcript.');
     } finally {
       if (client == null) http_.close();
     }

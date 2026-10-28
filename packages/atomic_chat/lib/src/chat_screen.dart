@@ -315,9 +315,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// soon as the transcription arrives.
   bool _sendWhenTranscribed = false;
 
-  /// How long "Stop and send" waits for the final result before sending the
-  /// latest partial one.
-  static const _finalWait = Duration(milliseconds: 600);
+  /// How long "Stop and send" waits for the device recogniser's final result
+  /// before sending the latest partial one. The recogniser needs a moment
+  /// after the stop; sending earlier would cut off the last words.
+  static const _finalWait = Duration(milliseconds: 2500);
+
+  /// When the account engine was last found usable, so a tap on the mic does
+  /// not wait for a network round trip (speech in that time would be lost).
+  DateTime? _accountOkAt;
+  static const _accountOkFor = Duration(minutes: 5);
 
   /// Voice mode's turn-by-turn loop is running.
   bool _voiceLoop = false;
@@ -527,6 +533,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _cancelHosted() {
     if (!_hostedActive || !(_listening || _transcribing)) return;
     _listenSession++;
+    _sendWhenTranscribed = false;
     _listening = false;
     _starting = false;
     _transcribing = false;
@@ -581,13 +588,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return (engine: voiceEngineDevice, note: null);
     }
     HostedAvailability avail;
+    final okAt = _accountOkAt;
+    if (okAt != null && DateTime.now().difference(okAt) < _accountOkFor) {
+      return (engine: voiceEngineAccount, note: null);
+    }
     try {
       avail = await _hosted.availability();
     } catch (_) {
       avail =
           const HostedAvailability.unavailable('Could not reach your account.');
     }
-    if (avail.ok) return (engine: voiceEngineAccount, note: null);
+    if (avail.ok) {
+      _accountOkAt = DateTime.now();
+      return (engine: voiceEngineAccount, note: null);
+    }
+    _accountOkAt = null;
     if (chosen == null) return (engine: voiceEngineDevice, note: null);
     return (
       engine: voiceEngineDevice,
@@ -596,11 +611,43 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Stops dictation and sends what was recognised right away, as if the
-  /// normal send button was pressed. The words so far (the latest partial
-  /// result when the final one does not come in time) are in the field.
+  /// Send button and Enter: while the mic is on, a recording is being
+  /// transcribed or the recogniser is finalising, the words still to come are
+  /// waited for and sent together with the composer text, once.
+  Future<void> _submit() {
+    if (_listening || _transcribing || _finalising) return _stopAndSend();
+    return _send();
+  }
+
+  /// Stops the device recogniser and waits for its final result (at most
+  /// [_finalWait]; the latest partial one stands in). False when the listen
+  /// was replaced or ended meanwhile, which also handled what was heard.
+  Future<bool> _finaliseDevice() async {
+    final session = _listenSession;
+    final waiter = _finalWaiter = Completer<void>();
+    setState(() => _finalising = true);
+    _inputInst?.stop();
+    await waiter.future.timeout(_finalWait, onTimeout: () {});
+    _finalWaiter = null;
+    if (!mounted) return false;
+    setState(() => _finalising = false);
+    if (session != _listenSession) return false;
+    _stopListening(stopInput: false);
+    return true;
+  }
+
+  /// Stops dictation and sends what was recognised, as if the normal send
+  /// button was pressed, but only once the final transcript is in: the
+  /// account's after its transcription, the device's after the recogniser's
+  /// final result. The words are appended to the composer text first.
   Future<void> _stopAndSend() async {
-    if (!_listening || _finalising || _voiceLoop) return;
+    if (_voiceLoop || _finalising) return;
+    if (_transcribing) {
+      // Already stopped: the text is sent when the transcription arrives.
+      _sendWhenTranscribed = true;
+      return;
+    }
+    if (!_listening) return;
     if (_hostedActive) {
       // Nothing recorded yet: nothing to send.
       if (_starting) return _cancelHosted();
@@ -609,16 +656,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _stopListening();
       return;
     }
-    final session = _listenSession;
-    final waiter = _finalWaiter = Completer<void>();
-    setState(() => _finalising = true);
-    _inputInst?.stop();
-    await waiter.future.timeout(_finalWait, onTimeout: () {});
-    _finalWaiter = null;
-    if (!mounted) return;
-    setState(() => _finalising = false);
-    if (session != _listenSession) return;
-    _stopListening(stopInput: false);
+    if (!await _finaliseDevice()) return;
     if (_input.text.trim().isEmpty && _files.isEmpty) {
       setState(() => _noSpeechHint = true);
       return;
@@ -627,15 +665,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _toggleListening() async {
-    _sendWhenTranscribed = false;
+    // A send queued behind the transcription stays queued.
+    if (!_transcribing) _sendWhenTranscribed = false;
     if (_listening) {
-      _stopListening();
       // In the voice loop, stopping means "done talking": the device's words
-      // are sent now (the account's once transcribed).
-      if (_voiceLoop && !_hostedActive) _voiceTurnEnded(_listenSession);
+      // are sent once final (the account's once transcribed).
+      if (_voiceLoop && !_hostedActive && !_starting) {
+        final session = _listenSession;
+        if (await _finaliseDevice()) _voiceTurnEnded(session);
+        return;
+      }
+      _stopListening();
       return;
     }
-    if (_transcribing) return;
+    if (_transcribing || _finalising) return;
     // Typed text stays; what is heard is appended after it.
     String baseOf(String typed) =>
         typed.isEmpty || typed.endsWith(' ') || typed.endsWith('\n')
@@ -664,7 +707,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         hosted ? _hosted : (_inputInst ??= PluginSpeechInput());
     String? localeId;
     if (hosted) {
-      if (widget.accountLanguageHints) {
+      if (widget.accountLanguageHints || (_ai?.ownKey ?? false)) {
         localeId = prefs?.getString(voiceLanguageKey);
       }
     } else {
@@ -758,7 +801,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (ok && hosted) _hosted.cancel();
       return;
     }
-    if (!ok) {
+    if (ok) {
+      // Now it is recording: the mic and waveform say so.
+      setState(() {});
+    } else {
       setState(() {
         _listening = false;
         _level = 0;
@@ -2392,7 +2438,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   enabled: ai != null,
                   readOnly: _transcribing,
                   onEditingComplete: () {},
-                  onSubmitted: (_) => _send(),
+                  onSubmitted: (_) => _submit(),
                   style: ChatTextStyles.of(context).composer,
                   decoration: chatFieldDecoration(context),
                 ),
@@ -2421,13 +2467,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   key: _listening ? const Key('chat-stop-and-send') : null,
                   // While dictating, this is stop and send in one tap.
                   tooltip: _listening ? 'Stop and send' : 'Send',
-                  onPressed: _transcribing || _finalising || ai == null
+                  // While a recording is transcribed, tapping queues the
+                  // send for when the text arrives.
+                  onPressed: _finalising || ai == null
                       ? null
                       : _listening
                           ? (_voiceLoop ? null : _stopAndSend)
-                          : !(_hadText || _files.isNotEmpty)
-                              ? null
-                              : _send,
+                          : _transcribing
+                              ? (_voiceLoop || _sendWhenTranscribed
+                                  ? null
+                                  : _stopAndSend)
+                              : !(_hadText || _files.isNotEmpty)
+                                  ? null
+                                  : _send,
                 ),
             ],
           ),
@@ -2466,7 +2518,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             : _transcribing
                 ? 'Transcribing…'
                 : _listening
-                    ? 'Listening…'
+                    ? (_starting ? 'Getting ready…' : 'Listening…')
                     : 'Voice paused';
     final running = _voiceLoop || _speaking;
     return Padding(

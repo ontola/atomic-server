@@ -1832,6 +1832,22 @@ void main() {
           expect(find.byIcon(Icons.mic), findsOneWidget);
         });
 
+        testWidgets('waits for a slow final result, not the partial',
+            (tester) async {
+          final (input, api) = await record(tester);
+          input.onText!('hello the', false);
+          await tester.pump();
+          input.finalOnStop = 'hello there';
+          input.finalDelay = const Duration(milliseconds: 1500);
+          await tester.tap(find.byTooltip('Stop and send'));
+          await tester.pump(const Duration(milliseconds: 1000));
+          expect(api.added, isEmpty);
+          await tester.pumpAndSettle();
+          expect(api.added.where((m) => m.$2 == 'user').toList(), [
+            ('did:ad:new-chat', 'user', 'hello there'),
+          ]);
+        });
+
         testWidgets('uses the latest partial when no final arrives',
             (tester) async {
           final (input, api) = await record(tester);

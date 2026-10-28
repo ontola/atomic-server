@@ -165,6 +165,7 @@ class HostedAi {
     required Future<Map<String, dynamic>> Function() enable,
     this.transcribe,
     this.voiceStatus,
+    this.ownKey = false,
     this.acceptsImages = false,
     this.portal,
     this.loadModels,
@@ -185,6 +186,10 @@ class HostedAi {
   /// The account's voice status (`enabled`, `remaining_micros`); null result
   /// when the portal offers none.
   final Future<Map<String, dynamic>?> Function()? voiceStatus;
+
+  /// The AI is the person's own provider key, not the account: voice input
+  /// is then transcribed through it too and costs no credits.
+  final bool ownKey;
 
   /// Whether images may be sent to the model. The account's included AI
   /// takes text and tools only (it refuses image and file parts).

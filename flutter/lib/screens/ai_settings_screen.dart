@@ -356,6 +356,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             VoiceSettings(
               input: widget.speechInput,
               availability: widget.voiceAvailability ?? _voiceAvailability,
+              ownKey: _own,
             ),
           ],
         ),

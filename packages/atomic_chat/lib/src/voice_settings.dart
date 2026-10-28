@@ -20,11 +20,16 @@ class VoiceSettings extends StatefulWidget {
   final Future<HostedAvailability> Function()? availability;
   final bool languageHints;
 
+  /// The AI is the person's own OpenRouter key: that transcribes instead of
+  /// the account, for free, and takes a language hint.
+  final bool ownKey;
+
   const VoiceSettings({
     super.key,
     this.input,
     this.availability,
     this.languageHints = hostedLanguageHintSupported,
+    this.ownKey = false,
   });
 
   @override
@@ -194,7 +199,7 @@ class _VoiceSettingsState extends State<VoiceSettings> {
   Widget build(BuildContext context) {
     final avail = _avail;
     final account = _effective == voiceEngineAccount;
-    final hint = account && !widget.languageHints;
+    final hint = account && !widget.languageHints && !widget.ownKey;
     final language = account
         ? _languageName(_language)
         : (_locale?.replaceAll('_', '-') ?? 'System default');
@@ -202,11 +207,13 @@ class _VoiceSettingsState extends State<VoiceSettings> {
       _engineRow(
         key: const Key('engine-account'),
         engine: voiceEngineAccount,
-        title: 'atomic.place account',
+        title: widget.ownKey ? 'Your OpenRouter key' : 'atomic.place account',
         subtitle: avail == null
-            ? 'Checking your account…'
+            ? (widget.ownKey ? 'Checking…' : 'Checking your account…')
             : avail.ok
-                ? 'Whisper, any language, uses credits'
+                ? (widget.ownKey
+                    ? 'Gemini, any language, billed to your key'
+                    : 'Whisper, any language, uses credits')
                 : avail.reason ?? 'Not available',
         enabled: avail?.ok == true,
       ),

@@ -163,6 +163,30 @@ void main() {
       expect(m(shared.AtomicVoiceFailure.server),
           'The account could not transcribe that. Try again.');
       expect(hostedVoiceMessage(StateError('x')), 'Voice input failed.');
+      expect(hostedVoiceMessage(const VoiceTranscribeError('Key rejected.')),
+          'Key rejected.');
+    });
+  });
+
+  group('RecognisedText', () {
+    test('a growing or revised result replaces the last', () {
+      final heard = RecognisedText();
+      expect(heard.update('hello'), 'hello');
+      expect(heard.update('hello the'), 'hello the');
+      expect(heard.update('hello there my friend'), 'hello there my friend');
+      // A revision of the same utterance, even of its first word.
+      expect(heard.update('Hello there my friend'), 'Hello there my friend');
+    });
+
+    test('a new utterance after a pause keeps the earlier words', () {
+      final heard = RecognisedText();
+      heard.update('send the report to anna tomorrow');
+      expect(heard.update('and'), 'send the report to anna tomorrow and');
+      expect(heard.update('and cc bob'),
+          'send the report to anna tomorrow and cc bob');
+      heard.clear();
+      expect(heard.text, '');
+      expect(heard.update('fresh'), 'fresh');
     });
   });
 
@@ -418,6 +442,72 @@ void main() {
           tester.widget<TextField>(find.byType(TextField)).readOnly, isFalse);
     });
 
+    testWidgets('send while transcribing waits, then sends the text once',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({'voice_engine': 'account'});
+      final hosted = FakeHostedSpeechInput();
+      final api = FakeApi(ai: account());
+      await tester.pumpWidget(app(ChatScreen(
+        api: api,
+        speechInput: FakeSpeechInput(),
+        hostedSpeechInput: hosted,
+        speechOutput: null,
+      )));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Hello');
+      await tester.tap(find.byIcon(Icons.mic));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.stop));
+      await tester.pump();
+      expect(find.byKey(const Key('mic-transcribing')), findsOneWidget);
+
+      // Send is still tappable and queues; nothing is sent yet.
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pump();
+      expect(api.added, isEmpty);
+      expect(find.byKey(const Key('mic-transcribing')), findsOneWidget);
+      // A second tap does not queue a second send.
+      await tester.tap(find.byTooltip('Send'), warnIfMissed: false);
+      await tester.pump();
+
+      hosted.finish('good morning');
+      await tester.pump();
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(api.added.where((m) => m.$2 == 'user').toList(), [
+        ('did:ad:new-chat', 'user', 'Hello good morning'),
+      ]);
+      expect(field(tester), '');
+    });
+
+    testWidgets('stop and send with the account sends once, with the text',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({'voice_engine': 'account'});
+      final hosted = FakeHostedSpeechInput();
+      final api = FakeApi(ai: account());
+      await tester.pumpWidget(app(ChatScreen(
+        api: api,
+        speechInput: FakeSpeechInput(),
+        hostedSpeechInput: hosted,
+        speechOutput: null,
+      )));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.mic));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byTooltip('Stop and send'));
+      await tester.pump();
+      expect(api.added, isEmpty);
+      hosted.finish('see you soon');
+      await tester.pump();
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(api.added.where((m) => m.$2 == 'user').toList(), [
+        ('did:ad:new-chat', 'user', 'see you soon'),
+      ]);
+    });
+
     testWidgets('a hosted error shows its message and re-enables the mic',
         (tester) async {
       SharedPreferences.setMockInitialValues({'voice_engine': 'account'});
@@ -571,6 +661,29 @@ void main() {
       await tester.tap(find.byKey(const Key('voice-language-row')));
       await tester.pumpAndSettle();
       expect(find.text('Suggested'), findsOneWidget);
+    });
+
+    testWidgets('with the own OpenRouter key the account row says so',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(app(Scaffold(
+        body: ListView(children: [
+          VoiceSettings(
+            input: FakeSpeechInput(),
+            availability: () async => const HostedAvailability.available(),
+            ownKey: true,
+          ),
+        ]),
+      )));
+      await tester.pumpAndSettle();
+      expect(find.text('Your OpenRouter key'), findsOneWidget);
+      expect(find.text('atomic.place account'), findsNothing);
+      expect(find.text('Gemini, any language, billed to your key'),
+          findsOneWidget);
+      // The model takes a language hint, so the row is not locked.
+      expect(enabled(tester, 'voice-language-row'), isTrue);
     });
 
     testWidgets('the device language is searched, picked and remembered',
