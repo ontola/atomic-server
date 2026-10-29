@@ -1,12 +1,10 @@
-import 'dart:math' as math;
-
 import 'package:atomic_flutter/atomic_flutter.dart' show AppColorsExt;
 import 'package:flutter/material.dart';
 
 import 'meeting_call.dart';
 
 /// The running call over the whole app: a small tile that can be dragged
-/// (tap it to expand), or the larger view. One [Stack] child that stays where
+/// (tap it to expand), or the whole screen. One [Stack] child that stays where
 /// it is in the tree between the two, so the call's web view is moved and
 /// resized, never made again.
 class MeetingCallOverlay extends StatelessWidget {
@@ -43,12 +41,9 @@ class _CallView extends StatelessWidget {
     final room = MediaQuery.sizeOf(context);
     final pad = MediaQuery.paddingOf(context);
     final Rect rect;
-    if (call.expanded) {
-      final width = math.min(room.width - 2 * _margin, 640.0);
-      final top = pad.top + _margin;
-      final bottom = pad.bottom + _margin;
-      rect = Rect.fromLTWH(
-          (room.width - width) / 2, top, width, room.height - top - bottom);
+    final full = call.expanded;
+    if (full) {
+      rect = Offset.zero & room;
     } else {
       final size = tileSize(room);
       // By default under the top bar, on the right.
@@ -69,16 +64,21 @@ class _CallView extends StatelessWidget {
       rect: rect,
       child: Material(
         key: const ValueKey('meeting-call'),
-        elevation: 8,
+        elevation: full ? 0 : 8,
         color: c.bgBody,
         shadowColor: c.panelShadow,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(full ? 0 : 12),
         clipBehavior: Clip.antiAlias,
         child: Stack(fit: StackFit.expand, children: [
-          if (page == null)
-            const Center(child: CircularProgressIndicator(strokeWidth: 2))
-          else
-            page.build(),
+          // Full screen, the page stays clear of the status bar and the
+          // gesture bar.
+          Padding(
+            padding: full ? pad : EdgeInsets.zero,
+            child: page == null
+                ? const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : page.build(),
+          ),
           if (!call.expanded)
             // The tile is not for touching the page: a tap expands it and a
             // drag moves it.
@@ -91,8 +91,8 @@ class _CallView extends StatelessWidget {
               ),
             ),
           Positioned(
-            top: 2,
-            right: 2,
+            top: full ? pad.top + 8 : 2,
+            right: full ? pad.right + 8 : 2,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               if (call.expanded)
                 _RoundButton(

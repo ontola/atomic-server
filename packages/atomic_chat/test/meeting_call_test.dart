@@ -321,9 +321,10 @@ void main() {
       await joinFromPage(tester);
       final call = controller(tester).call!;
 
-      // Expanded at first: a larger view with a minimize button.
+      // Expanded at first: the whole screen, with a minimize button.
       expect(call.expanded, isTrue);
       final big = tester.getSize(find.byKey(const ValueKey('meeting-call')));
+      expect(big, tester.view.physicalSize / tester.view.devicePixelRatio);
       await tester.tap(find.byKey(const ValueKey('meeting-call-collapse')));
       await tester.pumpAndSettle();
       expect(call.expanded, isFalse);

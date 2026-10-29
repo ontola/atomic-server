@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Offset;
+import 'package:flutter/services.dart';
 
 import 'assistant_api.dart';
 import 'call_permissions.dart';
@@ -53,7 +54,7 @@ class MeetingCall extends ChangeNotifier {
   /// The call page; null while it loads or when there is no call.
   WarmPage? get page => _page;
 
-  /// The larger view instead of the small tile.
+  /// The whole screen instead of the small tile.
   bool get expanded => _expanded;
 
   /// Why the page could not be loaded; the call is over then.
@@ -135,6 +136,21 @@ class MeetingCall extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _immersive = false;
+
+  /// The expanded call covers the whole screen, status bar included, as a
+  /// page's own fullscreen does.
+  @override
+  void notifyListeners() {
+    final immersive = active && _expanded;
+    if (immersive != _immersive) {
+      _immersive = immersive;
+      SystemChrome.setEnabledSystemUIMode(
+          immersive ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge);
+    }
+    super.notifyListeners();
+  }
+
   void moveTile(Offset offset) {
     tileOffset = offset;
     notifyListeners();
@@ -193,6 +209,9 @@ class MeetingCall extends ChangeNotifier {
     _page?.release();
     _page = null;
     _meeting = null;
+    if (_immersive) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     super.dispose();
   }
 }
