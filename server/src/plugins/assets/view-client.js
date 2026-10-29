@@ -197,10 +197,10 @@ function makeResource(subject, propVals, title = subject) {
       if (destroyed) throw new Error('This resource was destroyed.');
 
       const remove = [...removed];
-      const propVals = Object.fromEntries([...changed].map(property => [property, props[property]]));
-      await send('save', { subject, propVals, ...(remove.length ? { remove } : {}) });
+      const changedVals = Object.fromEntries([...changed].map(property => [property, props[property]]));
+      await send('save', { subject, propVals: changedVals, ...(remove.length ? { remove } : {}) });
       for (const property of remove) removed.delete(property);
-      for (const property of Object.keys(propVals)) changed.delete(property);
+      for (const property of Object.keys(changedVals)) changed.delete(property);
 
       return this;
     },
@@ -565,6 +565,7 @@ async function signV2(method, url, body) {
 function proxyTarget(aud, connectionId, platform, path, query) {
   if (typeof platform !== 'string' || !/^[a-z0-9-]{1,80}$/.test(platform)) throw new Error('Invalid platform');
   if (typeof connectionId !== 'string' || !connectionId) throw new Error('connectionId is required');
+
   if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || /[\\#]/.test(path) || path.length > 4096) {
     throw new Error('Invalid proxy path');
   }

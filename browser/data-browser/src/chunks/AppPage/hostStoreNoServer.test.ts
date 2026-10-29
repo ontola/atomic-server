@@ -204,6 +204,7 @@ it('finds the app’s table on a device that has not read the drive’s schema',
     ],
   ]);
   const call = h.channel.call.bind(h.channel);
+
   h.channel.call = async (method, args) => {
     const subject = args[0] as string;
 
@@ -218,6 +219,7 @@ it('finds the app’s table on a device that has not read the drive’s schema',
 
     return call(method, args);
   };
+
   const { store } = await createEmbedStore(h.channel);
 
   const data = await handleRequest(store, app, DRIVE, {
