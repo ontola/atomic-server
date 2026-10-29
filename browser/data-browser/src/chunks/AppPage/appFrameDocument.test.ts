@@ -10,6 +10,10 @@ import {
 const serverFile = (name: string) =>
   new URL(`../../../../../server/src/${name}`, import.meta.url);
 
+// The browser build cannot see server/ (CI builds it on its own), so the
+// comparisons with the server frame only run where the checkout has it.
+const hasServer = fs.existsSync(serverFile('handlers/plugin_ui.rs'));
+
 describe('appFrameDocument', () => {
   it('carries the CSP and no connect-src', () => {
     const html = appFrameDocument({ source: 'x', client: 'y', nonce: 'N1' });
@@ -32,26 +36,29 @@ describe('appFrameDocument', () => {
     expect(JSON.parse(block)).toEqual({ source, client: 'c' });
   });
 
-  it('reports errors and the ready signal like the server shell', () => {
-    const html = appFrameDocument({ source: '', client: '', nonce: 'N' });
-    const server = fs.readFileSync(
-      serverFile('handlers/plugin_ui.rs'),
-      'utf-8',
-    );
+  it.skipIf(!hasServer)(
+    'reports errors and the ready signal like the server shell',
+    () => {
+      const html = appFrameDocument({ source: '', client: '', nonce: 'N' });
+      const server = fs.readFileSync(
+        serverFile('handlers/plugin_ui.rs'),
+        'utf-8',
+      );
 
-    for (const part of [
-      "type: '__atomic_plugin_rendered'",
-      "type: '__atomic_plugin_error'",
-      "type: '__atomic_plugin_ready'",
-      "'__atomic_style'",
-      "window.addEventListener('unhandledrejection'",
-    ]) {
-      expect(html).toContain(part);
-      expect(server).toContain(part);
-    }
-  });
+      for (const part of [
+        "type: '__atomic_plugin_rendered'",
+        "type: '__atomic_plugin_error'",
+        "type: '__atomic_plugin_ready'",
+        "'__atomic_style'",
+        "window.addEventListener('unhandledrejection'",
+      ]) {
+        expect(html).toContain(part);
+        expect(server).toContain(part);
+      }
+    },
+  );
 
-  it('keeps the CSP directives of the server frame', () => {
+  it.skipIf(!hasServer)('keeps the CSP directives of the server frame', () => {
     const server = fs.readFileSync(
       serverFile('handlers/plugin_ui.rs'),
       'utf-8',
