@@ -21,7 +21,8 @@ describe('appFrameDocument', () => {
   });
 
   it('keeps a </script> in the source from closing the data block', () => {
-    const source = 'export const view = () => "</script><script>alert(1)</script>";';
+    const source =
+      'export const view = () => "</script><script>alert(1)</script>";';
     const html = appFrameDocument({ source, client: 'c', nonce: 'N' });
     const block = html.match(
       /<script type="application\/json" id="__atomic_sources">([\s\S]*?)<\/script>/,
