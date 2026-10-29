@@ -31,12 +31,10 @@ import {
   core,
   server,
   isAtomicIdentifier,
+  asError,
 } from '@tomic/lib';
 import type { LoroDoc } from 'loro-crdt';
 import { useOnValueChange } from './helpers/useOnValueChange.js';
-
-const asError = (error: unknown): Error =>
-  error instanceof Error ? error : new Error(String(error));
 
 export type UseResourceOptions = FetchOpts;
 
@@ -320,7 +318,7 @@ function useValueWithSave(
         handleValidationError?.(undefined);
       } catch (e) {
         if (handleValidationError) handleValidationError(asError(e));
-        else store.notifyError(asError(e));
+        else store.notifyError(e);
       }
     },
 
@@ -494,7 +492,7 @@ export function useArray(
         handleValidationError?.(undefined);
       } catch (e) {
         if (handleValidationError) handleValidationError(asError(e));
-        else store.notifyError(asError(e));
+        else store.notifyError(e);
       }
     },
 
