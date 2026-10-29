@@ -32,6 +32,8 @@ export type HandoverResource = {
   push(property: string, values: string[], unique?: boolean): void;
   canWrite(agent?: string): Promise<[boolean, string | undefined]>;
   save(): Promise<unknown>;
+  /** Only read on the personal drive, to see whether it holds anything. */
+  getChildrenCollection?(pageSize?: number): Promise<{ totalMembers: number }>;
 };
 
 export type HandoverStore = {
@@ -135,7 +137,29 @@ async function drivesOf(
     return [];
   }
 
-  return drivesListedIn(home).filter(drive => drive !== personalDrive);
+  const listed = drivesListedIn(home).filter(drive => drive !== personalDrive);
+
+  // A home that holds documents of its own is work too; an empty one is only
+  // the list, and handing that over gave the account a second empty "My drive".
+  return (await holdsContent(home)) ? [...listed, personalDrive] : listed;
+}
+
+async function holdsContent(home: HandoverResource): Promise<boolean> {
+  if (!home.getChildrenCollection) return false;
+
+  return (await home.getChildrenCollection(1)).totalMembers > 0;
+}
+
+/**
+ * The drives `from` could hand over, before any grant: what a sign-in as
+ * someone else would bring along. Throws when they cannot be read.
+ */
+export async function listHandoverDrives(
+  store: HandoverStore,
+  from: string,
+  personalDrive?: string,
+): Promise<string[]> {
+  return [...new Set(await drivesOf(store, from, personalDrive))];
 }
 
 const inFlight = new Map<string, Promise<PendingDriveHandover>>();
@@ -262,6 +286,8 @@ export async function applyPendingDriveHandover(
   store: Pick<HandoverStore, 'getResource'>,
   agent: string,
   importCarriedDrives: (agent: string) => Promise<string[]> = async () => [],
+  /** `agent`'s home when the caller knows it: its agent resource may not be readable yet. */
+  knownPersonalDrive?: string,
 ): Promise<boolean> {
   try {
     const imported = await importCarriedDrives(agent);
@@ -277,10 +303,14 @@ export async function applyPendingDriveHandover(
   if (!pending || !sameAgent(pending.agent, agent)) return false;
 
   try {
-    const agentResource = await store.getResource(agent);
-    const personalDrive = agentResource.error
-      ? undefined
-      : personalDriveOf(agentResource);
+    let personalDrive = knownPersonalDrive;
+
+    if (!personalDrive) {
+      const agentResource = await store.getResource(agent);
+      personalDrive = agentResource.error
+        ? undefined
+        : personalDriveOf(agentResource);
+    }
 
     if (!personalDrive) return false;
 

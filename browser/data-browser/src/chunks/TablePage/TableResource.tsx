@@ -76,6 +76,7 @@ import { useRowActions } from './useRowActions';
 import { rowActionKey, type RowActionSpec } from './rowActions';
 import { QuickAddBar } from './QuickAddBar';
 import { useTableAggregates } from './useTableAggregates';
+import { getTableDrive } from './tableDrive';
 import { TableTotalsFooter } from './TableTotalsFooter';
 import { toAggregation } from './tableAggregates';
 import { stringToSlug } from '@helpers/stringToSlug';
@@ -561,7 +562,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     filters: queryFilters,
     expressionFilters: queryExpressionFilters,
     aggregation,
-    drive: store.getDrive(),
+    drive: getTableDrive(store, resource) ?? store.getDrive(),
     server: resource.subject.startsWith('http')
       ? new URL(resource.subject).origin
       : undefined,

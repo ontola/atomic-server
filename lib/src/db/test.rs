@@ -452,6 +452,25 @@ async fn synthetic_agent_reads_have_stable_history_without_persisting() {
 
 /// A profile stored under a padded spelling of the key answers for the
 /// canonical unpadded subject too, instead of an empty synthesized twin.
+/// The Flutter app signs in again with the saved secret on every start. The
+/// secret carries no name, and that used to overwrite the stored agent: a
+/// fresh account's own activity read "Someone created".
+#[tokio::test]
+async fn signing_in_again_with_the_secret_keeps_the_agents_name() {
+    let db = Db::init_redb(None).await.unwrap();
+    let (agent, drive) = db.setup("Tester").await.unwrap();
+    let secret = agent.build_secret().unwrap();
+
+    let loaded = db.load_agent_from_secret(&secret).await.unwrap();
+
+    assert_eq!(loaded.agent.name.as_deref(), Some("Tester"));
+    assert!(!loaded.drive_needs_sync);
+    let stored = db.get_resource(&agent.subject).await.unwrap();
+    assert_eq!(stored.get(urls::NAME).unwrap().to_string(), "Tester");
+    let home = stored.get(urls::PRIVATE_DRIVE).unwrap().to_string();
+    assert_eq!(Subject::from(home.as_str()), Subject::from(drive.as_str()));
+}
+
 #[tokio::test]
 async fn agent_profile_under_padded_key_answers_for_unpadded_subject() {
     let db = Db::init_temp("agent_padded_spelling").await.unwrap();
@@ -4713,6 +4732,50 @@ async fn deferred_search_entries_are_added_by_index_pending() {
     assert_eq!(store.search_hits("zebrafish", &opts).unwrap().len(), 1);
 }
 
+/// An index an older build left incomplete is rebuilt once per marker, and
+/// not again.
+#[tokio::test]
+#[timeout(120000)]
+async fn search_index_is_rebuilt_once_per_marker() {
+    let store = Db::init_temp("rebuild_once").await.unwrap();
+    let drive =
+        "did:ad:driveONCEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let subj = "did:ad:once000000000000000000000000000000000000000000000000000000000000000000==";
+    let mut authored = crate::Resource::new(subj.to_string());
+    authored
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    authored
+        .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    authored
+        .set_unsafe(
+            urls::NAME.into(),
+            Value::String("axolotl field guide".into()),
+        )
+        .unwrap();
+    let state = authored.build_state_doc().unwrap().export_snapshot();
+    crate::sync::ws_apply::apply_state_updates(&store, &[(subj.to_string(), state)], false)
+        .await
+        .unwrap();
+    let opts = crate::client::search::SearchOpts::default();
+    assert_eq!(store.search_hits("axolotl", &opts).unwrap().len(), 1);
+
+    // Lose the index entries, as a store filled by an older build can have.
+    for tree in [
+        crate::db::trees::Tree::SearchDocs,
+        crate::db::trees::Tree::SearchPostings,
+        crate::db::trees::Tree::SearchTrigrams,
+    ] {
+        store.kv.clear_tree(tree).unwrap();
+    }
+    assert!(store.search_hits("axolotl", &opts).unwrap().is_empty());
+
+    assert!(crate::search::rebuild_search_index_once(&store, "t1").unwrap());
+    assert_eq!(store.search_hits("axolotl", &opts).unwrap().len(), 1);
+    assert!(!crate::search::rebuild_search_index_once(&store, "t1").unwrap());
+}
+
 #[tokio::test]
 async fn removing_an_atom_also_removes_rows_an_older_store_wrote() {
     use crate::db::trees::{Method, Operation, Transaction, Tree};
@@ -6373,4 +6436,139 @@ async fn stored_envelope_bytes_per_small_edit_stay_small() {
         "{} bytes for {EDITS} edits",
         edits.iter().sum::<usize>()
     );
+}
+
+/// Signing in as someone else brings the work along: the drives the old agent
+/// can write become writable by the new one and show up in its drive list; a
+/// drive the old agent can only read, and an empty private drive, stay behind.
+#[tokio::test]
+#[timeout(120000)]
+async fn bring_along_moves_writable_drives_to_the_new_agent_once() {
+    let db = Db::init_temp("bring_along_main").await.unwrap();
+    let (a, a_home) = db.setup("Alice").await.unwrap();
+    let a_subject = a.subject.to_string();
+
+    // A shared drive A made, listed on A's home.
+    let shared = db.create_drive("Shared").await.unwrap();
+    // Something in A's private drive, so it counts as work.
+    db.create_resource(urls::FOLDER, &a_home, "Notes", None)
+        .await
+        .unwrap();
+
+    // A drive somebody else made that A lists but cannot write.
+    let other = db.create_agent(Some("Carol")).await.unwrap();
+    db.set_default_agent(other.clone());
+    let read_only = db.create_drive("Carol's").await.unwrap();
+    db.set_default_agent(a.clone());
+    db.push_drive_to_list(&a_home, &read_only).await.unwrap();
+
+    let b = db.create_agent(Some("Bob")).await.unwrap();
+    let b_subject = b.subject.to_string();
+    let b_home =
+        crate::genesis::GenesisCert::private_drive_subject(b.private_key.as_ref().unwrap())
+            .unwrap();
+
+    assert!(db.has_work_to_bring(&a).await.unwrap());
+    let brought = db.bring_along(&a, &b).await.unwrap();
+    let mut got = brought.drives.clone();
+    got.sort();
+    let mut want = vec![shared.clone(), a_home.clone()];
+    want.sort();
+    assert_eq!(
+        got, want,
+        "shared + private-with-content, not the read-only one"
+    );
+
+    // B can write what came along, and lists it.
+    for drive in [&shared, &a_home] {
+        let r = db.get_resource(&drive.as_str().into()).await.unwrap();
+        let write = r.get(urls::WRITE).unwrap().to_subjects(None).unwrap();
+        assert!(write.contains(&a_subject), "A keeps its own right");
+        assert!(write.contains(&b_subject));
+    }
+    let ro = db.get_resource(&read_only.as_str().into()).await.unwrap();
+    assert!(!ro
+        .get(urls::WRITE)
+        .unwrap()
+        .to_subjects(None)
+        .unwrap()
+        .contains(&b_subject));
+    let home = db.get_resource(&b_home.as_str().into()).await.unwrap();
+    let listed = home.get(urls::DRIVES).unwrap().to_subjects(None).unwrap();
+    assert!(listed.contains(&shared) && listed.contains(&a_home));
+    assert!(!listed.contains(&read_only));
+
+    // Second run: nothing to bring, nothing breaks.
+    let again = db.bring_along(&a, &b).await.unwrap();
+    assert!(again.drives.is_empty(), "{again:?}");
+    // Same agent: no-op.
+    assert!(db.bring_along(&a, &a).await.unwrap().drives.is_empty());
+}
+
+/// An agent that only has its empty private drive has nothing to bring.
+#[tokio::test]
+#[timeout(120000)]
+async fn bring_along_skips_an_empty_private_drive() {
+    let db = Db::init_temp("bring_along_empty").await.unwrap();
+    let (a, _home) = db.setup("Alice").await.unwrap();
+    let b = db.create_agent(Some("Bob")).await.unwrap();
+
+    assert!(!db.has_work_to_bring(&a).await.unwrap());
+    assert!(db.bring_along(&a, &b).await.unwrap().drives.is_empty());
+}
+
+/// A legacy drive (listed on the Agent resource, not on the home) comes along.
+#[tokio::test]
+#[timeout(120000)]
+async fn bring_along_finds_drives_listed_on_the_agent() {
+    let db = Db::init_temp("bring_along_legacy").await.unwrap();
+    let (a, _home) = db.setup("Alice").await.unwrap();
+    let drive = db.create_drive("Old").await.unwrap();
+    // Move the entry from the home list to the legacy Agent.drives list.
+    let mut agent_res = db.get_resource(&a.subject).await.unwrap();
+    agent_res
+        .set_unsafe(
+            urls::DRIVES.into(),
+            Value::ResourceArray(vec![drive.clone().into()]),
+        )
+        .unwrap();
+    db.add_resource_opts(&agent_res, false, true, true)
+        .await
+        .unwrap();
+    let home_subject = db.private_drive_subject().unwrap();
+    let mut home = db
+        .get_resource(&home_subject.as_str().into())
+        .await
+        .unwrap();
+    home.set_unsafe(urls::DRIVES.into(), Value::ResourceArray(vec![]))
+        .unwrap();
+    db.add_resource_opts(&home, false, true, true)
+        .await
+        .unwrap();
+
+    let b = db.create_agent(Some("Bob")).await.unwrap();
+    let brought = db.bring_along(&a, &b).await.unwrap();
+    assert_eq!(brought.drives, vec![drive]);
+}
+
+/// A drive made by a client (the Welcome drive) is on no `drives` list. It
+/// showed in the drive list only while it was the active drive, and vanished
+/// the moment another one was opened.
+#[tokio::test]
+async fn opened_drive_stays_listed_after_another_becomes_active() {
+    let db = Db::init_temp("opened_drive_stays_listed").await.unwrap();
+    let welcome = "did:ad:welcome-drive-not-on-any-list";
+    db.set_active_drive(welcome).unwrap();
+    let other = db.create_drive("Mine").await.unwrap();
+    assert_eq!(db.get_active_drive().as_deref(), Some(other.as_str()));
+
+    let subjects: Vec<String> = db
+        .list_drives()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|d| d.subject)
+        .collect();
+    assert!(subjects.contains(&welcome.to_string()), "{subjects:?}");
+    assert!(subjects.contains(&other), "{subjects:?}");
 }

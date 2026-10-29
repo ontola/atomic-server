@@ -307,16 +307,6 @@ impl Expression {
         })
     }
 
-    /// Evaluate with `get` standing in for the row: the one path both a stored
-    /// [`Resource`] and a plain map of values (the browser's cells) go through.
-    pub fn evaluate_with(
-        &self,
-        clock: impl Into<Clock>,
-        get: &dyn Fn(&str) -> Option<f64>,
-    ) -> Option<f64> {
-        self.compile(clock).ok()?.evaluate(get)
-    }
-
     /// This row's value, or `None` when an input it needs is missing — the same
     /// "doesn't contribute" a row without a stored value gets.
     ///

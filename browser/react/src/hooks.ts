@@ -18,7 +18,6 @@ import {
   JSONValue,
   valToBoolean,
   valToNumber,
-  valToDate,
   valToArray,
   valToString,
   FetchOpts,
@@ -32,12 +31,10 @@ import {
   core,
   server,
   isAtomicIdentifier,
+  asError,
 } from '@tomic/lib';
 import type { LoroDoc } from 'loro-crdt';
 import { useOnValueChange } from './helpers/useOnValueChange.js';
-
-const asError = (error: unknown): Error =>
-  error instanceof Error ? error : new Error(String(error));
 
 export type UseResourceOptions = FetchOpts;
 
@@ -321,7 +318,7 @@ function useValueWithSave(
         handleValidationError?.(undefined);
       } catch (e) {
         if (handleValidationError) handleValidationError(asError(e));
-        else store.notifyError(asError(e));
+        else store.notifyError(e);
       }
     },
 
@@ -495,7 +492,7 @@ export function useArray(
         handleValidationError?.(undefined);
       } catch (e) {
         if (handleValidationError) handleValidationError(asError(e));
-        else store.notifyError(asError(e));
+        else store.notifyError(e);
       }
     },
 
@@ -533,31 +530,6 @@ export function useBoolean(
   }
 
   return [valToBoolean(value), set];
-}
-
-/**
- * Hook for getting a stringified representation of an Atom in a React
- * component. See {@link useValue}
- */
-export function useDate(
-  resource: Resource,
-  propertyURL: string,
-  opts?: useValueOptions,
-): Date | undefined {
-  const store = useStore();
-  const [value] = useValue(resource, propertyURL, opts);
-
-  if (value === undefined) {
-    return undefined;
-  }
-
-  try {
-    return valToDate(value);
-  } catch (e) {
-    store.notifyError(asError(e));
-
-    return;
-  }
 }
 
 /**

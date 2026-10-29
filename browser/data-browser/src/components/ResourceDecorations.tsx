@@ -368,7 +368,7 @@ export function IconPickerDialog({
   show,
   onShowChange,
 }: PickerDialogProps): JSX.Element {
-  const { upload } = useUpload(resource);
+  const { upload } = useUpload(resource, { optimistic: true });
   const [emoji, setEmoji] = useString(
     resource,
     dataBrowser.properties.emoji,

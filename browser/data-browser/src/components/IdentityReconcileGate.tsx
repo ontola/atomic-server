@@ -17,15 +17,9 @@ import {
   syncDeviceDirectory,
   writeManagedAccountBinding,
 } from '../helpers/managed';
-import {
-  applyPendingDriveHandover,
-  handOverDrives,
-} from '../helpers/managed/driveHandover';
-import {
-  importDriveCarryOver,
-  stageDriveCarryOver,
-} from '../helpers/managed/driveCarryOver';
-import { isClientDbEnabled } from '../helpers/clientDbMode';
+import { applyPendingDriveHandover } from '../helpers/managed/driveHandover';
+import { importDriveCarryOver } from '../helpers/managed/driveCarryOver';
+import { handOverFrom } from '../helpers/bringAlong';
 import { paths } from '../routes/paths';
 import { Button } from './Button';
 import { Column } from './Row';
@@ -90,17 +84,7 @@ async function handOverOrReport(
   to: string,
 ): Promise<boolean> {
   try {
-    await handOverDrives(store, {
-      from,
-      to,
-      personalDrive: store.getAgent()?.privateDrive,
-      archiveIdentity: archiveStoredAgent,
-      // Without a local database there is no identity database to leave the
-      // drives behind in.
-      carryOver: isClientDbEnabled()
-        ? drives => stageDriveCarryOver(store, { from, to, drives })
-        : undefined,
-    });
+    await handOverFrom(store, from, to);
 
     return true;
   } catch (error) {

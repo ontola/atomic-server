@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:atomiccanvas_flutter/screens/pair_screen.dart';
+import 'package:atomic_app/screens/pair_screen.dart';
 
 /// The node id in the code the data-browser showed for its server.
-const _hex =
-    '959866605fedfbc79d3890579d587410bfb05329f48cfe5186297ac8cf51888f';
+const _hex = '959866605fedfbc79d3890579d587410bfb05329f48cfe5186297ac8cf51888f';
 
 void main() {
   group('atomic://pair codes (what the data-browser and Tauri apps show)', () {
-    test('reads the code a browser shows for the server its drives live on', () {
+    test('reads the code a browser shows for the server its drives live on',
+        () {
       // Copied from the Sync page, verbatim.
       final peer = PairScreen.parsePeerInfo(
         'atomic://pair?v=1&node=did:ad:node:$_hex&drives=*',
@@ -15,7 +15,8 @@ void main() {
 
       expect(peer, isNotNull);
       expect(peer!.nodeId, _hex);
-      expect(peer.drives, isNull, reason: '"*" means every drive, not a filter');
+      expect(peer.drives, isNull,
+          reason: '"*" means every drive, not a filter');
     });
 
     test('keeps the server the code advertises', () {
@@ -26,7 +27,9 @@ void main() {
       expect(peer!.serverUrl, 'https://my.server.com');
     });
 
-    test('a code that names a drive says which one — that is what unsticks a new device', () {
+    test(
+        'a code that names a drive says which one — that is what unsticks a new device',
+        () {
       // A device holding only a secret has no drive to sync. The code naming
       // one is the whole mechanism for its first pull; `*` names none.
       final peer = PairScreen.parsePeerInfo(
@@ -87,6 +90,14 @@ void main() {
       expect(PairScreen.parsePeerInfo(''), isNull);
       expect(PairScreen.parsePeerInfo('https://example.com'), isNull);
       expect(PairScreen.parsePeerInfo('did:ad:node:tooshort'), isNull);
+    });
+
+    test(
+        'atomic://account-ready (the portal returning the person) is no pairing code',
+        () {
+      // main.dart ignores anything this rejects, so that link only brings the
+      // app to the front and the AI chat's resume poll connects the account.
+      expect(PairScreen.parsePeerInfo('atomic://account-ready'), isNull);
     });
   });
 }

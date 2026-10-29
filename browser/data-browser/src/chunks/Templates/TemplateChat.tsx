@@ -11,6 +11,7 @@ import { selectGenerativeFeaturesModel } from '../AI/useGenerativeData';
 import { TEMPLATE_CATALOG } from './catalog';
 import type { TemplateDefinition } from './model';
 import { SectionTitle } from '../../views/Drive/DriveHome';
+import { asError } from '@tomic/react';
 const ChatInput = lazy(() => import('../RTE/AIChatInput/AsyncAIChatInput'));
 
 export default function TemplateChat({
@@ -78,7 +79,7 @@ export default function TemplateChat({
       setInput('');
       setComposer(value => value + 1);
     } catch (e) {
-      setError(e instanceof Error ? e : new Error(String(e)));
+      setError(asError(e));
     } finally {
       clearTimeout(timeout);
       request.current = undefined;

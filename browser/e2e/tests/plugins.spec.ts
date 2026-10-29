@@ -36,7 +36,7 @@ export function run() { return { intents: [] }; }
     expect(published.ok()).toBe(true);
     const { id } = await published.json();
     await expect(
-      page.getByRole('heading', { name: 'Integrations', exact: true }),
+      page.getByRole('heading', { name: 'Apps', exact: true }),
     ).toBeVisible();
     await page
       .getByRole('checkbox', { name: 'Show experimental plugins' })

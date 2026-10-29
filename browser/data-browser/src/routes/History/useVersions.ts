@@ -6,6 +6,7 @@ import {
   type HistoryAttribution,
 } from '@tomic/react';
 import { useState, useEffect, useRef } from 'react';
+import { asError } from '@tomic/react';
 
 export interface UseVersionsResult {
   versions: Version[];
@@ -68,7 +69,7 @@ export function useVersions(resource: Resource): UseVersionsResult {
       setVersions(history);
     } catch (e) {
       console.error('Failed to get Loro history:', e);
-      setError(e instanceof Error ? e : new Error(String(e)));
+      setError(asError(e));
     } finally {
       setLoading(false);
       isRunning.current = false;

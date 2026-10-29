@@ -5,6 +5,8 @@ export const pathNames = {
   welcome: '/welcome',
   agentSettings: '/agent',
   appSettings: '/settings',
+  apps: '/apps',
+  // Old name of the Apps page; redirects (see IntegrationStoreRoute).
   integrations: '/integrations',
   notifications: '/notifications',
   sync: '/sync',
@@ -32,13 +34,16 @@ export const pathNames = {
   signOut: '/sign-out',
   connectAgent: '/connect-agent',
   authorizeMcp: '/authorize-mcp',
+  sendIdentity: '/send-identity',
 } as const;
 export const paths = {
   welcome: `${pathNames.app}${pathNames.welcome}`,
   agentSettings: `${pathNames.app}${pathNames.agentSettings}`,
   connectAgent: `${pathNames.app}${pathNames.connectAgent}`,
   authorizeMcp: `${pathNames.app}${pathNames.authorizeMcp}`,
+  sendIdentity: `${pathNames.app}${pathNames.sendIdentity}`,
   appSettings: `${pathNames.app}${pathNames.appSettings}`,
+  apps: `${pathNames.app}${pathNames.apps}`,
   integrations: `${pathNames.app}${pathNames.integrations}`,
   notifications: `${pathNames.app}${pathNames.notifications}`,
   sync: `${pathNames.app}${pathNames.sync}`,

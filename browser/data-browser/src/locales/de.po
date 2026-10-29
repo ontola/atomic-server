@@ -114,6 +114,7 @@ msgstr ""
 #: src/chunks/AppPage/ConnectDialog.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
@@ -1023,6 +1024,7 @@ msgstr ""
 
 #: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 #: src/components/Share/ShareDialog.tsx
+#: src/routes/SendIdentityRoute.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Send"
 msgstr ""
@@ -1371,6 +1373,7 @@ msgstr ""
 msgid "Save"
 msgstr ""
 
+#: src/routes/AppSettings.tsx
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Templates"
 msgstr ""
@@ -1526,6 +1529,7 @@ msgstr ""
 
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/components/EditLanguagesDialog.tsx
+#: src/components/Settings/IntegrationSettings.tsx
 msgid "Add"
 msgstr ""
 
@@ -2246,6 +2250,7 @@ msgstr ""
 msgid "Share"
 msgstr ""
 
+#: src/components/BreadCrumbs.tsx
 #: src/components/NavBar.tsx
 msgid "Breadcrumbs"
 msgstr ""
@@ -2667,7 +2672,7 @@ msgstr ""
 msgid "Open tag page"
 msgstr ""
 
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/components/ShareLink.tsx
 msgid "Link copied to clipboard"
 msgstr ""
 
@@ -3419,6 +3424,7 @@ msgstr ""
 msgid "Back up your secret?"
 msgstr ""
 
+#: src/routes/SendIdentityRoute.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery password"
@@ -4279,8 +4285,8 @@ msgstr ""
 msgid "Mounted at {0}"
 msgstr ""
 
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
 #: src/components/Settings/VirtualDriveSettings.tsx
+#: src/components/ShareLink.tsx
 msgid "<0/> Open"
 msgstr ""
 
@@ -4407,8 +4413,10 @@ msgid "Languages"
 msgstr ""
 
 #. 0: tag
+#. 0: url
 #. 0: email
 #: src/components/EditLanguagesDialog.tsx
+#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Share/EmailInviteInput.tsx
 msgid "Remove {0}"
 msgstr ""
@@ -4568,6 +4576,8 @@ msgstr ""
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/AccountRecoveryCard.tsx
+#: src/routes/SendIdentityRoute.tsx
+#: src/routes/SendIdentityRoute.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery code"
@@ -4629,6 +4639,7 @@ msgid "Checking what this device supports…"
 msgstr ""
 
 #: src/components/NewIdentitySection.tsx
+#: src/routes/SendIdentityRoute.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -4651,6 +4662,7 @@ msgstr ""
 msgid "Could not unlock with your passkey."
 msgstr ""
 
+#: src/routes/SendIdentityRoute.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Unlock with your passkey"
@@ -4678,6 +4690,7 @@ msgstr ""
 
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/AccountRecoveryCard.tsx
+#: src/routes/SendIdentityRoute.tsx
 msgid "Unlocking…"
 msgstr ""
 
@@ -5460,7 +5473,9 @@ msgstr ""
 msgid "Switch"
 msgstr ""
 
+#. 0: accountAddress(phase.account)
 #. 0: managedAccount.email
+#: src/routes/SendIdentityRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
 msgstr ""
@@ -5630,10 +5645,6 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
-msgstr ""
-
-#: src/handlers/errorHandler.ts
-msgid "Something failed, and reported no reason."
 msgstr ""
 
 #: src/views/Drive/DrivePage.tsx
@@ -6503,6 +6514,7 @@ msgstr ""
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
 #: src/routes/NewResource/NewRoute.tsx
+#: src/routes/SendIdentityRoute.tsx
 msgid "Loading…"
 msgstr ""
 
@@ -6767,30 +6779,12 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
-#: src/components/MetaSetter.tsx
-#: src/components/SideBar/AccountMenu.tsx
-#: src/routes/IntegrationStore.tsx
-msgid "Integrations"
-msgstr ""
-
-#: src/components/SideBar/AccountMenu.tsx
-msgid "Discover published integrations"
-msgstr ""
-
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Review the saved proposal and run history before continuing."
 msgstr ""
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Resume saved run"
-msgstr ""
-
-#: src/routes/IntegrationStore.tsx
-msgid "Search integrations"
-msgstr ""
-
-#: src/routes/IntegrationStore.tsx
-msgid "Search integrations, domains or standards"
 msgstr ""
 
 #: src/routes/IntegrationStore.tsx
@@ -6977,10 +6971,6 @@ msgstr ""
 
 #: src/chunks/PluginRuns/CreateEventAutomation.tsx
 msgid "The next screen opens an editable JavaScript starter. Automatic execution stays off until you enable it."
-msgstr ""
-
-#: src/routes/IntegrationStore.tsx
-msgid "Connect your apps and keep your work in sync. Add automations when you need them."
 msgstr ""
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
@@ -8340,12 +8330,13 @@ msgstr ""
 msgid "The selected model is not in the zero-retention list. Choose another model."
 msgstr ""
 
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/components/ShareLink.tsx
 msgid "<0/> Copy link"
 msgstr ""
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
+#: src/routes/SendIdentityRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr ""
@@ -8580,8 +8571,12 @@ msgstr ""
 msgid "from {0}"
 msgstr ""
 
+#. 0: app.name
+#. 0: sharing.app.name
 #. 0: title
 #. 0: title
+#: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Share {0}"
@@ -8617,6 +8612,7 @@ msgid "Add a note for the people you're inviting"
 msgstr ""
 
 #: src/components/Share/ShareDialog.tsx
+#: src/routes/SendIdentityRoute.tsx
 msgid "Sending…"
 msgstr ""
 
@@ -8801,6 +8797,7 @@ msgstr ""
 msgid "Discover integrations from this catalog.json. This setting is saved in this browser."
 msgstr ""
 
+#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr ""
@@ -9603,6 +9600,7 @@ msgid "Share form"
 msgstr ""
 
 #: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
 msgid "<0/> Share"
 msgstr ""
 
@@ -11248,16 +11246,11 @@ msgid "Usage"
 msgstr ""
 
 #: src/routes/IntegrationStore.tsx
-#: src/routes/IntegrationStore.tsx
 msgid "Loading integrations…"
 msgstr ""
 
 #: src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental plugins"
-msgstr ""
-
-#: src/routes/IntegrationStore.tsx
-msgid "Discover integrations"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -11948,6 +11941,7 @@ msgstr ""
 msgid "Add a device"
 msgstr ""
 
+#: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr ""
@@ -13140,6 +13134,205 @@ msgstr ""
 msgid "Timed out fetching {0}"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/routes/IntegrationStore.tsx
+msgid "Apps"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Install apps into your drive, connect integrations and keep your work in sync. Add automations when you need them."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Search apps"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Search apps, integrations, domains or standards"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Loading apps…"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Discover apps"
+msgstr ""
+
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
+msgid "That marketplace link is not a valid catalog URL."
+msgstr ""
+
+#. 0: host
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
+msgid "Add marketplace {0}?"
+msgstr ""
+
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
+msgid "Apps from it can be installed into your drives. Only add marketplaces you trust."
+msgstr ""
+
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
+msgid "Add marketplace"
+msgstr ""
+
+#. 0: sharing.app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "QR code for the {0} link"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "<0/> Remove"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Marketplaces"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Add marketplace URL"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Discover apps and integrations"
+msgstr ""
+
+#: src/helpers/managed/vaultAutoBackup.ts
+msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
+msgstr ""
+
+#: src/embed/MeetingChatOverlay.tsx
+msgid "Close chat"
+msgstr ""
+
+#: src/embed/mockHost.ts
+msgid "Mock drive"
+msgstr ""
+
+#: src/embed/mockHost.ts
+msgid "A drive that only exists in this page."
+msgstr ""
+
+#: src/embed/mockHost.ts
+msgid "A folder"
+msgstr ""
+
+#: src/embed/mockHost.ts
+msgid "A resource inside the folder"
+msgstr ""
+
+#: src/embed/mockHost.ts
+msgid "Rendered by ResourcePage, with nothing around it."
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar <0>Show icons and pictures next to items in the sidebar</0>"
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "This link has no code. Start again from your device."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "That device did not ask for your identity."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "This code was already used. Ask the device for a new one."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Could not look up that code."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Could not unlock your backup."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Could not send your identity."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "This account has no backup yet. Create it in the web app first."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "This backup cannot be opened here. Restore it in the web app first."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Could not read your backup."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "No account service is known here."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Sign in to continue"
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Sign in to your account to send your identity to your device."
+msgstr ""
+
+#. 0: phase.link.deviceName
+#: src/routes/SendIdentityRoute.tsx
+msgid "Send your identity to {0}?"
+msgstr ""
+
+#. 0: code
+#: src/routes/SendIdentityRoute.tsx
+msgid "Only continue if you started this on your own device just now and it shows code {0}."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Send with this code"
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Unlock your backup"
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Go back to your device."
+msgstr ""
+
+#: src/routes/SendIdentityRoute.tsx
+msgid "Could not send your identity"
+msgstr ""
+
+#: src/components/SideBar/SideBarDrive.tsx
+msgid "Switch Drive"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Add your work from this browser to your account?"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Your account gets access to it. Nothing is copied or deleted."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Add to my account"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Don't add, keep it in this browser only"
+msgstr ""
+
+#: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Show Getting started on this drive's page"
+msgstr ""
+
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr ""
@@ -13156,10 +13349,6 @@ msgstr ""
 msgid "Start a drive first"
 msgstr ""
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on this drive's page"
-msgstr ""
-
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Nothing is created until you add it."
 msgstr ""
@@ -13170,10 +13359,6 @@ msgstr ""
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Or describe what you need"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
 msgstr ""
 
 #: src/views/Drive/EmptyDriveStart.tsx
@@ -13194,4 +13379,8 @@ msgstr ""
 
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start this drive"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Give it a name, then fill it with a starter"
 msgstr ""

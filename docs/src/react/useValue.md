@@ -29,7 +29,6 @@ The following value hooks are available:
 - `useString` for string, slug, uri and markdown values.
 - `useNumber` for float and integer values.
 - `useBoolean` for boolean values.
-- `useDate` for date and timestamp values.
 - `useArray` for ResourceArray values.
 
 ## Reference

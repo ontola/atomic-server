@@ -9,11 +9,13 @@ import {
   hasExperimentalEntries,
   useIntegrationCatalog,
 } from '../chunks/PluginRuns/pluginCatalog';
+import { AddMarketplaceDialog } from '../chunks/PluginRuns/AddMarketplaceDialog';
+import { useMarketplaceUrls } from '@helpers/pluginCatalogUrl';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
 import { PLUGIN_PREVIEW_PARAM } from '@helpers/integrationVisibility';
 import { driveHasServer } from '@helpers/driveData';
 import { isOriginWithoutNode } from '@helpers/originNode';
-import { createRoute } from '@tanstack/react-router';
+import { createRoute, redirect } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaPlug } from 'react-icons/fa6';
@@ -39,7 +41,7 @@ import {
 } from '../chunks/Plugins/InstallationReviewDialog';
 import toast from 'react-hot-toast';
 import { appRoute } from './RootRoutes';
-import { pathNames } from './paths';
+import { pathNames, paths } from './paths';
 import { Main } from '@components/Main';
 import { ContainerWide } from '@components/Containers';
 import { Card } from '@components/Card';
@@ -68,24 +70,47 @@ interface Listing {
   world: string | null;
 }
 
-export const IntegrationStoreRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: pathNames.integrations,
-  component: IntegrationStore,
-  validateSearch: (search: Record<string, unknown>) => ({
+function validateAppsSearch(search: Record<string, unknown>) {
+  return {
     workspace:
       typeof search.workspace === 'string' ? search.workspace : undefined,
     // `?preview=plugins` unlocks the experimental toggle on this device, for
     // user-testing sessions.
     preview: typeof search.preview === 'string' ? search.preview : undefined,
-  }),
+    // A shared app link: `?app=<shortname>[&marketplace=<catalog url>]`.
+    app: typeof search.app === 'string' ? search.app : undefined,
+    marketplace:
+      typeof search.marketplace === 'string' ? search.marketplace : undefined,
+  };
+}
+
+export const IntegrationStoreRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: pathNames.apps,
+  component: IntegrationStore,
+  validateSearch: validateAppsSearch,
+});
+
+/**
+ * The page used to be "Integrations" at /app/integrations. Old links, and the
+ * integration proxy, which only returns there, land on Apps with their search.
+ */
+export const LegacyIntegrationsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: pathNames.integrations,
+  validateSearch: validateAppsSearch,
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: paths.apps, search, replace: true });
+  },
 });
 
 function IntegrationStore(): React.JSX.Element {
   const store = useStore();
   const { drive } = useSettings();
   // Opened from a workspace: new automations can belong to it.
-  const { workspace, preview } = IntegrationStoreRoute.useSearch();
+  const { workspace, preview, app, marketplace } =
+    IntegrationStoreRoute.useSearch();
+  const marketplaceUrls = useMarketplaceUrls();
   const {
     showExperimentalPlugins,
     showApiPlugins,
@@ -97,7 +122,7 @@ function IntegrationStore(): React.JSX.Element {
   const {
     entries: catalogEntries,
     ready: catalogReady,
-    error: catalogEntriesError,
+    errors: catalogEntriesErrors,
   } = useIntegrationCatalog();
   // The ontology can hydrate after this page mounts on a full navigation.
   const pluginClass = usePluginClass(drive);
@@ -313,16 +338,19 @@ function IntegrationStore(): React.JSX.Element {
 
   return (
     <Main>
+      {marketplace && !marketplaceUrls.includes(marketplace) && (
+        <AddMarketplaceDialog url={marketplace} />
+      )}
       <ContainerWide>
         <Column gap='1.5rem'>
           <Header>
             <Icon>
               <FaPlug aria-hidden />
             </Icon>
-            <h1>Integrations</h1>
+            <h1>Apps</h1>
             <p>
-              Connect your apps and keep your work in sync. Add automations when
-              you need them.
+              Install apps into your drive, connect integrations and keep your
+              work in sync. Add automations when you need them.
             </p>
             <NewFeatureNote role='note'>
               <NewBadge>New</NewBadge>
@@ -372,20 +400,20 @@ function IntegrationStore(): React.JSX.Element {
               </Grid>
             </section>
           )}
-          <h2>Discover integrations</h2>
+          <h2>Discover apps</h2>
           <Input
-            aria-label='Search integrations'
-            placeholder='Search integrations, domains or standards'
+            aria-label='Search apps'
+            placeholder='Search apps, integrations, domains or standards'
             value={search}
             onChange={event => setSearch(event.target.value)}
           />
           {error && <Card role='alert'>{error}</Card>}
-          {catalogEntriesError && (
-            <Card role='alert'>{catalogEntriesError}</Card>
-          )}
-          {!catalogReady && !catalogEntriesError && (
-            <p>Loading integrations…</p>
-          )}
+          {catalogEntriesErrors.map(message => (
+            <Card key={message} role='alert'>
+              {message}
+            </Card>
+          ))}
+          {!catalogReady && <p>Loading apps…</p>}
           {showExperimentalPlugins && catalogError && (
             <Card role='alert'>{catalogError}</Card>
           )}
@@ -411,6 +439,7 @@ function IntegrationStore(): React.JSX.Element {
               query={query}
               showExperimental={showExperimentalPlugins}
               showApi={showApiPlugins}
+              highlight={app}
             />
           )}
           <Column gap='0.75rem'>

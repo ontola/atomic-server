@@ -763,7 +763,7 @@ export class AtomicServer {
 
   /**
    * Flutter unit/widget tests + static analysis. The FFI plugin (cargokit)
-   * compiles `flutter/rust` against repo-root `lib/` (`atomic_lib`);
+   * compiles `packages/atomic_store_flutter/rust` against repo-root `lib/` (`atomic_lib`);
    * both trees are mounted under `/workspace/`.
    */
   @func()
@@ -796,8 +796,8 @@ export class AtomicServer {
         // Persist the rustup toolchain so a layer-cache miss doesn't
         // re-download rustc. Idempotent install below.
         .withMountedCache('/root/.rustup', flutterRustup)
-        // Update and install in one layer: a cached `apt-get update` layer can
-        // come back without its package lists, and the install then fails.
+        // One layer: a cached `apt-get update` layer can come back without
+        // its package lists, and the install then finds no packages.
         .withExec([
           'sh',
           '-c',
@@ -821,7 +821,7 @@ export class AtomicServer {
           '/workspace/packages',
           this.source.directory('packages'),
         )
-        .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
+        .withMountedCache('/workspace/packages/atomic_store_flutter/rust/target', flutterRustTarget, {
           sharing: CacheSharingMode.Locked,
         })
         .withWorkdir('/workspace/flutter')
@@ -865,7 +865,7 @@ export class AtomicServer {
           '-lc',
           `${pathPrefix} && ` +
             'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
-            'cargo test --manifest-path rust/Cargo.toml',
+            'cargo test --manifest-path ../packages/atomic_store_flutter/rust/Cargo.toml',
         ])
         .stdout()
     );
@@ -1420,6 +1420,14 @@ export class AtomicServer {
         this.source.directory('lib/test_files/loro-compat'),
       )
       .withFile('/Cargo.lock', this.source.file('Cargo.lock'))
+      // data-browser's identityHandback.test.ts opens the vector the Dart
+      // package tests against, by repository-root path. Mount only that file.
+      .withFile(
+        '/packages/atomic_flutter/test/fixtures/identity_handback_vector.json',
+        this.source.file(
+          'packages/atomic_flutter/test/fixtures/identity_handback_vector.json',
+        ),
+      )
       // Fixtures shared by the Rust and TS twins (class constraints, lenses,
       // JSON Schema interop, schema lockfiles), read by repository-root
       // path. Same /lib collision: mount only that directory.

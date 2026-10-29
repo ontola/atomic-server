@@ -62,3 +62,75 @@ const subscribe = subscribeToSetting(event);
 
 export const usePluginCatalogUrl = (): string =>
   useSyncExternalStore(subscribe, getPluginCatalogUrl);
+
+// Extra marketplaces, on top of the primary catalog above. Earlier ones win a
+// duplicate shortname, the primary first (see `mergeCatalogs`).
+const MARKETPLACES_KEY = 'plugin-marketplaces';
+const marketplacesEvent = 'plugin-marketplaces-change';
+
+function readMarketplacesRaw(): string {
+  try {
+    return localStorage.getItem(MARKETPLACES_KEY) ?? '[]';
+  } catch {
+    return '[]';
+  }
+}
+
+function parseMarketplaces(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+
+    if (!Array.isArray(parsed)) return [];
+
+    // A stored value that no longer validates is dropped, not thrown.
+    return parsed.flatMap(value => {
+      try {
+        return typeof value === 'string' ? [validateCatalogUrl(value)] : [];
+      } catch {
+        return [];
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function getExtraMarketplaces(): string[] {
+  return parseMarketplaces(readMarketplacesRaw());
+}
+
+function writeMarketplaces(urls: string[]) {
+  localStorage.setItem(MARKETPLACES_KEY, JSON.stringify(urls));
+  window.dispatchEvent(new Event(marketplacesEvent));
+}
+
+/** Throws when the URL is invalid. Adding one already listed is a no-op. */
+export function addMarketplace(value: string) {
+  const url = validateCatalogUrl(value.trim());
+  const current = getExtraMarketplaces();
+
+  if (url === getPluginCatalogUrl() || current.includes(url)) return;
+
+  writeMarketplaces([...current, url]);
+}
+
+export function removeMarketplace(url: string) {
+  writeMarketplaces(getExtraMarketplaces().filter(u => u !== url));
+}
+
+const subscribeMarketplaces = subscribeToSetting(marketplacesEvent);
+
+export function useExtraMarketplaces(): string[] {
+  // The raw string is the snapshot: a fresh array each call would never settle.
+  const raw = useSyncExternalStore(subscribeMarketplaces, readMarketplacesRaw);
+
+  return parseMarketplaces(raw);
+}
+
+/** Primary catalog first, then the extra marketplaces. */
+export function useMarketplaceUrls(): string[] {
+  const primary = usePluginCatalogUrl();
+  const extra = useExtraMarketplaces();
+
+  return [primary, ...extra.filter(url => url !== primary)];
+}

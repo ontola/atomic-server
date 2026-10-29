@@ -1,6 +1,28 @@
 import { core } from './ontologies/core.js';
 import type { Resource } from './resource.js';
 
+/**
+ * Coerces whatever was thrown into an Error.
+ *
+ * Rejections, `window.onerror` and worker failures hand over anything: a
+ * string, `undefined`, a DOM event.
+ */
+export function asError(thrown: unknown): Error {
+  if (thrown instanceof Error) {
+    return thrown;
+  }
+
+  if (typeof thrown === 'string' && thrown.length > 0) {
+    return new Error(thrown);
+  }
+
+  if (thrown === null || thrown === undefined) {
+    return new Error('Something failed, and reported no reason.');
+  }
+
+  return new Error(String(thrown));
+}
+
 export function getMessageForErrorType(error: Error) {
   if (isAtomicError(error)) {
     switch (error.type) {
@@ -69,6 +91,9 @@ export const NOT_AVAILABLE_SERVER_UNREACHABLE_MESSAGE =
  * signed-out visitor to a drive they made here ends up exactly where a visitor
  * to one they never held does — and should be sent the same way, to sign in.
  */
+/** A store with no server (`StoreOpts.noServer`) whose host does not have it. */
+export const NOT_IN_HOST_STORE_MESSAGE = "Not found in this device's store.";
+
 export const LOCAL_ONLY_NOT_FOUND_MESSAGE =
   'This resource belongs to a local-only drive but was not found in local storage.';
 

@@ -103,7 +103,7 @@ export function PluginPage({
 
     try {
       await publishPluginRelease(store, { drive, plugin: resource.subject });
-      navigate(paths.integrations);
+      navigate(paths.apps);
     } catch (error) {
       toast.error(String(error));
     } finally {

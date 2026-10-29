@@ -233,49 +233,62 @@ export const useSidebarDnd = (
 
       return new Promise<void>(resolve => {
         // Favorites keeps the item in place, so flying back to its row is right.
-        (waitForSaveRef.current ?? Promise.resolve()).then(() => {
-          const targetNode = document.querySelector(
-            `[data-sidebar-id="${getTransitionName(
-              SIDEBAR_TRANSITION_TAG,
-              active.id as string,
-            )}"]`,
-          ) as HTMLElement;
+        // A failed save must not leave this promise pending: dnd-kit keeps the
+        // overlay on screen until it settles.
+        (waitForSaveRef.current ?? Promise.resolve())
+          .catch(() => undefined)
+          .then(() => {
+            const targetNode = document.querySelector(
+              `[data-sidebar-id="${getTransitionName(
+                SIDEBAR_TRANSITION_TAG,
+                active.id as string,
+              )}"]`,
+            ) as HTMLElement;
 
-          if (!targetNode) {
-            return resolve();
-          }
+            if (!targetNode) {
+              return resolve();
+            }
 
-          targetNode.style.opacity = '0';
+            targetNode.style.opacity = '0';
 
-          const { top: originTop, left: originLeft } = dragOverlay.rect;
-          const { x: originTransformX, y: originTransformY } = transform;
+            const { top: originTop, left: originLeft } = dragOverlay.rect;
+            const { x: originTransformX, y: originTransformY } = transform;
 
-          const { top: targetTop, left: targetLeft } =
-            targetNode.getBoundingClientRect();
+            const { top: targetTop, left: targetLeft } =
+              targetNode.getBoundingClientRect();
 
-          const targetTransformX = targetLeft - originLeft + originTransformX;
-          const targetTransformY = targetTop - originTop + originTransformY;
+            const targetTransformX = targetLeft - originLeft + originTransformX;
+            const targetTransformY = targetTop - originTop + originTransformY;
 
-          const dropAnimation = dragOverlay.node.animate(
-            [
+            const dropAnimation = dragOverlay.node.animate(
+              [
+                {
+                  transform: `translate(${originTransformX}px, ${originTransformY}px)`,
+                },
+                {
+                  transform: `translate(${targetTransformX}px, ${targetTransformY}px)`,
+                },
+              ],
               {
-                transform: `translate(${originTransformX}px, ${originTransformY}px)`,
+                duration: 300,
+                easing: 'cubic-bezier(0.2, 0, 0, 1)',
               },
-              {
-                transform: `translate(${targetTransformX}px, ${targetTransformY}px)`,
-              },
-            ],
-            {
-              duration: 300,
-              easing: 'cubic-bezier(0.2, 0, 0, 1)',
-            },
-          );
+            );
 
-          dropAnimation.onfinish = () => {
-            targetNode.style.opacity = '1';
-            resolve();
-          };
-        });
+            // `finish` is not guaranteed: a cancelled animation (node detached,
+            // tab throttled) never fires it, which left the overlay stuck on
+            // screen. Settle on cancel and after a timeout too.
+            const settle = () => {
+              clearTimeout(fallback);
+              targetNode.style.opacity = '1';
+              resolve();
+            };
+
+            const fallback = setTimeout(settle, 300 + 500);
+
+            dropAnimation.onfinish = settle;
+            dropAnimation.oncancel = settle;
+          });
       });
     },
     [],
@@ -327,9 +340,13 @@ export const useSidebarDnd = (
       });
 
       waitForSaveRef.current = promise;
-      await promise;
-      setDraggingResource(undefined);
-      onIsRearangingChange(false);
+
+      try {
+        await promise;
+      } finally {
+        setDraggingResource(undefined);
+        onIsRearangingChange(false);
+      }
 
       return;
     }
@@ -406,9 +423,15 @@ export const useSidebarDnd = (
     })();
 
     waitForSaveRef.current = promise;
-    await promise;
-    setDraggingResource(undefined);
-    onIsRearangingChange(false);
+
+    // A failed save must still leave drag mode, or the overlay and the
+    // drop zones stay on screen.
+    try {
+      await promise;
+    } finally {
+      setDraggingResource(undefined);
+      onIsRearangingChange(false);
+    }
   };
 
   const dndExplanation: string = sidebarKeyboardDndEnabled

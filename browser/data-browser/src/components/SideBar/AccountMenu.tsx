@@ -198,11 +198,11 @@ function AccountMenuRow({
         ]
       : []),
     {
-      id: 'integrations',
-      label: 'Integrations',
+      id: 'apps',
+      label: 'Apps',
       icon: <FaPlug />,
-      helper: 'Discover published integrations',
-      onClick: goTo(paths.integrations),
+      helper: 'Discover apps and integrations',
+      onClick: goTo(paths.apps),
     },
     {
       id: 'sync',
