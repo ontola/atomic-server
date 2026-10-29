@@ -7,6 +7,7 @@ mod ai_chat_migration_test;
 pub mod app_agent;
 pub mod blob_backend;
 pub mod blob_gc;
+pub mod bring_along;
 mod canonical_scheme;
 mod chat_migration;
 #[cfg(test)]
@@ -30,6 +31,8 @@ pub mod plugin_secret;
 pub mod plugin_trigger;
 pub(crate) mod prop_val_sub_index;
 mod query_index;
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+pub mod recovery;
 pub mod redb_store;
 pub mod website;
 pub mod write_log;
@@ -93,8 +96,8 @@ use self::{
     kv_store::KvStore,
     prop_val_sub_index::{add_atom_to_prop_val_sub_index, find_in_prop_val_sub_index},
     query_index::{
-        check_if_atom_matches_watched_query_filters, query_sorted_indexed, update_indexed_member,
-        IndexIterator,
+        check_if_atom_matches_watched_query_filters, query_sorted_indexed,
+        query_sorted_indexed_page, update_indexed_member, IndexIterator,
     },
     val_prop_sub_index::add_atom_to_valpropsub_index,
 };
@@ -1295,6 +1298,20 @@ impl Db {
         uploads_path: &std::path::Path,
         policy: &compaction::CompactionPolicy,
     ) -> AtomicResult<Db> {
+        Self::init_redb_file_with_cache(path, base_domain, uploads_path, policy, None).await
+    }
+
+    /// `init_redb_file_with_policy` with redb's read cache at `cache_bytes`
+    /// instead of its 1 GiB default. The cache keeps whatever was read, up
+    /// to the store's size; a phone sets tens of MiB.
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+    pub async fn init_redb_file_with_cache(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        policy: &compaction::CompactionPolicy,
+        cache_bytes: Option<usize>,
+    ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
         std::fs::create_dir_all(path).map_err(|e| {
@@ -1354,7 +1371,7 @@ impl Db {
         let _ = uploads_path;
 
         let (redb_store, compaction) =
-            redb_store::RedbStore::new_file_with_policy(&redb_path, policy)?;
+            redb_store::RedbStore::new_file_with_options(&redb_path, policy, cache_bytes)?;
 
         let store = Db::from_kv(path.to_path_buf(), Arc::new(redb_store), base_domain);
 
@@ -1591,15 +1608,49 @@ impl Db {
             .and_then(|v| String::from_utf8(v).ok())
     }
 
+    /// Every drive that has been the active one on this device, oldest first.
+    fn opened_drives(&self) -> Vec<String> {
+        self.kv
+            .get(trees::Tree::PluginMeta, b"opened_drives")
+            .ok()
+            .flatten()
+            .and_then(|v| serde_json::from_slice(&v).ok())
+            .unwrap_or_default()
+    }
+
     /// Set the active drive subject. Persisted in the database.
     pub fn set_active_drive(&self, drive: &str) -> AtomicResult<()> {
         self.kv
             .insert(trees::Tree::PluginMeta, b"active_drive", drive.as_bytes())?;
+        // Remember every drive that was ever opened: one made by a client
+        // (the Welcome drive) is on no `drives` list, and would drop out of
+        // `list_drives` as soon as another drive became the active one.
+        let mut opened = self.opened_drives();
+        if !opened.iter().any(|d| d == drive) {
+            opened.push(drive.to_string());
+            self.kv.insert(
+                trees::Tree::PluginMeta,
+                b"opened_drives",
+                serde_json::to_string(&opened)
+                    .unwrap_or_default()
+                    .as_bytes(),
+            )?;
+        }
         // Durable now: with Durability::None a freshly adopted drive is rolled
         // back on the next app kill, and the auto-connect loop (which needs an
         // active drive) then has nothing to reconnect to. Rare write; cheap.
         let _ = self.flush();
         Ok(())
+    }
+
+    /// A handle on the same store (same key-value store, indexes, events and
+    /// outbox) with its own default agent, set to `agent`. Unlike `clone`,
+    /// which shares the agent, changing the agent of one does not change the
+    /// other. For hosts that serve several agents from one open file.
+    pub fn with_own_agent(&self, agent: Option<crate::agents::Agent>) -> Db {
+        let mut db = self.clone();
+        db.default_agent = Arc::new(Mutex::new(agent));
+        db
     }
 
     /// Clear the default agent.
@@ -1679,7 +1730,21 @@ impl Db {
     /// Repeat genesis for the same subject merges.
     pub async fn ensure_private_drive(&self) -> AtomicResult<String> {
         let agent = self.get_default_agent()?;
-        let did = self.private_drive_subject()?;
+        self.ensure_private_drive_for(&agent).await
+    }
+
+    /// [`Self::ensure_private_drive`] for an explicit agent rather than the
+    /// default one. The agent needs its private key.
+    pub async fn ensure_private_drive_for(
+        &self,
+        agent: &crate::agents::Agent,
+    ) -> AtomicResult<String> {
+        let agent = agent.clone();
+        let private_key = agent
+            .private_key
+            .as_ref()
+            .ok_or("Cannot derive a private drive without a private key")?;
+        let did = crate::genesis::GenesisCert::private_drive_subject(private_key)?;
         if self.get_resource(&did.as_str().into()).await.is_ok() {
             return Ok(did);
         }
@@ -1782,11 +1847,28 @@ impl Db {
     /// If `drive_needs_sync` is true, the caller must sync with another device
     /// before the user can create resources — the drive's genesis commit is missing.
     pub async fn load_agent_from_secret(&self, secret: &str) -> AtomicResult<AgentLoadResult> {
-        let agent = crate::agents::Agent::from_secret(secret)?;
+        let mut agent = crate::agents::Agent::from_secret(secret)?;
+
+        // A secret carries no name (nor when the agent was made). Signing in
+        // again on the device that made the agent (every app start does) used
+        // to replace its stored resource with this nameless one, so the
+        // agent showed as "Someone" and the embedded page found no name.
+        // What the store already holds wins; the secret fills in the rest.
+        let stored = self.get_resource_shallow(&agent.subject).ok();
+        if agent.name.is_none() {
+            if let Some(Ok(Value::String(name))) = stored.as_ref().map(|r| r.get(urls::NAME)) {
+                agent.name = Some(name.clone());
+            }
+        }
         self.set_default_agent(agent.clone());
 
         // Persist so list_drives() can read the agent's `drives` property
-        let agent_resource = agent.to_resource()?;
+        let mut agent_resource = agent.to_resource()?;
+        if let Some(stored) = stored {
+            for (property, value) in stored.get_propvals().iter() {
+                agent_resource.set_unsafe(property.clone(), value.clone())?;
+            }
+        }
         self.add_resource_opts(&agent_resource, false, false, true)
             .await?;
 
@@ -1854,10 +1936,19 @@ impl Db {
                 subjects.push(active);
             }
         }
+        // Drives opened here that no list names (the Welcome drive).
+        for opened in self.opened_drives() {
+            if !subjects.contains(&opened) {
+                subjects.push(opened);
+            }
+        }
 
         let mut drives = Vec::with_capacity(subjects.len());
         for subject in subjects {
-            let name = match self.get_resource(&subject.as_str().into()).await {
+            // Stored state only: `get_resource` would go and fetch every drive
+            // this device does not hold (the agent lists dozens of old ones),
+            // one after the other, before the list could be shown.
+            let name = match self.get_resource_shallow(&subject.as_str().into()) {
                 Ok(r) => r.get(urls::NAME).map(|v| v.to_string()).unwrap_or_default(),
                 Err(_) => String::new(),
             };
@@ -4403,6 +4494,21 @@ impl Db {
         }
 
         Ok(outcomes)
+    }
+
+    /// The subjects of one page of a sorted (or multi-filter) query, reading
+    /// only as far into the query index as the page reaches (`offset` +
+    /// `limit`), not every member as [`Storelike::query`] does to count them.
+    /// The first call for a filter builds its index the usual way (a full
+    /// pass); after that a page of the newest 50 of 200 000 costs 50 reads.
+    pub async fn query_page(&self, q: &Query) -> AtomicResult<Vec<Subject>> {
+        if q.expression_filters.is_empty() && requires_query_index(q) {
+            let q_filter = QueryFilter::try_from_query(q)?;
+            if q_filter.is_watched(self) {
+                return Ok(query_sorted_indexed_page(self, q, &q_filter).await?.0);
+            }
+        }
+        Ok(self.query(q).await?.subjects)
     }
 
     async fn query_complex(&self, q: &Query) -> AtomicResult<QueryResult> {

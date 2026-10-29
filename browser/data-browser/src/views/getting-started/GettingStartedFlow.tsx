@@ -21,6 +21,10 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 import { useWelcomeLayoutEffect } from '../../hooks/useWelcomeLayoutEffect';
 import { useSettings } from '../../helpers/AppSettings';
 import { saveAgentToIDB } from '../../helpers/agentStorage';
+import {
+  applyBroughtAlong,
+  prepareIdentitySwitch,
+} from '../../helpers/bringAlong';
 import { beat } from '../../helpers/deviceLock';
 import { fetchPrivateDriveSubject } from '../../helpers/privateDrive';
 import { connectHostedDrive, shortDid } from '../../helpers/managed/reconcile';
@@ -35,6 +39,7 @@ import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
+import { ResourceRow } from '../ResourceRow';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
 import {
   accountAddress,
@@ -108,6 +113,7 @@ type Step =
   | 'restore'
   | 'restore-upgraded'
   | 'secret-conflict'
+  | 'bring-along'
   | 'connect-device'
   | 'opening-workspace';
 
@@ -274,6 +280,11 @@ export function GettingStartedFlow({
   const [secretConflict, setSecretConflict] = useState<
     (SecretAccountConflict & { secret: string }) | null
   >(null);
+  /** The question before this browser's own work is left behind or brought along. */
+  const [bringPrompt, setBringPrompt] = useState<{
+    drives: string[];
+    answer: (bring: boolean) => void;
+  } | null>(null);
   /** Shown only after blur/Enter — every prefix of a valid secret is invalid,
    * so erroring while typing would be constant noise. */
   const [secretError, setSecretError] = useState<string | undefined>();
@@ -590,6 +601,18 @@ export function GettingStartedFlow({
       }
 
       setSecretConflict(null);
+      // The identity this browser holds is kept on the device. When it has
+      // work, ask before it is left behind (see helpers/bringAlong.ts).
+      const outcome = await prepareIdentitySwitch(
+        store,
+        newAgent.subject,
+        drives =>
+          new Promise<boolean>(resolve => {
+            setBringPrompt({ drives, answer: resolve });
+            setStep('bring-along');
+          }),
+      );
+      setBringPrompt(null);
       setWorkspaceStage('identity');
       setStep('opening-workspace');
       setAgent(newAgent);
@@ -732,8 +755,15 @@ export function GettingStartedFlow({
           ? await openPrivateHome(store, target, true)
           : undefined;
 
+      // The drives brought along are listed in the home, so only once it is here.
+      const listBroughtAlong = async () => {
+        if (outcome === 'brought' && newAgent.subject && target)
+          await applyBroughtAlong(store, newAgent.subject, target);
+      };
+
       if (home) {
         if (home === 'created') privateHomeNudge();
+        await listBroughtAlong();
         navigate(constructOpenURL(target!));
       } else if (hasData) {
         // The home drive is derived from the key rather than looked up, so
@@ -761,6 +791,7 @@ export function GettingStartedFlow({
         // the whole drive, and sign-in should not wait on an upload.
         void ensureVaultBackup(store, target!);
 
+        await listBroughtAlong();
         navigate(returnPath ?? constructOpenURL(target!));
       } else if (returnPath) {
         // Passkey management needs the key, not a downloaded copy of the drive.
@@ -1604,6 +1635,45 @@ export function GettingStartedFlow({
                   }
                 >
                   Use this secret and sign out
+                </Button>
+              </Column>
+            </OnboardingCard>
+          </OnboardingWrap>
+        </Swap>
+      ) : step === 'bring-along' && bringPrompt ? (
+        <Swap key='bring-along'>
+          <OnboardingWrap>
+            <OnboardingCard key='card' data-testid='bring-along'>
+              <Column gap='1rem'>
+                <CardTitle key='title'>
+                  Add your work from this browser to your account?
+                </CardTitle>
+                <p key='copy'>
+                  Your account gets access to it. Nothing is copied or deleted.
+                </p>
+                {bringPrompt.drives.length > 0 && (
+                  <Column key='drives' gap='0.5rem'>
+                    {bringPrompt.drives.map(drive => (
+                      <ResourceRow key={drive} subject={drive} />
+                    ))}
+                  </Column>
+                )}
+                <Button
+                  key='bring'
+                  type='button'
+                  data-testid='bring-along-yes'
+                  onClick={() => bringPrompt.answer(true)}
+                >
+                  Add to my account
+                </Button>
+                <Button
+                  key='leave'
+                  type='button'
+                  subtle
+                  data-testid='bring-along-no'
+                  onClick={() => bringPrompt.answer(false)}
+                >
+                  Don&apos;t add, keep it in this browser only
                 </Button>
               </Column>
             </OnboardingCard>

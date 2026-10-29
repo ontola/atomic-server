@@ -43,6 +43,7 @@ import {
   ErrorType,
   isTransportError,
   LOCAL_ONLY_NOT_FOUND_MESSAGE,
+  NOT_IN_HOST_STORE_MESSAGE,
   NOT_AVAILABLE_LOCALLY_MESSAGE,
   NOT_AVAILABLE_SERVER_UNREACHABLE_MESSAGE,
 } from './error.js';
@@ -205,6 +206,14 @@ type DriveCallback = (drive: string) => void;
 /** Called when the server reports vector index activity for a drive (via websocket). */
 export type IndexingStatusCallback = (indexing: boolean) => void;
 
+/**
+ * Delivers a signed commit somewhere other than a server: a host app that
+ * holds the real store (the Flutter app's embedded renderer hands it to Rust
+ * over a JS channel). Resolves with the commit as stored, like a server's
+ * answer to `POST /commit`; rejects when the commit was refused.
+ */
+export type CommitTransport = (commit: Commit) => Promise<Commit>;
+
 /** How long a migration fetch may take before the answer stops being useful.
  *  These are servers the device may never reach; sign-in must not wait on
  *  them. */
@@ -270,6 +279,17 @@ export interface StoreOpts {
   connect?: boolean;
   /** Native shells have no ClientDb, so a disconnected node cannot save edits. */
   requireOnlineWrites?: boolean;
+  /** Where commits go instead of a server, see {@link Store.setCommitTransport}. */
+  commitTransport?: CommitTransport;
+  /**
+   * There is no server, and never will be: a host app holds the real store
+   * and answers through the client database (the Flutter app's embedded
+   * renderer). Every read comes from that database, nothing is fetched over
+   * HTTP and no auth cookie is made. Without this, a read that "asks the
+   * server" signed a request through the host (which signs only commits) and
+   * failed the resource it was meant to refresh. Implies `connect: false`.
+   */
+  noServer?: boolean;
 }
 
 export interface StoreSyncStatus {
@@ -825,7 +845,7 @@ export class Store {
    * land instead of stranding until the next user keystroke.
    */
   private scheduleOutboxDrain(): void {
-    if (!this._serverConnected) return;
+    if (!this.canCommit) return;
     if (this.outbox.size === 0) return;
     if (!this.getAgent()) return;
     // Wake when the soonest entry is due (0 = due now), honoring per-entry
@@ -848,7 +868,7 @@ export class Store {
     if (this.outboxDrainTimer) clearTimeout(this.outboxDrainTimer);
     this.outboxDrainTimer = setTimeout(() => {
       this.outboxDrainTimer = undefined;
-      if (!this._serverConnected) return;
+      if (!this.canCommit) return;
       void this.syncDirtyResources().catch(() => undefined);
     }, delay);
   }
@@ -929,16 +949,23 @@ export class Store {
 
   private client: Client;
   public readonly requireOnlineWrites: boolean;
+  private commitTransport: CommitTransport | undefined;
+  /** See {@link StoreOpts.noServer}. */
+  public readonly noServer: boolean;
 
   public constructor(opts: StoreOpts = {}) {
     this.requireOnlineWrites = opts.requireOnlineWrites ?? false;
+    this.commitTransport = opts.commitTransport;
+    this.noServer = opts.noServer ?? false;
     initOntologies();
     this._resources = new Map();
     this.webSockets = new Map();
     this.subscribers = new Map();
 
     if (opts.serverUrl) {
-      this.setServerUrl(opts.serverUrl, { connect: opts.connect ?? true });
+      this.setServerUrl(opts.serverUrl, {
+        connect: !this.noServer && (opts.connect ?? true),
+      });
     }
 
     if (opts.agent) this.setAgent(opts.agent);
@@ -3962,6 +3989,10 @@ export class Store {
       return true;
     }
 
+    if (this.noServer) {
+      return !!(await this.fetchResourceFromClientDb(subject))?.isReady();
+    }
+
     try {
       const signInfo = this.agent
         ? { agent: this.agent, serverURL: this.getServerUrl() }
@@ -4403,6 +4434,7 @@ export class Store {
     // bounded legacy-account lookup during sign-in). Keep OPFS as an offline
     // fallback, but do not make it a prerequisite for contacting the server.
     if (
+      !this.noServer &&
       /^https?:\/\//.test(subject) &&
       new URL(subject).origin !== new URL(this.serverUrl).origin &&
       !isEmbeddedVocabulary(subject) &&
@@ -4490,13 +4522,18 @@ export class Store {
     // above is authoritative. Without this guard a cache miss would GET
     // the subject from the server (a guaranteed 404 that also leaks
     // local-only subjects onto the wire).
-    if (this.isLocalOnlySubject(subject)) {
+    if (this.noServer || this.isLocalOnlySubject(subject)) {
       await askOnceAttached();
 
       if (!hasLocalData) {
         this.failResource(
           subject,
-          new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport),
+          this.noServer
+            ? new AtomicError(NOT_IN_HOST_STORE_MESSAGE, ErrorType.NotFound)
+            : new AtomicError(
+                LOCAL_ONLY_NOT_FOUND_MESSAGE,
+                ErrorType.Transport,
+              ),
         );
       }
 
@@ -4751,12 +4788,16 @@ export class Store {
 
     // A server cannot refresh a browser-only resource. In particular, explicit
     // refresh callers must not turn a valid local drive into a server 404.
-    if (this.isLocalOnlySubject(normalizedSubject)) {
+    // Without a server the client database is the authority: "refresh from
+    // the server" is a read from it.
+    if (this.noServer || this.isLocalOnlySubject(normalizedSubject)) {
       const local = this.resources.get(normalizedSubject);
       if (local?.isReady()) return local as Resource<C>;
       const stored = await this.fetchResourceFromClientDb(normalizedSubject);
       if (stored) return stored as Resource<C>;
-      throw new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport);
+      throw this.noServer
+        ? new AtomicError(NOT_IN_HOST_STORE_MESSAGE, ErrorType.NotFound)
+        : new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport);
     }
 
     // In-flight dedup. SideBarDrive and DrivePage both call
@@ -5098,7 +5139,8 @@ export class Store {
     subject: string,
   ): Promise<HistoryAttribution | null> {
     // A drive that stays on this device has no history on the server.
-    if (!this.serverUrl || this.isLocalOnlySubject(subject)) return null;
+    if (!this.serverUrl || this.noServer || this.isLocalOnlySubject(subject))
+      return null;
 
     try {
       const url = new URL('/history-attribution', this.serverUrl);
@@ -5757,6 +5799,31 @@ export class Store {
     return this._serverConnected;
   }
 
+  /**
+   * Whether a signed commit can be delivered right now: to the server, or to
+   * the {@link setCommitTransport commit transport}. The WRITE side asks
+   * this (save, destroy, the outbox drain); reads and live subscriptions keep
+   * asking {@link serverConnected}, so a transport never makes the store
+   * fetch from a server it does not have.
+   */
+  public get canCommit(): boolean {
+    return this._serverConnected || this.commitTransport !== undefined;
+  }
+
+  /**
+   * Send every commit to `transport` instead of a server. For a page whose
+   * store lives in a host app: the page runs `connect: false`, so without a
+   * transport its edits would only ever reach the offline path (snapshot and
+   * outbox rows in the local database), which such a host does not keep.
+   * With one, saving works as when online: the outbox drains, each commit is
+   * signed here and handed over, and `save()` resolves once the host has it.
+   */
+  public setCommitTransport(transport: CommitTransport | undefined): void {
+    this.commitTransport = transport;
+    this.emitSyncStatus();
+    this.scheduleOutboxDrain();
+  }
+
   /** Called by WebSocket client when connection state changes. */
   public setServerConnected(connected: boolean, error?: string): void {
     const nextError = connected ? undefined : error;
@@ -5867,7 +5934,7 @@ export class Store {
 
   private saveStatus = new SaveStatusCoordinator({
     getOutboxEntry: subject => this.outbox.getEntry(subject),
-    isConnected: () => this._serverConnected,
+    isConnected: () => this.canCommit,
     changePending: delta => {
       this._scheduledSaves += delta;
       this.emitSyncStatus();
@@ -5885,6 +5952,15 @@ export class Store {
     } = {},
   ): ScheduledSave {
     return this.saveStatus.createScheduler(resource, options);
+  }
+
+  /**
+   * Run every save a UI debounce timer is holding (`createSaveScheduler`,
+   * `useValue`'s commit debounce) now instead of when its timer fires, and
+   * wait for them. For a page about to go away: its timers would die with it.
+   */
+  public flushScheduledSaves(): Promise<void> {
+    return this.saveStatus.flushAll();
   }
 
   /** Read status is separate: a queued offline edit can still be fully readable. */
@@ -6371,7 +6447,7 @@ export class Store {
     this.scheduleOutboxDrain();
 
     if (agent && agent.subject) {
-      if (hasBrowserAPI()) {
+      if (hasBrowserAPI() && !this.noServer) {
         // Fire-and-forget here: this is a side effect on agent change,
         // not a precondition of a specific request. The HTTP request
         // path (`Client.fetchResourceHTTP`) re-installs the cookie if
@@ -6391,7 +6467,7 @@ export class Store {
       // it.
       void this.adoptLegacyAgentIdentity(agent);
     } else {
-      if (hasBrowserAPI()) {
+      if (hasBrowserAPI() && !this.noServer) {
         removeCookieAuthentication();
       }
     }
@@ -7831,6 +7907,8 @@ export class Store {
    * commits still work; they just always reach every subscriber.
    */
   private async sendCommit(commit: Commit, endpoint: string): Promise<Commit> {
+    if (this.commitTransport) return this.commitTransport(commit);
+
     const ws = this.getWebSocketForEndpoint(endpoint);
 
     if (ws && ws.readyState === WebSocket.OPEN) {

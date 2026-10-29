@@ -539,7 +539,7 @@ loading notifications before exposing a resource to callers such as table column
 | Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | Local diagnostic |
 | Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on dispatched batches, `develop`, and `v*` tags |
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
-| Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
+| Flutter Rust bridge | `cargo test --manifest-path packages/atomic_store_flutter/rust/Cargo.toml` | `flutterTest` |
 
 CI runs `cargo nextest run --workspace --exclude atomic-server-tauri
 --no-default-features --features light`. Feature unification pulls in
@@ -547,7 +547,7 @@ CI runs `cargo nextest run --workspace --exclude atomic-server-tauri
 
 Two things worth knowing about the runners:
 
-- **`flutter/rust` is excluded from the workspace** (root `Cargo.toml`), so
+- **`packages/atomic_store_flutter/rust` is excluded from the workspace** (root `Cargo.toml`), so
   `--workspace` never compiles it. It is covered only by the explicit
   `--manifest-path` step in `flutterTest`.
 - **`.config/nextest.toml` sets `retries = 2`.** A flaky test passes CI
@@ -608,14 +608,17 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Known-peer store: labels, dedupe, corrupt data, quota | `data-browser/src/helpers/knownPeers.test.ts` | |
 | `forgetServerPeer` signs the exact `?node=` URL, and fails soft | `data-browser/src/helpers/managedServer.test.ts` | mocked `signRequest` |
 | Opening a foreign HTTP drive does not move `serverUrl` | `browser/lib/src/store.set-drive.test.ts` | bare origin still switches the server; path-bearing HTTP is a drive |
-| Canvas editing session merges a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
-| Whole-list rewrite (erase/undo) keeps a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
-| Bridge `start_peer` → `add_known_peer` → `peer_sync` pushes a drawing to a real remote process | `flutter/rust/src/api/simple/peer_tests.rs` | receiving side writes the receipt |
-| Bridge known-peer bookkeeping (add / rename / dedupe / forget) | `flutter/rust/src/api/simple/peer_tests.rs` | |
-| Bridge `peer_sync` to an unreachable node errors rather than hanging | `flutter/rust/src/api/simple/peer_tests.rs` | |
+| Canvas editing session merges a peer's stroke | `packages/atomic_store_flutter/rust/src/api/simple/tests.rs` | |
+| Whole-list rewrite (erase/undo) keeps a peer's stroke | `packages/atomic_store_flutter/rust/src/api/simple/tests.rs` | |
+| Bridge `start_peer` → `add_known_peer` → `peer_sync` pushes a drawing to a real remote process | `packages/atomic_store_flutter/rust/src/api/simple/peer_tests.rs` | receiving side writes the receipt |
+| Bridge known-peer bookkeeping (add / rename / dedupe / forget) | `packages/atomic_store_flutter/rust/src/api/simple/peer_tests.rs` | |
+| Bridge `peer_sync` to an unreachable node errors rather than hanging | `packages/atomic_store_flutter/rust/src/api/simple/peer_tests.rs` | |
 | **`POST /iroh-sync` request shape, both sides** | `testdata/pairing-request.json` + `pairing.test.ts` + `iroh_pairing.rs` | shared fixture binds them |
 | Dart pairing-code parser, peer-sync result formatting | `flutter/test/atomic/` | pure parsers |
 | Rotation does not treat a metrics-change pop as "back to gallery" | `flutter/test/canvas/rotation_pop_test.dart` | |
+| Host layer: chat entries merged across `ChatLog` pages oldest first, AI chats of every drive by last activity, recents/activity index (events, bursts, deletes, persistence), favorites, opened resources, emoji on rows, search (scope, prefix, cross-drive with the hit's drive, synced resources, no full reads), conversations (titles, decrypt both sides, send sealed, unopenable), background agent-name lookup, resource text for an AI, the embed dispatcher (reads, query, search, sign/signBytes policy, applyCommit round trip and push) | `lib/src/host/*.rs` | an in-memory store per test (`host::test_support::Device`) |
+| Bridge end to end: every assistant/home/context/embed function through the process-global store and `push_local_write` | `packages/atomic_store_flutter/rust/src/api/assistant/tests.rs`, `api/context/tests.rs`, `src/embed.rs` | real temp store shared by the bridge tests |
+| Assistant screens (chats list, chat, type-ahead search) with a fake `AssistantApi`; JSON parsing of chats, text parts and hits | `packages/atomic_chat/test/assistant_screens_test.dart` (and the other `packages/atomic_chat/test/` files) | not covered: `ResourceWebView` (needs a platform webview), the app's `AtomicAssistantApi` over the real FFI, Android/iOS devices |
 | `AtomicNode`: `mutate` on one node, `apply_commit(IngestPolicy::Peer)` on another, query + `DbEvent` reflect it | `lib/src/runtime/node.rs` | in-process, no transport; `LocalCache` skips signature check, `Peer` does not |
 
 ## Local full-text search
@@ -630,7 +633,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 | `Store.search` offline hits `ClientDb.search` | JS | `browser/lib/src/store.test.ts` |
 | Search-result excerpts: document preference, exact/prefix before fuzzy, Unicode source offsets, token boundaries, bounded context including long matches | JS | `browser/data-browser/src/helpers/searchResultHint.test.ts` |
 
-Not covered: table `contains`; Playwright search overlay on the KV path and assertion for the search-result excerpt; Flutter bridge `search`. Hosted `/search` is `atomic_lib::search` (Tantivy and MiniSearch are gone). Offline E2E polls `ClientDb.search`. Filters (`isA`, tags) are covered by `lib/src/search/tests.rs` and `server/tests/it/file_search_repro.rs`.
+Not covered: table `contains`; Playwright search overlay on the KV path and assertion for the search-result excerpt; the Flutter bridge `search` end to end only through `assistant/tests.rs` (one prefix query; the logic in `lib/src/host/lists.rs`). Hosted `/search` is `atomic_lib::search` (Tantivy and MiniSearch are gone). Offline E2E polls `ClientDb.search`. Filters (`isA`, tags) are covered by `lib/src/search/tests.rs` and `server/tests/it/file_search_repro.rs`.
 
 ### Flow — the thin layer
 
