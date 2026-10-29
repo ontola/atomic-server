@@ -82,6 +82,24 @@ it('does not borrow rows from a different query', async () => {
   expect(other.result.current.ready).toBe(false);
 });
 
+it('rebuilds the collection when the drive becomes known', async () => {
+  const store = newStore();
+  fakeRefresh(0);
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(StoreContext.Provider, { value: store }, children);
+
+  const hook = renderHook(
+    ({ drive }: { drive?: string }) => useCollection({ ...filter, drive }),
+    { wrapper, initialProps: {} as { drive?: string } },
+  );
+  await waitFor(() => expect(hook.result.current.ready).toBe(true));
+
+  hook.rerender({ drive: 'did:ad:driveB' });
+  // A different drive is a different query: not ready until it has loaded.
+  expect(hook.result.current.ready).toBe(false);
+  await waitFor(() => expect(hook.result.current.ready).toBe(true));
+});
+
 it('refreshes the collection that is loading, not the remembered one on screen', async () => {
   const store = newStore();
   const refreshed: Collection[] = [];
