@@ -14,6 +14,7 @@ export 'package:atomic_flutter/atomic_flutter.dart'
 
 // The seam to the host's store, and what goes through it.
 export 'src/assistant_api.dart';
+export 'src/feedback_dialog.dart';
 export 'src/models.dart';
 export 'src/chat_parts.dart';
 export 'src/chat_window.dart';

@@ -8,6 +8,7 @@ import 'app_shell.dart';
 import 'assistant_api.dart';
 import 'background_activity.dart';
 import 'chat_screen.dart';
+import 'feedback_dialog.dart';
 import 'home_sections.dart';
 import 'home_sections_dialog.dart' show homeSectionIcon;
 import 'models.dart';
@@ -220,6 +221,8 @@ class AppBottomBar extends StatelessWidget {
                             wide: roomy && !split && more == null,
                             onPressed: onUser,
                             onViewProfile: _actions.viewProfile,
+                            onFeedback: () => showFeedbackDialog(context,
+                                api: api, source: 'profile-menu'),
                           ),
                         ),
                         if (split)
@@ -446,7 +449,7 @@ class _Current extends StatelessWidget {
   }
 }
 
-enum _ProfileChoice { settings, profile }
+enum _ProfileChoice { settings, profile, feedback }
 
 /// The widest the name next to the avatar gets.
 const _profileNameWidth = 96.0;
@@ -462,6 +465,9 @@ class _ProfileButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final void Function(ProfileIdentity who)? onViewProfile;
 
+  /// "Send feedback" in the menu.
+  final VoidCallback onFeedback;
+
   const _ProfileButton({
     required this.shell,
     required this.activity,
@@ -469,6 +475,7 @@ class _ProfileButton extends StatelessWidget {
     required this.wide,
     required this.onPressed,
     this.onViewProfile,
+    required this.onFeedback,
   });
 
   @override
@@ -598,10 +605,13 @@ class _ProfileButton extends StatelessWidget {
                 if (view != null && who.subject != null)
                   const HoldFanItem('View profile', _ProfileChoice.profile,
                       icon: Icons.person_outline),
+                const HoldFanItem('Send feedback', _ProfileChoice.feedback,
+                    icon: Icons.feedback_outlined),
               ],
               onSelected: (choice) => switch (choice) {
                 _ProfileChoice.settings => onPressed?.call(),
                 _ProfileChoice.profile => view?.call(who),
+                _ProfileChoice.feedback => onFeedback(),
               },
               child: content,
             ),

@@ -17,6 +17,7 @@ import 'package:atomic_chat/atomic_chat.dart'
         openResourceView,
         BackgroundActivity,
         BackgroundState,
+        showFeedbackDialog,
         timeAgo,
         ToastScope;
 
@@ -239,6 +240,13 @@ class _SyncScreenState extends State<SyncScreen> {
       appBar: AppTopBar(
         title: 'User',
         actions: [
+          IconButton(
+            key: const ValueKey('sync-feedback'),
+            tooltip: 'Send feedback',
+            onPressed: () => showFeedbackDialog(context,
+                api: const AtomicAssistantApi(), source: 'user-page'),
+            icon: const Icon(Icons.feedback_outlined),
+          ),
           TextButton.icon(
             key: const ValueKey('sync-open-settings'),
             onPressed: _openSettings,
