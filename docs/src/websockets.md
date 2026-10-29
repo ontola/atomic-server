@@ -16,7 +16,23 @@ truth for tag bytes and layouts) and `browser/lib/src/ws-v2.ts`
 
 ## SYNC_PUSH durability
 
-The receiver stages accepted resource changes within one SYNC_PUSH frame and applies their resource, snapshot and query/search index projections together. Signed envelope validation remains separate. Intermediate acknowledgements indicate receipt; the final LAST frame (including an empty terminator) performs the durability flush before successful completion. A projection or flush failure rejects the import. Frame admission and cross-drive permissions are unchanged.
+The receiver stages accepted resource changes within one SYNC_PUSH frame and
+validates the accompanying signed envelopes against that staged state. Resource,
+snapshot and query/search index projections, retained envelopes, and change-log
+and drive-event records are applied in one storage transaction. Resource-change
+notifications follow that transaction, so listeners can read the retained
+envelopes with the new resource state.
+
+Envelope validation can use schema and signer resources from the same frame.
+External schema fetched during validation is cached for that frame; these reads
+do not create separate persistent resources in the receiver.
+
+Malformed or invalidly signed envelopes are dropped while valid resource
+projections proceed. A storage failure rejects the import. Intermediate
+acknowledgements indicate receipt; the final LAST frame (including an empty
+terminator) calls the durability flush before successful completion. A flush
+failure rejects completion but does not undo an already applied transaction.
+Frame admission and cross-drive permissions are unchanged.
 
 ## Overview and transports
 

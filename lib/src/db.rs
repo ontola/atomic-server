@@ -844,7 +844,7 @@ impl Db {
             .iter()
             .any(|(resource, _)| crate::import_identity::identity(resource).is_some());
         let resources = self
-            .persist_replicated_resources_prepared_opts(entries, defer_search)
+            .persist_replicated_resources_prepared_opts(entries, defer_search, Transaction::new())
             .await?;
         if has_identity {
             self.flush()?;
@@ -879,11 +879,12 @@ impl Db {
 
     /// The caller holds subject locks from snapshot reads through this write.
     /// Return notifications for delivery after those locks have been released.
-    pub(crate) async fn persist_replicated_resources_prepared(
+    pub(crate) async fn persist_replicated_resources_with_envelopes(
         &self,
         entries: Vec<(Resource, Option<Vec<u8>>)>,
+        envelopes: Transaction,
     ) -> AtomicResult<Vec<Resource>> {
-        self.persist_replicated_resources_prepared_opts(entries, false)
+        self.persist_replicated_resources_prepared_opts(entries, false, envelopes)
             .await
     }
 
@@ -891,6 +892,7 @@ impl Db {
         &self,
         entries: Vec<(Resource, Option<Vec<u8>>)>,
         defer_search: bool,
+        envelopes: Transaction,
     ) -> AtomicResult<Vec<Resource>> {
         let mut last = HashMap::new();
         for (i, (resource, _)) in entries.iter().enumerate() {
@@ -944,7 +946,8 @@ impl Db {
             }
             resources.push(resource);
         }
-        if !resources.is_empty() {
+        transaction.extend(envelopes);
+        if !transaction.is_empty() {
             self.apply_transaction_with_source(&mut transaction, None, events)?;
         }
         drop(identity_guards);
