@@ -375,6 +375,30 @@ export async function listVaultDrives(): Promise<VaultEnrollment[]> {
   return api<VaultEnrollment[]>('/cloud-vault/drives');
 }
 
+/**
+ * What any signed-in account may learn about a drive's backup, including one
+ * that another account pays for. The members' view of a vault they do not own:
+ * that it exists and who made it, never how to manage it.
+ */
+export type VaultDriveSummary =
+  | { enabled: false }
+  | {
+      enabled: true;
+      is_yours: boolean;
+      suspended: boolean;
+      last_backup_at: number | null;
+      /** The payer's chosen display name; null when they set none. */
+      backed_up_by: string | null;
+    };
+
+export async function getVaultDriveSummary(
+  driveSubject: string,
+): Promise<VaultDriveSummary> {
+  return api<VaultDriveSummary>(
+    `/cloud-vault/drive-status?${new URLSearchParams({ drive: driveSubject })}`,
+  );
+}
+
 export async function disableVault(drivePseudonym: string): Promise<void> {
   await api(`/cloud-vault/${drivePseudonym}/disable`, {
     method: 'POST',

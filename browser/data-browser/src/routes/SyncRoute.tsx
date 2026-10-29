@@ -1325,7 +1325,7 @@ function SyncPage() {
       serverSync: showServerConn,
       hosting: cloudEnrolled,
       managed: isCloudSyncAvailable(managedInfo),
-      vaultOn: vault.status.state === 'on',
+      vaultOn: vault.status.state === 'on' || vault.status.state === 'other',
     });
   }
 
@@ -1544,7 +1544,7 @@ function SyncPage() {
   const cloudTier: CloudTier =
     managedServer || hostedCopyOrigin
       ? 'server'
-      : vault.status.state === 'on'
+      : vault.status.state === 'on' || vault.status.state === 'other'
         ? 'vault'
         : 'local';
   const planActive =

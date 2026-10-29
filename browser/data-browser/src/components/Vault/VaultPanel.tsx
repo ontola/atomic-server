@@ -100,6 +100,30 @@ export function VaultPanel({
     );
   }
 
+  // Someone else's vault: say it is there and whose it is, offer nothing.
+  if (status.state === 'other') {
+    return (
+      <ServiceRow
+        data-testid='vault-panel'
+        data-vault-state='other'
+        kind='vault'
+        title='Cloud Vault'
+        standing='included'
+        tagline={tagline}
+        status={{
+          tone: status.suspended ? 'waiting' : 'ok',
+          text: (
+            <span data-testid='vault-managed-elsewhere'>
+              {status.backedUpBy
+                ? `This drive is backed up by ${status.backedUpBy}. Only that account can change it.`
+                : 'This drive is backed up by another account. Only that account can change it.'}
+            </span>
+          ),
+        }}
+      />
+    );
+  }
+
   if (status.state === 'off') {
     return (
       <ServiceRow

@@ -5,6 +5,7 @@ import {
   compactVaultBackup,
   type CompactResult,
   disableVault,
+  getVaultDriveSummary,
   getVaultState,
   listVaultDrives,
   recoverDriveKey,
@@ -39,6 +40,16 @@ export type VaultStatus =
   | { state: 'loading' }
   | { state: 'unavailable'; reason: string }
   | { state: 'off' }
+  /**
+   * Backed up by another account. Members see that the drive is covered, and
+   * by whom; managing it stays with the account that turned it on.
+   */
+  | {
+      state: 'other';
+      backedUpBy: string | null;
+      lastBackupAt: number | null;
+      suspended: boolean;
+    }
   | { state: 'on'; enrollment: VaultEnrollment; details: VaultDriveState };
 
 export type UseVaultBackup = {
@@ -176,7 +187,22 @@ export function useVaultBackup({
       const enrollment = drives.find(d => d.drive_subject === driveSubject);
 
       if (!enrollment) {
-        setStatus({ state: 'off' });
+        // Not ours does not mean not backed up: the account that pays may be
+        // someone else. A control plane without this endpoint reads as off.
+        const summary = await getVaultDriveSummary(driveSubject).catch(
+          () => null,
+        );
+
+        setStatus(
+          summary?.enabled && !summary.is_yours
+            ? {
+                state: 'other',
+                backedUpBy: summary.backed_up_by,
+                lastBackupAt: summary.last_backup_at,
+                suspended: summary.suspended,
+              }
+            : { state: 'off' },
+        );
 
         return;
       }
