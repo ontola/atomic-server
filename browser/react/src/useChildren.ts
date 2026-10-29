@@ -218,9 +218,7 @@ export function useChildren(
     };
 
     // Never leave the list empty without saying why.
-    extractMembers().catch(e =>
-      store.notifyError(e instanceof Error ? e : new Error(String(e))),
-    );
+    extractMembers().catch(e => store.notifyError(e));
 
     return () => {
       cancelled = true;

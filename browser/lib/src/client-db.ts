@@ -29,7 +29,7 @@ import {
   publishIndexMigration,
   type IndexMigrationProgress,
 } from './client-db-migration.js';
-import { RequestCancelledError } from './error.js';
+import { asError, RequestCancelledError } from './error.js';
 import { versionVectorRecords } from './version-vector-records.js';
 import {
   parseHistoryAttribution,
@@ -132,7 +132,7 @@ function asInitError(e: unknown): Error {
     );
   }
 
-  return e instanceof Error ? e : new Error(String(e));
+  return asError(e);
 }
 
 export interface ClientDbQueryResult {
@@ -193,7 +193,7 @@ export interface ClientDbOptions {
    *  index.html), and a compiled module crosses into the worker for free. A
    *  rejection, or none, falls back to the worker fetching it itself. */
   wasmModule?: Promise<WebAssembly.Module | undefined>;
-  /** Called once when a request to the leader times out, so the person sees
+  /** Called when a request to the leader times out, so the person sees
    *  that the local database stopped answering. */
   onLeaderTimeout?: (error: Error) => void;
 }
@@ -432,7 +432,6 @@ export class ClientDbWorker {
   private baseUrl: string | undefined;
   private lastLeaderAnnounceAt = 0;
   private probingLeader = false;
-  private timeoutReported = false;
 
   private async doInit(baseUrl?: string): Promise<void> {
     if (!this.workerUrl) {
@@ -1667,10 +1666,7 @@ export class ClientDbWorker {
             this.requestLeaderLock(this.baseUrl, true);
           }
 
-          if (!this.timeoutReported) {
-            this.timeoutReported = true;
-            this.opts.onLeaderTimeout?.(error);
-          }
+          this.opts.onLeaderTimeout?.(error);
 
           reject(error);
         }

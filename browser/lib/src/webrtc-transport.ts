@@ -1,3 +1,5 @@
+import { asError } from './error.js';
+
 /** Reliable, ordered Atomic frame transport. Authentication belongs to the sync
  * session: an open data channel is never evidence of drive access. */
 export class WebRtcTransport {
@@ -110,7 +112,7 @@ export class WebRtcTransport {
       }
     } catch (error) {
       // A partial frame cannot be retried on this stream without corrupting it.
-      this.finish(error instanceof Error ? error : new Error(String(error)));
+      this.finish(asError(error));
       throw error;
     }
   }
@@ -181,7 +183,7 @@ export class WebRtcTransport {
         }
       }
     } catch (error) {
-      this.finish(error instanceof Error ? error : new Error(String(error)));
+      this.finish(asError(error));
     }
   };
 

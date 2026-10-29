@@ -34,6 +34,7 @@ import { readTemplateDemo, TEMPLATE_DEMO_KEY } from './demoSession';
 import { keepTemplateDemo } from './keepTemplateDemo';
 import { prepareTemplateDrive } from './prepareTemplateDrive';
 import { clearPendingTemplate, savePendingTemplate } from './pendingTemplate';
+import { asError } from '@tomic/react';
 const TemplateChat = lazy(() => import('./TemplateChat'));
 
 export interface TemplateSetupStep {
@@ -123,7 +124,7 @@ export function DriveTemplateSetup({
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e : new Error(String(e)));
+      setError(asError(e));
     } finally {
       busyRef.current = false;
       setBusy(false);

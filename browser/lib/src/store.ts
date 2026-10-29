@@ -39,6 +39,7 @@ import {
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
 import {
   AtomicError,
+  asError,
   RequestCancelledError,
   ErrorType,
   isTransportError,
@@ -1662,7 +1663,7 @@ export class Store {
           return isUnrecoverableCommitError(msg, code);
         },
         onRepeatedFailure: (entry, e) => {
-          const error = e instanceof Error ? e : new Error(String(e));
+          const error = asError(e);
           const report = () =>
             this.eventManager.emit(StoreEvents.CommitRepeatedlyFailing, {
               subject: entry.subject,
@@ -2745,10 +2746,7 @@ export class Store {
         );
 
         if (!this.resources.get(subject)?.get(core.properties.isA)) {
-          this.failResource(
-            subject,
-            error instanceof Error ? error : new Error(String(error)),
-          );
+          this.failResource(subject, asError(error));
         }
       })
       .finally(() => {
@@ -4863,10 +4861,7 @@ export class Store {
         const pending = this.getResolved(subject);
 
         if (pending && !this.hasRenderableContent(pending)) {
-          this.failResource(
-            subject,
-            error instanceof Error ? error : new Error(String(error)),
-          );
+          this.failResource(subject, asError(error));
 
           return pending as Resource<C>;
         }
@@ -5198,11 +5193,14 @@ export class Store {
       // here. Answer from what the store already knows instead of fetching:
       // the request can only 404, and the round-trip is what turned a row
       // that should have gone away into a "Resource with error" that stays.
-      if (!isNew && this.isDestroyed(normalized)) {
+      // A mangled legacy subject can never resolve either; asking only toasts a 404.
+      const unresolvable = isMangledLegacySubject(normalized);
+
+      if (!isNew && (unresolvable || this.isDestroyed(normalized))) {
         resource.loading = false;
         resource.setError(
           new AtomicError(
-            `Resource ${normalized} was destroyed`,
+            `Resource ${normalized} ${unresolvable ? 'is not a valid subject' : 'was destroyed'}`,
             ErrorType.NotFound,
           ),
         );
@@ -5739,8 +5737,8 @@ export class Store {
   /**
    * This is called when Errors occur in some of the library functions.
    */
-  public notifyError(e: Error | string): void {
-    const error = e instanceof Error ? e : new Error(e);
+  public notifyError(e: unknown): void {
+    const error = asError(e);
 
     if (this.eventManager.hasSubscriptions(StoreEvents.Error)) {
       this.eventManager.emit(StoreEvents.Error, error);
@@ -5748,6 +5746,21 @@ export class Store {
       throw error;
     }
   }
+
+  /** Like {@link notifyError}, but only the first time for this key. */
+  public notifyErrorOnce(key: string, e: unknown): void {
+    if (this._notifiedErrorKeys.has(key)) return;
+
+    this._notifiedErrorKeys.add(key);
+    this.notifyError(e);
+  }
+
+  /** Lets {@link notifyErrorOnce} report this key again. */
+  public clearNotifiedError(key: string): void {
+    this._notifiedErrorKeys.delete(key);
+  }
+
+  private _notifiedErrorKeys = new Set<string>();
 
   /**
    * Whether the Store has an active WebSocket connection to the server.
@@ -5858,7 +5871,7 @@ export class Store {
 
         if (r) {
           r.loading = false;
-          r.setError(e instanceof Error ? e : new Error(String(e)));
+          r.setError(asError(e));
           this.notify(r);
         }
       });
@@ -7630,14 +7643,9 @@ export class Store {
     return this.maybePushBlobForResource(resource).catch(e => {
       console.warn('[Store] blob push failed', resource.subject, e);
 
-      if (this._notifiedBlobFailures.has(resource.subject)) return;
-
-      this._notifiedBlobFailures.add(resource.subject);
-      this.notifyError(e instanceof Error ? e : new Error(String(e)));
+      this.notifyErrorOnce(`blob:${resource.subject}`, e);
     });
   }
-
-  private _notifiedBlobFailures = new Set<string>();
 
   /**
    * Uploads files. The bytes are hashed (BLAKE3), stored in the local blob
@@ -7757,11 +7765,7 @@ export class Store {
       if (opts.optimistic) {
         // The bytes are local, so the caller can show the file now. A failed
         // sync is toasted, never swallowed.
-        void resource
-          .save()
-          .catch(e =>
-            this.notifyError(e instanceof Error ? e : new Error(String(e))),
-          );
+        void resource.save().catch(e => this.notifyError(e));
       } else {
         await resource.save();
       }

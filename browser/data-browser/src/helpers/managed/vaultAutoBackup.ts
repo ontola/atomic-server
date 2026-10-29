@@ -33,6 +33,7 @@ import { evaluateIdentityReconciliation } from './reconcile';
 import { nodeVault } from './nodeVault';
 import { isRunningInTauri } from '../tauri';
 import { reopenRestoredDrive } from '../driveData';
+import { asError } from '@tomic/react';
 
 /**
  * Cloud Vault without a button.
@@ -426,7 +427,7 @@ async function ensureVaultBackupOnce(
     });
     signal.throwIfAborted();
     notifyVaultChanged(driveSubject);
-    quotaNotified.delete(driveSubject);
+    store.clearNotifiedError(`vault-quota:${driveSubject}`);
 
     return outcome;
   } catch (error) {
@@ -449,21 +450,16 @@ async function ensureVaultBackupOnce(
 
     // A full vault is not something a retry fixes; say so once per drive
     // until a backup succeeds again, instead of failing quietly every minute.
-    if (
-      /quota exceeded/i.test(String((error as Error)?.message)) &&
-      !quotaNotified.has(driveSubject)
-    ) {
-      quotaNotified.add(driveSubject);
-      store.notifyError(
-        new Error(
-          'Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan.',
-        ),
+    if (/quota exceeded/i.test(String((error as Error)?.message))) {
+      store.notifyErrorOnce(
+        `vault-quota:${driveSubject}`,
+        'Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan.',
       );
     }
 
     return {
       status: 'failed',
-      error: error instanceof Error ? error : new Error(String(error)),
+      error: asError(error),
     };
   } finally {
     offAgent();
@@ -472,9 +468,6 @@ async function ensureVaultBackupOnce(
       window.removeEventListener('pagehide', stop);
   }
 }
-
-/** Drives whose "vault full" failure was already shown. */
-const quotaNotified = new Set<string>();
 
 /** Incremental packs make short idle backups cheap; unchanged drives upload nothing. */
 export const AUTO_BACKUP_IDLE_MS = 5_000;
@@ -612,7 +605,7 @@ export async function restoreFromVault(
 
     return {
       status: 'failed',
-      error: error instanceof Error ? error : new Error(String(error)),
+      error: asError(error),
     };
   }
 }

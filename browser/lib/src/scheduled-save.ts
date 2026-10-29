@@ -1,3 +1,5 @@
+import { asError } from './error.js';
+
 /** Owns one debounce slot and any saves already started from it.
  * Cancellation affects only the slot; in-flight persistence always settles.
  */
@@ -42,9 +44,7 @@ export class ScheduledSave {
           await this.save();
         })
         .catch(error => {
-          this.onError(
-            error instanceof Error ? error : new Error(String(error)),
-          );
+          this.onError(asError(error));
         })
         .finally(() => {
           this.running.delete(task);
