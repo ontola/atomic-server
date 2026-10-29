@@ -6007,10 +6007,6 @@ msgid "Thank you. Your feedback has been received."
 msgstr "Thank you. Your feedback has been received."
 
 #: src/components/SideBar/FeedbackButton.tsx
-msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
-msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
-
-#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback <0/>"
 msgstr "Feedback <0/>"
 
@@ -8546,10 +8542,6 @@ msgstr "Could not copy. Select the text above to copy it manually."
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "The report could not be sent. Your text is still here; try again."
 msgstr "The report could not be sent. Your text is still here; try again."
-
-#: src/chunks/AI/ReportAIChatDialog.tsx
-msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Remove private information before sending."
-msgstr "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Remove private information before sending."
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "What went wrong? <0/>"
@@ -13342,3 +13334,11 @@ msgstr "Latest changes"
 #: src/views/OntologyPage/sortSubjectList.ts
 msgid "Timed out fetching {0}"
 msgstr "Timed out fetching {0}"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Technical details about your setup (app version, server address and status) are attached. Remove private information before sending."
+msgstr "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Technical details about your setup (app version, server address and status) are attached. Remove private information before sending."
+
+#: src/components/SideBar/FeedbackButton.tsx
+msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
+msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as Sentry from '@sentry/react';
 import { errorFeedbackMessage, submitFeedback } from './feedback';
+import type { Store } from '@tomic/react';
 vi.mock('@sentry/react', () => ({ isEnabled: vi.fn(), sendFeedback: vi.fn() }));
 describe('feedback delivery', () => {
   it('rejects disabled reporting', async () => {
@@ -50,5 +51,36 @@ describe('feedback delivery', () => {
       },
       { includeReplay: false },
     );
+  });
+  it('attaches setup diagnostics as tags, and still sends if reading them fails', async () => {
+    vi.mocked(Sentry.isEnabled).mockReturnValue(true);
+    vi.mocked(Sentry.sendFeedback).mockResolvedValue('receipt');
+    const store = {
+      getSyncStatus: () => ({
+        serverUrl: 'http://localhost:11870/some/path?q=1',
+        serverConnected: false,
+        serverConnectionError: 'closed',
+        blockedCount: 1,
+      }),
+      outbox: { pending: () => [{ failures: 2 }, {}] },
+      getDefaultWebSocket: () => ({ serverCapabilities: [] }),
+    } as unknown as Store;
+    await submitFeedback('Problem', '', 'sidebar', store);
+    const params = vi.mocked(Sentry.sendFeedback).mock.lastCall![0];
+    expect(params.url).toBe('');
+    expect(params.tags).toMatchObject({
+      server: 'http://localhost:11870',
+      connected: false,
+      connectionError: 'closed',
+      outboxSize: 2,
+      blocked: 1,
+      failures: 2,
+      canonicalScheme: false,
+      desktop: false,
+    });
+    await submitFeedback('Problem', '', 'sidebar', {} as unknown as Store);
+    expect(
+      vi.mocked(Sentry.sendFeedback).mock.lastCall![0].tags,
+    ).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type RefObject } from 'react';
 import { FaComment } from 'react-icons/fa6';
 import * as Sentry from '@sentry/react';
+import { useStore } from '@tomic/react';
 import {
   Dialog,
   DialogTitle,
@@ -34,6 +35,7 @@ export function useFeedbackDialog({
   triggerRef,
 }: UseFeedbackDialogOptions = {}) {
   const feedbackTitle = reportError ? 'Report this error' : 'Send feedback';
+  const store = useStore();
   const messageId = useId();
   const emailId = useId();
   const emailRef = useRef<HTMLInputElement>(null);
@@ -53,7 +55,12 @@ export function useFeedbackDialog({
     setFailed(false);
 
     try {
-      await submitFeedback(message, email, reportError ? 'error' : 'sidebar');
+      await submitFeedback(
+        message,
+        email,
+        reportError ? 'error' : 'sidebar',
+        store,
+      );
       setSent(true);
       setMessage('');
     } catch {
@@ -81,8 +88,9 @@ export function useFeedbackDialog({
           <Column>
             <p>
               Report a bug or suggest an improvement. Your message and optional
-              email go to the Atomic team through Sentry. Please leave out
-              private workspace content.
+              email go to the Atomic team through Sentry, with technical details
+              about your setup (app version, server address and status). Please
+              leave out private workspace content.
             </p>
             <label htmlFor={messageId}>
               Feedback
