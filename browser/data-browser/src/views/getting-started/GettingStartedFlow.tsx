@@ -105,6 +105,7 @@ import {
   FooterBar,
   BackLabel,
 } from './chrome';
+import { asError } from '@tomic/react';
 
 type Step =
   | 'welcome'
@@ -936,7 +937,7 @@ export function GettingStartedFlow({
       // The drive page, with the Getting started card above its documents.
       navigate(constructOpenURL(open.drive));
     } catch (err) {
-      setError(err instanceof Error ? err : new Error(String(err)));
+      setError(asError(err));
       setStep('welcome');
     }
   }

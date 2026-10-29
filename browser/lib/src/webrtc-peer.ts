@@ -1,4 +1,5 @@
 import { WebRtcTransport } from './webrtc-transport.js';
+import { asError } from './error.js';
 
 const PROTOCOL = 'atomic-sync-v2-framed-v1';
 
@@ -162,7 +163,7 @@ export class WebRtcPeer {
           clearTimeout(this.timer);
           this.resolve(this.pipe);
         } catch (error) {
-          this.close(error instanceof Error ? error : new Error(String(error)));
+          this.close(asError(error));
         }
       },
       { once: true },

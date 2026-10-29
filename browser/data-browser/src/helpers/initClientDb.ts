@@ -166,9 +166,7 @@ async function startForIdentity(
     try {
       if (await previous.waitForReady()) await previous.flush();
     } catch (error) {
-      store.notifyError(
-        error instanceof Error ? error : new Error(String(error)),
-      );
+      store.notifyError(error);
     } finally {
       previous.destroy();
     }
@@ -212,6 +210,7 @@ async function startForIdentity(
     discardUndecryptable,
     // Fetched and compiled once for the whole page, starting in index.html.
     wasmModule: compiledAtomicWasm(),
+    onLeaderTimeout: e => store.notifyErrorOnce('db-leader-timeout', e),
   });
   currentWorker = clientDb;
 

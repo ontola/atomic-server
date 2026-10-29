@@ -54,7 +54,7 @@ test('a Listing opens the Installation review before anything is installed', asy
     }),
   );
   await enableIntegrationDiscovery(page);
-  await page.goto(new URL('/app/integrations', page.url()).href);
+  await page.goto(new URL('/app/apps', page.url()).href);
 
   const card = page.locator('[data-release="blake3:fixture"]');
   await expect(

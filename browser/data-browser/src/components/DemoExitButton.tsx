@@ -2,6 +2,7 @@ import { Button } from './Button';
 import { SetupBar, ShortLabel } from './SetupBar';
 import { useState } from 'react';
 import { useResource, useStore } from '@tomic/react';
+import { withDeadline } from '@tomic/lib';
 import { useNavigate } from '@tanstack/react-router';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -52,9 +53,10 @@ export function DemoActionsBar({
 
       const agent = store.getAgent();
       const home = agent
-        ? await withTimeout(
+        ? await withDeadline(
             fetchPrivateDriveSubject(store, agent).catch(() => undefined),
             2500,
+            undefined,
           )
         : undefined;
       const target = home && home !== demoDrive ? home : undefined;
@@ -123,13 +125,4 @@ function PreviewTitle({ drive }: { drive: string }): React.JSX.Element {
   const resource = useResource(drive);
 
   return <>Preview: {resource.title}</>;
-}
-
-/** Resolve `p`, but give up with `undefined` after `ms` — so a hung fetch
- *  can't freeze the caller. */
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
-  return Promise.race([
-    p,
-    new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), ms)),
-  ]);
 }

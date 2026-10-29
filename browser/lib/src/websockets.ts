@@ -82,6 +82,7 @@ import {
   LIVENESS_PROBE_TIMEOUT_MS,
 } from './liveness.js';
 import { perfMark, perfSpan } from './perf-trace.js';
+import { asError } from './error.js';
 
 /** How long a drive's sync probe waits so the screen's first reads are not
  *  queued behind the version-vector scan. */
@@ -1047,9 +1048,7 @@ export class WSClient {
     if (!this.supportsGetMany) {
       return Promise.all(
         subjects.map(subject =>
-          this.fetch(subject).catch((e: unknown) =>
-            e instanceof Error ? e : new Error(String(e)),
-          ),
+          this.fetch(subject).catch((e: unknown) => asError(e)),
         ),
       );
     }

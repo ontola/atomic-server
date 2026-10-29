@@ -3,7 +3,10 @@ import { ShowRoute } from './ShowRoute';
 import { SearchRoute } from './Search/SearchRoute';
 import { NewRoute } from './NewResource/NewRoute';
 import { AppSettingsRoute } from './AppSettings';
-import { IntegrationStoreRoute } from './IntegrationStore';
+import {
+  IntegrationStoreRoute,
+  LegacyIntegrationsRoute,
+} from './IntegrationStore';
 import { EditRoute } from './EditRoute';
 import { DataRoute } from './DataRoute';
 import { ShortcutsRoute } from './ShortcutsRoute';
@@ -80,6 +83,7 @@ const routeTree = rootRoute.addChildren({
     SearchRoute,
     AppSettingsRoute,
     IntegrationStoreRoute,
+    LegacyIntegrationsRoute,
     SyncRoute,
     ShortcutsRoute,
     StorageRoute,

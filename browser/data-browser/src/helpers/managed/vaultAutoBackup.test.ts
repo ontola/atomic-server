@@ -239,6 +239,23 @@ describe('ensureVaultBackup', () => {
     warn.mockRestore();
   });
 
+  it('shows a quota-exceeded failure once, not on every retry', async () => {
+    const store = await signedInStore();
+    const notify = vi.spyOn(store, 'notifyError').mockImplementation(() => {});
+    const deps = fakeDeps({
+      identityMatches: vi.fn(async () => true),
+      runVaultBackup: vi.fn(async () => {
+        throw new Error('Cloud Vault quota exceeded');
+      }),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await ensureVaultBackup(store, DRIVE, deps);
+    await ensureVaultBackup(store, DRIVE, deps);
+    expect(notify).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
   it('reuses the enrollment on later passes', async () => {
     const store = await signedInStore();
     const deps = fakeDeps();

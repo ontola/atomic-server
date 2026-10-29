@@ -39,6 +39,7 @@ import {
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
 import {
   AtomicError,
+  asError,
   RequestCancelledError,
   ErrorType,
   isTransportError,
@@ -96,6 +97,7 @@ import {
   isAgentSubject,
   agentPublicKey,
   isAtomicIdentifier,
+  isMangledLegacySubject,
   isBlobSubject,
   isLensSubject,
   isPropertySubject,
@@ -992,14 +994,12 @@ export class Store {
     let storedDrive: string | undefined = undefined;
 
     if (typeof window !== 'undefined') {
-      const raw = localStorage.getItem('drive');
+      try {
+        const raw = localStorage.getItem('drive');
 
-      if (raw) {
-        try {
-          storedDrive = JSON.parse(raw);
-        } catch {
-          // ignore corrupt value
-        }
+        if (raw) storedDrive = JSON.parse(raw);
+      } catch {
+        // ignore corrupt value, or storage that is blocked
       }
     }
 
@@ -1227,14 +1227,8 @@ export class Store {
   public registerLocalOnlyDrive(drive: string): void {
     const normalized = this.normalizeSubject(drive);
 
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(
-        'atomic.localOnlyDrives',
-        JSON.stringify([...new Set([...this.localOnlyDrives, normalized])]),
-      );
-    }
-
     this.localOnlyDrives.add(normalized);
+    this.persistLocalOnlyDrives();
   }
 
   /** The drive a subject belongs to, for naming it to the person. */
@@ -1386,11 +1380,22 @@ export class Store {
     // Normalized to match what `registerLocalOnlyDrive` stored.
     if (!this.localOnlyDrives.delete(this.normalizeSubject(drive))) return;
 
-    if (typeof localStorage !== 'undefined') {
+    this.persistLocalOnlyDrives();
+  }
+
+  /** Remember the local-only drives across reloads. Full or blocked storage
+   *  must not break the drive that was just registered, so a failure only
+   *  costs the persistence. */
+  private persistLocalOnlyDrives(): void {
+    if (typeof localStorage === 'undefined') return;
+
+    try {
       localStorage.setItem(
         'atomic.localOnlyDrives',
         JSON.stringify([...this.localOnlyDrives]),
       );
+    } catch (e) {
+      console.warn('[Store] could not persist local-only drives:', e);
     }
   }
 
@@ -1693,7 +1698,7 @@ export class Store {
           return isUnrecoverableCommitError(msg, code);
         },
         onRepeatedFailure: (entry, e) => {
-          const error = e instanceof Error ? e : new Error(String(e));
+          const error = asError(e);
           const report = () =>
             this.eventManager.emit(StoreEvents.CommitRepeatedlyFailing, {
               subject: entry.subject,
@@ -1950,7 +1955,7 @@ export class Store {
         resource.setLastCommitValue(commitId);
         resource.applyToStore('local-acked', { commitId });
         resource.markSynced();
-        await this.maybePushBlobForResource(resource).catch(() => undefined);
+        await this.pushBlobOrNotify(resource);
         // wasNew pipeline — first-time subscribe + save batched children
         this.subscribeWebSocket(subject);
         // The genesis POST IS a save — fire `ResourceSaved` so listeners
@@ -2228,7 +2233,7 @@ export class Store {
     }
 
     this.notifyResourceSaved(resource);
-    await this.maybePushBlobForResource(resource).catch(() => undefined);
+    await this.pushBlobOrNotify(resource);
 
     this.emitSyncStatus();
   };
@@ -2776,10 +2781,7 @@ export class Store {
         );
 
         if (!this.resources.get(subject)?.get(core.properties.isA)) {
-          this.failResource(
-            subject,
-            error instanceof Error ? error : new Error(String(error)),
-          );
+          this.failResource(subject, asError(error));
         }
       })
       .finally(() => {
@@ -4940,10 +4942,7 @@ export class Store {
         const pending = this.getResolved(subject);
 
         if (pending && !this.hasRenderableContent(pending)) {
-          this.failResource(
-            subject,
-            error instanceof Error ? error : new Error(String(error)),
-          );
+          this.failResource(subject, asError(error));
 
           return pending as Resource<C>;
         }
@@ -5276,11 +5275,14 @@ export class Store {
       // here. Answer from what the store already knows instead of fetching:
       // the request can only 404, and the round-trip is what turned a row
       // that should have gone away into a "Resource with error" that stays.
-      if (!isNew && this.isDestroyed(normalized)) {
+      // A mangled legacy subject can never resolve either; asking only toasts a 404.
+      const unresolvable = isMangledLegacySubject(normalized);
+
+      if (!isNew && (unresolvable || this.isDestroyed(normalized))) {
         resource.loading = false;
         resource.setError(
           new AtomicError(
-            `Resource ${normalized} was destroyed`,
+            `Resource ${normalized} ${unresolvable ? 'is not a valid subject' : 'was destroyed'}`,
             ErrorType.NotFound,
           ),
         );
@@ -5817,8 +5819,8 @@ export class Store {
   /**
    * This is called when Errors occur in some of the library functions.
    */
-  public notifyError(e: Error | string): void {
-    const error = e instanceof Error ? e : new Error(e);
+  public notifyError(e: unknown): void {
+    const error = asError(e);
 
     if (this.eventManager.hasSubscriptions(StoreEvents.Error)) {
       this.eventManager.emit(StoreEvents.Error, error);
@@ -5826,6 +5828,21 @@ export class Store {
       throw error;
     }
   }
+
+  /** Like {@link notifyError}, but only the first time for this key. */
+  public notifyErrorOnce(key: string, e: unknown): void {
+    if (this._notifiedErrorKeys.has(key)) return;
+
+    this._notifiedErrorKeys.add(key);
+    this.notifyError(e);
+  }
+
+  /** Lets {@link notifyErrorOnce} report this key again. */
+  public clearNotifiedError(key: string): void {
+    this._notifiedErrorKeys.delete(key);
+  }
+
+  private _notifiedErrorKeys = new Set<string>();
 
   /**
    * Whether the Store has an active WebSocket connection to the server.
@@ -5961,7 +5978,7 @@ export class Store {
 
         if (r) {
           r.loading = false;
-          r.setError(e instanceof Error ? e : new Error(String(e)));
+          r.setError(asError(e));
           this.notify(r);
         }
       });
@@ -6748,10 +6765,7 @@ export class Store {
   ): boolean {
     if (isAtomicIdentifier(subject)) return true;
 
-    // The migration's mangled spelling. It survives serialization as a path
-    // segment containing a colon, which is not a subject this server can
-    // resolve — it is the `staging` subdomain welded onto the path.
-    if (/\/[^/]+:\//.test(subject.replace(/^https?:\/\//, ''))) return false;
+    if (isMangledLegacySubject(subject)) return false;
 
     try {
       const { origin } = new URL(subject);
@@ -6852,9 +6866,15 @@ export class Store {
     }
 
     if (supportsWebSockets()) {
-      const userDisconnected =
-        typeof localStorage !== 'undefined' &&
-        localStorage.getItem('ws-disconnected') === '1';
+      let userDisconnected = false;
+
+      try {
+        userDisconnected =
+          typeof localStorage !== 'undefined' &&
+          localStorage.getItem('ws-disconnected') === '1';
+      } catch {
+        // Blocked storage: treat the person as connected.
+      }
 
       if (!userDisconnected && url !== this.serverUrlWithoutSocket) {
         this.openWebSocket(url);
@@ -6893,7 +6913,14 @@ export class Store {
     }
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('drive', JSON.stringify(drive));
+      try {
+        localStorage.setItem('drive', JSON.stringify(drive));
+      } catch (e) {
+        // A full or blocked storage (QuotaExceededError, SecurityError) only
+        // costs the person this drive being remembered after a reload; it must
+        // not unwind the effect that selected it.
+        console.warn('[Store] could not persist the current drive:', e);
+      }
     }
 
     this.eventManager.emit(StoreEvents.DriveChanged, drive);
@@ -6984,7 +7011,11 @@ export class Store {
     }
 
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('ws-disconnected', '1');
+      try {
+        localStorage.setItem('ws-disconnected', '1');
+      } catch (e) {
+        console.warn('[Store] could not persist the disconnected state:', e);
+      }
     }
   }
 
@@ -7752,12 +7783,28 @@ export class Store {
     // here meant tests/embedders overriding the store's fetch couldn't
     // observe or intercept blob pushes at all.
     const fetchImpl = this.injectedFetch ?? fetch;
-    await fetchImpl(url, {
+    const response = await fetchImpl(url, {
       method: 'PUT',
       // Cast: TS lib.dom marks Uint8Array<SharedArrayBuffer> incompatible with
       // BodyInit/BlobPart; at runtime our bytes are ArrayBuffer-backed.
       body: bytes as unknown as BodyInit,
       headers: { 'Content-Type': 'application/octet-stream' },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Uploading the file to the server failed (HTTP ${response.status}). ` +
+          `It stays on this device.`,
+      );
+    }
+  }
+
+  /** Push a resource's blob; a failure is shown once per resource, not per retry. */
+  private pushBlobOrNotify(resource: Resource): Promise<void> {
+    return this.maybePushBlobForResource(resource).catch(e => {
+      console.warn('[Store] blob push failed', resource.subject, e);
+
+      this.notifyErrorOnce(`blob:${resource.subject}`, e);
     });
   }
 
@@ -7771,6 +7818,7 @@ export class Store {
   public async uploadFiles(
     files: FileOrFileLike[],
     parent: string,
+    opts: { optimistic?: boolean } = {},
   ): Promise<string[]> {
     const agent = this.getAgent();
 
@@ -7875,7 +7923,14 @@ export class Store {
         resource.stashGenesis(genesis);
       }
 
-      await resource.save();
+      if (opts.optimistic) {
+        // The bytes are local, so the caller can show the file now. A failed
+        // sync is toasted, never swallowed.
+        void resource.save().catch(e => this.notifyError(e));
+      } else {
+        await resource.save();
+      }
+
       // The blob bytes are pushed to the server from the outbox drain
       // (via `Store.maybePushBlobForResource`) — that path covers both the
       // online-save case here AND the offline → reconnect retry path, where

@@ -1,15 +1,7 @@
 import { core, forms, Resource, useNumber, useString } from '@tomic/react';
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import toast from 'react-hot-toast';
-import QRCode from 'qrcode';
-import {
-  FaArrowUpRightFromSquare,
-  FaCode,
-  FaCopy,
-  FaLink,
-  FaShareNodes,
-} from 'react-icons/fa6';
+import { FaCode, FaLink, FaShareNodes } from 'react-icons/fa6';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +9,7 @@ import {
   useDialog,
 } from '@components/Dialog';
 import { Column, Row } from '@components/Row';
+import { ShareLink } from '@components/ShareLink';
 import { CodeBlock } from '@components/CodeBlock';
 import { Tabs } from '@components/Tabs';
 import { Button } from '@components/Button';
@@ -144,27 +137,9 @@ function PanelContent({
   shareUrl: string;
   resource: Resource;
 }): JSX.Element {
-  const [qrDataUrl, setQrDataUrl] = useState<string | undefined>();
   const [formName] = useString(resource, core.properties.name);
   const [access] = useString(resource, forms.properties.formAccess);
   const inviteOnly = access === 'invite-only';
-
-  useEffect(() => {
-    let cancelled = false;
-
-    QRCode.toDataURL(shareUrl, { margin: 1, width: 180 }).then(url => {
-      if (!cancelled) setQrDataUrl(url);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [shareUrl]);
-
-  const copyLink = () => {
-    navigator.clipboard.writeText(shareUrl);
-    toast.success('Link copied to clipboard');
-  };
 
   return (
     <Inner gap='0.75rem'>
@@ -183,20 +158,7 @@ function PanelContent({
         ]}
       >
         <Tabs.Panel value='link'>
-          <Column gap='0.75rem' align='center'>
-            {qrDataUrl && (
-              <QrImage src={qrDataUrl} alt='QR code for the form link' />
-            )}
-            <LinkText title={shareUrl}>{shareUrl}</LinkText>
-            <Row gap='0.5rem'>
-              <PanelButton type='button' onClick={copyLink}>
-                <FaCopy /> Copy link
-              </PanelButton>
-              <PanelLink href={shareUrl} target='_blank' rel='noreferrer'>
-                <FaArrowUpRightFromSquare /> Open
-              </PanelLink>
-            </Row>
-          </Column>
+          <ShareLink url={shareUrl} qrAlt='QR code for the form link' />
         </Tabs.Panel>
         <Tabs.Panel value='embed'>
           <EmbedView shareUrl={shareUrl} formName={formName} />
@@ -271,54 +233,6 @@ const InviteOnlyNote = styled.p`
   background-color: ${p => p.theme.colors.bg1};
   border-radius: ${p => p.theme.radius};
   padding: 0.5rem 0.75rem;
-`;
-
-const QrImage = styled.img`
-  width: 10rem;
-  height: 10rem;
-  border-radius: ${p => p.theme.radius};
-`;
-
-const LinkText = styled.span`
-  max-width: 14rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const PanelButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  height: 1.85rem;
-  padding: 0 0.6rem;
-  border: none;
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
-  color: ${p => p.theme.colors.text};
-  cursor: pointer;
-
-  &:hover {
-    background-color: ${p => p.theme.colors.bg2};
-  }
-`;
-
-const PanelLink = styled.a`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  height: 1.85rem;
-  padding: 0 0.6rem;
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
-  color: ${p => p.theme.colors.text};
-  text-decoration: none;
-
-  &:hover {
-    background-color: ${p => p.theme.colors.bg2};
-  }
 `;
 
 /**

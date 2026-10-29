@@ -96,6 +96,17 @@ export function isNewPlaceholderSubject(raw: string): boolean {
   return /^(?:[a-z][a-z0-9+.-]*:\/\/[^/]+\/|internal:\/|\/)?_new:/i.test(raw);
 }
 
+/**
+ * The legacy migration's mangled spelling of a drive subject, like
+ * `https://staging.atomicdata.dev/staging:/drive/abc`. It survives
+ * serialization as a path segment containing a colon, which is not a subject
+ * any server can resolve (the `staging` subdomain welded onto the path), so
+ * requesting it only yields a 404.
+ */
+export function isMangledLegacySubject(subject: string): boolean {
+  return /\/[^/]+:\//.test(subject.replace(/^https?:\/\//, ''));
+}
+
 export function isAtomicIdentifier(raw: string): boolean {
   return startsWithAtomicScheme(raw) || raw.startsWith(DID_AD_PREFIX);
 }

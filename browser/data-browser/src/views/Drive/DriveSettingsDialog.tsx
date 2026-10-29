@@ -14,6 +14,9 @@ import { styled } from 'styled-components';
 import { Dialog } from '@components/Dialog';
 import type { InternalDialogProps } from '@components/Dialog';
 import { Column, Row } from '@components/Row';
+import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
+import { onboardingKeys } from '@hooks/useOnboardingProgress';
+import { useLocalStorage } from '@hooks/useLocalStorage';
 import InputSwitcher from '@components/forms/InputSwitcher';
 import { SettingsGroup, SettingsSection } from '@components/Settings';
 import { Tag } from '@components/Tag/Tag';
@@ -21,6 +24,7 @@ import { CreateTagRow } from '@components/Tag/CreateTagRow';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { useGettingStartedAgent } from './GettingStartedCard';
 import { PluginList } from './PluginList';
 
 const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
@@ -60,6 +64,7 @@ function DriveSettingsBody({
 
   return (
     <SettingsGroup>
+      <GettingStartedSetting drive={drive} canEdit={canEdit} />
       <SettingsSection label='Tags' initialState>
         <DriveTagList resource={drive} />
       </SettingsSection>
@@ -105,6 +110,36 @@ function DriveSettingsBody({
         </Column>
       </SettingsSection>
     </SettingsGroup>
+  );
+}
+
+/** Brings the Getting started card back after Hide; same flag, so they stay in sync. */
+function GettingStartedSetting({
+  drive,
+  canEdit,
+}: {
+  drive: Resource;
+  canEdit: boolean;
+}): JSX.Element | null {
+  const agent = useGettingStartedAgent(drive, canEdit);
+
+  // Keyed by agent: the flag is read once, and the agent may load after mount.
+  return agent ? <ShowGettingStarted key={agent} agent={agent} /> : null;
+}
+
+function ShowGettingStarted({ agent }: { agent: string }): JSX.Element {
+  const [hidden, setHidden] = useLocalStorage(
+    onboardingKeys.hidden(agent),
+    false,
+  );
+
+  return (
+    <SettingsSection label='Getting started' initialState>
+      <CheckboxLabel>
+        <Checkbox checked={!hidden} onChange={checked => setHidden(!checked)} />{' '}
+        <span>Show Getting started on this drive's page</span>
+      </CheckboxLabel>
+    </SettingsSection>
   );
 }
 

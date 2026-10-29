@@ -1,6 +1,28 @@
 import { core } from './ontologies/core.js';
 import type { Resource } from './resource.js';
 
+/**
+ * Coerces whatever was thrown into an Error.
+ *
+ * Rejections, `window.onerror` and worker failures hand over anything: a
+ * string, `undefined`, a DOM event.
+ */
+export function asError(thrown: unknown): Error {
+  if (thrown instanceof Error) {
+    return thrown;
+  }
+
+  if (typeof thrown === 'string' && thrown.length > 0) {
+    return new Error(thrown);
+  }
+
+  if (thrown === null || thrown === undefined) {
+    return new Error('Something failed, and reported no reason.');
+  }
+
+  return new Error(String(thrown));
+}
+
 export function getMessageForErrorType(error: Error) {
   if (isAtomicError(error)) {
     switch (error.type) {

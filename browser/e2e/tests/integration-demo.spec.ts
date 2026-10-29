@@ -3,8 +3,8 @@ import { FRONTEND_URL } from './test-utils';
 
 // The demo workspace lives only on this device. On app.atomic.place there is
 // no node either: `/query` gets the app's HTML back, which put "Connection
-// query failed" on the Integrations page. Answer it that way here too.
-test('the demo workspace opens Integrations without asking a server', async ({
+// query failed" on the Apps page. Answer it that way here too.
+test('the demo workspace opens Apps without asking a server', async ({
   page,
 }) => {
   test.setTimeout(120000);
@@ -21,7 +21,7 @@ test('the demo workspace opens Integrations without asking a server', async ({
   await expect(page.getByText('This workspace is a demo')).toBeVisible({
     timeout: 90000,
   });
-  await page.goto(`${FRONTEND_URL}/app/integrations`);
+  await page.goto(`${FRONTEND_URL}/app/apps`);
   await expect(
     page.getByRole('heading', { name: 'Your automations' }),
   ).toBeVisible();

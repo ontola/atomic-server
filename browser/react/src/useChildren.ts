@@ -169,9 +169,14 @@ export function useChildren(
       // screen, an undefined slot is far more likely to be one that just went
       // away — a delete leaves the count ahead of the page for a moment — and
       // re-fetching then pulls the deleted resource back into the store.
+      //
+      // An empty answer is read the same way: the first query of a drive can
+      // be answered before its index has the children (the sidebar stayed
+      // empty while the drive page, which asks later, listed them all).
       if (
         subjectsRef.current.length === 0 &&
-        resolved.some(member => member === undefined) &&
+        (resolved.length === 0 ||
+          resolved.some(member => member === undefined)) &&
         attempt < 3
       ) {
         await collection.refresh();
@@ -212,7 +217,8 @@ export function useChildren(
       setSubjects(sorted);
     };
 
-    extractMembers();
+    // Never leave the list empty without saying why.
+    extractMembers().catch(e => store.notifyError(e));
 
     return () => {
       cancelled = true;

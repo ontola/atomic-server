@@ -87,13 +87,13 @@ describe('GettingStartedCard', () => {
     expect(html).toMatch(/1\s*(<!-- -->)?\s*of/);
     for (const title of [
       'Name your drive',
-      'Start a project',
+      'Start a drive',
       'Talk to the AI',
       'Invite someone',
       'Save your work',
     ])
       expect(html).toContain(title);
-    expect(html).toContain('Start a project first');
+    expect(html).toContain('Start a drive first');
     expect(html).toMatch(/<button disabled="">Invite<\/button>/);
   });
 

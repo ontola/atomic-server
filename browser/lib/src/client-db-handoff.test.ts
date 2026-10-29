@@ -190,7 +190,14 @@ it('does not replay a worker-local session mutation after a leader change', asyn
 
 it('keeps a bounded timeout when the leader never changes', async () => {
   await openTab();
-  const follower = await openTab();
+  const onLeaderTimeout = vi.fn();
+  const follower = new ClientDbWorker('wasm-url', 'worker-url', {
+    onLeaderTimeout,
+  });
+  clients.push(follower);
+  const init = follower.init('https://example.com');
+  await vi.advanceTimersByTimeAsync(100);
+  await init;
   workers[0].heldType = 'blake3Hash';
   let error: unknown;
   void follower.blake3Hash(new Uint8Array([10])).catch(value => {
@@ -205,6 +212,10 @@ it('keeps a bounded timeout when the leader never changes', async () => {
   expect(
     workers[0].messages.filter(message => message.type === 'blake3Hash'),
   ).toHaveLength(1);
+  // The follower took over the hung leader's lock (a new worker) and told the
+  // person once, so the next call does not wait out another 30s.
+  expect(workers).toHaveLength(2);
+  expect(onLeaderTimeout).toHaveBeenCalledTimes(1);
 });
 
 it('does not replay a cancelled upload from a destroyed tab', async () => {
