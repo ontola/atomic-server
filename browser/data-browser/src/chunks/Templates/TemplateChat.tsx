@@ -10,10 +10,8 @@ import { useGetModel } from '../AI/useModel';
 import { selectGenerativeFeaturesModel } from '../AI/useGenerativeData';
 import { TEMPLATE_CATALOG } from './catalog';
 import type { TemplateDefinition } from './model';
+import { SectionTitle } from '../../views/Drive/DriveHome';
 const ChatInput = lazy(() => import('../RTE/AIChatInput/AsyncAIChatInput'));
-const Setup = lazy(() =>
-  import('../AI/AISetupPanel').then(m => ({ default: m.AISetupPanel })),
-);
 
 export default function TemplateChat({
   onProposal,
@@ -22,10 +20,8 @@ export default function TemplateChat({
 }) {
   const labels = {
     loadingChat: 'Loading chat…',
-    reviewHint: 'Nothing is created until you review it.',
-    reviewSetup: 'Review this setup',
-    setupAI: 'Set up AI',
-    loadingSettings: 'Loading AI settings…',
+    reviewHint: 'Nothing is created until you add it.',
+    reviewSetup: 'Add to this drive',
   };
   const settings = useAISettings();
   const getModel = useGetModel();
@@ -39,7 +35,6 @@ export default function TemplateChat({
   const [proposal, setProposal] = useState<TemplateDefinition>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error>();
-  const [setup, setSetup] = useState(false);
   const identifier = selectGenerativeFeaturesModel(
     settings.genFeaturesModel,
     settings.defaultChatModel,
@@ -50,11 +45,7 @@ export default function TemplateChat({
     if (request.current || !input.trim()) return;
     const model = identifier ? getModel(identifier) : undefined;
 
-    if (!model) {
-      setSetup(true);
-
-      return;
-    }
+    if (!model) return;
 
     const history = [
       ...messages,
@@ -95,9 +86,12 @@ export default function TemplateChat({
     }
   }
 
+  // Without an AI source there is nothing to ask.
+  if (!identifier) return null;
+
   return (
     <Column>
-      <h2>Or, tell Atomic what you need</h2>
+      <SectionTitle>Or describe what you need</SectionTitle>
       {messages.map((m, i) => (
         <Card key={i}>
           <strong>{m.role === 'user' ? 'You' : 'Atomic'}</strong>
@@ -128,16 +122,6 @@ export default function TemplateChat({
           </Button>
         )}
       </Row>
-      {!identifier && (
-        <Button subtle onClick={() => setSetup(!setup)}>
-          Set up AI
-        </Button>
-      )}
-      {setup && (
-        <Suspense fallback={<p>{labels.loadingSettings}</p>}>
-          <Setup onDismiss={() => setSetup(false)} />
-        </Suspense>
-      )}
     </Column>
   );
 }

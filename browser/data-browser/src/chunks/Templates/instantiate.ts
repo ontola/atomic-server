@@ -1,11 +1,9 @@
 // @wc-ignore-file
-import { TEMPLATE_DEMO_KEY, readTemplateDemo } from './demoSession';
 import {
   canvas,
   core,
   dataBrowser,
   enableLoro,
-  server,
   type Store,
   type Resource,
 } from '@tomic/react';
@@ -22,8 +20,8 @@ export interface TemplateInstance {
 type Json = { type: string; [k: string]: unknown };
 
 /**
- * Document text is one block per line: `# ` heading, `- ` bullet, else a
- * paragraph. Inside a line `**bold**` and `{{key}}` (a chip linking to the
+ * Document text is one block per line: `# ` heading, `- ` bullet,
+ * `- [ ] ` / `- [x] ` task (unchecked / checked), else a paragraph. Inside a line `**bold**` and `{{key}}` (a chip linking to the
  * part with that key) work.
  */
 export function textToBlocks(
@@ -53,18 +51,25 @@ export function textToBlocks(
   const blocks: Json[] = [];
 
   for (const line of text.split('\n')) {
+    const task = line.match(/^- \[([ x])\] /);
     const item = line.startsWith('- ');
     const heading = line.startsWith('# ');
-    const content = inline(item || heading ? line.slice(2) : line);
+    const content = inline(
+      task ? line.slice(6) : item || heading ? line.slice(2) : line,
+    );
 
     if (item) {
-      const li = {
-        type: 'listItem',
-        content: [{ type: 'paragraph', content }],
-      };
+      const li = task
+        ? {
+            type: 'taskItem',
+            attrs: { checked: task[1] === 'x' },
+            content: [{ type: 'paragraph', content }],
+          }
+        : { type: 'listItem', content: [{ type: 'paragraph', content }] };
+      const listType = task ? 'taskList' : 'bulletList';
       const last = blocks[blocks.length - 1];
-      if (last?.type === 'bulletList') (last.content as Json[]).push(li);
-      else blocks.push({ type: 'bulletList', content: [li] });
+      if (last?.type === listType) (last.content as Json[]).push(li);
+      else blocks.push({ type: listType, content: [li] });
     } else if (heading) {
       blocks.push({ type: 'heading', attrs: { level: 2 }, content });
     } else {
@@ -128,7 +133,7 @@ export async function instantiateTemplate(
       });
       documents.push({
         resource,
-        text: plan.examples ? (part.exampleText ?? part.text) : part.text,
+        text: part.text,
       });
       subjects[part.key] = resource.subject;
     }
@@ -153,50 +158,4 @@ export async function instantiateTemplate(
   }
 
   return { release: plan.release, root: target.parent, subjects };
-}
-export async function startTemplateDemo(
-  store: Store,
-  plan: TemplatePlan,
-): Promise<string> {
-  const db = store.getClientDb();
-  if (!db) throw new Error('Enable local storage to preview this template.');
-  await db.waitForReady();
-  const { cleanupDemoDrive, stopDemoDirector } =
-    await import('../Demo/startDemo');
-  stopDemoDirector();
-  const previous = readTemplateDemo();
-  const previousDrive = previous?.previousDrive ?? store.getDrive() ?? '';
-  if (previous) await cleanupDemoDrive(store, previous.drive);
-  const agent = store.getAgent();
-  if (!agent) throw new Error('Sign in before previewing a template.');
-  await enableLoro();
-  const drive: Resource = await store.newResource({
-    isA: server.classes.drive,
-    noParent: true,
-    propVals: {
-      [core.properties.name]: `${plan.title} demo`,
-      [core.properties.read]: [agent.subject],
-      [core.properties.write]: [agent.subject],
-    },
-  });
-  // Register and track before the first save; a failed preview can still be cleaned up.
-  store.registerLocalOnlyDrive(drive.subject);
-  localStorage.setItem(
-    TEMPLATE_DEMO_KEY,
-    JSON.stringify({
-      drive: drive.subject,
-      template: plan.release.id,
-      previousDrive,
-    }),
-  );
-  await drive.save();
-  await store.createDefaultOntology(drive);
-  const instance = await instantiateTemplate(
-    store,
-    { ...plan, examples: true },
-    { parent: drive.subject, drive: drive.subject },
-  );
-  store.setDrive(drive.subject);
-
-  return Object.values(instance.subjects)[0] ?? drive.subject;
 }

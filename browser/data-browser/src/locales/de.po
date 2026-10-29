@@ -140,6 +140,7 @@ msgstr ""
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -283,7 +284,6 @@ msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/DemoExitButton.tsx
-#: src/routes/NewDriveRoute.tsx
 msgid "Back"
 msgstr ""
 
@@ -313,7 +313,6 @@ msgid "Ollama"
 msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/components/AI/LocalNetworkNotice.tsx
 msgid "Continue"
 msgstr ""
@@ -4131,7 +4130,6 @@ msgstr ""
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
-#: src/routes/NewDriveRoute.tsx
 msgid "Close"
 msgstr ""
 
@@ -4457,16 +4455,17 @@ msgstr ""
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Creating…"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Create drive"
 msgstr ""
 
 #: src/components/MetaSetter.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr ""
@@ -6431,7 +6430,6 @@ msgstr ""
 msgid "Sign in to join"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/views/PeerInvitePage.tsx
 msgid "Open drive"
 msgstr ""
@@ -6570,48 +6568,16 @@ msgstr ""
 msgid "<0/> Loading"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "The drive was created, but setup did not finish. Open it to inspect what was saved."
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Drive name"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/components/DemoExitButton.tsx
-#: src/routes/NewDriveRoute.tsx
 msgid "Back to templates"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Give your space a name"
-msgstr ""
-
-#. 0: template.title
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "{0} contents"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Preparing…"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Preview template"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Prefer a fresh start?"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Create a blank drive"
 msgstr ""
 
 #: src/components/DemoExitButton.tsx
@@ -6623,51 +6589,15 @@ msgid "Atomic"
 msgstr ""
 
 #: src/chunks/Templates/TemplateChat.tsx
-msgid "Or, tell Atomic what you need"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "<0/> Include example content"
-msgstr ""
-
-#: src/chunks/Templates/TemplateChat.tsx
 msgid "Loading chat…"
 msgstr ""
 
-#: src/chunks/Templates/TemplateChat.tsx
-msgid "Nothing is created until you review it."
-msgstr ""
-
-#: src/chunks/Templates/TemplateChat.tsx
-msgid "Review this setup"
-msgstr ""
-
-#: src/chunks/Templates/TemplateChat.tsx
-#: src/chunks/Templates/TemplateChat.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Set up AI"
 msgstr ""
 
-#: src/chunks/Templates/TemplateChat.tsx
 #: src/components/AI/AISettings.tsx
 msgid "Loading AI settings…"
-msgstr ""
-
-#: src/routes/NewDriveRoute.tsx
-msgid "Could not open the preview. Please refresh."
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "/app/new-drive?blank=1"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "<0/> Keep demo content and my edits"
-msgstr ""
-
-#. 0: ' '
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Start with a template,{0} <0>create a blank drive</0> , or describe a space of your own."
 msgstr ""
 
 #: src/actions/resourceActions.tsx
@@ -9093,7 +9023,6 @@ msgid "Open your drive"
 msgstr ""
 
 #: src/components/DemoExitButton.tsx
-#: src/routes/NewDriveRoute.tsx
 #: src/views/ErrorPage.tsx
 msgid "Choose a template"
 msgstr ""
@@ -9115,15 +9044,6 @@ msgstr ""
 msgid "Setup"
 msgstr ""
 
-#: src/routes/NewDriveRoute.tsx
-msgid "Back to the demo"
-msgstr ""
-
-#: src/routes/NewDriveRoute.tsx
-msgid "Back to the preview"
-msgstr ""
-
-#: src/routes/NewDriveRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Name your drive"
 msgstr ""
@@ -10946,14 +10866,6 @@ msgstr ""
 msgid "Reload the whole app, as if you opened it again."
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Opening sign-up…"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
-msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
 msgstr ""
@@ -11525,10 +11437,6 @@ msgstr ""
 #. 0: trigger.queuedEvents
 #: src/chunks/PluginRuns/PluginTrigger.tsx
 msgid "{0} events queued. They remain saved while waiting for review."
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Loading AI setup…"
 msgstr ""
 
 #: src/components/AI/AISettings.tsx
@@ -12712,10 +12620,6 @@ msgid "<0/> Drive settings"
 msgstr "<0/> Drive-Einstellungen"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "Nothing here yet. Create something with New, or drop files on this page."
-msgstr "Noch nichts hier. Erstelle etwas mit Neu oder ziehe Dateien auf diese Seite."
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Noch nichts hier."
 
@@ -13227,10 +13131,6 @@ msgid "Not hosted yet"
 msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
-msgid "Pick a template for a team, a class or yourself"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Talk to the AI"
 msgstr ""
 
@@ -13330,4 +13230,40 @@ msgstr ""
 
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Show Getting started on this drive's page"
+msgstr ""
+
+#: src/chunks/Templates/TemplateChat.tsx
+msgid "Nothing is created until you add it."
+msgstr ""
+
+#: src/chunks/Templates/TemplateChat.tsx
+msgid "Add to this drive"
+msgstr ""
+
+#: src/chunks/Templates/TemplateChat.tsx
+msgid "Or describe what you need"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Give it a name, then fill it with a starter"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Start with"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Adding…"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Use this starter"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Or fill this drive with a starter"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Start this drive"
 msgstr ""

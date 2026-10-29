@@ -1,10 +1,6 @@
 import { Spinner } from '../../components/Spinner';
 import { resumeInviteUrl } from '../../helpers/inviteSignup';
 import { signInAccountWithAgent } from '../../helpers/managed/agentSession';
-import {
-  pendingTemplateUrl,
-  readPendingTemplate,
-} from '../../chunks/Templates/pendingTemplate';
 import { WorkspaceLoading } from './WorkspaceLoading';
 import {
   PRODUCT_NAME,
@@ -223,11 +219,6 @@ export function GettingStartedFlow({
   // here with `next` carrying that drive's subject, so we open straight to the
   // sign-in step and return them to that drive afterwards (not their home).
   const inviteToken = new URLSearchParams(window.location.search).get('invite');
-  // A demo guest who chose a template was sent to make an account first; once
-  // it exists they go back to that template instead of to their home.
-  const [pendingTemplate] = useState(() =>
-    fromManaged && !inviteToken ? readPendingTemplate() : undefined,
-  );
   const nextDrive =
     new URLSearchParams(window.location.search).get('next') ||
     new URLSearchParams(window.location.search).get('drive') ||
@@ -1662,7 +1653,7 @@ export function GettingStartedFlow({
                 ) : (
                   <NewIdentitySection
                     autoStart
-                    navigateToDrive={!inviteToken && !pendingTemplate}
+                    navigateToDrive={!inviteToken}
                     // Already saved and confirmed on the portal.
                     verifySecret={!presetKeys}
                     presetKeys={presetKeys}
@@ -1681,8 +1672,6 @@ export function GettingStartedFlow({
                     }
                     onDone={() => {
                       if (inviteToken) navigate(resumeInviteUrl(inviteToken));
-                      else if (pendingTemplate)
-                        navigate(pendingTemplateUrl(pendingTemplate));
                     }}
                   />
                 )}
