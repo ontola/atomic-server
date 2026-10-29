@@ -469,6 +469,26 @@ void main() {
       expect(view.path, '/app/new-drive');
     });
 
+    testWidgets('a new page takes the place of the one that is open',
+        (tester) async {
+      await tester.pumpWidget(_shell(_BarApi()));
+      await tester.pumpAndSettle();
+      await _pick(tester, await _hold(tester, 'New'), 'New drive');
+      expect(tester.widget<ResourceView>(find.byType(ResourceView)).path,
+          '/app/new-drive');
+
+      await tester.tap(find.byTooltip('New'));
+      await tester.pumpAndSettle();
+      final view = tester.widget<ResourceView>(find.byType(ResourceView));
+      expect(Uri.parse(view.path!).path, '/app/new');
+      expect(_controller(tester).pages, hasLength(1));
+
+      // Back goes home, not to the New drive page.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(_controller(tester).atHome, isTrue);
+    });
+
     testWidgets('Other opens the web New page in the last drive',
         (tester) async {
       SharedPreferences.setMockInitialValues(

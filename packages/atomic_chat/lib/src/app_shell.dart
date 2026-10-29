@@ -466,6 +466,20 @@ class ShellController extends ChangeNotifier {
       (settings) => SlideBackRoute<T>(
           builder: builder, settings: settings, instant: split));
 
+  /// Opens a page for something new ([ShellPage.newResource]) in place of
+  /// the one that is open. The pages for a new drive, a chat room or anything
+  /// else share that kind, so [open] would only show the open one again.
+  Future<void> openNewPage(WidgetBuilder builder) async {
+    final navigator = navigatorKey.currentState;
+    final open =
+        pages.where((r) => kindOf(r) == ShellPage.newResource).lastOrNull;
+    if (navigator != null && open != null) {
+      navigator.popUntil((r) => r == open);
+      navigator.pop();
+    }
+    await openPage<void>(ShellPage.newResource, builder);
+  }
+
   /// Back to the first page.
   void goHome() {
     driveSwitcher.value = false;

@@ -1072,10 +1072,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Future<void> _newInDrive() async {
     final shell = _shell;
     if (shell != null) {
-      await shell.openPage<void>(
-          ShellPage.newResource,
-          (_) => ResourceView(
-              api: widget.api, drive: _drive, path: newResourcePath(_drive)));
+      await shell.openNewPage((_) => ResourceView(
+          api: widget.api, drive: _drive, path: newResourcePath(_drive)));
       if (mounted) _tree.currentState?.reload();
       return;
     }

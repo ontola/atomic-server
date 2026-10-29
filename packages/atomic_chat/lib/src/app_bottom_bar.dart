@@ -286,16 +286,12 @@ class ShellActions {
 
   Future<void> newOther() async {
     final drive = await lastNewResourceDrive() ?? shell.drive.value;
-    await shell.openPage<void>(
-        ShellPage.newResource,
-        (_) =>
-            ResourceView(api: api, drive: drive, path: newResourcePath(drive)));
+    await shell.openNewPage((_) =>
+        ResourceView(api: api, drive: drive, path: newResourcePath(drive)));
   }
 
   /// The web app's page for a new drive.
-  Future<void> newDrive() => shell.openPage<void>(
-      ShellPage.newResource,
-      (_) => ResourceView(
+  Future<void> newDrive() => shell.openNewPage((_) => ResourceView(
           api: api,
           drive: shell.drive.value,
           title: 'New drive',
@@ -304,9 +300,7 @@ class ShellActions {
   /// The web app's form for a new chat room (a conversation) in the drive.
   Future<void> newConversation() {
     final drive = shell.drive.value;
-    return shell.openPage<void>(
-        ShellPage.newResource,
-        (_) => ResourceView(
+    return shell.openNewPage((_) => ResourceView(
             api: api,
             drive: drive,
             title: 'New chat room',
