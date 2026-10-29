@@ -3918,7 +3918,9 @@ msgid "Leave"
 msgstr ""
 
 #. 0: participants.length
+#. 0: participants.length
 #: src/components/Presence/FollowSessionPanelContainer.tsx
+#: src/components/Presence/MeetingAttendees.tsx
 msgid "{0} here"
 msgstr ""
 
@@ -4492,6 +4494,7 @@ msgstr ""
 msgid "Leave video call"
 msgstr ""
 
+#: src/components/Presence/FollowSessionPanelContainer.tsx
 #: src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "Start video call"
 msgstr ""
@@ -13346,6 +13349,7 @@ msgid "Timed out fetching {0}"
 msgstr ""
 
 #: src/embed/MeetingChatOverlay.tsx
+#: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
 msgstr ""
 
@@ -13465,4 +13469,8 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Don't add, keep it in this browser only"
+msgstr ""
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
 msgstr ""
