@@ -160,7 +160,6 @@ export function useCollection(
     String(pageSize),
     server ?? '',
     String(includeNested),
-    queryFilterMemo.drive ?? '',
   ].join('\0');
 
   // Build collection once, reuse on remount. Only rebuild when query params change.
