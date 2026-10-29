@@ -45,7 +45,7 @@ type Conflict = {
   to: string;
   /**
    * Whether its workspace can be brought into the account: only an identity
-   * that never hosted anything, like a demo guest. A hosted or synced drive
+   * that never hosted anything, like a guest started with Get started. A hosted or synced drive
    * has an enrollment tied to `from` that the account cannot take over from
    * here.
    */
@@ -201,7 +201,7 @@ export function IdentityReconcileGate({
         if (!isCurrent()) return;
 
         if (workspace !== 'none' && from && to) {
-          // Only a demo guest's work moves into the account. A guest has no
+          // Only a guest's work (local-only, from Get started) moves into the account. A guest has no
           // account of its own, so its drives belong to whoever is signing in
           // here. Any other identity may be someone else's on a shared
           // browser: its key is kept on this device and nothing is copied or

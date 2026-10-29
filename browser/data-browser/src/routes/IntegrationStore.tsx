@@ -136,7 +136,7 @@ function IntegrationStore(): React.JSX.Element {
   useEffect(() => {
     let active = true;
 
-    // Without a server (the demo workspace, an origin with no node) there is
+    // Without a server (a local-only drive, an origin with no node) there is
     // nothing to query, and so no connections yet.
     if (!drive || !driveHasServer(store, drive)) {
       setInstalled([]);

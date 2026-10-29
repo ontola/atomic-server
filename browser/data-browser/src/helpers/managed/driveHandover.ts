@@ -7,13 +7,13 @@ import { sameAgent } from './recovery';
  * Handing a local identity's drives to the account identity that replaces it.
  *
  * One email has one identity. When the account already has one and this
- * browser made a demo guest, the account's wins — but the guest may already
- * own drives (a kept template preview). Before the switch, while the guest
+ * browser started a guest with Get started, the account's wins, but the
+ * guest already owns drives (its Welcome drive and anything made since). Before the switch, while the guest
  * can still sign, it adds the account agent to each of those drives'
  * `write`, and copies the local-only ones out of its own database
  * (`driveCarryOver.ts`). After the switch, the account imports those copies
  * and lists every handed-over drive in its own home, the way
- * `addToSavedDrives` does for the demo.
+ * `addToSavedDrives` does for a drive the agent opens.
  *
  * The guest's own home is read for the drives it lists, never handed over
  * itself: it holds nothing but that list, and the account has a home of its

@@ -137,7 +137,7 @@ function ShowGettingStarted({ agent }: { agent: string }): JSX.Element {
     <SettingsSection label='Getting started' initialState>
       <CheckboxLabel>
         <Checkbox checked={!hidden} onChange={checked => setHidden(!checked)} />{' '}
-        <span>Show Getting started on this drive's page</span>
+        <span>Show Getting started on my drives</span>
       </CheckboxLabel>
     </SettingsSection>
   );

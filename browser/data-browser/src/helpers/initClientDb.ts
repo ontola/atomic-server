@@ -45,7 +45,7 @@ export function initClientDb(
   // ago, and Android WebView (the Tauri mobile app) has no SharedWorker — a
   // stale SharedWorker guard silently disabled the entire local database
   // there, so every collection query fell back to the server and local-only
-  // drives (the demo) rendered empty. Missing locks/OPFS on insecure
+  // drives rendered empty. Missing locks/OPFS on insecure
   // contexts is handled inside ClientDbWorker with a clear message.
   if (typeof Worker === 'undefined') return;
 

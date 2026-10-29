@@ -8971,10 +8971,6 @@ msgid "This page no longer exists"
 msgstr ""
 
 #: src/views/ErrorPage.tsx
-msgid "It was deleted, for example when you left a demo or a preview."
-msgstr ""
-
-#: src/views/ErrorPage.tsx
 msgid "Open your drive"
 msgstr ""
 
@@ -13329,10 +13325,6 @@ msgstr ""
 msgid "Don't add, keep it in this browser only"
 msgstr ""
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on this drive's page"
-msgstr ""
-
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr ""
@@ -13383,4 +13375,12 @@ msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "It was deleted on this device."
+msgstr ""
+
+#: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Show Getting started on my drives"
 msgstr ""

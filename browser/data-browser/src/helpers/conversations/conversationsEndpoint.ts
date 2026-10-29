@@ -66,7 +66,7 @@ export async function fetchMemberOf(store: Store): Promise<string[]> {
   }
 
   try {
-    // A demo guest's identity exists only on this device, so no server has
+    // A guest's identity exists only on this device, so no server has
     // conversations for it.
     const agent = store.getAgent();
 

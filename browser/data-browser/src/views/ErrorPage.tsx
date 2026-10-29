@@ -115,9 +115,8 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
     );
   }
 
-  // Deleted on this device: going back in history after leaving a demo or a
-  // template preview lands here, since leaving deletes it. Retrying cannot
-  // bring it back, so offer the way forward instead of a raw error.
+  // Deleted on this device, for example by going back in history to
+  // something that was removed. Retrying cannot bring it back, so offer the way forward instead of a raw error.
   if (store.isDestroyed(resource.subject)) {
     const home = drive && drive !== resource.subject ? drive : undefined;
 
@@ -125,7 +124,7 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
       <ContainerWide>
         <Column>
           <h1>This page no longer exists</h1>
-          <p>It was deleted, for example when you left a demo or a preview.</p>
+          <p>It was deleted on this device.</p>
           <Row>
             {home && (
               <Button onClick={() => navigate({ to: constructOpenURL(home) })}>
