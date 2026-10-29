@@ -199,7 +199,7 @@ class _SyncScreenState extends State<SyncScreen> {
             api: const AtomicAssistantApi(),
             drive: drive,
             title: title,
-            path: '/app/storage');
+            path: '/app/storage?drive=${Uri.encodeComponent(drive)}');
     openFromList<void>(context, build, subject: '$drive#storage');
   }
 

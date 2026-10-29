@@ -1,4 +1,5 @@
 import type { NativeChannel } from '@tomic/lib';
+import type { ResourceUsage } from '../helpers/storageMap';
 
 let host: NativeChannel | undefined;
 
@@ -54,6 +55,25 @@ export async function askAssistant(
     return (await host.call('askAssistant', [prompt, subject])) === true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Per-resource storage of `drive` as this device holds it, measured by the
+ * app's own store. Null when there is no app, or it does not know the call
+ * (an older app, the desktop mock): then the page asks the drive's server.
+ */
+export async function driveUsageOnHost(
+  drive: string,
+): Promise<ResourceUsage[] | null> {
+  if (!host) return null;
+
+  try {
+    const rows = await host.call('driveUsageBreakdown', [drive]);
+
+    return Array.isArray(rows) ? (rows as ResourceUsage[]) : null;
+  } catch {
+    return null;
   }
 }
 

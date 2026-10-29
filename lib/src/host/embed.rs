@@ -488,6 +488,26 @@ impl EmbedHost {
             .await
             .into_iter()
             .collect::<Vec<_>>()),
+            // "Where space goes" for this device's copy of a drive, in the
+            // rows of the server's `/drive-usage/breakdown`.
+            "driveUsageBreakdown" => {
+                let drive = subject_of(store, str_arg(&args, 0)?).to_string();
+                let rows = store
+                    .drive_usage_breakdown(&drive)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                json!(rows
+                    .iter()
+                    .map(|r| json!({
+                        "subject": r.subject,
+                        "name": r.name,
+                        "parent": r.parent,
+                        "isA": r.is_a,
+                        "loroBytes": r.loro_bytes,
+                        "blobBytes": r.blob_bytes,
+                    }))
+                    .collect::<Vec<_>>())
+            }
             "getVersionVectorsForDrive" => {
                 let subjects: Vec<String> = crate::sync::engine::collect_drive_subjects(
                     store,
@@ -662,6 +682,26 @@ mod tests {
             ask(&host(&d), "opened", json!(["x", d.drive])).await,
             json!(false)
         );
+    }
+
+    #[tokio::test]
+    async fn the_page_can_measure_a_drive_on_this_device() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let folder = d
+            .store
+            .create_resource(urls::FOLDER, &d.drive, "Measured folder", None)
+            .await
+            .unwrap();
+
+        let rows = ask(&h, "driveUsageBreakdown", json!([d.drive])).await;
+        let rows = rows.as_array().unwrap();
+        let row = rows
+            .iter()
+            .find(|r| r["subject"] == json!(folder))
+            .expect("the folder is measured");
+        assert_eq!(row["name"], json!("Measured folder"));
+        assert!(row["loroBytes"].as_u64().unwrap() > 0, "{row}");
     }
 
     #[tokio::test]

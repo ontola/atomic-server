@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   askAssistant,
+  driveUsageOnHost,
   hasActionsHost,
   hostFollow,
   hostMeetingEnded,
@@ -75,6 +76,35 @@ describe('askAssistant', () => {
 
     setActionsHost({ call: vi.fn().mockRejectedValue(new Error('unknown')) });
     expect(await askAssistant('Fix it', 'did:ad:app')).toBe(false);
+  });
+});
+
+describe('driveUsageOnHost', () => {
+  it('is null without an app', async () => {
+    expect(await driveUsageOnHost('atomic:drive')).toBeNull();
+  });
+
+  it("hands over the app's measurement of the drive", async () => {
+    const rows = [
+      {
+        subject: 'atomic:doc',
+        name: 'Doc',
+        parent: 'atomic:drive',
+        isA: null,
+        loroBytes: 120,
+        blobBytes: 0,
+      },
+    ];
+    const call = vi.fn().mockResolvedValue(rows);
+
+    setActionsHost({ call });
+    expect(await driveUsageOnHost('atomic:drive')).toEqual(rows);
+    expect(call).toHaveBeenCalledWith('driveUsageBreakdown', ['atomic:drive']);
+  });
+
+  it('is null when the app does not know the call', async () => {
+    setActionsHost({ call: vi.fn().mockRejectedValue(new Error('unknown')) });
+    expect(await driveUsageOnHost('atomic:drive')).toBeNull();
   });
 });
 
