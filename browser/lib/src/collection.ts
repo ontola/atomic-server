@@ -383,6 +383,10 @@ export class Collection {
     return this.params.value;
   }
 
+  public get drive(): string | undefined {
+    return this.params.drive;
+  }
+
   public get filters(): PropVal[] {
     return this.params.filters ?? [];
   }
