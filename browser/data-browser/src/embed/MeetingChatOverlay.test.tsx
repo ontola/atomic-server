@@ -8,6 +8,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from '@testing-library/react';
 import { MeetingChatOverlay } from './MeetingChatOverlay';
 import { closeTopOverlay } from './overlayBack';
@@ -88,12 +89,17 @@ it('closes with the close button', async () => {
 it('closes on back and reports it handled it', async () => {
   renderOverlay();
   await screen.findByTestId('meeting-chat-overlay');
-  let handled = false;
 
-  act(() => {
-    handled = closeTopOverlay();
+  // The overlay registers for Back in an effect after it renders, which a
+  // loaded runner can run after findByTestId resolves.
+  await waitFor(() => {
+    let handled = false;
+
+    act(() => {
+      handled = closeTopOverlay();
+    });
+    expect(handled).toBe(true);
   });
-  expect(handled).toBe(true);
   expect(state.closePanel).toHaveBeenCalledWith('followSession');
   expect(closeTopOverlay()).toBe(false);
 });
