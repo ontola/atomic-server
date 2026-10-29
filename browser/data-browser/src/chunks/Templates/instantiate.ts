@@ -4,6 +4,7 @@ import {
   core,
   dataBrowser,
   enableLoro,
+  server,
   type Store,
   type Resource,
 } from '@tomic/react';
@@ -96,7 +97,6 @@ export async function instantiateTemplate(
     }
   }
 
-  const { addToOntology } = await import('../Demo/demoWorkspace');
   await enableLoro();
   const subjects: Record<string, string> = {};
   const documents: Array<{ resource: Resource; text: string }> = [];
@@ -158,4 +158,40 @@ export async function instantiateTemplate(
   }
 
   return { release: plan.release, root: target.parent, subjects };
+}
+
+/** Mirrors `useAddToOntology` for imperative (non-hook) callers: parent
+ *  the class/property under the drive's default ontology and link it in
+ *  the matching ontology list. */
+async function addToOntology(
+  store: Store,
+  driveSubject: string,
+  resource: Resource,
+): Promise<void> {
+  const drive = await store.getResource(driveSubject);
+  const ontologySubject = drive.get(server.properties.defaultOntology) as
+    | string
+    | undefined;
+
+  if (!ontologySubject) {
+    await resource.set(core.properties.parent, driveSubject);
+    await resource.save();
+
+    return;
+  }
+
+  await resource.set(core.properties.parent, ontologySubject);
+  await resource.save();
+
+  const ontology = await store.getResource(ontologySubject);
+
+  if (resource.hasClasses(core.classes.class)) {
+    ontology.push(core.properties.classes, [resource.subject], true);
+  } else if (resource.hasClasses(core.classes.property)) {
+    ontology.push(core.properties.properties, [resource.subject], true);
+  } else {
+    ontology.push(core.properties.instances, [resource.subject], true);
+  }
+
+  await ontology.save();
 }

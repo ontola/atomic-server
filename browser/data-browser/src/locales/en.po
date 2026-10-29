@@ -283,7 +283,6 @@ msgid "Choose a default model"
 msgstr "Choose a default model"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/components/DemoExitButton.tsx
 msgid "Back"
 msgstr "Back"
 
@@ -589,7 +588,6 @@ msgstr "Required field."
 msgid "Error: {0}"
 msgstr "Error: {0}"
 
-#: src/chunks/Demo/SimulatedTypist.ts
 #: src/chunks/RTE/applyPatchedJsonToLoroDocCollaborative.ts
 msgid "Editor was destroyed before it finished initializing"
 msgstr "Editor was destroyed before it finished initializing"
@@ -3076,7 +3074,6 @@ msgid "No alt text"
 msgstr "No alt text"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
-#: src/chunks/Demo/SimulatedTypist.ts
 #: src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
@@ -3877,22 +3874,6 @@ msgstr "End meeting"
 msgid "Start meeting"
 msgstr "Start meeting"
 
-#: src/routes/DemoRoute.tsx
-msgid "Could not start the demo"
-msgstr "Could not start the demo"
-
-#: src/routes/DemoRoute.tsx
-msgid "The demo could not start"
-msgstr "The demo could not start"
-
-#: src/chunks/Demo/SimulatedTypist.ts
-msgid "Map"
-msgstr "Map"
-
-#: src/chunks/Demo/SimulatedTypist.ts
-msgid "List"
-msgstr "List"
-
 #. 0: new Date().toLocaleString(undefined, { month\\: 'short', day\\: 'numeric', hour\\: '2-digit', minute\\: '2-digit', })
 #: src/components/Presence/FollowContext.tsx
 msgid "Meeting · {0}"
@@ -3941,10 +3922,6 @@ msgstr "Join {0} — led by {1}"
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Join"
 msgstr "Join"
-
-#: src/routes/DemoRoute.tsx
-msgid "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
-msgstr "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
 
 #. 0: name
 #: src/components/Presence/AgentAvatar.tsx
@@ -4004,11 +3981,6 @@ msgstr "Only stored on this device. Star a drive to keep it in My drives."
 #: src/routes/SettingsAgent.tsx
 msgid "Recently visited"
 msgstr "Recently visited"
-
-#: src/routes/DemoRoute.tsx
-#: src/routes/DemoRoute.tsx
-msgid "Setting up your demo…"
-msgstr "Setting up your demo…"
 
 #. 0: status.lastDriveSync.count.toLocaleString()
 #: src/routes/SyncRoute.tsx
@@ -4119,7 +4091,6 @@ msgstr "Pairing device"
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
-#: src/routes/DemoRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Try again"
@@ -6582,14 +6553,6 @@ msgstr "My drive"
 msgid "Drive name"
 msgstr "Drive name"
 
-#: src/components/DemoExitButton.tsx
-msgid "Back to templates"
-msgstr "Back to templates"
-
-#: src/components/DemoExitButton.tsx
-msgid "Use this template"
-msgstr "Use this template"
-
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
 msgstr "Atomic"
@@ -8852,10 +8815,6 @@ msgstr "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json fi
 msgid "Go to the User page"
 msgstr "Go to the User page"
 
-#: src/routes/DemoRoute.tsx
-msgid "Demo setup stalled"
-msgstr "Demo setup stalled"
-
 #. 0: title || 'Untitled Chat'; 1: messages.length
 #: src/chunks/AI/formatAIChatReport.ts
 msgid ""
@@ -9035,27 +8994,9 @@ msgstr "It was deleted, for example when you left a demo or a preview."
 msgid "Open your drive"
 msgstr "Open your drive"
 
-#: src/components/DemoExitButton.tsx
 #: src/views/ErrorPage.tsx
 msgid "Choose a template"
 msgstr "Choose a template"
-
-#: src/components/DemoExitButton.tsx
-msgid "Leave demo"
-msgstr "Leave demo"
-
-#: src/components/DemoExitButton.tsx
-msgid "Demo workspace"
-msgstr "Demo workspace"
-
-#. 0: resource.title
-#: src/components/DemoExitButton.tsx
-msgid "Preview: {0}"
-msgstr "Preview: {0}"
-
-#: src/components/SetupBar.tsx
-msgid "Setup"
-msgstr "Setup"
 
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Name your drive"
@@ -9206,10 +9147,6 @@ msgstr "Lets {0} edit the drives made on this browser, then switches to that ide
 #: src/actions/resourceActions.tsx
 msgid "Add or remove tags"
 msgstr "Add or remove tags"
-
-#: src/routes/DemoRoute.tsx
-msgid "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
-msgstr "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
 
 #: src/components/Vault/AICreditsService.tsx
 msgid "Could not open checkout. Try again."
@@ -10586,10 +10523,6 @@ msgstr "Add a view"
 msgid "Change this view to"
 msgstr "Change this view to"
 
-#: src/routes/DemoRoute.tsx
-msgid "Demo setup finished after stall"
-msgstr "Demo setup finished after stall"
-
 #. 0: providerName(portalUrl)
 #: src/components/Vault/LinkProviderPanel.tsx
 msgid "Connect this app to your existing {0} account to use your cloud services. This is free and does not purchase hosting or fetch a workspace."
@@ -11326,11 +11259,6 @@ msgstr "save"
 #: src/routes/DataRoute.tsx
 msgid "Usage"
 msgstr "Usage"
-
-#. 0: step && ` Still busy with\\: ${STEP_LABELS[step]}.`
-#: src/routes/DemoRoute.tsx
-msgid "This is taking longer than usual. {0}"
-msgstr "This is taking longer than usual. {0}"
 
 #: src/routes/IntegrationStore.tsx
 #: src/routes/IntegrationStore.tsx

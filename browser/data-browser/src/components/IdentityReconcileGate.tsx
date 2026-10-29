@@ -26,10 +26,6 @@ import {
   stageDriveCarryOver,
 } from '../helpers/managed/driveCarryOver';
 import { isClientDbEnabled } from '../helpers/clientDbMode';
-import {
-  readInteractiveDemo,
-  readTemplateDemo,
-} from '../chunks/Templates/demoSession';
 import { paths } from '../routes/paths';
 import { Button } from './Button';
 import { Column } from './Row';
@@ -98,7 +94,6 @@ async function handOverOrReport(
       from,
       to,
       personalDrive: store.getAgent()?.privateDrive,
-      skip: [readInteractiveDemo()?.drive, readTemplateDemo()?.drive],
       archiveIdentity: archiveStoredAgent,
       // Without a local database there is no identity database to leave the
       // drives behind in.
@@ -175,14 +170,8 @@ export function IdentityReconcileGate({
 
   // Identity setup owns its transition. Reconciling a half-created dev agent
   // can classify it as disposable and redirect before its drive is saved.
-  // The demo is the same: it makes (or keeps) a guest identity itself, and a
-  // signed-in visitor is sent to their own drive from there. Holding it back
-  // for this check cost a first visit a cold round trip to the account
-  // server before setup could even start. The check runs as soon as the demo
-  // navigates on.
   const skip =
     pathname === paths.devDrive ||
-    pathname === paths.demo ||
     pathname === paths.welcome ||
     pathname.startsWith(`${paths.welcome}/`);
 

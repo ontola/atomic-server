@@ -49,8 +49,8 @@ export type DriveHandoverOptions = {
    * agent resource cannot be read, which must not hide the drives on it.
    */
   personalDrive?: string;
-  /** Drives that are not the user's to hand over: demo and preview drives. */
-  skip: (string | undefined)[];
+  /** Drives that are not the user's to hand over. */
+  skip?: (string | undefined)[];
   /** Keep `from`'s key on this device; see `archiveStoredAgent`. */
   archiveIdentity: (
     subject: string,
@@ -175,7 +175,7 @@ async function runHandover(
     from,
     to,
     personalDrive,
-    skip,
+    skip = [],
     archiveIdentity,
     carryOver,
   }: DriveHandoverOptions,

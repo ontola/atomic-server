@@ -1873,6 +1873,11 @@ the drive it was chosen in, the block then disappears, and its document shows a
 task list. `template-recovery.spec.ts` covers drive creation on a managed build
 with an unenrolled home, and reporting a failed create.
 Existing `table-templates.spec.ts` exercises the same table adapter.
+The scripted demo (`/app/demo`, `demo-chat.spec.ts`, `integration-demo.spec.ts`,
+`messageSpeaker.test.ts`, `startDemo.test.ts`) and the template preview/keep-edits
+flow (`keepTemplateDemo.test.ts`, `leaveTemplatePreview.test.ts`,
+`pendingTemplate.test.ts`) are removed along with their tests; the bring-along
+specs start their guest with Get started.
 Not covered: a live AI provider, durable interrupted-install resume, portable graph
 import/export, shared schema IDs, initial identity signup, physical mobile browsers.
 

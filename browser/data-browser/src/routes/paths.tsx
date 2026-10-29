@@ -28,7 +28,6 @@ export const pathNames = {
   pruneTests: '/prunetests',
   linkOpenRouter: '/link-openrouter',
   devDrive: '/dev-drive',
-  demo: '/demo',
   invite: '/invite',
   signOut: '/sign-out',
   connectAgent: '/connect-agent',
@@ -63,6 +62,5 @@ export const paths = {
   pruneTests: `${pathNames.app}${pathNames.pruneTests}`,
   linkOpenRouter: `${pathNames.app}${pathNames.linkOpenRouter}`,
   devDrive: `${pathNames.app}${pathNames.devDrive}`,
-  demo: `${pathNames.app}${pathNames.demo}`,
   signOut: `${pathNames.app}${pathNames.signOut}`,
 } as const;

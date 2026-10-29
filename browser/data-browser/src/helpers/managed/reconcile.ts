@@ -286,7 +286,7 @@ export type AgentResourceReader = {
  * What the device's agent has on it: a workspace (`some`), nothing (`none`,
  * the demo guest or an identity that never got one), or no answer because its
  * resource could not be read (`unknown`). Real accounts get a personal drive
- * during onboarding; guests never do (same test `ensureAgentForDemo` uses).
+ * during onboarding; guests never do.
  *
  * The reconcile gate needs all three: `unknown` must not be mistaken for
  * `none`, or an identity that is merely offline would be switched out with
