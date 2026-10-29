@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/painting.dart' show Offset;
 import 'package:flutter/services.dart';
 
 import 'assistant_api.dart';

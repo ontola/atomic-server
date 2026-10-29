@@ -75,8 +75,7 @@ class _CallView extends StatelessWidget {
           Padding(
             padding: full ? pad : EdgeInsets.zero,
             child: page == null
-                ? const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
                 : page.build(),
           ),
           if (!call.expanded)
