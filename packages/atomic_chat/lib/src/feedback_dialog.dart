@@ -94,8 +94,7 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                       maxLength: 10000,
                       onChanged: (_) => setState(() {}),
                       decoration: const InputDecoration(
-                          labelText: 'Feedback',
-                          border: OutlineInputBorder()),
+                          labelText: 'Feedback', border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 12),
                     TextField(
