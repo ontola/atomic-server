@@ -85,3 +85,47 @@ export async function adoptDriveOf(
     // The page still shows the resource; only its lists can come up short.
   }
 }
+
+/** More new resources than this in one change are a bulk sync, not a live
+ * edit: they are left for the lists that ask for them. */
+const MAX_NEW_PER_CHANGE = 64;
+
+/**
+ * Brings resources the host changed (renamed in the app's own screen, synced
+ * from another device) into the page. `getResource` answers a resource the
+ * page already holds from memory, so a change made outside the page never
+ * showed. The host's state is merged into the page's copy, so an open
+ * document follows live and keeps the edits it has not handed over yet.
+ *
+ * A resource the page does not hold yet is read too: a list sees a new
+ * member only through the store. The first message of a meeting chat starts
+ * a new ChatLog page, and the other device never listed it.
+ */
+export function applyHostChanges(
+  store: Pick<Store, 'applyIncoming'> & { resources: Map<string, unknown> },
+  db: Pick<NativeClientDb, 'getLoroSnapshot'>,
+  subjects: string[],
+): Promise<void> {
+  const unheld = subjects.filter(s => !store.resources.has(s));
+  const read =
+    unheld.length > MAX_NEW_PER_CHANGE
+      ? subjects.filter(s => store.resources.has(s))
+      : subjects;
+
+  return Promise.all(
+    read.map(subject =>
+      db
+        .getLoroSnapshot(subject)
+        .then(loroBytes => {
+          if (loroBytes)
+            store.applyIncoming({
+              subject,
+              loroBytes,
+              source: 'peer-sync',
+              forceNotify: true,
+            });
+        })
+        .catch(() => undefined),
+    ),
+  ).then(() => undefined);
+}

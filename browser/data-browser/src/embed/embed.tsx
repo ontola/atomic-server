@@ -75,6 +75,7 @@ import { createMockHost } from './mockHost';
 import { createFlush } from './flush';
 import {
   adoptDriveOf,
+  applyHostChanges,
   createEmbedStore,
   registerEmbedActions,
 } from './embedStore';
@@ -495,26 +496,7 @@ window.atomicEmbed = {
     });
   },
   changed(subjects) {
-    // `getResource` answers a resource the page already holds from memory,
-    // so a change made outside the page (renamed in the app's own screen, or
-    // edited on another device) never showed. The host's state is merged
-    // into the page's copy, so an open document follows live and keeps the
-    // edits it has not handed over yet.
-    for (const subject of subjects) {
-      if (!store.resources.has(subject)) continue;
-      void db
-        .getLoroSnapshot(subject)
-        .then(loroBytes => {
-          if (loroBytes)
-            store.applyIncoming({
-              subject,
-              loroBytes,
-              source: 'peer-sync',
-              forceNotify: true,
-            });
-        })
-        .catch(() => undefined);
-    }
+    void applyHostChanges(store, db, subjects);
   },
   presence(drive, items) {
     presenceBridge.feed(drive, Array.isArray(items) ? items : []);

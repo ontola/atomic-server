@@ -6,6 +6,7 @@ import { fetchPluginList } from '../components/CustomViewProvider';
 import { hasBasicInstanceHandler } from '../components/forms/NewForm/useNewResourceUI';
 import {
   adoptDriveOf,
+  applyHostChanges,
   createEmbedStore,
   registerEmbedActions,
 } from './embedStore';
@@ -133,4 +134,32 @@ it('follows the drive of what it shows, so a table can ask for its rows', async 
   expect(store.getDrive()).toBeFalsy();
   await adoptDriveOf(store, TABLE);
   expect(store.getDrive()).toBe(DRIVE);
+});
+
+// The first message of a meeting chat starts a ChatLog page. On the other
+// device the page was synced into the host but never into the open chat,
+// which only read resources it already held.
+it('reads a changed resource the page does not hold yet', async () => {
+  const applied: string[] = [];
+  const store = {
+    resources: new Map<string, unknown>([['held', {}]]),
+    applyIncoming: (change: { subject: string }) => {
+      applied.push(change.subject);
+
+      return 'applied' as const;
+    },
+  };
+  const db = {
+    getLoroSnapshot: async (s: string) =>
+      s === 'gone' ? null : Uint8Array.of(1),
+  };
+
+  await applyHostChanges(store, db, ['held', 'new-page', 'gone']);
+  expect(applied).toEqual(['held', 'new-page']);
+
+  // A bulk sync is not read into the page, only what it already shows.
+  applied.length = 0;
+  const many = Array.from({ length: 100 }, (_, i) => `n${i}`);
+  await applyHostChanges(store, db, ['held', ...many]);
+  expect(applied).toEqual(['held']);
 });
