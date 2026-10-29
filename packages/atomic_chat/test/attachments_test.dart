@@ -242,4 +242,22 @@ void main() {
     expect(_enabled(tester, 'attach-file'), isFalse);
     expect(_enabled(tester, 'attach-drive'), isTrue);
   });
+
+  test(
+    'a picker that keeps a file lets it through though the AI cannot read it',
+    () {
+      final pdf = PickedFile(
+        name: 'plan.pdf',
+        mediaType: 'application/pdf',
+        bytes: Uint8List.fromList([1, 2, 3]),
+      );
+      expect(attachmentProblem(pdf, images: true), contains("Can't read"));
+      expect(attachmentProblem(pdf, images: true, picker: _Keeper()), isNull);
+    },
+  );
+}
+
+class _Keeper extends _Picker {
+  @override
+  bool keeps(PickedFile file) => file.mediaType == 'application/pdf';
 }

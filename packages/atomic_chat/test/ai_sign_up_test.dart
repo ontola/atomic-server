@@ -9,11 +9,24 @@ class _SignUpApi extends FakeApi {
   final bool canSignUp;
   final sent = <String>[];
   Object? failWith;
+  bool connects = false;
+  int connected = 0;
   HostedAi? account;
   int lookups = 0;
 
   @override
   bool get canSignUpForAi => canSignUp;
+
+  @override
+  bool get canConnectAccount => connects;
+
+  @override
+  Future<void> connectAccount(BuildContext context) async {
+    final failure = failWith;
+    if (failure != null) throw failure;
+    connected++;
+    account = _ai;
+  }
 
   @override
   Future<void> signUpForAi(String email) async {
@@ -141,5 +154,18 @@ void main() {
     expect(find.byKey(const Key('sign-up-email')), findsOneWidget);
     // Leaves no timer behind.
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a host that connects the account replaces the email field',
+      (tester) async {
+    final api = _SignUpApi()..connects = true;
+    await tester.pumpWidget(app(ChatScreen(api: api)));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('sign-up-open')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('connect-account')));
+    await tester.pumpAndSettle();
+    expect(api.connected, 1);
+    expect(find.text('AI chat needs an atomic.place account'), findsNothing);
   });
 }

@@ -148,7 +148,8 @@ class HostedAi {
   final Future<Map<String, dynamic>?> Function()? voiceStatus;
 
   /// Whether images may be sent to the model. The account's included AI
-  /// takes text and tools only (it refuses image and file parts).
+  /// takes inline JPEG, PNG and WebP photos of up to 1 MB each (8 per
+  /// request), and refuses other files.
   final bool acceptsImages;
 
   /// The account portal's origin, where credits are bought; null when not

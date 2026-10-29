@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show Listenable;
+import 'package:flutter/widgets.dart' show BuildContext;
 import 'chat_parts.dart';
 import 'chat_window.dart';
 import 'hosted_ai.dart';
@@ -151,6 +152,17 @@ abstract class AssistantApi {
   /// link is opened, [hostedAi] returns the AI.
   Future<void> signUpForAi(String email) async =>
       throw UnsupportedError('This host cannot create an account');
+
+  /// Whether this host connects the account itself ([connectAccount], every
+  /// way the account offers to sign in); the AI notice then offers that
+  /// instead of the email field.
+  bool get canConnectAccount => false;
+
+  /// Signs in to the account that has the AI, or creates one, however the
+  /// person chooses. Completes when the account is linked; [hostedAi] then
+  /// returns the AI. Throws when it fails.
+  Future<void> connectAccount(BuildContext context) async =>
+      throw UnsupportedError('This host cannot connect an account');
 
   /// Starts an AI chat named [name]; returns its subject.
   Future<String> newChat(String name);
