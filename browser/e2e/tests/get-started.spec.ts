@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { FRONTEND_URL } from './test-utils';
+import { FRONTEND_URL, openDriveSettings } from './test-utils';
 
 /**
  * A new visitor starts without an account: one tap makes a real identity on
@@ -25,7 +25,7 @@ test('Get started opens a workspace of your own, without an account', async ({
 
   for (const step of [
     'Name your drive',
-    'Start a project',
+    'Start a drive',
     'Talk to the AI',
     'Invite someone',
     'Save your work',
@@ -33,9 +33,9 @@ test('Get started opens a workspace of your own, without an account', async ({
     await expect(card.getByText(step, { exact: true })).toBeVisible();
   }
 
-  // Inviting needs a project first, and says so.
+  // Inviting needs a drive first, and says so.
   await expect(card.getByRole('button', { name: 'Invite' })).toBeDisabled();
-  await expect(card).toContainText('Start a project first');
+  await expect(card).toContainText('Start a drive first');
   await expect(
     page.getByRole('link', { name: 'Start here' }).first(),
   ).toBeVisible();
@@ -100,4 +100,32 @@ test('Hide removes the Getting started card and it stays away after a reload', a
     { timeout: 30_000 },
   );
   await expect(card).toHaveCount(0);
+});
+
+test('Drive settings bring the Getting started card back after Hide', async ({
+  page,
+}) => {
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  const card = page.getByTestId('getting-started');
+  await expect(card).toBeVisible({ timeout: 60_000 });
+  await page.keyboard.press('Escape');
+  await card.getByRole('button', { name: 'Hide' }).click();
+  await expect(card).toHaveCount(0);
+
+  const dialog = await openDriveSettings(page);
+  await dialog
+    .getByRole('checkbox', {
+      name: "Show Getting started on this drive's page",
+    })
+    .check();
+  await page.keyboard.press('Escape');
+  await expect(card).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByTestId('current-drive-title')).toHaveText(
+    'Welcome to Atomic',
+    { timeout: 30_000 },
+  );
+  await expect(card).toBeVisible({ timeout: 30_000 });
 });
