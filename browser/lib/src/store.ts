@@ -989,14 +989,12 @@ export class Store {
     let storedDrive: string | undefined = undefined;
 
     if (typeof window !== 'undefined') {
-      const raw = localStorage.getItem('drive');
+      try {
+        const raw = localStorage.getItem('drive');
 
-      if (raw) {
-        try {
-          storedDrive = JSON.parse(raw);
-        } catch {
-          // ignore corrupt value
-        }
+        if (raw) storedDrive = JSON.parse(raw);
+      } catch {
+        // ignore corrupt value, or storage that is blocked
       }
     }
 
@@ -1224,14 +1222,8 @@ export class Store {
   public registerLocalOnlyDrive(drive: string): void {
     const normalized = this.normalizeSubject(drive);
 
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(
-        'atomic.localOnlyDrives',
-        JSON.stringify([...new Set([...this.localOnlyDrives, normalized])]),
-      );
-    }
-
     this.localOnlyDrives.add(normalized);
+    this.persistLocalOnlyDrives();
   }
 
   /** The drive a subject belongs to, for naming it to the person. */
@@ -1383,11 +1375,22 @@ export class Store {
     // Normalized to match what `registerLocalOnlyDrive` stored.
     if (!this.localOnlyDrives.delete(this.normalizeSubject(drive))) return;
 
-    if (typeof localStorage !== 'undefined') {
+    this.persistLocalOnlyDrives();
+  }
+
+  /** Remember the local-only drives across reloads. Full or blocked storage
+   *  must not break the drive that was just registered, so a failure only
+   *  costs the persistence. */
+  private persistLocalOnlyDrives(): void {
+    if (typeof localStorage === 'undefined') return;
+
+    try {
       localStorage.setItem(
         'atomic.localOnlyDrives',
         JSON.stringify([...this.localOnlyDrives]),
       );
+    } catch (e) {
+      console.warn('[Store] could not persist local-only drives:', e);
     }
   }
 
@@ -6826,9 +6829,15 @@ export class Store {
     }
 
     if (supportsWebSockets()) {
-      const userDisconnected =
-        typeof localStorage !== 'undefined' &&
-        localStorage.getItem('ws-disconnected') === '1';
+      let userDisconnected = false;
+
+      try {
+        userDisconnected =
+          typeof localStorage !== 'undefined' &&
+          localStorage.getItem('ws-disconnected') === '1';
+      } catch {
+        // Blocked storage: treat the person as connected.
+      }
 
       if (!userDisconnected && url !== this.serverUrlWithoutSocket) {
         this.openWebSocket(url);
@@ -6867,7 +6876,14 @@ export class Store {
     }
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('drive', JSON.stringify(drive));
+      try {
+        localStorage.setItem('drive', JSON.stringify(drive));
+      } catch (e) {
+        // A full or blocked storage (QuotaExceededError, SecurityError) only
+        // costs the person this drive being remembered after a reload; it must
+        // not unwind the effect that selected it.
+        console.warn('[Store] could not persist the current drive:', e);
+      }
     }
 
     this.eventManager.emit(StoreEvents.DriveChanged, drive);
@@ -6958,7 +6974,11 @@ export class Store {
     }
 
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('ws-disconnected', '1');
+      try {
+        localStorage.setItem('ws-disconnected', '1');
+      } catch (e) {
+        console.warn('[Store] could not persist the disconnected state:', e);
+      }
     }
   }
 

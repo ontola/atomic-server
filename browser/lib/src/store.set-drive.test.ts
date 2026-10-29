@@ -1,6 +1,6 @@
-import { describe, it } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 import { Client } from './client.js';
-import { Store } from './store.js';
+import { Store, StoreEvents } from './store.js';
 
 const HOME = 'http://localhost:9883';
 
@@ -72,5 +72,35 @@ describe('Store.setDrive does not move the home server for an HTTP drive', () =>
 
     expect(store.getDrive()).toBeUndefined();
     expect(store.getServerUrl()).toBe(HOME);
+  });
+});
+
+describe('Store.setDrive when localStorage cannot be written', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('still switches the drive and emits DriveChanged on a full storage', ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: HOME });
+    // `setDrive` only persists in a browser.
+    vi.stubGlobal('window', {});
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException(
+        'The quota has been exceeded.',
+        'QuotaExceededError',
+      );
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const changed: unknown[] = [];
+    store.on(StoreEvents.DriveChanged, drive => changed.push(drive));
+
+    expect(() => store.setDrive('did:ad:personal')).not.toThrow();
+
+    expect(store.getDrive()).toBe('did:ad:personal');
+    expect(changed).toEqual(['did:ad:personal']);
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 });
