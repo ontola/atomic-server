@@ -4481,6 +4481,7 @@ msgstr "Create drive"
 
 #: src/components/MetaSetter.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "New drive"
 
@@ -13237,20 +13238,8 @@ msgid "Not hosted yet"
 msgstr "Not hosted yet"
 
 #: src/views/Drive/GettingStartedCard.tsx
-msgid "Give your drive a name: a project, company, team or household"
-msgstr "Give your drive a name: a project, company, team or household"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a project"
-msgstr "Start a project"
-
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Pick a template for a team, a class or yourself"
 msgstr "Pick a template for a team, a class or yourself"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "New project"
-msgstr "New project"
 
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Talk to the AI"
@@ -13269,10 +13258,6 @@ msgid "Invite someone"
 msgstr "Invite someone"
 
 #: src/views/Drive/GettingStartedCard.tsx
-msgid "Share your project with a teammate or a friend"
-msgstr "Share your project with a teammate or a friend"
-
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Invite"
 msgstr "Invite"
 
@@ -13284,14 +13269,11 @@ msgstr "Save your work"
 msgid "Sign up with your email, save your secret or connect a device"
 msgstr "Sign up with your email, save your secret or connect a device"
 
+#: src/views/Drive/DriveSettingsDialog.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Getting started"
 msgstr "Getting started"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a project first"
-msgstr "Start a project first"
 
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Needs an AI source: your own key or Ollama"
@@ -13535,3 +13517,23 @@ msgstr "Add to my account"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Don't add, keep it in this browser only"
 msgstr "Don't add, keep it in this browser only"
+
+#: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Show Getting started on this drive's page"
+msgstr "Show Getting started on this drive's page"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Give your drive a name: a team, company, class or household"
+msgstr "Give your drive a name: a team, company, class or household"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a drive"
+msgstr "Start a drive"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Share a drive with a teammate or a friend"
+msgstr "Share a drive with a teammate or a friend"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a drive first"
+msgstr "Start a drive first"

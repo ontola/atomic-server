@@ -4475,6 +4475,7 @@ msgstr ""
 
 #: src/components/MetaSetter.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr ""
 
@@ -13224,19 +13225,7 @@ msgid "Not hosted yet"
 msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
-msgid "Give your drive a name: a project, company, team or household"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a project"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Pick a template for a team, a class or yourself"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "New project"
 msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
@@ -13256,10 +13245,6 @@ msgid "Invite someone"
 msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
-msgid "Share your project with a teammate or a friend"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Invite"
 msgstr ""
 
@@ -13271,13 +13256,10 @@ msgstr ""
 msgid "Sign up with your email, save your secret or connect a device"
 msgstr ""
 
+#: src/views/Drive/DriveSettingsDialog.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Getting started"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a project first"
 msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
@@ -13521,4 +13503,24 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Don't add, keep it in this browser only"
+msgstr ""
+
+#: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Show Getting started on this drive's page"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Give your drive a name: a team, company, class or household"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a drive"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Share a drive with a teammate or a friend"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a drive first"
 msgstr ""

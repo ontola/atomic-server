@@ -17,8 +17,8 @@ import { paths } from '../../routes/paths';
 
 /**
  * The first things worth trying, on the drive page of a drive of your own.
- * Every tick is derived from what exists, so deleting a project un-ticks it;
- * only "Hide" is remembered, on this device.
+ * Every tick is derived from what exists, so deleting a drive un-ticks it;
+ * only "Hide" is remembered, on this device. Drive settings can bring it back.
  */
 export function GettingStartedCard({
   drive,
@@ -27,15 +27,25 @@ export function GettingStartedCard({
   drive: Resource;
   canEdit: boolean;
 }): JSX.Element | null {
+  const agent = useGettingStartedAgent(drive, canEdit);
+
+  // Keyed by agent: the hidden flag is stored per agent and read once.
+  return agent ? <Steps key={agent} drive={drive} /> : null;
+}
+
+/** The agent the card applies for: a drive of your own, that you can edit. */
+export function useGettingStartedAgent(
+  drive: Resource,
+  canEdit: boolean,
+): string | undefined {
   const [agent] = useCurrentAgent();
   const isPrivate = useIsPrivateDrive(drive.subject);
   // Whoever made the drive is its first writer; people invited later come after.
   const mine = (drive.get(core.properties.write) as string[] | undefined)?.[0];
 
-  if (!canEdit || isPrivate || !agent || mine !== agent.subject) return null;
-
-  // Keyed by agent: the hidden flag is stored per agent and read once.
-  return <Steps key={agent.subject} drive={drive} />;
+  return canEdit && !isPrivate && agent && mine === agent.subject
+    ? agent.subject
+    : undefined;
 }
 
 function Steps({ drive }: { drive: Resource }): JSX.Element | null {
@@ -53,7 +63,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   > = {
     name: {
       title: 'Name your drive',
-      hint: 'Give your drive a name: a project, company, team or household',
+      hint: 'Give your drive a name: a team, company, class or household',
       action: 'Rename',
       run: () =>
         document
@@ -61,9 +71,9 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
           ?.click(),
     },
     project: {
-      title: 'Start a project',
+      title: 'Start a drive',
       hint: 'Pick a template for a team, a class or yourself',
-      action: 'New project',
+      action: 'New drive',
       run: () => navigate(paths.newDrive),
     },
     ai: {
@@ -74,7 +84,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     },
     invite: {
       title: 'Invite someone',
-      hint: 'Share your project with a teammate or a friend',
+      hint: 'Share a drive with a teammate or a friend',
       action: 'Invite',
       run: () => projectDrive && openShareDialog(projectDrive),
     },
@@ -102,7 +112,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
           const { title, hint, action, run } = copy[step.id];
           const need =
             step.needs === 'project'
-              ? 'Start a project first'
+              ? 'Start a drive first'
               : step.needs === 'ai-source'
                 ? 'Needs an AI source: your own key or Ollama'
                 : undefined;
