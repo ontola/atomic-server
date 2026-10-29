@@ -3,6 +3,7 @@ import { Agent } from './agent.js';
 import {
   connectAgentUrl,
   grantAgent,
+  GrantAgentError,
   grantsTo,
   revokeAgent,
   sharedWith,
@@ -46,6 +47,44 @@ async function workspace(store: TestStore, owner: string, name: string) {
 }
 
 describe('agent grants', () => {
+  it('grants the other drives when one cannot be saved, then reports it', async () => {
+    const { store, agentDID } = await testStore();
+    searchFromMemory(store);
+    const app = agentSubject((await Agent.generateKeyPair()).publicKey);
+    const first = await workspace(store, agentDID, 'First');
+    const refused = await workspace(store, agentDID, 'Refused');
+    const last = await workspace(store, agentDID, 'Last');
+    const refusal = new Error('Drive x is not enrolled for sync on this node.');
+    const originalGet = store.getResource.bind(store);
+    store.getResource = (async (subject: string) => {
+      const resource = await originalGet(subject);
+
+      if (subject === refused.subject) {
+        resource.save = async () => {
+          throw refusal;
+        };
+      }
+
+      return resource;
+    }) as typeof store.getResource;
+
+    const error = await grantAgent(
+      store,
+      app,
+      [first.subject, refused.subject, last.subject],
+      false,
+    ).catch(e => e);
+
+    expect(error).toBeInstanceOf(GrantAgentError);
+    expect(error.granted).toEqual([first.subject, last.subject]);
+    expect(error.failed).toEqual([
+      { subject: refused.subject, error: refusal },
+    ]);
+    expect((await grantsTo(store, app)).map(g => g.subject)).toEqual(
+      expect.arrayContaining([first.subject, last.subject]),
+    );
+  });
+
   it('finds, and then revokes, what an app key was given', async () => {
     const { store, agentDID } = await testStore();
     searchFromMemory(store);

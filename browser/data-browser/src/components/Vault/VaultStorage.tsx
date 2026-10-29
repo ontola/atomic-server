@@ -14,14 +14,11 @@ import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
 } from '../ConfirmationDialog';
-import { formatTimeAgo } from '../../helpers/formatTimeAgo';
 import {
   type CompactResult,
   deleteVaultSnapshot,
   freeUpVaultStorage,
   getVaultUsage,
-  removeVaultDeviceHistory,
-  type VaultDeviceUsage,
   type VaultFreeUpResult,
   type VaultHistoryUsage,
   type VaultSnapshotUsage,
@@ -43,7 +40,6 @@ export function VaultStorage({
   busy: parentBusy = false,
   suspended = false,
   onCompact,
-  currentDevice = null,
 }: {
   drivePseudonym: string;
   /** A backup, restore or other pass is running somewhere else in the row. */
@@ -55,8 +51,6 @@ export function VaultStorage({
    * when it failed; the host reports why.
    */
   onCompact?: (includeUndoWindow: boolean) => Promise<CompactResult | null>;
-  /** This device's public key, to mark its row among the devices. */
-  currentDevice?: string | null;
   /** Called after storage was freed, so the host can refresh its numbers. */
   onChanged?: () => void;
   /** Called once the dialog has closed. The row's "Manage storage" action opens it. */
@@ -72,9 +66,6 @@ export function VaultStorage({
   const [working, setWorking] = useState(false);
   const busy = working || parentBusy;
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [removeDevice, setRemoveDevice] = useState<VaultDeviceUsage | null>(
-    null,
-  );
   const [deleteSnapshot, setDeleteSnapshot] =
     useState<VaultSnapshotUsage | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -163,7 +154,6 @@ export function VaultStorage({
   const segments = usage ? buildSegments(usage) : [];
   const history = usage?.history;
   const historyRows = history ? historyRowsFor(history) : [];
-  const devices = history?.devices;
   const snapshots = usage?.snapshots;
 
   return (
@@ -241,12 +231,6 @@ export function VaultStorage({
                       </li>
                     ))}
                   </ul>
-                  {devices && devices.length > 0 && (
-                    <Hint>
-                      Each browser or app&apos;s share is listed below, where
-                      you can remove it.
-                    </Hint>
-                  )}
                 </Explain>
               )}
 
@@ -286,45 +270,6 @@ export function VaultStorage({
                       Older snapshots are removed automatically.
                     </Hint>
                   )}
-                </Section>
-              )}
-
-              {devices && devices.length > 0 && (
-                <Section data-testid='vault-devices'>
-                  <strong>Browsers and apps backing up here</strong>
-                  <Hint as='p'>
-                    Every browser or app you signed in on sends its own changes
-                    to this backup. Old or unused ones can pile up.
-                  </Hint>
-                  <ul>
-                    {devices.map(d => (
-                      <li
-                        key={d.device_pubkey}
-                        data-testid={`vault-device-${d.device_pubkey}`}
-                      >
-                        <span>
-                          {deviceLabel(d.device_pubkey)}
-                          {currentDevice === d.device_pubkey && (
-                            <> · This browser</>
-                          )}
-                          <Hint>
-                            {formatBytes(d.pack_bytes)}
-                            {d.last_activity_at
-                              ? ` · last active ${formatTimeAgo(new Date(d.last_activity_at * 1000))}`
-                              : ''}
-                          </Hint>
-                        </span>
-                        <Button
-                          subtle
-                          data-testid={`vault-device-remove-${d.device_pubkey}`}
-                          onClick={() => setRemoveDevice(d)}
-                          disabled={busy}
-                        >
-                          Remove its history…
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
                 </Section>
               )}
 
@@ -441,41 +386,6 @@ export function VaultStorage({
           </ConfirmationDialog>
         )}
         <ConfirmationDialog
-          show={removeDevice !== null}
-          bindShow={open => {
-            if (!open) setRemoveDevice(null);
-          }}
-          title='Remove the saved history of this browser or app?'
-          confirmLabel='Remove history'
-          theme={ConfirmationDialogTheme.Alert}
-          onConfirm={() => {
-            const target = removeDevice;
-
-            if (target) {
-              void manage(
-                () =>
-                  removeVaultDeviceHistory(
-                    drivePseudonym,
-                    target.device_pubkey,
-                  ),
-                'Could not remove the history.',
-              );
-            }
-          }}
-        >
-          <p data-testid='vault-remove-warning'>
-            {removeDevice
-              ? `About ${formatBytes(removeDevice.pack_bytes)} of saved history from ${deviceLabel(removeDevice.device_pubkey)} will be removed.`
-              : ''}
-          </p>
-          <p>
-            This deletes the changes it sent to your backup. Edits made only
-            there, and never synced anywhere else, are lost. Your workspace and
-            your other browsers are not touched.
-          </p>
-          <p>This cannot be undone.</p>
-        </ConfirmationDialog>
-        <ConfirmationDialog
           show={deleteSnapshot !== null}
           bindShow={open => {
             if (!open) setDeleteSnapshot(null);
@@ -509,11 +419,6 @@ export function VaultStorage({
       </DialogActions>
     </Dialog>
   );
-}
-
-/** A short, recognisable form of a device key. */
-function deviceLabel(pubkey: string): string {
-  return pubkey.slice(0, 8);
 }
 
 type Segment = {
@@ -605,10 +510,7 @@ function historyRowsFor(h: VaultHistoryUsage): HistoryRow[] {
   const rows: HistoryRow[] = [
     {
       id: 'tip',
-      label:
-        h.lanes === 1
-          ? 'Latest changes from 1 browser or app'
-          : `Latest changes from each of ${h.lanes} browsers and apps`,
+      label: 'Latest changes',
       hint: 'Always kept',
       bytes: h.tip_bytes,
     },

@@ -223,7 +223,6 @@ export function VaultPanel({
                 busy={busy}
                 suspended={suspended}
                 onCompact={vault.compact}
-                currentDevice={vault.devicePubkey}
               />
             )}
           </>

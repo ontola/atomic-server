@@ -15,4 +15,4 @@ additional-js = ["discord.js"]
 
 [output.html.fold]
 enable = true
-level = 2
+level = 0

@@ -1213,6 +1213,57 @@ async fn drive_usage_endpoint() {
     assert_eq!(loro_total, json["loroBytes"].as_u64().unwrap());
 }
 
+/// A drive hosted on another server is a 404 on both usage routes, answered
+/// without fetching the caller-supplied URL. The sync page asks about every
+/// drive it knows; fetching them made the node a request amplifier, and the
+/// remote's 401 reached Sentry as a 500 (ATOMIC-SERVER-K, -S). The `.invalid`
+/// host never resolves, so a fetch would show up as a 502, not a 404.
+#[actix_rt::test]
+async fn drive_usage_of_an_external_drive_is_not_found() {
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+
+    let mut config = config::build_config(opts).expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+
+    let data = Data::new(appstate.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(data)
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    for route in ["/drive-usage", "/drive-usage/breakdown"] {
+        let uri = format!(
+            "{route}?subject={}",
+            urlencoding::encode("https://elsewhere.invalid/drive/x")
+        );
+        let req = build_request_authenticated(&uri, &appstate).to_request();
+        let resp = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            test::call_service(&app, req),
+        )
+        .await
+        .unwrap_or_else(|_| panic!("{route} hung: it fetched the external drive"));
+        let status = resp.status();
+        let body = get_body(resp);
+        assert_eq!(status, 404, "{route}: {body}");
+        assert!(body.contains("not hosted on this node"), "{route}: {body}");
+    }
+}
+
 /// `GET /drive-usage` says whether the node still admits the drive, rather
 /// than leaving clients to infer it from "the node holds data". A drive whose
 /// plan was switched off keeps its data on a managed node but is no longer

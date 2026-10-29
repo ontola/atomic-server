@@ -3,7 +3,7 @@
 _Status: Beta. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 
 View, edit and create [Atomic Data](https://atomicdata.dev/) from your browser!
-Designed for interacting with [`atomic-server`](https://github.com/atomicdata-dev/atomic-data-browser).
+Designed for interacting with [`atomic-server`](https://github.com/ontola/atomic-server).
 
 **[demo on atomicdata.dev](https://atomicdata.dev/)**
 
@@ -42,7 +42,7 @@ pnpm start
 ```
 
 If you want to _edit_ data, you'll need an [_Agent_](https://atomicdata.dev/classes/Agent), including its `privateKey` and `subject`.
-You can get one by accepting [an Invite](https://atomicdata.dev/invites/1), or by hosting your own [`atomic-server`](https://github.com/atomicdata-dev/atomic-data-rust/blob/master/server/README.md).
+You can get one by accepting [an Invite](https://atomicdata.dev/invites/1), or by hosting your own [`atomic-server`](https://github.com/ontola/atomic-server/blob/develop/server/README.md).
 You can set the Agent on the `/app/agent` route.
 
 ## Understanding & contributing to the code

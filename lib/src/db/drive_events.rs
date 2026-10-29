@@ -114,6 +114,19 @@ impl PendingEvent {
         destroyed: bool,
         props: BTreeSet<String>,
     ) -> Option<Self> {
+        Self::new_for_drive(store, resource, destroyed, props, None).await
+    }
+
+    /// `drive_hint` comes from a sync frame that already passed its
+    /// drive-level admission checks. It is used only for the event routing of
+    /// an unstamped child whose parent is staged in the same transaction.
+    pub(crate) async fn new_for_drive(
+        store: &Db,
+        resource: &Resource,
+        destroyed: bool,
+        props: BTreeSet<String>,
+        drive_hint: Option<&str>,
+    ) -> Option<Self> {
         let classes: Vec<String> = resource
             .get(crate::urls::IS_A)
             .ok()
@@ -133,7 +146,10 @@ impl PendingEvent {
         // of its parent chain is the drive then.
         let drive = match resource.get_drive() {
             Some(drive) => drive.pure_id(),
-            None => store.event_ancestors(parent.as_deref()).await?.pop()?,
+            None => match drive_hint {
+                Some(drive) => pure(drive),
+                None => store.event_ancestors(parent.as_deref()).await?.pop()?,
+            },
         };
         if installation {
             store.enable_drive_events(&drive).ok()?;

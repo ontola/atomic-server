@@ -2375,7 +2375,10 @@ export async function inDialog(
   await expect(page.locator('dialog[open]')).toHaveCount(0);
 }
 
-export async function acceptInvite(page: Page) {
+export async function acceptInvite(
+  page: Page,
+  name = `Test User ${timestamp()}`,
+) {
   // InvitePage CTA now reads "Create account and accept" (it generates a new
   // DID agent on the fly); the old "Accept as new user" button is gone. The
   // invite resource is loaded over WS, so under suite-wide load wait longer
@@ -2395,9 +2398,7 @@ export async function acceptInvite(page: Page) {
   });
   await acceptBtn.click();
 
-  await page
-    .getByLabel('Full name', { exact: true })
-    .fill(`Test User ${timestamp()}`);
+  await page.getByLabel('Full name', { exact: true }).fill(name);
   await page
     .getByRole('button', { name: 'Save and continue', exact: true })
     .click();

@@ -1,6 +1,6 @@
 # Batch replicated envelopes with SYNC_PUSH projections
 
-Status: implementation reviewed; targeted sync tests pass; full validation and matched benchmark in progress.
+Status: implementation and matched benchmark complete; PR #2381 open. Its CI failed on existing version-endpoint and downstream profile-alignment checks. Candidate25 integration and validation are tracked in `candidate25-integration.md`.
 
 Task: the benchmark chat rooted at `/Users/michieldejong/Documents/Codex/2026-10-26/sync-benchmark-atomic`.
 Worktree: `/Users/michieldejong/gh/ontola/worktrees/atomic-server/sync-envelope-batching-candidate24`.
@@ -28,7 +28,7 @@ Coordinator owns this plan, documentation integration, benchmark harness/evidenc
 - [x] Internal batching implementation and regression coverage.
 - [x] Public documentation and TESTING_COVERAGE updates.
 - [x] Targeted tests, required server build, and final architecture/diff review.
-- [ ] Mandatory commit-hook checks.
+- [x] Mandatory commit-hook checks.
 - [x] Matched unchanged/optimized benchmark and proof.
 - [ ] Focused PR against candidate24 and exact-commit CI.
 - [ ] Completed-plan cleanup and final exact-commit CI.

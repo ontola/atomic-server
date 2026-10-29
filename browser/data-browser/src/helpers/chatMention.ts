@@ -81,14 +81,12 @@ export const serializeMentions = (
   const labels = [...queues.keys()]
     .sort((a, b) => b.length - a.length)
     .map(l => l.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const re = new RegExp(
-    `(?<!\\S)@(${labels.join('|')})(?=$|[\\s.,;:!?)])`,
-    'g',
-  );
+  // No lookbehind: Safari before 16.4 can't compile one.
+  const re = new RegExp(`(^|\\s)@(${labels.join('|')})(?=$|[\\s.,;:!?)])`, 'g');
 
-  return text.replace(re, (match, label: string) => {
+  return text.replace(re, (match, before: string, label: string) => {
     const m = queues.get(label)?.shift();
 
-    return m ? formatMention(m.id, m.label) : match;
+    return m ? before + formatMention(m.id, m.label) : match;
   });
 };

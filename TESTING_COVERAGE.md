@@ -886,8 +886,9 @@ Two things worth knowing about the runners:
 
 | Flow | Where |
 |---|---|
-| Two Iroh nodes reconcile (bulk + live) | `lib/src/sync/iroh_e2e.rs` (13 tests, real QUIC) |
+| Two Iroh nodes reconcile (bulk + live) | `lib/src/sync/iroh_e2e.rs` (18 tests, real QUIC) |
 | Stroke appended after sync propagates | `lib/src/sync/iroh_e2e.rs` |
+| Iroh initiator probes first: level drives end on `SYNC_OK` (`probe_hit`), a miss falls back to the full sparse `SYNC` and reconciles both ways; both ends reach live mode | `lib/src/sync/iroh_e2e.rs` (`e2e_probe_*`). Not covered: a responder without `sync-probe` / `sparse-sync` (no cheap way to hide a capability) |
 | A peer only receives what its agent may read | `iroh_e2e.rs`, `peer.rs` |
 | A peer cannot forge a third agent's resource | `iroh_e2e.rs` |
 | Relayed write accepted only for a drive we own and dialled | `peer.rs` |
@@ -1764,6 +1765,10 @@ are covered by the follow-up checks below.
 - `lib/tests/import_durability.rs` aborts a child process after an acknowledged
   DID import, reopens redb and verifies identity lookup plus continued nested writes.
   Removing the commit flush reproduces loss; restoring it passes.
+- Its `sync_last_survives_process_kill_with_indexes_snapshot_and_envelope`
+  case imports a non-final chunk followed by an empty LAST, aborts without
+  running database destructors, then verifies resource data, localId and parent
+  indexes, CRDT snapshot and retained signed envelope after reopening redb.
 - Schema unit tests recover unattached saved terms. The resumable-installation
   helper reuses saved logical steps while preserving repeated identical rows.
   `installation-recovery.spec.ts` injects a lost table-class receipt and checks
@@ -3129,9 +3134,13 @@ resources), the `parent` authority check, ID mismatch and identity
 immutability; `lens.test.ts` covers `ensureLens`, activation, and
 re-materializing a loaded resource when a Lens arrives.
 
-Not covered: lens application on the Iroh and WebSocket sync import paths (they
-share `persist_replicated_*`, which is covered through `build_projection_tx`
-only by reasoning, not a test), a browser reload with lenses loaded through
+`lens_values_are_indexed_for_synced_resources` imports a Lens and its target
+row in the same engine `SYNC_PUSH`, checking activation, backfill and the value
+index under a timeout. It exercises releasing the batch's subject guards before
+lens activation reacquires a target's guard.
+
+Not covered: lens application over a real Iroh or WebSocket connection, a
+browser reload with lenses loaded through
 `loadLenses`, and the data-browser flows that mint a lens (datatype change,
 form question shortname) end to end.
 
@@ -3175,3 +3184,27 @@ naming the extras, an answer at once when the grant covers them, a new request
 when the declaration widened, and a pre-extras grant covering none. Gap:
 nothing automated checks the row dialog's read-only "Kept by apps" fold or that
 the table shows no extra columns.
+
+Sync probe hash cache: Rust unit tests in `lib/src/db/write_log.rs` check that an unchanged drive is served from the cache (hit counter) and equals a cold computation, and that an edit, a new child, a move out of and into the drive, a ring overflow, `clear_tree` and a committed batch each force a recompute, while a write in another drive and an uncommitted batch do not. Agents keep separate entries (Public and a stranger still get an error after the owner is cached). Not covered: a change to a `drive`-stamp resource outside the drive, and the HTTP-URL drive path (never cached).
+
+## Batched SYNC_PUSH persistence
+
+`db::test::sync_push_batches_local_ids_and_flushes_only_at_last` uses a counting
+KV adapter to verify that localId resources share one projection transaction,
+non-final chunks do not flush, and LAST flushes once. The test-only copy fails
+on the pre-batch implementation (two unexpected per-resource flushes).
+`sync_push_last_reports_a_durable_flush_failure_even_when_empty` injects a flush
+failure and asserts rejection. `sync_push_staged_parent_accepts_an_unstamped_childs_second_delta`
+checks a parent and repeated child arriving in the same batch. Existing sync
+admission and envelope-retention tests cover rejected snapshots and envelope
+subject/signature checks; the offline-duplicate identity test covers preserving
+replica duplicates while rejecting a newly authored duplicate.
+`sync_push_merges_independent_same_subject_deltas_and_keeps_history` merges two
+independent updates onto staged state and verifies the stored replayable
+snapshot. The watched scoped/sorted query regression adds its later 17 rows as
+one replica batch; the public bulk helper's counting test checks that its
+localId durability contract still uses one flush.
+
+Manual acceptance measurements and their limits are recorded in PR #2361.
+The private-dataset harness is kept outside the repository; it is not a CI
+speed assertion. Crash durability is covered by the abort test above.

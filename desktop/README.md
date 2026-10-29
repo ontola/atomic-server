@@ -13,7 +13,7 @@ The native WebView can also hold entry animations at their initial opacity
 while backgrounded, so onboarding and its app wrapper skip those fades in Tauri.
 
 Desktop release for Atomic-Server.
-[Tauri] takes care of native installers, app icons, system tray icons, menu items, self-update ([issue](https://github.com/atomicdata-dev/atomic-server/issues/158)) and more.
+[Tauri] takes care of native installers, app icons, system tray icons, menu items, self-update ([issue](https://github.com/ontola/atomic-server/issues/158)) and more.
 
 ```sh
 # install tauri

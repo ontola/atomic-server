@@ -551,16 +551,6 @@ export type VaultSnapshotUsage = {
   is_latest: boolean;
 };
 
-/** One device's share of the change history. */
-export type VaultDeviceUsage = {
-  device_pubkey: string;
-  pack_objects: number;
-  pack_bytes: number;
-  /** Bytes no snapshot includes yet: lost if this device's history is removed. */
-  uncovered_bytes: number;
-  last_activity_at: number | null;
-};
-
 export type VaultHistoryUsage = {
   /** Devices that have written changes to this backup. */
   lanes: number;
@@ -580,8 +570,6 @@ export type VaultHistoryUsage = {
   freeable_bytes: number;
   checkpoint_objects: number;
   anchor_covers_lanes: number;
-  /** Per device, biggest first. Optional: older control planes omit it. */
-  devices?: VaultDeviceUsage[];
 };
 
 export type VaultFreeUpResult = {
@@ -615,20 +603,6 @@ export async function freeUpVaultStorage(
       method: 'POST',
       body: JSON.stringify({ include_undo_window: includeUndoWindow }),
     },
-  );
-}
-
-/**
- * Remove one device's change history from the backup. Edits only that device
- * made and never synced elsewhere are lost; the workspace is not touched.
- */
-export async function removeVaultDeviceHistory(
-  drivePseudonym: string,
-  devicePubkey: string,
-): Promise<VaultFreeUpResult> {
-  return storageApi<VaultFreeUpResult>(
-    `/cloud-vault/${drivePseudonym}/devices/${encodeURIComponent(devicePubkey)}/remove-history`,
-    { method: 'POST' },
   );
 }
 

@@ -51,14 +51,19 @@ export function MessagesPanel({
         heightStorageKey='messagesPanelHeight'
         initialHeight={200}
         data-testid='messages-panel'
-        actions={
+        actions={({ openPanel }) => (
           <>
             {conversations.length > 0 && (
               <IconButton
                 title='Search messages'
                 size='small'
                 color='textLight'
-                onClick={() => (searching ? closeSearch() : setSearching(true))}
+                onClick={() => {
+                  if (searching) return closeSearch();
+                  // The input sits inside the section, so unfold it first.
+                  openPanel();
+                  setSearching(true);
+                }}
                 data-testid='search-messages'
               >
                 <FaMagnifyingGlass />
@@ -74,7 +79,7 @@ export function MessagesPanel({
               <FaPlus />
             </IconButton>
           </>
-        }
+        )}
       >
         {conversations.length === 0 ? (
           <Empty>No messages yet</Empty>

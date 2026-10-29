@@ -17,13 +17,11 @@ import type { VaultUsage } from '../../helpers/managed/vault';
 
 const theme = buildTheme(false, '#1b50d8');
 const usageMock = vi.hoisted(() => vi.fn());
-const removeMock = vi.hoisted(() => vi.fn());
 const deleteMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../helpers/managed/vault', async importOriginal => ({
   ...(await importOriginal<typeof import('../../helpers/managed/vault')>()),
   getVaultUsage: usageMock,
-  removeVaultDeviceHistory: removeMock,
   deleteVaultSnapshot: deleteMock,
 }));
 
@@ -77,7 +75,6 @@ HTMLDialogElement.prototype.close = function close() {
 afterEach(() => {
   cleanup();
   usageMock.mockReset();
-  removeMock.mockReset();
   deleteMock.mockReset();
 });
 
@@ -200,9 +197,7 @@ it('explains what remains of the history when the server says', async () => {
 
   const explain = await screen.findByTestId('vault-history-explain');
 
-  expect(explain.textContent).toContain(
-    'Latest changes from each of 2 browsers and apps',
-  );
+  expect(explain.textContent).toContain('Latest changes');
   expect(screen.getByTestId('vault-history-uncovered').textContent).toContain(
     '80 MB',
   );
@@ -254,22 +249,6 @@ const manageable = (over: Partial<VaultUsage> = {}) =>
   usage({
     history: {
       lanes: 2,
-      devices: [
-        {
-          device_pubkey: 'aaaaaaaa1111',
-          pack_objects: 3,
-          pack_bytes: 3 * MB,
-          uncovered_bytes: MB,
-          last_activity_at: Math.floor(Date.now() / 1000) - 3600,
-        },
-        {
-          device_pubkey: 'bbbbbbbb2222',
-          pack_objects: 1,
-          pack_bytes: MB,
-          uncovered_bytes: 0,
-          last_activity_at: null,
-        },
-      ],
     } as never,
     snapshots: [
       { id: 'new', created_at: 1_700_000_000, bytes: 2 * MB, is_latest: true },
@@ -325,58 +304,23 @@ it('deletes an older snapshot after confirming, then reloads usage', async () =>
   expect(onChanged).toHaveBeenCalled();
 });
 
-it('shows devices with a short label and marks this device', async () => {
+it('shows an error when deleting a snapshot fails', async () => {
   usageMock.mockResolvedValue(manageable());
-  show({ currentDevice: 'aaaaaaaa1111' });
-
-  const mine = await screen.findByTestId('vault-device-aaaaaaaa1111');
-  expect(mine.textContent).toContain('aaaaaaaa');
-  expect(mine.textContent).toContain('This browser');
-  expect(
-    screen.getByTestId('vault-device-bbbbbbbb2222').textContent,
-  ).not.toContain('This browser');
-});
-
-it('warns about unsynced edits before removing a device history', async () => {
-  usageMock.mockResolvedValue(manageable());
-  removeMock.mockResolvedValue({ bytes_reclaimed: MB });
+  deleteMock.mockRejectedValue(new Error('nope'));
   show();
 
-  fireEvent.click(
-    await screen.findByTestId('vault-device-remove-bbbbbbbb2222'),
-  );
-
-  const dialog = lastDialog();
-  expect(dialog.textContent).toContain('never synced anywhere else');
-  expect(dialog.textContent).toContain('other browsers are not touched');
-  expect(removeMock).not.toHaveBeenCalled();
-
-  fireEvent.click(within(dialog).getByText('Remove history'));
-  await screen.findByTestId('vault-storage-message');
-  expect(removeMock).toHaveBeenCalledWith('p', 'bbbbbbbb2222');
-  expect(usageMock).toHaveBeenCalledTimes(2);
-});
-
-it('shows an error when removing fails', async () => {
-  usageMock.mockResolvedValue(manageable());
-  removeMock.mockRejectedValue(new Error('nope'));
-  show();
-
-  fireEvent.click(
-    await screen.findByTestId('vault-device-remove-aaaaaaaa1111'),
-  );
-  fireEvent.click(within(lastDialog()).getByText('Remove history'));
+  fireEvent.click(await screen.findByTestId('vault-snapshot-delete-old'));
+  fireEvent.click(within(lastDialog()).getByText('Delete snapshot'));
 
   expect((await screen.findByTestId('vault-storage-error')).textContent).toBe(
     'nope',
   );
 });
 
-it('hides snapshot and device management on a server that does not send them', async () => {
+it('hides snapshot management on a server that does not send them', async () => {
   usageMock.mockResolvedValue(usage());
   show();
 
   await screen.findByTestId('vault-storage-total');
   expect(screen.queryByTestId('vault-snapshots')).toBeNull();
-  expect(screen.queryByTestId('vault-devices')).toBeNull();
 });

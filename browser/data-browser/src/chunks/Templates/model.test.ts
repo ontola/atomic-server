@@ -71,3 +71,37 @@ describe('shared template planning', () => {
     ).toThrow('Duplicate');
   });
 });
+
+describe('welcome template', () => {
+  const welcome = TEMPLATE_CATALOG.find(t => t.id === 'welcome')!;
+
+  it('plans two documents, the tasks table and a canvas, in order', () => {
+    const plan = planTemplate(welcome, TEMPLATE_CATALOG, true);
+
+    expect(plan.title).toBe('Welcome to Atomic');
+    expect(plan.parts.map(p => [p.kind, p.name])).toEqual([
+      ['document', 'Start here'],
+      ['document', 'Notes'],
+      ['table', 'Tasks'],
+      ['canvas', 'Sketch'],
+    ]);
+  });
+
+  it('keeps the welcome text short and links only to planned parts', () => {
+    const doc = welcome.parts[0];
+    if (doc.kind !== 'document') throw new Error('not a document');
+    const lines = doc.text.split('\n');
+    const keys = planTemplate(welcome, TEMPLATE_CATALOG, true).parts.map(
+      p => p.key,
+    );
+    const links = [...doc.text.matchAll(/\{\{([\w/-]+)\}\}/g)].map(m => m[1]);
+
+    expect(lines.length).toBeLessThanOrEqual(10);
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every(k => keys.includes(k))).toBe(true);
+  });
+
+  it('is not offered by the gallery or the table chat', () => {
+    expect(welcome.entryPoints).toEqual([]);
+  });
+});

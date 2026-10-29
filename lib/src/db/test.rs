@@ -4,7 +4,6 @@ use super::*;
 use ntest::timeout;
 
 use std::sync::Mutex;
-
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
@@ -84,6 +83,15 @@ impl super::kv_store::KvStore for CountingKv {
     ) -> crate::errors::AtomicResult<Vec<super::kv_store::KvPair>> {
         self.inner.range_page(tree, start, end, limit)
     }
+    fn range_value_sizes(
+        &self,
+        tree: super::trees::Tree,
+        start: Vec<u8>,
+        end: Vec<u8>,
+        limit: usize,
+    ) -> crate::errors::AtomicResult<Vec<(Vec<u8>, u64)>> {
+        self.inner.range_value_sizes(tree, start, end, limit)
+    }
     fn iter_tree(&self, tree: super::trees::Tree) -> super::kv_store::KvIter {
         self.inner.iter_tree(tree)
     }
@@ -119,9 +127,16 @@ impl super::kv_store::KvStore for CountingKv {
 }
 
 async fn counting_db() -> (Db, Arc<CountingKv>) {
-    let mut db = Db::init_redb(None).await.unwrap();
-    let kv = Arc::new(CountingKv::new(db.kv.clone()));
-    db.kv = kv.clone();
+    let kv = Arc::new(CountingKv::new(Arc::new(
+        super::redb_store::RedbStore::new_memory().unwrap(),
+    )));
+    let db = Db::from_kv(std::path::PathBuf::new(), kv.clone(), None)
+        .open()
+        .await
+        .unwrap();
+    let agent = db.create_agent(None).await.unwrap();
+    db.set_default_agent(agent);
+    db.populate().await.unwrap();
     kv.reset();
     (db, kv)
 }
@@ -248,6 +263,67 @@ async fn sync_push_batches_envelopes_with_projections() {
             .get(Tree::LoroSnapshots, entry.subject.as_bytes())
             .unwrap()
             .is_some());
+    }
+}
+
+/// A sync transaction must keep envelope batching, drive-routed events, and
+/// probe invalidation together even for a child whose parent is newly staged.
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_envelopes_share_batch_with_drive_events_and_write_log() {
+    let (push, agent) = envelope_push().await;
+    let child = "atomic:envelope-event-unstamped-child";
+    let mut resource = Resource::new(child.into());
+    resource
+        .set_unsafe(
+            urls::PARENT.into(),
+            Value::AtomicUrl(push.drive.clone().into()),
+        )
+        .unwrap();
+    resource
+        .set_unsafe(urls::NAME.into(), Value::String("child".into()))
+        .unwrap();
+    let snapshot = resource.build_state_doc().unwrap().export_snapshot();
+    let mut entries: Vec<_> = push
+        .entries
+        .iter()
+        .map(|entry| (entry.subject.as_str(), entry.loro_bytes.as_slice()))
+        .collect();
+    entries.push((child, snapshot.as_slice()));
+    let envelopes: Vec<_> = push
+        .envelopes
+        .iter()
+        .map(|entry| (entry.subject.as_str(), entry.json.as_str()))
+        .collect();
+    let frame = crate::sync::protocol::encode_sync_push_with_envelopes(
+        &push.drive,
+        &entries,
+        &envelopes,
+        true,
+    );
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    let (sink, counter) = counting_db().await;
+    sink.enable_drive_events(&push.drive).unwrap();
+    let generation = sink.write_log().generation();
+    counter.reset();
+    crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent), false)
+        .await
+        .unwrap();
+    assert_eq!(counter.applies.load(Ordering::SeqCst), 1);
+    assert_eq!(counter.flushes.load(Ordering::SeqCst), 1);
+    assert!(
+        sink.write_log().generation() > generation,
+        "the committed projections invalidate sync probes"
+    );
+    assert!(sink
+        .drive_events(&push.drive, 0, 100)
+        .iter()
+        .any(|event| event.subject == child));
+    for envelope in &push.envelopes {
+        assert_eq!(
+            crate::envelopes::envelopes(&sink, &envelope.subject).len(),
+            1
+        );
     }
 }
 
@@ -615,6 +691,9 @@ async fn sync_push_envelope_retention_matches_sequential_import() {
 async fn sync_push_envelope_batch_failure_is_atomic() {
     let (push, agent) = envelope_push().await;
     let (sink, counter) = counting_db().await;
+    sink.enable_drive_events(&push.drive).unwrap();
+    let generation = sink.write_log().generation();
+    counter.reset();
     counter.fail_apply.store(true, Ordering::SeqCst);
     let mut events = sink.db_events.subscribe();
     assert!(
@@ -624,6 +703,8 @@ async fn sync_push_envelope_batch_failure_is_atomic() {
     );
     assert_eq!(counter.applies.load(Ordering::SeqCst), 1);
     assert_eq!(counter.flushes.load(Ordering::SeqCst), 0);
+    assert_eq!(sink.write_log().generation(), generation);
+    assert!(sink.drive_events(&push.drive, 0, 100).is_empty());
     for entry in &push.entries {
         assert!(sink
             .kv
@@ -3955,12 +4036,12 @@ async fn replicated_rows_reach_a_watched_scoped_sorted_query() {
             .is_watched(&store)
     );
 
-    for i in 5..22 {
-        store
-            .persist_replicated_resource(&replicate(i))
-            .await
-            .unwrap();
-    }
+    // The watch is already active. These 17 peer rows must be projected and
+    // maintained by the one bulk transaction that SYNC_PUSH uses.
+    store
+        .persist_replicated_resources((5..22).map(|i| (replicate(i), None)).collect())
+        .await
+        .unwrap();
 
     let unsorted = table_query(false, drive);
     let other_scope = table_query(true, table);
@@ -6128,22 +6209,65 @@ mod lenses {
     #[timeout(120000)]
     async fn lens_values_are_indexed_for_synced_resources() {
         let db = Db::init_temp("lens_sync").await.unwrap();
-        let agent = db.get_default_agent().unwrap();
+        let (agent, drive) = db.setup("Lens sync").await.unwrap();
         let title = make_property(&db, &agent, PARENT, "title").await;
         let name = make_property(&db, &agent, PARENT, "name").await;
-        lens_commit(&db, &agent, PARENT, &title, &name)
-            .await
+        assert!(db.lenses().is_empty());
+
+        // The lens and its target arrive in the same SYNC_PUSH. The import
+        // holds sorted subject guards through its projection transaction, so
+        // lens activation must happen only after it has released them.
+        let transform = serde_json::json!({"op": "rename"});
+        let lens_subject = lens_id(&title, &name, &transform).unwrap();
+        let mut lens = Resource::new(lens_subject.clone());
+        lens.set_unsafe(urls::IS_A.into(), Value::from(vec![urls::LENS.to_string()]))
             .unwrap();
-        assert_eq!(db.lenses().len(), 1);
+        lens.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(PARENT.into()))
+            .unwrap();
+        lens.set_unsafe(
+            urls::LENS_FROM.into(),
+            Value::AtomicUrl(title.clone().into()),
+        )
+        .unwrap();
+        lens.set_unsafe(urls::LENS_TO.into(), Value::AtomicUrl(name.clone().into()))
+            .unwrap();
+        lens.set_unsafe(urls::LENS_TRANSFORM.into(), Value::Json(transform))
+            .unwrap();
+        lens.set_unsafe(
+            urls::DRIVE_PROP.into(),
+            Value::AtomicUrl(drive.clone().into()),
+        )
+        .unwrap();
+        let lens_snapshot = lens.build_state_doc().unwrap().export_snapshot();
 
         let doc = crate::loro::AtomicLoroDoc::new();
         doc.set_property(&title, &Value::String("Synced".into()))
             .unwrap();
+        doc.set_property(urls::DRIVE_PROP, &Value::AtomicUrl(drive.clone().into()))
+            .unwrap();
+        let snapshot = doc.export_snapshot();
         let mut replica = Resource::new("atomic:syncedresource0".into());
         replica.apply_state_doc(doc).unwrap();
         assert!(replica.get(&name).is_err(), "no lens on a bare apply");
 
-        db.persist_replicated_resource(&replica).await.unwrap();
+        let frame = crate::sync::protocol::encode_sync_push(
+            &drive,
+            &[
+                (lens_subject.as_str(), lens_snapshot.as_slice()),
+                (replica.get_subject().as_str(), snapshot.as_slice()),
+            ],
+            true,
+        );
+        let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+        crate::sync::engine::import_sync_push(
+            &push,
+            &db,
+            &crate::agents::ForAgent::from(agent),
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(db.lenses().len(), 1);
         assert_eq!(
             indexed(&db, &name, "Synced").await,
             vec!["atomic:syncedresource0".to_string()]

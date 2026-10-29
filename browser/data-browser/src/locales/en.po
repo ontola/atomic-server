@@ -275,6 +275,7 @@ msgstr "Automatically compact the conversation when input tokens exceed this per
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -1376,6 +1377,7 @@ msgstr "Alt text"
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -1504,7 +1506,6 @@ msgstr "JSON-LD"
 msgid "Turtle / N-triples / N3"
 msgstr "Turtle / N-triples / N3"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr "Create account"
@@ -2806,6 +2807,7 @@ msgstr "Empty"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Hide"
 
@@ -3233,6 +3235,7 @@ msgstr "Search"
 
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
+#: src/helpers/connectableDrives.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
@@ -3500,6 +3503,7 @@ msgid "Click to add a value"
 msgstr "Click to add a value"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Rename"
 msgstr "Rename"
 
@@ -3951,10 +3955,6 @@ msgstr "Join {0} — led by {1}"
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Join"
 msgstr "Join"
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Try the live demo"
-msgstr "Try the live demo"
 
 #: src/routes/DemoRoute.tsx
 msgid "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
@@ -5533,9 +5533,11 @@ msgstr "{0} resources"
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
+#. 0: doneCount; 1: steps.length
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
 
@@ -6664,6 +6666,7 @@ msgstr "Review this setup"
 
 #: src/chunks/Templates/TemplateChat.tsx
 #: src/chunks/Templates/TemplateChat.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Set up AI"
 msgstr "Set up AI"
 
@@ -8478,6 +8481,7 @@ msgstr "<0/> Copy link"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr "Done"
 
@@ -9158,6 +9162,7 @@ msgid "Back to the preview"
 msgstr "Back to the preview"
 
 #: src/routes/NewDriveRoute.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "Name your drive"
 msgstr "Name your drive"
 
@@ -11074,6 +11079,7 @@ msgid "Data"
 msgstr "Data"
 
 #: src/components/MetaSetter.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr "Get started"
 
@@ -12581,7 +12587,6 @@ msgstr "Discard history"
 
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/Vault/VaultStorage.tsx
-#: src/components/Vault/VaultStorage.tsx
 msgid "This cannot be undone."
 msgstr "This cannot be undone."
 
@@ -13169,53 +13174,12 @@ msgid "Waiting for permission"
 msgstr "Waiting for permission"
 
 #: src/components/Vault/VaultStorage.tsx
-msgid "Each browser or app's share is listed below, where you can remove it."
-msgstr "Each browser or app's share is listed below, where you can remove it."
-
-#: src/components/Vault/VaultStorage.tsx
 msgid "Delete"
 msgstr "Delete"
 
 #: src/components/Vault/VaultStorage.tsx
 msgid "Older snapshots are removed automatically."
 msgstr "Older snapshots are removed automatically."
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "· This browser"
-msgstr "· This browser"
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Remove its history…"
-msgstr "Remove its history…"
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Browsers and apps backing up here"
-msgstr "Browsers and apps backing up here"
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Every browser or app you signed in on sends its own changes to this backup. Old or unused ones can pile up."
-msgstr "Every browser or app you signed in on sends its own changes to this backup. Old or unused ones can pile up."
-
-#. 0: formatBytes(removeDevice.pack_bytes); 1: deviceLabel(removeDevice.device_pubkey)
-#: src/components/Vault/VaultStorage.tsx
-msgid "About {0} of saved history from {1} will be removed."
-msgstr "About {0} of saved history from {1} will be removed."
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "This deletes the changes it sent to your backup. Edits made only there, and never synced anywhere else, are lost. Your workspace and your other browsers are not touched."
-msgstr "This deletes the changes it sent to your backup. Edits made only there, and never synced anywhere else, are lost. Your workspace and your other browsers are not touched."
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Remove the saved history of this browser or app?"
-msgstr "Remove the saved history of this browser or app?"
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Remove history"
-msgstr "Remove history"
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Could not remove the history."
-msgstr "Could not remove the history."
 
 #. 0: formatBytes(deleteSnapshot.bytes)
 #: src/components/Vault/VaultStorage.tsx
@@ -13233,15 +13197,6 @@ msgstr "Delete snapshot"
 #: src/components/Vault/VaultStorage.tsx
 msgid "Could not delete the snapshot."
 msgstr "Could not delete the snapshot."
-
-#: src/components/Vault/VaultStorage.tsx
-msgid "Latest changes from 1 browser or app"
-msgstr "Latest changes from 1 browser or app"
-
-#. 0: h.lanes
-#: src/components/Vault/VaultStorage.tsx
-msgid "Latest changes from each of {0} browsers and apps"
-msgstr "Latest changes from each of {0} browsers and apps"
 
 #: src/components/Vault/VaultStorage.tsx
 msgid "The next backup from that browser or app adds them"
@@ -13932,3 +13887,108 @@ msgstr "Can send requests to other servers: {0}"
 #: src/views/Installation/InstallationConnections.tsx
 msgid "Connected · <0/>"
 msgstr "Connected · <0/>"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Give your drive a name: a project, company, team or household"
+msgstr "Give your drive a name: a project, company, team or household"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a project"
+msgstr "Start a project"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Pick a template for a team, a class or yourself"
+msgstr "Pick a template for a team, a class or yourself"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "New project"
+msgstr "New project"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Talk to the AI"
+msgstr "Talk to the AI"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Ask it to find, write or organize things in your drive"
+msgstr "Ask it to find, write or organize things in your drive"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a chat"
+msgstr "Start a chat"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Invite someone"
+msgstr "Invite someone"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Share your project with a teammate or a friend"
+msgstr "Share your project with a teammate or a friend"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Invite"
+msgstr "Invite"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Save your work"
+msgstr "Save your work"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Sign up with your email, save your secret or connect a device"
+msgstr "Sign up with your email, save your secret or connect a device"
+
+#: src/views/Drive/GettingStartedCard.tsx
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Getting started"
+msgstr "Getting started"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a project first"
+msgstr "Start a project first"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Needs an AI source: your own key or Ollama"
+msgstr "Needs an AI source: your own key or Ollama"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Not done yet"
+msgstr "Not done yet"
+
+#: src/views/getting-started/WorkspaceLoading.tsx
+msgid "Setting up your workspace on this device…"
+msgstr "Setting up your workspace on this device…"
+
+#: src/components/ConnectDrivePicker.tsx
+msgid "Only on your devices"
+msgstr "Only on your devices"
+
+#. 0: titles; 1: app; 2: node
+#: src/helpers/connectableDrives.ts
+msgid "{0} only lives on your devices, so {1} cannot reach it through {2}. Deselect it, or turn on Cloud Server for that drive."
+msgstr "{0} only lives on your devices, so {1} cannot reach it through {2}. Deselect it, or turn on Cloud Server for that drive."
+
+#. 0: app; 1: titles; 2: text(other[0].error)
+#: src/helpers/connectableDrives.ts
+msgid "Could not give {0} access to {1}: {2}"
+msgstr "Could not give {0} access to {1}: {2}"
+
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "A drive"
+msgstr "A drive"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Invited"
+msgstr "Invited"
+
+#. 0: invite.email
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Remove invite for {0}"
+msgstr "Remove invite for {0}"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Latest changes"
+msgstr "Latest changes"
+
+#. 0: subject
+#: src/views/OntologyPage/sortSubjectList.ts
+msgid "Timed out fetching {0}"
+msgstr "Timed out fetching {0}"

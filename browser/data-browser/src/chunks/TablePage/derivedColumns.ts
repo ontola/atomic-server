@@ -246,11 +246,13 @@ const NOT_COLUMNS = new Set(['true', 'false']);
 
 /** The column identifiers a formula reads — not function names or literals. */
 export function formulaIdentifiers(formula: string): string[] {
+  // The character before is matched as a group, not a lookbehind: Safari
+  // before 16.4 rejects a lookbehind literal, and the whole bundle with it.
   const identifiers = formula
     .replace(/"[^"]*"/g, '')
-    .matchAll(/(?<![\w:])[A-Za-z_]\w*(?!\s*\(|\w|::)/g);
+    .matchAll(/(^|[^\w:])([A-Za-z_]\w*)(?!\s*\(|\w|::)/g);
 
-  return [...new Set([...identifiers].map(m => m[0]))].filter(
+  return [...new Set([...identifiers].map(m => m[2]))].filter(
     name => !NOT_COLUMNS.has(name),
   );
 }

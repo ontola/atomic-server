@@ -74,6 +74,7 @@ vi.mock('react-icons/fa6', () => ({
 vi.mock('@components/Dialog/useDialog', () => ({
   useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
+vi.mock('./GettingStartedCard', () => ({ GettingStartedCard: () => null }));
 vi.mock('./DriveSettingsDialog', () => ({
   DriveSettingsDialog: () => <div />,
 }));
