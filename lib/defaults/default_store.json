@@ -252,6 +252,15 @@
     "https://atomicdata.dev/properties/shortname": "drives"
   },
   {
+    "@id": "https://atomicdata.dev/properties/hiddenDrives",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Drive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Drive references hidden from the owner's drive lists. Stored on the personal drive and synced between devices. Hiding does not delete resources, revoke access, or disable hosting or backup. Explicitly adding a drive clears its hidden entry.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/shortname": "hidden-drives"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/personalDrive",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Drive",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",

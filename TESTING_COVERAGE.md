@@ -1660,10 +1660,25 @@ The WebSocket unit suite also covers a socket closing while an asynchronous vers
 ## Account drive catalog
 
 `helpers/managed/driveCatalog.test.ts` covers union/deduplication, removal precedence,
-offline retry/cache isolation, and stale results after logout or account switching.
+offline retry/cache isolation, canonical hidden-drive filtering, and stale results after logout or account switching.
 `e2e/tests/drive-catalog.spec.ts` renders an account-only drive without a local
-saved pointer, publishes the local drive, and applies a removal after reconnect
-(real app/node, mocked account API). Existing saved-drive tests remain separate.
+saved pointer, removes it through the manager, verifies it stays removed after
+reload/reconnect, restores it with its name across identifier aliases, and applies
+an account-side removal (real app/node, mocked account API). It also verifies list
+cleanup never calls the service-removal API.
+
+`helpers/driveListManagement.test.ts` checks index-only changes, private-drive
+protection, restore, rapid queued edits, and distinct HTTP origins.
+`helpers/driveListStatus.test.ts` distinguishes missing local data, denied access,
+missing resources and unreachable servers. `store.private-drive.test.ts` covers
+hidden preferences during home migration and suppression of legacy re-adoption.
+`actions/trashActions.test.ts` verifies another drive root is never put in the
+active drive's Trash and still requires write access for deletion.
+`e2e/tests/drive-management.spec.ts` verifies multi-selection, private-drive
+protection, the permanent-delete confirmation (cancelled), remove/reload/restore,
+loaded names and preserved project content. Desktop and 390px mobile layouts
+were inspected separately in the live local UI. Cross-device peer delivery of
+the preference and production deployment remain separate acceptance checks.
 SaaS handler tests cover authenticated additive registration, account isolation,
 service-backed discovery and removal versus stale upload. Catalog entries confer
 no access to resource content. A live cross-app deployment acceptance is separate.

@@ -1,6 +1,6 @@
 import { NewInstanceButton } from '../../components/NewInstanceButton';
 import { Card } from '../../components/Card';
-import { server } from '@tomic/react';
+import { canonicalizeScheme, server } from '@tomic/react';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { DriveRow } from './DriveRow';
@@ -18,6 +18,11 @@ export interface DriveCardProps {
   hideFavorite?: boolean;
   onDriveSelect: (drive: string) => void;
   onDriveRemove?: (drive: string) => void;
+  managing?: boolean;
+  checked?: string[];
+  disabled?: boolean;
+  onToggle?: (drive: string) => void;
+  onDeleted?: (drive: string) => void;
 }
 
 /**
@@ -37,6 +42,11 @@ export function DrivesCard({
   hideFavorite,
   onDriveSelect,
   onDriveRemove,
+  managing,
+  checked,
+  disabled,
+  onToggle,
+  onDeleted,
 }: DriveCardProps): JSX.Element {
   const { drive } = useSettings();
 
@@ -46,17 +56,29 @@ export function DrivesCard({
 
   return (
     <ContainerCard data-testid={testId}>
-      <List role='radiogroup' aria-label='Drives'>
+      <List role={managing ? 'group' : 'radiogroup'} aria-label='Drives'>
         {drives.map(subject => (
           <DriveRow
             key={subject}
             subject={subject}
             label={labels?.[subject]}
+            managing={managing}
+            checked={checked?.includes(subject)}
+            disabled={disabled}
+            onToggle={onToggle}
+            onDeleted={onDeleted}
             selected={subject === drive}
-            isPrivate={subject === privateDrive}
+            isPrivate={
+              canonicalizeScheme(subject) ===
+              canonicalizeScheme(privateDrive ?? '')
+            }
             // Never unstarrable: it is not in the list by choice, and a star
             // that removes your home is a trap.
-            hideFavorite={hideFavorite || subject === privateDrive}
+            hideFavorite={
+              hideFavorite ||
+              canonicalizeScheme(subject) ===
+                canonicalizeScheme(privateDrive ?? '')
+            }
             onRemove={onDriveRemove}
             onClick={onDriveSelect}
           />

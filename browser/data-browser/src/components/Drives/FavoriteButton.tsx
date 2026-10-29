@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { canonicalizeScheme } from '@tomic/react';
 import { FaRegStar, FaStar } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
@@ -11,33 +12,28 @@ interface FavoriteButtonProps {
 
 export function FavoriteButton({ subject, className }: FavoriteButtonProps) {
   const [savedDrives, addSaveDrive, removeSaveDrive] = useSavedDrives();
-  const [_, addDriveToHistory, removeFromHistory] = useDriveHistory();
+  const [_, , removeFromHistory] = useDriveHistory();
 
-  const isFavorite = savedDrives.includes(subject);
+  const isFavorite = savedDrives.some(
+    s => canonicalizeScheme(s) === canonicalizeScheme(subject),
+  );
   const Icon = isFavorite ? FaStar : FaRegStar;
 
   const handleClick = useCallback(() => {
     if (isFavorite) {
       removeSaveDrive(subject);
-      addDriveToHistory(subject);
+      removeFromHistory(subject);
     } else {
       addSaveDrive(subject);
       removeFromHistory(subject);
     }
-  }, [
-    subject,
-    removeFromHistory,
-    addDriveToHistory,
-    addSaveDrive,
-    removeSaveDrive,
-    isFavorite,
-  ]);
+  }, [subject, removeFromHistory, addSaveDrive, removeSaveDrive, isFavorite]);
 
   return (
     <StyledButton
       className={className}
       onClick={handleClick}
-      title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+      title={isFavorite ? 'Remove from My drives' : 'Add to My drives'}
     >
       <Icon />
     </StyledButton>

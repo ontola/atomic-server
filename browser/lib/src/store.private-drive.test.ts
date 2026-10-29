@@ -154,6 +154,11 @@ describe('deterministic personal drive', () => {
     const starred = 'did:ad:starred-doc';
     oldHome.push(server.properties.drives, [leftover], true);
     oldHome.push(FAVORITES, [starred], true);
+    oldHome.push(
+      server.properties.hiddenDrives,
+      ['atomic:hidden-project'],
+      true,
+    );
     await oldHome.save();
 
     const agentResource = store.getResourceLoading(agentDID, {
@@ -175,6 +180,9 @@ describe('deterministic personal drive', () => {
     expect(listed).toContain(oldHome.subject);
     expect(listed).toContain(leftover);
     expect(derived.getSubjects(FAVORITES)).toContain(starred);
+    expect(derived.getSubjects(server.properties.hiddenDrives)).toContain(
+      'atomic:hidden-project',
+    );
   });
 
   it('falls back to the pointer on the Agent resource when the key cannot derive', async ({
@@ -309,5 +317,33 @@ describe('deterministic personal drive', () => {
     expect(listed).not.toContain(
       'https://staging.atomicdata.dev/drive/ckggjb1d3md',
     );
+  });
+  it('does not re-adopt a legacy drive explicitly removed from the private index', async ({
+    expect,
+  }) => {
+    const { store, agentDID } = await testStore();
+    const agent = store.getAgent()!;
+    const removed = 'https://atomicdata.dev/drive/removed';
+    const home = await store.ensurePrivateDrive();
+    home.push(server.properties.hiddenDrives, [removed], true);
+    await home.save();
+    const legacy = store.getResourceLoading(
+      'https://atomicdata.dev/agents/legacy',
+      { newResource: true },
+    );
+    await legacy.set(core.properties.isA, [core.classes.agent], false);
+    await legacy.set(server.properties.drives, [removed], false);
+    const identity = store.getResourceLoading(agentDID, { newResource: true });
+    await (
+      store as unknown as {
+        adoptLegacyDriveList: (
+          a: unknown,
+          l: unknown,
+          d: unknown,
+        ) => Promise<void>;
+      }
+    ).adoptLegacyDriveList(agent, legacy, identity);
+    expect(home.getSubjects(server.properties.drives)).not.toContain(removed);
+    expect(home.getSubjects(server.properties.hiddenDrives)).toContain(removed);
   });
 });

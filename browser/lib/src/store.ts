@@ -585,6 +585,8 @@ const embeddedVocabulary = new Set<string>([
   ...Object.values(taskSchema.properties),
   ...Object.values(taskSchema.tags),
   ...sharedVocabularyProperties,
+  // Private drive-list preference bundled in default_store.json.
+  server.properties.hiddenDrives,
   // These classes ship in lib/defaults/plugins.json on every host. Their
   // public atomicdata.dev URLs are not published on the catalog yet.
   server.classes.plugin,
@@ -3755,6 +3757,7 @@ export class Store {
 
       const listProps = [
         server.properties.drives,
+        server.properties.hiddenDrives,
         core.properties.sharedWithMe,
         'https://atomicdata.dev/properties/favorites',
       ];
@@ -6766,8 +6769,16 @@ export class Store {
     const privateDriveSubject = privateDrive.subject;
 
     const already = new Set(privateDrive.getSubjects(server.properties.drives));
+    const hidden = new Set(
+      privateDrive
+        .getSubjects(server.properties.hiddenDrives)
+        .map(canonicalizeScheme),
+    );
     const missing = inherited.filter(
-      subject => subject !== privateDriveSubject && !already.has(subject),
+      subject =>
+        subject !== privateDriveSubject &&
+        !already.has(subject) &&
+        !hidden.has(canonicalizeScheme(subject)),
     );
 
     if (missing.length === 0) return;

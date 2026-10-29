@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useDriveListManagement } from './useDriveListManagement';
 import { core, server, useStore } from '@tomic/react';
 import { driveDisplayMetadata } from '../helpers/managed/driveDisplayMetadata';
 import { hasManagedApi, managedFetch } from '../helpers/managed/api';
@@ -15,6 +16,7 @@ import {
 
 /** Reconcile account membership separately from the user's favorite pointers. */
 export function useAccountDriveCatalog(local: string[]) {
+  const { hidden } = useDriveListManagement();
   const store = useStore();
   const agent = store.getAgent()?.subject;
   const [snapshot, setSnapshot] = useState<CatalogSnapshot | null>(null);
@@ -136,7 +138,7 @@ export function useAccountDriveCatalog(local: string[]) {
   const current = snapshot?.agent === agent ? snapshot : null;
 
   return {
-    subjects: catalogSubjects(local, current),
+    subjects: catalogSubjects(local, current, hidden),
     entries: current?.drives ?? [],
     removed: current?.removed ?? [],
   };

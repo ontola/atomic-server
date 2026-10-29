@@ -12,6 +12,16 @@ const remote = {
 };
 
 describe('account drive catalog', () => {
+  it('keeps a user-hidden drive out when the account catalog adds it again', () => {
+    expect(
+      catalogSubjects(
+        ['atomic:home', 'did:ad:hidden'],
+        { drives: [{ drive_subject: 'atomic:hidden' }], removed: [] },
+        ['did:ad:hidden'],
+      ),
+    ).toEqual(['atomic:home']);
+  });
+
   it('lists a drive once when the lists spell it differently', () => {
     expect(
       catalogSubjects(['atomic:home', 'did:ad:gone'], {

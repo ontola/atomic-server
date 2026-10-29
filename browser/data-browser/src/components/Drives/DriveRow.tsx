@@ -1,7 +1,15 @@
 import { styled } from 'styled-components';
 
 import { FaRegCircle, FaSquareCheck, FaXmark } from 'react-icons/fa6';
-import { ResourceInline } from '../../views/ResourceInline';
+import {
+  core,
+  server,
+  useResourceSnapshot,
+  useString,
+  useArray,
+} from '@tomic/react';
+import { driveListStatus } from '../../helpers/driveListStatus';
+import { ResourceContextMenu } from '../ResourceContextMenu';
 import { FavoriteButton } from './FavoriteButton';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { PrivateDriveBadge } from './PrivateDriveBadge';
@@ -22,22 +30,13 @@ export interface DriveRowProps {
   isPrivate?: boolean;
   onClick: (subject: string) => void;
   onRemove?: (subject: string) => void;
+  managing?: boolean;
+  checked?: boolean;
+  disabled?: boolean;
+  onToggle?: (subject: string) => void;
+  onDeleted?: (subject: string) => void;
 }
 
-/**
- * One drive, in a list where exactly one of them is the one you are on.
- *
- * The row IS the control: the radio, the name and the badge are a single
- * target spanning the full width, and the hover state covers the same ground.
- * Anything less means aiming at part of a line in order to choose the thing
- * the whole line names.
- *
- * No subject and no connection light. The DID took three quarters of the row's
- * width in order to be truncated, and is neither read nor typed. The light
- * showed a websocket's ready state, which for a drive you are not on says
- * nothing about that drive — no socket is open to it — while a transient
- * CLOSING rendered as an orange warning about nothing at all.
- */
 export function DriveRow({
   subject,
   label,
@@ -46,25 +45,57 @@ export function DriveRow({
   isPrivate,
   onClick,
   onRemove,
+  managing,
+  checked,
+  disabled,
+  onToggle,
+  onDeleted,
 }: DriveRowProps) {
+  const { resource, ready, error, loading } = useResourceSnapshot(subject, {
+    allowIncomplete: true,
+  });
+  const [name] = useString(resource, core.properties.name);
+  const [classes] = useArray(resource, core.properties.isA);
+  const displayName = (typeof name === 'string' && name) || label || subject;
+  const status = driveListStatus(error, loading);
+  const showAddress = (managing || !!status) && displayName !== subject;
+
   return (
     <Wrapper>
       <Choice
         type='button'
-        role='radio'
-        aria-checked={!!selected}
+        role={managing ? 'checkbox' : 'radio'}
+        aria-checked={managing ? !!checked : !!selected}
+        disabled={disabled || (managing && isPrivate)}
         $selected={!!selected}
-        onClick={() => onClick(subject)}
+        onClick={() => (managing ? onToggle?.(subject) : onClick(subject))}
       >
-        {selected ? <FaSquareCheck /> : <FaRegCircle />}
-        <Name>{label || <ResourceInline subject={subject} />}</Name>
+        {(managing ? checked : selected) ? <FaSquareCheck /> : <FaRegCircle />}
+        <Name>
+          <span>{displayName}</span>
+          {showAddress && <Address title={subject}>{subject}</Address>}
+          {status && <Status title={error?.message}>{status}</Status>}
+        </Name>
         {isPrivate && <PrivateDriveBadge />}
       </Choice>
       <Actions>
-        {!hideFavorite && <FavoriteButton subject={subject} />}
-        {onRemove && (
+        {!managing && !hideFavorite && <FavoriteButton subject={subject} />}
+        {managing &&
+          !isPrivate &&
+          !error &&
+          ready &&
+          classes.includes(server.classes.drive) && (
+            <ResourceContextMenu
+              subject={subject}
+              title='Drive actions'
+              simple
+              onAfterDelete={() => onDeleted?.(subject)}
+            />
+          )}
+        {onRemove && !isPrivate && (
           <IconButton
             title='Remove drive from list'
+            disabled={disabled}
             onClick={() => onRemove(subject)}
           >
             <FaXmark />
@@ -114,9 +145,11 @@ const Choice = styled.button<{ $selected: boolean }>`
 `;
 
 const Name = styled.span`
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  overflow-wrap: anywhere;
 `;
 
 const Actions = styled.div`
@@ -124,4 +157,17 @@ const Actions = styled.div`
   align-items: center;
   gap: 0.25rem;
   flex-shrink: 0;
+`;
+
+const Address = styled.small`
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.75rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+`;
+
+const Status = styled.small`
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.8rem;
 `;

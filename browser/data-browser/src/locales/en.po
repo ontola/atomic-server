@@ -130,6 +130,7 @@ msgstr "AI Agents"
 #: src/components/Cloud/DriveAddress.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ConnectAppForm.tsx
+#: src/components/Drives/DriveManager.tsx
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/HostUI/hostUIDialogs.tsx
 #: src/components/MoveResourceDialog.tsx
@@ -1846,13 +1847,11 @@ msgid "View the resource and its properties in the Data View."
 msgstr "View the resource and its properties in the Data View."
 
 #: src/actions/resourceActions.tsx
-#: src/components/Drives/FavoriteButton.tsx
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Remove from favorites"
 msgstr "Remove from favorites"
 
 #: src/actions/resourceActions.tsx
-#: src/components/Drives/FavoriteButton.tsx
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Add to favorites"
 msgstr "Add to favorites"
@@ -5702,10 +5701,6 @@ msgstr "Creating your private drive…"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Could not update your list: no private drive is set up for this account yet."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-
 #: src/components/Drives/DrivesCard.tsx
 msgid "Drives"
 msgstr "Drives"
@@ -6090,6 +6085,7 @@ msgid "Could not prepare file. Select it again to retry."
 msgstr "Could not prepare file. Select it again to retry."
 
 #: src/actions/resourceActions.tsx
+#: src/components/Drives/DriveManager.tsx
 #: src/components/Vault/VaultPanel.tsx
 msgid "Restore"
 msgstr "Restore"
@@ -8469,6 +8465,7 @@ msgid "<0/> Copy link"
 msgstr "<0/> Copy link"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
+#: src/components/Drives/DriveManager.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
@@ -13479,3 +13476,93 @@ msgstr "Add to my account"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Don't add, keep it in this browser only"
 msgstr "Don't add, keep it in this browser only"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Your private drive is always first. Manage your list to remove or restore other drives."
+msgstr "Your private drive is always first. Manage your list to remove or restore other drives."
+
+#: src/helpers/driveListStatus.ts
+msgid "Not on this device yet"
+msgstr "Not on this device yet"
+
+#: src/helpers/driveListStatus.ts
+msgid "No access with this identity"
+msgstr "No access with this identity"
+
+#: src/helpers/driveListStatus.ts
+msgid "Drive not found at this address"
+msgstr "Drive not found at this address"
+
+#: src/helpers/driveListStatus.ts
+msgid "Server unavailable"
+msgstr "Server unavailable"
+
+#: src/helpers/driveListStatus.ts
+msgid "Could not load this drive"
+msgstr "Could not load this drive"
+
+#: src/helpers/driveListStatus.ts
+msgid "Loading drive…"
+msgstr "Loading drive…"
+
+#: src/components/Drives/DriveManager.tsx
+msgid "Manage drives"
+msgstr "Manage drives"
+
+#: src/components/Drives/DriveManager.tsx
+msgid "Deselect all"
+msgstr "Deselect all"
+
+#: src/components/Drives/DriveManager.tsx
+msgid "Select all"
+msgstr "Select all"
+
+#. 0: selection.length
+#: src/components/Drives/DriveManager.tsx
+msgid "Remove selected ({0})"
+msgstr "Remove selected ({0})"
+
+#: src/components/Drives/DriveManager.tsx
+msgid "Select drives to remove from your list. Their contents, sharing and cloud services stay unchanged."
+msgstr "Select drives to remove from your list. Their contents, sharing and cloud services stay unchanged."
+
+#: src/components/Drives/DriveManager.tsx
+msgid "You can add these drives back at any time."
+msgstr "You can add these drives back at any time."
+
+#. 0: hidden.length
+#: src/components/Drives/DriveManager.tsx
+msgid "Removed from My drives ({0})"
+msgstr "Removed from My drives ({0})"
+
+#: src/components/Drives/DriveManager.tsx
+msgid "Remove from My drives?"
+msgstr "Remove from My drives?"
+
+#: src/components/Drives/DriveManager.tsx
+msgid "Remove the selected drives from your list on devices that sync your private drive. This does not delete their contents, change access or cancel hosting and backup."
+msgstr "Remove the selected drives from your list on devices that sync your private drive. This does not delete their contents, change access or cancel hosting and backup."
+
+#: src/components/Drives/DriveManager.tsx
+msgid "You can undo this under Removed from My drives."
+msgstr "You can undo this under Removed from My drives."
+
+#: src/components/Drives/DriveManager.tsx
+msgid "Removing…"
+msgstr "Removing…"
+
+#: src/components/Drives/DriveManager.tsx
+msgid "Remove from list"
+msgstr "Remove from list"
+
+#: src/components/Drives/DriveRow.tsx
+msgid "Drive actions"
+msgstr "Drive actions"
+
+#: src/components/Drives/FavoriteButton.tsx
+msgid "Remove from My drives"
+msgstr "Remove from My drives"
+
+#: src/components/Drives/FavoriteButton.tsx
+msgid "Add to My drives"
+msgstr "Add to My drives"

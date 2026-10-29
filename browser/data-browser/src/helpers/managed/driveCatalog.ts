@@ -14,10 +14,13 @@ export type CatalogSnapshot = DriveCatalog & CatalogIdentity;
 export function catalogSubjects(
   local: string[],
   catalog: DriveCatalog | null,
+  hidden: string[] = [],
 ): string[] {
   // Compared by canonical spelling: one drive can arrive as `did:ad:` from
   // one list and `atomic:` from the other, and was then listed twice.
-  const removed = new Set((catalog?.removed ?? []).map(canonicalizeScheme));
+  const removed = new Set(
+    [...hidden, ...(catalog?.removed ?? [])].map(canonicalizeScheme),
+  );
   const seen = new Set<string>();
 
   return [

@@ -82,10 +82,11 @@ const isConversation = (ctx: ActionContext): boolean =>
 const inTrash = (ctx: ActionContext): boolean =>
   ctx.store.isTrashed(ctx.resource, ctx.drive);
 
-/** The drive itself and its Trash folder cannot be moved to the Trash. */
+/** Drive roots (including another drive in the account list) and Trash folders cannot be trashed. */
 const isTrashable = (ctx: ActionContext): boolean => {
   if (
     isConversation(ctx) ||
+    ctx.resource.getClasses().includes(server.classes.drive) ||
     !ctx.drive ||
     ctx.subject === ctx.drive ||
     inTrash(ctx)

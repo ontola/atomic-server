@@ -1,7 +1,14 @@
 import { useAccountDriveCatalog } from '../hooks/useAccountDriveCatalog';
 import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { core, server, urls, useCurrentAgent, useStore } from '@tomic/react';
+import {
+  canonicalizeScheme,
+  core,
+  server,
+  urls,
+  useCurrentAgent,
+  useStore,
+} from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from '../components/Button';
 import { Margin } from '../components/Card';
@@ -24,6 +31,9 @@ import {
 } from '../components/forms/InputStyles';
 import { ErrorLook } from '../components/ErrorLook';
 import { DrivesCard } from '../components/Drives/DrivesCard';
+import { DriveManager } from '../components/Drives/DriveManager';
+import { useDriveListManagement } from '../hooks/useDriveListManagement';
+import { visibleDrives } from '../helpers/driveListManagement';
 import { AccountRecoveryCard } from '../components/AccountRecoveryCard';
 import { ConnectedAppsCard } from '../components/ConnectedAppsCard';
 import { AgentProfileHeader } from '../components/AgentProfileHeader';
@@ -56,6 +66,7 @@ const SettingsAgent: React.FunctionComponent = () => {
 
   const { privateDrive, loading: privateDriveLoading } = usePrivateDrive();
   const [savedDrives] = useSavedDrives();
+  const { hidden } = useDriveListManagement();
   const [history, addToHistory, removeFromHistory] =
     useDriveHistory(savedDrives);
 
@@ -70,11 +81,13 @@ const SettingsAgent: React.FunctionComponent = () => {
   );
   const myDrives = catalog.subjects;
   // Still kept out of Recently visited: it is not somewhere you happened to go.
-  const recentDrives = history.filter(
-    subject =>
-      subject !== privateDrive &&
-      !catalog.removed.includes(subject) &&
-      !myDrives.includes(subject),
+  const knownDrives = new Set(
+    [...myDrives, ...catalog.removed, privateDrive ?? ''].map(
+      canonicalizeScheme,
+    ),
+  );
+  const recentDrives = visibleDrives(history, hidden).filter(
+    subject => !knownDrives.has(canonicalizeScheme(subject)),
   );
 
   const driveUrlId = useId();
@@ -215,7 +228,7 @@ const SettingsAgent: React.FunctionComponent = () => {
               <SectionHeader>
                 <Row center gap='1ch'>
                   <Heading as='h2'>My drives</Heading>
-                  <InfoHint title='Your private drive is always first. Unstar any other drive to move it back to recently visited.' />
+                  <InfoHint title='Your private drive is always first. Manage your list to remove or restore other drives.' />
                 </Row>
                 <Row gap='0.5rem'>
                   <NewInstanceButton
@@ -268,16 +281,16 @@ const SettingsAgent: React.FunctionComponent = () => {
                 </div>
               )}
 
-              <DrivesCard
+              <DriveManager
+                key={effectiveAgent.subject}
                 drives={myDrives}
                 labels={Object.fromEntries(
                   catalog.entries
-                    .filter(
-                      e =>
-                        e.drive_name &&
-                        !store.resources.get(e.drive_subject)?.isReady(),
-                    )
-                    .map(e => [e.drive_subject, e.drive_name!]),
+                    .filter(e => e.drive_name)
+                    .flatMap(e => [
+                      [e.drive_subject, e.drive_name!],
+                      [canonicalizeScheme(e.drive_subject), e.drive_name!],
+                    ]),
                 )}
                 testId='my-drives'
                 privateDrive={privateDrive}

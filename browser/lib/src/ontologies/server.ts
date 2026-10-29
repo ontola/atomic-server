@@ -32,6 +32,7 @@ export const server = {
     destination: 'https://atomicdata.dev/properties/destination',
     downloadUrl: 'https://atomicdata.dev/properties/downloadURL',
     drives: 'https://atomicdata.dev/properties/drives',
+    hiddenDrives: 'https://atomicdata.dev/properties/hiddenDrives',
     filename: 'https://atomicdata.dev/properties/filename',
     filesize: 'https://atomicdata.dev/properties/filesize',
     imageHeight: 'https://atomicdata.dev/properties/imageHeight',
@@ -329,6 +330,7 @@ declare module '../index.js' {
     [server.properties.destination]: string;
     [server.properties.downloadUrl]: string;
     [server.properties.drives]: string[];
+    [server.properties.hiddenDrives]: string[];
     [server.properties.filename]: string;
     [server.properties.filesize]: number;
     [server.properties.imageHeight]: number;
@@ -387,6 +389,7 @@ declare module '../index.js' {
     [server.properties.destination]: 'destination';
     [server.properties.downloadUrl]: 'downloadUrl';
     [server.properties.drives]: 'drives';
+    [server.properties.hiddenDrives]: 'hiddenDrives';
     [server.properties.filename]: 'filename';
     [server.properties.filesize]: 'filesize';
     [server.properties.imageHeight]: 'imageHeight';

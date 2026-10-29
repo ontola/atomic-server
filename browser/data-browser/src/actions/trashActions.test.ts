@@ -1,4 +1,4 @@
-import { conversations } from '@tomic/react';
+import { conversations, server } from '@tomic/react';
 import { describe, expect, it } from 'vitest';
 import { Store } from '@tomic/react';
 import { resourceActions } from './resourceActions';
@@ -61,5 +61,13 @@ describe('trash and delete availability', () => {
 
     expect(available('trash', ctx)).toBe(false);
     expect(available('delete', ctx)).toBe(false);
+  });
+  it('never moves another drive into the currently selected drive trash', () => {
+    const ctx = make('atomic:other-drive', 'atomic:agent:owner', [
+      server.classes.drive,
+    ]);
+    expect(available('trash', ctx)).toBe(false);
+    expect(available('delete', ctx)).toBe(true);
+    expect(available('delete', { ...ctx, canWrite: false })).toBe(false);
   });
 });
