@@ -1,4 +1,5 @@
 import { ManagedReadCache } from './readCache';
+import { canHoldProviderCookie } from './providerCookie';
 
 const metadataReads = new ManagedReadCache();
 
@@ -352,23 +353,31 @@ export function setManagedDeviceToken(
  *
  * Linked devices use a bearer token and omit browser cookies. Sending
  * credentialed cross-origin requests from the native WebView fails CORS even
- * after the portal has approved a valid device link. Unlinked browsers still
- * include their control-plane cookie.
+ * after the portal has approved a valid device link. Before linking, off-site
+ * browsers omit cookies too. Only a browser on the provider's own site can
+ * authenticate with its control-plane cookie.
  */
 export async function managedFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
   const token = getManagedDeviceToken();
+  const apiBase = getManagedApiBase();
   const headers = new Headers(init.headers);
 
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  return metadataReads.fetch(`${getManagedApiBase()}${path}`, {
+  // Explicit authorization must not compete with an ambient cookie session.
+  const credentials =
+    !headers.has('Authorization') && canHoldProviderCookie(apiBase)
+      ? 'include'
+      : 'omit';
+
+  return metadataReads.fetch(`${apiBase}${path}`, {
     ...init,
-    credentials: token ? 'omit' : 'include',
+    credentials,
     headers,
   });
 }

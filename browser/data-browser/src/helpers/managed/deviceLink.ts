@@ -7,8 +7,9 @@ import {
   setManagedDeviceToken,
 } from './api';
 import { noteManagedSessionChanged } from './session';
-import { isRunningInTauri } from '../tauri';
 import { sha256 } from '@noble/hashes/sha2.js';
+
+export { canHoldProviderCookie } from './providerCookie';
 
 /**
  * Linking this install to a hosted provider.
@@ -118,6 +119,7 @@ export async function requestDeviceLink(
 
   const response = await fetch(`${apiBaseFor(portalUrl)}/device-link`, {
     method: 'POST',
+    credentials: 'omit',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       device_name: deviceName,
@@ -151,6 +153,7 @@ export async function redeemDeviceLink(
     `${apiBaseFor(portalUrl)}/device-link/${encodeURIComponent(deviceCode)}/redeem`,
     {
       method: 'POST',
+      credentials: 'omit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ handoff, verifier }),
     },
@@ -182,6 +185,7 @@ export async function pollDeviceLink(
 ): Promise<LinkProgress> {
   const response = await fetch(
     `${apiBaseFor(portalUrl)}/device-link/${encodeURIComponent(deviceCode)}`,
+    { credentials: 'omit' },
   );
 
   if (response.status === 404) return { state: 'expired' };
@@ -244,38 +248,6 @@ export function unlinkDevice(): void {
 
 export function isDeviceLinked(): boolean {
   return getManagedDeviceToken() !== null;
-}
-
-/**
- * Can this client sign in to the provider the ordinary way — by holding its
- * session cookie?
- *
- * Only a page on the provider's own site can: the cookie is set for the
- * portal's registrable domain, which covers `app.` on the same domain and
- * nothing else. The desktop and Android apps live on `tauri://localhost`, a
- * self-hoster's app on their own origin; sending either to the portal's sign-in
- * page ends with a session in some browser and none in the app. Those link
- * instead — see {@link requestDeviceLink}.
- */
-export function canHoldProviderCookie(portalUrl: string | null): boolean {
-  if (!portalUrl) return false;
-
-  if (typeof window === 'undefined') return false;
-
-  // A native WebView may use an http://localhost dev URL, but its account
-  // session still comes from device linking rather than the browser cookie.
-  if (isRunningInTauri()) return false;
-
-  if (!/^https?:$/.test(window.location.protocol)) return false;
-
-  try {
-    const portalHost = new URL(portalUrl).hostname;
-    const here = window.location.hostname;
-
-    return here === portalHost || here.endsWith(`.${portalHost}`);
-  } catch {
-    return false;
-  }
 }
 
 /**
