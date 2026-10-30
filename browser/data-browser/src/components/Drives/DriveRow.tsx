@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { styled } from 'styled-components';
 
 import { FaRegCircle, FaSquareCheck, FaXmark } from 'react-icons/fa6';
@@ -28,7 +29,9 @@ export interface DriveRowProps {
    * from reading as an ordinary drive that happens to be first.
    */
   isPrivate?: boolean;
-  onClick: (subject: string) => void;
+  /** Omit for a display-only row in a confirmation or removed-drives list. */
+  onClick?: (subject: string) => void;
+  actions?: ReactNode;
   onRemove?: (subject: string) => void;
   managing?: boolean;
   checked?: boolean;
@@ -50,6 +53,7 @@ export function DriveRow({
   disabled,
   onToggle,
   onDeleted,
+  actions,
 }: DriveRowProps) {
   const { resource, ready, error, loading } = useResourceSnapshot(subject, {
     allowIncomplete: true,
@@ -58,19 +62,30 @@ export function DriveRow({
   const [classes] = useArray(resource, core.properties.isA);
   const displayName = (typeof name === 'string' && name) || label || subject;
   const status = driveListStatus(error, loading);
-  const showAddress = (managing || !!status) && displayName !== subject;
+  const interactive = !!(managing || onClick);
+  const showAddress =
+    (!interactive || managing || !!status) && displayName !== subject;
 
   return (
     <Wrapper>
       <Choice
-        type='button'
-        role={managing ? 'checkbox' : 'radio'}
-        aria-checked={managing ? !!checked : !!selected}
-        disabled={disabled || (managing && isPrivate)}
+        as={interactive ? 'button' : 'div'}
+        type={interactive ? 'button' : undefined}
+        role={interactive ? (managing ? 'checkbox' : 'radio') : undefined}
+        aria-checked={
+          interactive ? (managing ? !!checked : !!selected) : undefined
+        }
+        disabled={interactive ? disabled || (managing && isPrivate) : undefined}
+        $interactive={interactive}
         $selected={!!selected}
-        onClick={() => (managing ? onToggle?.(subject) : onClick(subject))}
+        onClick={() => (managing ? onToggle?.(subject) : onClick?.(subject))}
       >
-        {(managing ? checked : selected) ? <FaSquareCheck /> : <FaRegCircle />}
+        {interactive &&
+          ((managing ? checked : selected) ? (
+            <FaSquareCheck />
+          ) : (
+            <FaRegCircle />
+          ))}
         <Name>
           <span>{displayName}</span>
           {showAddress && <Address title={subject}>{subject}</Address>}
@@ -79,7 +94,10 @@ export function DriveRow({
         {isPrivate && <PrivateDriveBadge />}
       </Choice>
       <Actions>
-        {!managing && !hideFavorite && <FavoriteButton subject={subject} />}
+        {actions}
+        {interactive && !managing && !hideFavorite && (
+          <FavoriteButton subject={subject} />
+        )}
         {managing &&
           !isPrivate &&
           !error &&
@@ -118,7 +136,7 @@ const Wrapper = styled.div`
   }
 `;
 
-const Choice = styled.button<{ $selected: boolean }>`
+const Choice = styled.button<{ $selected: boolean; $interactive: boolean }>`
   flex: 1;
   min-width: 0;
   display: flex;
@@ -127,7 +145,7 @@ const Choice = styled.button<{ $selected: boolean }>`
   background: none;
   border: none;
   padding: 0.5rem 0.75rem;
-  cursor: pointer;
+  cursor: ${p => (p.$interactive ? 'pointer' : 'default')};
   color: inherit;
   font-size: inherit;
   text-align: left;

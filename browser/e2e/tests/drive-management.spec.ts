@@ -50,6 +50,12 @@ test('manage multiple drives without deleting content, and restore after reload'
   await page
     .getByRole('button', { name: 'Remove selected (2)', exact: true })
     .click();
+  const confirmation = page.getByRole('dialog');
+  await expect(confirmation).toContainText('Project alpha');
+  await expect(confirmation).toContainText('Project beta');
+  await expect(confirmation).toContainText(projects[0]);
+  await expect(confirmation.getByRole('radio')).toHaveCount(0);
+  await expect(confirmation.getByRole('checkbox')).toHaveCount(0);
   await page
     .getByRole('button', { name: 'Remove from list', exact: true })
     .click();
@@ -57,6 +63,12 @@ test('manage multiple drives without deleting content, and restore after reload'
   await page.reload();
   await expect(list.getByRole('radio')).toHaveCount(1);
   await page.getByText('Removed from My drives (2)', { exact: true }).click();
+  await expect(
+    page.getByRole('radio', { name: /Project alpha|Project beta/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Restore', exact: true }),
+  ).toHaveCount(2);
   await page
     .getByRole('button', { name: 'Restore', exact: true })
     .first()

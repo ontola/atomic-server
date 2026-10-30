@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { canonicalizeScheme, useStore } from '@tomic/react';
 import { styled } from 'styled-components';
 import { DrivesCard, type DriveCardProps } from './DrivesCard';
+import { DriveRow } from './DriveRow';
 import { Button } from '../Button';
 import { Row, Column } from '../Row';
 import { Details } from '../Details';
@@ -121,21 +122,20 @@ export function DriveManager(props: DriveCardProps) {
           <Column>
             <p>You can add these drives back at any time.</p>
             {hidden.map(subject => (
-              <RestoreRow key={subject}>
-                <RemovedName>
-                  {props.labels?.[subject] ||
-                    store.resources.get(subject)?.title ||
-                    subject}
-                  <small>{subject}</small>
-                </RemovedName>
-                <Button
-                  subtle
-                  disabled={!ready || busy}
-                  onClick={() => void update([subject], true)}
-                >
-                  Restore
-                </Button>
-              </RestoreRow>
+              <DriveRow
+                key={subject}
+                subject={subject}
+                label={props.labels?.[subject]}
+                actions={
+                  <Button
+                    subtle
+                    disabled={!ready || busy}
+                    onClick={() => void update([subject], true)}
+                  >
+                    Restore
+                  </Button>
+                }
+              />
             ))}
           </Column>
         </Details>
@@ -151,16 +151,15 @@ export function DriveManager(props: DriveCardProps) {
             cancel hosting and backup.
           </p>
           <p>You can undo this under Removed from My drives.</p>
-          <RemovalList>
+          <Column gap='0' style={{ maxHeight: '35vh', overflow: 'auto' }}>
             {removing.map(subject => (
-              <li key={subject}>
-                {props.labels?.[subject] ||
-                  store.resources.get(subject)?.title ||
-                  subject}
-                <small>{subject}</small>
-              </li>
+              <DriveRow
+                key={subject}
+                subject={subject}
+                label={props.labels?.[subject]}
+              />
             ))}
-          </RemovalList>
+          </Column>
           {error && <ErrorLook>{error}</ErrorLook>}
         </DialogContent>
         <DialogActions>
@@ -182,25 +181,4 @@ export function DriveManager(props: DriveCardProps) {
 
 const Toolbar = styled(Row)`
   flex-wrap: wrap;
-`;
-const RestoreRow = styled(Row)`
-  align-items: center;
-  justify-content: space-between;
-`;
-const RemovedName = styled.span`
-  min-width: 0;
-  overflow-wrap: anywhere;
-  small {
-    display: block;
-    color: ${p => p.theme.colors.textLight};
-  }
-`;
-const RemovalList = styled.ul`
-  max-height: 35vh;
-  overflow: auto;
-  overflow-wrap: anywhere;
-  small {
-    display: block;
-    color: ${p => p.theme.colors.textLight};
-  }
 `;
