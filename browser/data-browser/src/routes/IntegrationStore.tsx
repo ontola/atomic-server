@@ -52,23 +52,7 @@ import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
-
-/** One entry of `/plugin-catalog`: a public Listing resource on this server. */
-interface Listing {
-  subject: string;
-  name: string;
-  emoji: string | null;
-  description: string;
-  publisher: string | null;
-  domains: string[];
-  standards: string[];
-  /** The Release resource URL an Installation pins. */
-  release: string;
-  /** The `blake3:` id, which `/plugin-package/{id}` takes. */
-  releaseId: string;
-  runtime: string | null;
-  world: string | null;
-}
+import { parsePluginListings, type Listing } from '@helpers/pluginListings';
 
 function validateAppsSearch(search: Record<string, unknown>) {
   return {
@@ -229,7 +213,7 @@ function IntegrationStore(): React.JSX.Element {
     void fetch(`${serverUrl}/plugin-catalog`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error(await response.text());
-        const entries = await response.json();
+        const entries = parsePluginListings(await response.json());
         if (!controller.signal.aborted) setListings(entries);
       })
       .catch(reason => {
