@@ -1,5 +1,5 @@
 import 'package:atomic_chat/atomic_chat.dart'
-    show AiChatSettings, ChatUsageStore, HostedAi, HostedAvailability;
+    show AiChatSettings, HostedAi, HostedAvailability;
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:atomic_app/atomic/own_ai.dart';
 import 'package:atomic_app/screens/ai_settings_screen.dart';
@@ -107,8 +107,6 @@ void main() {
     expect(find.byKey(const Key('ai-buy-credits')), findsOneWidget);
     expect(find.byKey(const Key('ai-model-row')), findsOneWidget);
     expect(find.text('Small'), findsOneWidget);
-    expect(tester.widget<Switch>(find.byKey(const Key('ai-show-usage'))).value,
-        isFalse);
   });
 
   testWidgets('opened from a chat: what it used, and Report this chat',
@@ -215,18 +213,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('ai-model-row')), findsNothing);
     expect(find.text('AI usage'), findsOneWidget);
-  });
-
-  testWidgets('the token usage switch is off by default and is stored',
-      (tester) async {
-    tall(tester);
-    await tester.pumpWidget(_screen());
-    await tester.pumpAndSettle();
-    final toggle = find.byKey(const Key('ai-show-usage'));
-    await tester.tap(toggle);
-    await tester.pumpAndSettle();
-    expect(tester.widget<Switch>(toggle).value, isTrue);
-    expect(await ChatUsageStore.shown(), isTrue);
   });
 
   testWidgets('the usage row opens the usage page', (tester) async {

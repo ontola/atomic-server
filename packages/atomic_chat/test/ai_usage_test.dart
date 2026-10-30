@@ -1,5 +1,6 @@
 import 'package:atomic_chat/atomic_chat.dart';
-import 'package:atomic_flutter/atomic_flutter.dart' show AtomicAiModel;
+import 'package:atomic_flutter/atomic_flutter.dart'
+    show AtomicAiModel, AtomicAiUsageTotal;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,7 +57,11 @@ class _Api extends UnimplementedApi {
 class _SettingsApi extends _Api {
   _SettingsApi(super.ai);
   AiChatSettings? opened;
+  Future<AtomicAiUsageTotal?> Function(String chat)? usage;
 
+  @override
+  Future<AtomicAiUsageTotal?> chatUsage(String chat) async =>
+      usage?.call(chat);
   @override
   bool get canOpenAiSettings => true;
   @override
@@ -258,73 +263,62 @@ void main() {
       expect(seen, ['did:ad:chat']);
     });
 
-    test('the totals add up per chat and use the web metadata names', () async {
-      var total = await ChatUsageStore.add(
-          'c', const ChatUsage(inputTokensUsed: 10, outputTokensUsed: 2));
-      total = await ChatUsageStore.add(
-          'c',
-          const ChatUsage(
-              inputTokensUsed: 5, outputTokensUsed: 1, costMicros: 300));
-      expect(total.toJson(),
-          {'inputTokensUsed': 15, 'outputTokensUsed': 3, 'costMicros': 300});
-      expect((await ChatUsageStore.load('c')).line,
-          'Tokens: 15 in, 3 out · 0.3 credits');
-      expect((await ChatUsageStore.load('other')).isEmpty, isTrue);
-    });
-
     test('credits read as whole, fractions or one', () {
       expect(formatCredits(420), '0.42 credits');
       expect(formatCredits(1000), '1 credit');
       expect(formatCredits(12600), '13 credits');
     });
 
-    testWidgets('an answer\'s usage is stored and shown under the chat',
-        (tester) async {
-      SharedPreferences.setMockInitialValues({ChatUsageStore.showKey: true});
-      final asked = <({String model, String? chat})>[];
-      final api = _Api(_ai(asked, [_text('Hi'), _usage(120, 30, 0.00042)]));
-      await _open(tester, api);
-      expect(find.byKey(const Key('chat-usage-line')), findsNothing);
-
-      await _ask(tester, 'Hello');
+    test('the server\'s total reads in, out, credits and requests', () {
       expect(
-          find.text('Tokens: 120 in, 30 out · 0.42 credits'), findsOneWidget);
-      // The first question made the chat; the request carried its subject.
-      expect(asked.single.chat, 'did:ad:chat');
-      expect((await ChatUsageStore.load('did:ad:chat')).inputTokensUsed, 120);
-
-      await _ask(tester, 'Again');
-      expect(
-          find.text('Tokens: 240 in, 60 out · 0.84 credits'), findsOneWidget);
-      expect(asked.last.chat, 'did:ad:chat');
+          formatUsageTotal(const AtomicAiUsageTotal(
+              id: 'c',
+              requests: 3,
+              costMicros: 300,
+              promptTokens: 15,
+              completionTokens: 3)),
+          '15 in, 3 out · 0.3 credits · 3 requests');
+      expect(formatUsageTotal(const AtomicAiUsageTotal(id: 'c', requests: 1)),
+          '0 in, 0 out · 1 request');
     });
 
-    testWidgets('the line is off by default; the AI settings get the total',
+    testWidgets('the request carries the chat the first question made',
         (tester) async {
-      final api = _SettingsApi(_ai([], [_text('Hi'), _usage(120, 30)]));
-      await _open(tester, api);
+      final asked = <({String model, String? chat})>[];
+      await _open(tester, _Api(_ai(asked, [_text('Hi')])));
       await _ask(tester, 'Hello');
-      expect(find.byKey(const Key('chat-usage-line')), findsNothing);
-      // It was still counted.
-      expect((await ChatUsageStore.load('did:ad:chat')).outputTokensUsed, 30);
+      expect(asked.single.chat, 'did:ad:chat');
+    });
 
+    testWidgets('the AI settings get the server\'s total for the chat',
+        (tester) async {
+      final api = _SettingsApi(_ai([], const []))
+        ..usage = (chat) async => chat == 'did:ad:chat'
+            ? const AtomicAiUsageTotal(
+                id: 'did:ad:chat',
+                requests: 1,
+                promptTokens: 7,
+                completionTokens: 3)
+            : null;
+      await _open(tester, api, subject: 'did:ad:chat');
       await tester.tap(find.byKey(const Key('chat-ai-button')));
       await tester.pumpAndSettle();
-      expect(api.opened!.usage, 'Tokens: 120 in, 30 out');
-      expect(api.opened!.onReport, isNotNull);
+      expect(api.opened!.usage, '7 in, 3 out · 1 request');
+      // Nothing to report in a chat without messages.
+      expect(api.opened!.onReport, isNull);
     });
 
-    testWidgets('an opened chat hands over what it used before',
-        (tester) async {
-      await ChatUsageStore.add('did:ad:chat',
-          const ChatUsage(inputTokensUsed: 7, outputTokensUsed: 3));
+    testWidgets('no report, or none reachable, is said', (tester) async {
       final api = _SettingsApi(_ai([], const []));
       await _open(tester, api, subject: 'did:ad:chat');
       await tester.tap(find.byKey(const Key('chat-ai-button')));
       await tester.pumpAndSettle();
-      expect(api.opened!.usage, 'Tokens: 7 in, 3 out');
-      // Nothing to report in a chat without messages.
-      expect(api.opened!.onReport, isNull);
+      expect(api.opened!.usage, 'Nothing used yet');
+
+      api.usage = (_) => throw Exception('down');
+      await tester.tap(find.byKey(const Key('chat-ai-button')));
+      await tester.pumpAndSettle();
+      expect(api.opened!.usage, contains('Could not load the usage'));
     });
 
     testWidgets('no AI button without AI settings', (tester) async {

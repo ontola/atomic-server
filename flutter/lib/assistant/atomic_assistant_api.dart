@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:atomic_chat/atomic_chat.dart';
+import 'package:atomic_flutter/atomic_flutter.dart' show AtomicAiUsageTotal;
 import 'package:flutter/foundation.dart' show Listenable, debugPrint;
 import 'package:flutter/material.dart'
     show BuildContext, MaterialPageRoute, Navigator;
@@ -213,6 +214,13 @@ class AtomicAssistantApi extends AssistantApi {
     if (saved == null) return null;
     return HostedAi.forSession(saved);
   }
+
+  @override
+  Future<AtomicAiUsageTotal?> chatUsage(String chat) async =>
+      (await AccountStore.aiUsage())
+          ?.chats
+          .where((c) => c.id == chat)
+          .firstOrNull;
 
   @override
   bool get canOpenAiSettings => true;

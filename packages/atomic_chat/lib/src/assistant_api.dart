@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:atomic_flutter/atomic_flutter.dart' show AtomicAiUsageTotal;
 import 'package:flutter/foundation.dart' show Listenable, VoidCallback;
 import 'package:flutter/widgets.dart' show BuildContext;
 import 'chat_parts.dart';
@@ -148,6 +149,10 @@ abstract class AssistantApi {
 
   /// The AI of the linked account; null when none is linked.
   Future<HostedAi?> hostedAi();
+
+  /// What the AI used for [chat] this period, as the server counts it; null
+  /// when it has no report (or nothing). Throws when it cannot be reached.
+  Future<AtomicAiUsageTotal?> chatUsage(String chat) async => null;
 
   /// Whether this host has an AI settings page ([openAiSettings]): the chat
   /// then links to it from its header and from the out-of-credits notice.

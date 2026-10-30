@@ -253,10 +253,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   HostedAi? _ai;
   bool _aiLooked = false;
 
-  /// What the AI used in this chat, and whether to show it (the setting).
-  ChatUsage _usage = const ChatUsage();
-  bool _showUsage = false;
-
   /// The answer's parts as they stream in; null when none is coming.
   List<ChatPart>? _partial;
 
@@ -369,7 +365,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _input.addListener(_inputChanged);
     _outputInst = widget.speechOutput;
     _chat = widget.subject;
-    _readUsage();
     _readMessages();
     final prompt = widget.initialPrompt?.trim() ?? '';
     final attached = widget.initialContext;
@@ -399,23 +394,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _readUsage() async {
-    final show = await ChatUsageStore.shown();
-    final chat = _chat;
-    final usage = chat == null ? null : await ChatUsageStore.load(chat);
-    if (!mounted) return;
-    setState(() {
-      _showUsage = show;
-      if (usage != null) _usage = usage;
-    });
-  }
-
   /// The AI settings page; the AI is looked up again after it, as the mode
   /// or the key may have changed.
   Future<void> _openAiSettings() async {
+    final chat = _chat;
+    String usage;
+    try {
+      final total = chat == null ? null : await widget.api.chatUsage(chat);
+      usage = total == null ? 'Nothing used yet' : formatUsageTotal(total);
+    } catch (e) {
+      usage = 'Could not load the usage: $e';
+    }
+    if (!mounted) return;
     await widget.api.openAiSettings(context,
         chat: AiChatSettings(
-          usage: _usage.isEmpty ? 'Nothing used yet' : _usage.line,
+          usage: usage,
           onReport: _messages.isEmpty
               ? null
               : () => showReportChatDialog(context,
@@ -1475,7 +1468,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     String? spoken;
     // The answer's parts as they arrive: text, and tool calls in between.
     final parts = <ChatPart>[];
-    var used = const ChatUsage();
     var stopped = false;
     var failed = false;
     try {
@@ -1508,7 +1500,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               }
               _showLater(parts);
             case AiUsage():
-              used = used.plus(event);
+              break;
             case AiNotice(:final text):
               parts.add(TextPart('_${text}_\n\n'));
               _showNow(parts);
@@ -1572,15 +1564,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         if (mounted) _window.add(reply);
         // The saved answer takes the streamed one's place (and its key).
         _answerId = reply.id;
-      }
-      // Stopped or failed answers used tokens too.
-      if (!used.isEmpty) {
-        _persist('usage', () async {
-          final chat = _chat;
-          if (chat == null) return;
-          final total = await ChatUsageStore.add(chat, used);
-          if (mounted) setState(() => _usage = total);
-        });
       }
       if (mounted) {
         setState(() {
@@ -2489,15 +2472,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           if (_runError != null) _runErrorBar(c, ai),
           if (_runError == null && ai != null && ai.remaining == 0)
             _creditsBar(c, ai),
-          if (_showUsage && !_usage.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(_usage.line,
-                  key: const Key('chat-usage-line'),
-                  style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: ChatTextStyles.metaSize)),
-            ),
           if (_files.isNotEmpty ||
               (_attached.isNotEmpty &&
                   (_messages.isNotEmpty ||

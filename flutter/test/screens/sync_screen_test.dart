@@ -549,7 +549,6 @@ void main() {
           find.byKey(const Key('ai-settings-row')), 300);
       expect(find.text('AI credits'), findsNothing);
       expect(find.byKey(const Key('ai-model-row')), findsNothing);
-      expect(find.byKey(const Key('ai-show-usage')), findsNothing);
       await tester.tap(find.byKey(const Key('ai-settings-row')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('ai-credits-row')), findsOneWidget);

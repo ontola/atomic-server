@@ -4,7 +4,7 @@ import 'package:atomic_chat/atomic_chat.dart'
         ChatScreen,
         ResourceRow,
         RowShape,
-        formatCredits,
+        formatUsageTotal,
         iconForClass,
         readableHorizontalPadding;
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
@@ -82,12 +82,6 @@ class _AiUsageScreenState extends State<AiUsageScreen> {
         for (final c in await const AtomicAssistantApi().chats())
           c.subject: c.name,
       };
-
-  static String _tokens(shared.AtomicAiUsageTotal t) => [
-        '${t.promptTokens} in, ${t.completionTokens} out',
-        if (t.costMicros > 0) formatCredits(t.costMicros),
-        '${t.requests} ${t.requests == 1 ? 'request' : 'requests'}',
-      ].join(' · ');
 
   String _modelName(String id) =>
       _credits?.models.where((m) => m.id == id).firstOrNull?.name ?? id;
@@ -175,7 +169,7 @@ class _AiUsageScreenState extends State<AiUsageScreen> {
                     key: Key('ai-usage-model-${m.id}'),
                     icon: Icons.memory,
                     title: _modelName(m.id),
-                    subtitle: _tokens(m),
+                    subtitle: formatUsageTotal(m),
                   ),
               ]),
             if (usage != null && usage.chats.isNotEmpty)
@@ -186,7 +180,7 @@ class _AiUsageScreenState extends State<AiUsageScreen> {
                     icon: iconForClass('ai-chat'),
                     shape: RowShape.circle,
                     title: _names[t.id] ?? 'AI chat',
-                    detail: _tokens(t),
+                    detail: formatUsageTotal(t),
                     onTap: () => _openChat(t.id, _names[t.id] ?? ''),
                   ),
               ]),

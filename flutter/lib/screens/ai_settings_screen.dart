@@ -2,7 +2,6 @@ import 'package:atomic_chat/atomic_chat.dart'
     show
         AiChatSettings,
         AppTopBar,
-        ChatUsageStore,
         HostedAi,
         HostedAvailability,
         SpeechInput,
@@ -22,9 +21,9 @@ import 'ai_usage_screen.dart';
 
 /// Everything about the AI in one place, as the web app's AI settings: which
 /// AI answers (the included AI of the atomic.place account, or the person's
-/// own OpenRouter key), the credits and where to buy more, the model, and
-/// whether chats show their token usage; the voice input; and, when opened
-/// from a chat, what that chat used and Report this chat.
+/// own OpenRouter key), the credits and where to buy more, the model; the
+/// voice input; and, when opened from a chat, what that chat used and Report
+/// this chat.
 class AiSettingsScreen extends StatefulWidget {
   /// The account's credits; [AccountStore.aiCredits] by default.
   final Future<shared.AtomicAiCredits?> Function()? loadCredits;
@@ -74,7 +73,7 @@ class AiSettingsScreen extends StatefulWidget {
 }
 
 class _AiSettingsScreenState extends State<AiSettingsScreen> {
-  bool _own = false, _hasKey = false, _showUsage = false;
+  bool _own = false, _hasKey = false;
   shared.AtomicAiCredits? _credits;
   OwnKeyUsage? _keyUsage;
   Uri? _portal;
@@ -91,7 +90,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     setState(() => _loading = true);
     final own = await OwnAi.enabled();
     final hasKey = await OwnAi.apiKey() != null;
-    final show = await ChatUsageStore.shown();
     final model = await HostedAi.storedModel();
     final label = await HostedAi.storedModelLabel();
     Uri? portal;
@@ -108,7 +106,6 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       if (!hasKey) _keyUsage = null;
       _own = own;
       _hasKey = hasKey;
-      _showUsage = show;
       _model = model;
       _modelLabel = label;
       _portal = portal;
@@ -352,8 +349,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                     )),
                   ),
               ]),
-            shared.SyncSection(title: 'Chat', children: [
-              if (canChoose)
+            if (canChoose)
+              shared.SyncSection(title: 'Chat', children: [
                 shared.SyncRow(
                   key: const Key('ai-model-row'),
                   icon: Icons.tune,
@@ -361,20 +358,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
                   subtitle: _chosenModel?.name,
                   onTap: _pickModel,
                 ),
-              shared.SyncRow(
-                icon: Icons.numbers,
-                title: 'Show token usage',
-                subtitle: 'In each AI chat',
-                trailing: Switch(
-                  key: const Key('ai-show-usage'),
-                  value: _showUsage,
-                  onChanged: (v) {
-                    setState(() => _showUsage = v);
-                    ChatUsageStore.setShown(v);
-                  },
-                ),
-              ),
-            ]),
+              ]),
             VoiceSettings(
               input: widget.speechInput,
               availability: widget.voiceAvailability ?? _voiceAvailability,
