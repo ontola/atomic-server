@@ -22,3 +22,8 @@ Preserve develop's deferred-search/admitted-drive parameters, drive-scoped event
 The feature's prior full CI failed at the unrelated `/all-versions` endpoint test and downstream Server/SaaS `profile.dev` alignment. These are recorded blockers, not green validation. Candidate25 needs its own CI; previous 10k timing is for the feature on candidate24, not this merged candidate.
 
 Validation so far: frontend/WASM build and formatting passed; catalogs unchanged by build. Sync filter: 20 passed; envelope filter: 87 passed; write-log/cache: 10 passed; storage/flush: 5 passed; drive events: 2 passed; import-durability integration: 2 parents passed (2 ignored subprocess entry points were invoked by the parents). Counts overlap between filters. Native server build and plugin-routes-enabled Clippy passed. Mandatory commit-hook checks pending.
+
+## Obsolete endpoint test follow-up
+
+- [x] Remove `version_endpoints`, which still required the deliberately retired `/all-versions` and `/version` routes. Client Loro history and `/history-attribution` coverage remain in place.
+- [ ] Re-run candidate CI after publication; the independent Server/SaaS `profile.dev` alignment failure remains unresolved.
