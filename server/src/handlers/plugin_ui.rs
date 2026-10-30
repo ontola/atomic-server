@@ -629,8 +629,8 @@ mod tests {
 
     #[test]
     fn browser_frame_csp_matches() {
-        // The `'name': value,` lines of `frameCspDirectives`, evaluated by eye:
-        // a quoted or backticked literal.
+        // The `'name': value,` lines of `frameCspDirectives`, each value a
+        // single string literal.
         let ts = APP_FRAME_TS
             .split("function frameCspDirectives")
             .nth(1)
@@ -640,9 +640,8 @@ mod tests {
             .lines()
             .filter_map(|l| l.trim().strip_suffix(',')?.split_once(": "))
             .map(|(name, v)| {
-                let v = v
-                    .trim_matches(|c: char| c == '"' || c == '`')
-                    .replace("${nonce}", "N");
+                // Strip the JS string quotes around each value.
+                let v = v[1..v.len() - 1].replace("${nonce}", "N");
                 (name.trim_matches('\'').to_string(), v)
             })
             .collect::<Vec<_>>();
