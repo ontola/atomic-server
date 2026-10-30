@@ -46,7 +46,6 @@ test.describe('sync page devices', () => {
       const path = new URL(request.url()).pathname;
       const headers = {
         'access-control-allow-origin': new URL(FRONTEND_URL).origin,
-        'access-control-allow-credentials': 'true',
         'access-control-allow-methods': 'GET,POST,OPTIONS',
         'access-control-allow-headers': 'content-type,authorization',
       };
@@ -59,7 +58,14 @@ test.describe('sync page devices', () => {
         return request.headers().authorization ===
           'Bearer sync-test-managed-token'
           ? route.fulfill({ headers, json: { email: 'linked@example.com' } })
-          : route.fulfill({ status: 204, headers });
+          : route.fulfill({ status: 401, headers });
+      }
+
+      if (path === '/api/auth/providers') {
+        return route.fulfill({
+          headers,
+          json: { google: true, apple: false, github: false },
+        });
       }
 
       if (path === '/api/device-link' && request.method() === 'POST') {
@@ -96,6 +102,9 @@ test.describe('sync page devices', () => {
       .click();
     await expect(page.getByTestId('link-provider-panel')).toHaveCount(1);
     await expect(provider.getByTestId('link-provider-panel')).toBeVisible();
+    await expect(
+      provider.getByRole('button', { name: 'Google', exact: true }),
+    ).toBeVisible();
     await provider
       .getByRole('button', {
         name: 'Signed in on another device? Use a code',

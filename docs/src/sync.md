@@ -42,7 +42,8 @@ If this app is configured with a cloud provider, the provider's account card
 on Sync shows whether this client is signed in. Use its **Sign in** action to
 connect the client. When the app runs on a different site from the provider,
 the sign-in form links this client to the account; signing in only on the
-provider's website does not connect a localhost or self-hosted app.
+provider's website does not connect a localhost or self-hosted app. Off-site
+clients use their approved device session rather than the portal's browser cookie.
 
 This account connection is separate from the Agent that signs edits to a Drive.
 Connecting an account does not purchase hosting or copy a Drive to a server.

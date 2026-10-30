@@ -912,6 +912,10 @@ single sign-in entry: off-site clients open the device-link form locally,
 hosted clients retain portal sign-in, and signed-in accounts retain the
 provider dashboard link. Existing `LinkProviderPanel` and `AccountSignInPanel`
 component tests cover device-link polling and the browser sign-in flow.
+`helpers/managed/api.test.ts` and `deviceLink.test.ts` verify that off-site clients
+omit cookies before and after linking, including caller attempts to enable them;
+hosted sessions retain cookie access. The Sync browser regression uses a provider
+that offers no credentialed CORS and requires the issued bearer after approval.
 Live provider deployment and physical passkey acceptance remain separate checks.
 
 ## Cloud Server setup

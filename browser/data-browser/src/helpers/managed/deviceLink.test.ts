@@ -85,6 +85,7 @@ describe('requestDeviceLink', () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe(`${PORTAL}/api/device-link`);
+    expect(init?.credentials).toBe('omit');
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
       device_name: 'Joep’s Pixel',
     });
@@ -104,10 +105,11 @@ describe('requestDeviceLink', () => {
 
 describe('pollDeviceLink', () => {
   it('reads pending and approved', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse({ state: 'pending' }),
-    );
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ state: 'pending' }));
     expect(await pollDeviceLink(PORTAL, 'dc')).toEqual({ state: 'pending' });
+    expect(fetch.mock.calls[0][1]?.credentials).toBe('omit');
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ state: 'approved', token: 'sess' }),
@@ -245,6 +247,7 @@ describe('being sent back to the app', () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe(`${PORTAL}/api/device-link/dc-long-secret/redeem`);
+    expect(init?.credentials).toBe('omit');
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
       handoff: 'H1',
       verifier: 'the-verifier',
@@ -317,6 +320,13 @@ describe('canHoldProviderCookie', () => {
 
     at('https://notportal.example/app');
     expect(canHoldProviderCookie(PORTAL)).toBe(false);
+  });
+
+  it('is false across schemes even when the hostname matches', () => {
+    at('http://app.portal.example/app');
+    expect(canHoldProviderCookie(PORTAL)).toBe(false);
+    at('https://portal.example/app');
+    expect(canHoldProviderCookie('http://portal.example')).toBe(false);
   });
 
   it('is false with no portal to hold a cookie for', () => {
