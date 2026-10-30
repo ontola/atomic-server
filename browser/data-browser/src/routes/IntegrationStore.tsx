@@ -14,6 +14,7 @@ import { useMarketplaceUrls } from '@helpers/pluginCatalogUrl';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
 import { PLUGIN_PREVIEW_PARAM } from '@helpers/integrationVisibility';
 import { driveHasServer } from '@helpers/driveData';
+import { parseListings, type Listing } from '@helpers/pluginListings';
 import { isOriginWithoutNode } from '@helpers/originNode';
 import { createRoute, redirect } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -52,23 +53,6 @@ import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
-
-/** One entry of `/plugin-catalog`: a public Listing resource on this server. */
-interface Listing {
-  subject: string;
-  name: string;
-  emoji: string | null;
-  description: string;
-  publisher: string | null;
-  domains: string[];
-  standards: string[];
-  /** The Release resource URL an Installation pins. */
-  release: string;
-  /** The `blake3:` id, which `/plugin-package/{id}` takes. */
-  releaseId: string;
-  runtime: string | null;
-  world: string | null;
-}
 
 function validateAppsSearch(search: Record<string, unknown>) {
   return {
@@ -229,7 +213,7 @@ function IntegrationStore(): React.JSX.Element {
     void fetch(`${serverUrl}/plugin-catalog`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error(await response.text());
-        const entries = await response.json();
+        const entries = parseListings(await response.json());
         if (!controller.signal.aborted) setListings(entries);
       })
       .catch(reason => {
