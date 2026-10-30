@@ -9,6 +9,7 @@ import {
   CLIENT_CAPABILITIES,
   decodeCommit,
   encodeEphemeral,
+  encodeSyncPush,
   decodeEphemeral,
   EphemeralKind,
   Flags,
@@ -129,6 +130,80 @@ describe('WSClient handshake', () => {
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
+
+  it('does not keep a SYNC_DIFF receipt if the drive becomes local-only while reading', async () => {
+    const { client, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    let release!: (value: Uint8Array | undefined) => void;
+    const snapshot = new Promise<Uint8Array | undefined>(resolve => {
+      release = resolve;
+    });
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: () => snapshot,
+    } as never);
+    const diff = (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:doc'], push: [] });
+    store.registerLocalOnlyDrive(drive);
+    release(undefined);
+    await diff;
+    store.unregisterLocalOnlyDrive(drive);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().lastDriveSync).toBeUndefined();
+    client.close();
+  });
+
+  it('ignores a late SYNC_OK after a drive becomes local-only', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    store.startDriveSync();
+    store.registerLocalOnlyDrive(drive);
+    const bytes = new TextEncoder().encode(drive);
+    socket.receive(new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]));
+    store.unregisterLocalOnlyDrive(drive);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().lastDriveSync).toBeUndefined();
+    assert(store.getSyncStatus().syncInProgress).toBe(false);
+    client.close();
+  });
+
+  it.each(['server', 'agent', 'drive', 'local-only', 'unchanged'] as const)(
+    'records a deferred sync only when the context is unchanged (%s)',
+    async context => {
+      const { client, socket, store } = await connectedClient();
+      const drive = 'atomic:drive';
+      const getDrive = vi.mocked(store.getDrive);
+      getDrive.mockReturnValue(drive);
+      let release!: () => void;
+      const flush = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const flushDb = vi.fn(() => flush);
+      vi.spyOn(store, 'getClientDb').mockReturnValue({
+        flush: flushDb,
+      } as never);
+      const finished = vi.spyOn(store, 'finishDriveSync');
+      socket.receive(encodeSyncPush(drive, [], true));
+      await Promise.resolve();
+      assert(flushDb).toHaveBeenCalledOnce();
+      if (context === 'server') client.close();
+      if (context === 'agent') store.setAgent(undefined);
+      if (context === 'drive') getDrive.mockReturnValue('atomic:other');
+      if (context === 'local-only') store.registerLocalOnlyDrive(drive);
+      release();
+      await flush;
+      await Promise.resolve();
+      if (context === 'unchanged' || context === 'local-only') {
+        assert(finished).toHaveBeenCalledOnce();
+        assert(store.hasCompletedDriveSyncFor(drive)).toBe(
+          context === 'unchanged',
+        );
+      } else assert(finished).not.toHaveBeenCalled();
+      client.close();
+    },
+  );
 
   it.each([
     'atomic:workspace',

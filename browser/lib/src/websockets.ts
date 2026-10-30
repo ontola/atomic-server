@@ -1639,7 +1639,10 @@ export class WSClient {
             const drive = canonicalizeScheme(msg.drive);
             const count = msg.entries.length;
 
+            const current = this.connectionGuard();
+
             const finish = () => {
+              if (!current()) return;
               this.store.finishDriveSync(drive, count, Date.now());
 
               if (this.pulledInBulk) {

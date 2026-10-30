@@ -373,10 +373,11 @@ export interface CommitLogEntry {
   /**
    * - `pending`  — locally signed, queued, not yet posted to the server.
    * - `sent`     — server accepted the commit.
+   * - `local`    — saved locally without sending to a server.
    * - `failed`   — server rejected, or the network call threw.
    * - `received` — incoming commit pushed to us by the server.
    */
-  status: 'pending' | 'sent' | 'failed' | 'received';
+  status: 'pending' | 'sent' | 'local' | 'failed' | 'received';
   subject: string;
   signer?: string;
   previousCommit?: string;
@@ -1227,8 +1228,21 @@ export class Store {
   public registerLocalOnlyDrive(drive: string): void {
     const normalized = this.normalizeSubject(drive);
 
+    if (this.localOnlyDrives.has(normalized)) return;
+
     this.localOnlyDrives.add(normalized);
+    this._syncedDrives.delete(normalized);
+    this._driveSyncs.delete(normalized);
+
+    if (
+      this._lastDriveSync &&
+      this.normalizeSubject(this._lastDriveSync.drive) === normalized
+    ) {
+      this._lastDriveSync = undefined;
+    }
+
     this.persistLocalOnlyDrives();
+    this.emitSyncStatus();
   }
 
   /** The drive a subject belongs to, for naming it to the person. */
@@ -1381,6 +1395,7 @@ export class Store {
     if (!this.localOnlyDrives.delete(this.normalizeSubject(drive))) return;
 
     this.persistLocalOnlyDrives();
+    this.emitSyncStatus();
   }
 
   /** Remember the local-only drives across reloads. Full or blocked storage
@@ -6059,10 +6074,20 @@ export class Store {
   ): void {
     this._driveSyncInProgress = false;
     this._driveSyncPulling = false;
+
+    // An acknowledgement can arrive after a drive was made local-only (or
+    // after its HTTP origin became foreign). Settle progress without keeping
+    // a receipt that could incorrectly certify a later promotion.
+    if (!this.isLiveSyncedDrive(drive)) {
+      this.emitSyncStatus();
+
+      return;
+    }
+
     this._lastDriveSync = { drive, count, timestamp };
 
     if (drive) {
-      this._syncedDrives.add(drive);
+      this._syncedDrives.add(this.normalizeSubject(drive));
       this._driveSyncs.set(this.normalizeSubject(drive), {
         drive,
         count,
@@ -6105,7 +6130,16 @@ export class Store {
     this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
 
     if (drive) {
-      this._syncedDrives.delete(drive);
+      this._syncedDrives.delete(this.normalizeSubject(drive));
+      this._driveSyncs.delete(this.normalizeSubject(drive));
+
+      if (
+        this._lastDriveSync &&
+        this.normalizeSubject(this._lastDriveSync.drive) ===
+          this.normalizeSubject(drive)
+      ) {
+        this._lastDriveSync = undefined;
+      }
     }
 
     this.emitSyncStatus();
@@ -6161,7 +6195,7 @@ export class Store {
   public hasCompletedDriveSyncFor(drive: string | undefined): boolean {
     if (!drive) return false;
 
-    return this._syncedDrives.has(drive);
+    return this._syncedDrives.has(this.normalizeSubject(drive));
   }
 
   /**
@@ -6488,7 +6522,11 @@ export class Store {
     // The current drive is an account context, not a server preference. Clear
     // it before reauthenticating, so the next identity never subscribes or
     // reconciles the previous identity's private workspace.
-    if (this.agent && this.agent.subject !== agent?.subject) this.setDrive('');
+    if (this.agent?.subject !== agent?.subject) {
+      this.clearDriveSyncReceipts();
+      if (this.agent) this.setDrive('');
+    }
+
     this.agent = agent;
 
     // The outbox is identity-scoped: rebind to this agent's own queue so a new
@@ -6849,6 +6887,7 @@ export class Store {
     // overwriting them, which surfaces the previous server's error on the new
     // server's card.
     if (previous && previous !== url) {
+      this.clearDriveSyncReceipts();
       const stale = this.webSockets.get(previous);
 
       if (stale) {
@@ -7473,6 +7512,13 @@ export class Store {
     );
   }
 
+  private clearDriveSyncReceipts(): void {
+    this._syncedDrives.clear();
+    this._driveSyncs.clear();
+    this._lastDriveSync = undefined;
+    this._lastDriveSyncError = undefined;
+  }
+
   private emitSyncStatus(): void {
     this.eventManager.emit(StoreEvents.SyncStatusChanged, this.getSyncStatus());
   }
@@ -7611,7 +7657,7 @@ export class Store {
 
   public logLocalOnlyCommitSettled(commit: Commit): void {
     this.pushCommitLog(
-      this.buildCommitLogEntry(commit, 'outgoing', 'sent'),
+      this.buildCommitLogEntry(commit, 'outgoing', 'local'),
       commit.loroUpdate,
     );
   }
