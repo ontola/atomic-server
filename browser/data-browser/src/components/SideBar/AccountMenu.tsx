@@ -39,6 +39,7 @@ import { paths } from '../../routes/paths';
 import { shortcuts } from '../../actions/shortcuts';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useInbox } from '../../hooks/useInbox';
+import { useHasManagedAccount } from '../../hooks/useHasManagedAccount';
 import { DropdownMenu, type DropdownItem } from '../Dropdown';
 import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
 import { IconButton } from '../IconButton/IconButton';
@@ -316,8 +317,16 @@ function AccountTrigger({
   // the 'User' it first rendered, before the profile had loaded or after a
   // rename.
   const [agentName] = useString(agentResource, core.properties.name);
+  // A local key without a profile name is a guest unless an account session
+  // exists. Only say so once the account check settled with "none".
+  const hasAccount = useHasManagedAccount();
   const name = agent
-    ? (agentName ?? (agentResource.loading ? '' : 'Signed in'))
+    ? (agentName ??
+      (agentResource.loading
+        ? ''
+        : hasAccount === false
+          ? 'Guest'
+          : 'Signed in'))
     : 'Login / New User';
 
   return (
