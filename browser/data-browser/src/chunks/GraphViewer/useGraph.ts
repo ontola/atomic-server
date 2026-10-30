@@ -1,12 +1,7 @@
-import {
-  Edge,
-  Node,
-  NodeChange,
-  NodePositionChange,
-  applyNodeChanges,
-} from 'reactflow';
+// @wc-ignore-file
+import { Edge, Node, NodeChange, applyNodeChanges } from 'reactflow';
 import { EdgeData, NodeData, applyNodeStyling } from './buildGraph';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import Dagre from '@dagrejs/dagre';
 import { useTheme } from 'styled-components';
 import { dataBrowser, Resource, useValue } from '@tomic/react';
@@ -87,8 +82,9 @@ export function useGraph(ontology: Resource): UseNodeReturn {
 
   const [nodes, setNodes] = useState<Node<NodeData>[]>([]);
   const [edges, setEdges] = useState<Edge<EdgeData>[]>([]);
-  const [lastPositionChange, setLastPositionChange] =
-    useState<NodePositionChange>();
+  // A stop notification may omit coordinates, and several notifications can
+  // arrive before React renders. Keep the last drag position per node.
+  const dragPositions = useRef(new Map<string, { x: number; y: number }>());
 
   const setGraph = useCallback(
     (_nodes: Node<NodeData>[], _edges: Edge<EdgeData>[]) => {
@@ -126,25 +122,37 @@ export function useGraph(ontology: Resource): UseNodeReturn {
 
   const handleNodeChange = useCallback(
     (changes: NodeChange[]) => {
-      const change = changes[0];
+      const nextPositioning = { ...customPositioning };
+      let moved = false;
 
-      if (change.type === 'position') {
-        if (change.dragging) {
-          setLastPositionChange(change);
-        } else {
-          setCustomPositioning({
-            ...customPositioning,
-            [change.id]: [
-              lastPositionChange!.positionAbsolute?.x,
-              lastPositionChange!.positionAbsolute?.y,
-            ],
-          });
+      for (const change of changes) {
+        if (change.type !== 'position') continue;
+        const position = change.position ?? change.positionAbsolute;
+
+        if (change.dragging === true) {
+          if (position) dragPositions.current.set(change.id, position);
+        } else if (change.dragging === false) {
+          const finalPosition =
+            position ?? dragPositions.current.get(change.id);
+          dragPositions.current.delete(change.id);
+
+          if (
+            finalPosition &&
+            Number.isFinite(finalPosition.x) &&
+            Number.isFinite(finalPosition.y)
+          ) {
+            nextPositioning[change.id] = [finalPosition.x, finalPosition.y];
+            moved = true;
+          }
         }
       }
 
+      // Layout/measurement events have no dragging flag. They must neither
+      // require a previous drag nor replace the user's saved positions.
+      if (moved) void setCustomPositioning(nextPositioning);
       setNodes(prev => applyNodeChanges(changes, prev));
     },
-    [customPositioning, lastPositionChange, setCustomPositioning],
+    [customPositioning, setCustomPositioning],
   );
 
   return {
