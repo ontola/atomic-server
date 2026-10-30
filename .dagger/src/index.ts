@@ -1943,6 +1943,21 @@ export class AtomicServer {
         '--features',
         'light,wasm-plugins',
       ])
+      // The minimal `light` server, without the plugin runtime: catches code
+      // that uses `wasm-plugins`-gated modules or `AppState` fields without
+      // the same gate (#2412).
+      .withExec([
+        'cargo',
+        'clippy',
+        '--locked',
+        '-p',
+        'atomic-server',
+        '--no-deps',
+        '--all-targets',
+        '--no-default-features',
+        '--features',
+        'light',
+      ])
       .stdout();
   }
 

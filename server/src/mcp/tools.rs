@@ -123,10 +123,13 @@ pub async fn call(
             }
         }
         // Exports of the drives' apps, named from interface and function.
+        #[cfg(feature = "wasm-plugins")]
         other => match super::exports::call(appstate, req, grant, other, args).await {
             Some(outcome) => outcome,
             None => Err(format!("Unknown tool {other}")),
         },
+        #[cfg(not(feature = "wasm-plugins"))]
+        other => Err(format!("Unknown tool {other}")),
     }
 }
 
