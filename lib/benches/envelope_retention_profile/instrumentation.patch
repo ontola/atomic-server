@@ -1,0 +1,110 @@
+diff --git a/lib/Cargo.toml b/lib/Cargo.toml
+index e0df972de..ab7f15ffa 100644
+--- a/lib/Cargo.toml
++++ b/lib/Cargo.toml
+@@ -169,0 +170,5 @@ required-features = ["db-redb"]
++
++[[bench]]
++name = "sync_import_bench"
++harness = false
++required-features = ["db-redb"]
+diff --git a/lib/src/commit.rs b/lib/src/commit.rs
+index 0d21499c6..0bd42b0c3 100644
+--- a/lib/src/commit.rs
++++ b/lib/src/commit.rs
+@@ -513,0 +514 @@ impl Commit {
++    let _profile = crate::envelope_profile::span("signature.total");
+@@ -549,0 +551 @@ impl Commit {
++        let phase = crate::envelope_profile::span("signature.canonicalize");
+@@ -551,0 +554,2 @@ impl Commit {
++        drop(phase);
++        let phase = crate::envelope_profile::span("signature.ed25519");
+@@ -571,0 +576,2 @@ impl Commit {
++        drop(phase);
++        let _genesis_profile = crate::envelope_profile::span("signature.genesis_and_rest");
+diff --git a/lib/src/db/compressed_kv.rs b/lib/src/db/compressed_kv.rs
+index 9cc6107a2..55e6658d9 100644
+--- a/lib/src/db/compressed_kv.rs
++++ b/lib/src/db/compressed_kv.rs
+@@ -57,0 +58 @@ pub(super) fn encode(value: &[u8]) -> Vec<u8> {
++    let _profile = crate::envelope_profile::span("storage.encode");
+diff --git a/lib/src/db/redb_store.rs b/lib/src/db/redb_store.rs
+index 1dc5a3731..e706bf096 100644
+--- a/lib/src/db/redb_store.rs
++++ b/lib/src/db/redb_store.rs
+@@ -526,0 +527 @@ impl KvStore for RedbStore {
++    let _profile = crate::envelope_profile::span("storage.redb_batch");
+@@ -576,0 +578 @@ impl KvStore for RedbStore {
++    let _profile = crate::envelope_profile::span("storage.durable_flush");
+diff --git a/lib/src/envelopes.rs b/lib/src/envelopes.rs
+index 93063c39b..cf5238a48 100644
+--- a/lib/src/envelopes.rs
++++ b/lib/src/envelopes.rs
+@@ -256,0 +257 @@ fn value_for(subject: &str, created_at: i64, signature: &str, json: String) -> V
++    let _profile = crate::envelope_profile::span("envelope.row_encode");
+@@ -632,0 +634,2 @@ pub(crate) async fn verify_envelope(
++    let _profile = crate::envelope_profile::span("envelope.verify_total");
++    let phase = crate::envelope_profile::span("envelope.parse");
+@@ -633,0 +637,2 @@ pub(crate) async fn verify_envelope(
++    drop(phase);
++    let phase = crate::envelope_profile::span("envelope.from_resource");
+@@ -634,0 +640 @@ pub(crate) async fn verify_envelope(
++    drop(phase);
+@@ -639,0 +646 @@ pub(crate) async fn verify_envelope(
++    let phase = crate::envelope_profile::span("envelope.signature");
+@@ -640,0 +648 @@ pub(crate) async fn verify_envelope(
++    drop(phase);
+@@ -652,0 +661 @@ fn resolve_staged_retention(
++    let _profile = crate::envelope_profile::span("envelope.retention");
+@@ -653,0 +663 @@ fn resolve_staged_retention(
++        crate::envelope_profile::hit("retention.resource_reads", 1);
+@@ -685,0 +696 @@ fn envelopes_checked_staged(
++    let _profile = crate::envelope_profile::span("envelope.retained_scan");
+@@ -713,0 +725 @@ fn envelopes_checked_staged(
++        crate::envelope_profile::hit("retention.rows_decoded",1);
+@@ -759,0 +772 @@ pub(crate) fn stage_verified_envelopes(
++    let _profile = crate::envelope_profile::span("envelope.stage_total");
+diff --git a/lib/src/lib.rs b/lib/src/lib.rs
+index 67b6a31c8..a07fd133e 100644
+--- a/lib/src/lib.rs
++++ b/lib/src/lib.rs
+@@ -121,0 +122,3 @@ pub use values::Value;
++
++#[doc(hidden)]
++pub mod envelope_profile;
+diff --git a/lib/src/loro.rs b/lib/src/loro.rs
+index f0d55657d..23d928276 100644
+--- a/lib/src/loro.rs
++++ b/lib/src/loro.rs
+@@ -140,0 +141 @@ impl AtomicLoroDoc {
++    let _profile = crate::envelope_profile::span("loro.snapshot_load");
+@@ -183,0 +185 @@ impl AtomicLoroDoc {
++    let _profile = crate::envelope_profile::span("loro.snapshot_export");
+diff --git a/lib/src/resources.rs b/lib/src/resources.rs
+index 069a104f8..11bb0e5e9 100644
+--- a/lib/src/resources.rs
++++ b/lib/src/resources.rs
+@@ -40,0 +41 @@ impl Clone for Resource {
++    let _profile = crate::envelope_profile::span("resource.clone");
+diff --git a/lib/src/sync/engine.rs b/lib/src/sync/engine.rs
+index dcfd14f9d..e0f8f3b8d 100644
+--- a/lib/src/sync/engine.rs
++++ b/lib/src/sync/engine.rs
+@@ -75,0 +76,2 @@ impl Storelike for EnvelopeOverlay<'_> {
++        let _profile = crate::envelope_profile::span("overlay.get_resource");
++        crate::envelope_profile::hit("overlay.resource_reads", 1);
+@@ -78,0 +81 @@ impl Storelike for EnvelopeOverlay<'_> {
++            crate::envelope_profile::hit("overlay.staged_hits",1);
+@@ -90,0 +94 @@ impl Storelike for EnvelopeOverlay<'_> {
++            crate::envelope_profile::hit("overlay.db_hits",1);
+@@ -2296,0 +2301 @@ pub async fn import_sync_push(
++    let overlay_phase = crate::envelope_profile::span("import.overlay_build");
+@@ -2317,0 +2323,2 @@ pub async fn import_sync_push(
++    drop(overlay_phase);
++    let verify_phase = crate::envelope_profile::span("import.envelopes_verify");
+@@ -2330,0 +2338 @@ pub async fn import_sync_push(
++    drop(verify_phase);
+@@ -2335,0 +2344 @@ pub async fn import_sync_push(
++    let persist_phase = crate::envelope_profile::span("import.persist_with_envelopes");
+@@ -2342,0 +2352 @@ pub async fn import_sync_push(
++    drop(persist_phase);
