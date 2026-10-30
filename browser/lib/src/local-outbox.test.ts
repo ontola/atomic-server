@@ -381,10 +381,10 @@ describe('LocalOutbox drain re-entrancy (planning/completed/outbox-drain-data-lo
 });
 
 describe('isUnrecoverableCommitErrorMessage', () => {
-  it('flags the server "no write right" 401', ({ expect }) => {
-    expect(
+  it.each(['write', 'append'])('flags the server "no %s right" 401', right => {
+    assert(
       isUnrecoverableCommitErrorMessage(
-        'Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:Qmfp=',
+        `Unauthorized. No https://atomicdata.dev/properties/${right} right has been found for did:ad:agent:Qmfp=`,
       ),
     ).toBe(true);
   });
@@ -620,10 +620,10 @@ describe('LocalOutbox blocking', () => {
     onBlocked,
   });
 
-  const alwaysUnauthorized = () =>
+  const alwaysUnauthorized = (right = 'write') =>
     vi.fn(async () => {
       throw new Error(
-        'Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:x=',
+        `Unauthorized. No https://atomicdata.dev/properties/${right} right has been found for did:ad:agent:x=`,
       );
     });
 
@@ -681,42 +681,43 @@ describe('LocalOutbox blocking', () => {
     },
   );
 
-  it('retries a blocking error first, then parks after sustained failures', async ({
-    expect,
-  }) => {
-    vi.useFakeTimers();
+  it.each(['write', 'append'])(
+    'retries a denied %s first, then parks after sustained failures',
+    async right => {
+      vi.useFakeTimers();
 
-    try {
-      const outbox = new LocalOutbox();
-      outbox.markDirty(SUBJECT);
-      const drainSubject = alwaysUnauthorized();
-      const onBlocked = vi.fn();
-      const ctx = blockingCtx(drainSubject, onBlocked);
+      try {
+        const outbox = new LocalOutbox();
+        outbox.markDirty(SUBJECT);
+        const drainSubject = alwaysUnauthorized(right);
+        const onBlocked = vi.fn();
+        const ctx = blockingCtx(drainSubject, onBlocked);
 
-      // A 401 is NOT blocked on the first failure — it's retried under backoff
-      // (it's usually a transient ordering race: parent not yet synced).
-      vi.setSystemTime(0);
-      await outbox.drain(ctx);
-      expect(outbox.getEntry(SUBJECT)?.blocked).toBeFalsy();
-      expect(outbox.getEntry(SUBJECT)?.failures).toBe(1);
+        // A 401 is NOT blocked on the first failure — it's retried under backoff
+        // (it's usually a transient ordering race: parent not yet synced).
+        vi.setSystemTime(0);
+        await outbox.drain(ctx);
+        assert(outbox.getEntry(SUBJECT)?.blocked).toBeFalsy();
+        assert(outbox.getEntry(SUBJECT)?.failures).toBe(1);
 
-      // Only after BLOCK_AFTER_FAILURES sustained failures does it park.
-      await drainUntilBlocked(outbox, ctx);
-      expect(drainSubject).toHaveBeenCalledTimes(BLOCK_AFTER_FAILURES);
-      expect(outbox.getEntry(SUBJECT)?.blocked).toBe(true);
-      expect(outbox.blockedCount).toBe(1);
-      expect(outbox.size).toBe(1); // kept (visible), not dropped
-      expect(onBlocked).toHaveBeenCalledTimes(1);
-      expect(outbox.nextDueAt()).toBeUndefined();
+        // Only after BLOCK_AFTER_FAILURES sustained failures does it park.
+        await drainUntilBlocked(outbox, ctx);
+        assert(drainSubject).toHaveBeenCalledTimes(BLOCK_AFTER_FAILURES);
+        assert(outbox.getEntry(SUBJECT)?.blocked).toBe(true);
+        assert(outbox.blockedCount).toBe(1);
+        assert(outbox.size).toBe(1); // kept (visible), not dropped
+        assert(onBlocked).toHaveBeenCalledTimes(1);
+        assert(outbox.nextDueAt()).toBeUndefined();
 
-      // Once blocked, further drains do NOT re-attempt it.
-      vi.setSystemTime(60_000);
-      await outbox.drain(ctx);
-      expect(drainSubject).toHaveBeenCalledTimes(BLOCK_AFTER_FAILURES);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+        // Once blocked, further drains do NOT re-attempt it.
+        vi.setSystemTime(60_000);
+        await outbox.drain(ctx);
+        assert(drainSubject).toHaveBeenCalledTimes(BLOCK_AFTER_FAILURES);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it('reports a persistently failing write once, and keeps retrying it', async ({
     expect,

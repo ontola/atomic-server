@@ -1629,7 +1629,7 @@ setup currently fails opening OPFS before it can create its dev drive.
 
 ### Managed admission retries and content-addressed image downloads
 
-- `local-outbox.test.ts`: enrollment/quota refusals stop after bounded retries,
+- `local-outbox.test.ts`: legacy write/append permission refusals and enrollment/quota refusals stop after bounded retries,
   retain dirty edits, and can be re-armed by a new edit; legacy messages and
   structured `SYNC_REJECTED` classification are covered.
 - `store-commit-fallback.test.ts`: a WebSocket enrollment refusal is not

@@ -323,8 +323,8 @@ export function isUnrecoverableCommitErrorMessage(message: string): boolean {
     return true;
   }
 
-  // Server emits: "No https://atomicdata.dev/properties/write right has been found..."
-  if (message.includes('/properties/write right has been found')) {
+  // Legacy servers report denied updates and denied child creation as text.
+  if (/\/properties\/(?:write|append) right has been found/.test(message)) {
     return true;
   }
 
