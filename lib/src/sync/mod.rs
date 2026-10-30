@@ -8,6 +8,8 @@
 // (always compiled) can reference `sync::policy` in a no-features build.
 #[cfg(all(feature = "iroh", feature = "db"))]
 pub mod call;
+#[cfg(feature = "db")]
+pub mod confirmation;
 #[cfg(feature = "iroh")]
 pub mod dial_gate;
 #[cfg(feature = "iroh")]

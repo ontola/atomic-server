@@ -1598,7 +1598,17 @@ export class WSClient {
         const msg = decodeSyncPush(payload);
 
         if (msg) {
-          if (msg.entries.length > 0) this.store.startDriveSyncPull();
+          const driveKey = this.store.normalizeSubject(
+            canonicalizeScheme(msg.drive),
+          );
+
+          if (
+            msg.entries.length > 0 &&
+            (this.pendingReconcile.has(driveKey) ||
+              this.activeReconciles.has(driveKey))
+          ) {
+            this.store.startDriveSyncPull();
+          }
 
           // Per-entry `getResourceLoading + importLoroUpdate +
           // setSource + addResources({skipCommitCompare:true})`

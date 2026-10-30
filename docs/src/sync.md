@@ -22,12 +22,43 @@ A connection to a server used for another Drive does not make this Drive synced.
 A Drive excluded from server sync shows a red **Not syncing with a server** indicator;
 an eligible Drive without an acknowledged sync shows **Sync not confirmed**.
 The indicator stays red while edits are unsaved, saving, queued, blocked or
-being reconciled. **Synced with server** requires acknowledged synchronization
-of the selected Drive with the current server and no unconfirmed changes.
+being reconciled. **Synced with server** requires confirmation that the current
+server holds the selected Drive's latest resource state and every referenced
+file or image chunk, with no unconfirmed local changes.
 The desktop app's embedded server does not count as another place.
 These labels do not certify Cloud Vault backups or browser peer copies; inspect
-those services separately on the Sync page. Resource-state acknowledgements
-also do not establish that every file or image byte has arrived.
+those services separately on the Sync page. Servers that cannot provide this
+confirmation leave the indicator red.
+
+### Confirming a server copy
+
+`GET /drive-sync-confirmation?subject=<drive>&hash=<hash>&hashVersion=2` is a
+signed, read-only request. The caller must be able to read a Drive stored on
+that server. `hash` is the canonical v2 resource-state hash used by Atomic Sync.
+The request neither uploads data nor turns on synchronization.
+
+```json
+{
+  "version": 1,
+  "drive": "atomic:...",
+  "hashVersion": 2,
+  "driveHash": "<canonical v2 hash>",
+  "confirmed": true,
+  "checkedBlobs": 12
+}
+```
+
+`confirmed` is true only when the complete readable Drive inventory matches
+the requested hash and all of its supported attachment references are present
+and verified. A chunked file requires every chunk, not an additional monolithic
+copy. Incomplete reads, invalid references, concurrent changes and missing bytes
+provide no confirmation. Responses are not cacheable. The browser discards a
+response if its identity, server, Drive or local state changed while checking.
+
+The check uses the database's atomic parent-index consistency and normal
+content-addressed storage invariants. It reports the copy observed during the
+check. Strong object revisions can reuse a previously verified content hash,
+but every check rechecks the object's current presence and revision.
 
 The [transports reference](atomic-sync/transports.md) compares WebSocket, Iroh, WebRTC and HTTP, and how a Drive is found by identifier.
 

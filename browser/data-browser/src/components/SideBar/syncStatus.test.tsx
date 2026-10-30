@@ -51,7 +51,7 @@ it('tracks local-only registration and promotion while the server is connected',
     store.setServerConnected(true);
     store.finishDriveSync(A, 1, 10);
   });
-  expect(getSyncLabel(hook.result.current)).toBe('Synced with server');
+  expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
   act(() => store.registerLocalOnlyDrive(A));
   expect(getSyncLabel(hook.result.current)).toBe('Not syncing with a server');
   expect(hasSyncWarning(hook.result.current)).toBe(false);
@@ -77,9 +77,9 @@ it('requires the selected drive receipt and handles foreign and absent drives', 
   });
   expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
   act(() => store.finishDriveSync(A, 1, 20));
-  expect(getSyncLabel(hook.result.current)).toBe('Synced with server');
+  expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
   act(() => store.setDrive(B));
-  expect(getSyncLabel(hook.result.current)).toBe('Synced with server');
+  expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
   act(() => store.setDrive('https://other.example/drive'));
   expect(getSyncLabel(hook.result.current)).toBe('Not syncing with a server');
   act(() => store.setDrive(''));
@@ -100,7 +100,7 @@ it('clears receipts on server or identity changes, but preserves them for no-ops
     store.setServerUrl('https://example.com', { connect: false });
     store.setAgent(alice);
   });
-  expect(getSyncLabel(hook.result.current)).toBe('Synced with server');
+  expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
   act(() => {
     store.setServerUrl('https://new.example', { connect: false });
     store.setServerConnected(true);
@@ -175,7 +175,7 @@ it('turns red immediately for an unsaved edit after a completed sync', () => {
     store.setServerConnected(true);
     store.finishDriveSync(A, 1, 10);
   });
-  expect(getSyncLabel(hook.result.current)).toBe('Synced with server');
+  expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
   act(() => resource.markDirty());
   expect(getSyncLabel(hook.result.current)).not.toBe('Synced with server');
 });
@@ -196,7 +196,7 @@ it('stays red when a later edit arrives while an earlier save awaits acknowledge
       </StoreContext.Provider>
     ),
   });
-  expect(getSyncLabel(hook.result.current)).toBe('Synced with server');
+  expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
   const acknowledgements: Array<() => void> = [];
   postCommitSpy.mockImplementation(
     commit =>
@@ -230,7 +230,7 @@ it('stays red when a later edit arrives while an earlier save awaits acknowledge
     acknowledgements[1]();
     await saving;
   });
-  expect(getSyncLabel(hook.result.current)).toBe('Synced with server');
+  expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
 });
 
 it('tracks resources added after mounting and releases removed resources', () => {
@@ -247,7 +247,7 @@ it('tracks resources added after mounting and releases removed resources', () =>
   });
   expect(getSyncLabel(hook.result.current)).toBe('Changes not yet synced');
   act(() => store.removeResource(A));
-  expect(getSyncLabel(hook.result.current)).toBe('Synced with server');
+  expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
 });
 
 it('does not count the embedded desktop server as another place', () => {
@@ -270,4 +270,14 @@ it('does not count the embedded desktop server as another place', () => {
   });
   expect(getSyncLabel(hook.result.current)).toBe('Not syncing with a server');
   tauri.mockRestore();
+});
+
+it('does not claim a complete copy solely from a drive sync receipt', () => {
+  const { store, hook } = mounted();
+  act(() => {
+    store.setDrive(A);
+    store.setServerConnected(true);
+    store.finishDriveSync(A, 1, 10);
+  });
+  expect(getSyncLabel(hook.result.current)).toBe('Sync not confirmed');
 });

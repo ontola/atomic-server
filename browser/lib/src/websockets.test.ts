@@ -275,6 +275,16 @@ describe('WSClient handshake', () => {
     release();
     await flushed;
     await Promise.resolve();
+    vi.spyOn(store, 'applyIncoming').mockImplementation(() => {});
+    socket.receive(
+      encodeSyncPush(
+        drive,
+        [{ subject: 'atomic:late', loroBytes: new Uint8Array([1]) }],
+        true,
+      ),
+    );
+    await Promise.resolve();
+    assert(store.isDriveSyncPulling()).toBe(false);
     assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
     assert(store.getSyncStatus().lastDriveSyncError?.message).toContain(
       'no access',

@@ -1,77 +1,75 @@
-# Selected-drive sync indicator (#2409)
+# Confirmed drive sync (#2409)
 
-Status: design and reproduction.
+Status: attachment confirmation implemented and reviewed; browser acceptance and final PR validation in progress.
 
 - Task: Codex chat `drive-my-chrome-to-find-out`.
 - Worktree: `/Users/michieldejong/.codex/worktrees/drive-sync-indicator-2409/atomic-server`.
 - Branch: `codex/drive-sync-indicator-2409`.
 - Base: fetched `origin/develop`, `54dc025958dd370c1730dc240854d9614ecf1b60`.
-- Ownership: coordinator owns this plan and documentation; bounded Astra design
-  pass is read-only; implementation/test ownership will be assigned after design.
-- Original checkout has four pre-existing untracked paths; its status and HEAD
-  were saved outside the repository before setup. Preserve all original work.
+- Original checkout baseline is saved outside the repository and remains unchanged.
+- Ownership: coordinator owns plan/docs/catalogs/builds/E2E/PR; client coding
+  agent owns TS confirmation and sidebar; server coding agent owns Rust strict
+  inventory/endpoint, narrow storage consistency primitives and Rust tests;
+  architecture reviewer is read-only.
 
 ## Acceptance
 
-- A local-only selected drive cannot look protected because an unrelated saved
-  server happens to be connected. The sidebar and Sync page must agree.
-- A sync result for another drive/server cannot establish a remote copy here.
-- Preserve truthful syncing, queued, blocked, and disconnected states for drives
-  actually using the server. Account for existing browser peer/Vault evidence
-  without treating a transport connection or enabled service as proof of backup.
-- Drive and identity switches must not retain the previous drive's status.
-- Reproduce at the cheapest meaningful test layer before fixing; capture the
-  actual changed UI with synthetic data and record validation limitations.
+- Remain red unless the latest selected drive state is confirmed at another
+  place, including every referenced file/image blob and chunk.
+- An unrelated server, historic receipt, pending save, unsaved edit, partial
+  chunk ACK, rejected transfer or stale asynchronous response cannot certify it.
+- Keep local-only drives excluded; checks are read-only and cannot promote or
+  upload anything. The desktop embedded node is not another place.
+- Unsupported servers, incomplete inventories, invalid references and read
+  failures fail closed. Confirmed state must be scoped to drive, server and
+  identity, and invalidated by changes.
+- Account/drive routing preference isolation remains separate in #2411;
+  global progress counters remain conservative blockers. Minimal server feature
+  build repair remains separate in #2412.
+
+## Design
+
+Add signed, read-only `GET /drive-sync-confirmation?subject=...&hash=...&hashVersion=2`.
+Its versioned response confirms an exact canonical v2 hash plus exhaustive
+attachment presence from a stable readable drive inventory. Metadata-only
+`SYNC_OK` remains insufficient. Old servers leave the icon red.
+
+Use authoritative stored membership and propagate inventory/read errors.
+Mirror download semantics: nonempty `chunks` needs every chunk but not a
+monolithic blob; single-file representations validate their backing hash.
+Establish a consistent metadata/ACL view and durable storage before responding.
+The response exposes no private manifest, only authorized drive/hash/result/count.
+
+The client flushes local persistence, obtains the full local state hash, and
+accepts the response only while the captured identity/server/drive/mutation
+context remains current and all local work is settled. Recheck after later
+acknowledged uploads; querying must never enable publishing.
 
 ## Work
 
-- [x] Astra architecture review and implementation contract.
-- [x] Regression reproduces current misleading connected status.
-- [x] Implement selected-drive indicator and necessary activity wording.
-- [x] Update public docs, shared UX reference and TESTING_COVERAGE.md.
-- [ ] Targeted tests, typecheck, compiler/lint checks, translations and UI screenshot.
-- [ ] Review task-owned diff, commit, push, open PR against develop.
-- [ ] Follow exact-commit CI; remove completed plan and verify final commit.
+- [x] Original icon/local-activity regressions reproduced and fixed.
+- [x] Strict resource-state ACK behavior reviewed and verified (131 library,
+  25 sidebar/helper tests, real Chromium journey, typechecks and screenshots).
+- [x] User explicitly included file/image byte confirmation in PR scope.
+- [x] Attachment confirmation architecture contract.
+- [x] Strict server inventory, attachment checks and signed endpoint with tests.
+- [x] Correlated client confirmation lifecycle, invalidation and tests.
+- [x] Public docs, UX reference, coverage map and settled catalogs (no new catalog diff).
+- [x] Matching builds, endpoint tests, browser acceptance and screenshots.
+- [ ] Review, push and update PR #2413; mark ready after requested behavior.
+- [ ] Exact-commit CI, completed-plan removal and final cleanup validation.
 
-## Decisions and boundaries
+## Validation constraints
 
-- The skill requests unavailable `gpt-5.6-terra`; the available
-  `gpt-6.1-terra` substitution was disclosed before dispatch. The skill does
-  not require approval for this routine choice.
-- Terra implementation owns Sidebar presentation and narrow Store receipt/event
-  fixes plus component/library tests. A separate Terra owns only
-  `browser/e2e/tests/sidebar-drive-sync.spec.ts`. Coordinator owns docs and builds.
-- Preserve the raw global connection status. Derive selected-drive presentation
-  using live-sync eligibility and confirmed sync evidence for the current server.
-- The red local-only label describes server sync, not backup protection: Vault
-  enrollment and peer connectivity do not establish a completed durable backup.
-- Global pending/sync counters remain global; this is not a per-drive progress
-  accounting redesign.
-- Existing Flutter device settings has no browser sidebar replica or commit
-  activity log; no unrelated Flutter change is needed.
-- User subsequently requested model-agnostic skill guidance; the local skill and
-  its UI metadata now request state-of-the-art available models without names.
-- Architecture review found late responses could revive a local-only receipt.
-  The shared Store completion boundary now rejects that evidence, with a failing
-  then passing late-ack regression; deferred socket work also checks its context.
-- Focused component/helper tests: 20 passed. Library checks include Store,
-  local-only persistence, commit summaries, routing and socket responses: final
-  rerun passed 121 tests. Browser verification is still pending.
-- User chose a focused indicator PR with separate account-isolation cleanup.
-  Follow-up #2411 owns agent/drive routing preferences, conservative legacy
-  migration, and retained-cache protection across A → sign-out → B transitions.
-  This PR does not claim to isolate those preferences or all progress counters.
-- Additional user requirement: remain red unless the latest state is confirmed
-  elsewhere. The strict follow-up observes unsaved/resource save state, keeps
-  pending/syncing/refused states red, and waits for actual reconciliation ACKs.
-  Attachment-byte confirmation scope is being clarified because the existing
-  protocol acknowledges metadata before missing blobs arrive.
-- Original browser regression passed on 038e4b9ec (1 Chromium test, no skips or
-  retries); rerun it after the stricter acknowledgement changes. The initial CI
-  run was canceled while queued so the next run validates the final behavior.
-- Strict resource-state version reviewed and verified: 131 library tests,
-  25 sidebar/helper tests, one real Chromium journey with zero retries/skips,
-  app typecheck, compiler, targeted lint/format, and matching native build pass.
-  Screenshots of the local-only notice and local-save activity are shared in chat.
-  The final PR remains draft until attachment-byte assurance scope is resolved;
-  current server receipts do not establish that assurance.
+The documented minimal `light` build fails on unrelated plugin imports (#2412).
+Local app verification uses `light,wasm-plugins` with a real built runtime. The
+current PR head is `2d43236f6`; its CI is queued on the repository's self-hosted
+runner. Do not claim green CI. All task logs/builds remain inside ignored
+`target/task-logs/` and the worktree's own build directories.
+
+Latest checks: 134 client-library tests, 44 sidebar/confirmation/helper tests,
+8 Rust confirmation/epoch tests, 1 revision-cache test and 2 server tests passed.
+App/E2E TypeScript, React Compiler and rustfmt checks passed. Matching WASM,
+frontend and native `light,wasm-plugins` builds passed. Architecture review found
+no blockers. Real Chromium acceptance passed 2/2 tests with zero skips, retries or failures
+(21.6 seconds); screenshots were reviewed and shared in the task chat.

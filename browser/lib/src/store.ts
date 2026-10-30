@@ -6179,7 +6179,9 @@ export class Store {
 
   /** The server started sending resources for a drive sync. */
   public startDriveSyncPull(): void {
+    if (this._driveSyncPulling) return;
     this._driveSyncPulling = true;
+    this.emitSyncStatus();
   }
 
   /** The finished sync of the open drive when there is one, else the most
@@ -7847,11 +7849,13 @@ export class Store {
 
   /** Push a resource's blob; a failure is shown once per resource, not per retry. */
   private pushBlobOrNotify(resource: Resource): Promise<void> {
-    return this.maybePushBlobForResource(resource).catch(e => {
-      console.warn('[Store] blob push failed', resource.subject, e);
+    return this.maybePushBlobForResource(resource)
+      .catch(e => {
+        console.warn('[Store] blob push failed', resource.subject, e);
 
-      this.notifyErrorOnce(`blob:${resource.subject}`, e);
-    });
+        this.notifyErrorOnce(`blob:${resource.subject}`, e);
+      })
+      .finally(() => this.emitSyncStatus());
   }
 
   /**
@@ -8459,6 +8463,8 @@ export class Store {
   /** Resources were stored without a notification each (see
    *  `WSClient.applyPulledStates`): re-run the queries that are still alive. */
   public notifyBulkApplied(): void {
+    this.emitSyncStatus();
+
     for (const ref of this.bulkRefreshables) {
       const collection = ref.deref();
 

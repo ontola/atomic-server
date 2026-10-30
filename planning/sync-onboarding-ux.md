@@ -154,6 +154,12 @@ saves, queued/blocked writes and reconciliation keep the icon red. A later edit
 cannot be certified by an earlier acknowledgement. The desktop embedded node
 does not count as a separate place. Progress counters
 remain store-wide and are not a new per-workspace accounting API.
+The browser additionally requires the read-only `/drive-sync-confirmation`
+receipt for its exact current state, including all file/image chunks stored on
+the server. An ordinary metadata `SYNC_OK` is insufficient. Proof checks wait
+for quiet local state and are invalidated immediately by edits and context
+changes; unavailable/older servers remain red. This browser indicator has no
+Flutter device-settings counterpart.
 Saved server selection and local-only preferences are not yet isolated by
 identity/workspace; [#2411](https://github.com/ontola/atomic-server/issues/2411)
 tracks that separate boundary and its safe legacy migration.

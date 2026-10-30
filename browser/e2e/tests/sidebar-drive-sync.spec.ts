@@ -141,4 +141,97 @@ test.describe('sidebar drive sync', () => {
       'Synced with server',
     );
   });
+  test('missing attachment stays red until the server holds its bytes', async ({
+    page,
+  }, testInfo) => {
+    const syncButton = page.getByTestId('sidebar-sync-button');
+    await expect(syncButton).toHaveAttribute(
+      'title',
+      'Sync: Synced with server',
+      { timeout: 60_000 },
+    );
+
+    // Let the metadata commit succeed while pretending the blob PUT succeeded.
+    // The proof endpoint must check the server's actual bytes, not this response.
+    const blobRoute = '**/blob/**';
+    await page.route(blobRoute, route =>
+      route.request().method() === 'PUT'
+        ? route.fulfill({ status: 204 })
+        : route.continue(),
+    );
+    const missingProof = page.waitForResponse(
+      async response => {
+        if (
+          !response.url().includes('/drive-sync-confirmation?') ||
+          !response.ok()
+        )
+          return false;
+
+        try {
+          return (await response.json()).confirmed === false;
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 60_000 },
+    );
+    const attachment = await page.evaluate(async () => {
+      const store = window.store;
+      const [subject] = await store.uploadFiles(
+        [
+          new File(
+            ['Attachment bytes for sync verification'],
+            'confirmation.txt',
+            { type: 'text/plain' },
+          ),
+        ],
+        store.getDrive()!,
+      );
+      const file = await store.getResource(subject);
+
+      return {
+        subject,
+        download: String(
+          file.get('https://atomicdata.dev/properties/downloadURL'),
+        ),
+      };
+    });
+    const response = await missingProof;
+    expect(await response.json()).toMatchObject({
+      version: 1,
+      hashVersion: 2,
+      confirmed: false,
+    });
+    expect((await page.request.get(attachment.download)).status()).toBe(404);
+    await expect(syncButton).toHaveAttribute(
+      'title',
+      'Sync: Sync not confirmed',
+      { timeout: 30_000 },
+    );
+    await expect(syncButton.locator('svg')).toHaveCSS(
+      'color',
+      'rgb(207, 91, 91)',
+    );
+    await page.screenshot({
+      path: testInfo.outputPath('missing-attachment-sync.png'),
+      fullPage: true,
+    });
+
+    await page.unroute(blobRoute);
+    await page.evaluate(async subject => {
+      const file = await window.store.getResource(subject);
+      await window.store.maybePushBlobForResource(file);
+    }, attachment.subject);
+    await expect
+      .poll(
+        async () => (await page.request.get(attachment.download)).status(),
+        { timeout: 30_000 },
+      )
+      .toBe(200);
+    await expect(syncButton).toHaveAttribute(
+      'title',
+      'Sync: Synced with server',
+      { timeout: 60_000 },
+    );
+  });
 });

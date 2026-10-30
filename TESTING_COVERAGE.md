@@ -1205,8 +1205,16 @@ wording, save/reload persistence, and switching back to a server-synced drive.
 Account/drive routing preferences remain browser-wide; #2411 owns isolation and
 the two-identity shared-drive transition tests. These indicator tests do not
 establish that isolation.
-Server resource-state receipts do not establish that every attachment byte is
-present remotely; that requires separate verification or protocol evidence.
+Ordinary server resource-state receipts do not establish attachment presence.
+`components/SideBar/driveConfirmation.test.tsx` exercises the separate exact-hash
+copy check, stale responses, context/DB changes, missing/old/malformed endpoints,
+retry and local-only exclusions. Rust `sync::confirmation` tests check stored
+files and chunks, missing/corrupt bytes, strict reads and a drive-scoped inventory;
+the handler test exercises signed requests and rejects foreign drives. Object
+revision-cache tests require fresh presence/revision checks and rehash changed
+content. The browser attachment journey deliberately acknowledges a blob PUT
+without storing its bytes, requires red with the real confirmation endpoint,
+then uploads the bytes and waits for a confirmed copy.
 
 `driveSyncStatus.test.ts` rejects another drive's sync timestamp and scopes
 asynchronous hosting/usage results to the selected drive and server. It covers
