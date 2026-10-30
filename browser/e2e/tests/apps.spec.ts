@@ -177,6 +177,56 @@ test.describe('apps', () => {
     });
   });
 
+  test('a failed app key handover recovers after reload without reinstalling', async ({
+    page,
+  }) => {
+    let blocked = true;
+    let attempts = 0;
+    await page.route('**/app-agent', route => {
+      if (route.request().method() === 'POST' && blocked) {
+        attempts += 1;
+
+        return route.abort('connectionfailed');
+      }
+
+      return route.continue();
+    });
+    await newApp(page);
+    await expect.poll(() => attempts).toBeGreaterThan(0);
+    await waitForSynced(page);
+    const beforeReload = attempts;
+    await page.reload();
+    // This request can only be recovered from the encrypted IDB record. The
+    // installation function that minted the key is gone after a reload.
+    await expect
+      .poll(() => attempts, { timeout: 30_000 })
+      .toBeGreaterThan(beforeReload);
+    const frame = page.locator('iframe[title="App"]');
+    await expect(frame).toBeVisible();
+    const previousFrame = await frame.elementHandle();
+    const recovered = page.waitForResponse(
+      response =>
+        new URL(response.url()).pathname === '/app-agent' &&
+        response.request().method() === 'POST' &&
+        response.ok(),
+    );
+    blocked = false;
+    await recovered;
+    await expect
+      .poll(() => previousFrame!.evaluate(element => element.isConnected))
+      .toBe(false);
+
+    // Recovery remounts the affected frame; the user never reinstalls the app.
+    const app = page.frameLocator('iframe[title="App"]');
+    await app.getByRole('button', { name: 'Add an item' }).click();
+    await expect(app.getByRole('listitem')).toHaveCount(1);
+    await waitForSynced(page);
+    await page.reload();
+    await expect(
+      page.frameLocator('iframe[title="App"]').getByRole('listitem'),
+    ).toHaveCount(1);
+  });
+
   test('an app that breaks says so, and offers to have it fixed', async ({
     page,
   }) => {

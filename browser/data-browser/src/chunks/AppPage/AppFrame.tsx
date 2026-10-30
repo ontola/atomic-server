@@ -36,15 +36,32 @@ import {
   type ProxyConnection,
 } from '@helpers/proxyConnections';
 import { appAgentOf } from './appAgent';
+import { subscribeAppKeyHandover } from './appKeyHandover';
 import { ConnectDialog } from './ConnectDialog';
 import { useHostUI } from '@components/HostUI/hostUI';
 import type { ViewChanges } from '@helpers/extensions/viewApply';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
+  const store = useStore();
+  const [identityRevision, setIdentityRevision] = useState(0);
+  useEffect(
+    () =>
+      subscribeAppKeyHandover(store, recovered => {
+        if (recovered.app === props.app && recovered.drive === props.drive)
+          setIdentityRevision(revision => revision + 1);
+      }),
+    [store, props.app, props.drive],
+  );
+
   return (
     <AppFrameSession
-      key={JSON.stringify([props.app, props.drive, props.table])}
+      key={JSON.stringify([
+        props.app,
+        props.drive,
+        props.table,
+        identityRevision,
+      ])}
       {...props}
     />
   );
@@ -103,7 +120,9 @@ function AppFrameSession({
   // Held in a ref so an inline callback does not tear down the listener — and
   // with it every subscription — on each render.
   const onOutcomeRef = useRef(onOutcome);
-  onOutcomeRef.current = onOutcome;
+  useEffect(() => {
+    onOutcomeRef.current = onOutcome;
+  }, [onOutcome]);
   // Subject to the store's unsubscribe, so a view that re-renders does not
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
