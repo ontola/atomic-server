@@ -38,6 +38,7 @@
     - [Concepts](commits/concepts.md)
     - [Compared to](commits/compare.md)
   - [Drive reconciliation](atomic-sync/drive-reconciliation.md)
+  - [Sync performance](atomic-sync/performance.md)
   - [Browser peer sync (WebRTC)](browser-peer-sync.md)
   - [Remote peers](atomic-sync/remote-peers.md)
   - [Self-hosting with AtomicServer](atomic-server.md)
