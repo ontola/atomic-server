@@ -394,3 +394,38 @@ JSONSchema7;
 ```
 
 The [JSON Schema](https://json-schema.org/) of the plugin's config. This helps the user understand the config and gives them feedback when the config is invalid.
+
+### Folder and individual-resource views
+
+A catalog drive app can declare
+`https://atomicdata.dev/integrations/properties/app-data-kind` as `table`
+(the default), `folder`, or `none`. A folder dataset is an ordinary drive-root
+folder with one child resource per record. `none` is for a renderer that uses
+existing data and must not create an empty Items table or row class.
+`https://atomicdata.dev/integrations/properties/app-installation-hidden: true`
+keeps the executable App, schema and source under the drive's default ontology.
+It remains installed and manageable through Integrations.
+
+The drive's plugin vocabulary has an `app-resource-view` property. Resolve its
+subject through `findSchema(store, drive, pluginSchema())`, then set it on the
+folder or note to the installed renderer App's subject. Opening that resource
+runs the renderer with `await store.getData()` returning `{ resource }`.
+`await store.getContext()` names that same subject. Existing table views still
+receive `{ table, rowClass }` and optional sibling `tables`. Without an explicit
+binding, one compatible view-only App can render a note or folder immediately
+after registration. Resource-page compatibility is declared separately in the App's
+`resource-renders` array; the existing `renders` array remains table-only.
+A folder matches its `classtype`; a table retains its own view tabs. Registering
+an imported checklist table therefore never takes over the pages of its rows.
+Multiple compatible renderers require an explicit binding.
+
+A resource-view binding selects presentation only: it does not grant table-row
+access or permission to edit the resource. Writes retain the app's signing
+identity and require the user's and app key's native rights, or an existing
+table-row grant when the renderer is actually shown as a table view.
+
+Updating a catalog app from a table dataset to a folder preserves the dataset,
+note and item resource identifiers. The host must first identify the existing
+app key, grant that same key native access to the dataset, and only then move
+the dataset outside the installation. It refuses an unrelated `app-data`
+pointer; no provider requests are part of this placement migration.

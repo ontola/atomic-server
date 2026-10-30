@@ -161,7 +161,7 @@ export function grantRowAccess(
   target: RowGrantTarget & { view: string; via: RowGrantVia },
 ): Promise<RowGrant> {
   return post<RowGrant>(store, { op: 'grant', ...target }).then(grant => {
-    notifyRowGrantChange();
+    notifyRowGrantChange(target);
 
     return grant;
   });
@@ -177,7 +177,7 @@ export function revokeRowAccess(
     via: 'menu',
     ...target,
   }).then(revoked => {
-    notifyRowGrantChange();
+    notifyRowGrantChange(target);
 
     return revoked;
   });
@@ -203,20 +203,22 @@ export async function canGrantRows(
   return canWrite;
 }
 
-const listeners = new Set<() => void>();
+const listeners = new Set<(target?: RowGrantTarget) => void>();
 
 /**
  * Called after this page grants or revokes, so the tab menu and an open app
  * see the same answer without polling. Returns an unsubscribe function.
  */
-export function onRowGrantChange(listener: () => void): () => void {
+export function onRowGrantChange(
+  listener: (target?: RowGrantTarget) => void,
+): () => void {
   listeners.add(listener);
 
   return () => listeners.delete(listener);
 }
 
-export function notifyRowGrantChange(): void {
-  for (const listener of listeners) listener();
+export function notifyRowGrantChange(target?: RowGrantTarget): void {
+  for (const listener of listeners) listener(target);
 }
 
 /** What an app's `requestRowAccess()` resolves to. */

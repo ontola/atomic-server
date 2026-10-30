@@ -59,6 +59,8 @@ export interface SchemaResource {
   get(property: string): unknown;
   set(property: string, value: JSONValue): Promise<void>;
   save(): Promise<unknown>;
+  /** Remove a persisted value when migrating optional app metadata. */
+  remove?(property: string): unknown;
   pushListItem?(property: string, value: JSONValue): void;
 }
 

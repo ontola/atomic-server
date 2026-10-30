@@ -1,3 +1,8 @@
+import { server } from './ontologies/server.js';
+import { grantAccessAgent } from './issue-access-agent.js';
+import type { Store } from './store.js';
+import { pluginSchema } from './plugin-log.js';
+import { classes } from './urls.js';
 import { core } from './ontologies/core.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 import { Datatype } from './datatypes.js';
@@ -43,6 +48,8 @@ export const catalogAppProperties = {
   integrity: `${CATALOG}app-module-integrity`,
   rowName: `${CATALOG}app-row-name`,
   rowNamePlural: `${CATALOG}app-row-name-plural`,
+  dataKind: `${CATALOG}app-data-kind`,
+  installationHidden: `${CATALOG}app-installation-hidden`,
 } as const;
 
 /** One installable app, as a catalog entry describes it. */
@@ -58,6 +65,8 @@ export interface CatalogApp {
   /** `sha256-`, `sha384-` or `sha512-` followed by base64, as in SRI. */
   integrity: string;
   rowName?: { singular: string; plural: string };
+  dataKind?: 'table' | 'folder' | 'none';
+  installationHidden?: boolean;
 }
 
 const asString = (value: unknown): string | undefined =>
@@ -122,6 +131,17 @@ export function parseCatalogApp(
 
   const singular = asString(values[p.rowName]);
   const plural = asString(values[p.rowNamePlural]);
+  const dataKind = values[p.dataKind];
+  if (
+    dataKind !== undefined &&
+    !['table', 'folder', 'none'].includes(String(dataKind))
+  )
+    return undefined;
+  if (
+    values[p.installationHidden] !== undefined &&
+    typeof values[p.installationHidden] !== 'boolean'
+  )
+    return undefined;
 
   return {
     id,
@@ -132,6 +152,12 @@ export function parseCatalogApp(
     emoji: asString(values[p.emoji]),
     description: asString(values[p.description]),
     rowName: singular && plural ? { singular, plural } : undefined,
+    ...(dataKind !== undefined
+      ? { dataKind: dataKind as CatalogApp['dataKind'] }
+      : {}),
+    ...(values[p.installationHidden] !== undefined
+      ? { installationHidden: values[p.installationHidden] as boolean }
+      : {}),
   };
 }
 
@@ -280,6 +306,8 @@ export async function installCatalogApp(
     emoji: app.emoji,
     description: app.description,
     rowName: app.rowName,
+    dataKind: app.dataKind,
+    installationHidden: app.installationHidden,
     source,
   });
   await recordProvenance(store, drive, created.app, app);
@@ -297,15 +325,114 @@ export async function updateCatalogApp(
     drive: string;
     subject: string;
     app: CatalogApp;
+    /** Exact public identity reported by the host for this installation; never inferred from ACLs. */
+    agent?: string;
     transport?: typeof fetch;
   },
 ): Promise<AppDescription> {
   const { drive, subject, app } = options;
   const source = await fetchCatalogAppModule(app, options.transport);
+  await ensureSchema(store, drive, pluginSchema());
   await updateApp(store, drive, { app: subject, source });
+  await migrateCatalogAppLayout(store, { ...options, agent: options.agent });
   await recordProvenance(store, drive, subject, app);
 
   return describeApp(store, drive, subject);
+}
+
+/**
+ * Changes placement without copying notes or importing from the provider.
+ * Save the existing signing identity's explicit destination grant before
+ * changing ancestry. The app-data pointer alone never authorizes a write.
+ */
+export async function migrateCatalogAppLayout(
+  store: SchemaStore,
+  {
+    drive,
+    subject,
+    app,
+    agent,
+  }: { drive: string; subject: string; app: CatalogApp; agent?: string },
+): Promise<void> {
+  const description = await describeApp(store, drive, subject);
+
+  if (app.dataKind === 'folder' && description.data) {
+    if (!agent)
+      throw new Error('The host must identify this app before moving its data');
+    const data = await store.getResource(description.data);
+    const strings = (value: unknown): string[] =>
+      Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === 'string')
+        : [];
+    const previous = strings(data.get(core.properties.isA));
+    const hasGrant =
+      strings(data.get(core.properties.read)).includes(agent) &&
+      strings(data.get(core.properties.write)).includes(agent);
+    const parent = data.get(core.properties.parent);
+    const ownedDataset =
+      parent === subject &&
+      (previous.includes(dataBrowser.classes.table) ||
+        previous.includes(dataBrowser.classes.folder));
+    const migratedDataset =
+      parent === drive &&
+      previous.includes(dataBrowser.classes.folder) &&
+      hasGrant;
+    if (!ownedDataset && !migratedDataset)
+      throw new Error(
+        'An app may only migrate its own dataset, not another resource named by app-data',
+      );
+    if (!hasGrant)
+      await grantAccessAgent(
+        store as unknown as Store,
+        agent,
+        [data.subject],
+        true,
+      );
+    const next = [
+      ...new Set([
+        dataBrowser.classes.folder,
+        ...previous.filter(c => c !== dataBrowser.classes.table),
+      ]),
+    ];
+    await data.set(core.properties.isA, next);
+    await data.set(
+      dataBrowser.properties.displayStyle,
+      classes.displayStyles.grid,
+    );
+    await data.set(core.properties.parent, drive);
+    // The provider may already have supplied an account-specific name.
+    if (
+      !String(data.get(core.properties.name) ?? '').startsWith(app.name + ' ')
+    )
+      await data.set(core.properties.name, app.name);
+    await data.save();
+  }
+
+  if (app.dataKind === 'none') {
+    const schema = await findSchema(store, drive, pluginSchema());
+    const property = schema.properties?.['app-data'];
+    const installation = await store.getResource(subject);
+
+    if (property && installation.get(property)) {
+      if (!installation.remove)
+        throw new Error('This host cannot detach the old view-only dataset');
+      installation.remove(property);
+      await installation.save();
+    }
+  }
+
+  if (app.installationHidden) {
+    const driveResource = await store.getResource(drive);
+    const ontology = driveResource.get(server.properties.defaultOntology);
+    if (typeof ontology !== 'string' || !ontology)
+      throw new Error('This drive has no ontology for installation metadata');
+    const installation = await store.getResource(subject);
+
+    if (installation.get(core.properties.parent) !== ontology) {
+      await installation.set(core.properties.parent, ontology);
+      await installation.save();
+    }
+  }
 }
 
 /** An app on the drive that came from a catalog. */
