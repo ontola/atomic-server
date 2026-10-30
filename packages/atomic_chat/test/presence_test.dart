@@ -179,12 +179,14 @@ void main() {
       'session': 'meeting',
       'data': {'cursor': 3},
       'typing': 'room',
+      'call': 'meeting',
       'allowFollow': false,
       'updatedAt': 5,
     });
     expect(item.session, 'meeting');
     expect(item.data, {'cursor': 3});
     expect(item.typing, 'room');
+    expect(item.call, 'meeting');
     expect(PresenceItem.fromJson(item.toJson()).toJson(), item.toJson());
     expect(item.toJson()['allowFollow'], false);
 
