@@ -34,8 +34,16 @@ test.describe('sync page devices', () => {
 
   test('an off-site account signs in through one local linking form', async ({
     page,
+    browserDiagnostics,
   }, testInfo) => {
     const portal = 'https://sync-provider.example';
+    browserDiagnostics.expect(
+      'error',
+      /^Failed to load resource: the server responded with a status of 401 \(Unauthorized\)$/,
+      'The pilot account endpoint rejects the initial request before a device bearer exists.',
+      1,
+      /^https:\/\/sync-provider\.example\/api\/me$/,
+    );
     let linkRequests = 0;
     let approved = false;
     await page.addInitScript(portalUrl => {
