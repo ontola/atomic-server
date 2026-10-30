@@ -7,6 +7,11 @@
 
 import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
 import { wasmBinaryUrl } from './wasm-url.js';
+import type {
+  ClientDbOutboxWrite,
+  ClientDbQueryOpts,
+  ClientDbQueryResult,
+} from './client-db.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
@@ -14,130 +19,127 @@ type WasmModule = any;
 let db: WasmModule | null = null;
 let initPromise: Promise<ClientDbInitTimings> | null = null;
 
-/** Message types sent from main thread to worker */
-export type WorkerRequest =
-  | { id: number; type: 'canSendPeerFrame'; session: number; subject: string }
-  | {
-      id: number;
-      type: 'createPeerSession';
-      drive: string;
-      expectedPeer?: string;
-      challenge: string;
-    }
-  | { id: number; type: 'handlePeerFrame'; session: number; frame: Uint8Array }
-  | { id: number; type: 'closePeerSession'; session: number }
-  | {
-      id: number;
-      type: 'init';
-      wasmUrl: string;
-      /** The binary behind `wasmUrl`, compiled by the page ahead of time. */
-      wasmModule?: WebAssembly.Module;
-      baseUrl?: string;
-      /** OPFS file name of the database; the WASM side defaults to the
-       *  legacy shared `atomic_data.redb` when omitted. */
-      dbName?: string;
-      /** Encryption key for the database file. */
-      dbKey?: Uint8Array;
-      /** Migrate the legacy shared DB into `dbName` before opening. */
-      migrateLegacy?: boolean;
-      /** Allow discarding an undecryptable `dbName`; see `client-db-open.ts`. */
-      discardUndecryptable?: boolean;
-      /**
-       * Drives that exist only in this browser (`Store.registerLocalOnlyDrive`).
-       * Chat messages are moved into chat log pages for these alone; a drive a
-       * server hosts gets its pages from the server.
-       */
-      localOnlyDrives?: string[];
-    }
-  | { id: number; type: 'getResource'; subject: string }
-  | { id: number; type: 'getResourceWithSnapshot'; subject: string }
-  | { id: number; type: 'getResourcesWithSnapshots'; subjects: string[] }
-  | { id: number; type: 'putResource'; jsonAd: string }
-  | { id: number; type: 'putResources'; jsonAds: string[] }
-  | {
-      id: number;
-      type: 'putResourceWithSnapshot';
-      subject: string;
-      jsonAd: string;
-      snapshot?: Uint8Array;
-      /** Outbox rows written with the resource and made durable by the same
-       *  flush, so a crash keeps both or neither. */
-      outbox?: OutboxWrite;
-    }
-  | {
-      id: number;
-      type: 'putResourcesWithSnapshots';
-      /** Written in one transaction and made durable by one flush. */
+type Rows = Array<{ jsonAd: string | null; snapshot: Uint8Array | null }>;
+
+export interface VaultExportResult {
+  objectKey: string;
+  sealed: Uint8Array;
+  kind: 'pack' | 'checkpoint';
+  resources: number;
+  unchanged: number;
+  tombstones: number;
+  coverage: Record<string, number>;
+}
+
+export interface VaultImportSummary {
+  packsRead: number;
+  resourcesRestored: number;
+  tombstonesApplied: number;
+  objectsSkipped: number;
+  objectsUnreadable: number;
+}
+
+/** What `init` is asked to open, and with what. */
+export interface ClientDbInitRequest {
+  wasmUrl: string;
+  /** The binary behind `wasmUrl`, compiled by the page ahead of time. */
+  wasmModule?: WebAssembly.Module;
+  baseUrl?: string;
+  /** OPFS file name of the database; the WASM side defaults to the
+   *  legacy shared `atomic_data.redb` when omitted. */
+  dbName?: string;
+  /** Encryption key for the database file. */
+  dbKey?: Uint8Array;
+  /** Migrate the legacy shared DB into `dbName` before opening. */
+  migrateLegacy?: boolean;
+  /** Allow discarding an undecryptable `dbName`; see `client-db-open.ts`. */
+  discardUndecryptable?: boolean;
+  /** Drives that exist only in this browser (`Store.registerLocalOnlyDrive`).
+   *  Chat messages are moved into chat log pages for these alone; a drive a
+   *  server hosts gets its pages from the server. */
+  localOnlyDrives?: string[];
+}
+
+/**
+ * THE method list of the worker RPC. Each entry is `[request fields, result]`.
+ * Everything else derives from it: the `WorkerRequest` wire union, the worker's
+ * handler table (`handlers`, which must cover every key), and the typed
+ * `call()` the `ClientDbWorker` proxy sends through. Add a method here, add its
+ * handler below, and the proxy can call it.
+ */
+export interface ClientDbRpc {
+  init: [ClientDbInitRequest, ClientDbInitTimings];
+  getResource: [{ subject: string }, string | null];
+  getResourceWithSnapshot: [{ subject: string }, Rows[number] | null];
+  getResourcesWithSnapshots: [{ subjects: string[] }, Rows | null];
+  putResource: [{ jsonAd: string }, void];
+  putResources: [{ jsonAds: string[] }, void];
+  /** Row, index entries and Loro snapshot in one transaction, plus outbox rows
+   *  made durable by the same flush, so a crash keeps both or neither. */
+  putResourceWithSnapshot: [
+    { jsonAd: string; snapshot?: Uint8Array; outbox?: ClientDbOutboxWrite },
+    void,
+  ];
+  /** Written in one transaction and made durable by one flush. */
+  putResourcesWithSnapshots: [
+    {
       items: {
         jsonAd: string;
         snapshot?: Uint8Array;
-        outbox?: OutboxWrite;
+        outbox?: ClientDbOutboxWrite;
       }[];
-    }
-  | { id: number; type: 'outboxEntries'; agent: string }
-  | ({ id: number; type: 'outboxWrite'; durable: boolean } & OutboxWrite)
-  | { id: number; type: 'applyCommit'; commitJsonAd: string }
-  | { id: number; type: 'applyPeerCommit'; commitJsonAd: string }
-  | { id: number; type: 'removeResource'; subject: string }
-  | {
-      id: number;
-      type: 'query';
-      property?: string;
-      value?: string;
-      filters?: Array<{ property?: string; value?: string; operator?: string }>;
-      sortBy?: string;
-      sortDesc?: boolean;
-      limit?: number;
-      offset?: number;
-      includeResources?: boolean;
-      drive?: string;
-      /** Statistics over every matching resource — computed in WASM by the same
-       *  Rust code the server runs. */
-      aggregation?: unknown;
-      /** Constraints on values computed per resource, evaluated in the same WASM
-       *  pass. */
-      expressionFilters?: unknown;
-      /** Also return trashed resources (default hidden). */
-      includeTrashed?: boolean;
-    }
-  | {
-      id: number;
-      type: 'search';
+    },
+    void,
+  ];
+  outboxEntries: [{ agent: string }, string[] | null];
+  outboxWrite: [{ durable: boolean } & ClientDbOutboxWrite, void];
+  applyCommit: [{ commitJsonAd: string }, void];
+  applyPeerCommit: [{ commitJsonAd: string }, void];
+  removeResource: [{ subject: string }, void];
+  query: [ClientDbQueryOpts, ClientDbQueryResult];
+  search: [
+    {
       query: string;
       limit?: number;
       parents?: string | string[];
       filters?: Record<string, string | number | string[]>;
       includeTrashed?: boolean;
-    }
-  | { id: number; type: 'allSubjects' }
-  | { id: number; type: 'populate' }
-  | { id: number; type: 'flush' }
-  | { id: number; type: 'exportAllResources' }
-  | { id: number; type: 'importAllResources'; jsonArray: string }
-  | { id: number; type: 'getLoroSnapshot'; subject: string }
-  | { id: number; type: 'historyAttribution'; subject: string }
-  | { id: number; type: 'envelopesFor'; subjects: string[] }
-  | { id: number; type: 'importEnvelopes'; envelopes: string }
-  | { id: number; type: 'putBlob'; hash: Uint8Array; data: Uint8Array }
-  | { id: number; type: 'getBlob'; hash: Uint8Array }
-  | { id: number; type: 'blake3Hash'; data: Uint8Array }
-  | { id: number; type: 'getAllVersionVectors' }
-  | { id: number; type: 'getVersionVectorsForDrive'; drive: string }
-  | { id: number; type: 'getDriveSubjects'; drive: string }
-  | {
-      id: number;
-      type: 'applyStateUpdates';
-      subjects: string[];
-      states: Uint8Array[];
-    }
-  | { id: number; type: 'getVersionVectorsForSubjects'; subjects: string[] }
-  | { id: number; type: 'indexPendingSearch'; limit: number }
+    },
+    string[] | null,
+  ];
+  allSubjects: [object, string[]];
+  populate: [object, void];
+  flush: [object, void];
+  exportAllResources: [object, string];
+  importAllResources: [{ jsonArray: string }, number];
+  getLoroSnapshot: [{ subject: string }, Uint8Array | null];
+  historyAttribution: [{ subject: string }, unknown];
+  envelopesFor: [{ subjects: string[] }, string];
+  importEnvelopes: [{ envelopes: string }, unknown];
+  putBlob: [{ hash: Uint8Array; data: Uint8Array }, void];
+  getBlob: [{ hash: Uint8Array }, Uint8Array | null];
+  blake3Hash: [{ data: Uint8Array }, Uint8Array];
+  getAllVersionVectors: [object, unknown];
+  getVersionVectorsForDrive: [{ drive: string }, unknown];
+  getDriveSubjects: [{ drive: string }, string[]];
+  applyStateUpdates: [{ subjects: string[]; states: Uint8Array[] }, number];
+  getVersionVectorsForSubjects: [{ subjects: string[] }, unknown];
+  indexPendingSearch: [{ limit: number }, number];
+  createPeerSession: [
+    { drive: string; expectedPeer?: string; challenge: string },
+    number,
+  ];
+  handlePeerFrame: [
+    { session: number; frame: Uint8Array },
+    { frames: number[][]; changed: string[]; ephemeral?: number[] },
+  ];
+  canSendPeerFrame: [{ session: number; subject: string }, boolean];
+  closePeerSession: [{ session: number }, void];
   // Cloud Vault. These live in the worker because it holds the only Db handle;
   // the network half stays on the main thread, where the control-plane session
   // and CORS setup already work. What crosses this boundary is ciphertext.
-  | {
-      id: number;
-      type: 'vaultExport';
+  vaultExport: [
+    {
       driveSubject: string;
       key: Uint8Array;
       keyEpoch: number;
@@ -148,33 +150,36 @@ export type WorkerRequest =
       driveHasCheckpoint: boolean;
       observedLanes: Record<string, number>;
       currentStateOnly?: boolean;
-    }
-  | {
-      id: number;
-      type: 'vaultImport';
+    },
+    VaultExportResult | null,
+  ];
+  vaultImport: [
+    {
       key: Uint8Array;
       keyEpoch: number;
       drivePseudonym: string;
       devicePubkey: string;
       objects: { objectKey: string; sealed: Uint8Array }[];
-    }
-  | {
-      id: number;
-      type: 'vaultCommitSegment';
-      drivePseudonym: string;
-      devicePubkey: string;
-      segment: number;
-    };
-
-/** Outbox rows for one agent; mirrors `ClientDbOutboxWrite` in client-db.ts
- *  (duplicated, not imported: see the note on shared modules there). */
-interface OutboxWrite {
-  agent: string;
-  puts: Array<{ subject: string; value: string }>;
-  deletes: string[];
+    },
+    VaultImportSummary,
+  ];
+  vaultCommitSegment: [
+    { drivePseudonym: string; devicePubkey: string; segment: number },
+    void,
+  ];
 }
 
-function writeOutbox(write: OutboxWrite): void {
+export type RpcType = keyof ClientDbRpc;
+export type RpcReq<K extends RpcType> = ClientDbRpc[K][0];
+export type RpcRes<K extends RpcType> = ClientDbRpc[K][1];
+
+/** Message types sent from main thread to worker: one per RPC method, the
+ *  request fields flat beside `type` and the request `id`. */
+export type WorkerRequest = {
+  [K in RpcType]: { id: number; type: K } & RpcReq<K>;
+}[RpcType];
+
+function writeOutbox(write: ClientDbOutboxWrite): void {
   db!.outboxWrite(
     write.agent,
     JSON.stringify(write.puts),
@@ -187,434 +192,252 @@ export type WorkerResponse =
   | { id: number; type: 'ok'; data?: unknown }
   | { id: number; type: 'error'; message: string };
 
+/** Persist what was written, now. Per-write redb commits use
+ *  `Durability::None`; see the periodic tick below. */
+function flushNow(): void {
+  dirty = true;
+  db!.flush();
+  dirty = false;
+}
+
+type Handlers = {
+  [K in RpcType]: (req: RpcReq<K>) => RpcRes<K> | Promise<RpcRes<K>>;
+};
+
+const handlers: Handlers = {
+  // Return the per-phase init timings so the main thread can fold the
+  // worker-side WASM/OPFS boot into its perf trace.
+  init: msg => {
+    initPromise ??= doInit(
+      msg.wasmUrl,
+      msg.wasmModule,
+      msg.baseUrl,
+      msg.dbName,
+      msg.dbKey,
+      msg.migrateLegacy,
+      msg.discardUndecryptable,
+      msg.localOnlyDrives,
+    );
+
+    return initPromise;
+  },
+  canSendPeerFrame: m => db!.canSendPeerFrame(m.session, m.subject),
+  createPeerSession: m =>
+    db!.createPeerSession(m.drive, m.expectedPeer, m.challenge),
+  handlePeerFrame: m => db!.handlePeerFrame(m.session, m.frame),
+  closePeerSession: m => db!.closePeerSession(m.session),
+  getResource: m => db!.getResource(m.subject),
+  // One round trip for a whole list: opening a chat asks for every message and
+  // part at once, and a postMessage per subject queued behind boot-time sync
+  // traffic made that the slow part of the open.
+  getResourcesWithSnapshots: async m => {
+    const rows: Rows = [];
+
+    for (const subject of m.subjects) {
+      rows.push(await db!.getResourceWithSnapshot(subject));
+    }
+
+    return rows;
+  },
+  // One wasm call reads the stored row and its snapshot, without decoding the
+  // CRDT history on the way (the tab imports the snapshot into its own doc).
+  getResourceWithSnapshot: m => db!.getResourceWithSnapshot(m.subject),
+  putResource: async m => {
+    await db!.putResource(m.jsonAd);
+  },
+  // Batch put: one postMessage for a whole seed loop. Processed in order, so
+  // ordering-sensitive callers (properties seeded before others) are safe.
+  putResources: async m => {
+    for (const jsonAd of m.jsonAds) {
+      await db!.putResource(jsonAd);
+    }
+  },
+  putResourceWithSnapshot: async m => {
+    // One transaction: row, index entries and the Loro snapshot as the tab
+    // holds it. Snapshot omitted for resources without a Loro doc (e.g.
+    // Commit resources).
+    if (m.snapshot) {
+      await db!.putResourceWithSnapshot(m.jsonAd, m.snapshot);
+    } else {
+      await db!.putResource(m.jsonAd);
+    }
+
+    // The outbox entry that says this snapshot still has to reach the server.
+    // Both writes commit without fsync, so the one flush below persists them
+    // together: redb rolls back every commit after the last durable one, so a
+    // crash before it keeps neither, never just one.
+    if (m.outbox) writeOutbox(m.outbox);
+
+    // This op is the one `persistToClientDb` uses because its caller
+    // (`saveOffline`) needs the write durable the moment its promise resolves:
+    // an offline edit has no server copy to fall back on. Leave a periodic
+    // retry armed on failure, and reject the RPC so a caller never mistakes an
+    // in-memory write for a durable snapshot.
+    flushNow();
+  },
+  // What a burst of `putResourceWithSnapshot` calls costs one at a time: a
+  // transaction each, so a page every resource touches (the parent's member
+  // list, the name index) is written again per resource. Together they share
+  // one commit and one flush.
+  putResourcesWithSnapshots: async m => {
+    await db!.putResourcesWithSnapshots(
+      m.items.map(item => item.jsonAd),
+      m.items.map(item => item.snapshot ?? null),
+    );
+
+    for (const item of m.items) {
+      if (item.outbox) writeOutbox(item.outbox);
+    }
+
+    flushNow();
+  },
+  outboxEntries: m => db!.outboxEntries(m.agent) as string[],
+  outboxWrite: m => {
+    writeOutbox(m);
+
+    // Envelopes (a signed genesis or destroy) and offline cursors are written
+    // durably; a plain dirty bit waits for the periodic tick.
+    if (m.durable) flushNow();
+    else dirty = true;
+  },
+  applyPeerCommit: m => db!.applyPeerCommit(m.commitJsonAd),
+  applyCommit: async m => {
+    await db!.applyCommit(m.commitJsonAd);
+  },
+  removeResource: async m => {
+    await db!.removeResource(m.subject);
+  },
+  query: m =>
+    db!.query(
+      m.property ?? null,
+      m.value ?? null,
+      m.sortBy ?? null,
+      m.sortDesc ?? null,
+      m.limit ?? null,
+      m.offset ?? null,
+      m.includeResources ?? null,
+      m.drive ?? null,
+      m.filters ?? null,
+      m.aggregation ?? null,
+      m.expressionFilters ?? null,
+      m.includeTrashed ?? null,
+    ),
+  search: m =>
+    db!.search(
+      m.query,
+      m.limit ?? null,
+      m.parents ?? null,
+      m.filters ?? null,
+      m.includeTrashed ?? null,
+    ),
+  allSubjects: () => db!.allSubjects(),
+  populate: async () => {
+    await db!.populate();
+  },
+  // Durability on demand. Writes commit with `Durability::None` and are only
+  // persisted by a later Immediate commit, which otherwise happens on the
+  // periodic tick below, so until it lands a reload rolls the writes back.
+  // Callers about to do something a rollback would ruin (reload, navigate
+  // away, go offline) need to be able to ask for it rather than wait and hope.
+  flush: () => {
+    db!.flush();
+    dirty = false;
+  },
+  exportAllResources: () => db!.exportAllResources(),
+  importAllResources: m => db!.importAllResources(m.jsonArray),
+  getLoroSnapshot: m => db!.getLoroSnapshot(m.subject),
+  historyAttribution: async m =>
+    (await db!.historyAttribution(m.subject)) as string,
+  envelopesFor: m => db!.envelopesFor(JSON.stringify(m.subjects)) as string,
+  importEnvelopes: async m =>
+    (await db!.importEnvelopes(m.envelopes)) as number,
+  putBlob: m => {
+    db!.putBlob(m.hash, m.data);
+  },
+  getBlob: m => db!.getBlob(m.hash),
+  blake3Hash: m => db!.blake3Hash(m.data),
+  getAllVersionVectors: () => db!.getAllVersionVectors(),
+  vaultExport: m =>
+    db!.vaultExport(
+      m.driveSubject,
+      m.key,
+      m.keyEpoch,
+      m.drivePseudonym,
+      m.devicePubkey,
+      m.segment,
+      // `checkpoint_n` is a u64 on the Rust side; wasm-bindgen wants a BigInt
+      // for it and throws "Cannot convert 1 to a BigInt" for a Number, which
+      // failed every automatic backup in the browser.
+      BigInt(m.checkpointN),
+      m.driveHasCheckpoint,
+      m.observedLanes,
+      m.currentStateOnly ?? false,
+    ),
+  vaultImport: async m => {
+    const summary = await db!.vaultImport(
+      m.key,
+      m.keyEpoch,
+      m.drivePseudonym,
+      m.devicePubkey,
+      m.objects,
+    );
+
+    // A restore writes a whole drive behind `Durability::None`, and the caller
+    // reloads the page the moment this resolves (`onRestored` in `VaultPanel`),
+    // so waiting for the 1s tick regularly lost the race: a restore that
+    // reported success and silently did nothing. Flush now; we are already
+    // inside the work queue, so this cannot race an in-flight mutation.
+    try {
+      db!.flush();
+    } catch (e) {
+      // Fall back to the tick rather than failing a restore that did land.
+      dirty = true;
+      console.error('[ClientDb] flush after vault import failed:', e);
+    }
+
+    return summary;
+  },
+  // Backup completion must survive an immediate reload, or the cursor is lost
+  // and the same data uploads again. Keep the retry armed if flush fails, but
+  // propagate that failure so the caller cannot report a completed backup.
+  vaultCommitSegment: m => {
+    db!.vaultCommitSegment(m.drivePseudonym, m.devicePubkey, m.segment);
+    flushNow();
+  },
+  getVersionVectorsForDrive: m => db!.getVersionVectorsForDrive(m.drive),
+  // Search entries are about three quarters of a pulled resource's index
+  // writes; they are added afterwards by `indexPendingSearch`.
+  applyStateUpdates: async m => {
+    const applied = await db!.applyStateUpdates(m.subjects, m.states, true);
+
+    dirty = true;
+
+    return applied;
+  },
+  indexPendingSearch: async m => {
+    const done = await db!.indexPendingSearch(m.limit);
+
+    if (done > 0) dirty = true;
+
+    return done;
+  },
+  getDriveSubjects: m => db!.getDriveSubjects(m.drive),
+  getVersionVectorsForSubjects: m =>
+    db!.getVersionVectorsForSubjects(m.subjects),
+};
+
+/** `init` creates the database, and `flush` has always run without waiting for it. */
+const WITHOUT_DB = new Set<RpcType>(['init', 'flush']);
+
 async function handleMessage(msg: WorkerRequest): Promise<unknown> {
-  switch (msg.type) {
-    case 'canSendPeerFrame':
-      await ensureInit();
+  const handler = handlers[msg.type] as
+    | ((req: WorkerRequest) => unknown)
+    | undefined;
 
-      return db!.canSendPeerFrame(msg.session, msg.subject);
-    case 'createPeerSession':
-      await ensureInit();
+  if (!handler) throw new Error(`Unknown message type: ${msg.type as string}`);
+  if (!WITHOUT_DB.has(msg.type)) await ensureInit();
 
-      return db!.createPeerSession(msg.drive, msg.expectedPeer, msg.challenge);
-    case 'handlePeerFrame':
-      await ensureInit();
-
-      return db!.handlePeerFrame(msg.session, msg.frame);
-    case 'closePeerSession':
-      await ensureInit();
-
-      return db!.closePeerSession(msg.session);
-
-    case 'init': {
-      // Return the per-phase init timings so the main thread can fold the
-      // worker-side WASM/OPFS boot into its perf trace.
-      if (initPromise) {
-        return await initPromise;
-      }
-
-      initPromise = doInit(
-        msg.wasmUrl,
-        msg.wasmModule,
-        msg.baseUrl,
-        msg.dbName,
-        msg.dbKey,
-        msg.migrateLegacy,
-        msg.discardUndecryptable,
-        msg.localOnlyDrives,
-      );
-
-      return await initPromise;
-    }
-
-    case 'getResource': {
-      await ensureInit();
-
-      return db!.getResource(msg.subject);
-    }
-
-    case 'getResourcesWithSnapshots': {
-      // One round trip for a whole list: opening a chat asks for every
-      // message and part at once, and a postMessage per subject queued
-      // behind boot-time sync traffic made that the slow part of the open.
-      await ensureInit();
-      const rows: Array<{
-        jsonAd: string | null;
-        snapshot: Uint8Array | null;
-      }> = [];
-
-      for (const subject of msg.subjects) {
-        rows.push(await db!.getResourceWithSnapshot(subject));
-      }
-
-      return rows;
-    }
-
-    case 'getResourceWithSnapshot': {
-      // One wasm call reads the stored row and its snapshot, without
-      // decoding the CRDT history on the way (the tab imports the
-      // snapshot into its own doc). One round trip instead of two for
-      // every `fetchResourceWithLocalFallback`.
-      await ensureInit();
-
-      return db!.getResourceWithSnapshot(msg.subject);
-    }
-
-    case 'putResource': {
-      await ensureInit();
-      await db!.putResource(msg.jsonAd);
-
-      return;
-    }
-
-    case 'putResources': {
-      // Batch put: each individual `putResource` call costs one
-      // postMessage round-trip. The startup seed loop in the data-
-      // browser writes ~200 resources right after the WASM init —
-      // batching them into one message saves ~200 postMessages of
-      // overhead. The worker still processes them in order, so any
-      // ordering-sensitive caller (properties seeded before others)
-      // can keep its current sequencing.
-      await ensureInit();
-
-      for (const jsonAd of msg.jsonAds) {
-        await db!.putResource(jsonAd);
-      }
-
-      return;
-    }
-
-    case 'putResourceWithSnapshot': {
-      // One transaction: row, index entries and the Loro snapshot as the
-      // tab holds it. Snapshot omitted for resources without a Loro doc
-      // (e.g. Commit resources).
-      await ensureInit();
-
-      if (msg.snapshot) {
-        await db!.putResourceWithSnapshot(msg.jsonAd, msg.snapshot);
-      } else {
-        await db!.putResource(msg.jsonAd);
-      }
-
-      // The outbox entry that says this snapshot still has to reach the
-      // server. Both writes commit without fsync, so the one flush below
-      // persists them together: redb rolls back every commit after the last
-      // durable one, so a crash before it keeps neither, never just one.
-      if (msg.outbox) writeOutbox(msg.outbox);
-
-      // Per-write redb commits use `Durability::None` — see the periodic
-      // `flush()` tick below. Everywhere else that's fine (the periodic
-      // tick catches up within `FLUSH_INTERVAL_MS`), but this op is the
-      // one `resource.ts` `persistToClientDb` uses specifically because
-      // its caller (`saveOffline`) needs the write durable the moment its
-      // promise resolves — an offline edit has no server copy to fall
-      // back on. Without an immediate flush here, a reload landing before
-      // the next tick reads the pre-edit (or entirely absent) state and
-      // silently drops the offline edit.
-      // Leave a periodic retry armed on failure, and reject the RPC so a
-      // caller never mistakes an in-memory write for a durable snapshot.
-      dirty = true;
-      db!.flush();
-      dirty = false;
-
-      return;
-    }
-
-    case 'putResourcesWithSnapshots': {
-      // What a burst of `putResourceWithSnapshot` calls costs one at a time:
-      // a transaction each, so a page every resource touches (the parent's
-      // member list, the name index) is written again per resource. Together
-      // they share one commit and one flush.
-      await ensureInit();
-      await db!.putResourcesWithSnapshots(
-        msg.items.map(item => item.jsonAd),
-        msg.items.map(item => item.snapshot ?? null),
-      );
-
-      for (const item of msg.items) {
-        if (item.outbox) writeOutbox(item.outbox);
-      }
-
-      dirty = true;
-      db!.flush();
-      dirty = false;
-
-      return;
-    }
-
-    case 'outboxEntries': {
-      await ensureInit();
-
-      return db!.outboxEntries(msg.agent) as string[];
-    }
-
-    case 'outboxWrite': {
-      await ensureInit();
-      writeOutbox(msg);
-
-      // Envelopes (a signed genesis or destroy) and offline cursors are
-      // written durably; a plain dirty bit waits for the periodic tick.
-      if (msg.durable) {
-        dirty = true;
-        db!.flush();
-        dirty = false;
-      } else {
-        dirty = true;
-      }
-
-      return;
-    }
-
-    case 'applyPeerCommit':
-      await ensureInit();
-
-      return db!.applyPeerCommit(msg.commitJsonAd);
-
-    case 'applyCommit': {
-      await ensureInit();
-      await db!.applyCommit(msg.commitJsonAd);
-
-      return;
-    }
-
-    case 'removeResource': {
-      await ensureInit();
-      await db!.removeResource(msg.subject);
-
-      return;
-    }
-
-    case 'query': {
-      await ensureInit();
-
-      return db!.query(
-        msg.property ?? null,
-        msg.value ?? null,
-        msg.sortBy ?? null,
-        msg.sortDesc ?? null,
-        msg.limit ?? null,
-        msg.offset ?? null,
-        msg.includeResources ?? null,
-        msg.drive ?? null,
-        msg.filters ?? null,
-        msg.aggregation ?? null,
-        msg.expressionFilters ?? null,
-        msg.includeTrashed ?? null,
-      );
-    }
-
-    case 'search': {
-      await ensureInit();
-
-      return db!.search(
-        msg.query,
-        msg.limit ?? null,
-        msg.parents ?? null,
-        msg.filters ?? null,
-        msg.includeTrashed ?? null,
-      );
-    }
-
-    case 'allSubjects': {
-      await ensureInit();
-
-      return db!.allSubjects();
-    }
-
-    case 'populate': {
-      await ensureInit();
-      await db!.populate();
-
-      return;
-    }
-
-    case 'flush': {
-      await ensureInit();
-      // Durability on demand. Writes commit with `Durability::None` and are
-      // only persisted by a later Immediate commit, which otherwise happens
-      // on the periodic tick below — so until it lands, a reload rolls the
-      // writes back. Callers that are about to do something a rollback would
-      // ruin (reload, navigate away, go offline) need to be able to ask for
-      // it rather than wait and hope.
-      db!.flush();
-      dirty = false;
-
-      return;
-    }
-
-    case 'exportAllResources': {
-      await ensureInit();
-
-      return db!.exportAllResources();
-    }
-
-    case 'importAllResources': {
-      await ensureInit();
-
-      return db!.importAllResources(msg.jsonArray);
-    }
-
-    case 'getLoroSnapshot': {
-      await ensureInit();
-
-      return db!.getLoroSnapshot(msg.subject);
-    }
-
-    case 'historyAttribution': {
-      await ensureInit();
-
-      return (await db!.historyAttribution(msg.subject)) as string;
-    }
-
-    case 'envelopesFor': {
-      await ensureInit();
-
-      return db!.envelopesFor(JSON.stringify(msg.subjects)) as string;
-    }
-
-    case 'importEnvelopes': {
-      await ensureInit();
-
-      return (await db!.importEnvelopes(msg.envelopes)) as number;
-    }
-
-    case 'putBlob': {
-      await ensureInit();
-      db!.putBlob(msg.hash, msg.data);
-
-      return;
-    }
-
-    case 'getBlob': {
-      await ensureInit();
-
-      return db!.getBlob(msg.hash);
-    }
-
-    case 'blake3Hash': {
-      await ensureInit();
-
-      return db!.blake3Hash(msg.data);
-    }
-
-    case 'getAllVersionVectors': {
-      await ensureInit();
-
-      return db!.getAllVersionVectors();
-    }
-
-    case 'vaultExport': {
-      await ensureInit();
-
-      return db!.vaultExport(
-        msg.driveSubject,
-        msg.key,
-        msg.keyEpoch,
-        msg.drivePseudonym,
-        msg.devicePubkey,
-        msg.segment,
-        // `checkpoint_n` is a u64 on the Rust side; wasm-bindgen wants a
-        // BigInt for it and throws "Cannot convert 1 to a BigInt" for a
-        // Number, which failed every automatic backup in the browser.
-        BigInt(msg.checkpointN),
-        msg.driveHasCheckpoint,
-        msg.observedLanes,
-        msg.currentStateOnly ?? false,
-      );
-    }
-
-    case 'vaultImport': {
-      await ensureInit();
-      const summary = await db!.vaultImport(
-        msg.key,
-        msg.keyEpoch,
-        msg.drivePseudonym,
-        msg.devicePubkey,
-        msg.objects,
-      );
-      // A restore writes a whole drive behind `Durability::None`, so without
-      // persisting it here those writes wait for the next flush tick.
-      //
-      // Marking dirty is not enough: the tick is 1s away and the caller
-      // reloads the page the moment this resolves (`onRestored` in
-      // `VaultPanel`), so the reload regularly wins that race and the drive
-      // comes back empty — a restore that reported success and silently did
-      // nothing, which is the precise failure this is meant to prevent.
-      //
-      // A restore is one bulk write, so the amortisation the tick exists for
-      // does not apply. Flush now; we are already inside the work queue, so
-      // this cannot race an in-flight mutation.
-
-      try {
-        db!.flush();
-      } catch (e) {
-        // Fall back to the tick rather than failing a restore that did land.
-        dirty = true;
-        console.error('[ClientDb] flush after vault import failed:', e);
-      }
-
-      return summary;
-    }
-
-    case 'vaultCommitSegment': {
-      await ensureInit();
-      db!.vaultCommitSegment(msg.drivePseudonym, msg.devicePubkey, msg.segment);
-      // Backup completion must survive an immediate reload. Waiting for the
-      // periodic tick loses the cursor and uploads the same data again.
-      // Keep the retry armed if flush fails, but propagate that failure so
-      // the caller cannot report a durably completed backup.
-      dirty = true;
-      db!.flush();
-      dirty = false;
-
-      return undefined;
-    }
-
-    case 'getVersionVectorsForDrive': {
-      await ensureInit();
-
-      return db!.getVersionVectorsForDrive(msg.drive);
-    }
-
-    case 'applyStateUpdates': {
-      await ensureInit();
-      // Search entries are about three quarters of a pulled resource's index
-      // writes; they are added afterwards by `indexPendingSearch`.
-      const applied = await db!.applyStateUpdates(
-        msg.subjects,
-        msg.states,
-        true,
-      );
-
-      dirty = true;
-
-      return applied;
-    }
-
-    case 'indexPendingSearch': {
-      await ensureInit();
-      const done = await db!.indexPendingSearch(msg.limit);
-
-      if (done > 0) dirty = true;
-
-      return done;
-    }
-
-    case 'getDriveSubjects': {
-      await ensureInit();
-
-      return db!.getDriveSubjects(msg.drive);
-    }
-
-    case 'getVersionVectorsForSubjects': {
-      await ensureInit();
-
-      return db!.getVersionVectorsForSubjects(msg.subjects);
-    }
-
-    default:
-      throw new Error(`Unknown message type: ${(msg as WorkerRequest).type}`);
-  }
+  return handler(msg);
 }
 
 /**

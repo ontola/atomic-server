@@ -41,9 +41,14 @@ import type {
   ExpressionFilter,
 } from './collection.js';
 import type {
+  ClientDbInitTimings,
+  RpcReq,
+  RpcRes,
+  RpcType,
+  VaultExportResult,
+  VaultImportSummary,
   WorkerRequest,
   WorkerResponse,
-  ClientDbInitTimings,
 } from './client-db.worker.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 
@@ -197,6 +202,8 @@ export interface ClientDbOptions {
    *  that the local database stopped answering. */
   onLeaderTimeout?: (error: Error) => void;
 }
+
+type Vectors = Record<string, Record<string, number>>;
 
 type PendingRequest = {
   resolve: (value: unknown) => void;
@@ -886,10 +893,17 @@ export class ClientDbWorker {
 
   /* ------------------------------- Public API ------------------------------ */
 
-  async getResource(subject: string): Promise<string | null> {
-    const r = await this.send({ type: 'getResource', subject });
+  /** Send one RPC method of {@link ClientDbRpc}; its request fields and result
+   *  are typed from that list. */
+  private call<K extends RpcType>(
+    type: K,
+    ...req: keyof RpcReq<K> extends never ? [] : [RpcReq<K>]
+  ): Promise<RpcRes<K>> {
+    return this.send({ type, ...(req[0] as object) }) as Promise<RpcRes<K>>;
+  }
 
-    return (r as string | null) ?? null;
+  async getResource(subject: string): Promise<string | null> {
+    return (await this.call('getResource', { subject })) ?? null;
   }
 
   /**
@@ -902,12 +916,12 @@ export class ClientDbWorker {
   async getResourceWithSnapshot(
     subject: string,
   ): Promise<{ jsonAd: string | null; snapshot: Uint8Array | null }> {
-    const r = (await this.send({
-      type: 'getResourceWithSnapshot',
-      subject,
-    })) as { jsonAd: string | null; snapshot: Uint8Array | null } | null;
-
-    return r ?? { jsonAd: null, snapshot: null };
+    return (
+      (await this.call('getResourceWithSnapshot', { subject })) ?? {
+        jsonAd: null,
+        snapshot: null,
+      }
+    );
   }
 
   /** Every subject in one worker round trip, in order; see the worker. */
@@ -915,16 +929,15 @@ export class ClientDbWorker {
     subjects: string[],
   ): Promise<Array<{ jsonAd: string | null; snapshot: Uint8Array | null }>> {
     if (subjects.length === 0) return [];
-    const rows = (await this.send({
-      type: 'getResourcesWithSnapshots',
-      subjects,
-    })) as Array<{ jsonAd: string | null; snapshot: Uint8Array | null }> | null;
 
-    return rows ?? subjects.map(() => ({ jsonAd: null, snapshot: null }));
+    return (
+      (await this.call('getResourcesWithSnapshots', { subjects })) ??
+      subjects.map(() => ({ jsonAd: null, snapshot: null }))
+    );
   }
 
-  async putResource(jsonAd: string): Promise<void> {
-    await this.send({ type: 'putResource', jsonAd });
+  putResource(jsonAd: string): Promise<void> {
+    return this.call('putResource', { jsonAd });
   }
 
   /**
@@ -971,12 +984,7 @@ export class ClientDbWorker {
 
     const message =
       batch.length === 1
-        ? {
-            type: 'putResourceWithSnapshot',
-            jsonAd: batch[0].jsonAd,
-            snapshot: batch[0].snapshot,
-            outbox: batch[0].outbox,
-          }
+        ? { type: 'putResourceWithSnapshot', ...batch[0] }
         : {
             type: 'putResourcesWithSnapshots',
             items: batch.map(({ jsonAd, snapshot, outbox }) => ({
@@ -994,9 +1002,7 @@ export class ClientDbWorker {
 
   /** The outbox rows stored for `agent`: one JSON value per subject. */
   async outboxEntries(agent: string): Promise<string[]> {
-    const rows = await this.send({ type: 'outboxEntries', agent });
-
-    return (rows as string[] | null) ?? [];
+    return (await this.call('outboxEntries', { agent })) ?? [];
   }
 
   /**
@@ -1004,11 +1010,8 @@ export class ClientDbWorker {
    * once the write is flushed to disk; otherwise the worker's periodic flush
    * persists it within a second.
    */
-  async outboxWrite(
-    write: ClientDbOutboxWrite,
-    durable: boolean,
-  ): Promise<void> {
-    await this.send({ type: 'outboxWrite', ...write, durable });
+  outboxWrite(write: ClientDbOutboxWrite, durable: boolean): Promise<void> {
+    return this.call('outboxWrite', { ...write, durable });
   }
 
   /** Put many resources in a single worker round-trip. The worker
@@ -1018,92 +1021,58 @@ export class ClientDbWorker {
    *  used to mean 70 sequential round-trips). */
   async putResources(jsonAds: string[]): Promise<void> {
     if (jsonAds.length === 0) return;
-    await this.send({ type: 'putResources', jsonAds });
+    await this.call('putResources', { jsonAds });
   }
 
-  async createPeerSession(
+  createPeerSession(
     drive: string,
     expectedPeer: string | undefined,
     challenge: string,
   ): Promise<number> {
-    return this.send({
-      type: 'createPeerSession',
-      drive,
-      expectedPeer,
-      challenge,
-    }) as Promise<number>;
+    return this.call('createPeerSession', { drive, expectedPeer, challenge });
   }
 
-  async handlePeerFrame(
-    session: number,
-    frame: Uint8Array,
-  ): Promise<{ frames: number[][]; changed: string[]; ephemeral?: number[] }> {
-    return this.send({ type: 'handlePeerFrame', session, frame }) as Promise<{
-      frames: number[][];
-      changed: string[];
-      ephemeral?: number[];
-    }>;
+  handlePeerFrame(session: number, frame: Uint8Array) {
+    return this.call('handlePeerFrame', { session, frame });
   }
 
-  async canSendPeerFrame(session: number, subject: string): Promise<boolean> {
-    return this.send({
-      type: 'canSendPeerFrame',
-      session,
-      subject,
-    }) as Promise<boolean>;
+  canSendPeerFrame(session: number, subject: string): Promise<boolean> {
+    return this.call('canSendPeerFrame', { session, subject });
   }
 
-  async closePeerSession(session: number): Promise<void> {
-    await this.send({ type: 'closePeerSession', session });
+  closePeerSession(session: number): Promise<void> {
+    return this.call('closePeerSession', { session });
   }
 
-  async applyPeerCommit(commitJsonAd: string): Promise<void> {
-    await this.send({ type: 'applyPeerCommit', commitJsonAd });
+  applyPeerCommit(commitJsonAd: string): Promise<void> {
+    return this.call('applyPeerCommit', { commitJsonAd });
   }
 
-  async applyCommit(commitJsonAd: string): Promise<void> {
-    await this.send({ type: 'applyCommit', commitJsonAd });
+  applyCommit(commitJsonAd: string): Promise<void> {
+    return this.call('applyCommit', { commitJsonAd });
   }
 
-  async removeResource(subject: string): Promise<void> {
-    await this.send({ type: 'removeResource', subject });
+  removeResource(subject: string): Promise<void> {
+    return this.call('removeResource', { subject });
   }
 
-  async query(opts: ClientDbQueryOpts = {}): Promise<ClientDbQueryResult> {
-    const r = await this.send({ type: 'query', ...opts });
-
-    return r as ClientDbQueryResult;
+  query(opts: ClientDbQueryOpts = {}): Promise<ClientDbQueryResult> {
+    return this.call('query', opts);
   }
 
   async search(
     query: string,
-    opts: {
-      limit?: number;
-      parents?: string | string[];
-      filters?: Record<string, string | number | string[]>;
-      includeTrashed?: boolean;
-    } = {},
+    opts: Omit<RpcReq<'search'>, 'query'> = {},
   ): Promise<string[]> {
-    const r = await this.send({
-      type: 'search',
-      query,
-      limit: opts.limit,
-      parents: opts.parents,
-      filters: opts.filters,
-      includeTrashed: opts.includeTrashed,
-    });
-
-    return (r as string[]) ?? [];
+    return (await this.call('search', { query, ...opts })) ?? [];
   }
 
-  async allSubjects(): Promise<string[]> {
-    const r = await this.send({ type: 'allSubjects' });
-
-    return r as string[];
+  allSubjects(): Promise<string[]> {
+    return this.call('allSubjects');
   }
 
-  async populate(): Promise<void> {
-    await this.send({ type: 'populate' });
+  populate(): Promise<void> {
+    return this.call('populate');
   }
 
   /**
@@ -1115,26 +1084,20 @@ export class ClientDbWorker {
    * offline — has no way to know whether that tick has landed. This is that
    * signal.
    */
-  async flush(): Promise<void> {
-    await this.send({ type: 'flush' });
+  flush(): Promise<void> {
+    return this.call('flush');
   }
 
-  async exportAllResources(): Promise<string> {
-    const r = await this.send({ type: 'exportAllResources' });
-
-    return r as string;
+  exportAllResources(): Promise<string> {
+    return this.call('exportAllResources');
   }
 
-  async importAllResources(jsonArray: string): Promise<number> {
-    const r = await this.send({ type: 'importAllResources', jsonArray });
-
-    return r as number;
+  importAllResources(jsonArray: string): Promise<number> {
+    return this.call('importAllResources', { jsonArray });
   }
 
   async getLoroSnapshot(subject: string): Promise<Uint8Array | null> {
-    const r = await this.send({ type: 'getLoroSnapshot', subject });
-
-    return (r as Uint8Array | null) ?? null;
+    return (await this.call('getLoroSnapshot', { subject })) ?? null;
   }
 
   /** The retained signed envelopes (commit JSON-AD) per subject, to ride
@@ -1143,9 +1106,7 @@ export class ClientDbWorker {
     if (subjects.length === 0) return {};
 
     try {
-      const r = await this.send({ type: 'envelopesFor', subjects });
-
-      return JSON.parse(r as string) as Record<string, string[]>;
+      return JSON.parse(await this.call('envelopesFor', { subjects }));
     } catch {
       return {};
     }
@@ -1159,8 +1120,7 @@ export class ClientDbWorker {
     if (envelopes.length === 0) return 0;
 
     try {
-      const r = await this.send({
-        type: 'importEnvelopes',
+      const r = await this.call('importEnvelopes', {
         envelopes: JSON.stringify(envelopes),
       });
 
@@ -1177,84 +1137,62 @@ export class ClientDbWorker {
     subject: string,
   ): Promise<HistoryAttribution | null> {
     try {
-      const r = await this.send({ type: 'historyAttribution', subject });
-
-      return parseHistoryAttribution(r);
+      return parseHistoryAttribution(
+        await this.call('historyAttribution', { subject }),
+      );
     } catch {
       return null;
     }
   }
 
-  async putBlob(hash: Uint8Array, data: Uint8Array): Promise<void> {
-    await this.send({ type: 'putBlob', hash, data });
+  putBlob(hash: Uint8Array, data: Uint8Array): Promise<void> {
+    return this.call('putBlob', { hash, data });
   }
 
   async getBlob(hash: Uint8Array): Promise<Uint8Array | null> {
-    const r = await this.send({ type: 'getBlob', hash });
-
-    return (r as Uint8Array | null) ?? null;
+    return (await this.call('getBlob', { hash })) ?? null;
   }
 
-  async blake3Hash(data: Uint8Array): Promise<Uint8Array> {
-    const r = await this.send({ type: 'blake3Hash', data });
-
-    return r as Uint8Array;
+  blake3Hash(data: Uint8Array): Promise<Uint8Array> {
+    return this.call('blake3Hash', { data });
   }
 
-  async getAllVersionVectors(): Promise<
-    Record<string, Record<string, number>>
-  > {
-    const r = await this.send({ type: 'getAllVersionVectors' });
-
-    return versionVectorRecords(r);
+  async getAllVersionVectors(): Promise<Vectors> {
+    return versionVectorRecords(await this.call('getAllVersionVectors'));
   }
 
   /** Version vectors for one drive's resources only (parent-index walk),
    *  instead of every resource in every drive. */
-  async getVersionVectorsForDrive(
-    drive: string,
-  ): Promise<Record<string, Record<string, number>>> {
-    const r = await this.send({ type: 'getVersionVectorsForDrive', drive });
-
-    return versionVectorRecords(r);
+  async getVersionVectorsForDrive(drive: string): Promise<Vectors> {
+    return versionVectorRecords(
+      await this.call('getVersionVectorsForDrive', { drive }),
+    );
   }
 
-  /** The subjects of one drive, without reading any snapshot. */
   /** Merge and persist pulled resource states inside the worker, without
    *  building them in this thread. */
-  async applyStateUpdates(
-    subjects: string[],
-    states: Uint8Array[],
-  ): Promise<number> {
-    return (await this.send({
-      type: 'applyStateUpdates',
-      subjects,
-      states,
-    })) as number;
+  applyStateUpdates(subjects: string[], states: Uint8Array[]): Promise<number> {
+    return this.call('applyStateUpdates', { subjects, states });
   }
 
   /** Add search entries for up to `limit` resources stored without them.
    *  Resolves to how many were done; 0 means nothing is left. */
-  async indexPendingSearch(limit: number): Promise<number> {
-    return (await this.send({ type: 'indexPendingSearch', limit })) as number;
+  indexPendingSearch(limit: number): Promise<number> {
+    return this.call('indexPendingSearch', { limit });
   }
 
-  async getDriveSubjects(drive: string): Promise<string[]> {
-    return (await this.send({ type: 'getDriveSubjects', drive })) as string[];
+  /** The subjects of one drive, without reading any snapshot. */
+  getDriveSubjects(drive: string): Promise<string[]> {
+    return this.call('getDriveSubjects', { drive });
   }
 
   /** Version vectors of exactly these subjects. A big drive is read in slices
    *  of these, so reads queued on the same database worker run between the
    *  slices instead of behind one long scan. */
-  async getVersionVectorsForSubjects(
-    subjects: string[],
-  ): Promise<Record<string, Record<string, number>>> {
-    const r = await this.send({
-      type: 'getVersionVectorsForSubjects',
-      subjects,
-    });
-
-    return versionVectorRecords(r);
+  async getVersionVectorsForSubjects(subjects: string[]): Promise<Vectors> {
+    return versionVectorRecords(
+      await this.call('getVersionVectorsForSubjects', { subjects }),
+    );
   }
 
   /**
@@ -1285,38 +1223,21 @@ export class ClientDbWorker {
     driveHasCheckpoint: boolean,
     observedLanes: Record<string, number>,
     currentStateOnly = false,
-  ): Promise<{
-    objectKey: string;
-    sealed: Uint8Array;
-    kind: 'pack' | 'checkpoint';
-    resources: number;
-    unchanged: number;
-    tombstones: number;
-    coverage: Record<string, number>;
-  } | null> {
-    const r = await this.send({
-      type: 'vaultExport',
-      driveSubject,
-      key,
-      keyEpoch,
-      drivePseudonym,
-      devicePubkey,
-      segment,
-      checkpointN,
-      driveHasCheckpoint,
-      observedLanes,
-      currentStateOnly,
-    });
-
-    return (r ?? null) as {
-      objectKey: string;
-      sealed: Uint8Array;
-      kind: 'pack' | 'checkpoint';
-      resources: number;
-      unchanged: number;
-      tombstones: number;
-      coverage: Record<string, number>;
-    } | null;
+  ): Promise<VaultExportResult | null> {
+    return (
+      (await this.call('vaultExport', {
+        driveSubject,
+        key,
+        keyEpoch,
+        drivePseudonym,
+        devicePubkey,
+        segment,
+        checkpointN,
+        driveHasCheckpoint,
+        observedLanes,
+        currentStateOnly,
+      })) ?? null
+    );
   }
 
   /**
@@ -1329,35 +1250,20 @@ export class ClientDbWorker {
    * decision lives in `plan_restore` (`lib/src/vault/sync.rs`) rather than
    * being duplicated in every host's JS.
    */
-  async vaultImport(
+  vaultImport(
     key: Uint8Array,
     keyEpoch: number,
     drivePseudonym: string,
     devicePubkey: string,
     objects: { objectKey: string; sealed: Uint8Array }[],
-  ): Promise<{
-    packsRead: number;
-    resourcesRestored: number;
-    tombstonesApplied: number;
-    objectsSkipped: number;
-    objectsUnreadable: number;
-  }> {
-    const r = await this.send({
-      type: 'vaultImport',
+  ): Promise<VaultImportSummary> {
+    return this.call('vaultImport', {
       key,
       keyEpoch,
       drivePseudonym,
       devicePubkey,
       objects,
     });
-
-    return r as {
-      packsRead: number;
-      resourcesRestored: number;
-      tombstonesApplied: number;
-      objectsSkipped: number;
-      objectsUnreadable: number;
-    };
   }
 
   /**
@@ -1368,13 +1274,12 @@ export class ClientDbWorker {
    * progress stays provisional, so a failed upload is retried against the same
    * view of what has been backed up.
    */
-  async vaultCommitSegment(
+  vaultCommitSegment(
     drivePseudonym: string,
     devicePubkey: string,
     segment: number,
   ): Promise<void> {
-    await this.send({
-      type: 'vaultCommitSegment',
+    return this.call('vaultCommitSegment', {
       drivePseudonym,
       devicePubkey,
       segment,
