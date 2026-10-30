@@ -53,23 +53,16 @@ import { ProxyConsentBar, ProxyConsentText } from '@components/ProxyConsentBar';
 import { appAgentOf } from './appAgent';
 import { grantRowAccess, rowAccessQuestion } from './rowGrant';
 import { RowGrantText } from './RowGrantText';
+import { useAppFrameIdentity } from './appFrameIdentity';
 import { registerRuntimesInBackground } from '@helpers/useInstallationRuntimes';
 
 const IMPORT_WAITING = 'An import from this app is already waiting for you.';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
-  return (
-    <AppFrameSession
-      key={JSON.stringify([
-        props.app,
-        props.drive,
-        props.table,
-        props.resource,
-      ])}
-      {...props}
-    />
-  );
+  const identity = useAppFrameIdentity(props);
+
+  return <AppFrameSession key={identity} {...props} />;
 }
 
 /**

@@ -3222,3 +3222,11 @@ or row class and folder creation with native access for the existing app key.
 native app-key access to a moved dataset and refuses unrelated writes. These
 are offline tests; production deployment and live provider behavior are separate
 acceptance steps.
+
+
+`appFrameIdentity.test.tsx` reproduces a table-view guest reading an absent grant
+before Add view's grant POST finishes. The acknowledged grant notification remounts
+the guest so it reads current permission; revocation remounts it again. Initial permission loading never remounts a guest or fetches a second
+status; acknowledgements for unrelated apps, tables and drives are ignored.
+Individual-resource views never fetch or borrow a table grant. This uses the existing grant notification path,
+with no permission polling or provider operations.

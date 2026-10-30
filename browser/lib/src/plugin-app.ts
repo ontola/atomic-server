@@ -164,11 +164,10 @@ export async function createApp(
   });
   await ontology.save();
 
-  // The app's rows are a Table, not a folder. Structurally they are the same
-  // thing — a table's rows are its children — but a Table carries a row class
-  // and display config, so the rows are sortable, filterable, editable and
-  // exportable without the app implementing any of it, and someone who wants
-  // the data rather than the app can just open it.
+  // A dataset retains its row class and its existing resource identities.
+  // Tables expose the native row tools; an account folder presents the same
+  // child records through its selected resource view. A view-only app needs
+  // neither a dataset nor a placeholder row class.
   const rows = options.rowName ?? { singular: 'Item', plural: 'Items' };
 
   let rowClass: Awaited<ReturnType<SchemaStore['getResource']>> | undefined;

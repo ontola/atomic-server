@@ -218,6 +218,9 @@ describe('giving and taking back a row grant (#1740)', () => {
     expect(versions).toEqual(['2']);
     expect(grant.via).toBe('request');
     expect(changed).toHaveBeenCalledOnce();
+    expect(changed).toHaveBeenCalledWith(
+      expect.objectContaining({ drive: DRIVE, table: TABLE, app: APP }),
+    );
   });
 
   it('revokes from the menu', async () => {
