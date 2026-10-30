@@ -117,6 +117,10 @@ test.describe('sync page devices', () => {
       contentType: 'image/png',
     });
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
+    await expect
+      .poll(async () => (await provider.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(300);
     await expect(provider.getByTestId('link-user-code')).toBeVisible();
     await testInfo.attach('sync-account-mobile', {
       body: await page.screenshot({ fullPage: true }),
