@@ -220,6 +220,12 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
+Server marketplace discovery: `helpers/pluginListings.test.ts` covers legacy
+Listing arrays, catalog envelopes with `entries` and `hostFeatures`, empty
+catalogs and malformed responses. `integration-store-install.spec.ts` checks
+search and Installation review with both response formats, and that invalid
+catalog data shows an alert while the Apps page remains available.
+
 Plugin discovery: `PluginRuns/pluginCatalog.test.tsx` covers parsing the remote
 plugin catalog, which entries unlock "Show experimental plugins" (entries
 that need API plugins don't), and a remounted hook rendering the cached catalog

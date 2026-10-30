@@ -17,6 +17,11 @@ Three classes describe a plugin's life on a server:
 - A **Listing** is a marketplace entry pointing at a Release: name, emoji, description, domains, standards. Every Listing the public can read on a server is part of that server's Store; `GET /plugin-catalog` returns them. Any drive of Listings is a marketplace.
 - An **Installation** is one installed Release on one Drive. It pins the `release` URL and its `releaseId`, holds the `grants` you approved, your `config`, and an `installationStatus` (`draft`, `active`, `paused`, `revoked`). Committing it as `active` is the single install trigger for both runtimes; `paused` stops the plugin without uninstalling it, keeping its files, its config and the agent it signs as; `revoked` or destroying the resource uninstalls it and retires that agent. Updating a plugin means pointing the same Installation at a newer Release, which keeps everything the plugin already owns.
 
+The Apps page accepts both a JSON array of Listings from `GET /plugin-catalog`
+and an object with that array in `entries`. Additional response metadata, such
+as `hostFeatures`, does not change the listings. Invalid catalog responses show
+a catalog error while the rest of the page stays available.
+
 ## Installing a plugin
 
 You need write access to the drive the plugin will be installed on. Two ways in, one review:
