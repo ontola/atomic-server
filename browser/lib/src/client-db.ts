@@ -984,7 +984,12 @@ export class ClientDbWorker {
 
     const message =
       batch.length === 1
-        ? { type: 'putResourceWithSnapshot', ...batch[0] }
+        ? {
+            type: 'putResourceWithSnapshot',
+            jsonAd: batch[0].jsonAd,
+            snapshot: batch[0].snapshot,
+            outbox: batch[0].outbox,
+          }
         : {
             type: 'putResourcesWithSnapshots',
             items: batch.map(({ jsonAd, snapshot, outbox }) => ({
