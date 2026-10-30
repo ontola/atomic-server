@@ -2541,12 +2541,16 @@ function SyncPage() {
                   <LogHeader>
                     <LogHeaderLeft>
                       <StatusBadge $status={entry.status}>
-                        {entry.status}
+                        {entry.status === 'local'
+                          ? 'Saved locally'
+                          : entry.status}
                       </StatusBadge>
-                      <Direction>
-                        {entry.direction === 'outgoing' ? '\u2191' : '\u2193'}{' '}
-                        {entry.direction}
-                      </Direction>
+                      {entry.status !== 'local' && (
+                        <Direction>
+                          {entry.direction === 'outgoing' ? '\u2191' : '\u2193'}{' '}
+                          {entry.direction}
+                        </Direction>
+                      )}
                       {entry.destroy && <DestroyBadge>destroy</DestroyBadge>}
                     </LogHeaderLeft>
                     {/* `entry.commitId` is a `did:ad:commit:` receipt, not a

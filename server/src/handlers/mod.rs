@@ -13,6 +13,7 @@ pub mod app_write;
 pub mod blob;
 pub mod commit;
 pub mod download;
+pub mod drive_sync_confirmation;
 pub mod drive_usage;
 pub mod export;
 pub mod forget_peer;

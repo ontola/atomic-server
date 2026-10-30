@@ -141,6 +141,32 @@ Shared, and authoritative over all of the above:
 
 ## 5. What is tested
 
+### Browser sidebar server-sync status (#2409)
+
+The sidebar's icon, tooltip and account-menu helper describe server sync for
+the selected workspace, rather than the store's global server connection.
+An unrelated saved server cannot make a local-only or foreign-origin workspace
+look synced. The red label is "Not syncing with a server", which makes no
+claim about Cloud Vault or browser peer backups. A workspace eligible for server
+sync remains "Sync not confirmed" until its sync with the current server is
+acknowledged; other workspaces' receipts do not count. Unsaved edits, active
+saves, queued/blocked writes and reconciliation keep the icon red. A later edit
+cannot be certified by an earlier acknowledgement. The desktop embedded node
+does not count as a separate place. Progress counters
+remain store-wide and are not a new per-workspace accounting API.
+The browser additionally requires the read-only `/drive-sync-confirmation`
+receipt for its exact current state, including all file/image chunks stored on
+the server. An ordinary metadata `SYNC_OK` is insufficient. Proof checks wait
+for quiet local state and are invalidated immediately by edits and context
+changes; unavailable/older servers remain red. This browser indicator has no
+Flutter device-settings counterpart.
+Saved server selection and local-only preferences are not yet isolated by
+identity/workspace; [#2411](https://github.com/ontola/atomic-server/issues/2411)
+tracks that separate boundary and its safe legacy migration.
+
+This browser sidebar has no Flutter counterpart; the Flutter device-settings
+screen and the browser Sync page's connection controls are unchanged.
+
 | Level | Covers | Where |
 | --- | --- | --- |
 | Rust unit | pairing AUTH; a different agent syncs what it may read, is told why when it may read nothing, and pushing to an empty device is not a failure | `lib/src/sync/` |

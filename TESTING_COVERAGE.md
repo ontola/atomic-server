@@ -1187,6 +1187,35 @@ the reader's active drive to receive live updates.
 
 ### Per-drive Cloud Server display
 
+`components/SideBar/syncStatus.test.tsx` mounts the sidebar status hook against a
+real Store. It covers a connected server with a local-only selected drive,
+registration/promotion, selected-drive receipts, foreign/absent drives, server
+and identity changes, unsaved edits, a later edit during an unacknowledged save,
+new/removed resources, the embedded desktop node, and red progress/warning states. Counters
+remain store-wide. These tests do not establish Cloud Vault or peer durability.
+`local-only-drive.test.ts` distinguishes locally settled commits from server
+acceptance. `websockets.test.ts` covers deferred flushes across context changes
+and late `SYNC_OK`/`SYNC_DIFF` responses after a drive becomes local-only.
+It also covers all-chunk acknowledgement, both orders of bidirectional sync,
+bounded remove-only verification, rejected transfers, and retry after terminal
+authentication, send and flush failures.
+`sidebar-drive-sync.spec.ts` uses a real server connection and local database to
+exercise the red local-only indicator, Sync page explanation, local activity
+wording, save/reload persistence, and switching back to a server-synced drive.
+Account/drive routing preferences remain browser-wide; #2411 owns isolation and
+the two-identity shared-drive transition tests. These indicator tests do not
+establish that isolation.
+Ordinary server resource-state receipts do not establish attachment presence.
+`components/SideBar/driveConfirmation.test.tsx` exercises the separate exact-hash
+copy check, stale responses, context/DB changes, missing/old/malformed endpoints,
+retry and local-only exclusions. Rust `sync::confirmation` tests check stored
+files and chunks, missing/corrupt bytes, strict reads and a drive-scoped inventory;
+the handler test exercises signed requests and rejects foreign drives. Object
+revision-cache tests require fresh presence/revision checks and rehash changed
+content. The browser attachment journey deliberately acknowledges a blob PUT
+without storing its bytes, requires red with the real confirmation endpoint,
+then uploads the bytes and waits for a confirmed copy.
+
 `driveSyncStatus.test.ts` rejects another drive's sync timestamp and scopes
 asynchronous hosting/usage results to the selected drive and server. It covers
 unenrolled/local drives and shared drives confirmed directly by their node.

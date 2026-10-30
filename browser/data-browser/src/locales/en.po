@@ -534,8 +534,6 @@ msgstr "Not configured"
 
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/AI/ProviderStatus.tsx
-#: src/components/SideBar/syncStatus.tsx
-#: src/components/SideBar/syncStatus.tsx
 #: src/routes/ConnectAgentRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -13405,3 +13403,27 @@ msgstr "Start this drive"
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
 msgstr "Give it a name, then fill it with a starter"
+
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
+msgid "Not syncing with a server"
+msgstr "Not syncing with a server"
+
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
+msgid "Sync not confirmed"
+msgstr "Sync not confirmed"
+
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
+msgid "Synced with server"
+msgstr "Synced with server"
+
+#: src/routes/SyncRoute.tsx
+msgid "Saved locally"
+msgstr "Saved locally"
+
+#: src/components/SideBar/syncStatus.tsx
+msgid "Changes not yet synced"
+msgstr "Changes not yet synced"
