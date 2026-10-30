@@ -52,7 +52,7 @@ it.each(['packaged', 'generated'])(
     } else {
       const source = readFileSync(
         new URL(
-          '../../../server/src/plugins/assets/view-client.js',
+          '../../data-browser/src/chunks/AppPage/viewClient.js',
           import.meta.url,
         ),
         'utf8',
@@ -101,7 +101,7 @@ it('lets a generated view wait for host recovery but still rejects a silent host
   const f = frame();
   const source = readFileSync(
     new URL(
-      '../../../server/src/plugins/assets/view-client.js',
+      '../../data-browser/src/chunks/AppPage/viewClient.js',
       import.meta.url,
     ),
     'utf8',
@@ -141,7 +141,7 @@ it('lets a generated view wait for host recovery but still rejects a silent host
 function generatedStore(f: ReturnType<typeof frame>) {
   const source = readFileSync(
     new URL(
-      '../../../server/src/plugins/assets/view-client.js',
+      '../../data-browser/src/chunks/AppPage/viewClient.js',
       import.meta.url,
     ),
     'utf8',
@@ -448,7 +448,7 @@ it('sends a menu at the point clicked and waits on the person with no timeout', 
   const f = frame();
   const source = readFileSync(
     new URL(
-      '../../../server/src/plugins/assets/view-client.js',
+      '../../data-browser/src/chunks/AppPage/viewClient.js',
       import.meta.url,
     ),
     'utf8',
@@ -523,7 +523,7 @@ it('knows whether the host is light or dark, before and after a theme message', 
   const f = frame();
   const source = readFileSync(
     new URL(
-      '../../../server/src/plugins/assets/view-client.js',
+      '../../data-browser/src/chunks/AppPage/viewClient.js',
       import.meta.url,
     ),
     'utf8',

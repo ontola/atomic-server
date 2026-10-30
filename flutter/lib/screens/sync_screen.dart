@@ -17,6 +17,7 @@ import 'package:atomic_chat/atomic_chat.dart'
         openResourceView,
         BackgroundActivity,
         BackgroundState,
+        showFeedbackDialog,
         timeAgo,
         ToastScope;
 
@@ -24,6 +25,7 @@ import '../assistant/atomic_assistant_api.dart';
 import '../atomic/account_store.dart';
 import '../atomic/settings_backend.dart';
 import 'account_link_dialog.dart';
+import 'ai_settings_screen.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 
@@ -95,6 +97,12 @@ class SyncScreen extends StatefulWidget {
   /// The account's AI credits; [AccountStore.aiCredits] by default.
   final Future<shared.AtomicAiCredits?> Function()? loadCredits;
 
+  /// The account's AI usage report; [AccountStore.aiUsage] by default.
+  final Future<shared.AtomicAiUsage?> Function()? loadUsage;
+
+  /// Every model that may be chosen; [AccountStore.aiModels] by default.
+  final Future<List<shared.AtomicAiModel>?> Function()? loadModels;
+
   /// The portal sign-in cookie for the web view; [AccountStore.portalCookie]
   /// by default.
   final Future<String?> Function(Uri portal)? portalCookie;
@@ -129,6 +137,8 @@ class SyncScreen extends StatefulWidget {
     this.loadAccount,
     this.linkAccount,
     this.loadCredits,
+    this.loadUsage,
+    this.loadModels,
     this.portalCookie,
     this.portalPage,
     this.profilePage,
@@ -190,7 +200,7 @@ class _SyncScreenState extends State<SyncScreen> {
             api: const AtomicAssistantApi(),
             drive: drive,
             title: title,
-            path: '/app/storage');
+            path: '/app/storage?drive=${Uri.encodeComponent(drive)}');
     openFromList<void>(context, build, subject: '$drive#storage');
   }
 
@@ -230,6 +240,13 @@ class _SyncScreenState extends State<SyncScreen> {
       appBar: AppTopBar(
         title: 'User',
         actions: [
+          IconButton(
+            key: const ValueKey('sync-feedback'),
+            tooltip: 'Send feedback',
+            onPressed: () => showFeedbackDialog(context,
+                api: const AtomicAssistantApi(), source: 'user-page'),
+            icon: const Icon(Icons.feedback_outlined),
+          ),
           TextButton.icon(
             key: const ValueKey('sync-open-settings'),
             onPressed: _openSettings,
@@ -257,6 +274,8 @@ class _SyncScreenState extends State<SyncScreen> {
               loadAccount: widget.loadAccount,
               linkAccount: widget.linkAccount,
               loadCredits: widget.loadCredits,
+              loadUsage: widget.loadUsage,
+              loadModels: widget.loadModels,
               portalCookie: widget.portalCookie,
               portalPage: widget.portalPage,
             ),
@@ -306,6 +325,8 @@ class _AccountSection extends StatefulWidget {
   final Future<AccountSummary?> Function(String? drive)? loadAccount;
   final Future<void> Function(BuildContext context, String portal)? linkAccount;
   final Future<shared.AtomicAiCredits?> Function()? loadCredits;
+  final Future<shared.AtomicAiUsage?> Function()? loadUsage;
+  final Future<List<shared.AtomicAiModel>?> Function()? loadModels;
   final Future<String?> Function(Uri portal)? portalCookie;
   final Widget Function(ResourceWebView page)? portalPage;
 
@@ -315,6 +336,8 @@ class _AccountSection extends StatefulWidget {
     this.loadAccount,
     this.linkAccount,
     this.loadCredits,
+    this.loadUsage,
+    this.loadModels,
     this.portalCookie,
     this.portalPage,
   });
@@ -326,11 +349,6 @@ class _AccountSection extends StatefulWidget {
 class _AccountSectionState extends State<_AccountSection> {
   AccountSummary? _account;
   String? _accountError;
-
-  /// Last known AI credits, kept when a refresh fails (offline).
-  shared.AtomicAiCredits? _credits;
-  bool _creditsLoading = false;
-  bool _creditsFailed = false;
 
   /// Where the active server is administered, when it is a managed one: the
   /// only place an account can be linked from.
@@ -393,39 +411,22 @@ class _AccountSectionState extends State<_AccountSection> {
       _accountError = accountError;
       _portal = portal;
     });
-    if (account != null) unawaited(_loadCredits());
   }
 
-  Future<void> _loadCredits() async {
-    if (_creditsLoading) return;
-    setState(() => _creditsLoading = true);
-    var failed = false;
-    shared.AtomicAiCredits? credits = _credits;
-    try {
-      credits = await (widget.loadCredits ?? AccountStore.aiCredits)();
-    } catch (_) {
-      failed = true;
-    }
-    if (!mounted) return;
-    setState(() {
-      _credits = credits;
-      _creditsLoading = false;
-      _creditsFailed = failed;
-    });
-  }
+  void _openAiSettings() => Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => AiSettingsScreen(
+            loadCredits: widget.loadCredits,
+            loadUsage: widget.loadUsage,
+            loadModels: widget.loadModels),
+      ));
 
-  String _creditsLine() {
-    final credits = _credits;
-    if (credits == null) return _creditsFailed ? 'Could not load' : '—';
-    return [
-      if (credits.allowance > 0)
-        '${credits.remaining} of ${credits.allowance} this month'
-      else
-        '${credits.remaining} left',
-      if (credits.purchased > 0) '${credits.purchased} purchased',
-      if (_creditsFailed) 'offline, last known',
-    ].join(' · ');
-  }
+  Widget get _aiSettingsRow => shared.SyncRow(
+        key: const Key('ai-settings-row'),
+        icon: Icons.auto_awesome_outlined,
+        title: 'AI settings',
+        subtitle: 'Provider, credits, model and usage',
+        onTap: _openAiSettings,
+      );
 
   void _fail(String what, Object e) =>
       shared.showErrorSnack(context, '$what: $e');
@@ -459,8 +460,6 @@ class _AccountSectionState extends State<_AccountSection> {
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => widget.portalPage?.call(page) ?? page,
     ));
-    // Credits may have been bought or used while away.
-    if (mounted) unawaited(_loadCredits());
   }
 
   /// In the system browser: it is where the emailed sign-in link will open,
@@ -551,25 +550,7 @@ class _AccountSectionState extends State<_AccountSection> {
         subtitle:
             server == null ? 'Off for ${_driveLabel()}' : _serverLine(server),
       ),
-      shared.SyncRow(
-        icon: Icons.auto_awesome_outlined,
-        title: 'AI credits',
-        subtitle: _creditsLine(),
-        trailing: _creditsLoading
-            ? const shared.SyncSpinner()
-            : IconButton(
-                tooltip: 'Refresh AI credits',
-                icon: const Icon(Icons.refresh, size: 24),
-                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-                onPressed: _loadCredits),
-      ),
-      if (_credits?.purchasesEnabled == true)
-        shared.SyncRow(
-          icon: Icons.add_card_outlined,
-          title: 'Get more credits',
-          onTap: () => _openInBrowser(account.portal
-              .replace(path: '/dashboard', query: null, fragment: null)),
-        ),
+      _aiSettingsRow,
       shared.SyncRow(
         icon: Icons.open_in_new,
         title: 'Manage in the portal',
@@ -618,6 +599,7 @@ class _AccountSectionState extends State<_AccountSection> {
               'Show Cloud Vault and Cloud Server from ${Uri.tryParse(portal)?.host ?? portal}',
           onTap: () => _link(portal),
         ),
+        _aiSettingsRow,
       ]);
 }
 

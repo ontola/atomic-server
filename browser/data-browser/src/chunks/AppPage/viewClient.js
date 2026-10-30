@@ -1,3 +1,4 @@
+// @wc-ignore-file
 /**
  * The data API a view gets, and the only one it should need.
  *
@@ -58,7 +59,8 @@ const ASKS_THE_PERSON = new Set([
 
 /** A MouseEvent or `{ x, y }`, as a point in this frame. */
 function point(at) {
-  if (at && typeof at.clientX === 'number') return { x: at.clientX, y: at.clientY };
+  if (at && typeof at.clientX === 'number')
+    return { x: at.clientX, y: at.clientY };
 
   return at;
 }
@@ -70,7 +72,8 @@ let colorScheme;
 const themeListeners = new Set();
 
 window.addEventListener('message', event => {
-  if (event.source !== window.parent || event.data?.type !== '__atomic_style') return;
+  if (event.source !== window.parent || event.data?.type !== '__atomic_style')
+    return;
   const next = event.data.colorScheme;
   if (next !== 'light' && next !== 'dark') return;
   // Compared with what `getTheme()` already said, so the first message after
@@ -89,7 +92,11 @@ function currentColorScheme() {
   if (colorScheme) return colorScheme;
 
   try {
-    return getComputedStyle(document.documentElement).colorScheme.split(' ').includes('dark') ? 'dark' : 'light';
+    return getComputedStyle(document.documentElement)
+      .colorScheme.split(' ')
+      .includes('dark')
+      ? 'dark'
+      : 'light';
   } catch {
     return 'light';
   }
@@ -103,7 +110,13 @@ function currentColorScheme() {
  */
 window.addEventListener('keydown', event => {
   if (event.defaultPrevented || event.isComposing) return;
-  if (event.key !== 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey) return;
+  if (
+    event.key !== 'Escape' &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey
+  )
+    return;
 
   window.parent.postMessage(
     {
@@ -138,7 +151,10 @@ function send(op, payload) {
           }
         }, 60000);
     pending.set(id, { resolve, reject, timer });
-    window.parent.postMessage({ type: 'atomic.view.request', version: 1, id, op, args: payload }, '*');
+    window.parent.postMessage(
+      { type: 'atomic.view.request', version: 1, id, op, args: payload },
+      '*',
+    );
   });
 }
 
@@ -196,10 +212,16 @@ function makeResource(subject, propVals, title = subject) {
       if (destroyed) throw new Error('This resource was destroyed.');
 
       const remove = [...removed];
-      const propVals = Object.fromEntries([...changed].map(property => [property, props[property]]));
-      await send('save', { subject, propVals, ...(remove.length ? { remove } : {}) });
+      const changedVals = Object.fromEntries(
+        [...changed].map(property => [property, props[property]]),
+      );
+      await send('save', {
+        subject,
+        propVals: changedVals,
+        ...(remove.length ? { remove } : {}),
+      });
       for (const property of remove) removed.delete(property);
-      for (const property of Object.keys(propVals)) changed.delete(property);
+      for (const property of Object.keys(changedVals)) changed.delete(property);
 
       return this;
     },
@@ -265,7 +287,9 @@ export const store = {
     const list = Array.from(subjects ?? []);
 
     if (list.length > MAX_GET_MANY) {
-      throw new Error(`getMany reads at most ${MAX_GET_MANY} subjects at a time; ask in batches`);
+      throw new Error(
+        `getMany reads at most ${MAX_GET_MANY} subjects at a time; ask in batches`,
+      );
     }
 
     if (list.length === 0) return [];
@@ -273,7 +297,9 @@ export const store = {
     const results = await send('getMany', { subjects: list });
 
     return results.map(entry =>
-      entry.error === undefined ? makeResource(entry.subject, entry.props, entry.title) : { subject: entry.subject, error: entry.error },
+      entry.error === undefined
+        ? makeResource(entry.subject, entry.props, entry.title)
+        : { subject: entry.subject, error: entry.error },
     );
   },
 
@@ -325,7 +351,12 @@ export const store = {
    */
   subscribe(subject, handler) {
     const listener = event => {
-      if (event.source === window.parent && event.data?.type === 'atomic.view.change' && event.data.version === 1 && event.data.subject === subject) {
+      if (
+        event.source === window.parent &&
+        event.data?.type === 'atomic.view.change' &&
+        event.data.version === 1 &&
+        event.data.subject === subject
+      ) {
         // Apps written before the resource was passed along ignore it; a
         // failed read (the subject was just destroyed) still notifies them.
         store.getResource(subject).then(handler, () => handler());
@@ -457,8 +488,24 @@ export const store = {
      * text. Resolves to `{ status, headers, body }`, `body` parsed as JSON
      * when it is JSON.
      */
-    async request({ platform, connectionId, path, method = 'GET', query, body, ifMatch }) {
-      return proxyRequest({ platform, connectionId, path, method, query, body, ifMatch });
+    async request({
+      platform,
+      connectionId,
+      path,
+      method = 'GET',
+      query,
+      body,
+      ifMatch,
+    }) {
+      return proxyRequest({
+        platform,
+        connectionId,
+        path,
+        method,
+        query,
+        body,
+        ifMatch,
+      });
     },
 
     /** Connections for `platform` delegated to this app: `[{ connectionId, platform }]`. */
@@ -490,9 +537,15 @@ let frameKey;
 const capabilities = new Map();
 
 const b64url = bytes =>
-  btoa(String.fromCharCode(...new Uint8Array(bytes))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  btoa(String.fromCharCode(...new Uint8Array(bytes)))
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
 
-const hex = bytes => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
+const hex = bytes =>
+  Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join(
+    '',
+  );
 
 /**
  * This frame's key: made once, kept only in this frame's memory, and never
@@ -503,20 +556,33 @@ const hex = bytes => Array.from(new Uint8Array(bytes), b => b.toString(16).padSt
 function getFrameKey() {
   frameKey ??= (async () => {
     if (!globalThis.crypto?.subtle) {
-      throw new Error('This browser has no WebCrypto here, so this view cannot sign integration requests.');
+      throw new Error(
+        'This browser has no WebCrypto here, so this view cannot sign integration requests.',
+      );
     }
 
     let pair;
 
     try {
-      pair = await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']);
+      pair = await crypto.subtle.generateKey({ name: 'Ed25519' }, false, [
+        'sign',
+        'verify',
+      ]);
     } catch (e) {
-      throw new Error(`This browser cannot make an Ed25519 key (WebCrypto Ed25519 is missing, see atomic-server#1688), so this view cannot reach integrations: ${e?.message ?? e}`);
+      throw new Error(
+        `This browser cannot make an Ed25519 key (WebCrypto Ed25519 is missing, see atomic-server#1688), so this view cannot reach integrations: ${e?.message ?? e}`,
+      );
     }
 
-    const publicKey = b64url(await crypto.subtle.exportKey('raw', pair.publicKey));
+    const publicKey = b64url(
+      await crypto.subtle.exportKey('raw', pair.publicKey),
+    );
 
-    return { privateKey: pair.privateKey, publicKey, agent: `atomic:agent:${publicKey}` };
+    return {
+      privateKey: pair.privateKey,
+      publicKey,
+      agent: `atomic:agent:${publicKey}`,
+    };
   })();
   frameKey.catch(() => {
     frameKey = undefined;
@@ -529,12 +595,21 @@ async function capabilityFor(platform, connectionId, fresh) {
   const key = JSON.stringify([platform, connectionId]);
   const cached = capabilities.get(key);
 
-  if (!fresh && cached && cached.exp * 1000 - Date.now() > CAPABILITY_MARGIN_MS) return cached;
+  if (!fresh && cached && cached.exp * 1000 - Date.now() > CAPABILITY_MARGIN_MS)
+    return cached;
 
   const { publicKey } = await getFrameKey();
-  const minted = await send('proxyCapability', { platform, connectionId, publicKey });
+  const minted = await send('proxyCapability', {
+    platform,
+    connectionId,
+    publicKey,
+  });
 
-  if (!minted || typeof minted.capability !== 'string' || typeof minted.aud !== 'string') {
+  if (
+    !minted ||
+    typeof minted.capability !== 'string' ||
+    typeof minted.aud !== 'string'
+  ) {
     throw new Error('The host returned no capability.');
   }
 
@@ -549,8 +624,20 @@ async function signV2(method, url, body) {
   const timestamp = Date.now();
   const bytes = new TextEncoder().encode(body ?? '');
   const digest = hex(await crypto.subtle.digest('SHA-256', bytes));
-  const message = ['atomic-request-v2', method, url, String(timestamp), digest].join('\n');
-  const signature = b64url(await crypto.subtle.sign({ name: 'Ed25519' }, privateKey, new TextEncoder().encode(message)));
+  const message = [
+    'atomic-request-v2',
+    method,
+    url,
+    String(timestamp),
+    digest,
+  ].join('\n');
+  const signature = b64url(
+    await crypto.subtle.sign(
+      { name: 'Ed25519' },
+      privateKey,
+      new TextEncoder().encode(message),
+    ),
+  );
 
   return {
     'x-atomic-agent': agent,
@@ -562,16 +649,26 @@ async function signV2(method, url, body) {
 }
 
 function proxyTarget(aud, connectionId, platform, path, query) {
-  if (typeof platform !== 'string' || !/^[a-z0-9-]{1,80}$/.test(platform)) throw new Error('Invalid platform');
-  if (typeof connectionId !== 'string' || !connectionId) throw new Error('connectionId is required');
-  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || /[\\#]/.test(path) || path.length > 4096) {
+  if (typeof platform !== 'string' || !/^[a-z0-9-]{1,80}$/.test(platform))
+    throw new Error('Invalid platform');
+  if (typeof connectionId !== 'string' || !connectionId)
+    throw new Error('connectionId is required');
+
+  if (
+    typeof path !== 'string' ||
+    !path.startsWith('/') ||
+    path.startsWith('//') ||
+    /[\\#]/.test(path) ||
+    path.length > 4096
+  ) {
     throw new Error('Invalid proxy path');
   }
 
   const prefix = `/proxy/${encodeURIComponent(connectionId)}/${platform}/`;
   const url = new URL(`${prefix.slice(0, -1)}${path}`, aud);
 
-  if (url.origin !== new URL(aud).origin || !url.pathname.startsWith(prefix)) throw new Error('Invalid proxy path');
+  if (url.origin !== new URL(aud).origin || !url.pathname.startsWith(prefix))
+    throw new Error('Invalid proxy path');
 
   for (const [k, v] of Object.entries(query ?? {})) {
     if (typeof v !== 'string') throw new Error('Invalid proxy query');
@@ -591,12 +688,23 @@ function parseBody(text) {
   }
 }
 
-async function proxyRequest({ platform, connectionId, path, method, query, body, ifMatch }) {
+async function proxyRequest({
+  platform,
+  connectionId,
+  path,
+  method,
+  query,
+  body,
+  ifMatch,
+}) {
   const verb = String(method).toUpperCase();
   if (!PROXY_METHODS.includes(verb)) throw new Error('Invalid proxy method');
-  if (body !== undefined && typeof body !== 'string') throw new Error('A proxy request body is JSON text');
-  if (body !== undefined && verb === 'GET') throw new Error('A GET proxy request has no body');
-  if (ifMatch !== undefined && typeof ifMatch !== 'string') throw new Error('Invalid If-Match');
+  if (body !== undefined && typeof body !== 'string')
+    throw new Error('A proxy request body is JSON text');
+  if (body !== undefined && verb === 'GET')
+    throw new Error('A GET proxy request has no body');
+  if (ifMatch !== undefined && typeof ifMatch !== 'string')
+    throw new Error('Invalid If-Match');
 
   const attempt = async fresh => {
     const cap = await capabilityFor(platform, connectionId, fresh);

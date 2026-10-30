@@ -60,6 +60,7 @@ export interface SchemaResource {
   set(property: string, value: JSONValue): Promise<void>;
   save(): Promise<unknown>;
   pushListItem?(property: string, value: JSONValue): void;
+  getPropVals?(): Record<string, unknown>;
 }
 
 export interface SchemaStore {

@@ -196,28 +196,169 @@ verified without a device: the transparent web view background in dark mode.
 follow-session side panel; the embed renders no side panels except comments, so
 nothing appeared. Decision:
 
-- **Open chat**: the page asks the app to show the chat in its own screen
-  (`openNative('chatroom', subject, title)`, `src/embed/hostActions.ts`, a call
-  on the AtomicFlutter channel answered `true` when the app opened it). The
+- **Open chat on a meeting**: a meeting opens as the meeting page, and its chat
+  is the web meeting panel, never the native screen.
+  `src/embed/MeetingChatOverlay.tsx` shows `FollowSessionChat` (exported from
+  `components/Presence/FollowSessionPanelContainer.tsx`: title, who is here,
+  chat, End / Leave) full screen with a close button. In the embed
+  (`embedded`) Notes is left out (the page is the meeting) and the video
+  button asks the app to place the call (see "Calls" below).
+- **Open chat on a plain ChatRoom**: the page asks the app to show the chat in
+  its own screen (`openNative('chatroom', subject, title)`,
+  `src/embed/hostActions.ts`, answered `true` when the app opened it). The
   app's `ResourceView` handles it (`openNative` in `resource_view.dart`): when
-  `nativeViews` has the kind it pushes `ChatRoomScreen` over the page and
-  answers true. A meeting is a chat room of its own (the log sits under the
-  meeting), so the same screen shows both. A link to a `ChatRoom` inside the
-  page does the same (`useNativeChatRoom`), and the page goes back to where the
-  link was. `ChatRoom` is also in the native views registry, so opening one from
-  a list or search skips the web page.
-- **Fallback**: `src/embed/MeetingChatOverlay.tsx` shows the meeting's chat
-  (the web app's `ChatRoomView`: messages and composer, writing through the
-  commit transport like every other write) full screen, with a close button,
-  when the app answers false or does not know the call (desktop mock, an older
-  app). The call and the presence list of the web panel are left out.
+  `nativeViews` has the kind it pushes `ChatRoomScreen` over the page. A link
+  to a `ChatRoom` inside the page does the same (`useNativeChatRoom`). If the
+  app answers false (or does not know the call: desktop mock, older app) the
+  overlay shows the chat room's `ChatRoomView` instead.
+- **A reused page starts clean**: `atomicEmbed.open` and `show` (also
+  `show("")` from giving a page back) call `closeAllOverlays()`
+  (`overlayBack.ts`): open overlays close, the right panel closes and the
+  overlay forgets a declined chat. The panel state lives in `RightPanelProvider`
+  and survives moving to another resource in a warm page, so without this
+  "going back into a meeting" showed the chat.
+- **Hidden spare**: the warm pool (`warm_resource_web_view.dart`, `_answer`)
+  answers `openNative` with `false`: nobody holds the spare, so it must not
+  push a screen, and it must not be left thinking the app declined with an
+  overlay drawn inside it.
 - **Back**: the overlay registers in `src/embed/overlayBack.ts`;
   `atomicEmbed.back()` closes the topmost overlay first and returns true.
-- **Start meeting**: hidden in the embed (`showMeetingStart` in
-  `src/embed/settings.ts`). It starts a presence session over the server
-  connection (the embed has none) and a WebRTC call needing microphone and
-  camera, which the host does not grant the web view. "End meeting" only shows
-  for a meeting started on the page, so it follows.
+- **Start / End meeting**: shown in the embed, and the app leads (see
+  "Leading a meeting" below). The page still writes the resources
+  (`meetingStartedAt`, `meetingLeader`, the drive's `currentMeetings`, the
+  "Started" / "ended" chat lines: commit transport, works in the embed), then
+  tells the app with the host calls `meetingStarted(subject)` /
+  `meetingEnded(subject)` (`hostMeetingStarted` / `hostMeetingEnded` in
+  `hostActions.ts`).
+
+### Leading a meeting
+
+"I'm leading meeting X on drive D" is the app's, not a page's: a page is
+replaced when following and recycled in the warm pool, and the web's
+`sessionStorage` copy went with it.
+
+- **`MeetingLead`** (`packages/atomic_chat/lib/src/meeting_lead.dart`, one per
+  shell: `ShellController.lead`): drive + meeting, saved in SharedPreferences
+  (`meetingLead`) so it survives page recycling and restarts, loaded by the
+  shell. It also remembers which resources the trail already holds (`markTrailed`,
+  once per resource per meeting; the meeting page itself counts as done at
+  start, so the "Started the meeting." line stays first).
+- **Announce**: `ResourceView._announce` sends `session: X` for the drive the
+  meeting belongs to (a meeting led on another drive is not announced here);
+  the page's own `session` relay is only a fallback and is cleared when the
+  lead ends. A page hidden for another keeps announcing it.
+- **Page**: `atomicEmbed.setMeeting(subject|null)` (pushed with presence and
+  follow, only the meeting of the page's drive) feeds `useHostMeeting`
+  (`presenceBridge.ts`); in the embed `FollowContext.activeMeeting` is that
+  value, not `sessionStorage`. `startMeeting` / `endMeeting` set it at once
+  and tell the app; the app pushes the same value back.
+- **Trail**: while leading, the app posts `Viewing [title](subject)` in the
+  meeting's chat when the leader's page changes (`ResourceView._trail`), once
+  per resource per meeting. It uses `AssistantApi.sendChatRoomMessage`; the
+  page still skips it when embedded. **Rust, unverified**:
+  `host::chat_rooms::send_message` marks a text of the form
+  `Viewing [title](subject)` as a `FollowEvent` entry (as the web writes it),
+  so it reads back as an event line; test
+  `a_sent_trail_line_is_a_follow_event`. It was not compiled in the session
+  that wrote it (no cargo build, disk).
+- **Live strip**: `LiveMeetingBanner` (`live_meeting_banner.dart`), "Live
+  meeting - name - Join", on the home (above the drive tree) and above resource
+  pages. A meeting is live as in the web's `MeetingBanner`: listed in the
+  drive's `currentMeetings` (`AssistantApi.currentMeetings`, read through
+  `embedCall('getResource')`, null = unknown so the announcement counts alone)
+  and carried by a presence entry's `session`; the freshest wins. Not shown
+  while this device leads. Join follows the leader (that session) and opens the
+  meeting, replacing the page; following then goes where the leader is. When
+  already following, the strip says Open (and hides on the meeting page).
+- **Meeting page**: shows who is in a live meeting (`MeetingAttendees`, the
+  same participants as the chat panel: `useMeetingParticipants`).
+
+Not done: "Joined / Left the meeting." chat lines for a joiner in the embed
+(the web page writes them from `sessionStorage`), and ending a stale lead
+after a crash other than by End on the meeting page.
+
+Tests: `FollowContext.test.tsx`, `hostActions.test.ts`,
+`packages/atomic_chat/test/meeting_lead_test.dart`.
+
+### Calls
+
+Audio/video in a meeting is the web's `ConferenceRoom` (WebRTC over the
+trystero/nostr public relays, signaling included): one implementation, nothing
+of it in Dart. The resource page cannot hold it: following the leader replaces
+the `ResourceView`, and warm pages are recycled, which would hang up. So:
+
+- **Call page**: `embed.html?call=<meeting>&scheme=` renders only
+  `ConferenceRoom` (`src/embed/CallPage.tsx`; same native store and crypto as
+  every embed page, no presence relay). Its width picks `compact` (<= 240 px,
+  the floating tile: the others first, no controls) or the full room with
+  mute / camera / leave. Leave posts `leaveCall` to the app.
+- **`MeetingCall`** (`packages/atomic_chat/lib/src/meeting_call.dart`): one per
+  `AppShell` (`ShellController.call`), owning ONE dedicated web view (made with
+  `WebViewEmbedPage.create(mediaPermissions:)`, not from the warm pool). Its
+  web view gets `onPermissionRequest` (`call_permissions.dart`: only
+  microphone/camera are granted, after the runtime permission on Android via
+  `permission_handler`; on iOS the grant itself makes the system ask) and, on
+  iOS, `allowsInlineMediaPlayback` and no tap needed to play. The permission
+  layer sits behind `CallPermissions`, so tests need no plugin.
+- **`MeetingCallOverlay`** (`meeting_call_overlay.dart`, a child of the
+  shell's `Stack`): a small draggable tile (tap: expand; red button: leave)
+  or the larger view (minimize / leave, the page's own controls). One widget
+  in the tree between the two, so the web view is resized, not made again; it
+  stays across pages being pushed, popped or replaced.
+- **Wiring**: with a host (`hasActionsHost`) `FollowSessionChat embedded`
+  shows the video button again. Pressing it calls `joinCall(meeting)`
+  (`hostActions.ts`), handled in `ResourceView` (`_answerJoinCall`) by
+  `MeetingCall.start`, and, as the web's Join does, `startHostCall`
+  (`joinCall.ts`) follows the leader through the existing `follow` call
+  unless the session leads or already follows. An answer of false (no shell;
+  the warm spare, older app, desktop mock has no host) hides the button.
+- **Native**: Android `MODIFY_AUDIO_SETTINGS` (with CAMERA, RECORD_AUDIO),
+  iOS usage texts now name the meeting calls.
+
+Tests: `CallPage.test.tsx`, `joinCall.test.ts`, `hostActions.test.ts`,
+`packages/atomic_chat/test/meeting_call_test.dart` (controller, permission
+mapping, tile and survival across navigation in the shell).
+Not verified on a device: getUserMedia in the iOS/Android web views, the
+runtime permission prompt, audio route and the call continuing with the app in
+the background (no foreground service / background audio mode yet), TURN-less
+WebRTC across restrictive networks.
+
+### Presence and follow in the embed
+
+The page has no websocket, so the app is the page's presence channel (Rust
+`lib/src/host/presence.rs`, which passes every field of the web's
+`PresenceEntry` through). One follow implementation: the app navigates.
+
+- **App to page**: `ResourceView` (`_pushPresence`, `_pushFollow`) runs
+  `atomicEmbed.presence(drive, items)` (the other sessions of its
+  `PresenceWatch`, `PresenceItem.toJson`: `resource`, `following`, `session`,
+  `allowFollow`, `data`, `typing`, `updatedAt`) whenever the list changes, when
+  the page is shown and when it says `header`/`revealed`; and
+  `atomicEmbed.setFollow(agent|null)` on follow changes and on show.
+  `src/embed/presenceBridge.ts` (`createPresenceBridge`) injects the list into
+  the store's `DrivePresenceManager` (`injectEntry`/`removeEntry`, keeping the
+  entry's `updatedAt`), and re-sets it every 8 s so it outlives the 30 s TTL.
+  So `useDrivePresence`, facepiles, table/document cursors, typing hints and
+  `FollowSessionChat` participants work unchanged. Only the drive's manager is
+  fed; a shared-resource channel (`presenceScope`) gets nothing yet.
+- **Page to app**: `Store.onLocalPresence` (new, `browser/lib`) reports every
+  write of the page's own entry; `relayLocalPresence` sends `data`, `typing`
+  and `session` (null clears) as the `presence` call, at most every 120 ms, and
+  only on change. The app keeps them (`_pageData/_pageTyping/_pageSession`) and
+  merges them into each `announcePresence(session:, extra:)`; `resource` and
+  `following` stay the app's.
+- **Follow**: `FollowContext` in the embed calls `follow`/`unfollow` on the app
+  (`hostFollow`/`hostUnfollow`), which sets its `FollowController` and goes to
+  the leader (`_leaderMoved`); `followedAgent` mirrors `setFollow`
+  (`useHostFollow`). The page's own navigate-to-leader and "leader went away"
+  effects are off (the app does both); it only asks the app to stop when the
+  leader turned `allowFollow` off. The "Viewing" trail line is not posted from
+  the embedded page (neither on start nor per resource): nothing in the app
+  posts it yet, so a meeting led from the app has no trail until it does.
+
+Tests: `presenceBridge.test.ts`, `FollowContext.test.tsx`, `hostActions.test.ts`,
+`browser/lib/src/presence.test.ts`, `packages/atomic_chat/test/presence_test.dart`.
+Not verified on a device.
 
 The native chat: `lib/src/host/chat_rooms.rs` reads the room's `ChatLog` entries
 plus old `Message` resources (an old message that has its entry is left out) as

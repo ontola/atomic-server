@@ -56,16 +56,6 @@ export function showAppearanceOption(
 }
 
 /**
- * Is "Start meeting" shown? A live meeting needs the server connection (the
- * presence session) and a WebRTC call with microphone and camera; the app's
- * web view has neither. Chat of an existing meeting does work. See "Meetings in
- * the embed" in planning/flutter-embed-host.md.
- */
-export function showMeetingStart(embedded: boolean = isEmbedded()): boolean {
-  return !embedded;
-}
-
-/**
  * Are the web app's AI features on (the "AI chat" creation, "Build with AI",
  * the AI sidebar)? Not in the embed: the page has no AI provider (no keys, no
  * server connection for the included AI), so "Build with AI" did nothing at

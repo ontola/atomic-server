@@ -19,6 +19,10 @@
  *   startWelcome(id, personalDrive)  the app's first run: build the Welcome
  *                     drive (answered as a `welcomeResult` message)
  *
+ * Call mode: `embed.html?call=<meeting>` renders only the meeting's call
+ * (`CallPage.tsx`); the page asks the app for one with `joinCall(meeting)` and
+ * ends it with `leaveCall()` (`hostActions.ts`).
+ *
  * Page to host, besides the store's calls: `openNative(classUrl, subject, title)`
  * (`hostActions.ts`) asks the app to show the chat of a meeting or chat room in
  * its own screen; the answer is whether it did. `opened(subject)` tells the app
@@ -39,7 +43,12 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { enableLoro, StoreContext, type NativeChannel } from '@tomic/react';
+import {
+  enableLoro,
+  StoreContext,
+  type NativeChannel,
+  type PresenceItem,
+} from '@tomic/react';
 import {
   enableEmbedMode,
   setHostColorScheme,
@@ -57,25 +66,38 @@ import { CalculatedPageHeight } from '../globalCssVars';
 import { goToFirstEntry } from './resetHistory';
 import { actionPages } from './actionPages';
 import { styled } from 'styled-components';
-import { createFlutterHost } from './flutterHost';
+import {
+  createFlutterHost,
+  flutterChannel,
+  lockFlutterChannel,
+} from './flutterHost';
 import { createMockHost } from './mockHost';
 import { createFlush } from './flush';
 import {
   adoptDriveOf,
+  applyHostChanges,
   createEmbedStore,
   registerEmbedActions,
 } from './embedStore';
 import { installTouchGestures, setGestures } from './gestures';
-import { closeTopOverlay } from './overlayBack';
+import { closeAllOverlays, closeTopOverlay } from './overlayBack';
 import {
+  reportPresence,
   reportShown,
   setActionsHost,
   SHOW_SIDEBAR_ICONS_KEY,
 } from './hostActions';
 import { setLocalStorageValue } from '../hooks/useLocalStorage';
+import {
+  createPresenceBridge,
+  relayLocalPresence,
+  setHostFollow,
+  setHostMeeting,
+} from './presenceBridge';
 import { useNativeChatRoom } from './useNativeChatRoom';
 import { embedTouchCss } from './touchStyle';
 import { EmbedMenu } from './EmbedMenu';
+import { CallPage } from './CallPage';
 
 enableEmbedMode();
 registerEmbedActions();
@@ -150,6 +172,14 @@ declare global {
       show(subject: string, hint?: CrumbHint): void;
       open(subject: string, hint?: CrumbHint): void;
       changed(subjects: string[]): void;
+      /** The other sessions in `drive`, as the app's presence channel has
+       * them (`presenceBridge.ts`). The whole list, every time. */
+      presence(drive: string, items: PresenceItem[]): void;
+      /** Who the app is following now (null: nobody); the app navigates. */
+      setFollow(agent: string | null): void;
+      /** The meeting this device leads on the page's drive (null: none); the
+       * app keeps it. */
+      setMeeting(meeting: string | null): void;
       /** `anchor`: the app's "more" button (right edge, top), in page px. */
       openMenu(anchor?: { x: number; y: number }): void;
       /** The app's native screen asks for its "more" menu over itself: this
@@ -178,17 +208,31 @@ declare global {
   }
 }
 
+// First, before anything reads `window.AtomicFlutter`: every message carries
+// the app's token from here on.
+lockFlutterChannel();
+
 const channel: NativeChannel =
   window.atomicHost ??
-  (window.AtomicFlutter
-    ? createFlutterHost(window.AtomicFlutter)
-    : createMockHost());
+  (flutterChannel() ? createFlutterHost(flutterChannel()!) : createMockHost());
 // Only the app can open its own screens; the mock host answers nothing to that.
 setActionsHost(window.atomicHost || window.AtomicFlutter ? channel : undefined);
 
 const { store, db } = await createEmbedStore(channel);
 
 const flush = createFlush(store, db);
+
+// Presence goes through the app, not a websocket: its list comes in with
+// `atomicEmbed.presence`, and what the page writes to its own entry goes out.
+const presenceBridge = createPresenceBridge(store);
+
+// The call page (`?call=`) has no presence of its own to report.
+if (
+  (window.atomicHost || window.AtomicFlutter) &&
+  !new URLSearchParams(location.search).has('call')
+) {
+  relayLocalPresence(store, reportPresence);
+}
 
 // The app going to the background, or the page being torn down: whatever is
 // still in a debounce timer goes now. (Leaving a page, the app also asks for
@@ -202,6 +246,9 @@ window.addEventListener('pagehide', () => void flush());
 // tools (`?ai=1&drive=<subject>`).
 const aiParams = new URLSearchParams(location.search);
 const aiMode = aiParams.get('ai') === '1';
+// The app's call page (`?call=<meeting subject>`): only that meeting's
+// audio/video call, kept by the app across navigation (`CallPage.tsx`).
+const callMeeting = aiParams.get('call') || undefined;
 // The AI SDK and the web chat's tools are only for the app's AI chat: a lazy
 // chunk keeps them out of the first resource's load.
 const AiToolsHost = lazy(() =>
@@ -216,7 +263,7 @@ const rootRoute = createRootRoute({
           <AiToolsHost drive={aiParams.get('drive') ?? undefined} />
         </Suspense>
       )}
-      <Outlet />
+      {callMeeting ? <CallPage meeting={callMeeting} /> : <Outlet />}
     </Providers>
   ),
 });
@@ -337,7 +384,7 @@ const showRoute = createRoute({
 
       let frame = requestAnimationFrame(() => {
         frame = requestAnimationFrame(() =>
-          window.AtomicFlutter?.postMessage(
+          flutterChannel()?.postMessage(
             JSON.stringify({ method: 'header', subject }),
           ),
         );
@@ -432,10 +479,12 @@ const router = createRouter({
 
 window.atomicEmbed = {
   show(subject, hint) {
+    closeAllOverlays();
     setCrumbHint(subject, hint);
     void router.navigate({ to: '/app/show', search: { subject } });
   },
   open(subject, hint) {
+    closeAllOverlays();
     setCrumbHint(subject, hint);
     // The warm-up showed other resources here (`show`); none of them is a
     // place back goes to.
@@ -447,26 +496,16 @@ window.atomicEmbed = {
     });
   },
   changed(subjects) {
-    // `getResource` answers a resource the page already holds from memory,
-    // so a change made outside the page (renamed in the app's own screen, or
-    // edited on another device) never showed. The host's state is merged
-    // into the page's copy, so an open document follows live and keeps the
-    // edits it has not handed over yet.
-    for (const subject of subjects) {
-      if (!store.resources.has(subject)) continue;
-      void db
-        .getLoroSnapshot(subject)
-        .then(loroBytes => {
-          if (loroBytes)
-            store.applyIncoming({
-              subject,
-              loroBytes,
-              source: 'peer-sync',
-              forceNotify: true,
-            });
-        })
-        .catch(() => undefined);
-    }
+    void applyHostChanges(store, db, subjects);
+  },
+  presence(drive, items) {
+    presenceBridge.feed(drive, Array.isArray(items) ? items : []);
+  },
+  setFollow(agent) {
+    setHostFollow(agent);
+  },
+  setMeeting(meeting) {
+    setHostMeeting(meeting);
   },
   /** One step back in the page's own history; false when there is none. */
   back() {
@@ -493,7 +532,7 @@ window.atomicEmbed = {
   setGestures,
   aiCall(id, method, args) {
     void import('./aiTools').then(({ aiCall }) =>
-      aiCall(m => window.AtomicFlutter?.postMessage(m), id, method, args),
+      aiCall(m => flutterChannel()?.postMessage(m), id, method, args),
     );
   },
   startWelcome(id, personalDrive) {
@@ -502,7 +541,7 @@ window.atomicEmbed = {
         {
           store,
           flush: () => flush(),
-          post: m => window.AtomicFlutter?.postMessage(m),
+          post: m => flutterChannel()?.postMessage(m),
         },
         id,
         personalDrive,
@@ -549,4 +588,4 @@ createRoot(document.getElementById('root')!).render(
 
 // Tells the host the page is up, so it can keep one loaded and hidden and show
 // a resource in it with `open(subject)` instead of loading a page.
-window.AtomicFlutter?.postMessage(JSON.stringify({ method: 'ready' }));
+flutterChannel()?.postMessage(JSON.stringify({ method: 'ready' }));

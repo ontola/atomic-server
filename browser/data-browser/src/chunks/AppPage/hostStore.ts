@@ -1,18 +1,18 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
-import type { Store } from '@tomic/react';
+import type { NativeAppWrite, Store } from '@tomic/react';
 import { HostError, toHostErrorCode } from '@tomic/plugin';
 import type { ProxyHost } from '@helpers/proxyConnections';
 import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
+import { noServerHost } from './noServer';
 import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import {
   core,
   destinationTablesFor,
   errorMessageFromResponse,
-  findSchema,
-  pluginSchema,
   signRequest,
 } from '@tomic/react';
+import { readSchema, schemaValue } from '@tomic/lib';
 
 /**
  * Answers the data requests an app's view makes.
@@ -132,10 +132,9 @@ export async function handleRequest(
       // app can be its own thing on its own page and a view of someone
       // else's rows on a table tab, without knowing which it is.
       const resource = await store.getResource(app);
-      const schema = await findSchema(store, drive, pluginSchema());
-      const own = schema.properties?.['app-data']
-        ? (resource.get(schema.properties['app-data']) as string | undefined)
-        : undefined;
+      const schema = await readSchema(store, drive);
+      const value = await schemaValue(store, schema, resource, 'app-data');
+      const own = typeof value === 'string' && value ? value : undefined;
       const subject = table ?? own;
 
       if (!subject) return undefined;
@@ -385,7 +384,8 @@ export function appChanges(
 }
 
 /**
- * Asks the server to perform a write as the app.
+ * Asks the server to perform a write as the app (or, in a page with no
+ * server, the device's host, which holds the app's key).
  *
  * Not done in the page, because a commit is signed by whoever's key is here —
  * the user's. A write signed by the person is authored by the person and
@@ -401,8 +401,13 @@ async function writeAsApp(
   store: Store,
   drive: string,
   app: string,
-  request: Record<string, unknown>,
+  request: NativeAppWrite,
 ): Promise<{ subject: string }> {
+  // No server: the device's host holds the app's key and signs the write.
+  if (store.noServer) {
+    return await noServerHost(store).appWrite(drive, app, request);
+  }
+
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to use this app');
@@ -514,6 +519,10 @@ async function callExport(
   fn: string,
   args: unknown,
 ): Promise<unknown> {
+  // Another app's export runs on a node; the device host has none to ask.
+  if (store.noServer)
+    throw new HostError('unsupported', 'Calling another app needs a server');
+
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to call an app');

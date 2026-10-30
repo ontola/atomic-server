@@ -3906,7 +3906,9 @@ msgid "Leave"
 msgstr "Leave"
 
 #. 0: participants.length
+#. 0: participants.length
 #: src/components/Presence/FollowSessionPanelContainer.tsx
+#: src/components/Presence/MeetingAttendees.tsx
 msgid "{0} here"
 msgstr "{0} here"
 
@@ -4473,6 +4475,7 @@ msgstr "{0} title…"
 msgid "Leave video call"
 msgstr "Leave video call"
 
+#: src/components/Presence/FollowSessionPanelContainer.tsx
 #: src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "Start video call"
 msgstr "Start video call"
@@ -13217,6 +13220,7 @@ msgid "Cloud Vault is full, so this drive is not being backed up. Free up space 
 msgstr "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
 
 #: src/embed/MeetingChatOverlay.tsx
+#: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
 msgstr "Close chat"
 
@@ -13354,6 +13358,14 @@ msgstr "Share a drive with a teammate or a friend"
 msgid "Start a drive first"
 msgstr "Start a drive first"
 
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
+msgstr "Scripts run on a server, and this device has none. Open this drive on a server to run it."
+
+#: src/views/ErrorPage.tsx
+msgid "It was deleted on this device."
+msgstr "It was deleted on this device."
+
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Nothing is created until you add it."
 msgstr "Nothing is created until you add it."
@@ -13365,6 +13377,10 @@ msgstr "Add to this drive"
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Or describe what you need"
 msgstr "Or describe what you need"
+
+#: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Show Getting started on my drives"
+msgstr "Show Getting started on my drives"
 
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
@@ -13389,11 +13405,3 @@ msgstr "Start this drive"
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
 msgstr "Give it a name, then fill it with a starter"
-
-#: src/views/ErrorPage.tsx
-msgid "It was deleted on this device."
-msgstr "It was deleted on this device."
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "Show Getting started on my drives"

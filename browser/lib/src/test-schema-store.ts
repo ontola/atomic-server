@@ -19,6 +19,7 @@ export function fakeSchemaStore(): {
     error: undefined,
     new: false,
     get: (property: string) => resources.get(subject)?.[property],
+    getPropVals: () => ({ ...(resources.get(subject) ?? {}) }),
     set: async (property: string, value: JSONValue) => {
       resources.set(subject, {
         ...(resources.get(subject) ?? {}),

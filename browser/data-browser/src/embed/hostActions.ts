@@ -1,4 +1,5 @@
 import type { NativeChannel } from '@tomic/lib';
+import type { ResourceUsage } from '../helpers/storageMap';
 
 let host: NativeChannel | undefined;
 
@@ -34,6 +35,45 @@ export async function openNative(
     return (await host.call('openNative', [kind, subject, title])) === true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Asks the app to open its assistant on a new chat that starts with `prompt`
+ * (the "Fix it" of an app that hit an error), with `subject` as the resource
+ * it is about. Resolves true when the app did, false when it has no
+ * assistant, does not know the call (an older app, the desktop mock) or there
+ * is no app: then the page has to ask the assistant itself.
+ */
+export async function askAssistant(
+  prompt: string,
+  subject: string,
+): Promise<boolean> {
+  if (!host) return false;
+
+  try {
+    return (await host.call('askAssistant', [prompt, subject])) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Per-resource storage of `drive` as this device holds it, measured by the
+ * app's own store. Null when there is no app, or it does not know the call
+ * (an older app, the desktop mock): then the page asks the drive's server.
+ */
+export async function driveUsageOnHost(
+  drive: string,
+): Promise<ResourceUsage[] | null> {
+  if (!host) return null;
+
+  try {
+    const rows = await host.call('driveUsageBreakdown', [drive]);
+
+    return Array.isArray(rows) ? (rows as ResourceUsage[]) : null;
+  } catch {
+    return null;
   }
 }
 
@@ -90,4 +130,81 @@ export const SHOW_SIDEBAR_ICONS_KEY = 'showSidebarIcons';
  */
 export function reportSidebarIcons(show: boolean): void {
   host?.call('sidebarIcons', [show]).catch(() => undefined);
+}
+
+/**
+ * What the page owns of this session's presence entry. The app owns the rest
+ * (`resource`, `following`) and merges these into the entry it announces.
+ * `null` clears a field.
+ */
+export interface HostPresenceFields {
+  /** The view's own payload: a cursor inside a document, a table cell. */
+  data: unknown;
+  /** The thread or chat room being typed in. */
+  typing: string | null;
+  /** The Meeting this session leads, so joiners open its chat. */
+  session: string | null;
+}
+
+/**
+ * Hands the app the presence fields the page owns (`HostPresenceFields`), to
+ * announce with its own. An app that does not know the call keeps announcing
+ * without them.
+ */
+export function reportPresence(fields: HostPresenceFields): void {
+  host?.call('presence', [fields]).catch(() => undefined);
+}
+
+/** Asks the app to follow `agent`: the app navigates, the page only learns it
+ *  through `atomicEmbed.setFollow`. */
+export function hostFollow(agent: string): void {
+  host?.call('follow', [agent]).catch(() => undefined);
+}
+
+/** Asks the app to stop following. */
+export function hostUnfollow(): void {
+  host?.call('unfollow', []).catch(() => undefined);
+}
+
+/**
+ * Tells the app this device started leading `meeting` (the page wrote the
+ * resources). The app keeps the lead, announces it as the presence `session`,
+ * posts the "Viewing" trail and pushes it back in with `atomicEmbed.setMeeting`.
+ */
+export function hostMeetingStarted(meeting: string): void {
+  host?.call('meetingStarted', [meeting]).catch(() => undefined);
+}
+
+/** Tells the app the meeting this device led has ended. */
+export function hostMeetingEnded(meeting: string): void {
+  host?.call('meetingEnded', [meeting]).catch(() => undefined);
+}
+
+/** Whether the page runs in an app that can answer its calls (not the
+ *  desktop mock, not a plain browser). */
+export function hasActionsHost(): boolean {
+  return !!host;
+}
+
+/**
+ * Asks the app to start the audio/video call of `meeting`. The web view of
+ * this page is replaced when the app navigates (following the leader), so the
+ * call lives in a page of its own that the app keeps (`?call=`, see
+ * `CallPage.tsx`). Resolves true when the app took the call, false when it
+ * cannot (an older app, the desktop mock, no microphone permission yet
+ * decided against): the page then hides its call button.
+ */
+export async function joinCall(meeting: string): Promise<boolean> {
+  if (!host) return false;
+
+  try {
+    return (await host.call('joinCall', [meeting])) === true;
+  } catch {
+    return false;
+  }
+}
+
+/** The call page's Leave button: the app ends the call (and its tile). */
+export function leaveCall(): void {
+  host?.call('leaveCall', []).catch(() => undefined);
 }

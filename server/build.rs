@@ -20,6 +20,9 @@ struct Dirs {
     /// `form-assets/` subtree of `js_dist_tmp` alongside the data-browser
     /// dist — see `copy_form_assets`.
     form_app_dist_source: PathBuf,
+    /// The data API of app views, which the browser owns (`viewClient.js`); the
+    /// server embeds it from `js_dist_tmp` — see `copy_view_client`.
+    view_client_source: PathBuf,
     /// All source directories to watch for changes
     src_dirs: Vec<PathBuf>,
     browser_root: PathBuf,
@@ -45,6 +48,9 @@ fn main() -> std::io::Result<()> {
             js_dist_source: PathBuf::from("../browser/data-browser/dist"),
             js_dist_tmp: PathBuf::from("./assets_tmp"),
             form_app_dist_source: PathBuf::from("../browser/form-app/dist"),
+            view_client_source: PathBuf::from(
+                "../browser/data-browser/src/chunks/AppPage/viewClient.js",
+            ),
             src_dirs: vec![
                 PathBuf::from("../browser/data-browser/src"),
                 PathBuf::from("../browser/lib/src"),
@@ -150,6 +156,9 @@ fn main() -> std::io::Result<()> {
             start_copy.elapsed().as_secs_f32()
         );
     }
+
+    // After every branch above, whether or not they replaced `assets_tmp`.
+    copy_view_client(&dirs)?;
 
     // Pre-compress big, compressible assets with brotli quality 11. The
     // runtime `middleware::Compress` only uses brotli at its default
@@ -452,6 +461,35 @@ fn copy_form_assets(dirs: &Dirs) -> std::io::Result<()> {
     // Clear first so hashed bundle files from previous builds don't pile up.
     let _ = fs::remove_dir_all(&dest);
     dircpy::copy_dir(&dirs.form_app_dist_source, &dest)
+}
+
+/// Copies the app view client into `assets_tmp/view-client.js`, which
+/// `handlers/plugin_ui.rs` `include_str!`s. The browser file is the only
+/// source, so this runs on every build (a `.js` is cheap, and the JS build
+/// that refreshes `assets_tmp` is often skipped). A published crate has no
+/// `browser/`: it keeps the copy `assets_tmp` was shipped with.
+fn copy_view_client(dirs: &Dirs) -> std::io::Result<()> {
+    let dest = dirs.js_dist_tmp.join("view-client.js");
+
+    if !dirs.view_client_source.exists() {
+        assert!(
+            dest.exists(),
+            "{} is missing and so is {}, which handlers/plugin_ui.rs embeds",
+            dirs.view_client_source.display(),
+            dest.display()
+        );
+        return Ok(());
+    }
+
+    let source = fs::read(&dirs.view_client_source)?;
+
+    // Untouched when equal, so a build does not look like new assets.
+    if fs::read(&dest).ok().as_deref() != Some(source.as_slice()) {
+        fs::create_dir_all(&dirs.js_dist_tmp)?;
+        fs::write(&dest, source)?;
+    }
+
+    Ok(())
 }
 
 /// Writes the minimal `form-assets/index.html` that `handlers/form.rs`'s

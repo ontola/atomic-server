@@ -6,6 +6,7 @@
  * actions open), via `atomicEmbed.showMenu`. These helpers tell the app when
  * that is over.
  */
+import { flutterChannel } from './flutterHost';
 
 /** What the app hears (`{method: 'menuState', state}`):
  * - `closed`: the menu and every dialog it opened are gone; close the overlay.
@@ -14,9 +15,7 @@
 export type MenuState = 'closed' | 'page';
 
 export function reportMenuState(state: MenuState): void {
-  window.AtomicFlutter?.postMessage(
-    JSON.stringify({ method: 'menuState', state }),
-  );
+  flutterChannel()?.postMessage(JSON.stringify({ method: 'menuState', state }));
 }
 
 /** Menus already shown, by the app's id for them: going back to one (from an

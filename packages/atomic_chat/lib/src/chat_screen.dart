@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb, ValueListenable;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, kIsWeb, visibleForTesting;
 import 'dart:math' as math;
 
 import 'app_top_bar.dart';
@@ -23,6 +25,7 @@ import 'resource_row.dart';
 import 'chat_parts.dart';
 import 'chat_window.dart';
 import 'scroll_to_bottom_button.dart';
+import 'size_meter.dart';
 import 'markdown_view.dart';
 import 'chat_bubbles.dart';
 import 'chat_text_styles.dart';
@@ -30,16 +33,13 @@ import 'tool_step.dart';
 import 'toast.dart';
 import 'native_views.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'ai_usage.dart';
 import 'hosted_ai.dart';
 import 'hosted_voice.dart';
 import 'voice.dart';
 import 'list_and_field.dart';
 import 'resource_chrome.dart';
-
-/// SharedPreferences key: speak each new answer aloud.
-
-/// SharedPreferences key: the recogniser language the person picked.
-const voiceLocaleKey = 'voice_locale';
+import 'report_chat_dialog.dart';
 
 /// A resource the person attached to a new chat as context.
 typedef _Attached = ContextResource;
@@ -107,10 +107,21 @@ class ChatScreen extends StatefulWidget {
           ? WebViewToolBridge(api: api, drive: drive)
           : null;
 
+  /// Sent as the first message when this screen opens a new chat (a null
+  /// [subject]), once, as if the person had typed it and pressed send. When
+  /// the AI is not available it stays in the field instead.
+  final String? initialPrompt;
+
+  /// A resource attached to the chat as context from the start, like one
+  /// picked with the attach button.
+  final ContextResource? initialContext;
+
   const ChatScreen({
     super.key,
     required this.api,
     this.subject,
+    this.initialPrompt,
+    this.initialContext,
     this.drive = '',
     this.title = '',
     this.speechInput,
@@ -159,7 +170,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     idOf: (m) => m.id,
     onOlderPage: (ms, n) => Perf.span('chat older page $n', ms),
   );
-  late final _keeper = ChatScrollKeeper(_window);
+  late final _keeper = ChatScrollKeeper(_window,
+      controller: ChatScrollController(correction: _holdCorrection));
 
   // Following an answer as it streams in (see [_settle]): the list follows
   // the growing answer at the bottom while the answer's top is in view;
@@ -168,6 +180,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _listKey = GlobalKey();
   final _sentKey = GlobalKey();
   final _answerKey = GlobalKey();
+
+  /// The answer's height, recorded by the answer's own layout.
+  final _answerMeter = SizeMeter();
+
+  /// The list's padding at the bottom (where the newest message sits) and at
+  /// the top; answers are held [_holdLine] below the list's top.
+  static const _listPadding = 8.0;
+  static const _holdLine = 16.0;
 
   /// The question just sent and the answer to it (`partial` while it
   /// streams), or on opening the chat its newest answer.
@@ -255,6 +275,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// What the person attached, in the order they picked it; sent to the AI
   /// with every message of this screen, never stored in the chat.
   final List<_Attached> _attached = [];
+
+  /// [ChatScreen.initialPrompt] was handed to [_send].
+  bool _initialPromptSent = false;
   final Map<String, String> _attachedText = {};
 
   /// Resources added with the attach button (not one of the pills): their
@@ -314,9 +337,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// soon as the transcription arrives.
   bool _sendWhenTranscribed = false;
 
-  /// How long "Stop and send" waits for the final result before sending the
-  /// latest partial one.
-  static const _finalWait = Duration(milliseconds: 600);
+  /// How long "Stop and send" waits for the device recogniser's final result
+  /// before sending the latest partial one. The recogniser needs a moment
+  /// after the stop; sending earlier would cut off the last words.
+  static const _finalWait = Duration(milliseconds: 2500);
+
+  /// When the account engine was last found usable, so a tap on the mic does
+  /// not wait for a network round trip (speech in that time would be lost).
+  DateTime? _accountOkAt;
+  static const _accountOkFor = Duration(minutes: 5);
 
   /// Voice mode's turn-by-turn loop is running.
   bool _voiceLoop = false;
@@ -337,7 +366,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _outputInst = widget.speechOutput;
     _chat = widget.subject;
     _readMessages();
-    _lookUpAi();
+    final prompt = widget.initialPrompt?.trim() ?? '';
+    final attached = widget.initialContext;
+    if (_chat == null && attached != null) {
+      _attached.add(attached);
+      _fromDrive.add(attached.subject);
+    }
+    if (_chat == null && prompt.isNotEmpty) {
+      _input.text = prompt;
+      _lookUpAi().then((_) {
+        if (!mounted || _initialPromptSent) return;
+        _initialPromptSent = true;
+        // Without an AI the prompt waits in the field for the person.
+        if (_ai != null) _send();
+      });
+    } else {
+      _lookUpAi();
+    }
     if (_chat == null) _readPicker();
     // New on a new chat that is still empty: its field gets the cursor.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -347,6 +392,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ShellScope.maybeOf(context)?.onReselect(route, _focusInput);
       }
     });
+  }
+
+  /// The AI settings page; the AI is looked up again after it, as the mode
+  /// or the key may have changed.
+  Future<void> _openAiSettings() async {
+    final chat = _chat;
+    String usage;
+    try {
+      final total = chat == null ? null : await widget.api.chatUsage(chat);
+      usage = total == null ? 'Nothing used yet' : formatUsageTotal(total);
+    } catch (e) {
+      usage = 'Could not load the usage: $e';
+    }
+    if (!mounted) return;
+    await widget.api.openAiSettings(context,
+        chat: AiChatSettings(
+          usage: usage,
+          onReport: _messages.isEmpty
+              ? null
+              : () => showReportChatDialog(context,
+                  api: widget.api, title: _title, messages: _messages),
+        ));
+    if (mounted) await _lookUpAi(quiet: true);
   }
 
   bool _hadText = false;
@@ -500,6 +568,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _cancelHosted() {
     if (!_hostedActive || !(_listening || _transcribing)) return;
     _listenSession++;
+    _sendWhenTranscribed = false;
     _listening = false;
     _starting = false;
     _transcribing = false;
@@ -554,13 +623,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return (engine: voiceEngineDevice, note: null);
     }
     HostedAvailability avail;
+    final okAt = _accountOkAt;
+    if (okAt != null && DateTime.now().difference(okAt) < _accountOkFor) {
+      return (engine: voiceEngineAccount, note: null);
+    }
     try {
       avail = await _hosted.availability();
     } catch (_) {
       avail =
           const HostedAvailability.unavailable('Could not reach your account.');
     }
-    if (avail.ok) return (engine: voiceEngineAccount, note: null);
+    if (avail.ok) {
+      _accountOkAt = DateTime.now();
+      return (engine: voiceEngineAccount, note: null);
+    }
+    _accountOkAt = null;
     if (chosen == null) return (engine: voiceEngineDevice, note: null);
     return (
       engine: voiceEngineDevice,
@@ -569,11 +646,43 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Stops dictation and sends what was recognised right away, as if the
-  /// normal send button was pressed. The words so far (the latest partial
-  /// result when the final one does not come in time) are in the field.
+  /// Send button and Enter: while the mic is on, a recording is being
+  /// transcribed or the recogniser is finalising, the words still to come are
+  /// waited for and sent together with the composer text, once.
+  Future<void> _submit() {
+    if (_listening || _transcribing || _finalising) return _stopAndSend();
+    return _send();
+  }
+
+  /// Stops the device recogniser and waits for its final result (at most
+  /// [_finalWait]; the latest partial one stands in). False when the listen
+  /// was replaced or ended meanwhile, which also handled what was heard.
+  Future<bool> _finaliseDevice() async {
+    final session = _listenSession;
+    final waiter = _finalWaiter = Completer<void>();
+    setState(() => _finalising = true);
+    _inputInst?.stop();
+    await waiter.future.timeout(_finalWait, onTimeout: () {});
+    _finalWaiter = null;
+    if (!mounted) return false;
+    setState(() => _finalising = false);
+    if (session != _listenSession) return false;
+    _stopListening(stopInput: false);
+    return true;
+  }
+
+  /// Stops dictation and sends what was recognised, as if the normal send
+  /// button was pressed, but only once the final transcript is in: the
+  /// account's after its transcription, the device's after the recogniser's
+  /// final result. The words are appended to the composer text first.
   Future<void> _stopAndSend() async {
-    if (!_listening || _finalising || _voiceLoop) return;
+    if (_voiceLoop || _finalising) return;
+    if (_transcribing) {
+      // Already stopped: the text is sent when the transcription arrives.
+      _sendWhenTranscribed = true;
+      return;
+    }
+    if (!_listening) return;
     if (_hostedActive) {
       // Nothing recorded yet: nothing to send.
       if (_starting) return _cancelHosted();
@@ -582,16 +691,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _stopListening();
       return;
     }
-    final session = _listenSession;
-    final waiter = _finalWaiter = Completer<void>();
-    setState(() => _finalising = true);
-    _inputInst?.stop();
-    await waiter.future.timeout(_finalWait, onTimeout: () {});
-    _finalWaiter = null;
-    if (!mounted) return;
-    setState(() => _finalising = false);
-    if (session != _listenSession) return;
-    _stopListening(stopInput: false);
+    if (!await _finaliseDevice()) return;
     if (_input.text.trim().isEmpty && _files.isEmpty) {
       setState(() => _noSpeechHint = true);
       return;
@@ -600,15 +700,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _toggleListening() async {
-    _sendWhenTranscribed = false;
+    // A send queued behind the transcription stays queued.
+    if (!_transcribing) _sendWhenTranscribed = false;
     if (_listening) {
-      _stopListening();
       // In the voice loop, stopping means "done talking": the device's words
-      // are sent now (the account's once transcribed).
-      if (_voiceLoop && !_hostedActive) _voiceTurnEnded(_listenSession);
+      // are sent once final (the account's once transcribed).
+      if (_voiceLoop && !_hostedActive && !_starting) {
+        final session = _listenSession;
+        if (await _finaliseDevice()) _voiceTurnEnded(session);
+        return;
+      }
+      _stopListening();
       return;
     }
-    if (_transcribing) return;
+    if (_transcribing || _finalising) return;
     // Typed text stays; what is heard is appended after it.
     String baseOf(String typed) =>
         typed.isEmpty || typed.endsWith(' ') || typed.endsWith('\n')
@@ -637,7 +742,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         hosted ? _hosted : (_inputInst ??= PluginSpeechInput());
     String? localeId;
     if (hosted) {
-      if (widget.accountLanguageHints) {
+      if (widget.accountLanguageHints || (_ai?.ownKey ?? false)) {
         localeId = prefs?.getString(voiceLanguageKey);
       }
     } else {
@@ -731,7 +836,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (ok && hosted) _hosted.cancel();
       return;
     }
-    if (!ok) {
+    if (ok) {
+      // Now it is recording: the mic and waveform say so.
+      setState(() {});
+    } else {
       setState(() {
         _listening = false;
         _level = 0;
@@ -794,31 +902,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
-  /// Long-press on the mic: pick the engine and its language.
-  Future<void> _openVoiceSheet() async {
+  /// Long-press on the mic: the AI settings, where the voice engine and its
+  /// language are.
+  Future<void> _openVoiceSettings() async {
     _stopListening();
-    final input = _inputInst ??= PluginSpeechInput();
-    final all = await input.locales();
-    final system = await input.systemLocale();
-    final prefs = await _prefs();
-    if (!mounted) return;
-    final availability = _hosted.availability().catchError(
-          (Object _) => const HostedAvailability.unavailable(
-              'Could not reach your account.'),
-        );
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _VoiceSheet(
-        locales: all,
-        systemId: system,
-        currentLocale: prefs?.getString(voiceLocaleKey) ?? system,
-        availability: availability,
-        engine: prefs?.getString(voiceEngineKey),
-        language: prefs?.getString(voiceLanguageKey),
-        languageHints: widget.accountLanguageHints,
-      ),
-    );
+    await _openAiSettings();
     if (mounted) setState(() => _noSpeechHint = false);
   }
 
@@ -891,7 +979,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   (RenderBox, double)? _listBox() {
     final list = _listKey.currentContext?.findRenderObject();
     if (list is! RenderBox || !list.hasSize || !list.attached) return null;
-    return (list, list.localToGlobal(Offset.zero).dy + 16);
+    return (list, list.localToGlobal(Offset.zero).dy + _holdLine);
   }
 
   RenderBox? _boxOf(GlobalKey key) {
@@ -921,34 +1009,49 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   /// After each frame while an answer streams in: make room below it so the
-  /// question sits at the top; follow it at the bottom while its top is in
-  /// view; then hold its top there. When the person scrolled away (or the
-  /// top is held), what is on screen stays put as the answer grows (in an
-  /// upside-down list a growing last message pushes everything up).
+  /// question sits at the top (the sent height is measured here, it needs a
+  /// rebuild).
   void _settle() {
     _settleQueued = false;
-    if (!mounted || !_keeper.controller.hasClients) return;
-    final list = _listBox();
-    final answer = _boxOf(_answerKey);
-    if (list == null || answer == null) return;
-    final pos = _keeper.controller.position;
-    final h = answer.size.height;
-    final grew = _answerHeight == null ? 0.0 : h - _answerHeight!;
-    _answerHeight = h;
+    if (!mounted) return;
     final sent = _boxOf(_sentKey);
     if (sent != null && (sent.size.height - _sentHeight).abs() > 0.5) {
       setState(() => _sentHeight = sent.size.height);
-      return;
     }
+  }
+
+  /// Asked by the list while it lays out (see
+  /// [ChatScrollController.correction]), so a correction is never a frame
+  /// late: follow the answer at the bottom while its top is in view; then
+  /// hold its top at the top of the list. When the person scrolled away (or
+  /// the top is held), what is on screen stays put as the answer grows (in an
+  /// upside-down list a growing last message pushes everything up). Returns
+  /// how far the offset must move; the list lays out again at once.
+  double _holdCorrection(double pixels, double min, double max) {
+    // Nothing but the scroll metrics and the answer's own recorded height
+    // is read: other boxes may not be asked for their size or transform
+    // while the list lays out. The list is upside down and the answer is
+    // its newest row, so it spans [_listPadding, _listPadding + h] from the
+    // bottom of the content, and its top is that far above the bottom of the
+    // list, less the offset.
+    final h = _answerMeter.height;
+    if (!_sending || h == null || !_keeper.controller.hasClients) return 0;
+    final position = _keeper.controller.position;
+    if (!position.hasViewportDimension) return 0;
+    final grew = _answerHeight == null ? 0.0 : h - _answerHeight!;
+    _answerHeight = h;
+    double want = 0;
     if (_follow && !_pinned) {
-      final top = answer.localToGlobal(Offset.zero).dy;
-      if (top < list.$2 - 0.5) {
+      final top = position.viewportDimension - _listPadding - h + pixels;
+      if (top < _holdLine - 0.5) {
         _pinned = true;
-        pos.jumpTo(pos.pixels + list.$2 - top);
+        want = _holdLine - top;
       }
-    } else if (grew.abs() > 0.01 && pos.pixels > 0.5) {
-      pos.jumpTo(math.min(pos.maxScrollExtent, pos.pixels + grew));
+    } else if (grew.abs() > 0.01 && pixels > 0.5) {
+      want = grew;
     }
+    if (want == 0) return 0;
+    return math.min(max, math.max(min, pixels + want)) - pixels;
   }
 
   /// A drag by the person ends following the answer.
@@ -1146,7 +1249,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       // The chat exists once its first message is saved.
       await _persistTail;
-      final title = await ai.title(question, answer);
+      final title = await ai.title(question, answer, chat: _chat);
       if (title == null) return;
       await _rename(title);
     } catch (e) {
@@ -1378,7 +1481,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final bridge = ai.supportsTools ? _toolBridge() : null;
       _sub = ai
           .run(asked,
-              context: context, tools: tools ?? const [], bridge: bridge)
+              context: context,
+              tools: tools ?? const [],
+              bridge: bridge,
+              chat: () => _chat)
           .listen(
         (event) {
           if (first) {
@@ -1393,6 +1499,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 parts.add(TextPart(text));
               }
               _showLater(parts);
+            case AiUsage():
+              break;
             case AiNotice(:final text):
               parts.add(TextPart('_${text}_\n\n'));
               _showNow(parts);
@@ -1532,17 +1640,46 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// Opens a link of a message: a resource in the app, anything else
   /// outside it.
   void _openLink(String url) {
-    if (url.startsWith('atomic:') || url.startsWith('did:ad:')) {
+    final subject = linkSubject(url);
+    if (subject != null) {
       openFromList<void>(
         context,
-        (_) => openResourceView(api: widget.api, drive: '', subject: url),
-        subject: url,
+        (_) => openResourceView(api: widget.api, drive: '', subject: subject),
+        subject: subject,
       );
       return;
     }
+    if (isShortRef(url)) {
+      _openShortRef(url);
+      return;
+    }
     final uri = Uri.tryParse(url);
-    if (uri == null || !uri.hasScheme) return;
-    launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (uri == null || !uri.hasScheme) return _linkFailed(url);
+    launchUrl(uri, mode: LaunchMode.externalApplication).then((ok) {
+      if (!ok) _linkFailed(url);
+    }, onError: (Object _) => _linkFailed(url));
+  }
+
+  /// An AI's short ref (`#RbGIlHy6`, the start of a subject): the device's
+  /// store finds the resource it stands for.
+  Future<void> _openShortRef(String ref) async {
+    String? subject;
+    try {
+      final answer =
+          await widget.api.embedCall('expandRef', jsonEncode([ref]));
+      final found = jsonDecode(answer);
+      if (found is String && found.isNotEmpty) subject = found;
+    } catch (_) {}
+    if (!mounted) return;
+    if (subject == null) return _linkFailed(ref);
+    _openLink(subject);
+  }
+
+  /// A tap on a link always shows something: what could not be opened.
+  void _linkFailed(String url) {
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('Could not open $url')));
   }
 
   /// The chat exists now: in the shell this page is no longer the bar's
@@ -1582,20 +1719,27 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       appBar: AppTopBar(
                         compact: true,
                         title: _headerTitle,
-                        // A new chat is not saved yet: no place in the drive.
-                        bottom: _chat == null
-                            ? null
-                            : ResourceBreadcrumbs(
-                                api: widget.api,
-                                drive: widget.drive,
-                                subject: _chat!),
-                        actions: const [ResourceMoreButton()],
+                        actions: [
+                          if (widget.api.canOpenAiSettings)
+                            IconButton(
+                              key: const Key('chat-ai-button'),
+                              tooltip: 'AI',
+                              icon: const Icon(Icons.tune),
+                              onPressed: _openAiSettings,
+                            ),
+                          const ResourceMoreButton(),
+                        ],
                         titleWidget: InkWell(
                           key: const Key('chat-title'),
                           onTap: _chat == null ? null : _askRename,
                           child: ChatHeader(
                             title: _headerTitle,
-                            subtitle: 'AI assistant',
+                            subtitle: _ai?.canChoose == true
+                                ? _ai!.modelLabel
+                                : 'AI assistant',
+                            onSubtitleTap: widget.api.canOpenAiSettings
+                                ? _openAiSettings
+                                : null,
                             icon: Icons.auto_awesome_outlined,
                           ),
                         ),
@@ -1647,7 +1791,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: readableHorizontalPadding(box.maxWidth,
                   gutter: ChatTextStyles.gutter)
-              .copyWith(top: 8, bottom: 8),
+              .copyWith(top: _listPadding, bottom: _listPadding),
           itemCount: shown.length + (_window.hasOlder ? 1 : 0),
           findChildIndexCallback: (key) => reversedIndexOf(key, ids, at),
           itemBuilder: (context, i) {
@@ -1712,9 +1856,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             final keyed = m.id == _answerId
                 ? KeyedSubtree(
                     key: _answerKey,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: room),
-                      child: bubble,
+                    child: MeasuredSize(
+                      meter: _answerMeter,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: room),
+                        child: bubble,
+                      ),
                     ))
                 : m.id == _sentId
                     ? KeyedSubtree(key: _sentKey, child: bubble)
@@ -2176,21 +2323,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 constraints: const BoxConstraints(maxWidth: 360),
                 child: _signUpStep(c),
               ),
+              if (widget.api.canOpenAiSettings) _settingsButton(),
             ],
           ),
         ),
       );
 
-  /// Buy AI credits, when the account can.
+  /// Buy AI credits (the portal's dashboard), and switch AI in the settings.
   Widget _buyCredits(HostedAi? ai) {
     final url = ai?.creditsUrl;
-    if (url == null) return const SizedBox.shrink();
-    return TextButton(
-      key: const Key('chat-buy-credits'),
-      onPressed: () => _openLink('$url'),
-      child: const Text('Buy AI credits'),
-    );
+    return Wrap(children: [
+      if (url != null)
+        TextButton(
+          key: const Key('chat-buy-credits'),
+          onPressed: () => _openLink('$url'),
+          child: const Text('Buy credits'),
+        ),
+      if (widget.api.canOpenAiSettings) _settingsButton(),
+    ]);
   }
+
+  Widget _settingsButton() => TextButton(
+        key: const Key('chat-ai-settings'),
+        onPressed: _openAiSettings,
+        child: const Text('AI settings'),
+      );
 
   /// The credits are gone before a question is sent (the web app's notice).
   Widget _creditsBar(AppColors c, HostedAi ai) => Padding(
@@ -2227,7 +2384,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             Text(_noCredits,
                 style: TextStyle(
                     color: c.textSecondary, fontSize: ChatTextStyles.metaSize)),
-          Row(children: [
+          Wrap(children: [
             if (HostedAi.isOutOfCredits(error)) _buyCredits(ai),
             TextButton(
               key: const Key('chat-retry'),
@@ -2344,7 +2501,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   enabled: ai != null,
                   readOnly: _transcribing,
                   onEditingComplete: () {},
-                  onSubmitted: (_) => _send(),
+                  onSubmitted: (_) => _submit(),
                   style: ChatTextStyles.of(context).composer,
                   decoration: chatFieldDecoration(context),
                 ),
@@ -2354,8 +2511,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 level: _level,
                 locale: _activeLocale,
                 transcribing: _transcribing,
-                onLongPress:
-                    ai == null || _transcribing ? null : _openVoiceSheet,
+                onLongPress: ai == null ||
+                        _transcribing ||
+                        !widget.api.canOpenAiSettings
+                    ? null
+                    : _openVoiceSettings,
                 onPressed: ai == null ? null : _toggleListening,
               ),
               if (_sending)
@@ -2370,13 +2530,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   key: _listening ? const Key('chat-stop-and-send') : null,
                   // While dictating, this is stop and send in one tap.
                   tooltip: _listening ? 'Stop and send' : 'Send',
-                  onPressed: _transcribing || _finalising || ai == null
+                  // While a recording is transcribed, tapping queues the
+                  // send for when the text arrives.
+                  onPressed: _finalising || ai == null
                       ? null
                       : _listening
                           ? (_voiceLoop ? null : _stopAndSend)
-                          : !(_hadText || _files.isNotEmpty)
-                              ? null
-                              : _send,
+                          : _transcribing
+                              ? (_voiceLoop || _sendWhenTranscribed
+                                  ? null
+                                  : _stopAndSend)
+                              : !(_hadText || _files.isNotEmpty)
+                                  ? null
+                                  : _send,
                 ),
             ],
           ),
@@ -2415,7 +2581,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             : _transcribing
                 ? 'Transcribing…'
                 : _listening
-                    ? 'Listening…'
+                    ? (_starting ? 'Getting ready…' : 'Listening…')
                     : 'Voice paused';
     final running = _voiceLoop || _speaking;
     return Padding(
@@ -2651,262 +2817,6 @@ class _Waveform extends StatelessWidget {
   }
 }
 
-/// The voice input sheet: which engine transcribes, and its language. The
-/// device engine lists the recogniser's languages (suggested ones first, with
-/// a search field); the account engine detects the language by itself, with
-/// an optional hint when the server takes one. Choices are saved as they are
-/// made.
-class _VoiceSheet extends StatefulWidget {
-  final List<SpeechLocale> locales;
-  final String? systemId;
-  final String? currentLocale;
-  final Future<HostedAvailability> availability;
-  final String? engine;
-  final String? language;
-  final bool languageHints;
-
-  const _VoiceSheet({
-    required this.locales,
-    required this.systemId,
-    required this.currentLocale,
-    required this.availability,
-    required this.engine,
-    required this.language,
-    required this.languageHints,
-  });
-
-  @override
-  State<_VoiceSheet> createState() => _VoiceSheetState();
-}
-
-class _VoiceSheetState extends State<_VoiceSheet> {
-  String _query = '';
-  HostedAvailability? _avail;
-  String? _engine;
-  String? _language;
-
-  @override
-  void initState() {
-    super.initState();
-    _engine = widget.engine;
-    _language = widget.language;
-    widget.availability.then((a) {
-      if (mounted) setState(() => _avail = a);
-    });
-  }
-
-  /// The engine in effect: the chosen one, else the account's when usable;
-  /// the account's is never in effect while unusable.
-  String get _effective {
-    if (_engine == voiceEngineDevice) return voiceEngineDevice;
-    return _avail?.ok == true ? voiceEngineAccount : voiceEngineDevice;
-  }
-
-  Future<void> _save(String key, String? value) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (value == null) {
-        await prefs.remove(key);
-      } else {
-        await prefs.setString(key, value);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _pickEngine(String engine) async {
-    setState(() => _engine = engine);
-    await _save(voiceEngineKey, engine);
-  }
-
-  Future<void> _pickLocale(String id) async {
-    await _save(voiceLocaleKey, id);
-    if (mounted) Navigator.pop(context);
-  }
-
-  Future<void> _pickLanguage(String? code) async {
-    await _save(voiceLanguageKey, code);
-    if (mounted) Navigator.pop(context);
-  }
-
-  bool _match(SpeechLocale l) {
-    final q = _query.trim().toLowerCase();
-    return q.isEmpty ||
-        l.name.toLowerCase().contains(q) ||
-        l.id.toLowerCase().contains(q);
-  }
-
-  Widget _heading(String t) {
-    final c = context.appColors;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
-      child: Text(t, style: TextStyle(color: c.textSecondary, fontSize: 12)),
-    );
-  }
-
-  Widget _engineTile({
-    required Key key,
-    required String engine,
-    required String title,
-    required String subtitle,
-    String? reason,
-    bool enabled = true,
-  }) {
-    final c = context.appColors;
-    final on = _effective == engine;
-    return ListTile(
-      key: key,
-      dense: true,
-      enabled: enabled,
-      leading: Icon(
-        on ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-        color: on ? c.main : null,
-      ),
-      title: Text(title),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(subtitle),
-          if (reason != null)
-            Text(reason, style: TextStyle(color: c.alert, fontSize: 12)),
-        ],
-      ),
-      selected: on,
-      onTap: enabled ? () => _pickEngine(engine) : null,
-    );
-  }
-
-  Widget _deviceLanguages() {
-    final c = context.appColors;
-    final byId = {for (final l in widget.locales) l.id: l};
-    final suggested = <SpeechLocale>[];
-    for (final id in [widget.systemId, 'nl_NL', 'en_US', 'en_GB']) {
-      final l = id == null ? null : byId[id];
-      if (l != null && !suggested.contains(l)) suggested.add(l);
-    }
-    final rest = [
-      for (final l in widget.locales)
-        if (!suggested.contains(l)) l,
-    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    Widget tile(SpeechLocale l) => ListTile(
-          dense: true,
-          title: Text(l.name),
-          subtitle: Text(l.id),
-          selected: l.id == widget.currentLocale,
-          onTap: () => _pickLocale(l.id),
-        );
-    final sug = suggested.where(_match).toList();
-    final others = rest.where(_match).toList();
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-          child: TextField(
-            key: const Key('locale-search'),
-            decoration: const InputDecoration(
-              hintText: 'Search language',
-              prefixIcon: Icon(Icons.search),
-            ),
-            onChanged: (v) => setState(() => _query = v),
-          ),
-        ),
-        Expanded(
-          child: widget.locales.isEmpty
-              ? Center(
-                  child: Text(
-                    'No languages available.',
-                    style: TextStyle(color: c.textSecondary),
-                  ),
-                )
-              : ListView(children: [
-                  if (sug.isNotEmpty) _heading('Suggested'),
-                  for (final l in sug) tile(l),
-                  if (sug.isNotEmpty && others.isNotEmpty)
-                    _heading('All languages'),
-                  for (final l in others) tile(l),
-                ]),
-        ),
-      ],
-    );
-  }
-
-  Widget _accountLanguages() {
-    final auto = _language == null || _language!.isEmpty;
-    return ListView(children: [
-      ListTile(
-        key: const Key('language-auto'),
-        dense: true,
-        title: const Text('Auto-detect'),
-        subtitle: widget.languageHints
-            ? null
-            : const Text('Whisper recognises the language by itself.'),
-        selected: auto,
-        onTap: () => _pickLanguage(null),
-      ),
-      if (widget.languageHints)
-        for (final (code, name) in hostedLanguages)
-          ListTile(
-            key: Key('language-$code'),
-            dense: true,
-            title: Text(name),
-            subtitle: Text(code),
-            selected: _language == code,
-            onTap: () => _pickLanguage(code),
-          ),
-    ]);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final avail = _avail;
-    final accountOk = avail?.ok == true;
-    return SafeArea(
-      child: Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: SizedBox(
-          height: MediaQuery.sizeOf(context).height * 0.75,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Text('Voice input',
-                    style: Theme.of(context).textTheme.titleMedium),
-              ),
-              _heading('Engine'),
-              _engineTile(
-                key: const Key('engine-account'),
-                engine: voiceEngineAccount,
-                title: 'atomic.place account',
-                subtitle: 'Whisper, any language, uses credits',
-                enabled: accountOk,
-                reason: avail == null
-                    ? 'Checking your account…'
-                    : avail.ok
-                        ? null
-                        : avail.reason,
-              ),
-              _engineTile(
-                key: const Key('engine-device'),
-                engine: voiceEngineDevice,
-                title: 'This device',
-                subtitle: 'Google speech recognition, free, live words',
-              ),
-              const Divider(height: 8),
-              _heading('Language'),
-              Expanded(
-                child: _effective == voiceEngineAccount
-                    ? _accountLanguages()
-                    : _deviceLanguages(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// "N changes by AI" above the composer, with Review.
 class _ReviewBar extends StatelessWidget {
   final int count;
@@ -2994,4 +2904,20 @@ class _ReviewSheet extends StatelessWidget {
       },
     );
   }
+}
+
+/// Whether [url] is an AI's short ref to a resource: `#` and the first 8 or
+/// more characters of its subject (see `browser/lib/src/subject-refs.ts`).
+@visibleForTesting
+bool isShortRef(String url) => RegExp(r'^#[A-Za-z0-9_-]{8,}$').hasMatch(url);
+
+/// The resource a chat link points to: a subject itself, or the web app's
+/// `…?subject=` link to one. Null for anything else.
+@visibleForTesting
+String? linkSubject(String url) {
+  bool isSubject(String s) =>
+      s.startsWith('atomic:') || s.startsWith('did:ad:');
+  if (isSubject(url)) return url;
+  final inQuery = Uri.tryParse(url)?.queryParameters['subject'];
+  return inQuery != null && isSubject(inQuery) ? inQuery : null;
 }

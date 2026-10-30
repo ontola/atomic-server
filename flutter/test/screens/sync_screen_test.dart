@@ -156,6 +156,9 @@ Widget _app(Widget home) => MaterialApp(
     );
 
 void main() {
+  // The account section reads the AI settings from the preferences.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('lists unpaired connected devices, display only', (tester) async {
     // The This device card has grown (storage, background activity): give the
     // page room so the Devices section is built.
@@ -176,8 +179,8 @@ void main() {
     expect(find.text('Visitor phone'), findsOneWidget);
     // Nameless: the short node id is the title.
     expect(find.text('001122334455…'), findsOneWidget);
-    expect(find.textContaining('Connected to you · not saved'),
-        findsNWidgets(2));
+    expect(
+        find.textContaining('Connected to you · not saved'), findsNWidgets(2));
     expect(find.byTooltip('Remove'), findsNothing);
   });
 
@@ -519,58 +522,45 @@ void main() {
     expect(page!.cookies, isEmpty);
   });
 
-  group('AI credits', () {
-    Widget app(Future<shared.AtomicAiCredits?> Function() load) =>
-        _app(SyncScreen(
+  group('AI settings row', () {
+    Widget app({bool linked = true}) => _app(SyncScreen(
           backend: _Backend(servers: _Servers(managed: true)),
-          loadAccount: (_) async => AccountSummary(
-            address: 'joep@example.org',
-            portal: Uri.parse('https://portal.example'),
-          ),
-          loadCredits: load,
+          loadAccount: (_) async => linked
+              ? AccountSummary(
+                  address: 'joep@example.org',
+                  portal: Uri.parse('https://portal.example'),
+                )
+              : null,
+          loadCredits: () async => const shared.AtomicAiCredits(
+              enabled: true, allowanceMicros: 10000, remainingMicros: 4000),
         ));
 
-    testWidgets('shows the balance and refreshes on demand', (tester) async {
-      var remaining = 5000;
-      await tester.pumpWidget(app(() async => shared.AtomicAiCredits(
-            enabled: true,
-            allowanceMicros: 10000,
-            remainingMicros: remaining,
-            purchasedMicros: 2000,
-            purchasesEnabled: true,
-          )));
+    testWidgets('one row opens the AI settings; the old rows moved there',
+        (tester) async {
+      // The AI settings read the own provider's key from the keychain.
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+              const MethodChannel(
+                  'plugins.it_nomads.com/flutter_secure_storage'),
+              (call) async => null);
+      await tester.pumpWidget(app());
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI credits'), 300);
-      expect(find.text('5 of 10 this month · 2 purchased'), findsOneWidget);
-      expect(find.text('Get more credits'), findsOneWidget);
-      remaining = 3000;
-      await tester.tap(find.byTooltip('Refresh AI credits'));
+      await tester.scrollUntilVisible(
+          find.byKey(const Key('ai-settings-row')), 300);
+      expect(find.text('AI credits'), findsNothing);
+      expect(find.byKey(const Key('ai-model-row')), findsNothing);
+      await tester.tap(find.byKey(const Key('ai-settings-row')));
       await tester.pumpAndSettle();
-      expect(find.text('3 of 10 this month · 2 purchased'), findsOneWidget);
+      expect(find.byKey(const Key('ai-credits-row')), findsOneWidget);
     });
 
-    testWidgets('offline keeps the last known balance', (tester) async {
-      var fail = false;
-      await tester.pumpWidget(app(() async {
-        if (fail) throw StateError('offline');
-        return const shared.AtomicAiCredits(
-            enabled: true, allowanceMicros: 10000, remainingMicros: 4000);
-      }));
+    testWidgets('without a linked account the row is still there',
+        (tester) async {
+      await tester.pumpWidget(app(linked: false));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI credits'), 300);
-      fail = true;
-      await tester.tap(find.byTooltip('Refresh AI credits'));
-      await tester.pumpAndSettle();
-      expect(find.text('4 of 10 this month · offline, last known'),
-          findsOneWidget);
-      expect(find.text('Get more credits'), findsNothing);
-    });
-
-    testWidgets('shows a dash before anything is known', (tester) async {
-      await tester.pumpWidget(app(() async => null));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('AI credits'), 300);
-      expect(find.text('—'), findsOneWidget);
+      await tester.scrollUntilVisible(
+          find.byKey(const Key('ai-settings-row')), 300);
+      expect(find.text('Link your account'), findsOneWidget);
     });
   });
 
@@ -885,8 +875,8 @@ void main() {
                   .evaluate()
                   .isEmpty) {
                 // Rounded: a scroll offset at a fraction adds float noise.
-                singleLineHeights.add(
-                    (rect.height * 100).roundToDouble() / 100);
+                singleLineHeights
+                    .add((rect.height * 100).roundToDouble() / 100);
               }
               // Everything stays inside the card's inner 16 dp.
               expect(rect.left, cardRect.left + 1);

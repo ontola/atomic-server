@@ -563,16 +563,13 @@ pub async fn drain_outbox_to_live_peer(
     peer_id: &str,
 ) -> crate::errors::AtomicResult<crate::sync::outbox::DrainReport> {
     let mut transport = LivePeerCommitTransport::new(peer_id);
-    crate::sync::outbox::Outbox::new(store.clone())
-        .drain(&mut transport)
-        .await
+    crate::sync::outbox::Outbox::drain_all(store, &mut transport).await
 }
 
 /// Drain the outbox to the first live peer, if any. `None` when there is
 /// no live link or nothing to send.
 pub async fn drain_outbox_to_any_live_peer(store: &Db) -> Option<crate::sync::outbox::DrainReport> {
-    let outbox = crate::sync::outbox::Outbox::new(store.clone());
-    if outbox.entries().ok()?.is_empty() {
+    if !crate::sync::outbox::Outbox::any_pending(store) {
         return None;
     }
     let peer = live_peer_ids().into_iter().next()?;
@@ -1182,10 +1179,8 @@ fn register_live_peer(
         tokio::spawn(async move {
             // Let the HELLO and agent frames below go first.
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            if let Ok(entries) = crate::sync::outbox::Outbox::new(store_drain.clone()).entries() {
-                if entries.is_empty() {
-                    return;
-                }
+            if !crate::sync::outbox::Outbox::any_pending(&store_drain) {
+                return;
             }
             match drain_outbox_to_live_peer(&store_drain, &peer_drain).await {
                 Ok(report) => tracing::info!(

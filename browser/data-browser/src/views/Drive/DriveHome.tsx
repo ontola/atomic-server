@@ -304,7 +304,7 @@ export function ActivityFeed({
         continue;
       }
 
-      // AI chats, meetings and agent notes are reached elsewhere.
+      // AI chats and agent notes are reached elsewhere.
       if (
         isHiddenFromChildLists(
           resource.getClasses(),
