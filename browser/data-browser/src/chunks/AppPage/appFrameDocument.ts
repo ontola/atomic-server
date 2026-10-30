@@ -4,7 +4,7 @@
  * TypeScript port of the server's shell
  * (`render_drive_plugin_ui_html_with` and `frame_csp` in
  * `server/src/handlers/plugin_ui.rs`). Keep the two in step;
- * `appFrameDocument.test.ts` compares their CSP directives.
+ * the server's `plugin_ui.rs` tests compare their CSP directives.
  *
  * The frame is a sandboxed `srcdoc` (no `allow-same-origin`), so it is
  * null-origin and cannot touch the page. A `srcdoc` inherits the embedding
@@ -16,11 +16,11 @@
  * for that; the inline scripts need the nonce).
  */
 
-/** `view-client.js`, the data API a view gets (a copy of the server's file). */
+/** `view-client.js`, the data API a view gets (the server embeds this file too). */
 export { default as VIEW_CLIENT_SOURCE } from './viewClient.js?raw';
 
 /** The CSP directives of the frame, by name (as the meta tag has them). */
-export function frameCspDirectives(nonce: string): Record<string, string> {
+function frameCspDirectives(nonce: string): Record<string, string> {
   return {
     'default-src': "'none'",
     'script-src': `'nonce-${nonce}' blob:`,

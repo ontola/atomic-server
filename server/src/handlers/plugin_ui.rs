@@ -446,7 +446,7 @@ async fn serve_drive_plugin(
         return Ok(HttpResponse::Ok()
             .content_type("application/javascript")
             .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"))
-            .body(include_str!("../plugins/assets/view-client.js")));
+            .body(include_str!("../../assets_tmp/view-client.js")));
     }
 
     if format != "js" {
@@ -584,6 +584,93 @@ mod tests {
         assert!(csp.contains("font-src 'self' data:;"));
         assert!(csp.starts_with("sandbox allow-scripts "));
         assert!(csp.contains("script-src 'nonce-n0nce'"));
+    }
+
+    /// The browser draws the same frame itself when there is no server
+    /// (`appFrameDocument.ts`); its shell and CSP must not drift from ours.
+    const APP_FRAME_TS: &str =
+        include_str!("../../../browser/data-browser/src/chunks/AppPage/appFrameDocument.ts");
+
+    #[test]
+    fn browser_frame_shell_matches() {
+        let html = render_drive_plugin_ui_html_with("format=html", false, "n0nce", true);
+
+        for part in [
+            "type: '__atomic_plugin_rendered'",
+            "type: '__atomic_plugin_error'",
+            "type: '__atomic_plugin_ready'",
+            "'__atomic_style'",
+            "window.addEventListener('unhandledrejection'",
+        ] {
+            assert!(html.contains(part), "server frame lacks {part}");
+            assert!(
+                APP_FRAME_TS.contains(part),
+                "appFrameDocument.ts lacks {part}"
+            );
+        }
+    }
+
+    /// Directives as `name -> value` pairs, `'self'` and `sandbox` left out.
+    fn csp_directives(csp: &str) -> Vec<(String, String)> {
+        let mut out: Vec<_> = csp
+            .split(';')
+            .filter_map(|d| d.trim().split_once(' '))
+            .filter(|(name, _)| *name != "sandbox")
+            .map(|(name, value)| {
+                (
+                    name.to_string(),
+                    value.replace("'self'", "").trim().to_string(),
+                )
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn browser_frame_csp_matches() {
+        // The `'name': value,` lines of `frameCspDirectives`, evaluated by eye:
+        // a quoted or backticked literal.
+        let ts = APP_FRAME_TS
+            .split("function frameCspDirectives")
+            .nth(1)
+            .unwrap();
+        let ts = ts.split("\n}\n").next().unwrap();
+        let ours = ts
+            .lines()
+            .filter_map(|l| l.trim().strip_suffix(',')?.split_once(": "))
+            .map(|(name, v)| {
+                let v = v
+                    .trim_matches(|c: char| c == '"' || c == '`')
+                    .replace("${nonce}", "N");
+                (name.trim_matches('\'').to_string(), v)
+            })
+            .collect::<Vec<_>>();
+        let server = csp_directives(&frame_csp("N"));
+
+        // The srcdoc imports its sources through blob URLs and has no server to
+        // be 'self' of; `form-action` is ours alone (the sandbox has no forms).
+        let expect = |name: &str, value: &str| {
+            let found = ours
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, v)| v.as_str());
+            assert_eq!(found, Some(value), "{name}");
+        };
+        expect("script-src", "'nonce-N' blob:");
+        expect("form-action", "'none'");
+
+        let mut ours: Vec<_> = ours
+            .into_iter()
+            .filter(|(n, _)| n != "script-src" && n != "form-action")
+            .collect();
+        ours.sort();
+        let server: Vec<_> = server
+            .into_iter()
+            .filter(|(n, _)| n != "script-src")
+            .collect();
+
+        assert_eq!(ours, server);
     }
 
     /// An app's frame is null-origin, so its console is reachable by nobody:
