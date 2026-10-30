@@ -43,11 +43,14 @@ import {
   type CommitLogEntry,
   useStore,
   useProperty,
+  useResource,
+  useString,
   truncateUrl,
   Datatype,
   isAtomicIdentifier,
   nodeId as parseNodeId,
   nodeSubject,
+  core,
 } from '@tomic/react';
 import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
 import {
@@ -686,6 +689,12 @@ function SyncPage() {
   const [clientDbOn, setClientDbOn] = useState(() => isClientDbEnabled());
   const { setServer, setDrive, baseURL } = useSettings();
   const { drive: requestedDrive } = SyncRoute.useSearch();
+  // The portal does not know the name of a drive this account only belongs to,
+  // so the links to it carry the name this app shows.
+  const [driveName] = useString(
+    useResource(status.drive ?? undefined),
+    core.properties.name,
+  );
   const [hostedCopy, setHostedCopy] = useState<{
     drive: string;
     origin: string;
@@ -1526,7 +1535,11 @@ function SyncPage() {
           return;
         }
 
-        const salesUrl = cloudServerSalesUrl(accountPortalUrl, drive);
+        const salesUrl = cloudServerSalesUrl(
+          accountPortalUrl,
+          drive,
+          driveName,
+        );
 
         if (isRunningInTauri()) {
           await openExternal(salesUrl);
@@ -1628,7 +1641,9 @@ function SyncPage() {
         subtle
         data-testid='cloud-server-manage'
         onClick={() =>
-          void openExternal(driveBillingUrl(accountPortalUrl, status.drive))
+          void openExternal(
+            driveBillingUrl(accountPortalUrl, status.drive, driveName),
+          )
         }
       >
         Manage plan
@@ -1755,7 +1770,7 @@ function SyncPage() {
             data-testid='cloud-server-upgrade'
             onClick={() =>
               void openExternal(
-                cloudServerSalesUrl(accountPortalUrl, status.drive),
+                cloudServerSalesUrl(accountPortalUrl, status.drive, driveName),
               )
             }
           >
