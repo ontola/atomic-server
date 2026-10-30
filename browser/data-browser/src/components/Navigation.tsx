@@ -1,7 +1,4 @@
 import { AppVerifierProvider } from '@chunks/AppPage/AppVerifierContext';
-import { DemoActionsBar } from './DemoExitButton';
-import { SETUP_BAR_HEIGHT } from './SetupBar';
-import { demoForDrive } from '../chunks/Templates/demoSession';
 import { AppSetupProvider } from './AppSetup/AppSetupProvider';
 import * as React from 'react';
 import { type JSX, useMemo, useRef } from 'react';
@@ -56,10 +53,6 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     pathname.startsWith(`${paths.onboarding}/`);
   const welcomeOrChild =
     pathname === paths.welcome || pathname.startsWith(`${paths.welcome}/`);
-  // The demo splash ("Setting up your demo team…") is a transient
-  // full-screen moment; rendering it between the sidebars reads as a
-  // broken page.
-  const demoSplash = pathname === paths.demo;
   // The hosted product has no signed-out mode: the sidebar's "new user /
   // sign in" affordances next to a spinner or an error read as a broken
   // account rather than as a page for a visitor. Until an identity is
@@ -74,16 +67,9 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     rootWelcomeChromeHidden ||
     onboardingOrChild ||
     welcomeOrChild ||
-    demoSplash ||
     pathname === paths.newDrive ||
     pathname === `${pathNames.app}${pathNames.invite}` ||
     signedOutHosted;
-
-  // The setup bar follows one rule: the current drive is a demo drive. Pages
-  // without the app chrome (the template gallery, sign-in, the splash) are
-  // not part of the demo; the gallery renders its own setup bar.
-  const demo = hideGlobalChrome ? undefined : demoForDrive(drive);
-  const previewHeight = demo ? SETUP_BAR_HEIGHT : '0px';
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 
@@ -114,20 +100,10 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             {!hideGlobalChrome && <MeetingMessageToaster />}
             {/* New chat messages, comments and replies: toast or OS notification. */}
             <MessageNotifier />
-            {demo && (
-              <PreviewHeader>
-                <DemoActionsBar demo={demo} />
-              </PreviewHeader>
-            )}
             {!hideGlobalChrome && (
-              <TopBar
-                previewHeight={previewHeight}
-                subject={contextualSubject}
-                top={navbarTop}
-              />
+              <TopBar subject={contextualSubject} top={navbarTop} />
             )}
             <SideBarWrapper
-              previewHeight={previewHeight}
               top={navbarTop}
               fullViewportContent={hideGlobalChrome}
             >
@@ -188,30 +164,24 @@ const Content = styled.div<ContentProps>`
 const TopBar = React.memo(function TopBar({
   subject,
   top,
-  previewHeight,
 }: {
   subject: string | undefined;
   top: boolean;
-  previewHeight: string;
 }): JSX.Element {
   const resource = useResource(subject);
 
   return (
     <ChromeTheme>
-      <NavBarStyled
-        aria-label='navigation'
-        top={top}
-        previewHeight={previewHeight}
-      >
+      <NavBarStyled aria-label='navigation' top={top}>
         <NavBarContent resource={resource} />
       </NavBarStyled>
     </ChromeTheme>
   );
 });
 
-const NavBarStyled = styled.div<{ top: boolean; previewHeight: string }>`
+const NavBarStyled = styled.div<{ top: boolean }>`
   position: fixed;
-  ${p => (p.top ? `top: ${p.previewHeight};` : 'bottom: 0;')}
+  ${p => (p.top ? 'top: 0;' : 'bottom: 0;')}
   left: 0;
   right: 0;
   z-index: ${p => p.theme.zIndex.sidebar};
@@ -230,7 +200,6 @@ const NavBarStyled = styled.div<{ top: boolean; previewHeight: string }>`
 const SideBarWrapper = styled.div<{
   top: boolean;
   fullViewportContent?: boolean;
-  previewHeight: string;
 }>`
   /* Subtract the on-screen keyboard (see useKeyboardInset). On Android the
      webview is covered by the keyboard rather than resized for it, so 100dvh
@@ -241,20 +210,20 @@ const SideBarWrapper = styled.div<{
   ${p =>
     p.fullViewportContent
       ? CalculatedPageHeight.define(
-          `min(calc(100dvh - ${p.previewHeight} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.previewHeight}))`,
+          'min(calc(100dvh - var(--keyboard-inset, 0px)), var(--visible-viewport-height, 100dvh))',
         )
       : CalculatedPageHeight.define(
-          `min(calc(100dvh - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight}))`,
+          `min(calc(100dvh - ${p.theme.heights.breadCrumbBar} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.theme.heights.breadCrumbBar}))`,
         )}
   display: flex;
   height: ${CalculatedPageHeight.var()};
   position: fixed;
   ${p => {
     if (p.fullViewportContent) {
-      return `top: ${p.previewHeight};`;
+      return 'top: 0;';
     }
 
-    return `top: calc(${p.previewHeight} + ${p.top ? p.theme.heights.breadCrumbBar : '0px'});`;
+    return `top: ${p.top ? p.theme.heights.breadCrumbBar : '0px'};`;
   }}
   left: 0;
   right: 0;
@@ -271,11 +240,4 @@ const SideBarWrapper = styled.div<{
     position: static;
     display: block;
   }
-`;
-
-const PreviewHeader = styled.div`
-  position: fixed;
-  inset: 0 0 auto;
-  height: ${SETUP_BAR_HEIGHT};
-  z-index: ${p => p.theme.zIndex.sidebar};
 `;

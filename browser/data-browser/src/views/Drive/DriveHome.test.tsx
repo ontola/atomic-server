@@ -55,6 +55,7 @@ vi.mock('@helpers/recentResources', () => ({
   getRecentResources: (d: string) => recents[d] ?? [],
 }));
 vi.mock('@tomic/react', () => ({
+  canvas: { classes: {} },
   dataBrowser: { classes: {}, properties: {} },
   isNotFound: () => false,
   isUnauthorized: () => false,

@@ -45,7 +45,7 @@ export function initClientDb(
   // ago, and Android WebView (the Tauri mobile app) has no SharedWorker — a
   // stale SharedWorker guard silently disabled the entire local database
   // there, so every collection query fell back to the server and local-only
-  // drives (the demo) rendered empty. Missing locks/OPFS on insecure
+  // drives rendered empty. Missing locks/OPFS on insecure
   // contexts is handled inside ClientDbWorker with a clear message.
   if (typeof Worker === 'undefined') return;
 
@@ -530,13 +530,7 @@ async function startForIdentity(
       // ghost-leader lock it couldn't reclaim). Surface that to the user —
       // otherwise the app silently renders empty, unpersisted resources with
       // no explanation of why local caching/offline isn't working.
-      // The demo explains a storage problem on its own page; a toast with
-      // the same text beside it only doubled it.
-      if (
-        clientDb.initError &&
-        !clientDb.unsupportedEnvironment &&
-        window.location.pathname !== '/app/demo'
-      ) {
+      if (clientDb.initError && !clientDb.unsupportedEnvironment) {
         store.notifyError(clientDb.initError);
       }
     })
@@ -551,7 +545,6 @@ async function startForIdentity(
       // Re-emit so the Sync page can show the error (clientDbError).
       // clientDb.initError was populated in the send() catch inside doInit.
       store.setClientDb(clientDb);
-      if (window.location.pathname !== '/app/demo')
-        store.notifyError(clientDb.initError ?? err);
+      store.notifyError(clientDb.initError ?? err);
     });
 }

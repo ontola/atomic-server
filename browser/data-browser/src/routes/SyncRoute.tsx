@@ -1209,7 +1209,7 @@ function SyncPage() {
   // no address, port or certificate to dial: that is the point of Iroh.
   const isNode = isRunningInTauri();
   const pairNodeId = isNode ? localNodeId : serverNodeId;
-  // A local-only drive (the demo, or any drive made offline) is a normal
+  // A local-only drive (a guest's Welcome drive, or any drive made offline) is a normal
   // drive the sync engine was simply told to skip — not a special code path.
   // When the active drive is local-only the "syncs with N places" story is a
   // lie for it, so the page leads with an honest, drive-specific state + the
@@ -2237,7 +2237,7 @@ function SyncPage() {
             determine its status, so a missing session never renders a dead
             button. */}
 
-        {/* A local-only drive (demo, or any drive made offline) isn't synced.
+        {/* A local-only drive (any drive made offline) isn't synced.
             Offer to promote it to a normal synced drive on the connected
             server — the same reconcile a regular drive uses, no special path. */}
         {localOnlyDrive && !driveMissing && !showCloudBackup && (

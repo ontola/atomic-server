@@ -9,8 +9,8 @@ const LOCAL_STORAGE_KEY = 'atomic-disable-client-db';
  * off under Tauri (the embedded local server already persists everything;
  * OPFS would be redundant duplication). An explicit user/feature choice
  * (persisted in localStorage) overrides the default in either direction —
- * the demo needs this on Tauri, since its local-only drives never reach a
- * server and their queries can only be answered by the ClientDb.
+ * local-only drives need this on Tauri, since they never reach a server and
+ * their queries can only be answered by the ClientDb.
  *
  * Any change requires a page reload to take effect — the ClientDb worker
  * is spawned at app boot.

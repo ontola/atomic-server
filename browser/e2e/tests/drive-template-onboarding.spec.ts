@@ -1,279 +1,152 @@
 import { test, expect } from '@playwright/test';
 import { installEmptyDiscoveryRoom } from './fixtures';
-import { devDrive, FRONTEND_URL } from './test-utils';
+import { devDrive, FRONTEND_URL, sideBarDriveSwitcher } from './test-utils';
 
 test.beforeEach(async ({ context }) => {
   await installEmptyDiscoveryRoom(context);
 });
 
-for (const keepEdits of [false, true]) {
-  test(`template adoption ${keepEdits ? 'keeps edited content' : 'starts fresh without samples'}`, async ({
-    page,
-  }) => {
-    test.setTimeout(120000);
-    await devDrive(page);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${FRONTEND_URL}/app/new-drive`);
-    await expect(
-      page.getByRole('button', { name: 'Close', exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: 'create a blank drive', exact: true }),
-    ).toBeVisible();
-    // The lazy AI composer must not pull focus/scroll away from the gallery.
-    await expect(page.locator('[contenteditable=true]')).toBeAttached();
-    await expect(page.locator('[contenteditable=true]')).not.toBeFocused();
-    await expect(
-      page.getByRole('link', { name: 'create a blank drive', exact: true }),
-    ).toBeInViewport();
-    await expect(page.getByTestId('sidebar')).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: /Show \/ hide sidebar/ }),
-    ).toHaveCount(0);
-    await page
-      .getByRole('button', { name: 'Preview template', exact: true })
-      .first()
-      .click();
-    await expect(
-      page.getByRole('button', { name: 'Use this template', exact: true }),
-    ).toBeVisible({ timeout: 60000 });
-    await expect(page.getByTestId('sidebar')).toBeInViewport();
-    await page.getByRole('button', { name: /Show \/ hide sidebar/ }).click();
-    const tabs = page.getByRole('tablist');
-    await expect(tabs).toHaveCSS('overflow-x', 'auto');
-    const tabScroll = await tabs.evaluate(el => {
-      el.scrollLeft = el.scrollWidth;
-
-      return el.scrollLeft;
-    });
-    expect(tabScroll).toBeGreaterThan(0);
-    const previewBar = await page
-      .getByRole('region', { name: 'Setup' })
-      .boundingBox();
-    const navigation = await page
-      .getByLabel('navigation', { exact: true })
-      .boundingBox();
-    expect(previewBar!.y + previewBar!.height).toBeLessThanOrEqual(
-      navigation!.y,
-    );
-
-    for (const name of ['Use this template', 'Back']) {
-      const box = await page
-        .getByRole('button', { name, exact: true })
-        .boundingBox();
-      expect(box!.x).toBeGreaterThanOrEqual(0);
-      expect(box!.x + box!.width).toBeLessThanOrEqual(390);
-    }
-
-    const demo = await page.evaluate(() =>
-      JSON.parse(localStorage.getItem('atomic.templateDemo')!),
-    );
-    expect(
-      await page.evaluate(
-        drive => window.store.isLocalOnlySubject(drive),
-        demo.drive,
-      ),
-    ).toBe(true);
-    // Edit a real preview resource before choosing what to keep.
-    await page.evaluate(async drive => {
-      const store = window.store;
-      const children = await store.queryLocalDb({
-        property: 'https://atomicdata.dev/properties/parent',
-        value: drive,
-      });
-
-      for (const subject of children?.subjects ?? []) {
-        const resource = await store.getResource(subject);
-
-        if (
-          resource.get('https://atomicdata.dev/properties/name') ===
-          'Lecture notes'
-        ) {
-          await resource.set(
-            'https://atomicdata.dev/properties/name',
-            'My temporary demo edit',
-          );
-          await resource.save();
-        }
-      }
-    }, demo.drive);
-    await page
-      .getByRole('button', { name: 'Use this template', exact: true })
-      .click();
-    // The naming step's title is hidden on a phone; its Create button is not.
-    await expect(
-      page
-        .getByRole('region', { name: 'Setup' })
-        .getByRole('button', { name: 'Create drive', exact: true }),
-    ).toBeVisible();
-    await expect(page.getByLabel('Drive name')).toHaveValue('Student');
-    expect(
-      await page
-        .getByLabel('Drive name')
-        .evaluate((input: HTMLInputElement) => [
-          input.selectionStart,
-          input.selectionEnd,
-        ]),
-    ).toEqual([0, 'Student'.length]);
-    if (keepEdits)
-      await page.getByLabel('Keep demo content and my edits').check();
-    await page.getByLabel('Drive name').fill('My study workspace');
-    await page
-      .getByRole('button', { name: 'Create drive', exact: true })
-      .click();
-    await expect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
-    const result = await page.evaluate(async () => {
-      const store = window.store;
-      const drive = store.getDrive()!;
-      const children = await store.queryLocalDb({
-        property: 'https://atomicdata.dev/properties/parent',
-        value: drive,
-      });
-      const names = [];
-      let sampleRows = 0;
-
-      for (const subject of children?.subjects ?? []) {
-        names.push(
-          (await store.getResource(subject)).get(
-            'https://atomicdata.dev/properties/name',
-          ),
-        );
-        const nested = await store.queryLocalDb({
-          property: 'https://atomicdata.dev/properties/parent',
-          value: subject,
-        });
-
-        for (const child of nested?.subjects ?? []) {
-          const name = (await store.getResource(child)).get(
-            'https://atomicdata.dev/properties/name',
-          );
-          if (typeof name === 'string' && name.startsWith('Example '))
-            sampleRows++;
-        }
-      }
-
-      return {
-        drive,
-        names,
-        sampleRows,
-        demo: localStorage.getItem('atomic.templateDemo'),
-      };
-    });
-    if (keepEdits) expect(result.drive).toBe(demo.drive);
-    else expect(result.drive).not.toBe(demo.drive);
-    expect(result.names).toContain('Assignments');
-    expect(result.names).toContain(
-      keepEdits ? 'My temporary demo edit' : 'Lecture notes',
-    );
-    expect(result.demo).toBeNull();
-
-    if (keepEdits) expect(result.sampleRows).toBeGreaterThan(0);
-    else {
-      expect(result.names).not.toContain('My temporary demo edit');
-      expect(result.sampleRows).toBe(0);
-    }
-  });
-}
-
-test('blank drive remains a short path without feedback covering it on mobile', async ({
+test('a new drive asks for a name and opens empty, with ways to start', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  test.setTimeout(120000);
   await devDrive(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${FRONTEND_URL}/app/new-drive`);
+
+  // Only a name: no gallery, no preview, no blank-drive choice.
+  const name = page.getByLabel('Drive name');
+  await expect(name).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Close', exact: true }),
-  ).toBeVisible();
-  const blank = page.getByRole('button', { name: 'Create a blank drive' });
+    page.getByRole('button', { name: 'Preview template' }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel('Include example content')).toHaveCount(0);
+  expect(
+    await name.evaluate((input: HTMLInputElement) => [
+      input.selectionStart,
+      input.selectionEnd,
+    ]),
+  ).toEqual([0, 'My drive'.length]);
+
+  // The fixed Feedback control must not cover the only way forward.
+  const create = page.getByRole('button', {
+    name: 'Create drive',
+    exact: true,
+  });
   const feedback = page.getByRole('button', { name: 'Feedback', exact: true });
-  // The gallery above this button keeps loading after the page is
-  // interactive, growing the scroll area by about 250px. A single
-  // `scrollIntoViewIfNeeded` issued inside that window scrolls to what was
-  // then the bottom and is left short, so scroll again on every attempt
-  // rather than measuring once. If the fixed Feedback control really does
-  // cover the last option, no amount of scrolling clears it and this fails.
   await expect
     .poll(async () => {
-      await blank.scrollIntoViewIfNeeded();
-      const blankBox = await blank.boundingBox();
+      await create.scrollIntoViewIfNeeded();
+      const createBox = await create.boundingBox();
       const feedbackBox = await feedback.boundingBox();
 
-      if (!blankBox || !feedbackBox) return -1;
+      if (!createBox || !feedbackBox) return -1;
 
-      return feedbackBox.y - (blankBox.y + blankBox.height);
+      return feedbackBox.y - (createBox.y + createBox.height);
     })
     .toBeGreaterThanOrEqual(0);
-  await blank.click();
-  await page.getByLabel('Drive name').fill('Blank example');
-  await page.getByRole('button', { name: 'Create drive', exact: true }).click();
-  await expect(page).not.toHaveURL(/new-drive/);
+
+  await name.fill('My study workspace');
+  await create.click();
+  await expect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
+
+  // The drive is empty, and says what can go in it.
+  await expect(page.getByTestId('current-drive-title')).toHaveText(
+    'My study workspace',
+    { timeout: 30000 },
+  );
+  const start = page.getByLabel('Start this drive');
+  await expect(start).toBeVisible({ timeout: 30000 });
+
+  for (const label of ['Document', 'Table', 'Canvas']) {
+    await expect(start.getByRole('button', { name: label })).toBeVisible();
+  }
+
+  for (const title of ['Student', 'Team', 'Personal']) {
+    await expect(start.getByText(new RegExp(`\\s${title}$`))).toBeVisible();
+  }
+
+  await expect(start.getByText('Welcome to Atomic')).toHaveCount(0);
 });
 
-test('interactive demo leads to template selection and back from the top bar', async ({
+test('a starter fills the empty drive it is chosen in, with checklists', async ({
   page,
 }) => {
-  test.setTimeout(240000);
-  // A guest, not a dev drive: a signed-in visitor who opens the demo is sent
-  // to their own workspace instead (DemoRoute's signedInDrive).
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${FRONTEND_URL}/app/demo`);
-  const bar = page.getByRole('region', { name: 'Setup' });
-  const choose = bar.getByRole('button', { name: 'Choose a template' });
-  await expect(choose).toBeVisible({ timeout: 90000 });
-  await expect(bar.getByRole('button', { name: 'Leave demo' })).toBeVisible();
-  // The demo's app arrives from behind the splash with a slight scale (about
-  // half a second), and a box measured meanwhile is a little smaller than it
-  // settles at: the bar read 55.2 tall against a nav 55.7 down.
-  await expect(page.locator('#root')).not.toHaveClass(/boot-revealing/);
-  const barBox = await bar.boundingBox();
-  const nav = await page
-    .getByLabel('navigation', { exact: true })
-    .boundingBox();
-  expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(nav!.y);
+  test.setTimeout(120000);
+  await devDrive(page);
+  await page.goto(`${FRONTEND_URL}/app/new-drive`);
+  await page.getByLabel('Drive name').fill('Starter target');
+  await page.getByRole('button', { name: 'Create drive', exact: true }).click();
+  await expect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
+  const drive = await page.evaluate(() => window.store.getDrive()!);
 
-  // A stale template-preview record must not hide the demo's bar.
-  await page.evaluate(() =>
-    localStorage.setItem(
-      'atomic.templateDemo',
-      JSON.stringify({
-        drive: 'did:ad:stale',
-        template: 'student',
-        previousDrive: '',
-      }),
-    ),
-  );
-  await page.reload();
-  // The reload brings the demo up again from nothing, which took as long as
-  // the first visit (11 s alone here, 24 s at four workers), so it gets the
-  // first visit's budget: on run 4919 three attempts ran out at 30 s.
-  await expect(choose).toBeVisible({ timeout: 90000 });
+  const start = page.getByLabel('Start this drive');
+  await expect(start).toBeVisible({ timeout: 30000 });
+  // A new drive opens with its title in edit mode. Leave it first: its blur
+  // reflows the header, and a click that starts during that reflow is lost.
+  await page.mouse.click(1100, 400);
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.tagName))
+    .not.toBe('TEXTAREA');
+  await start
+    .getByRole('button', { name: 'Use this starter', exact: true })
+    .first()
+    .click();
 
-  // The demo is not a template, and the gallery keeps the way back.
-  await choose.click();
+  // The drive is no longer empty, so the block goes away.
+  await expect(start).toHaveCount(0, { timeout: 60000 });
   await expect(
-    page.getByRole('button', { name: 'Preview template' }).first(),
+    page.getByRole('link', { name: 'Lecture notes' }).first(),
   ).toBeVisible();
-  await expect(page.getByText('Meet the demo team')).toHaveCount(0);
-  await bar.getByRole('button', { name: 'Back to the demo' }).click();
-  await expect(choose).toBeVisible();
+
+  const result = await page.evaluate(async parent => {
+    const store = window.store;
+    const children = await store.queryLocalDb({
+      property: 'https://atomicdata.dev/properties/parent',
+      value: parent,
+    });
+    const names: unknown[] = [];
+
+    for (const subject of children?.subjects ?? [])
+      names.push(
+        (await store.getResource(subject)).get(
+          'https://atomicdata.dev/properties/name',
+        ),
+      );
+
+    return { drive: store.getDrive(), names };
+  }, drive);
+  // It went into this drive, not a new one.
+  expect(result.drive).toBe(drive);
+  expect(result.names).toContain('Assignments');
+  expect(result.names).toContain('Lecture notes');
+
+  await page.getByRole('link', { name: 'Lecture notes' }).first().click();
+  await expect(
+    page.locator('ul[data-type="taskList"] input[type="checkbox"]'),
+  ).toHaveCount(3, { timeout: 30000 });
 });
 
-test('AI setup can be dismissed and reopened without trapping the gallery', async ({
+test('the drive switcher opens the same name-only step in a dialog', async ({
   page,
 }) => {
   await devDrive(page);
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`${FRONTEND_URL}/app/new-drive`);
-
-  for (const method of ['outside', 'escape', 'close']) {
-    await page.getByRole('button', { name: 'Set up AI', exact: true }).click();
-    const title = page.getByRole('heading', {
-      name: 'Connect a model to use AI chat',
-    });
-    await expect(title).toBeVisible();
-    if (method === 'outside') await page.mouse.click(5, 5);
-    else if (method === 'escape') await page.keyboard.press('Escape');
-    else await page.getByRole('button', { name: 'close', exact: true }).click();
-    await expect(title).not.toBeVisible();
-  }
+  await sideBarDriveSwitcher(page).click();
+  await page.getByTestId('menu-item-new-drive').click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Drive name')).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Preview template' }),
+  ).toHaveCount(0);
+  await dialog.getByLabel('Drive name').fill('From the switcher');
+  await dialog
+    .getByRole('button', { name: 'Create drive', exact: true })
+    .click();
+  await expect(page.getByTestId('current-drive-title')).toHaveText(
+    'From the switcher',
+    { timeout: 30000 },
+  );
+  await expect(page.getByLabel('Start this drive')).toBeVisible({
+    timeout: 30000,
+  });
 });

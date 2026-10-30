@@ -381,8 +381,8 @@ export function MessageNotifier(): null {
     if (classes.includes(dataBrowser.classes.chatLog)) {
       const page = resource.stable;
 
-      // Nobody but you writes in a local-only drive, so whoever speaks there
-      // is the demo's script. Not news, and never the Inbox of a real account.
+      // Nobody but you writes in a local-only drive: what is said there is
+      // not news, and never belongs in the Inbox of a real account.
       if (store.isLocalOnlySubject(page.subject)) return;
 
       for (const { key, entry } of page.listChatLogEntries()) {

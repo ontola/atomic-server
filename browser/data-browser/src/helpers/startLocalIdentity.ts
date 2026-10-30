@@ -39,8 +39,8 @@ export async function saveAgentResource(
  * Start without an account: mint a real agent on this device, keep it local,
  * and give it its personal drive straight away.
  *
- * Nothing here is disposable. The key is stored like any account's (not as the
- * demo's throwaway guest, `adoptOnDevice: false`) and the personal drive exists
+ * Nothing here is disposable. The key is stored like any account's (not
+ * `adoptOnDevice: false`) and the personal drive exists
  * before this resolves, so the reconcile gate never mistakes the identity for
  * an empty one.
  *

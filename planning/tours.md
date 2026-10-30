@@ -1,7 +1,7 @@
 # Tours: replayable meetings and custom onboarding (design)
 
 > **Status:** design, not built (July 2026). Grew out of
-> `planning/demo-experience.md` (the scripted demo proved the
+> `planning/demo-experience.md` (removed with the scripted demo, see git history) (the scripted demo proved the
 > primitives) and `planning/meetings.md` (meetings made follow-mode
 > addressable — and, it turns out, recordable).
 >
@@ -249,7 +249,7 @@ player ships, where it doubles as the player's best dogfood.
 - `planning/meetings.md` — the substrate: meetings made the trail +
   narration addressable and persistent; this design makes that log
   replayable. Its "minutes for free" property is literally the tape.
-- `planning/demo-experience.md` — proved the primitives (presence
+- `planning/demo-experience.md` (removed with the scripted demo, see git history) — proved the primitives (presence
   injection, typist, skip-if-deleted, visibility pause) and remains
   the theatrical layer for full app demos; the known-gap note there
   about local-only shares applies to template tours too.

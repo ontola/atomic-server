@@ -1,9 +1,8 @@
 import { test, expect, type Page } from './fixtures';
-import type { DiagnosticCollector } from './diagnostic-collector';
 import { devDrive, FRONTEND_URL, nodeReachableServerUrl } from './test-utils';
 
 /**
- * A demo guest makes a workspace, then signs in with an email that already
+ * A guest (started with Get started) makes a workspace, then signs in with an email that already
  * has an identity. The account's identity wins, and the guest's workspace
  * comes along: still there, and editable, as the account.
  *
@@ -15,19 +14,6 @@ import { devDrive, FRONTEND_URL, nodeReachableServerUrl } from './test-utils';
 const EMAIL = 'bring-along@example.com';
 
 type Portal = { signedIn: boolean };
-
-function allowTemplateSetupWarning(
-  diagnostics: Pick<DiagnosticCollector, 'expect'>,
-) {
-  diagnostics.expect(
-    'error',
-    /Each child in a list should have a unique.*key.*DriveTemplateSetup/s,
-    'Existing Wuchale React key warning in Vite template setup',
-    1,
-    undefined,
-    { optional: true },
-  );
-}
 
 async function mockPortal(page: Page, accountAgent: string): Promise<Portal> {
   const portal: Portal = { signedIn: false };
@@ -84,16 +70,13 @@ async function existingAccount(
 }
 
 /**
- * As the guest: a drive of its own, which the guest owns. Made directly: the
- * template gallery sends a guest to create an account first (see
- * template-recovery.spec.ts), and this is about a guest that already has work.
+ * As the guest: Get started, which makes a real identity that stays on this
+ * device, then a drive of its own that the guest owns.
  */
 async function guestWorkspace(page: Page): Promise<string> {
-  await page.goto(`${FRONTEND_URL}/app/demo`);
-  await expect(page).not.toHaveURL(/\/app\/demo/, { timeout: 90_000 });
-  // Leave the demo document: its scripted teammates keep moving their
-  // cursors, and under load the editor logs each cursor it cannot place yet.
-  await page.goto(`${FRONTEND_URL}/app/settings`);
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  await expect(page).not.toHaveURL(/\/app\/welcome/, { timeout: 60_000 });
   await expect
     .poll(() => page.evaluate(() => !!window.store?.getAgent()), {
       timeout: 30_000,
@@ -102,8 +85,6 @@ async function guestWorkspace(page: Page): Promise<string> {
 
   return page.evaluate(async () => {
     const store = window.store;
-    // As `prepareTemplateDrive` does for a guest: its home lives here only.
-    store.registerLocalOnlyDrive(await store.getAgent()!.privateDriveSubject());
     const drive = await store.createDrive('Guest drive', {
       personal: false,
       localOnly: true,
@@ -171,10 +152,8 @@ async function expectBroughtAlong(page: Page, drive: string, agent: string) {
 
 test('a guest workspace comes along when signing in to an existing account', async ({
   page,
-  browserDiagnostics,
 }) => {
   test.setTimeout(300_000);
-  allowTemplateSetupWarning(browserDiagnostics);
   const account = await existingAccount(page);
   const portal = await mockPortal(page, account.agent);
   const drive = await guestWorkspace(page);
@@ -191,10 +170,8 @@ test('a guest workspace comes along when signing in to an existing account', asy
 
 test('the conflict dialog brings the workspace along after a failed try', async ({
   page,
-  browserDiagnostics,
 }) => {
   test.setTimeout(300_000);
-  allowTemplateSetupWarning(browserDiagnostics);
   const account = await existingAccount(page);
   const portal = await mockPortal(page, account.agent);
   const drive = await guestWorkspace(page);
@@ -237,44 +214,6 @@ test('the conflict dialog brings the workspace along after a failed try', async 
   await dialog
     .getByRole('button', { name: 'Bring this workspace into my account' })
     .click();
-  await unlockAccount(page, account.secret, account.agent);
-  await expectBroughtAlong(page, drive, account.agent);
-});
-
-test('a workspace started with Get started comes along when signing in', async ({
-  page,
-  browserDiagnostics,
-}) => {
-  test.setTimeout(300_000);
-  allowTemplateSetupWarning(browserDiagnostics);
-  const account = await existingAccount(page);
-  const portal = await mockPortal(page, account.agent);
-
-  await page.goto(`${FRONTEND_URL}/app/welcome`);
-  await page.getByRole('button', { name: 'Get started' }).click();
-  await expect(page).not.toHaveURL(/\/app\/welcome/, { timeout: 60_000 });
-  await expect
-    .poll(() => page.evaluate(() => !!window.store?.getAgent()), {
-      timeout: 30_000,
-    })
-    .toBe(true);
-  // Work of its own, in a drive that stays on this device.
-  const drive = await page.evaluate(async () => {
-    const store = window.store;
-    const made = await store.createDrive('Started drive', {
-      personal: false,
-      localOnly: true,
-    });
-    store.setDrive(made.subject);
-
-    return made.subject;
-  });
-
-  portal.signedIn = true;
-  await page.goto(
-    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
-  );
-  await expect(page.getByTestId('identity-conflict')).toHaveCount(0);
   await unlockAccount(page, account.secret, account.agent);
   await expectBroughtAlong(page, drive, account.agent);
 });

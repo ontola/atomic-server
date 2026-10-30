@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The scripted demo is removed: `/app/demo`, its simulated teammates and tour, the "Leave demo" and "Choose a template" bar, and the recording scripts that drove it. The Get started button on the welcome screen (a real identity and the Welcome drive on this device) is the way in.
+- New drive: asks only for a name and opens the empty drive. An empty drive page offers what to put in it: Document, Table, Canvas and other quick-create buttons, the Student, Team and Personal starters (one click fills this drive, no preview) and, when an AI model is set up, a prompt to describe what you need. The template gallery, template preview, "Include example content" and the sign-up detour for guests are gone. Starters and the Welcome document now have real content with checklists; document template text supports `- [ ]` / `- [x]` task lines.
 - `@tomic/react`: removed the `useMarkdown` and `useDate` hooks because they were unused.
 - Tables opened from a link in another drive than the active one now show their rows and totals #2392
 - Table templates trimmed: Grocery list opens on its List view (no By aisle board, and the Aisle column and per-aisle breakdown are gone), Plant care loses By room, Bookmarks loses By kind and the To read kind, Issue Tracker no longer ships an Issues tab (add it from Add view), Workout log drops Run and Cycle, Time tracker drops the Person column. The Team workspace keeps only Project tasks, and Personal gains a Notes document.

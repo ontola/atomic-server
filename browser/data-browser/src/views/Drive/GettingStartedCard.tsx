@@ -1,4 +1,10 @@
-import { core, useCurrentAgent, useString, type Resource } from '@tomic/react';
+import {
+  core,
+  server,
+  useCurrentAgent,
+  useString,
+  type Resource,
+} from '@tomic/react';
 import type { JSX } from 'react';
 import { FaCircleCheck, FaRegCircle } from 'react-icons/fa6';
 import { styled } from 'styled-components';
@@ -13,6 +19,7 @@ import {
   useOnboardingProgress,
   type OnboardingStep,
 } from '@hooks/useOnboardingProgress';
+import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
 import { paths } from '../../routes/paths';
 
 /**
@@ -54,6 +61,8 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     useOnboardingProgress(name);
   const { openChat } = useAISidebar();
   const navigate = useNavigateWithTransition();
+  const createNewResource = useNewResourceUI();
+  const [agent] = useCurrentAgent();
 
   if (hidden || doneCount === steps.length) return null;
 
@@ -72,9 +81,9 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     },
     project: {
       title: 'Start a drive',
-      hint: 'Pick a template for a team, a class or yourself',
+      hint: 'Give it a name, then fill it with a starter',
       action: 'New drive',
-      run: () => navigate(paths.newDrive),
+      run: () => createNewResource(server.classes.drive, agent?.subject ?? ''),
     },
     ai: {
       title: 'Talk to the AI',

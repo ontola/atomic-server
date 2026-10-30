@@ -188,6 +188,6 @@ already shipped.
 
 - `planning/presence-views.md` — canvas/table presence payloads the
   tour benefits from.
-- `planning/demo-experience.md` — the demo is the first consumer and
+- `planning/demo-experience.md` (removed with the scripted demo, see git history) — the demo is the first consumer and
   the forcing function; demo v3 should build on the real meeting
   feature, not simulate one.

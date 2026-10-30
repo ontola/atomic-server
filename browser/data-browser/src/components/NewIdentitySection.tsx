@@ -170,8 +170,8 @@ export function NewIdentitySection({
       // tier — see `originNode.ts`) this identity exists nowhere but here.
       // Its own resource, and the drive made below, must route to local
       // storage from their first save, or every commit parks in the outbox
-      // waiting for a server that is not coming. Same registration the demo
-      // guest uses; `enableCloudSyncForDrive` lifts it when a node is
+      // waiting for a server that is not coming. Same registration Get started
+      // uses; `enableCloudSyncForDrive` lifts it when a node is
       // assigned. Registered right after `setAgent` and before anything
       // async, so no consumer can mount `useResource(agent)` and fetch first.
       if (

@@ -46,11 +46,6 @@ const DevDriveRoute = createRoute({
   }
 });
 
-const DemoRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: pathNames.demo,
-}).lazy(() => import('./DemoRoute').then(mod => mod.demoRouteLazy));
-
 const PruneTestsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: pathNames.pruneTests,
@@ -103,7 +98,6 @@ const routeTree = rootRoute.addChildren({
     PruneTestsRoute,
     SandboxRoute,
     DevDriveRoute,
-    DemoRoute,
     InviteRoute,
     ConnectAgentRoute,
     SendIdentityRoute,

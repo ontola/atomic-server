@@ -1,5 +1,5 @@
 // The shared visual chrome of the full-screen onboarding surfaces: the
-// welcome/sign-in flow, the invite page, the demo intro, and the post-sign-in
+// welcome/sign-in flow, the invite page and the post-sign-in
 // "connect a device" screen. Lives apart from GettingStartedFlow so a step it
 // renders can use the chrome without importing its parent.
 

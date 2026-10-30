@@ -13,8 +13,12 @@ let isPrivate = false;
 
 vi.mock('@tomic/react', () => ({
   core: { properties: { name: 'name', write: 'write' } },
+  server: { classes: { drive: 'drive' } },
   useString: () => ['Welcome to Atomic'],
   useCurrentAgent: () => [agent ? { subject: agent } : undefined],
+}));
+vi.mock('@components/forms/NewForm/useNewResourceUI', () => ({
+  useNewResourceUI: () => vi.fn(),
 }));
 vi.mock('@hooks/useOnboardingProgress', () => ({
   useOnboardingProgress: () => ({
