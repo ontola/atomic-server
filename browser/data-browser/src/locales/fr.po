@@ -3850,11 +3850,6 @@ msgstr ""
 msgid "Open the parent of this resource."
 msgstr ""
 
-#. 0: ' '
-#: src/components/OverlayContainer.tsx
-msgid "Are you sure you want to delete{0} <0/>"
-msgstr ""
-
 #: src/actions/appActions.ts
 msgid "Show or hide the sidebar"
 msgstr "Afficher ou masquer la barre latérale"
@@ -5767,11 +5762,6 @@ msgstr ""
 msgid "The subject (URL or #ref) of the resource"
 msgstr ""
 
-#. 0: ctx.resource.title || ctx.subject
-#: src/actions/resourceActions.tsx
-msgid "Are you sure you want to delete {0}?"
-msgstr ""
-
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Deleting resource"
 msgstr ""
@@ -6033,10 +6023,6 @@ msgstr ""
 
 #: src/routes/Share/ShareRoute.tsx
 msgid "Atomic Data Docs"
-msgstr ""
-
-#: src/components/ResourceContextMenu/index.tsx
-msgid "Are you sure you want to delete"
 msgstr ""
 
 #: src/chunks/TablePage/TableExportDialog.tsx
@@ -13552,4 +13538,26 @@ msgstr ""
 
 #: src/components/Drives/FavoriteButton.tsx
 msgid "Add to My drives"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Delete this drive and all its contents permanently. This cannot be undone."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Permanently delete drive and all contents?"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Delete drive"
+msgstr ""
+
+#. 0: ctx.resource.title || ctx.subject
+#: src/actions/resourceActions.tsx
+msgid "Permanently delete {0} and everything inside it? This cannot be undone. Other people will also lose access to this content."
+msgstr ""
+
+#. 0: ctx.resource.title || ctx.subject
+#: src/actions/resourceActions.tsx
+msgid "Are you sure you want to delete {0}?"
 msgstr ""

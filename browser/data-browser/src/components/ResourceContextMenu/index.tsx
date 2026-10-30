@@ -28,7 +28,6 @@ import { usePluginClass } from '@chunks/PluginRuns/useDriveClass';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
 import { MoveResourceDialog } from '../MoveResourceDialog';
 import { CoverPickerDialog, IconPickerDialog } from '../ResourceDecorations';
-import { ResourceInline } from '../../views/ResourceInline';
 import { ResourceUsage } from '../ResourceUsage';
 import { getDeleteDialog } from './deleteDialogRegistry';
 import { useAfterResourceDelete } from '../../hooks/useAfterResourceDelete';
@@ -403,16 +402,9 @@ export function ResourceContextMenu({
           if (confirmingAction) runAction(confirmingAction, ctx);
         }}
       >
-        {confirmingAction?.id === 'delete' ? (
-          <>
-            <p>
-              <span>Are you sure you want to delete</span>{' '}
-              <ResourceInline subject={ctx.subject} />
-            </p>
-            <ResourceUsage resource={ctx.resource} />
-          </>
-        ) : (
-          confirmation?.body(ctx)
+        {confirmation?.body(ctx)}
+        {confirmingAction?.id === 'delete' && (
+          <ResourceUsage resource={ctx.resource} />
         )}
       </ConfirmationDialog>
       {CustomDeleteDialog && (

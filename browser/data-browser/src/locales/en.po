@@ -3856,11 +3856,6 @@ msgstr "Go to parent"
 msgid "Open the parent of this resource."
 msgstr "Open the parent of this resource."
 
-#. 0: ' '
-#: src/components/OverlayContainer.tsx
-msgid "Are you sure you want to delete{0} <0/>"
-msgstr "Are you sure you want to delete{0} <0/>"
-
 #: src/actions/appActions.ts
 msgid "Show or hide the sidebar"
 msgstr "Show or hide the sidebar"
@@ -5773,11 +5768,6 @@ msgstr "Error running {0} on {1}: {2}"
 msgid "The subject (URL or #ref) of the resource"
 msgstr "The subject (URL or #ref) of the resource"
 
-#. 0: ctx.resource.title || ctx.subject
-#: src/actions/resourceActions.tsx
-msgid "Are you sure you want to delete {0}?"
-msgstr "Are you sure you want to delete {0}?"
-
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Deleting resource"
 msgstr "Deleting resource"
@@ -6040,10 +6030,6 @@ msgstr "Read more about permissions in the"
 #: src/routes/Share/ShareRoute.tsx
 msgid "Atomic Data Docs"
 msgstr "Atomic Data Docs"
-
-#: src/components/ResourceContextMenu/index.tsx
-msgid "Are you sure you want to delete"
-msgstr "Are you sure you want to delete"
 
 #: src/chunks/TablePage/TableExportDialog.tsx
 #: src/views/File/DownloadButton.tsx
@@ -13566,3 +13552,25 @@ msgstr "Remove from My drives"
 #: src/components/Drives/FavoriteButton.tsx
 msgid "Add to My drives"
 msgstr "Add to My drives"
+
+#: src/actions/resourceActions.tsx
+msgid "Delete this drive and all its contents permanently. This cannot be undone."
+msgstr "Delete this drive and all its contents permanently. This cannot be undone."
+
+#: src/actions/resourceActions.tsx
+msgid "Permanently delete drive and all contents?"
+msgstr "Permanently delete drive and all contents?"
+
+#: src/actions/resourceActions.tsx
+msgid "Delete drive"
+msgstr "Delete drive"
+
+#. 0: ctx.resource.title || ctx.subject
+#: src/actions/resourceActions.tsx
+msgid "Permanently delete {0} and everything inside it? This cannot be undone. Other people will also lose access to this content."
+msgstr "Permanently delete {0} and everything inside it? This cannot be undone. Other people will also lose access to this content."
+
+#. 0: ctx.resource.title || ctx.subject
+#: src/actions/resourceActions.tsx
+msgid "Are you sure you want to delete {0}?"
+msgstr "Are you sure you want to delete {0}?"

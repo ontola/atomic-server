@@ -45,6 +45,17 @@ test('manage multiple drives without deleting content, and restore after reload'
     .getByRole('menuitem', { name: 'Delete permanently', exact: true })
     .click();
   await expect(page.getByRole('dialog')).toContainText('Project alpha');
+  await expect(page.getByRole('dialog')).toContainText(
+    'Permanently delete drive and all contents?',
+  );
+  await expect(page.getByRole('dialog')).toContainText(
+    'This cannot be undone.',
+  );
+  await expect(
+    page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Delete drive', exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Select all', exact: true }).click();
   await page

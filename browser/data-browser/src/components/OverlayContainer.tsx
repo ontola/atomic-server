@@ -20,7 +20,6 @@ import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
 } from './ConfirmationDialog';
-import { ResourceInline } from '../views/ResourceInline';
 import { ResourceUsage } from './ResourceUsage';
 import {
   useServerSearch,
@@ -803,16 +802,9 @@ function SearchOverlay(): JSX.Element {
           }
         }}
       >
-        {confirmingAction?.id === 'delete' ? (
-          <>
-            <p>
-              Are you sure you want to delete{' '}
-              <ResourceInline subject={actionCtx.subject} />
-            </p>
-            <ResourceUsage resource={actionCtx.resource} />
-          </>
-        ) : (
-          confirmingAction?.confirmation?.body(actionCtx)
+        {confirmingAction?.confirmation?.body(actionCtx)}
+        {confirmingAction?.id === 'delete' && (
+          <ResourceUsage resource={actionCtx.resource} />
         )}
       </ConfirmationDialog>
     </ErrorBoundary>

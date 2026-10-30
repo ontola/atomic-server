@@ -77,6 +77,9 @@ function LeaveConversationBody({ resource }: { resource: Resource }) {
 const isConversation = (ctx: ActionContext): boolean =>
   ctx.resource.getClasses().includes(conversations.classes.conversation);
 
+const isDrive = (ctx: ActionContext): boolean =>
+  ctx.resource.getClasses().includes(server.classes.drive);
+
 // Trash membership is the direct parent only: items nested deeper in a trashed
 // folder travel with it, so only the folder itself shows Restore.
 const inTrash = (ctx: ActionContext): boolean =>
@@ -86,7 +89,7 @@ const inTrash = (ctx: ActionContext): boolean =>
 const isTrashable = (ctx: ActionContext): boolean => {
   if (
     isConversation(ctx) ||
-    ctx.resource.getClasses().includes(server.classes.drive) ||
+    isDrive(ctx) ||
     !ctx.drive ||
     ctx.subject === ctx.drive ||
     inTrash(ctx)
@@ -546,7 +549,10 @@ export const resourceActions: ActionDefinition[] = [
     scope: 'resource',
     section: 'action',
     label: () => 'Delete permanently',
-    helper: () => 'Delete this resource permanently. This cannot be undone.',
+    helper: ctx =>
+      isDrive(ctx)
+        ? 'Delete this drive and all its contents permanently. This cannot be undone.'
+        : 'Delete this resource permanently. This cannot be undone.',
     keywords: ['remove', 'destroy'],
     icon: () => <FaTrash />,
     // Members of a conversation can't delete it, see `leave-conversation`.
@@ -556,13 +562,24 @@ export const resourceActions: ActionDefinition[] = [
     danger: true,
     dangerLabel: () => 'Confirm Delete',
     confirmation: {
-      title: () => 'Delete resource',
-      confirmLabel: () => 'Delete permanently',
-      body: ctx => (
-        <p>
-          Are you sure you want to delete {ctx.resource.title || ctx.subject}?
-        </p>
-      ),
+      title: ctx =>
+        isDrive(ctx)
+          ? 'Permanently delete drive and all contents?'
+          : 'Delete resource',
+      confirmLabel: ctx =>
+        isDrive(ctx) ? 'Delete drive' : 'Delete permanently',
+      body: ctx =>
+        isDrive(ctx) ? (
+          <p>
+            Permanently delete {ctx.resource.title || ctx.subject} and
+            everything inside it? This cannot be undone. Other people will also
+            lose access to this content.
+          </p>
+        ) : (
+          <p>
+            Are you sure you want to delete {ctx.resource.title || ctx.subject}?
+          </p>
+        ),
     },
     run: async ctx => {
       const parent = getParent(ctx);
