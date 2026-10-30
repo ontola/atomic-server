@@ -3900,7 +3900,9 @@ msgid "Leave"
 msgstr ""
 
 #. 0: participants.length
+#. 0: participants.length
 #: src/components/Presence/FollowSessionPanelContainer.tsx
+#: src/components/Presence/MeetingAttendees.tsx
 msgid "{0} here"
 msgstr ""
 
@@ -4467,6 +4469,7 @@ msgstr ""
 msgid "Leave video call"
 msgstr ""
 
+#: src/components/Presence/FollowSessionPanelContainer.tsx
 #: src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "Start video call"
 msgstr ""
@@ -13204,6 +13207,7 @@ msgid "Cloud Vault is full, so this drive is not being backed up. Free up space 
 msgstr ""
 
 #: src/embed/MeetingChatOverlay.tsx
+#: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
 msgstr ""
 
@@ -13341,6 +13345,14 @@ msgstr ""
 msgid "Start a drive first"
 msgstr ""
 
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "It was deleted on this device."
+msgstr ""
+
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Nothing is created until you add it."
 msgstr ""
@@ -13351,6 +13363,10 @@ msgstr ""
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Or describe what you need"
+msgstr ""
+
+#: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Show Getting started on my drives"
 msgstr ""
 
 #: src/views/Drive/EmptyDriveStart.tsx
@@ -13375,12 +13391,4 @@ msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
-msgstr ""
-
-#: src/views/ErrorPage.tsx
-msgid "It was deleted on this device."
-msgstr ""
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
 msgstr ""

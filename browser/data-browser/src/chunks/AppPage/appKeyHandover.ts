@@ -35,12 +35,14 @@ function endpoint(store: Store): string {
 
 function contextMatches(store: Store, pending: PendingKey): boolean {
   return (
+    !store.noServer &&
     store.getAgent()?.subject === pending.owner &&
     endpoint(store) === pending.endpoint
   );
 }
 
 function ready(store: Store): boolean {
+  if (store.noServer) return false;
   const status = store.getSyncStatus();
 
   return (

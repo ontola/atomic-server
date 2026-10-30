@@ -16,8 +16,13 @@
 //! is the subject, so it cannot be re-signed) and a destroy envelope.
 //!
 //! Entries live in [`Tree::Outbox`] under the signing agent, so a second
-//! identity on the same device never drains the first one's writes.
+//! identity on the same device never drains the first one's writes. An outbox
+//! is the queue of one signer: the device's default agent ([`Outbox::new`]) or
+//! an app's own agent ([`Outbox::for_signer`]), which signs its commits at
+//! drain time. [`Outbox::drain_all`] drains the default agent's queue and then
+//! every app agent's.
 
+use crate::agents::Agent;
 use crate::commit::{CommitBuilder, CommitResponse};
 use crate::db::trees::{Method, Operation, Tree};
 use crate::errors::AtomicResult;
@@ -168,19 +173,88 @@ pub struct DrainReport {
     pub remaining: usize,
 }
 
-/// Handle on the outbox of the store's default agent.
+/// Handle on the outbox of one signer: the store's default agent, or an app's
+/// agent ([`Outbox::for_signer`]).
 #[derive(Clone)]
 pub struct Outbox {
     db: Db,
+    /// `None` is the store's default agent, looked up on every use (it can
+    /// change while the outbox lives).
+    signer: Option<Agent>,
 }
 
 impl Outbox {
     pub fn new(db: Db) -> Self {
-        Self { db }
+        Self { db, signer: None }
+    }
+
+    /// The outbox of `agent`, which signs the commits of its drain. The agent
+    /// needs its private key. `Outbox::new` is the default agent's.
+    pub fn for_signer(db: Db, agent: Agent) -> Self {
+        Self {
+            db,
+            signer: Some(agent),
+        }
+    }
+
+    /// Whoever signs for this outbox.
+    fn signer(&self) -> AtomicResult<Agent> {
+        match &self.signer {
+            Some(agent) => Ok(agent.clone()),
+            None => self.db.get_default_agent(),
+        }
+    }
+
+    /// The outboxes of every signer on this device: the default agent's, then
+    /// one for each app agent that has a key (revoked ones are skipped), once
+    /// per agent.
+    pub fn all_signers(db: &Db) -> Vec<Outbox> {
+        let mut outboxes = vec![Outbox::new(db.clone())];
+        let mut seen: HashSet<String> = HashSet::new();
+        if let Ok(default) = db.get_default_agent() {
+            seen.insert(default.subject.pure_id());
+        }
+        for agent in db.app_agent_keys() {
+            if seen.insert(agent.subject.pure_id()) {
+                outboxes.push(Outbox::for_signer(db.clone(), agent));
+            }
+        }
+        outboxes
+    }
+
+    /// Whether any signer on this device has a queued entry.
+    pub fn any_pending(db: &Db) -> bool {
+        Self::all_signers(db)
+            .iter()
+            .any(|outbox| outbox.entries().is_ok_and(|e| !e.is_empty()))
+    }
+
+    /// Drain the default agent's outbox and then each app agent's over the
+    /// same transport. The reports are added up. `Err` only for a store or
+    /// transport failure, which stops the pass.
+    pub async fn drain_all<T: CommitTransport>(
+        db: &Db,
+        transport: &mut T,
+    ) -> AtomicResult<DrainReport> {
+        let mut total = DrainReport::default();
+        for outbox in Self::all_signers(db) {
+            // An app agent's queue is only drained when it has entries; the
+            // default agent's pass always runs (as `drain` always did).
+            if outbox.signer.is_some() && outbox.entries()?.is_empty() {
+                continue;
+            }
+            let report = outbox.drain(transport).await?;
+            total.sent += report.sent;
+            total.deferred += report.deferred;
+            total.blocked += report.blocked;
+            total.dropped += report.dropped;
+            total.remaining += report.remaining;
+        }
+        Ok(total)
     }
 
     fn agent_prefix(&self) -> AtomicResult<Vec<u8>> {
-        let agent = self.db.get_default_agent()?;
+        let agent = self.signer()?;
         Ok(agent_prefix(&agent.subject.pure_id()))
     }
 
@@ -245,15 +319,16 @@ impl Outbox {
         self.get(subject).ok().flatten().is_some()
     }
 
-    /// Record a commit this device just applied locally, signed by the
-    /// default agent. Commits by anyone else (a peer's, a hub's) are ignored:
-    /// they are not this device's to deliver.
+    /// Record a commit this device just applied locally, signed by this
+    /// outbox's signer (the default agent unless made by
+    /// [`Outbox::for_signer`]). Commits by anyone else (a peer's, a hub's, or
+    /// another signer's) are ignored: they are not this queue's to deliver.
     ///
     /// A genesis or destroy keeps its signed envelope to send verbatim; any
     /// other commit only moves the dirty bit, and the drain re-exports the
     /// accumulated delta. A fresh edit re-arms a blocked entry.
     pub async fn mark_dirty(&self, response: &CommitResponse) -> AtomicResult<bool> {
-        let agent = self.db.get_default_agent()?;
+        let agent = self.signer()?;
         let commit = &response.commit;
         if commit.signer.pure_id() != agent.subject.pure_id() || commit.signature.is_none() {
             return Ok(false);
@@ -424,7 +499,7 @@ impl Outbox {
             return Ok(SubjectOutcome::Sent(sent));
         }
 
-        let agent = self.db.get_default_agent()?;
+        let agent = self.signer()?;
         let resource = self.db.get_resource(&subject.as_str().into()).await?;
         let mut builder = CommitBuilder::new(resource.get_subject().clone());
         builder.set_loro_update(delta);
@@ -927,5 +1002,83 @@ mod tests {
             .entries()
             .map(|e| e.is_empty())
             .unwrap_or(true));
+    }
+
+    /// A transport that keeps what it is sent and accepts it.
+    #[derive(Default)]
+    struct Recording(Vec<String>);
+    impl CommitTransport for Recording {
+        async fn post_commit(&mut self, _: u16, json: &str) -> Result<String, CommitRefused> {
+            self.0.push(json.to_string());
+            Ok("did:ad:commit:recorded".into())
+        }
+    }
+
+    #[tokio::test]
+    async fn app_agent_commits_queue_under_the_app_prefix_and_drain_signed_by_the_app() {
+        let device = Db::init_temp("outbox_app_signer").await.unwrap();
+        let (alice, drive) = device.setup("Alice").await.unwrap();
+        let app = Agent::new(Some("App")).unwrap();
+        let key = crate::db::app_agent::AppAgentKey::new(&drive, "did:ad:the-app");
+        device
+            .set_app_agent(
+                &key,
+                &crate::db::app_agent::AppAgent::new(
+                    app.subject.to_string(),
+                    app.build_secret().unwrap(),
+                    0,
+                ),
+            )
+            .unwrap();
+        let subject = device
+            .create_resource(urls::FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let mut resource = device.get_resource(&subject.as_str().into()).await.unwrap();
+        resource
+            .set(
+                urls::NAME.into(),
+                Value::String("by the app".into()),
+                &device,
+            )
+            .await
+            .unwrap();
+        let by_app = resource.save_as(&app, &device).await.unwrap();
+
+        // Not the default agent's to deliver; the app's outbox takes it.
+        let default_outbox = Outbox::new(device.clone());
+        assert!(!default_outbox.mark_dirty(&by_app).await.unwrap());
+        let app_outbox = Outbox::for_signer(device.clone(), app.clone());
+        assert!(app_outbox.mark_dirty(&by_app).await.unwrap());
+        assert!(default_outbox.entries().unwrap().is_empty());
+        assert_eq!(app_outbox.entries().unwrap().len(), 1);
+        assert!(app_outbox.has_pending(&subject));
+        assert!(!default_outbox.has_pending(&subject));
+        assert_eq!(
+            raw::entries(&device, &app.subject.to_string())
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(raw::entries(&device, &alice.subject.to_string())
+            .unwrap()
+            .is_empty());
+        assert!(Outbox::any_pending(&device));
+
+        // drain_all reaches the app's queue and signs as the app.
+        assert_eq!(device.app_agent_keys().len(), 1);
+        let mut transport = Recording::default();
+        let report = Outbox::drain_all(&device, &mut transport).await.unwrap();
+        assert_eq!(report.sent, 1, "{report:?}");
+        assert_eq!(report.remaining, 0, "{report:?}");
+        assert_eq!(transport.0.len(), 1);
+        let wire: serde_json::Value = serde_json::from_str(&transport.0[0]).unwrap();
+        let signer = wire[urls::SIGNER].as_str().unwrap();
+        assert_eq!(pure(signer), pure(&app.subject.to_string()));
+        assert!(!Outbox::any_pending(&device));
+
+        // A revoked key is not drained any more.
+        device.delete_app_agent(&key).unwrap();
+        assert!(device.app_agent_keys().is_empty());
     }
 }

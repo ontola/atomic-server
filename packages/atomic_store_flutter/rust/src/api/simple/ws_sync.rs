@@ -332,7 +332,7 @@ impl SyncSession {
             return false;
         };
         let mut transport = SinkTransport(sink);
-        match Outbox::new(store.clone()).drain(&mut transport).await {
+        match Outbox::drain_all(store, &mut transport).await {
             Ok(report) => {
                 if report.remaining > 0 {
                     tracing::info!(

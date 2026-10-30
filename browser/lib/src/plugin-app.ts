@@ -8,6 +8,7 @@ import {
   ensureSchema,
   findSchema,
   type EnsuredSchema,
+  type SchemaResource,
   type SchemaStore,
 } from './plugin-schema.js';
 import { pluginSchema } from './plugin-log.js';
@@ -297,6 +298,57 @@ export interface AppDescription {
 }
 
 /**
+ * The source of an app's entry point (its `plugin-source`), or undefined when
+ * the drive has no plugin schema or the entry point has none.
+ */
+export async function appSourceOf(
+  store: SchemaStore,
+  drive: string,
+  entrypoint: string,
+): Promise<string | undefined> {
+  const schema = await readSchema(store, drive);
+  const script = await store.getResource(entrypoint);
+
+  return asString(await schemaValue(store, schema, script, 'plugin-source'));
+}
+
+/** The drive's plugin schema, or none when the drive's ontology can't be read. */
+export async function readSchema(
+  store: SchemaStore,
+  drive: string,
+): Promise<Partial<EnsuredSchema>> {
+  return findSchema(store, drive, pluginSchema()).catch(() => ({}));
+}
+
+/**
+ * A resource's value for the plugin schema's property `shortname`.
+ *
+ * The drive's schema can be unread on a device that has only part of the
+ * drive (the embedded app has no server to ask), so when it names no such
+ * property the resource's own properties are matched by shortname instead.
+ */
+export async function schemaValue(
+  store: SchemaStore,
+  schema: Partial<EnsuredSchema>,
+  resource: SchemaResource,
+  shortname: string,
+): Promise<unknown> {
+  const property = schema.properties?.[shortname];
+
+  if (property) return resource.get(property);
+
+  for (const [subject, value] of Object.entries(
+    resource.getPropVals?.() ?? {},
+  )) {
+    const term = await store.getResource(subject).catch(() => undefined);
+
+    if (term?.get(core.properties.shortname) === shortname) return value;
+  }
+
+  return undefined;
+}
+
+/**
  * Reads an app back, source included.
  *
  * An app that cannot be read cannot be revised, and the only repair for a
@@ -308,15 +360,11 @@ export async function describeApp(
   drive: string,
   app: string,
 ): Promise<AppDescription> {
-  const schema = await findSchema(store, drive, pluginSchema());
+  const schema = await readSchema(store, drive);
   const resource = await store.getResource(app);
 
-  const entrypointProp = schema.properties?.entrypoint;
-  const entrypoint = entrypointProp ? resource.get(entrypointProp) : undefined;
-
-  const data = schema.properties?.['app-data']
-    ? resource.get(schema.properties['app-data'])
-    : undefined;
+  const entrypoint = await schemaValue(store, schema, resource, 'entrypoint');
+  const data = await schemaValue(store, schema, resource, 'app-data');
 
   const description: AppDescription = {
     app,
@@ -327,11 +375,12 @@ export async function describeApp(
     data: asString(data),
   };
 
-  const sourceProp = schema.properties?.['plugin-source'];
-
-  if (description.entrypoint && sourceProp) {
-    const script = await store.getResource(description.entrypoint);
-    description.source = asString(script.get(sourceProp));
+  if (description.entrypoint) {
+    description.source = await appSourceOf(
+      store,
+      drive,
+      description.entrypoint,
+    );
   }
 
   if (description.data) {

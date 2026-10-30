@@ -84,6 +84,9 @@ jobs:
           rm -rf server/assets_tmp
           cp -r browser/data-browser/dist server/assets_tmp
           test -f server/assets_tmp/index.html
+          # The crate has no browser/, so build.rs cannot copy the app view
+          # client there itself.
+          cp browser/data-browser/src/chunks/AppPage/viewClient.js server/assets_tmp/view-client.js
 
           # crates.io rejects any .crate over 10 MiB, and these assets are most
           # of ours — the atomic_wasm and loro_wasm blobs alone are ~9 MiB

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { flutterChannel } from './flutterHost';
 
 /**
  * How the page wants the app's swipe-back gesture handled.
@@ -16,7 +17,7 @@ let sent: EmbedGestures = 'default';
 type Channel = { postMessage(message: string): void };
 
 function channel(): Channel | undefined {
-  return typeof window === 'undefined' ? undefined : window.AtomicFlutter;
+  return flutterChannel();
 }
 
 function current(): EmbedGestures {

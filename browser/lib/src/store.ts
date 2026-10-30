@@ -44,7 +44,7 @@ import {
   ErrorType,
   isTransportError,
   LOCAL_ONLY_NOT_FOUND_MESSAGE,
-  NOT_IN_HOST_STORE_MESSAGE,
+  notInHostStoreMessage,
   NOT_AVAILABLE_LOCALLY_MESSAGE,
   NOT_AVAILABLE_SERVER_UNREACHABLE_MESSAGE,
 } from './error.js';
@@ -125,7 +125,11 @@ import type {
   ClientDbQueryOpts,
   ClientDbQueryResult,
 } from './client-db.js';
-import { DrivePresenceManager } from './presence.js';
+import {
+  DrivePresenceManager,
+  type LocalPresenceListener,
+  type PresenceEntry,
+} from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
@@ -706,6 +710,7 @@ export class Store {
   /** One presence manager per drive; managers remove themselves when
    *  their last subscriber leaves. */
   private presenceManagers: Map<string, DrivePresenceManager> = new Map();
+  private localPresenceListeners = new Set<LocalPresenceListener>();
   /** This tab's presence session, shared by every channel it announces in. */
   public readonly presenceSessionId: string = crypto.randomUUID();
   private injectedFetch: Fetch;
@@ -3820,13 +3825,34 @@ export class Store {
     parent: string,
     localId: string,
   ): Promise<Resource | undefined> {
-    const { readConnectionSubjects } = await import('./plugin-connection.js');
-    const subjects = await readConnectionSubjects(
-      this,
-      drive,
-      core.properties.localId,
-      localId,
-    );
+    let subjects: string[];
+
+    if (this.noServer) {
+      // No server to answer `/query`: the host's database is the authority.
+      const local = await this.queryLocalDb({
+        drive,
+        property: core.properties.localId,
+        value: localId,
+        limit: 1000,
+      });
+
+      if (!local) {
+        throw new Error(
+          'Local database unavailable; refusing to infer that nothing has this localId',
+        );
+      }
+
+      subjects = local.subjects;
+    } else {
+      const { readConnectionSubjects } = await import('./plugin-connection.js');
+      subjects = await readConnectionSubjects(
+        this,
+        drive,
+        core.properties.localId,
+        localId,
+      );
+    }
+
     const matches: Resource[] = [];
 
     for (const subject of subjects) {
@@ -4530,7 +4556,10 @@ export class Store {
         this.failResource(
           subject,
           this.noServer
-            ? new AtomicError(NOT_IN_HOST_STORE_MESSAGE, ErrorType.NotFound)
+            ? new AtomicError(
+                notInHostStoreMessage(subject),
+                ErrorType.NotFound,
+              )
             : new AtomicError(
                 LOCAL_ONLY_NOT_FOUND_MESSAGE,
                 ErrorType.Transport,
@@ -4793,11 +4822,19 @@ export class Store {
     // the server" is a read from it.
     if (this.noServer || this.isLocalOnlySubject(normalizedSubject)) {
       const local = this.resources.get(normalizedSubject);
-      if (local?.isReady()) return local as Resource<C>;
+      // An override asks for what the database holds now: the host wrote
+      // behind this page's back (a write as an app), so the copy kept here is
+      // the one from before it.
+      const reread = this.noServer && opts.forceOverride;
+      if (local?.isReady() && !reread) return local as Resource<C>;
       const stored = await this.fetchResourceFromClientDb(normalizedSubject);
       if (stored) return stored as Resource<C>;
+      if (local?.isReady()) return local as Resource<C>;
       throw this.noServer
-        ? new AtomicError(NOT_IN_HOST_STORE_MESSAGE, ErrorType.NotFound)
+        ? new AtomicError(
+            notInHostStoreMessage(normalizedSubject),
+            ErrorType.NotFound,
+          )
         : new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport);
     }
 
@@ -7281,6 +7318,34 @@ export class Store {
         }
       },
     );
+  }
+
+  /**
+   * Hear every change to this session's own presence entry on any drive, as
+   * it is written (before it reaches a transport). For a host that carries the
+   * entry itself instead of the websocket (the Flutter embed). `undefined`
+   * means the entry was withdrawn.
+   */
+  public onLocalPresence(callback: LocalPresenceListener): () => void {
+    this.localPresenceListeners.add(callback);
+
+    return () => {
+      this.localPresenceListeners.delete(callback);
+    };
+  }
+
+  /** @internal A presence manager wrote its local entry. */
+  public __localPresenceChanged(
+    drive: string,
+    entry: PresenceEntry | undefined,
+  ): void {
+    for (const listener of this.localPresenceListeners) {
+      try {
+        listener(drive, entry);
+      } catch (e) {
+        console.error('[Presence] local listener threw:', e);
+      }
+    }
   }
 
   /** Broadcast raw presence bytes (Loro EphemeralStore update) to a

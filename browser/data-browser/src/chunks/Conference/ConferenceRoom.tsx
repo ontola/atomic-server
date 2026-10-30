@@ -34,6 +34,9 @@ export interface ConferenceRoomProps {
    *  p2p room (and signaling password) from it. */
   subject: string;
   onLeave: () => void;
+  /** A small tile (the app's floating call): the others first, no controls.
+   *  The person expands the tile to get the controls. */
+  compact?: boolean;
 }
 
 /**
@@ -46,6 +49,7 @@ export interface ConferenceRoomProps {
 export default function ConferenceRoom({
   subject,
   onLeave,
+  compact = false,
 }: ConferenceRoomProps): React.JSX.Element {
   const [agent] = useCurrentAgent();
   const agentSubject = agent?.subject;
@@ -177,8 +181,8 @@ export default function ConferenceRoom({
             : 'No microphone or camera found.'}
         </ErrorMessage>
       ) : (
-        <TileGrid>
-          <Tile>
+        <TileGrid $compact={compact}>
+          <Tile $last={compact}>
             <PeerVideo
               $mirrored
               muted
@@ -206,38 +210,40 @@ export default function ConferenceRoom({
           ))}
         </TileGrid>
       )}
-      {!error && peerEntries.length === 0 && (
+      {!error && peerEntries.length === 0 && !compact && (
         <WaitingNote>Waiting for others to join…</WaitingNote>
       )}
-      <Row center justify='center' gap='0.5rem'>
-        <IconButton
-          variant={IconButtonVariant.Square}
-          title={micOn ? 'Mute microphone' : 'Unmute microphone'}
-          size='1.1rem'
-          disabled={!localStream}
-          onClick={toggleMic}
-        >
-          {micOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
-        </IconButton>
-        <IconButton
-          variant={IconButtonVariant.Square}
-          title={camOn ? 'Turn camera off' : 'Turn camera on'}
-          size='1.1rem'
-          disabled={!localStream || !hasCamera}
-          onClick={toggleCam}
-        >
-          {camOn && hasCamera ? <FaVideo /> : <FaVideoSlash />}
-        </IconButton>
-        <IconButton
-          variant={IconButtonVariant.Colored}
-          color='alert'
-          title='Leave call'
-          size='1.1rem'
-          onClick={onLeave}
-        >
-          <HangUpIcon />
-        </IconButton>
-      </Row>
+      {!compact && (
+        <Row center justify='center' gap='0.5rem'>
+          <IconButton
+            variant={IconButtonVariant.Square}
+            title={micOn ? 'Mute microphone' : 'Unmute microphone'}
+            size='1.1rem'
+            disabled={!localStream}
+            onClick={toggleMic}
+          >
+            {micOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
+          </IconButton>
+          <IconButton
+            variant={IconButtonVariant.Square}
+            title={camOn ? 'Turn camera off' : 'Turn camera on'}
+            size='1.1rem'
+            disabled={!localStream || !hasCamera}
+            onClick={toggleCam}
+          >
+            {camOn && hasCamera ? <FaVideo /> : <FaVideoSlash />}
+          </IconButton>
+          <IconButton
+            variant={IconButtonVariant.Colored}
+            color='alert'
+            title='Leave call'
+            size='1.1rem'
+            onClick={onLeave}
+          >
+            <HangUpIcon />
+          </IconButton>
+        </Row>
+      )}
     </CallSection>
   );
 }
@@ -278,15 +284,24 @@ const CallSection = styled(Column)`
   margin-bottom: ${p => p.theme.size(2)};
 `;
 
-const TileGrid = styled.div`
+const TileGrid = styled.div<{ $compact?: boolean }>`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: ${p => p.theme.size(2)};
   max-height: 40vh;
   overflow-y: auto;
+
+  ${p =>
+    p.$compact &&
+    `
+    grid-template-columns: 1fr;
+    max-height: none;
+    overflow: hidden;
+  `}
 `;
 
-const Tile = styled.div`
+const Tile = styled.div<{ $last?: boolean }>`
+  ${p => p.$last && 'order: 1;'}
   position: relative;
   aspect-ratio: 4 / 3;
   border-radius: ${p => p.theme.radius};

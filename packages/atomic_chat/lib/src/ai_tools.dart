@@ -71,7 +71,8 @@ AiTool semanticSearchTool(AssistantApi api) => AiTool(
 AiTool getResourceTool(AssistantApi api) => AiTool(
       name: 'get_atomic_resource',
       description: 'Read resources (documents, tables, folders, chats…) by '
-          'their subjects: their title, class, properties and text.',
+          'their subjects: their title, class, properties and text. Subjects '
+          "come from semantic_search hits or a folder's Contains list.",
       parameters: {
         'type': 'object',
         'properties': {

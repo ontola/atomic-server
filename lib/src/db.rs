@@ -2552,6 +2552,16 @@ impl Db {
     }
 
     /// Every host → Drive mapping in this store, sorted by host.
+    /// The first stored subject that starts with `prefix`, if any. For the
+    /// short refs an AI writes (`#<start of the subject>`), see
+    /// `browser/lib/src/subject-refs.ts`.
+    pub fn subject_with_prefix(&self, prefix: &str) -> Option<String> {
+        self.kv
+            .scan_prefix(Tree::Resources, prefix.as_bytes())
+            .flatten()
+            .find_map(|(key, _)| String::from_utf8(key.to_vec()).ok())
+    }
+
     pub fn list_drive_mappings(&self) -> AtomicResult<Vec<(String, String)>> {
         let mut out = Vec::new();
 
@@ -3421,6 +3431,37 @@ impl Db {
         let agent = crate::agents::Agent::from_secret(&secret)?;
 
         Ok(Some(f(&agent)))
+    }
+
+    /// The signing agent of every app that has a live key on this node,
+    /// revoked ones skipped. A key that cannot be opened is skipped too (with
+    /// a warning): one bad row must not stop the others from syncing.
+    ///
+    /// For a caller that signs on the apps' behalf in bulk (the outbox drain),
+    /// never one that hands the agents on. Two apps given the same key appear
+    /// once.
+    pub fn app_agent_keys(&self) -> Vec<crate::agents::Agent> {
+        let mut agents: Vec<crate::agents::Agent> = Vec::new();
+        for (_, bin) in self.kv.scan_prefix(Tree::AppAgent, b"").flatten() {
+            let Ok(stored) = AppAgent::from_bytes(&bin) else {
+                continue;
+            };
+            if stored.revoked {
+                continue;
+            }
+            let agent = self
+                .unwrap_secret(&stored.secret)
+                .and_then(|secret| crate::agents::Agent::from_secret(&secret));
+            match agent {
+                Ok(agent) => {
+                    if !agents.iter().any(|a| a.subject == agent.subject) {
+                        agents.push(agent);
+                    }
+                }
+                Err(e) => tracing::warn!("[app-agent] skipping a key that cannot be opened: {e}"),
+            }
+        }
+        agents
     }
 
     pub fn delete_app_agent(&self, key: &AppAgentKey) -> AtomicResult<()> {

@@ -2,6 +2,7 @@ import React, { useCallback, useContext, useState, createContext } from 'react';
 
 import type { AIMessageContext } from '../../chunks/AI/types';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
+import { askAssistant, hasActionsHost } from '../../embed/hostActions';
 
 /**
  * A request handed to the assistant from another screen, with resource context.
@@ -11,6 +12,19 @@ export interface AIAsk {
   prompt: string;
   /** Attached to it, so the assistant can read what the question is about. */
   context?: AIMessageContext[];
+}
+
+/**
+ * In the Flutter app there is no sidebar: the app's own assistant opens a chat
+ * with the ask. True when the app took it.
+ */
+function askOnHost(ask: AIAsk): boolean {
+  if (!hasActionsHost()) return false;
+
+  const about = ask.context?.find(c => c.type === 'atomic-resource');
+  void askAssistant(ask.prompt, about?.subject ?? '');
+
+  return true;
 }
 
 export const AISidebarContext = createContext<{
@@ -31,7 +45,8 @@ export const AISidebarContext = createContext<{
   setIsOpen: () => {},
   contextItems: [],
   setContextItems: () => {},
-  askAI: () => {},
+  // The embedded page in the Flutter app has no provider: asks go to the app.
+  askAI: askOnHost,
   openChat: () => {},
   pendingChat: undefined,
   clearPendingChat: () => {},
@@ -79,6 +94,8 @@ export const AISidebarContextProvider: React.FC<React.PropsWithChildren> = ({
 
   const askAI = useCallback(
     (ask: AIAsk) => {
+      if (askOnHost(ask)) return;
+
       setPendingChat(undefined);
       setPendingAsk(ask);
       setPanelOpen('ai', true);

@@ -126,8 +126,13 @@ class WelcomeDriveBuilder {
     if (id is! int || method is! String) return;
     String reply;
     try {
-      final answer = const {'opened', 'theme', 'sidebarIcons', 'openNative'}
-              .contains(method)
+      final answer = const {
+        'opened',
+        'theme',
+        'sidebarIcons',
+        'openNative',
+        'askAssistant',
+      }.contains(method)
           ? 'false'
           : await api.embedCall(
               method, jsonEncode(request['args'] ?? const []));

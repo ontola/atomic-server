@@ -12,9 +12,12 @@ import 'app_shell.dart';
 import 'app_sidebar_icons.dart';
 import 'app_theme.dart';
 import 'assistant_api.dart';
+import 'chat_screen.dart';
 import 'conversation_screen.dart';
 import 'embed_server.dart';
 import 'follow_controller.dart';
+import 'live_meeting_banner.dart';
+import 'meeting_lead.dart';
 import 'models.dart';
 import 'native_views.dart';
 import 'page_swipe.dart';
@@ -140,6 +143,24 @@ class _ResourceViewState extends State<ResourceView>
   PresenceWatch? _watch;
   late final FollowController _follow;
 
+  /// The meeting this device leads (the app's, see [MeetingLead]); announced
+  /// as the entry's `session` and pushed into the page as its active meeting.
+  late final MeetingLead _lead;
+
+  /// What the web page owns of this device's presence entry (`presence` from
+  /// the page): the cursor of its view, the thread being typed in, the
+  /// meeting it leads. Merged into every announcement; the app keeps
+  /// `resource` and `following`.
+  Object? _pageData;
+  String? _pageTyping;
+  String? _pageSession;
+
+  /// The last list and follow state pushed into the page, so an unchanged
+  /// read does not wake it.
+  String? _pushedPresence;
+  String? _pushedFollow;
+  String? _pushedMeeting;
+
   /// The avatar sheet is open: it covers this page without leaving it.
   bool _sheetOpen = false;
 
@@ -188,6 +209,8 @@ class _ResourceViewState extends State<ResourceView>
     WidgetsBinding.instance.addObserver(this);
     _follow = ShellScope.maybeOf(context)?.follow ?? FollowController();
     _follow.addListener(_followChanged);
+    _lead = ShellScope.maybeOf(context)?.lead ?? MeetingLead();
+    _lead.addListener(_leadChanged);
     AppSidebarIcons.show.addListener(_tellSidebarIcons);
     _changes = widget.api.resourceChanges?.listen(_tellChanged);
     widget.api.storeChanges?.addListener(_storeChanged);
@@ -503,17 +526,149 @@ class _ResourceViewState extends State<ResourceView>
     if (ModalRoute.of(context)?.isCurrent == false) return;
     _announcer = this;
     final watch = _watch ??= PresenceWatch(widget.api, widget.drive)
-      ..addListener(_leaderMoved);
+      ..addListener(_watchChanged);
     watch.start();
     _announce();
+    _trail();
+    _pushPresence(force: true);
     setState(() {});
   }
 
   void _announce() {
     widget.api
         .announcePresence(widget.drive,
-            resource: widget.subject, following: _follow.agent)
+            resource: widget.subject,
+            following: _follow.agent,
+            session: _lead.meetingIn(widget.drive) ?? _pageSession,
+            extra: {
+              if (_pageData != null) 'data': _pageData,
+              if (_pageTyping != null) 'typing': _pageTyping,
+            })
         .catchError((Object e) => debugPrint('[presence] not announced: $e'));
+  }
+
+  void _watchChanged() {
+    _pushPresence();
+    _leaderMoved();
+  }
+
+  /// Hands the page the others in the drive and who the app follows, so its
+  /// facepiles, cursors and follow controls show what the app knows (the page
+  /// has no connection of its own). [force]: even when nothing changed since
+  /// the last push (the page was just shown, or loaded after the last one).
+  void _pushPresence({bool force = false}) {
+    final page = _page;
+    final watch = _watch;
+    if (page == null || watch == null || _announcer != this || _menuOnly) {
+      return;
+    }
+    final items = jsonEncode([for (final i in watch.items) i.toJson()]);
+    if (force || items != _pushedPresence) {
+      _pushedPresence = items;
+      unawaited(page
+          .runJavaScript('window.atomicEmbed?.presence('
+              '${jsonEncode(widget.drive)},$items)')
+          .catchError((Object _) {}));
+    }
+    _pushFollow(force: force);
+    _pushMeeting(force: force);
+  }
+
+  /// Tells the page which meeting this device leads on its drive (null:
+  /// none), so its Start / End buttons and `activeMeeting` follow the app.
+  void _pushMeeting({bool force = false}) {
+    final page = _page;
+    if (page == null || _announcer != this || _menuOnly) return;
+    final meeting = jsonEncode(_lead.meetingIn(widget.drive));
+    if (!force && meeting == _pushedMeeting) return;
+    _pushedMeeting = meeting;
+    unawaited(page
+        .runJavaScript('window.atomicEmbed?.setMeeting($meeting)')
+        .catchError((Object _) {}));
+  }
+
+  /// The meeting changed (started, ended, or read back after a restart): the
+  /// entry says so, the page hears it, and the page shown is trailed.
+  void _leadChanged() {
+    if (_lead.meetingIn(widget.drive) == null) _pageSession = null;
+    if (_announcer == this) {
+      _announce();
+      _trail();
+    }
+    _pushMeeting();
+    if (mounted) setState(() {});
+  }
+
+  /// While this device leads a meeting, the page now shown goes in the
+  /// meeting's chat as a "Viewing [title](subject)" line, once per resource
+  /// per meeting (the web's `postTrailMessage`). The page does not post it
+  /// when embedded: the app does.
+  void _trail() {
+    final meeting = _lead.meetingIn(widget.drive);
+    if (meeting == null || _announcer != this || !_announces) return;
+    if (!_lead.markTrailed(widget.subject)) return;
+    final title = widget.title.trim().isEmpty ? widget.subject : widget.title;
+    widget.api
+        .sendChatRoomMessage(meeting, 'Viewing [$title](${widget.subject})')
+        .catchError((Object e) => debugPrint('[meeting] trail not posted: $e'));
+  }
+
+  /// Join on the live meeting strip: follow the leader and open the meeting.
+  /// Following goes on from there (the leader's page replaces it).
+  void _joinLive(LiveMeeting live) {
+    _follow.follow(live.leader.agent, session: live.leader.sessionId);
+    if (live.meeting == widget.subject) {
+      _leaderMoved();
+      return;
+    }
+    _replacing = true;
+    widget.api.noteOpened(widget.drive, live.meeting);
+    final split = ShellScope.maybeOf(context)?.split ?? false;
+    unawaited(Navigator.of(context).pushReplacement(SlideBackRoute<void>(
+      instant: split,
+      builder: (_) => openResourceView(
+          api: widget.api, drive: widget.drive, subject: live.meeting),
+    )));
+  }
+
+  void _pushFollow({bool force = false}) {
+    final page = _page;
+    if (page == null || _announcer != this || _menuOnly) return;
+    final agent = jsonEncode(_follow.agent);
+    if (!force && agent == _pushedFollow) return;
+    _pushedFollow = agent;
+    unawaited(page
+        .runJavaScript('window.atomicEmbed?.setFollow($agent)')
+        .catchError((Object _) {}));
+  }
+
+  /// The page's `presence` call: the fields it owns of the entry. Only the
+  /// fields it names change; a null clears one.
+  void _pagePresence(Object? args) {
+    final fields = args is List && args.isNotEmpty ? args.first : null;
+    if (fields is! Map) return;
+    var changed = false;
+    if (fields.containsKey('data') && fields['data'] != _pageData) {
+      _pageData = fields['data'];
+      changed = true;
+    }
+    if (fields.containsKey('typing')) {
+      final typing = fields['typing'];
+      final next = typing is String && typing.isNotEmpty ? typing : null;
+      if (next != _pageTyping) {
+        _pageTyping = next;
+        changed = true;
+      }
+    }
+    if (fields.containsKey('session')) {
+      final session = fields['session'];
+      final next = session is String && session.isNotEmpty ? session : null;
+      if (next != _pageSession) {
+        _pageSession = next;
+        changed = true;
+      }
+    }
+    if (changed && _announcer == this) _announce();
   }
 
   /// This page is no longer shown: the entry keeps who we follow but no
@@ -525,13 +680,15 @@ class _ResourceViewState extends State<ResourceView>
     final drive = widget.drive;
     (background
             ? widget.api.clearPresence(drive)
-            : widget.api.announcePresence(drive, following: _follow.agent))
+            : widget.api.announcePresence(drive,
+                following: _follow.agent, session: _lead.meetingIn(drive)))
         .catchError((Object e) => debugPrint('[presence] not cleared: $e'));
   }
 
   /// Following started or stopped: the entry says so.
   void _followChanged() {
     if (_announcer == this) _announce();
+    _pushFollow();
     if (mounted) setState(() {});
   }
 
@@ -648,6 +805,7 @@ class _ResourceViewState extends State<ResourceView>
     _hidePresence();
     _watch?.dispose();
     _follow.removeListener(_followChanged);
+    _lead.removeListener(_leadChanged);
     // Left by hand (a swipe back, the system back), not replaced by follow.
     // (After the tree is torn down: other pages listen to it.)
     if (!_replacing) scheduleMicrotask(_follow.stop);
@@ -755,12 +913,16 @@ class _ResourceViewState extends State<ResourceView>
       return;
     }
     if (request['method'] == 'header') {
+      // The page is up: what the app knows of presence and following was
+      // pushed before it could listen.
+      _pushPresence(force: true);
       if (request['subject'] == widget.subject && !_headerShown && mounted) {
         setState(() => _headerShown = true);
       }
       return;
     }
     if (request['method'] == 'revealed') {
+      _pushPresence(force: true);
       final why = request['why'];
       if (why is String && why.isNotEmpty) {
         debugPrint('[warm] revealed after ${request['ms']} ms, waited on $why');
@@ -785,6 +947,53 @@ class _ResourceViewState extends State<ResourceView>
     }
     if (method == 'openNative') {
       await _answerOpenNative(id, request['args']);
+      return;
+    }
+    if (method == 'askAssistant') {
+      await _answerAskAssistant(id, request['args']);
+      return;
+    }
+    if (method == 'joinCall') {
+      await _answerJoinCall(id, request['args']);
+      return;
+    }
+    if (method == 'meetingStarted' || method == 'meetingEnded') {
+      // The page started or ended a meeting (its resources are written): the
+      // app owns that this device leads it, so it survives this page.
+      final args = request['args'];
+      final meeting = args is List && args.isNotEmpty && args.first is String
+          ? args.first as String
+          : '';
+      if (meeting.isNotEmpty) {
+        if (method == 'meetingStarted') {
+          _lead.start(widget.drive, meeting);
+        } else {
+          _lead.end(meeting);
+        }
+      }
+      try {
+        await _page?.runJavaScript(
+            'window.__atomicReply($id,true,${jsonEncode('true')})');
+      } catch (_) {}
+      return;
+    }
+    if (method == 'presence' || method == 'follow' || method == 'unfollow') {
+      // The page's presence fields, and its follow buttons: the app keeps the
+      // one follow state and does the navigating (`_leaderMoved`).
+      final args = request['args'];
+      if (method == 'presence') {
+        _pagePresence(args);
+      } else if (method == 'unfollow') {
+        _follow.stop();
+      } else if (args is List && args.isNotEmpty && '${args.first}'.isNotEmpty) {
+        _follow.follow('${args.first}');
+        // Go to where they are right away.
+        _leaderMoved();
+      }
+      try {
+        await _page?.runJavaScript(
+            'window.__atomicReply($id,true,${jsonEncode('true')})');
+      } catch (_) {}
       return;
     }
     if (method == 'sidebarIcons') {
@@ -929,6 +1138,72 @@ class _ResourceViewState extends State<ResourceView>
     }
   }
 
+  /// The page asks the assistant (`askAssistant(prompt, subject)`: the "Fix
+  /// it" of an app that hit an error, or any of the page's "ask AI" actions):
+  /// a new chat opens on top with the prompt as its first message and the
+  /// resource it is about attached, and the page is told it was taken.
+  Future<void> _answerAskAssistant(int id, Object? args) async {
+    var handled = false;
+    if (args is List && args.isNotEmpty && args.first is String) {
+      var prompt = (args.first as String).trim();
+      final subject = args.length > 1 && args[1] is String
+          ? (args[1] as String).trim()
+          : '';
+      if (mounted && prompt.isNotEmpty) {
+        handled = true;
+        if (subject.isNotEmpty) prompt = '$prompt\n\nAbout: $subject';
+        unawaited(Navigator.of(context).push(SlideBackRoute<void>(
+          builder: (_) => ChatScreen(
+            api: widget.api,
+            drive: widget.drive,
+            initialPrompt: prompt,
+            initialContext: subject.isEmpty
+                ? null
+                : (
+                    subject: subject,
+                    title: subject == widget.subject && widget.title.isNotEmpty
+                        ? widget.title
+                        : subject,
+                    className: '',
+                    emoji: null
+                  ),
+          ),
+        )));
+      }
+    }
+    try {
+      await _page?.runJavaScript('window.__atomicReply($id,true,'
+          '${jsonEncode(jsonEncode(handled))})');
+    } catch (e) {
+      debugPrint('[embed] reply to askAssistant not delivered: $e');
+    }
+  }
+
+  /// The page asks for the call of a meeting (`joinCall(meeting)`). The call
+  /// is not this page's: it is the shell's ([ShellController.call], a web
+  /// view of its own shown as a floating tile), so it goes on when this page
+  /// is replaced by following the leader. Answers whether the app took it
+  /// (not without a shell), and the page hides its call button when not.
+  Future<void> _answerJoinCall(int id, Object? args) async {
+    final call = ShellScope.maybeOf(context)?.call;
+    final meeting = args is List && args.isNotEmpty && args.first is String
+        ? args.first as String
+        : '';
+    var handled = false;
+    if (mounted && call != null && meeting.isNotEmpty) {
+      handled = true;
+      final scheme =
+          Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
+      unawaited(call.start(meeting, scheme: scheme));
+    }
+    try {
+      await _page?.runJavaScript('window.__atomicReply($id,true,'
+          '${jsonEncode(jsonEncode(handled))})');
+    } catch (e) {
+      debugPrint('[embed] reply to joinCall not delivered: $e');
+    }
+  }
+
   /// Back goes one page back inside the page first (after an action opened
   /// its form, say), and leaves the resource when there is none.
   Future<void> _back() async {
@@ -983,58 +1258,72 @@ class _ResourceViewState extends State<ResourceView>
             bottom: false,
             child: _error != null
                 ? Center(child: ErrorText('$_error', color: c.alert))
-                : Stack(children: [
-                    if (page != null && _inTree) page.build(),
-                    if (!_skeletonGone)
-                      Positioned.fill(
-                        // The page's header is the page's own: once it is
-                        // painted, only what is under it stays covered.
-                        top: _headerShown ? kEmbedNavBarHeight : 0,
-                        child: AnimatedOpacity(
-                          opacity: _revealed ? 0 : 1,
-                          duration: ResourceView.revealFade,
-                          onEnd: () {
-                            if (_revealed && mounted) {
-                              setState(() => _skeletonGone = true);
-                            }
-                          },
-                          child: const ResourceSkeleton(),
-                        ),
-                      ),
-                    // Next to the list the bar has no room for the resource's
-                    // menu: it sits in the pane's top right corner.
-                    if (widget.path == null &&
-                        ShellScope.maybeOf(context) != null &&
-                        ShellScope.layoutOf(context) == ShellLayout.split)
-                      Positioned(
-                        top: 0,
-                        right: kEmbedNavBarTrailingInset,
-                        child: const ResourceMoreButton(),
-                      ),
-                    // Who else has this resource open, in the page's top right
-                    // corner (before the more button where the pane has it).
+                : Column(children: [
+                    // A meeting is happening in this drive and this device is
+                    // not in it: one tap to join.
                     if (_watch != null && _announces)
-                      Positioned(
-                        top: 0,
-                        right: kEmbedNavBarTrailingInset +
-                            (ShellScope.maybeOf(context) != null &&
-                                    ShellScope.layoutOf(context) ==
-                                        ShellLayout.split
-                                ? kEmbedNavBarHeight
-                                : 8),
-                        height: kEmbedNavBarHeight,
-                        child: Center(
-                          child: PresenceFacepile(
-                              watch: _watch!,
-                              follow: _follow,
-                              subject: widget.subject,
-                              onTap: _avatarTapped),
+                      LiveMeetingBanner(
+                          api: widget.api,
+                          drive: widget.drive,
+                          watch: _watch,
+                          lead: _lead,
+                          follow: _follow,
+                          hideWhenJoinedOn: widget.subject,
+                          onJoin: _joinLive),
+                    Expanded(
+                        child: Stack(children: [
+                        if (page != null && _inTree) page.build(),
+                        if (!_skeletonGone)
+                          Positioned.fill(
+                            // The page's header is the page's own: once it is
+                            // painted, only what is under it stays covered.
+                            top: _headerShown ? kEmbedNavBarHeight : 0,
+                            child: AnimatedOpacity(
+                              opacity: _revealed ? 0 : 1,
+                              duration: ResourceView.revealFade,
+                              onEnd: () {
+                                if (_revealed && mounted) {
+                                  setState(() => _skeletonGone = true);
+                                }
+                              },
+                              child: const ResourceSkeleton(),
+                            ),
+                          ),
+                        // Next to the list the bar has no room for the resource's
+                        // menu: it sits in the pane's top right corner.
+                        if (widget.path == null &&
+                            ShellScope.maybeOf(context) != null &&
+                            ShellScope.layoutOf(context) == ShellLayout.split)
+                          Positioned(
+                            top: 0,
+                            right: kEmbedNavBarTrailingInset,
+                            child: const ResourceMoreButton(),
+                          ),
+                        // Who else has this resource open, in the page's top right
+                        // corner (before the more button where the pane has it).
+                        if (_watch != null && _announces)
+                          Positioned(
+                            top: 0,
+                            right: kEmbedNavBarTrailingInset +
+                                (ShellScope.maybeOf(context) != null &&
+                                        ShellScope.layoutOf(context) ==
+                                            ShellLayout.split
+                                    ? kEmbedNavBarHeight
+                                    : 8),
+                            height: kEmbedNavBarHeight,
+                            child: Center(
+                              child: PresenceFacepile(
+                                  watch: _watch!,
+                                  follow: _follow,
+                                  subject: widget.subject,
+                                  onTap: _avatarTapped),
+                            ),
+                          ),
+                        // The swipe back over the web view, which takes the touches.
+                        Positioned.fill(
+                          child: PageSwipe(blocked: () => _horizontal),
                         ),
-                      ),
-                    // The swipe back over the web view, which takes the touches.
-                    Positioned.fill(
-                      child: PageSwipe(blocked: () => _horizontal),
-                    ),
+                        ])),
                   ]),
           ),
         ));

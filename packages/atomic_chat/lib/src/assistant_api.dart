@@ -1,10 +1,20 @@
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show Listenable;
+import 'package:atomic_flutter/atomic_flutter.dart' show AtomicAiUsageTotal;
+import 'package:flutter/foundation.dart' show Listenable, VoidCallback;
+import 'package:flutter/widgets.dart' show BuildContext;
 import 'chat_parts.dart';
 import 'chat_window.dart';
 import 'hosted_ai.dart';
 import 'models.dart';
+
+/// What the AI settings show about the chat they were opened from: what it
+/// used, and Report this chat ([onReport] null: nothing to report yet).
+class AiChatSettings {
+  final String usage;
+  final VoidCallback? onReport;
+  const AiChatSettings({required this.usage, this.onReport});
+}
 
 /// What the assistant screens read and write: the seam between this package
 /// and the host's store. The host implements it over its own client (the
@@ -110,9 +120,8 @@ abstract class AssistantApi {
       {ActivityEntry? before,
       int limit = activityPageSize,
       bool includeOwn = false}) async {
-    final all = includeOwn
-        ? await activityWithMine(100000)
-        : await activity(100000);
+    final all =
+        includeOwn ? await activityWithMine(100000) : await activity(100000);
     final i = before == null
         ? -1
         : all.indexWhere(
@@ -141,6 +150,33 @@ abstract class AssistantApi {
   /// The AI of the linked account; null when none is linked.
   Future<HostedAi?> hostedAi();
 
+  /// What the AI used for [chat] this period, as the server counts it; null
+  /// when it has no report (or nothing). Throws when it cannot be reached.
+  Future<AtomicAiUsageTotal?> chatUsage(String chat) async => null;
+
+  /// Whether this host has an AI settings page ([openAiSettings]): the chat
+  /// then links to it from its header and from the out-of-credits notice.
+  bool get canOpenAiSettings => false;
+
+  /// Opens the AI settings (mode, credits, model, voice); completes when the
+  /// person leaves them, after which the chat looks the AI up again. [chat]
+  /// when opened from a chat, which adds a section about it.
+  Future<void> openAiSettings(BuildContext context,
+      {AiChatSettings? chat}) async {}
+
+  /// Whether this host lets the person switch the AI between the included one
+  /// and their own key ([usesOwnAi], [setUsesOwnAi]); the AI settings then
+  /// offer the switch.
+  bool get canSwitchAiSource => false;
+
+  /// Whether the AI in use is the person's own key.
+  Future<bool> usesOwnAi() async => false;
+
+  /// Switches to the person's own key ([own]) or back to the included AI.
+  /// Switching to the own key without a saved one may open the host's
+  /// settings to enter it; read [usesOwnAi] afterwards for what took effect.
+  Future<void> setUsesOwnAi(BuildContext context, bool own) async {}
+
   /// Whether this host can create the AI account for the identity this device
   /// already has ([signUpForAi]); the AI notice then offers it.
   bool get canSignUpForAi => false;
@@ -151,6 +187,16 @@ abstract class AssistantApi {
   /// link is opened, [hostedAi] returns the AI.
   Future<void> signUpForAi(String email) async =>
       throw UnsupportedError('This host cannot create an account');
+
+  /// Whether this host can send feedback ([sendFeedback]); the chat's "Report
+  /// this chat" dialog then offers Send report, else only Copy.
+  bool get canSendFeedback => false;
+
+  /// Sends a report the person reviewed to the team: [message], an optional
+  /// reply [email] and where it came from ([source]). Throws when it fails.
+  Future<void> sendFeedback(
+          {required String message, String? email, String source = 'app'}) =>
+      throw UnsupportedError('AssistantApi.sendFeedback');
 
   /// Starts an AI chat named [name]; returns its subject.
   Future<String> newChat(String name);
@@ -256,8 +302,18 @@ abstract class AssistantApi {
   /// Tells [drive] what this device is looking at: [resource] (null: nothing
   /// that others should see) and, in follow mode, the agent it [following].
   /// The host keeps the entry alive while the app is in the foreground.
+  /// [session] is the Meeting this device leads and [extra] more fields of the
+  /// web's entry (`data`, `typing`) that the page owns; null values are left
+  /// out, and [extra] never overrides [resource] or [following].
   Future<void> announcePresence(String drive,
-      {String? resource, String? following}) async {}
+      {String? resource,
+      String? following,
+      String? session,
+      Map<String, Object?>? extra}) async {}
+
+  /// The meetings listed on [drive] as live (its `currentMeetings`); null when
+  /// the host cannot tell, and an announced meeting then counts on its own.
+  Future<Set<String>?> currentMeetings(String drive) async => null;
 
   /// Takes this device's entry off [drive]'s presence channel (the app went
   /// to the background).

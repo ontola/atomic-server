@@ -63,6 +63,9 @@ export function PluginPage({
   drive: string;
 }): React.JSX.Element {
   const store = useStore();
+  // Scripts run on a server: the embedded app on a phone has none, and every
+  // run, schedule or secret is a signed request to one.
+  const noServer = store.noServer;
   const { askAI } = useAISidebar();
   const { setEnableAI } = useAISettings();
   const navigate = useNavigateWithTransition();
@@ -151,69 +154,80 @@ export function PluginPage({
                     ? 'Import'
                     : 'Run',
             },
-            ...(!automation
+            ...(!automation && !noServer
               ? [{ value: 'automations', label: 'Automations' }]
               : []),
-            { value: 'settings', label: 'Settings' },
-            { value: 'activity', label: 'Activity' },
+            ...(noServer
+              ? []
+              : [
+                  { value: 'settings', label: 'Settings' },
+                  { value: 'activity', label: 'Activity' },
+                ]),
             ...(!automation ? [{ value: 'code', label: 'Code' }] : []),
           ]}
         >
           <Panel value='manage'>
-            <Column gap='1.5rem'>
-              {fileImport && (
-                <FileImport
-                  resource={resource}
-                  drive={drive}
-                  source={source}
-                  manifest={manifest}
-                />
-              )}
-              {!connection && !automation && !fileImport && (
-                <Button onClick={run}>
-                  <FaPlay aria-hidden /> Run
-                </Button>
-              )}
-              {automation && (
-                <AutomationWorkspace
-                  key={resource.subject}
-                  resource={resource}
-                  drive={drive}
-                  source={source}
-                  eventName={automation.name || automation.event}
-                  eventId={automation.event}
-                  integration={automation.integration}
-                  onTest={run}
-                />
-              )}
-              {connection ? (
-                <IntegrationConnection
-                  plugin={resource.subject}
-                  drive={drive}
-                  definition={connection}
-                />
-              ) : !automation && !fileImport ? (
-                <PluginSchedule
-                  plugin={resource.subject}
-                  drive={drive}
-                  onReview={pending => {
-                    setReviewing(pending);
-                    setRunning(true);
-                  }}
-                  reviewedNonce={reviewedNonce}
-                />
-              ) : null}
-              {!connection && !fileImport && (
-                <PluginTrigger
-                  plugin={resource.subject}
-                  drive={drive}
-                  onReview={pending => {
-                    setReviewing(pending);
-                    setRunning(true);
-                  }}
-                />
-              )}
-            </Column>
+            {noServer ? (
+              <Muted>
+                Scripts run on a server, and this device has none. Open this
+                drive on a server to run it.
+              </Muted>
+            ) : (
+              <Column gap='1.5rem'>
+                {fileImport && (
+                  <FileImport
+                    resource={resource}
+                    drive={drive}
+                    source={source}
+                    manifest={manifest}
+                  />
+                )}
+                {!connection && !automation && !fileImport && (
+                  <Button onClick={run}>
+                    <FaPlay aria-hidden /> Run
+                  </Button>
+                )}
+                {automation && (
+                  <AutomationWorkspace
+                    key={resource.subject}
+                    resource={resource}
+                    drive={drive}
+                    source={source}
+                    eventName={automation.name || automation.event}
+                    eventId={automation.event}
+                    integration={automation.integration}
+                    onTest={run}
+                  />
+                )}
+                {connection ? (
+                  <IntegrationConnection
+                    plugin={resource.subject}
+                    drive={drive}
+                    definition={connection}
+                  />
+                ) : !automation && !fileImport ? (
+                  <PluginSchedule
+                    plugin={resource.subject}
+                    drive={drive}
+                    onReview={pending => {
+                      setReviewing(pending);
+                      setRunning(true);
+                    }}
+                    reviewedNonce={reviewedNonce}
+                  />
+                ) : null}
+                {!connection && !fileImport && (
+                  <PluginTrigger
+                    plugin={resource.subject}
+                    drive={drive}
+                    onReview={pending => {
+                      setReviewing(pending);
+                      setRunning(true);
+                    }}
+                  />
+                )}
+              </Column>
+            )}
           </Panel>
           <Panel value='automations'>
             <Column gap='0.5rem'>
@@ -263,7 +277,7 @@ export function PluginPage({
                   <FaPencil aria-hidden /> Edit
                 </Button>
               )}
-              {!automation && (
+              {!automation && !noServer && (
                 <Button subtle disabled={publishing} onClick={publish}>
                   Publish to integration store
                 </Button>

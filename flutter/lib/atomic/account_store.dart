@@ -162,6 +162,14 @@ class AccountStore {
     }
   }
 
+  /// The linked account's portal origin; null when none is linked.
+  static Future<Uri?> portal() async {
+    final saved = await read();
+    return saved == null
+        ? null
+        : shared.AtomicAccountClient.sessionOrigin(saved);
+  }
+
   /// The linked account's AI credits; null when no account is linked or the
   /// portal offers no included AI. Throws when the portal cannot be reached,
   /// so the caller can keep showing the last known balance.
@@ -173,6 +181,38 @@ class AccountStore {
       ..restoreSession(saved);
     try {
       return await client.aiCredits();
+    } finally {
+      client.close();
+    }
+  }
+
+  /// The linked account's AI usage this period; null when no account is
+  /// linked or the portal has no usage report (older portals). Throws when
+  /// the portal cannot be reached.
+  static Future<shared.AtomicAiUsage?> aiUsage() async {
+    final saved = await _secure.read(key: _key);
+    if (saved == null) return null;
+    final origin = shared.AtomicAccountClient.sessionOrigin(saved);
+    final client = shared.AtomicAccountClient(origin.toString())
+      ..restoreSession(saved);
+    try {
+      return await client.aiUsage();
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Every model the linked account may choose; null when no account is
+  /// linked or the portal has no list (older portals). Throws when the portal
+  /// cannot be reached.
+  static Future<List<shared.AtomicAiModel>?> aiModels() async {
+    final saved = await _secure.read(key: _key);
+    if (saved == null) return null;
+    final origin = shared.AtomicAccountClient.sessionOrigin(saved);
+    final client = shared.AtomicAccountClient(origin.toString())
+      ..restoreSession(saved);
+    try {
+      return await client.aiModels();
     } finally {
       client.close();
     }

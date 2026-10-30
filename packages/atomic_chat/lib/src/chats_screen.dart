@@ -13,6 +13,7 @@ import 'app_sidebar_icons.dart';
 import 'app_top_bar.dart';
 import 'home_sections.dart';
 import 'home_sections_dialog.dart';
+import 'live_meeting_banner.dart';
 
 import 'models.dart';
 import 'slide_back_route.dart';
@@ -576,6 +577,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
     if (mounted && _changesData(screen)) _reload();
   }
 
+  /// Join on the live meeting strip: follow the leader and open the meeting.
+  void _joinLive(LiveMeeting live) {
+    final shell = _shell;
+    if (shell == null) return;
+    shell.follow.follow(live.leader.agent, session: live.leader.sessionId);
+    _visit(
+        openResourceView(
+            api: widget.api, drive: _drive, subject: live.meeting),
+        drive: _drive,
+        subject: live.meeting);
+  }
+
   WidgetBuilder? get _profile => widget.profile ?? _shell?.profile;
 
   /// A section's full list: in the detail pane next to the home (where the
@@ -613,6 +626,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 colors: c,
                 row: _chatRow,
                 onNew: () => _openChat(null),
+                // Also the store's own ticks: a chat saved after the
+                // home's reload still comes in.
+                changed: Listenable.merge(
+                    [_feedChanged, widget.api.storeChanges]),
               ));
 
   void _openPage(HomeSection id, WidgetBuilder page) {
@@ -1055,10 +1072,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Future<void> _newInDrive() async {
     final shell = _shell;
     if (shell != null) {
-      await shell.openPage<void>(
-          ShellPage.newResource,
-          (_) => ResourceView(
-              api: widget.api, drive: _drive, path: newResourcePath(_drive)));
+      await shell.openNewPage((_) => ResourceView(
+          api: widget.api, drive: _drive, path: newResourcePath(_drive)));
       if (mounted) _tree.currentState?.reload();
       return;
     }
@@ -1248,6 +1263,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           }
                         }
                         return Column(children: [
+                          if (_shell != null && _drive.isNotEmpty)
+                            LiveMeetingBanner(
+                                api: widget.api,
+                                drive: _drive,
+                                lead: _shell!.lead,
+                                follow: _shell!.follow,
+                                onJoin: _joinLive),
                           // The tree takes what the panels leave; it scrolls itself.
                           Expanded(child: _driveTree()),
                           // Bottom-anchored panels, just above the bottom bar.
@@ -1954,6 +1976,10 @@ class _ChatsPage extends StatefulWidget {
   /// Starts a new chat (the bar's + New).
   final VoidCallback onNew;
 
+  /// Fires when the home read its lists again (a chat opened from here, or a
+  /// new one, was closed): the first page is read again.
+  final Listenable? changed;
+
   const _ChatsPage({
     required this.title,
     required this.api,
@@ -1961,6 +1987,7 @@ class _ChatsPage extends StatefulWidget {
     required this.colors,
     required this.row,
     required this.onNew,
+    this.changed,
   });
 
   @override
@@ -1977,8 +2004,35 @@ class _ChatsPageState extends State<_ChatsPage> {
   @override
   void initState() {
     super.initState();
+    widget.changed?.addListener(_refresh);
     WidgetsBinding.instance.addPostFrameCallback((_) => Perf.span(
         'chats all painted ${_chats.length}', _opened.elapsedMilliseconds));
+  }
+
+  @override
+  void dispose() {
+    widget.changed?.removeListener(_refresh);
+    super.dispose();
+  }
+
+  /// Reads the first page again: a new chat comes in on top, a renamed or
+  /// newly answered one moves; the pages read after it stay.
+  Future<void> _refresh() async {
+    try {
+      final fresh = await widget.api.chats();
+      if (!mounted) return;
+      final known = {for (final c in fresh) c.subject};
+      setState(() {
+        _chats = [
+          ...fresh,
+          for (final c in _chats)
+            if (known.add(c.subject)) c
+        ];
+        _entries = _entriesOf(_chats);
+      });
+    } catch (_) {
+      // Keep what is shown.
+    }
   }
 
   late List<ChatSummary> _chats = widget.first;

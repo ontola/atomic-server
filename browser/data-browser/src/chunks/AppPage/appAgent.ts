@@ -3,8 +3,26 @@ import {
   signRequest,
   type Store,
 } from '@tomic/react';
+import { noServerHost } from './noServer';
+import { handOverAppKey as handOverServerAppKey } from './appKeyHandover';
 
-export { handOverAppKey } from './appKeyHandover';
+/** Device-only apps keep their key in the host; server apps retain a retryable handover. */
+export async function handOverAppKey(
+  store: Store,
+  options: { drive: string; app: string; secret: string },
+): Promise<void> {
+  if (store.noServer) {
+    await noServerHost(store).setAppAgent(
+      options.drive,
+      options.app,
+      options.secret,
+    );
+
+    return;
+  }
+
+  await handOverServerAppKey(store, options);
+}
 
 /**
  * The agent an app acts as (`atomic:agent:…` or the older `did:ad:agent:…`),
@@ -19,23 +37,29 @@ export async function appAgentOf(
   store: Store,
   options: { drive: string; app: string },
 ): Promise<string> {
-  const agent = store.getAgent();
+  let info: { agent?: unknown } | null;
 
-  if (!agent) throw new Error('Sign in to use integration connections.');
+  if (store.noServer) {
+    info = await noServerHost(store).appAgent(options.drive, options.app);
+  } else {
+    const agent = store.getAgent();
 
-  const url = new URL('/app-agent', store.getServerUrl());
-  url.searchParams.set('drive', options.drive);
-  url.searchParams.set('app', options.app);
-  const headers = await signRequest(url.href, agent, {});
-  const response = await fetch(url.href, { headers });
+    if (!agent) throw new Error('Sign in to use integration connections.');
 
-  if (!response.ok) {
-    throw new Error(
-      errorMessageFromResponse(await response.text(), response.status),
-    );
+    const url = new URL('/app-agent', store.getServerUrl());
+    url.searchParams.set('drive', options.drive);
+    url.searchParams.set('app', options.app);
+    const headers = await signRequest(url.href, agent, {});
+    const response = await fetch(url.href, { headers });
+
+    if (!response.ok) {
+      throw new Error(
+        errorMessageFromResponse(await response.text(), response.status),
+      );
+    }
+
+    info = (await response.json()) as { agent?: unknown } | null;
   }
-
-  const info = (await response.json()) as { agent?: unknown } | null;
 
   if (typeof info?.agent !== 'string' || !info.agent) {
     throw new Error(

@@ -145,6 +145,18 @@ it('does not send while resources are still queued', async () => {
   expect(disk.size).toBe(0);
 });
 
+it('keeps server handovers queued when the store switches to a device-only host', async () => {
+  const { store } = await offlineInstall();
+  Object.defineProperty(store, 'noServer', { value: true });
+  vi.spyOn(store, 'getServerUrl').mockImplementation(() => {
+    throw new Error('device-only host');
+  });
+  const fetch = responding();
+  await retryPendingAppKeys(store);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(disk.size).toBe(1);
+});
+
 it.each(['node', 'account', 'signed out', 'locked'])(
   'keeps the encrypted record when the %s changes',
   async change => {

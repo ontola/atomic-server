@@ -615,6 +615,17 @@ class PresenceItem {
   /// older session of the same agent loses against the freshest.
   final int updatedAt;
 
+  /// The Meeting this session leads (the web's `session`): followers open its
+  /// chat. Null when it leads none.
+  final String? session;
+
+  /// What the session's view says about itself (a cursor in a document, a
+  /// table cell): opaque here, the web page reads it. Null when absent.
+  final Object? data;
+
+  /// The thread or chat room this session is typing in, if any.
+  final String? typing;
+
   const PresenceItem({
     required this.sessionId,
     required this.agent,
@@ -622,6 +633,9 @@ class PresenceItem {
     this.following,
     this.allowFollow = true,
     this.updatedAt = 0,
+    this.session,
+    this.data,
+    this.typing,
   });
 
   factory PresenceItem.fromJson(Map<String, dynamic> json) {
@@ -634,6 +648,23 @@ class PresenceItem {
       allowFollow: json['allowFollow'] != false,
       updatedAt:
           json['updatedAt'] is num ? (json['updatedAt'] as num).toInt() : 0,
+      session: text(json['session']),
+      data: json['data'],
+      typing: text(json['typing']),
     );
   }
+
+  /// The web's `PresenceItem`, as the page takes it: unset fields are left
+  /// out, and `allowFollow` only when it is the opt-out.
+  Map<String, Object?> toJson() => {
+        'sessionId': sessionId,
+        'agent': agent,
+        if (resource != null) 'resource': resource,
+        if (following != null) 'following': following,
+        if (!allowFollow) 'allowFollow': false,
+        if (updatedAt != 0) 'updatedAt': updatedAt,
+        if (session != null) 'session': session,
+        if (data != null) 'data': data,
+        if (typing != null) 'typing': typing,
+      };
 }

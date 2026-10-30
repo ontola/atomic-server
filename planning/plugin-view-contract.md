@@ -40,7 +40,7 @@ There are two plugin view hosts, with different wire formats:
 | Host | Where | Used for |
 | --- | --- | --- |
 | Class views | `views/PluginView/PluginView.tsx`, `pluginRPC.tsx`, `legacyViewAdapter.ts`; wire types in `browser/plugin/src/types.ts` | A plugin rendering a resource page |
-| Drive apps | `chunks/AppPage/AppFrame.tsx`, `hostStore.ts`; wire in `browser/plugin/src/viewProtocol.ts`; frame client `server/src/plugins/assets/view-client.js` | Apps on their own page **and as a table view tab** (`TableViewTabs.tsx:174`) |
+| Drive apps | `chunks/AppPage/AppFrame.tsx`, `hostStore.ts`; wire in `browser/plugin/src/viewProtocol.ts`; frame client `browser/data-browser/src/chunks/AppPage/viewClient.js` | Apps on their own page **and as a table view tab** (`TableViewTabs.tsx:174`) |
 
 What a view can do, from `viewProtocol.ts` and `view-client.js`:
 
