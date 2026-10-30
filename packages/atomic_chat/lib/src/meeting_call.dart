@@ -137,15 +137,19 @@ class MeetingCall extends ChangeNotifier {
 
   bool _immersive = false;
 
-  /// The expanded call covers the whole screen, status bar included, as a
-  /// page's own fullscreen does.
+  /// The expanded call covers the whole screen, status bar included. The
+  /// navigation bar stays, so back and home are a tap away during a call.
   @override
   void notifyListeners() {
     final immersive = active && _expanded;
     if (immersive != _immersive) {
       _immersive = immersive;
-      SystemChrome.setEnabledSystemUIMode(
-          immersive ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge);
+      if (immersive) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
+            overlays: [SystemUiOverlay.bottom]);
+      } else {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      }
     }
     super.notifyListeners();
   }
