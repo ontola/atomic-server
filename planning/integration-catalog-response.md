@@ -13,7 +13,9 @@ Acceptance: Apps (including legacy integrations links) accepts the observed `{ e
 - [x] Failing regression reproduction: envelope `.filter` failure reproduced before implementing parser
 - [x] Implement response normalization and regression coverage
 - [x] Update public docs and testing coverage
-- [ ] Validation: 68 targeted Vitest tests pass; focused lint/format pass; compiler findings match unchanged baseline. Typecheck and browser build/verification in progress.
-- [ ] Publication: read-only review has no actionable findings; commit/push/PR pending
-- [ ] Dispatch and follow exact-commit CI
-- [ ] Remove completed plan after green CI, push cleanup, verify final CI
+- [x] Validation: 68 targeted Vitest tests; typecheck; full pre-commit lint/format; rustfmt; full production frontend build. Compiler findings match unchanged baseline. Three Chromium regressions pass with one worker, no retries/skips, on the matching native `light,wasm-plugins` dev build. Actual screens captured outside the repository.
+- [x] Publication: reviewed, committed and pushed; PR #2419 targets develop.
+- [ ] CI: Main workflow dispatched for the PR head; main and downstream jobs remain queued awaiting Mancave. Retain this unfinished plan until CI can run.
+- [ ] After green CI, remove this plan, push cleanup and verify CI on the final commit.
+
+Local setup notes: the launcher repeat-WASM build failed parsing a generated package after the standalone matching WASM build succeeded; full frontend build passed reusing that generated WASM. `light` alone hits existing unguarded plugin imports; the native `light,wasm-plugins` build, with required plugin runtime, passed. Neither setup issue requires a source change for this fix. Original checkout status matches its saved baseline.
