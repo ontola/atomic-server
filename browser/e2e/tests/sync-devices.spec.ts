@@ -32,6 +32,107 @@ async function gotoSync(page: Page) {
 test.describe('sync page devices', () => {
   test.beforeEach(before);
 
+  test('an off-site account signs in through one local linking form', async ({
+    page,
+  }, testInfo) => {
+    const portal = 'https://sync-provider.example';
+    let linkRequests = 0;
+    let approved = false;
+    await page.addInitScript(portalUrl => {
+      Object.assign(window, { __ATOMIC_MANAGED__: { portalUrl } });
+    }, portal);
+    await page.route(`${portal}/api/**`, route => {
+      const request = route.request();
+      const path = new URL(request.url()).pathname;
+      const headers = {
+        'access-control-allow-origin': new URL(FRONTEND_URL).origin,
+        'access-control-allow-credentials': 'true',
+        'access-control-allow-methods': 'GET,POST,OPTIONS',
+        'access-control-allow-headers': 'content-type,authorization',
+      };
+
+      if (request.method() === 'OPTIONS') {
+        return route.fulfill({ status: 204, headers });
+      }
+
+      if (path === '/api/me') {
+        return request.headers().authorization ===
+          'Bearer sync-test-managed-token'
+          ? route.fulfill({ headers, json: { email: 'linked@example.com' } })
+          : route.fulfill({ status: 204, headers });
+      }
+
+      if (path === '/api/device-link' && request.method() === 'POST') {
+        linkRequests += 1;
+
+        return route.fulfill({
+          headers,
+          json: {
+            device_code: 'sync-test-device',
+            user_code: 'ABCD-EFGH',
+            expires_in: 600,
+            interval: 1,
+          },
+        });
+      }
+
+      return route.fulfill({
+        headers,
+        json: path.startsWith('/api/device-link/')
+          ? approved
+            ? { state: 'approved', token: 'sync-test-managed-token' }
+            : { state: 'pending' }
+          : [],
+      });
+    });
+    await gotoSync(page);
+    const provider = page.getByTestId('provider-card');
+    await expect(provider.getByTestId('provider-account')).toContainText(
+      'Not signed in',
+    );
+    await expect(page.locator(`a[href="${portal}/signin"]`)).toHaveCount(0);
+    await provider
+      .getByRole('button', { name: 'Sign in →', exact: true })
+      .click();
+    await expect(page.getByTestId('link-provider-panel')).toHaveCount(1);
+    await expect(provider.getByTestId('link-provider-panel')).toBeVisible();
+    await provider
+      .getByRole('button', {
+        name: 'Signed in on another device? Use a code',
+        exact: true,
+      })
+      .click();
+    await expect(provider.getByTestId('link-user-code')).toHaveText(
+      'ABCD-EFGH',
+    );
+    expect(linkRequests).toBe(1);
+    await expect(
+      provider.getByRole('link', {
+        name: 'sync-provider.example/link',
+        exact: true,
+      }),
+    ).toHaveAttribute('href', `${portal}/link?code=ABCD-EFGH`);
+    await testInfo.attach('sync-account-desktop', {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(provider.getByTestId('link-user-code')).toBeVisible();
+    await testInfo.attach('sync-account-mobile', {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    });
+    approved = true;
+    await expect(provider.getByTestId('provider-account')).toContainText(
+      'linked@example.com',
+    );
+    await expect(provider.getByTestId('link-provider-panel')).not.toBeVisible();
+    await expect(provider.getByTestId('provider-portal-link')).toHaveAttribute(
+      'href',
+      `${portal}/dashboard`,
+    );
+  });
+
   test('an unenrolled drive does not inherit another drive cloud status', async ({
     page,
   }) => {

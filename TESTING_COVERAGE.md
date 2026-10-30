@@ -905,6 +905,15 @@ machine with the old machine offline.
 
 Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enrollment and refresh after edits; SaaS `enrollment_display_metadata_refreshes_and_survives_legacy_clients` verifies persistence and account ownership.
 
+## Sync account sign-in
+
+`components/Cloud/SyncProviderAccount.test.tsx` covers the account card's
+single sign-in entry: off-site clients open the device-link form locally,
+hosted clients retain portal sign-in, and signed-in accounts retain the
+provider dashboard link. Existing `LinkProviderPanel` and `AccountSignInPanel`
+component tests cover device-link polling and the browser sign-in flow.
+Live provider deployment and physical passkey acceptance remain separate checks.
+
 ## Cloud Server setup
 
 - October 6 local audit: `atomic_lib`'s

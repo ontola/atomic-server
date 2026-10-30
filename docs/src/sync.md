@@ -36,6 +36,17 @@ Not everything a device holds travels, and not everything that travels is kept.
 4. Your phone, paired to the laptop directly, dials it over Iroh the next time both are awake. They compare version vectors, exchange only what differs, and end up identical.
 5. Meanwhile a colleague edited the same table from a browser tab. If you edited the same row, accepted changes merge automatically in that Resource's CRDT.
 
+## Connecting a cloud account
+
+If this app is configured with a cloud provider, the provider's account card
+on Sync shows whether this client is signed in. Use its **Sign in** action to
+connect the client. When the app runs on a different site from the provider,
+the sign-in form links this client to the account; signing in only on the
+provider's website does not connect a localhost or self-hosted app.
+
+This account connection is separate from the Agent that signs edits to a Drive.
+Connecting an account does not purchase hosting or copy a Drive to a server.
+
 ## Where the code lives
 
 The sync engine is transport-agnostic and lives in `atomic_lib` (`lib/src/sync/`).

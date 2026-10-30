@@ -54,7 +54,6 @@ import {
   cardSurface,
   CardIcon,
   CARD_SUB_FONT,
-  CARD_TITLE_FONT,
 } from '../components/cardSurface';
 import { openExternal } from '../helpers/openExternal';
 import { formatBytes } from '../helpers/formatBytes';
@@ -83,8 +82,7 @@ import { CloudServerDetails } from '../components/Cloud/CloudServerDetails';
 import { SyncProblemBanner } from '../components/SyncProblemBanner';
 import { describeSyncProblem } from '../helpers/syncProblem';
 import { isErrorReportingEnabled, reportSyncProblem } from '../helpers/sentry';
-import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
-import { isDeviceLinked } from '../helpers/managed/deviceLink';
+import { SyncProviderAccount } from '../components/Cloud/SyncProviderAccount';
 import {
   getManagedAccount,
   type ManagedAccount,
@@ -759,20 +757,6 @@ function SyncPage() {
   const vault = useDriveVault(status.drive ?? null);
 
   /**
-   * Does this client need to link before it can reach the provider at all?
-   *
-   * True only when nothing is linked yet and `/api/me` says there is no
-   * session — the state a self-hosted, desktop or Android client starts in,
-   * and never the state of a browser served from the provider's own site.
-   *
-   * Deliberately not gated on the vault's own status: the vault reports
-   * `unavailable` only once it has an agent, a drive and its wasm keys to ask
-   * with. A fresh install has none of those and sits at `loading`, so gating
-   * on it hid the one control that could have fixed the situation.
-   */
-  const [needsProviderLink, setNeedsProviderLink] = useState(false);
-
-  /**
    * The provider account this client is signed in to, if any.
    *
    * Kept rather than reduced to a boolean because the account is what earns a
@@ -948,7 +932,6 @@ function SyncPage() {
       // Asked even when this device is already linked. The link only settles
       // *how* this client authenticates; it says nothing about who, and the
       // portal link needs the account itself.
-      const linked = isDeviceLinked();
 
       try {
         const account = await getManagedAccount();
@@ -956,14 +939,12 @@ function SyncPage() {
         if (cancelled || requestGeneration !== generation) return;
 
         setManagedAccount(account);
-        setNeedsProviderLink(!linked && account === null);
       } catch {
         // Unreachable control plane. Offering to link is the useful answer —
         // the alternative is a Sync page that silently omits backup with no
         // way to ask for it.
         if (!cancelled && requestGeneration === generation) {
           setManagedAccount(null);
-          setNeedsProviderLink(!linked);
         }
       }
     };
@@ -2031,34 +2012,13 @@ function SyncPage() {
             from anything hardcoded here. */}
         {accountPortalUrl && (
           <ProviderCard data-testid='provider-card'>
-            <ProviderHeader>
-              <CardIcon $tone='provider'>
-                <FaCloud />
-              </CardIcon>
-              <AccountBody>
-                <AccountLabel>{PRODUCT_NAME}</AccountLabel>
-                <AccountEmail data-testid='provider-account'>
-                  {managedAccount
-                    ? recoveryBackup === 'stored'
-                      ? `${managedAccount.email} · Email recovery on`
-                      : managedAccount.email
-                    : 'Not signed in'}
-                </AccountEmail>
-              </AccountBody>
-              {/* Signed in, the dashboard rather than the portal root, which
-                  is the marketing page. Signed out, `/signin` both creates an
-                  account and returns to an existing one. */}
-              <ManagedLink
-                data-testid='provider-portal-link'
-                {...externalLinkProps(
-                  managedAccount
-                    ? `${accountPortalUrl}/dashboard`
-                    : `${accountPortalUrl}/signin`,
-                )}
-              >
-                {managedAccount ? 'Manage account →' : 'Sign in →'}
-              </ManagedLink>
-            </ProviderHeader>
+            <SyncProviderAccount
+              key={accountPortalUrl}
+              portalUrl={accountPortalUrl}
+              email={managedAccount?.email ?? null}
+              emailRecoveryOn={recoveryBackup === 'stored'}
+              onLinked={() => window.location.reload()}
+            />
 
             {/* Only when it needs you: signed out, or no backup that gets you
                 back in on a new device. Set up, it is one phrase in the
@@ -2095,10 +2055,7 @@ function SyncPage() {
                                 ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
                                 : `${managedAccount.email}. No recovery backup stored, so losing every device loses this drive.`}
                   </ConnSub>
-                  {/* Signed out, the account itself is the missing piece, and it
-                      is made in the portal: on a device that cannot hold our
-                      cookie the sign-in is approved from a browser anyway.
-
+                  {/* Signed out, use the account header's sign-in action.
                       Signed in with nothing stored, the flow is in settings,
                       where the rest of account recovery already lives. It asks
                       for the agent secret, which this page has no business
@@ -2109,18 +2066,11 @@ function SyncPage() {
                       Nothing to press once it is on. Rotating a code or reading
                       the secret back are settings' business, and this row's job
                       is answering whether you are covered. */}
-                  {!managedAccount ? (
-                    <ConnActions>
-                      <LearnMore
-                        {...externalLinkProps(`${accountPortalUrl}/signin`)}
-                      >
-                        Sign in to check recovery
-                      </LearnMore>
-                    </ConnActions>
-                  ) : recoveryBackup === 'none' ||
+                  {managedAccount &&
+                  (recoveryBackup === 'none' ||
                     recoveryBackup === 'device-only' ||
                     recoveryBackup === 'sign-in-not-on' ||
-                    recoveryBackup === 'passkey-only' ? (
+                    recoveryBackup === 'passkey-only') ? (
                     <ConnActions>
                       <LearnMoreLink
                         to={paths.agentSettings}
@@ -2296,22 +2246,6 @@ function SyncPage() {
             }
             nodeId={isNode && localNodeId ? localNodeId : undefined}
           />
-
-          {/* A client that cannot hold the provider's cookie — a self-hosted
-              origin, or the desktop and Android apps on tauri://localhost — has
-              to link before any of the vault works.
-
-              Gated on whether this client has a session, not on what the vault
-              says. The vault reports `unavailable` only once it has an agent, a
-              drive and its wasm keys to ask with; a fresh install has none of
-              those and sits at `loading` forever, so gating on the vault hid the
-              one control that could have fixed it. */}
-          {needsProviderLink && (
-            <LinkProviderPanel
-              portalUrl={getManagedPortalUrl(managedInfo)}
-              onLinked={() => window.location.reload()}
-            />
-          )}
 
           {localOnlyDrive && connectionCount > 0 && (
             <ConnNote>These sync your other drives — not this drive.</ConnNote>
@@ -2788,13 +2722,6 @@ const ProviderCard = styled(ServiceGroup)`
   background: ${p => `${p.theme.colors.main}0a`};
 `;
 
-const ProviderHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.9rem 1rem;
-`;
-
 /**
  * One service under the account header.
  *
@@ -2853,27 +2780,6 @@ const ProviderService = styled(ServiceSection)`
     text-overflow: clip;
     white-space: normal;
   }
-`;
-
-const AccountBody = styled.div`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-`;
-
-const AccountLabel = styled.span`
-  font-size: ${CARD_TITLE_FONT};
-  font-weight: 600;
-`;
-
-const AccountEmail = styled.span`
-  color: ${p => p.theme.colors.textLight};
-  font-size: ${CARD_SUB_FONT};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 `;
 
 const Section = styled.section`
