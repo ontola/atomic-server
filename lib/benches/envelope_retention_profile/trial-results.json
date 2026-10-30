@@ -1,0 +1,826 @@
+{
+  "scope": "Exact frozen SYNC_PUSH frame replay into fresh file-backed receivers. Sender reconcile, startup, reading frames, compilation and post-search state/envelope/reopen verification excluded. Both diagnostic binaries retain inactive probes; profile samples enable them explicitly.",
+  "binaries": {
+    "baseline": "c81570ab26c934948a5626f46d4256dd93245563f72fc16445123567414d265c",
+    "borrow": "3d682e82e466c72e209ffb09785f550e01015795187399b6858df5e5320a50c3"
+  },
+  "framesSha256": {
+    "1000": "9299daf1b1f770c2f6995f064002ccf9c17c790eb0ce215e0d09c8c99dcaa06d",
+    "5000": "9d27c7a75fb5e15c13875d1b2778fa38c1a1f4b382573b1e7b50e16af6a9c435",
+    "10000": "10d91b189d3bbe38fb5a4ce64cb11016da6ccf130944912becadfc52b569abaa"
+  },
+  "rows": [
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 1.332712437,
+      "envelopes": 1001,
+      "imported": 1001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 1001,
+          "seconds": 0.00503242
+        },
+        "envelope.parse": {
+          "count": 1001,
+          "seconds": 0.112925552
+        },
+        "envelope.retained_scan": {
+          "count": 601,
+          "seconds": 0.009011671
+        },
+        "envelope.retention": {
+          "count": 1001,
+          "seconds": 0.108990296
+        },
+        "envelope.row_encode": {
+          "count": 1001,
+          "seconds": 0.011184534
+        },
+        "envelope.signature": {
+          "count": 1001,
+          "seconds": 0.176385543
+        },
+        "envelope.stage_total": {
+          "count": 11,
+          "seconds": 0.1411371
+        },
+        "envelope.verify_total": {
+          "count": 1001,
+          "seconds": 0.296989814
+        },
+        "import.envelopes_verify": {
+          "count": 11,
+          "seconds": 0.299745333
+        },
+        "import.overlay_build": {
+          "count": 11,
+          "seconds": 0.07077802
+        },
+        "import.persist_with_envelopes": {
+          "count": 11,
+          "seconds": 0.505203323
+        },
+        "loro.snapshot_export": {
+          "count": 5104,
+          "seconds": 0.163183472
+        },
+        "loro.snapshot_load": {
+          "count": 5111,
+          "seconds": 0.184072088
+        },
+        "overlay.db_hits": {
+          "count": 8509,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 8509,
+          "seconds": 0.111866231
+        },
+        "overlay.resource_reads": {
+          "count": 8509,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 3102,
+          "seconds": 0.225299085
+        },
+        "retention.resource_reads": {
+          "count": 2001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 1001,
+          "seconds": 0.061609569
+        },
+        "signature.ed25519": {
+          "count": 1001,
+          "seconds": 0.04809579
+        },
+        "signature.genesis_and_rest": {
+          "count": 1001,
+          "seconds": 0.064894996
+        },
+        "signature.total": {
+          "count": 1001,
+          "seconds": 0.176174244
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.000318569
+        },
+        "storage.encode": {
+          "count": 3003,
+          "seconds": 0.09421941
+        },
+        "storage.redb_batch": {
+          "count": 11,
+          "seconds": 0.161599663
+        }
+      },
+      "receiverSeconds": 1.332712377,
+      "reconcileSeconds": 6e-08,
+      "resources": 1000,
+      "searchableSeconds": 1.343137752,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "baseline",
+      "pair": 0,
+      "profileEnabled": true
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 1.148991533,
+      "envelopes": 1001,
+      "imported": 1001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 1001,
+          "seconds": 0.004771656
+        },
+        "envelope.parse": {
+          "count": 1001,
+          "seconds": 0.105241758
+        },
+        "envelope.retained_scan": {
+          "count": 601,
+          "seconds": 0.006350479
+        },
+        "envelope.retention": {
+          "count": 1001,
+          "seconds": 0.013400686
+        },
+        "envelope.row_encode": {
+          "count": 1001,
+          "seconds": 0.009237778
+        },
+        "envelope.signature": {
+          "count": 1001,
+          "seconds": 0.170042787
+        },
+        "envelope.stage_total": {
+          "count": 11,
+          "seconds": 0.037022499
+        },
+        "envelope.verify_total": {
+          "count": 1001,
+          "seconds": 0.282688827
+        },
+        "import.envelopes_verify": {
+          "count": 11,
+          "seconds": 0.285195438
+        },
+        "import.overlay_build": {
+          "count": 11,
+          "seconds": 0.066958349
+        },
+        "import.persist_with_envelopes": {
+          "count": 11,
+          "seconds": 0.455622452
+        },
+        "loro.snapshot_export": {
+          "count": 4004,
+          "seconds": 0.115132114
+        },
+        "loro.snapshot_load": {
+          "count": 4011,
+          "seconds": 0.138352973
+        },
+        "overlay.db_hits": {
+          "count": 8509,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 8509,
+          "seconds": 0.102422768
+        },
+        "overlay.resource_reads": {
+          "count": 8509,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 2002,
+          "seconds": 0.134497172
+        },
+        "retention.resource_reads": {
+          "count": 2001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 1001,
+          "seconds": 0.057753146
+        },
+        "signature.ed25519": {
+          "count": 1001,
+          "seconds": 0.046532697
+        },
+        "signature.genesis_and_rest": {
+          "count": 1001,
+          "seconds": 0.064032799
+        },
+        "signature.total": {
+          "count": 1001,
+          "seconds": 0.169855093
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.000359453
+        },
+        "storage.encode": {
+          "count": 3003,
+          "seconds": 0.091646607
+        },
+        "storage.redb_batch": {
+          "count": 11,
+          "seconds": 0.132987794
+        }
+      },
+      "receiverSeconds": 1.148991473,
+      "reconcileSeconds": 6e-08,
+      "resources": 1000,
+      "searchableSeconds": 1.158872842,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "borrow",
+      "pair": 0,
+      "profileEnabled": true
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 7.411988517,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 7.4119884570000005,
+      "reconcileSeconds": 6e-08,
+      "resources": 5000,
+      "searchableSeconds": 7.461208645,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "baseline",
+      "pair": 0,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 6.725675524,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 6.725675454,
+      "reconcileSeconds": 7e-08,
+      "resources": 5000,
+      "searchableSeconds": 6.776965504,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "borrow",
+      "pair": 0,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 6.059803247,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 6.059803197,
+      "reconcileSeconds": 5e-08,
+      "resources": 5000,
+      "searchableSeconds": 6.105604822,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "borrow",
+      "pair": 1,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 6.704527006,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 6.7045269460000005,
+      "reconcileSeconds": 6e-08,
+      "resources": 5000,
+      "searchableSeconds": 6.75118147,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "baseline",
+      "pair": 1,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 6.768044691,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 6.768044631,
+      "reconcileSeconds": 6e-08,
+      "resources": 5000,
+      "searchableSeconds": 6.817125744,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "baseline",
+      "pair": 2,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 6.265280202,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 6.265280152,
+      "reconcileSeconds": 5e-08,
+      "resources": 5000,
+      "searchableSeconds": 6.321719527,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "borrow",
+      "pair": 2,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 6.444684912,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 6.444684862,
+      "reconcileSeconds": 5e-08,
+      "resources": 5000,
+      "searchableSeconds": 6.502724226,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "borrow",
+      "pair": 3,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 6.961699692,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 6.961699632,
+      "reconcileSeconds": 6e-08,
+      "resources": 5000,
+      "searchableSeconds": 7.011075173,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "baseline",
+      "pair": 3,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 17.073342855,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 17.073342795,
+      "reconcileSeconds": 6e-08,
+      "resources": 10000,
+      "searchableSeconds": 17.178952891,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "baseline",
+      "pair": 0,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 14.941475292,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 14.941475242,
+      "reconcileSeconds": 5e-08,
+      "resources": 10000,
+      "searchableSeconds": 15.042202436,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "borrow",
+      "pair": 0,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 15.61134615,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 15.61134609,
+      "reconcileSeconds": 6e-08,
+      "resources": 10000,
+      "searchableSeconds": 15.719752651,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "borrow",
+      "pair": 1,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 15.711770369,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 15.711770218,
+      "reconcileSeconds": 1.51e-07,
+      "resources": 10000,
+      "searchableSeconds": 15.828391391,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "baseline",
+      "pair": 1,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 16.144611398,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 16.144611336999997,
+      "reconcileSeconds": 6.1e-08,
+      "resources": 10000,
+      "searchableSeconds": 16.253294883,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "baseline",
+      "pair": 2,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 15.026991904,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 15.026991844000001,
+      "reconcileSeconds": 6e-08,
+      "resources": 10000,
+      "searchableSeconds": 15.126229224,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "borrow",
+      "pair": 2,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 16.889773192,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 16.889773132,
+      "reconcileSeconds": 6e-08,
+      "resources": 10000,
+      "searchableSeconds": 17.037808062,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "borrow",
+      "pair": 3,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 16.781341578,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 16.781341527,
+      "reconcileSeconds": 5.1e-08,
+      "resources": 10000,
+      "searchableSeconds": 16.883488224,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "baseline",
+      "pair": 3,
+      "profileEnabled": false
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 16.29897194,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 10001,
+          "seconds": 0.054326037
+        },
+        "envelope.parse": {
+          "count": 10001,
+          "seconds": 1.250203116
+        },
+        "envelope.retained_scan": {
+          "count": 9901,
+          "seconds": 0.155635148
+        },
+        "envelope.retention": {
+          "count": 10001,
+          "seconds": 1.315450732
+        },
+        "envelope.row_encode": {
+          "count": 10001,
+          "seconds": 0.127080006
+        },
+        "envelope.signature": {
+          "count": 10001,
+          "seconds": 1.939774298
+        },
+        "envelope.stage_total": {
+          "count": 101,
+          "seconds": 1.803995841
+        },
+        "envelope.verify_total": {
+          "count": 10001,
+          "seconds": 3.281718124
+        },
+        "import.envelopes_verify": {
+          "count": 101,
+          "seconds": 3.312150014
+        },
+        "import.overlay_build": {
+          "count": 101,
+          "seconds": 0.851222877
+        },
+        "import.persist_with_envelopes": {
+          "count": 101,
+          "seconds": 5.952459585
+        },
+        "loro.snapshot_export": {
+          "count": 50104,
+          "seconds": 1.866683201
+        },
+        "loro.snapshot_load": {
+          "count": 55004,
+          "seconds": 2.244912829
+        },
+        "overlay.db_hits": {
+          "count": 85009,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 85009,
+          "seconds": 1.198738213
+        },
+        "overlay.resource_reads": {
+          "count": 85009,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 30102,
+          "seconds": 2.621692657
+        },
+        "retention.resource_reads": {
+          "count": 20001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 10001,
+          "seconds": 0.665767419
+        },
+        "signature.ed25519": {
+          "count": 10001,
+          "seconds": 0.541112166
+        },
+        "signature.genesis_and_rest": {
+          "count": 10001,
+          "seconds": 0.714990865
+        },
+        "signature.total": {
+          "count": 10001,
+          "seconds": 1.937632676
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.004706699
+        },
+        "storage.encode": {
+          "count": 30003,
+          "seconds": 0.981022571
+        },
+        "storage.redb_batch": {
+          "count": 101,
+          "seconds": 2.271399703
+        }
+      },
+      "receiverSeconds": 16.29897188,
+      "reconcileSeconds": 6e-08,
+      "resources": 10000,
+      "searchableSeconds": 16.435229461,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "baseline",
+      "pair": 4,
+      "profileEnabled": true
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 14.998665467,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 10001,
+          "seconds": 0.056520008
+        },
+        "envelope.parse": {
+          "count": 10001,
+          "seconds": 1.220251042
+        },
+        "envelope.retained_scan": {
+          "count": 9901,
+          "seconds": 0.129574037
+        },
+        "envelope.retention": {
+          "count": 10001,
+          "seconds": 0.219737119
+        },
+        "envelope.row_encode": {
+          "count": 10001,
+          "seconds": 0.104716443
+        },
+        "envelope.signature": {
+          "count": 10001,
+          "seconds": 1.895179594
+        },
+        "envelope.stage_total": {
+          "count": 101,
+          "seconds": 0.601978793
+        },
+        "envelope.verify_total": {
+          "count": 10001,
+          "seconds": 3.206600511
+        },
+        "import.envelopes_verify": {
+          "count": 101,
+          "seconds": 3.236338962
+        },
+        "import.overlay_build": {
+          "count": 101,
+          "seconds": 0.83250446
+        },
+        "import.persist_with_envelopes": {
+          "count": 101,
+          "seconds": 6.020124307
+        },
+        "loro.snapshot_export": {
+          "count": 40004,
+          "seconds": 1.422642025
+        },
+        "loro.snapshot_load": {
+          "count": 44904,
+          "seconds": 1.808589994
+        },
+        "overlay.db_hits": {
+          "count": 85009,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 85009,
+          "seconds": 1.149189587
+        },
+        "overlay.resource_reads": {
+          "count": 85009,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 20002,
+          "seconds": 1.670821296
+        },
+        "retention.resource_reads": {
+          "count": 20001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 10001,
+          "seconds": 0.653414023
+        },
+        "signature.ed25519": {
+          "count": 10001,
+          "seconds": 0.50868296
+        },
+        "signature.genesis_and_rest": {
+          "count": 10001,
+          "seconds": 0.714767539
+        },
+        "signature.total": {
+          "count": 10001,
+          "seconds": 1.892728764
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.002704328
+        },
+        "storage.encode": {
+          "count": 30003,
+          "seconds": 1.007415262
+        },
+        "storage.redb_batch": {
+          "count": 101,
+          "seconds": 2.284079698
+        }
+      },
+      "receiverSeconds": 14.998665417,
+      "reconcileSeconds": 5e-08,
+      "resources": 10000,
+      "searchableSeconds": 15.105469434,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "borrow",
+      "pair": 4,
+      "profileEnabled": true
+    }
+  ],
+  "date": "2026-10-30",
+  "normalPeriodicFlushIntervalMs": 100,
+  "measuredRevision": "f570405eb2ff14570ca26d4e91e82e5dafd338b5",
+  "shippingBase": "6614fd0ed3e7e0dcc993a425447a846444b4c619; server test and planning notes change relative to measured revision; importer/retention files are identical",
+  "summary": [
+    {
+      "resources": 5000,
+      "pairs": 4,
+      "receiverSeconds": {
+        "baselineMedian": 6.8648721315,
+        "borrowMedian": 6.354982507,
+        "reductionPercent": 7.427518163963054,
+        "baselineRange": [
+          6.7045269460000005,
+          7.4119884570000005
+        ],
+        "borrowRange": [
+          6.059803197,
+          6.725675454
+        ]
+      },
+      "searchableSeconds": {
+        "baselineMedian": 6.9141004585,
+        "borrowMedian": 6.4122218765,
+        "reductionPercent": 7.2587690186509235,
+        "baselineRange": [
+          6.75118147,
+          7.461208645
+        ],
+        "borrowRange": [
+          6.105604822,
+          6.776965504
+        ]
+      },
+      "fasterBorrowPairs": 4
+    },
+    {
+      "resources": 10000,
+      "pairs": 4,
+      "receiverSeconds": {
+        "baselineMedian": 16.462976431999998,
+        "borrowMedian": 15.319168967,
+        "reductionPercent": 6.947756195390742,
+        "baselineRange": [
+          15.711770218,
+          17.073342795
+        ],
+        "borrowRange": [
+          14.941475242,
+          16.889773132
+        ]
+      },
+      "searchableSeconds": {
+        "baselineMedian": 16.5683915535,
+        "borrowMedian": 15.4229909375,
+        "reductionPercent": 6.913167233532935,
+        "baselineRange": [
+          15.828391391,
+          17.178952891
+        ],
+        "borrowRange": [
+          15.042202436,
+          17.037808062
+        ]
+      },
+      "fasterBorrowPairs": 3
+    }
+  ]
+}
