@@ -588,17 +588,8 @@ impl WebSocketConnection {
                     .store
                     .get_base_domain()
                     .unwrap_or_else(|| "http://localhost".to_string());
-                let slim_ack = self
-                    .client_capabilities
-                    .iter()
-                    .any(|c| c == atomic_lib::sync::protocol::CAP_COMMIT_OK_SLIM);
-                // Only a slim-ack client that also listed `commit-pace` gets
-                // the load hint; every other format stays byte-identical.
-                let paced_ack = slim_ack
-                    && self
-                        .client_capabilities
-                        .iter()
-                        .any(|c| c == atomic_lib::sync::protocol::CAP_COMMIT_PACE);
+                let ack =
+                    atomic_lib::sync::engine::CommitAck::negotiated(&self.client_capabilities);
                 ctx.spawn(
                     async move {
                         let result = crate::handlers::commit::apply_commit_json(
@@ -615,37 +606,8 @@ impl WebSocketConnection {
                         (request_id, result, pace_ms)
                     }
                     .into_actor(self)
-                    .map(move |(rid, res, pace_ms), _actor, ctx| match res {
-                        Ok(server_commit_json) => {
-                            // A client that listed `commit-ok-slim` in its
-                            // HELLO only wants the id it must chain the next
-                            // commit on; it already holds the commit it just
-                            // signed.
-                            let slim_id = if slim_ack {
-                                serde_json::from_str::<serde_json::Value>(&server_commit_json)
-                                    .ok()
-                                    .and_then(|v| v.get("@id")?.as_str().map(str::to_owned))
-                            } else {
-                                None
-                            };
-                            match slim_id {
-                                Some(id) if paced_ack => {
-                                    ctx.binary(ws_v2::encode_commit_ok_paced(rid, &id, pace_ms))
-                                }
-                                Some(id) => ctx.binary(ws_v2::encode_commit_ok_slim(rid, &id)),
-                                None => {
-                                    ctx.binary(ws_v2::encode_commit_ok(rid, &server_commit_json))
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            // F5 (planning/unified-sync.md): classify so the
-                            // outbox can switch on a structured code instead
-                            // of pattern-matching this exact message text.
-                            let msg = e.to_string();
-                            let code = ws_v2::classify_commit_error(&msg);
-                            ctx.binary(ws_v2::encode_error(rid, code, &msg));
-                        }
+                    .map(move |(rid, res, pace_ms), _actor, ctx| {
+                        ctx.binary(ack.frame(rid, &res, pace_ms));
                     }),
                 );
             }
