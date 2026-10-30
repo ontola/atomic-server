@@ -12,14 +12,17 @@
 
 use atomic_lib::{
     agents::ForAgent,
-    datatype::DataType,
     errors::AtomicResult,
     hierarchy,
     schema::json_schema::{ensure_ontology, validate_plan, OntologyPlan},
-    urls, Db, Storelike, Value,
+    urls, Db, Storelike,
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "wasm-plugins")]
+use atomic_lib::{datatype::DataType, Value};
+
+#[cfg(feature = "wasm-plugins")]
 use super::actions::InputSchema;
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
@@ -121,6 +124,7 @@ impl AppSchema {
     }
 
     /// The datatype and allowed values of the Property a field points at.
+    #[cfg(feature = "wasm-plugins")]
     async fn property(
         &self,
         store: &Db,
@@ -140,6 +144,7 @@ impl AppSchema {
 
 /// Checks the fields of `value` that point at a Property against it. The JSON
 /// shape was checked by [`InputSchema::validate`] first.
+#[cfg(feature = "wasm-plugins")]
 pub async fn check_values(
     store: &Db,
     schema: Option<&AppSchema>,

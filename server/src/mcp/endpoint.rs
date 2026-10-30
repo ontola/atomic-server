@@ -86,7 +86,9 @@ pub async fn mcp(
         }
         "ping" => HttpResponse::Ok().json(json!({"jsonrpc": "2.0", "id": id, "result": {}})),
         "tools/list" => {
+            #[cfg_attr(not(feature = "wasm-plugins"), allow(unused_mut))]
             let mut list = tools::list(grant.write);
+            #[cfg(feature = "wasm-plugins")]
             if let Some(tools) = list.as_array_mut() {
                 tools.extend(super::exports::list(&appstate, &grant).await);
             }
