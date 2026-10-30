@@ -220,7 +220,7 @@ export const store = {
   },
 
   /**
-   * The table and row class, or { resource } when this is a folder/note view.
+   * The table this app's rows live in, and the class they are.
    *
    * A table rather than a folder, so the same rows are sortable, filterable
    * and editable outside the app without the app implementing any of that.
