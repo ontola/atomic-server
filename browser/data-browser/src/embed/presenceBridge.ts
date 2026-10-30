@@ -129,61 +129,51 @@ export function relayLocalPresence(
   };
 }
 
-// Who the app is following, as it last said.
-let hostFollowed: string | undefined;
-const followListeners = new Set<() => void>();
+/** A value the app owns and the page only reads: `set` from the app, `use` in React. */
+function hostValue<T>(): {
+  set: (value: T | null | undefined) => void;
+  use: () => T | undefined;
+} {
+  let current: T | undefined;
+  const listeners = new Set<() => void>();
+
+  return {
+    set: value => {
+      if ((value || undefined) === current) return;
+
+      current = value || undefined;
+
+      for (const listener of listeners) listener();
+    },
+    use: () =>
+      useSyncExternalStore(
+        callback => {
+          listeners.add(callback);
+
+          return () => listeners.delete(callback);
+        },
+        () => current,
+        () => undefined,
+      ),
+  };
+}
+
+// Who the app is following, as it last said. The app owns it (`setFollow`),
+// because it does the navigating.
+const hostFollow = hostValue<string>();
 
 /** The app followed (or stopped following) `agent`. */
-export function setHostFollow(agent: string | null | undefined): void {
-  const next = agent || undefined;
-
-  if (next === hostFollowed) return;
-
-  hostFollowed = next;
-
-  for (const listener of followListeners) listener();
-}
+export const setHostFollow = hostFollow.set;
+/** The agent the app is following; undefined when it follows nobody. */
+export const useHostFollow = hostFollow.use;
 
 // The meeting this device leads, as the app last said. The app owns it (a page
 // is recycled, so a page-side `sessionStorage` forgets it); the page only asks
 // to start or end one (`hostMeetingStarted` / `hostMeetingEnded`).
-let hostMeeting: string | undefined;
-const meetingListeners = new Set<() => void>();
+const hostMeeting = hostValue<string>();
 
 /** The app says which meeting this device leads on the page's drive (null:
  *  none). */
-export function setHostMeeting(meeting: string | null | undefined): void {
-  const next = meeting || undefined;
-
-  if (next === hostMeeting) return;
-
-  hostMeeting = next;
-
-  for (const listener of meetingListeners) listener();
-}
-
+export const setHostMeeting = hostMeeting.set;
 /** The meeting this device leads, as the app keeps it. */
-export function useHostMeeting(): string | undefined {
-  return useSyncExternalStore(
-    callback => {
-      meetingListeners.add(callback);
-
-      return () => meetingListeners.delete(callback);
-    },
-    () => hostMeeting,
-    () => undefined,
-  );
-}
-
-/** The agent the app is following; undefined when it follows nobody. */
-export function useHostFollow(): string | undefined {
-  return useSyncExternalStore(
-    callback => {
-      followListeners.add(callback);
-
-      return () => followListeners.delete(callback);
-    },
-    () => hostFollowed,
-    () => undefined,
-  );
-}
+export const useHostMeeting = hostMeeting.use;
