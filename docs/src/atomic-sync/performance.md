@@ -87,6 +87,73 @@ an explicit disclosure design. The experiment leaves production mutation
 authorization and tombstones unchanged. It is not enabled in candidate25 and
 does not change SyncD's source-side creation path.
 
+## Joep's initial-sync investigation: 2026-10-29
+
+Joep reported a separate in-process, single-threaded benchmark on four
+2.1 GHz Xeon cores using a release build. His notes describe the source as
+`develop` after envelope batching, but do not provide an exact commit SHA.
+The harness, `lib/benches/sync_import_bench.rs`, had not been pushed with the
+report and is not included in this documentation PR. These are reported
+measurements, not independently reproduced results. They exclude network,
+WebSocket/TLS, client-side SYNC hashing and browser/OPFS costs.
+
+### Reported flat-drive timings
+
+All values below are milliseconds. Import phases are reported separately;
+the search check follows import.
+
+| Resources | Sender reconcile | Total import | Per-entry loop | Persist/index | Envelope import | Search |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 670 | 3,344 | 381 | 634 | 2,294 | 48 |
+| 5,000 | 4,150 | 22,872 | 2,055 | 4,497 | 16,142 | 203 |
+| 10,000 | 8,719 | 53,369 | 4,958 | 10,426 | 37,602 | 384 |
+
+Reconcile plus import plus search totals approximately 4.1, 27 and 62 seconds.
+A nested layout with N resources in one folder and roughly 50 elsewhere was
+reported to be about 13% slower. At 1,000 resources, Joep's wire-size comparison
+reports 6.2 MB versus 2.3 MB of snapshots and identifies envelopes as duplicated
+payload; the notes do not give a complete byte accounting. Equal-state resync still
+cost roughly 0.5 seconds per 1,000 resources in per-resource VV comparison.
+
+Envelope import accounts for about 70% of the 10k import time and grows about
+16.4 times for a tenfold resource increase. Joep suspects a repeated scan in
+`envelopes_checked` or `resolve_retention`; that cause is **not confirmed**.
+Persist/index work accounts for about 20% and the per-entry loop about 9%.
+Sender reconciliation costs about 0.9 ms per resource at 10k, with
+`build_drive_vvs`, resource reads and per-subject read checks identified as
+investigation targets. Joep did not identify per-entry tracing or Loro loads
+as the dominant cost in this workload.
+
+To reproduce once the harness and exact source revision are available, his
+reported command is:
+
+```sh
+BENCH_N=1000,5000,10000 BENCH_LAYOUT=flat,nested cargo bench -p atomic_lib --bench sync_import_bench --features db-redb
+```
+
+The different fixtures, hardware, revisions and timing boundaries prevent a
+direct speed ratio against the WebSocket measurements above. Recover the
+harness, source SHA and envelope-batching implementation before combining
+these profiles or attributing the scaling to a particular function.
+
+### Proposed follow-ups, in Joep's priority order
+
+| Proposal | Protocol/storage boundary and validation |
+| --- | --- |
+| Make envelopes opt-in during sync | Joep reports this as a decided direction being built, with a request flag and no envelopes by default. It changes sync behavior and requires protocol/compatibility work; this PR does not implement or establish its availability. Define older-peer behavior and which provenance/history guarantees remain when envelopes are omitted. |
+| Fix superlinear envelope work, then batch verification with cached signer lookups | A candidate within the existing protocol and storage format. First isolate prefix scans, ancestor walks, parsing, verification and transactions at 1k/5k/10k on a pinned revision. Preserve signature rejection, inherited audit retention, unreadable rows and exact retained proofs. Scope signer caches to a batch and preserve key-resolution rules. Existing write batching is tracked separately in #2381. |
+| Cold-start fast path | Potentially internal, but an apparently empty receiver does not establish exclusive ownership. Avoid redundant reads/merges only when their absence is proven; preserve concurrent-write locking, admission/authorization, identity validation and the final durable acknowledgment. Compare bounded batches with a single transaction, including memory and writer contention. |
+| Defer derived rows and indexes until after bulk writing, possibly in parallel | Scheduling may be internal, but rows, query indexes and search results become available at different times. Define readiness and persist resumable rebuild work; test restart, concurrent edits, notifications and complete query/search results. Do not silently weaken the current transaction or acknowledgment contract. |
+| Stream a compressed pack from the `LoroSnapshots` tree with drive-level authorization | Requires a transport/protocol and authorization design; it is not an existing-protocol optimization. Prove access equivalence before replacing per-resource read checks. Joep's approximately 1 s estimate for 10k issues (23 MB, roughly 5 MB with zstd) is a theoretical target, not a measured implementation. |
+| Merkle/nested hashing and top-layer-first nested sync | A protocol/manifest design for comparing roots and transferring differing branches. Define hash inputs, invalidation, filtered access and compatibility; the equal-state resync measurement motivates it but does not establish a gain. |
+
+Joep estimates roughly threefold faster import without envelopes and suggests
+later steps could approach a reported 3.5 s Jazz result. Those are projections,
+not matched measurements. Omitting provenance verification/retention changes
+the work performed; the notes do not establish that Anytype or Jazz never
+performs equivalent work. Keep those comparisons separate from improvements
+that preserve Atomic's current protocol and guarantees.
+
 ## Remaining candidates without a wire-format change
 
 The optimized importer profile at `8ffbc40b9` provides concrete leads, but it
@@ -98,7 +165,8 @@ these paths.
 
 | Candidate | Evidence | Decision and required validation |
 | --- | --- | --- |
-| Reuse Loro state during import, envelope staging and full-text extraction | 50,240 snapshot loads took 2.725 s and 50,133 exports took 2.329 s. Full-text extraction accounted for 20,036 loads and 1.015 s; envelope staging for 10,061 loads and 0.576 s. | Best bounded next experiment. Pass already loaded state or extracted text through the pipeline where ownership permits. Deferred because no matched implementation trial has established a gain; preserve rich text, full state/history, signatures and every query/search result. |
+| Profile envelope scaling and reuse batch-local validation work | Joep reports envelope import at 37.602 s of 53.369 s for 10k resources and superlinear growth; the cause remains unconfirmed. | Highest-priority investigation in his workload. Separate scans, ancestry, schema/signer reads, verification and writes on the intended revision; preserve inherited retention, signatures and exact proofs. See his follow-ups above. |
+| Reuse Loro state during import, envelope staging and full-text extraction | 50,240 snapshot loads took 2.725 s and 50,133 exports took 2.329 s. Full-text extraction accounted for 20,036 loads and 1.015 s; envelope staging for 10,061 loads and 0.576 s. | A bounded implementation experiment alongside envelope profiling. Pass already loaded state or extracted text through the pipeline where ownership permits. Deferred because no matched implementation trial has established a gain; preserve rich text, full state/history, signatures and every query/search result. |
 | Coordinate the importer with periodic durable flushing | Database work and waits totaled 16.279 s, including 7.324 s beginning writes. A separate stack sample observed importer lock waits alongside a flushing thread. | Investigate scheduling/coalescing on the newer flush implementation. The sample does not attribute all waiting to flushing. Deferred pending a current profile and concurrency/error tests; retain the covering durable acknowledgment and retry behavior. |
 | Avoid redundant storage encoding or tune existing compression | 30,054 deflate calls took 4.444 s in the profile. | Potential internal optimization, independent of wire envelopes. Deferred pending CPU, file-size and memory measurements; preserve codec readability, stored data and crash recovery. |
 | Evaluate initial Loro export choices | New-resource envelopes currently carry full snapshots, including history and current state. | An operations-only export might trade fewer bytes for more replay work. Unmeasured; verify existing receiver compatibility and history/identity behavior before treating it as an available optimization. |
