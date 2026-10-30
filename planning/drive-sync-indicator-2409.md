@@ -1,6 +1,6 @@
 # Confirmed drive sync (#2409)
 
-Status: attachment confirmation implemented and reviewed; browser acceptance and final PR validation in progress.
+Status: implementation and local validation complete; PR #2413 ready for review, exact-head CI pending.
 
 - Task: Codex chat `drive-my-chrome-to-find-out`.
 - Worktree: `/Users/michieldejong/.codex/worktrees/drive-sync-indicator-2409/atomic-server`.
@@ -56,15 +56,15 @@ acknowledged uploads; querying must never enable publishing.
 - [x] Correlated client confirmation lifecycle, invalidation and tests.
 - [x] Public docs, UX reference, coverage map and settled catalogs (no new catalog diff).
 - [x] Matching builds, endpoint tests, browser acceptance and screenshots.
-- [ ] Review, push and update PR #2413; mark ready after requested behavior.
+- [x] Review, push and update PR #2413; marked ready for review.
 - [ ] Exact-commit CI, completed-plan removal and final cleanup validation.
 
 ## Validation constraints
 
 The documented minimal `light` build fails on unrelated plugin imports (#2412).
-Local app verification uses `light,wasm-plugins` with a real built runtime. The
-current PR head is `2d43236f6`; its CI is queued on the repository's self-hosted
-runner. Do not claim green CI. All task logs/builds remain inside ignored
+Local app verification uses `light,wasm-plugins` with a real built runtime.
+Exact-head CI must finish on the repository's self-hosted runner. Earlier runs
+remain queued; do not claim green CI. All task logs/builds remain inside ignored
 `target/task-logs/` and the worktree's own build directories.
 
 Latest checks: 134 client-library tests, 44 sidebar/confirmation/helper tests,
@@ -73,3 +73,7 @@ App/E2E TypeScript, React Compiler and rustfmt checks passed. Matching WASM,
 frontend and native `light,wasm-plugins` builds passed. Architecture review found
 no blockers. Real Chromium acceptance passed 2/2 tests with zero skips, retries or failures
 (21.6 seconds); screenshots were reviewed and shared in the task chat.
+
+Final pre-commit workspace lint/format and all-target Clippy passed after
+style-only corrections. No implementation work remains; keep this plan until
+the required main/downstream CI checks pass, then remove it per AGENTS.md.
