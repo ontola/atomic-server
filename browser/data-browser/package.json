@@ -56,6 +56,7 @@
     "@tomic/lib": "workspace:*",
     "@tomic/plugin": "workspace:*",
     "@tomic/react": "workspace:*",
+    "@tomic/service-ui": "workspace:*",
     "@uiw/codemirror-theme-github": "^4.25.10",
     "@uiw/react-codemirror": "^4.25.10",
     "@wuchale/jsx": "^0.12.5",
@@ -72,6 +73,7 @@
     "idb-keyval": "^6.2.4",
     "katex": "^0.16.45",
     "linkifyjs": "4.3.3",
+    "livekit-client": "2.22.4",
     "loro-crdt": "^1.12.1",
     "ollama-ai-provider-v2": "^3.5.1",
     "polished": "^4.3.1",
@@ -106,8 +108,7 @@
     "workbox-window": "^7.4.1",
     "wuchale": "^0.25.6",
     "yjs": "^13.6.30",
-    "zod": "^4.4.3",
-    "@tomic/service-ui": "workspace:*"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@sentry/vite-plugin": "^5.4.1",
