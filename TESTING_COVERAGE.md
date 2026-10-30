@@ -2493,6 +2493,15 @@ to the class map, `useTableColumns` re-reading columns when the class map
 changes, `TagPropertyCard`'s class usage rows, and forms bound to a table column
 whose options now live only in the class map (see the forms entry below).
 
+Ontology graph position changes (2026-10-30):
+`browser/data-browser/src/chunks/GraphViewer/useGraph.test.ts` reproduces the
+`positionAbsolute` crash on a position notification before any drag. It covers
+layout-only events, keyboard moves, coordinate-less drag stops, batched nodes
+and callbacks before a render, final-position precedence, existing positions,
+non-finite coordinates and empty batches. `browser/e2e/tests/ontology-graph.spec.ts`
+opens an invented checklist ontology, moves a node first with the keyboard and
+then by pointer, and checks that its saved position survives reload without errors.
+
 Class constraints in forms (`planning/class-constraints-and-forms.md`, step 3):
 `formFieldSettings.test.ts` and `formConstraints.test.ts` pin the limit
 keywords, that old names read and are rewritten on edit, that a question can only
