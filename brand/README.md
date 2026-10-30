@@ -72,7 +72,7 @@ error. If the orb ever loses its gradient, look here first.
 
 Generated into, across three repositories:
 
-- `atomic-server` — data-browser favicon set, Tauri desktop + iOS icons, mdBook
+- `atomic-server` — data-browser favicon set, Tauri desktop icons, mdBook
   docs, svelte package, sveltekit starter template, root `logo-square.svg`
 - `atomic-server/flutter` — Atomic Canvas web, iOS and Android launcher icons
 - `atomic-saas/portal` — portal favicon set

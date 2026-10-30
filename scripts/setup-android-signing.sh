@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Generate a fresh Android release keystore and load it into GitHub Actions
-# secrets, for the Android job in .github/workflows/tauri-release.yml.
+# secrets, for Android release signing (read by
+# .github/workflows/flutter-play.yml).
 #
 # WHY THIS EXISTS
 #
