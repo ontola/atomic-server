@@ -11,8 +11,8 @@
 //! The clients that need credentials are all on origins this server answers
 //! for: the data-browser served by the server itself, a tenant on a subdomain
 //! of the base domain, the Vite dev server on another loopback port, and the
-//! desktop and Android webviews (`tauri://localhost` on macOS and iOS,
-//! `http://tauri.localhost` on Windows and Android), which talk to a server
+//! desktop webviews (`tauri://localhost` on macOS,
+//! `http://tauri.localhost` on Windows), which talk to a server
 //! bound to loopback. So credentials are allowed for exactly those, by the
 //! same rule `RequestContext` uses to decide which `Host` to trust, and every
 //! other origin keeps its any-origin access without them.

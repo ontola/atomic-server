@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Generate Apple signing material and load it into GitHub Actions secrets, for
-# the desktop (macOS) and ios jobs in .github/workflows/tauri-release.yml.
+# the desktop (macOS) job in .github/workflows/tauri-release.yml.
 #
 # WHAT THIS DOES AND DOES NOT DO
 #
@@ -26,19 +26,15 @@
 # re-downloaded with its private key, and a team is limited to five of them —
 # so losing one is not a free do-over. The .p12 is the only complete copy.
 #
-# Usage:  scripts/setup-apple-signing.sh [--macos-only|--ios-only] [--macos-p12 FILE] [workdir]
+# Usage:  scripts/setup-apple-signing.sh [--macos-p12 FILE] [workdir]
 
 set -euo pipefail
 
 WORKDIR=""
-DO_MACOS=true
-DO_IOS=true
 MACOS_P12=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --macos-only) DO_IOS=false ;;
-    --ios-only)   DO_MACOS=false ;;
     # Reuse a Developer ID certificate you already hold, instead of issuing a
     # new one. Prefer this whenever `security find-identity -v -p codesigning`
     # already lists "Developer ID Application: <your team>": a team may hold
@@ -163,95 +159,60 @@ EOF
   echo "Identity: $IDENTITY"
 }
 
-if [ "$DO_MACOS" = true ]; then
-  if [ -n "$MACOS_P12" ]; then
-    [ -e "$MACOS_P12" ] || die "$MACOS_P12 not found."
-    echo
-    echo "──── Developer ID Application (existing certificate) ────"
-    read -r -s -p "Password for $MACOS_P12: " PASS; echo
-    [ -n "$PASS" ] || die "a password is required — an unprotected .p12 cannot be imported by CI."
-
-    # Verify before uploading. A .p12 exported from Keychain Access WITHOUT the
-    # private key is the classic mistake here: it looks fine, uploads fine, and
-    # then fails deep inside a release build with an error about no identity
-    # being found rather than about the file.
-    openssl pkcs12 -in "$MACOS_P12" -nokeys "${P12_LEGACY[@]}" \
-      -passin "pass:$PASS" -out "$WORKDIR/developer-id.pem" 2>/dev/null \
-      || die "could not read $MACOS_P12 — wrong password, or OpenSSL cannot parse it."
-    # Grep the extracted key rather than relying on an exit code: `pkcs12
-    # -nocerts -noout` exits 0 on a certificate-only .p12, so it detects
-    # nothing. Verified both ways against a with-key and a no-key file.
-    openssl pkcs12 -in "$MACOS_P12" -nocerts -nodes "${P12_LEGACY[@]}" \
-      -passin "pass:$PASS" 2>/dev/null | grep -q 'PRIVATE KEY' \
-      || die "$MACOS_P12 contains no private key. In Keychain Access, expand the certificate's disclosure triangle and export the certificate itself (which carries the key underneath), not the bare certificate."
-
-    IDENTITY=$(openssl x509 -in "$WORKDIR/developer-id.pem" -noout -subject -nameopt multiline \
-      | sed -n 's/ *commonName *= //p')
-    [ -n "$IDENTITY" ] || die "could not read the certificate common name."
-    echo "Identity: $IDENTITY"
-
-    cp "$MACOS_P12" "$WORKDIR/developer-id.p12"
-    chmod 600 "$WORKDIR/developer-id.p12"
-  else
-    request_cert "developer-id" "Developer ID Application" "Developer ID Application"
-  fi
-
-  set_secret_file APPLE_CERTIFICATE "developer-id.p12"
-  set_secret APPLE_CERTIFICATE_PASSWORD "$PASS"
-  set_secret APPLE_SIGNING_IDENTITY "$IDENTITY"
-  trap - EXIT
-  echo "Set: APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY"
-
+if [ -n "$MACOS_P12" ]; then
+  [ -e "$MACOS_P12" ] || die "$MACOS_P12 not found."
   echo
-  echo "──── Notarization ────"
-  cat <<'EOF'
+  echo "──── Developer ID Application (existing certificate) ────"
+  read -r -s -p "Password for $MACOS_P12: " PASS; echo
+  [ -n "$PASS" ] || die "a password is required — an unprotected .p12 cannot be imported by CI."
+
+  # Verify before uploading. A .p12 exported from Keychain Access WITHOUT the
+  # private key is the classic mistake here: it looks fine, uploads fine, and
+  # then fails deep inside a release build with an error about no identity
+  # being found rather than about the file.
+  openssl pkcs12 -in "$MACOS_P12" -nokeys "${P12_LEGACY[@]}" \
+    -passin "pass:$PASS" -out "$WORKDIR/developer-id.pem" 2>/dev/null \
+    || die "could not read $MACOS_P12 — wrong password, or OpenSSL cannot parse it."
+  # Grep the extracted key rather than relying on an exit code: `pkcs12
+  # -nocerts -noout` exits 0 on a certificate-only .p12, so it detects
+  # nothing. Verified both ways against a with-key and a no-key file.
+  openssl pkcs12 -in "$MACOS_P12" -nocerts -nodes "${P12_LEGACY[@]}" \
+    -passin "pass:$PASS" 2>/dev/null | grep -q 'PRIVATE KEY' \
+    || die "$MACOS_P12 contains no private key. In Keychain Access, expand the certificate's disclosure triangle and export the certificate itself (which carries the key underneath), not the bare certificate."
+
+  IDENTITY=$(openssl x509 -in "$WORKDIR/developer-id.pem" -noout -subject -nameopt multiline \
+    | sed -n 's/ *commonName *= //p')
+  [ -n "$IDENTITY" ] || die "could not read the certificate common name."
+  echo "Identity: $IDENTITY"
+
+  cp "$MACOS_P12" "$WORKDIR/developer-id.p12"
+  chmod 600 "$WORKDIR/developer-id.p12"
+else
+  request_cert "developer-id" "Developer ID Application" "Developer ID Application"
+fi
+
+set_secret_file APPLE_CERTIFICATE "developer-id.p12"
+set_secret APPLE_CERTIFICATE_PASSWORD "$PASS"
+set_secret APPLE_SIGNING_IDENTITY "$IDENTITY"
+trap - EXIT
+echo "Set: APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY"
+
+echo
+echo "──── Notarization ────"
+cat <<'EOF'
 Notarization needs an APP-SPECIFIC password, not your Apple ID password.
 Generate one at https://appleid.apple.com -> Sign-In and Security ->
 App-Specific Passwords. It looks like abcd-efgh-ijkl-mnop.
 EOF
-  read -r -p "Apple ID email: " APPLE_ID_VALUE
-  read -r -s -p "App-specific password: " APPLE_PASSWORD_VALUE; echo
-  [ -n "$APPLE_ID_VALUE" ] || die "an Apple ID is required."
-  [ -n "$APPLE_PASSWORD_VALUE" ] || die "an app-specific password is required."
+read -r -p "Apple ID email: " APPLE_ID_VALUE
+read -r -s -p "App-specific password: " APPLE_PASSWORD_VALUE; echo
+[ -n "$APPLE_ID_VALUE" ] || die "an Apple ID is required."
+[ -n "$APPLE_PASSWORD_VALUE" ] || die "an app-specific password is required."
 
-  set_secret APPLE_ID "$APPLE_ID_VALUE"
-  set_secret APPLE_PASSWORD "$APPLE_PASSWORD_VALUE"
-  set_secret APPLE_TEAM_ID "$TEAM_ID"
-  echo "Set: APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID"
-fi
-
-if [ "$DO_IOS" = true ]; then
-  request_cert "apple-distribution" "Apple Distribution" "Apple Distribution"
-
-  set_secret_file IOS_CERTIFICATE "apple-distribution.p12"
-  set_secret IOS_CERTIFICATE_PASSWORD "$PASS"
-  trap - EXIT
-  echo "Set: IOS_CERTIFICATE, IOS_CERTIFICATE_PASSWORD"
-
-  echo
-  echo "──── Provisioning profile ────"
-  cat <<EOF
-The workflow exports with --export-method app-store-connect, so this must be an
-APP STORE profile (not Ad Hoc — those only install on registered UDIDs).
-
-  1. Open https://developer.apple.com/account/resources/profiles/add
-  2. Distribution -> App Store Connect
-  3. App ID:       io.ontola.atomicserver
-  4. Certificate:  the Apple Distribution certificate just created
-  5. Download and save it as:
-                   $WORKDIR/profile.mobileprovision
-
-A profile snapshots the App ID's capabilities at creation time, so if you added
-Associated Domains after making an earlier profile, regenerate it now or the
-entitlement will be missing from the signed IPA.
-
-EOF
-  read -r -p "Press Enter once profile.mobileprovision is in place... " _
-  [ -e "profile.mobileprovision" ] || die "$WORKDIR/profile.mobileprovision not found."
-
-  set_secret_file IOS_MOBILE_PROVISION "profile.mobileprovision"
-  echo "Set: IOS_MOBILE_PROVISION"
-fi
+set_secret APPLE_ID "$APPLE_ID_VALUE"
+set_secret APPLE_PASSWORD "$APPLE_PASSWORD_VALUE"
+set_secret APPLE_TEAM_ID "$TEAM_ID"
+echo "Set: APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID"
 
 trap - EXIT
 

@@ -62,20 +62,10 @@
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": ""
-    },
-    "android": {
-      "minSdkVersion": 24
     }
   },
   "plugins": {
     "deep-link": {
-      "mobile": [
-        {
-          "scheme": [
-            "atomic"
-          ]
-        }
-      ],
       "desktop": {
         "schemes": [
           "atomic"

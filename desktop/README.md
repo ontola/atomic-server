@@ -115,15 +115,12 @@ which every later build shares.
 
 ### Error reporting in official packages
 
-The release workflow enables Sentry for the embedded WebView on every platform,
-including Android and iOS. Tag builds use `production`; manual workflow builds
+The release workflow enables Sentry for the embedded WebView on every platform.
+Tag builds use `production`; manual workflow builds
 use `staging`. Reports carry the app version and source commit. JavaScript/React
 errors and sidebar feedback are covered; native process crashes are not covered
 by this browser SDK. Local builds can opt in with `VITE_SENTRY_DSN` and
 `VITE_SENTRY_ENVIRONMENT`. See the SaaS `SENTRY.md` runbook for receipt verification.
-
-Android launcher images are generated from `brand/src/atomic-mark.svg` by
-`node brand/generate.mjs`, including adaptive foregrounds at every density.
 
 ### Automatic Cloud Vault backup
 
@@ -138,4 +135,4 @@ stops, or at most 30 seconds during sustained editing. Switching drives preserve
 queued work. Foregrounding/reconnecting retries immediately; a 60-second check
 also catches native-node changes and late account availability. Unchanged drives
 upload no object. These timers run only while the app runtime can execute; they
-are not an Android/iOS OS background service. Manual backup remains a retry option.
+are not an OS background service. Manual backup remains a retry option.
