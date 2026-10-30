@@ -3927,6 +3927,7 @@ msgstr "Open the meeting chat"
 msgid "Join {0} — led by {1}"
 msgstr "Join {0} — led by {1}"
 
+#: src/components/Presence/FollowSessionPanelContainer.tsx
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Join"
 msgstr "Join"
@@ -13405,3 +13406,14 @@ msgstr "Start this drive"
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
 msgstr "Give it a name, then fill it with a starter"
+
+#. 0: strip.agents.length
+#. 0: strip.agents.length
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "{0} in the call"
+msgstr "{0} in the call"
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "Video call"
+msgstr "Video call"

@@ -13,6 +13,9 @@ export interface PresenceEntry<T = unknown> {
   /** Subject of the ChatRoom logging this agent's follow session, when
    *  they're being followed. Followers use it to open the session chat. */
   session?: string;
+  /** Subject of the meeting whose video call this session is in. Lets the
+   *  meeting chat show who is in the call, also to those who left it. */
+  call?: string;
   /** When `false`, other sessions should not follow this one's agent.
    *  Absent means followable. */
   allowFollow?: boolean;

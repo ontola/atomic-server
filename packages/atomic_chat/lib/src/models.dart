@@ -626,6 +626,9 @@ class PresenceItem {
   /// The thread or chat room this session is typing in, if any.
   final String? typing;
 
+  /// The Meeting whose video call this session is in (the web's `call`).
+  final String? call;
+
   const PresenceItem({
     required this.sessionId,
     required this.agent,
@@ -636,6 +639,7 @@ class PresenceItem {
     this.session,
     this.data,
     this.typing,
+    this.call,
   });
 
   factory PresenceItem.fromJson(Map<String, dynamic> json) {
@@ -651,6 +655,7 @@ class PresenceItem {
       session: text(json['session']),
       data: json['data'],
       typing: text(json['typing']),
+      call: text(json['call']),
     );
   }
 
@@ -666,5 +671,6 @@ class PresenceItem {
         if (session != null) 'session': session,
         if (data != null) 'data': data,
         if (typing != null) 'typing': typing,
+        if (call != null) 'call': call,
       };
 }
