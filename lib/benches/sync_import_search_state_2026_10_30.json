@@ -1,0 +1,612 @@
+{
+  "baseCommit": "aca3106edd71922ef7b593d35a02ddfb44eda83c",
+  "profile": "e2e: opt-level=2, lto=false, codegen-units=16, debug-assertions=true",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "cpu": "AMD EPYC 9V74; 4-core cgroup quota, 5 visible logical CPUs",
+  "scope": "Single-thread native engine: sender reconcile/framing through signed import, LAST durable flush, pending search drain and complete title/body queries. Excludes fixture preparation, DB startup, network/TLS and browser/OPFS. Full state, history metadata, envelope, projection and reopen verification outside timer.",
+  "binaries": {
+    "baseline": "e009553a692f29707457ccbf5101fb7707882ae64fb06a14f707198ff4e3e2eb",
+    "optimized": "81db200098d01c82f4332fa9998b5bf593ce04a9cc3b1984bb23fa8bacd39088"
+  },
+  "fixtureManifestSha256": {
+    "1000": "ca3f3e433ff7c165dbf4ba02aba3a2c66d471e56cb67d4d412d7805076db2309",
+    "5000": "6b4dc6ae0aa22f8cd03caa6566138561c33a8e5df734fba25908a071ede8467e"
+  },
+  "rows": [
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.313836224,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 1.9643444220000001,
+      "reconcileSeconds": 0.349491802,
+      "resources": 1000,
+      "searchableSeconds": 2.325837235,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "baseline",
+      "pair": 0,
+      "loadBefore": [
+        2.81298828125,
+        3.41015625,
+        1.90234375
+      ],
+      "loadAfter": [
+        2.66748046875,
+        3.3701171875,
+        1.8974609375
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.356299824,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 1.9572181360000003,
+      "reconcileSeconds": 0.399081688,
+      "resources": 1000,
+      "searchableSeconds": 2.365221667,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "optimized",
+      "pair": 0,
+      "loadBefore": [
+        2.66748046875,
+        3.3701171875,
+        1.8974609375
+      ],
+      "loadAfter": [
+        2.53369140625,
+        3.33056640625,
+        1.892578125
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 3.083115598,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 2.568874737,
+      "reconcileSeconds": 0.514240861,
+      "resources": 1000,
+      "searchableSeconds": 3.101599738,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "optimized",
+      "pair": 1,
+      "loadBefore": [
+        2.53369140625,
+        3.33056640625,
+        1.892578125
+      ],
+      "loadAfter": [
+        2.41064453125,
+        3.29150390625,
+        1.8876953125
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.651613995,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 2.223661414,
+      "reconcileSeconds": 0.427952581,
+      "resources": 1000,
+      "searchableSeconds": 2.659806455,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "baseline",
+      "pair": 1,
+      "loadBefore": [
+        2.41064453125,
+        3.29150390625,
+        1.8876953125
+      ],
+      "loadAfter": [
+        2.41064453125,
+        3.29150390625,
+        1.8876953125
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.495084404,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 2.125715789,
+      "reconcileSeconds": 0.369368615,
+      "resources": 1000,
+      "searchableSeconds": 2.504085508,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "baseline",
+      "pair": 2,
+      "loadBefore": [
+        2.41064453125,
+        3.29150390625,
+        1.8876953125
+      ],
+      "loadAfter": [
+        2.29736328125,
+        3.25341796875,
+        1.8828125
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.5866187419999997,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 2.1946276179999997,
+      "reconcileSeconds": 0.391991124,
+      "resources": 1000,
+      "searchableSeconds": 2.5960764689999998,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "optimized",
+      "pair": 2,
+      "loadBefore": [
+        2.29736328125,
+        3.25341796875,
+        1.8828125
+      ],
+      "loadAfter": [
+        2.193359375,
+        3.2158203125,
+        1.8779296875
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.674207646,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 2.254904088,
+      "reconcileSeconds": 0.419303558,
+      "resources": 1000,
+      "searchableSeconds": 2.6846011560000003,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "optimized",
+      "pair": 3,
+      "loadBefore": [
+        2.193359375,
+        3.2158203125,
+        1.8779296875
+      ],
+      "loadAfter": [
+        2.09765625,
+        3.1787109375,
+        1.873046875
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.868333155,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 2.4497872320000003,
+      "reconcileSeconds": 0.418545923,
+      "resources": 1000,
+      "searchableSeconds": 2.876768769,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "baseline",
+      "pair": 3,
+      "loadBefore": [
+        2.09765625,
+        3.1787109375,
+        1.873046875
+      ],
+      "loadAfter": [
+        2.09765625,
+        3.1787109375,
+        1.873046875
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.5762653049999997,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 2.2078236529999997,
+      "reconcileSeconds": 0.368441652,
+      "resources": 1000,
+      "searchableSeconds": 2.585147903,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "baseline",
+      "pair": 4,
+      "loadBefore": [
+        2.09765625,
+        3.1787109375,
+        1.873046875
+      ],
+      "loadAfter": [
+        2.00927734375,
+        3.14208984375,
+        1.8681640625
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.358837874,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 1.9340963059999998,
+      "reconcileSeconds": 0.424741568,
+      "resources": 1000,
+      "searchableSeconds": 2.36716287,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "optimized",
+      "pair": 4,
+      "loadBefore": [
+        2.00927734375,
+        3.14208984375,
+        1.8681640625
+      ],
+      "loadAfter": [
+        1.92822265625,
+        3.1064453125,
+        1.86328125
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.391935203,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 2.031842406,
+      "reconcileSeconds": 0.360092797,
+      "resources": 1000,
+      "searchableSeconds": 2.401361843,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "optimized",
+      "pair": 5,
+      "loadBefore": [
+        1.92822265625,
+        3.1064453125,
+        1.86328125
+      ],
+      "loadAfter": [
+        1.853515625,
+        3.0712890625,
+        1.8583984375
+      ]
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 2.9470601849999998,
+      "envelopes": 1001,
+      "imported": 1001,
+      "receiverSeconds": 2.422708411,
+      "reconcileSeconds": 0.524351774,
+      "resources": 1000,
+      "searchableSeconds": 2.960325527,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "baseline",
+      "pair": 5,
+      "loadBefore": [
+        1.853515625,
+        3.0712890625,
+        1.8583984375
+      ],
+      "loadAfter": [
+        1.853515625,
+        3.0712890625,
+        1.8583984375
+      ]
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 12.882926345,
+      "envelopes": 5001,
+      "imported": 5001,
+      "receiverSeconds": 11.073385647999999,
+      "reconcileSeconds": 1.809540697,
+      "resources": 5000,
+      "searchableSeconds": 12.931538173,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "baseline",
+      "pair": 0,
+      "loadBefore": [
+        1.853515625,
+        3.0712890625,
+        1.8583984375
+      ],
+      "loadAfter": [
+        1.61083984375,
+        2.93603515625,
+        1.8388671875
+      ]
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 12.406234897,
+      "envelopes": 5001,
+      "imported": 5001,
+      "receiverSeconds": 10.550090506,
+      "reconcileSeconds": 1.856144391,
+      "resources": 5000,
+      "searchableSeconds": 12.452590019,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "optimized",
+      "pair": 0,
+      "loadBefore": [
+        1.61083984375,
+        2.93603515625,
+        1.8388671875
+      ],
+      "loadAfter": [
+        1.474609375,
+        2.8408203125,
+        1.82421875
+      ]
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 13.049429405,
+      "envelopes": 5001,
+      "imported": 5001,
+      "receiverSeconds": 10.988073497,
+      "reconcileSeconds": 2.061355908,
+      "resources": 5000,
+      "searchableSeconds": 13.099327266,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "optimized",
+      "pair": 1,
+      "loadBefore": [
+        1.474609375,
+        2.8408203125,
+        1.82421875
+      ],
+      "loadAfter": [
+        1.369140625,
+        2.75,
+        1.81005859375
+      ]
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 13.552277763,
+      "envelopes": 5001,
+      "imported": 5001,
+      "receiverSeconds": 11.492075151,
+      "reconcileSeconds": 2.060202612,
+      "resources": 5000,
+      "searchableSeconds": 13.604197941,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "baseline",
+      "pair": 1,
+      "loadBefore": [
+        1.369140625,
+        2.75,
+        1.81005859375
+      ],
+      "loadAfter": [
+        1.26318359375,
+        2.6357421875,
+        1.79248046875
+      ]
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 12.609816821999999,
+      "envelopes": 5001,
+      "imported": 5001,
+      "receiverSeconds": 10.769636453999999,
+      "reconcileSeconds": 1.840180368,
+      "resources": 5000,
+      "searchableSeconds": 12.655163204,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "baseline",
+      "pair": 2,
+      "loadBefore": [
+        1.26318359375,
+        2.6357421875,
+        1.79248046875
+      ],
+      "loadAfter": [
+        1.2041015625,
+        2.55517578125,
+        1.779296875
+      ]
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 12.926645102,
+      "envelopes": 5001,
+      "imported": 5001,
+      "receiverSeconds": 10.947356623000001,
+      "reconcileSeconds": 1.979288479,
+      "resources": 5000,
+      "searchableSeconds": 12.9751758,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "optimized",
+      "pair": 2,
+      "loadBefore": [
+        1.2041015625,
+        2.55517578125,
+        1.779296875
+      ],
+      "loadAfter": [
+        1.158203125,
+        2.478515625,
+        1.76611328125
+      ]
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 12.317970976,
+      "envelopes": 5001,
+      "imported": 5001,
+      "receiverSeconds": 10.486448815,
+      "reconcileSeconds": 1.831522161,
+      "resources": 5000,
+      "searchableSeconds": 12.366859437,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "optimized",
+      "pair": 3,
+      "loadBefore": [
+        1.158203125,
+        2.478515625,
+        1.76611328125
+      ],
+      "loadAfter": [
+        1.11279296875,
+        2.3818359375,
+        1.74853515625
+      ]
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 13.015805649,
+      "envelopes": 5001,
+      "imported": 5001,
+      "receiverSeconds": 10.974473452000002,
+      "reconcileSeconds": 2.041332197,
+      "resources": 5000,
+      "searchableSeconds": 13.066754681,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "baseline",
+      "pair": 3,
+      "loadBefore": [
+        1.11279296875,
+        2.3818359375,
+        1.74853515625
+      ],
+      "loadAfter": [
+        1.08740234375,
+        2.3134765625,
+        1.7353515625
+      ]
+    }
+  ],
+  "measurementDate": "2026-10-30",
+  "harnessSha256": "9c735b5012dfd4a9c7814d2adf92775da39e6797def3e3f82929bf9bcbe5fcd1",
+  "baselineDefinition": "Same harness and PR files; only lib/src/search/mod.rs restored from baseCommit. Optimized restores the loaded-document implementation.",
+  "samplePolicy": "All 20 timed runs retained; six alternating pairs at 1000 resources and four at 5000; no concurrent compilation or linting. A separate 10-resource correctness pilot is excluded.",
+  "limits": "Shared-host synthetic in-process native benchmark; no network/TLS, browser/OPFS, crash test or peak-memory measurement. Sender HashMap iteration changes frame ordering between runs; identical wire ordering is not asserted.",
+  "summary": [
+    {
+      "resources": 1000,
+      "samplesPerBuild": 6,
+      "durableSeconds": {
+        "baselineMedian": 2.61393965,
+        "optimizedMedian": 2.4892769725,
+        "medianReductionPercent": 4.7691490314246465,
+        "baselineRange": [
+          2.313836224,
+          2.9470601849999998
+        ],
+        "optimizedRange": [
+          2.356299824,
+          3.083115598
+        ]
+      },
+      "searchableSeconds": {
+        "baselineMedian": 2.622477179,
+        "optimizedMedian": 2.498719156,
+        "medianReductionPercent": 4.719126785583372,
+        "baselineRange": [
+          2.325837235,
+          2.960325527
+        ],
+        "optimizedRange": [
+          2.365221667,
+          3.101599738
+        ]
+      },
+      "receiverSeconds": {
+        "baselineMedian": 2.2157425335,
+        "optimizedMedian": 2.1132350119999996,
+        "medianReductionPercent": 4.626328192476348,
+        "baselineRange": [
+          1.9643444220000001,
+          2.4497872320000003
+        ],
+        "optimizedRange": [
+          1.9340963059999998,
+          2.568874737
+        ]
+      },
+      "pairsWithLowerOptimizedSearchableTime": 3
+    },
+    {
+      "resources": 5000,
+      "samplesPerBuild": 4,
+      "durableSeconds": {
+        "baselineMedian": 12.949365997000001,
+        "optimizedMedian": 12.6664399995,
+        "medianReductionPercent": 2.1848637034859286,
+        "baselineRange": [
+          12.609816821999999,
+          13.552277763
+        ],
+        "optimizedRange": [
+          12.317970976,
+          13.049429405
+        ]
+      },
+      "searchableSeconds": {
+        "baselineMedian": 12.999146427,
+        "optimizedMedian": 12.7138829095,
+        "medianReductionPercent": 2.1944788382988745,
+        "baselineRange": [
+          12.655163204,
+          13.604197941
+        ],
+        "optimizedRange": [
+          12.366859437,
+          13.099327266
+        ]
+      },
+      "receiverSeconds": {
+        "baselineMedian": 11.02392955,
+        "optimizedMedian": 10.7487235645,
+        "medianReductionPercent": 2.4964418019162604,
+        "baselineRange": [
+          10.769636453999999,
+          11.492075151
+        ],
+        "optimizedRange": [
+          10.486448815,
+          10.988073497
+        ]
+      },
+      "pairsWithLowerOptimizedSearchableTime": 3
+    }
+  ]
+}
