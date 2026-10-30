@@ -2791,6 +2791,21 @@ Sync probe hash cache: Rust unit tests in `lib/src/db/write_log.rs` check that a
 
 ## Batched SYNC_PUSH persistence
 
+Search body extraction: `body_text_reuses_live_state_and_preserves_snapshot_fallback`
+checks loaded and snapshot-only state, live edits ahead of the saved snapshot,
+properties-only legacy docs, corrupt fallback bytes and empty resources.
+`body_text_preserves_prosemirror_precedence_in_loaded_state` checks rich-text
+precedence over the legacy body container. The ignored
+`measure_body_text_state_reuse` compares extraction with the previous
+export/reload path; it is a microbenchmark, not an initial-sync latency claim.
+`lib/benches/sync_import_bench.rs` exercises the full native reconcile/import
+pipeline with signed envelopes and a file-backed receiver, through LAST flush
+and complete title/body searches. After timing it checks projections, document
+state, version vectors, history metadata and envelope equality against the
+sender, then repeats validation after reopening. It excludes network/TLS and
+browser/OPFS; a normal reopen does not establish crash durability. See the
+adjacent benchmark notes and per-run measurements for the comparison limits.
+
 `db::test::sync_push_batches_local_ids_and_flushes_only_at_last` uses a counting
 KV adapter to verify that localId resources share one projection transaction,
 non-final chunks do not flush, and LAST flushes once. The test-only copy fails

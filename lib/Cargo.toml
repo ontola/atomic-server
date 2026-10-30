@@ -163,6 +163,11 @@ name = "loro_bench"
 harness = false
 
 [[bench]]
+name = "sync_import_bench"
+harness = false
+required-features = ["db-redb"]
+
+[[bench]]
 name = "populate_bench"
 harness = false
 required-features = ["db-redb"]
