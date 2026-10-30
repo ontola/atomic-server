@@ -61,3 +61,17 @@ Status: design and reproduction.
   Follow-up #2411 owns agent/drive routing preferences, conservative legacy
   migration, and retained-cache protection across A → sign-out → B transitions.
   This PR does not claim to isolate those preferences or all progress counters.
+- Additional user requirement: remain red unless the latest state is confirmed
+  elsewhere. The strict follow-up observes unsaved/resource save state, keeps
+  pending/syncing/refused states red, and waits for actual reconciliation ACKs.
+  Attachment-byte confirmation scope is being clarified because the existing
+  protocol acknowledges metadata before missing blobs arrive.
+- Original browser regression passed on 038e4b9ec (1 Chromium test, no skips or
+  retries); rerun it after the stricter acknowledgement changes. The initial CI
+  run was canceled while queued so the next run validates the final behavior.
+- Strict resource-state version reviewed and verified: 131 library tests,
+  25 sidebar/helper tests, one real Chromium journey with zero retries/skips,
+  app typecheck, compiler, targeted lint/format, and matching native build pass.
+  Screenshots of the local-only notice and local-save activity are shared in chat.
+  The final PR remains draft until attachment-byte assurance scope is resolved;
+  current server receipts do not establish that assurance.

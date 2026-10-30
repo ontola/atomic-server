@@ -1190,17 +1190,23 @@ the reader's active drive to receive live updates.
 `components/SideBar/syncStatus.test.tsx` mounts the sidebar status hook against a
 real Store. It covers a connected server with a local-only selected drive,
 registration/promotion, selected-drive receipts, foreign/absent drives, server
-and identity changes, and the existing progress/warning priorities. Counters
+and identity changes, unsaved edits, a later edit during an unacknowledged save,
+new/removed resources, the embedded desktop node, and red progress/warning states. Counters
 remain store-wide. These tests do not establish Cloud Vault or peer durability.
 `local-only-drive.test.ts` distinguishes locally settled commits from server
 acceptance. `websockets.test.ts` covers deferred flushes across context changes
 and late `SYNC_OK`/`SYNC_DIFF` responses after a drive becomes local-only.
+It also covers all-chunk acknowledgement, both orders of bidirectional sync,
+bounded remove-only verification, rejected transfers, and retry after terminal
+authentication, send and flush failures.
 `sidebar-drive-sync.spec.ts` uses a real server connection and local database to
 exercise the red local-only indicator, Sync page explanation, local activity
 wording, save/reload persistence, and switching back to a server-synced drive.
 Account/drive routing preferences remain browser-wide; #2411 owns isolation and
 the two-identity shared-drive transition tests. These indicator tests do not
 establish that isolation.
+Server resource-state receipts do not establish that every attachment byte is
+present remotely; that requires separate verification or protocol evidence.
 
 `driveSyncStatus.test.ts` rejects another drive's sync timestamp and scopes
 asynchronous hosting/usage results to the selected drive and server. It covers

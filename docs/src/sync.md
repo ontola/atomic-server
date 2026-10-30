@@ -20,11 +20,14 @@ Because every Resource is a [Loro CRDT](https://loro.dev) document, accepted edi
 The browser sidebar's sync indicator describes the selected Drive's server sync.
 A connection to a server used for another Drive does not make this Drive synced.
 A Drive excluded from server sync shows a red **Not syncing with a server** indicator;
-an eligible Drive without a completed sync shows **Sync not confirmed**.
-**Synced with server** requires a completed sync of the selected Drive with the
-current server and no pending work reported by the store.
+an eligible Drive without an acknowledged sync shows **Sync not confirmed**.
+The indicator stays red while edits are unsaved, saving, queued, blocked or
+being reconciled. **Synced with server** requires acknowledged synchronization
+of the selected Drive with the current server and no unconfirmed changes.
+The desktop app's embedded server does not count as another place.
 These labels do not certify Cloud Vault backups or browser peer copies; inspect
-those services separately on the Sync page.
+those services separately on the Sync page. Resource-state acknowledgements
+also do not establish that every file or image byte has arrived.
 
 The [transports reference](atomic-sync/transports.md) compares WebSocket, Iroh, WebRTC and HTTP, and how a Drive is found by identifier.
 

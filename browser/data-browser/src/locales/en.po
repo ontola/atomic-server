@@ -13411,6 +13411,7 @@ msgstr "Not syncing with a server"
 
 #: src/components/SideBar/syncStatus.tsx
 #: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
 msgid "Sync not confirmed"
 msgstr "Sync not confirmed"
 
@@ -13422,3 +13423,7 @@ msgstr "Synced with server"
 #: src/routes/SyncRoute.tsx
 msgid "Saved locally"
 msgstr "Saved locally"
+
+#: src/components/SideBar/syncStatus.tsx
+msgid "Changes not yet synced"
+msgstr "Changes not yet synced"

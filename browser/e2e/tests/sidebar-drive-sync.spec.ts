@@ -91,6 +91,11 @@ test.describe('sidebar drive sync', () => {
     await expect(localActivity).toBeVisible();
     await expect(localActivity.locator('..')).not.toContainText('outgoing');
     await expect(localActivity.locator('..')).not.toContainText('↑');
+    await localActivity.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: testInfo.outputPath('saved-locally-activity.png'),
+      fullPage: true,
+    });
 
     await page.reload();
     await expect(syncButton).toHaveAttribute(

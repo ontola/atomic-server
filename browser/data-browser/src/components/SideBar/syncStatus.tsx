@@ -1,18 +1,45 @@
 import { useEffect, useState, type JSX } from 'react';
 import { StoreEvents, type StoreSyncStatus, useStore } from '@tomic/react';
+import { ResourceEvents, type Resource } from '@tomic/lib';
 import { FaWifi, FaArrowsRotate, FaCircleExclamation } from 'react-icons/fa6';
 import { MdSignalWifiOff } from 'react-icons/md';
 import { styled, keyframes } from 'styled-components';
 import { currentDriveSync } from '../../helpers/driveSyncStatus';
+import { isRunningInTauri } from '../../helpers/tauri';
+import { isOriginWithoutNode } from '../../helpers/originNode';
 
-export type SidebarSyncStatus = StoreSyncStatus & { liveSyncedDrive: boolean };
+export type SidebarSyncStatus = StoreSyncStatus & {
+  liveSyncedDrive: boolean;
+  unsavedChanges: boolean;
+  refused: boolean;
+};
 
 function sidebarStatus(store: ReturnType<typeof useStore>): SidebarSyncStatus {
   const status = store.getSyncStatus();
 
+  const hostname = status.serverUrl ? new URL(status.serverUrl).hostname : '';
+  const embedded =
+    isRunningInTauri() &&
+    (hostname === 'localhost' || hostname === '127.0.0.1');
+  const unsavedChanges = [...store.resources.values()].some(
+    resource =>
+      status.drive &&
+      store.driveOfSubject(resource.subject) ===
+        store.normalizeSubject(status.drive) &&
+      (resource.hasUnsavedChanges() ||
+        resource.isSaving ||
+        store.getSaveState(resource).kind !== 'idle'),
+  );
+
   return {
     ...status,
-    liveSyncedDrive: !!status.drive && store.isLiveSyncedDrive(status.drive),
+    liveSyncedDrive:
+      !!status.drive &&
+      store.isLiveSyncedDrive(status.drive) &&
+      !embedded &&
+      !isOriginWithoutNode(status.serverUrl),
+    unsavedChanges: !!unsavedChanges,
+    refused: store.isDriveRefusedByServer(status.drive),
   };
 }
 
@@ -25,6 +52,59 @@ export function useSyncStatus(): SidebarSyncStatus {
 
   useEffect(() => {
     const refresh = () => setStatus(sidebarStatus(store));
+    const resourceSubscriptions = new Map<
+      string,
+      { resource: Resource; unsubscribe: () => void }
+    >();
+    const subjectsByResource = new WeakMap<Resource, string>();
+    let mounted = true;
+    let refreshQueued = false;
+
+    const queueRefresh = () => {
+      if (refreshQueued) return;
+      refreshQueued = true;
+      queueMicrotask(() => {
+        refreshQueued = false;
+        if (mounted) refresh();
+      });
+    };
+
+    const watchResource = (resource: Resource) => {
+      const subject = store.normalizeSubject(resource.subject);
+      const previous = subjectsByResource.get(resource);
+
+      if (previous && previous !== subject) {
+        resourceSubscriptions.get(previous)?.unsubscribe();
+        resourceSubscriptions.delete(previous);
+      }
+
+      const existing = resourceSubscriptions.get(subject);
+      if (existing?.resource === resource) return;
+      existing?.unsubscribe();
+      const local = resource.on(ResourceEvents.LocalChange, refresh);
+      const save = resource.on(ResourceEvents.SaveStateChange, refresh);
+      subjectsByResource.set(resource, subject);
+      resourceSubscriptions.set(subject, {
+        resource,
+        unsubscribe: () => {
+          local();
+          save();
+        },
+      });
+    };
+
+    for (const resource of store.resources.values()) watchResource(resource);
+    const unsubUpdated = store.on(StoreEvents.ResourceUpdated, resource => {
+      watchResource(resource);
+      queueRefresh();
+    });
+    const unsubRemoved = store.on(StoreEvents.ResourceRemoved, subject => {
+      const key = store.normalizeSubject(subject);
+      resourceSubscriptions.get(key)?.unsubscribe();
+      resourceSubscriptions.delete(key);
+      refresh();
+    });
+    refresh();
     const unsubConnection = store.on(StoreEvents.ConnectionChanged, refresh);
     const unsubSync = store.on(StoreEvents.SyncStatusChanged, refresh);
     const unsubAgent = store.on(StoreEvents.AgentChanged, refresh);
@@ -32,6 +112,11 @@ export function useSyncStatus(): SidebarSyncStatus {
     const unsubServer = store.on(StoreEvents.ServerURLChanged, refresh);
 
     return () => {
+      unsubUpdated();
+      unsubRemoved();
+      mounted = false;
+      for (const subscription of resourceSubscriptions.values())
+        subscription.unsubscribe();
       unsubAgent();
       unsubConnection();
       unsubSync();
@@ -70,25 +155,33 @@ export function getSyncIcon(status: SidebarSyncStatus): JSX.Element {
 
   if (status.blockedCount > 0) {
     return (
-      <WarningIcon>
+      <OfflineIcon>
         <FaCircleExclamation title='Changes could not sync' />
-      </WarningIcon>
+      </OfflineIcon>
     );
   }
 
   if (status.pendingDirtyCount > 0) {
     return (
-      <WarningIcon>
+      <OfflineIcon>
         <FaCircleExclamation title='Changes pending' />
-      </WarningIcon>
+      </OfflineIcon>
     );
   }
 
   if (!currentDriveSync(status)) {
     return (
-      <WarningIcon>
+      <OfflineIcon>
         <FaCircleExclamation title='Sync not confirmed' />
-      </WarningIcon>
+      </OfflineIcon>
+    );
+  }
+
+  if (status.unsavedChanges || status.refused) {
+    return (
+      <OfflineIcon>
+        <FaCircleExclamation title='Sync not confirmed' />
+      </OfflineIcon>
     );
   }
 
@@ -119,7 +212,8 @@ export function getSyncLabel(status: SidebarSyncStatus): string {
   if (status.pendingDirtyCount > 0)
     return `${status.pendingDirtyCount} changes pending`;
 
-  if (!currentDriveSync(status)) return 'Sync not confirmed';
+  if (status.unsavedChanges) return 'Changes not yet synced';
+  if (status.refused || !currentDriveSync(status)) return 'Sync not confirmed';
 
   return 'Synced with server';
 }
@@ -132,11 +226,7 @@ const spin = keyframes`
 const SpinningIcon = styled.span`
   display: inline-flex;
   animation: ${spin} 1s linear infinite;
-`;
-
-const WarningIcon = styled.span`
-  color: ${p => p.theme.colors.warning};
-  display: inline-flex;
+  color: ${p => p.theme.colors.alert};
 `;
 
 const OfflineIcon = styled.span`

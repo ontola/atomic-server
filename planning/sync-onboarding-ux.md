@@ -148,9 +148,11 @@ the selected workspace, rather than the store's global server connection.
 An unrelated saved server cannot make a local-only or foreign-origin workspace
 look synced. The red label is "Not syncing with a server", which makes no
 claim about Cloud Vault or browser peer backups. A workspace eligible for server
-sync remains "Sync not confirmed" until its sync with the current server
-completes; other workspaces' receipts do not count. Offline, active syncing and
-queued/blocked writes retain their existing presentation. Progress counters
+sync remains "Sync not confirmed" until its sync with the current server is
+acknowledged; other workspaces' receipts do not count. Unsaved edits, active
+saves, queued/blocked writes and reconciliation keep the icon red. A later edit
+cannot be certified by an earlier acknowledgement. The desktop embedded node
+does not count as a separate place. Progress counters
 remain store-wide and are not a new per-workspace accounting API.
 Saved server selection and local-only preferences are not yet isolated by
 identity/workspace; [#2411](https://github.com/ontola/atomic-server/issues/2411)
