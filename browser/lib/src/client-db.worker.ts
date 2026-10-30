@@ -65,7 +65,8 @@ export interface ClientDbInitRequest {
  * Everything else derives from it: the `WorkerRequest` wire union, the worker's
  * handler table (`handlers`, which must cover every key), and the typed
  * `call()` the `ClientDbWorker` proxy sends through. Add a method here, add its
- * handler below, and the proxy can call it.
+ * handler below, and the proxy can call it. A handler that writes sets `dirty`
+ * (or calls `flushNow()`), or a reload rolls its writes back.
  */
 export interface ClientDbRpc {
   init: [ClientDbInitRequest, ClientDbInitTimings];
@@ -244,6 +245,7 @@ const handlers: Handlers = {
   getResourceWithSnapshot: m => db!.getResourceWithSnapshot(m.subject),
   putResource: async m => {
     await db!.putResource(m.jsonAd);
+    dirty = true;
   },
   // Batch put: one postMessage for a whole seed loop. Processed in order, so
   // ordering-sensitive callers (properties seeded before others) are safe.
@@ -251,6 +253,8 @@ const handlers: Handlers = {
     for (const jsonAd of m.jsonAds) {
       await db!.putResource(jsonAd);
     }
+
+    dirty = true;
   },
   putResourceWithSnapshot: async m => {
     // One transaction: row, index entries and the Loro snapshot as the tab
@@ -300,12 +304,17 @@ const handlers: Handlers = {
     if (m.durable) flushNow();
     else dirty = true;
   },
-  applyPeerCommit: m => db!.applyPeerCommit(m.commitJsonAd),
+  applyPeerCommit: async m => {
+    await db!.applyPeerCommit(m.commitJsonAd);
+    dirty = true;
+  },
   applyCommit: async m => {
     await db!.applyCommit(m.commitJsonAd);
+    dirty = true;
   },
   removeResource: async m => {
     await db!.removeResource(m.subject);
+    dirty = true;
   },
   query: m =>
     db!.query(
@@ -333,6 +342,7 @@ const handlers: Handlers = {
   allSubjects: () => db!.allSubjects(),
   populate: async () => {
     await db!.populate();
+    dirty = true;
   },
   // Durability on demand. Writes commit with `Durability::None` and are only
   // persisted by a later Immediate commit, which otherwise happens on the
@@ -344,15 +354,27 @@ const handlers: Handlers = {
     dirty = false;
   },
   exportAllResources: () => db!.exportAllResources(),
-  importAllResources: m => db!.importAllResources(m.jsonArray),
+  importAllResources: async m => {
+    const count = await db!.importAllResources(m.jsonArray);
+
+    dirty = true;
+
+    return count;
+  },
   getLoroSnapshot: m => db!.getLoroSnapshot(m.subject),
   historyAttribution: async m =>
     (await db!.historyAttribution(m.subject)) as string,
   envelopesFor: m => db!.envelopesFor(JSON.stringify(m.subjects)) as string,
-  importEnvelopes: async m =>
-    (await db!.importEnvelopes(m.envelopes)) as number,
+  importEnvelopes: async m => {
+    const imported = (await db!.importEnvelopes(m.envelopes)) as number;
+
+    dirty = true;
+
+    return imported;
+  },
   putBlob: m => {
     db!.putBlob(m.hash, m.data);
+    dirty = true;
   },
   getBlob: m => db!.getBlob(m.hash),
   blake3Hash: m => db!.blake3Hash(m.data),
@@ -622,19 +644,8 @@ async function ensureInit(): Promise<void> {
 // server because the local DB query came back with 0 hits.
 let workQueue: Promise<void> = Promise.resolve();
 
-// Message types that mutate the DB. After any of these we owe the OPFS a
-// durable `flush()` (see below).
-const WRITE_OPS: ReadonlySet<WorkerRequest['type']> = new Set([
-  'putResource',
-  'putResources',
-  'applyCommit',
-  'removeResource',
-  'putBlob',
-  'importAllResources',
-  'populate',
-]);
-
 // Per-write redb commits use `Durability::None` (no fsync) for throughput;
+// every handler that writes sets `dirty` itself (or flushes on the spot);
 // they're only persisted to OPFS once a *subsequent* Immediate commit
 // (`db.flush()`) lands. Without that, every write is rolled back on the next
 // open (a page reload) — invisible online (the server re-fetches) but data
@@ -739,8 +750,6 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   workQueue = workQueue.then(async () => {
     try {
       const data = await handleMessage(msg);
-
-      if (WRITE_OPS.has(msg.type)) dirty = true;
 
       const response: WorkerResponse = { id: msg.id, type: 'ok', data };
       self.postMessage(response);
