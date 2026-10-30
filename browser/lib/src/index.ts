@@ -257,6 +257,7 @@ export * from './agent-grants.js';
 export * from './issue-access-agent.js';
 export {
   createApp,
+  APP_RESOURCE_VIEW_SHORTNAME,
   describeApp,
   updateApp,
   type AppDescription,
@@ -270,6 +271,7 @@ export {
   compareVersions,
   fetchCatalogAppModule,
   installCatalogApp,
+  migrateCatalogAppLayout,
   parseCatalogApp,
   readInstalledCatalogApps,
   resolveModuleUrl,
@@ -511,3 +513,8 @@ export {
   prepareAppPackageImport,
 } from './app-package.js';
 export type { AppPackage } from './app-package.js';
+
+export {
+  resolveResourceAppView,
+  resolveDefaultResourceAppView,
+} from './resource-app-view.js';

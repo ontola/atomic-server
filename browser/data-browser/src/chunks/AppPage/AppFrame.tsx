@@ -61,7 +61,12 @@ const IMPORT_WAITING = 'An import from this app is already waiting for you.';
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
   return (
     <AppFrameSession
-      key={JSON.stringify([props.app, props.drive, props.table])}
+      key={JSON.stringify([
+        props.app,
+        props.drive,
+        props.table,
+        props.resource,
+      ])}
       {...props}
     />
   );
@@ -81,6 +86,7 @@ function AppFrameSession({
   app,
   drive,
   table,
+  resource: targetResource,
   view,
   onOutcome,
   silent,
@@ -101,6 +107,8 @@ function AppFrameSession({
    * app that owns its data and an app that is a way of looking at data.
    */
   table?: string;
+  /** Host-selected folder or individual resource. Never a table row grant. */
+  resource?: string;
   /**
    * Told once, when the app either finishes rendering or fails.
    *
@@ -430,7 +438,16 @@ function AppFrameSession({
         return;
       }
 
-      void answer(store, app, drive, table, data, session.post, changes);
+      void answer(
+        store,
+        app,
+        drive,
+        table,
+        data,
+        session.post,
+        changes,
+        targetResource,
+      );
     });
     bridgeRef.current = bridge;
 
@@ -438,7 +455,17 @@ function AppFrameSession({
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, view, src, handleUI, forwardKey]);
+  }, [
+    store,
+    app,
+    drive,
+    table,
+    targetResource,
+    view,
+    src,
+    handleUI,
+    forwardKey,
+  ]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`, colorScheme);
@@ -693,6 +720,7 @@ async function answer(
   request: Parameters<typeof handleRequest>[3],
   post: (reply: HostReply) => void,
   changes: ViewChanges,
+  resource?: string,
 ): Promise<void> {
   try {
     post({
@@ -705,6 +733,7 @@ async function answer(
         table,
         proxyHost(store, app, drive),
         changes,
+        resource,
       ),
     });
   } catch (e) {

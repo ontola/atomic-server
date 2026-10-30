@@ -1,3 +1,4 @@
+import { appAgentOf } from './appAgent';
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
 import { HostError, toHostErrorCode } from '@tomic/plugin';
@@ -153,6 +154,8 @@ export async function handleRequest(
   proxy?: ProxyHost,
   /** This frame's `apply` and `undo` history. */
   changes?: ViewChanges,
+  /** Host-selected resource context; carries no implicit edit grant. */
+  resourceContext?: string,
 ): Promise<unknown> {
   switch (request.op) {
     case 'apply':
@@ -171,6 +174,7 @@ export async function handleRequest(
       return app;
 
     case 'data': {
+      if (resourceContext) return { resource: resourceContext };
       // The table it was pointed at, if any, and its own otherwise. So one
       // app can be its own thing on its own page and a view of someone
       // else's rows on a table tab, without knowing which it is.
@@ -266,7 +270,7 @@ export async function handleRequest(
 
     case 'context':
       return {
-        subject: table ?? app,
+        subject: resourceContext ?? table ?? app,
         agent: store.getAgent()?.subject,
       };
 
@@ -275,7 +279,7 @@ export async function handleRequest(
       // place a view may always write, so it is the only sensible default.
       const parent = request.parent ?? app;
 
-      await refuseOutsideApp(store, parent, app, table, 'create');
+      await refuseOutsideApp(store, parent, app, table, 'create', drive);
 
       const { subject } = await writeAsApp(store, drive, app, {
         op: 'create',
@@ -292,7 +296,7 @@ export async function handleRequest(
     case 'save': {
       const subject = required(request.subject, 'subject');
 
-      await refuseOutsideApp(store, subject, app, table, 'save');
+      await refuseOutsideApp(store, subject, app, table, 'save', drive);
 
       // `save` on the server only sets, so a property the view removed goes
       // as its own write. Without this, `resource.remove(p).save()` left `p`
@@ -324,7 +328,7 @@ export async function handleRequest(
     case 'destroy': {
       const subject = required(request.subject, 'subject');
 
-      await refuseOutsideApp(store, subject, app, table, 'destroy');
+      await refuseOutsideApp(store, subject, app, table, 'destroy', drive);
       await destroyAsApp(store, drive, app, subject);
 
       return { subject };
@@ -472,7 +476,8 @@ export function appChanges(
   table?: string,
 ): ViewChanges {
   return new ViewChanges(store, {
-    authorize: subject => refuseOutsideApp(store, subject, app, table, 'save'),
+    authorize: subject =>
+      refuseOutsideApp(store, subject, app, table, 'save', drive),
     writes: {
       create: async ({ parent, isA, propVals }) => {
         const { subject } = await writeAsApp(store, drive, app, {
@@ -606,8 +611,14 @@ async function refuseOutsideApp(
   app: string,
   table: string | undefined,
   op: 'create' | 'save' | 'destroy',
+  drive: string,
 ): Promise<void> {
   if (await isWithinApp(store, subject, app)) return;
+
+  // A user may move an integration's dataset outside its installation.
+  // Only the actual signing key's native ACL counts, never app-data or the
+  // resource being displayed. The server rechecks user and app rights.
+  if (await hasNativeAppWrite(store, drive, app, subject)) return;
 
   // A row of the table this app is a view of: the server decides, from the
   // grant someone gave it there. For `create` the subject is the parent.
@@ -629,6 +640,22 @@ async function refuseOutsideApp(
   throw new Error(
     'This app may only write its own data. Writing here needs rights its key does not have.',
   );
+}
+
+/** A failed/missing identity lookup must never become authority. */
+export async function hasNativeAppWrite(
+  store: Store,
+  drive: string,
+  app: string,
+  subject: string,
+): Promise<boolean> {
+  const target = await store.getResource(subject);
+  if (!target.canWrite) return false;
+  const agent = await appAgentOf(store, { drive, app }).catch(() => undefined);
+  if (!agent) return false;
+  const [allowed] = await target.canWrite(agent);
+
+  return allowed === true;
 }
 
 /** Longer subjects are not something a person could be sent to. */

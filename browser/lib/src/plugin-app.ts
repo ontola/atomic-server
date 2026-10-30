@@ -2,7 +2,7 @@ import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 import { classes } from './urls.js';
-import { issueAccessAgent } from './issue-access-agent.js';
+import { grantAccessAgent, issueAccessAgent } from './issue-access-agent.js';
 import type { Store } from './store.js';
 import {
   ensureSchema,
@@ -55,6 +55,10 @@ export interface CreateAppOptions {
    * is given. Never shown as table columns.
    */
   rowExtras?: string[];
+  /** A view-only installation has no dataset; folder datasets live at the drive root. */
+  dataKind?: 'table' | 'folder' | 'none';
+  /** Store executable installation metadata under the drive ontology, outside content lists. */
+  installationHidden?: boolean;
 }
 
 export interface CreatedApp {
@@ -64,9 +68,9 @@ export interface CreatedApp {
   /** The plugin the app opens to. */
   entrypoint: string;
   /** The table this app's rows live in. */
-  data: string;
-  /** The class those rows are. */
-  rowClass: string;
+  data?: string;
+  /** The class those rows are; absent on a view-only installation. */
+  rowClass?: string;
   /** The app's own agent. Writes it makes are attributable to this DID. */
   agent: string;
   /**
@@ -90,6 +94,16 @@ export interface CreatedApp {
  * An app reuses an existing class by naming its subject, which is how Atomic
  * already works, so nothing here is needed to make apps compose.
  */
+export const APP_RESOURCE_VIEW_SHORTNAME = 'app-resource-view';
+
+export function createApp(
+  store: SchemaStore,
+  options: CreateAppOptions & { dataKind?: 'table' | 'folder' },
+): Promise<CreatedApp & { data: string; rowClass: string }>;
+export function createApp(
+  store: SchemaStore,
+  options: CreateAppOptions,
+): Promise<CreatedApp>;
 export async function createApp(
   store: SchemaStore,
   options: CreateAppOptions,
@@ -111,8 +125,15 @@ export async function createApp(
 
   const schema = await ensureSchema(store, options.drive, pluginSchema());
 
+  const driveResource = await store.getResource(options.drive);
+  const metadataParent = driveResource.get(server.properties.defaultOntology);
+  if (options.installationHidden && typeof metadataParent !== 'string')
+    throw new Error('This drive has no ontology for installation metadata');
+
   const app = await store.newResource({
-    parent: options.drive,
+    parent: options.installationHidden
+      ? (metadataParent as string)
+      : options.drive,
     isA: [schema.classes.app],
     propVals: {
       [core.properties.name]: options.name,
@@ -150,40 +171,55 @@ export async function createApp(
   // the data rather than the app can just open it.
   const rows = options.rowName ?? { singular: 'Item', plural: 'Items' };
 
-  const rowClass =
-    sharedClass ??
-    (await store.newResource({
-      parent: ontology.subject,
-      isA: [core.classes.class],
+  let rowClass: Awaited<ReturnType<SchemaStore['getResource']>> | undefined;
+  let data: Awaited<ReturnType<SchemaStore['getResource']>> | undefined;
+
+  if (options.dataKind !== 'none') {
+    rowClass =
+      sharedClass ??
+      (await store.newResource({
+        parent: ontology.subject,
+        isA: [core.classes.class],
+        propVals: {
+          [core.properties.shortname]: slug(rows.singular),
+          [core.properties.name]: rows.singular,
+          [core.properties.description]: `A row in ${options.name}.`,
+          [core.properties.recommends]: [core.properties.name],
+        },
+      }));
+    if (!sharedClass) await rowClass.save();
+
+    // Registered on the ontology, or it is a class the app's own vocabulary
+    // does not list — and nothing that reads the ontology would find it.
+    const ontologyResource = await store.getResource(ontology.subject);
+    await ontologyResource.set(core.properties.classes, [rowClass.subject]);
+    await ontologyResource.save();
+
+    data = await store.newResource({
+      parent: options.dataKind === 'folder' ? options.drive : app.subject,
+      isA: [
+        options.dataKind === 'folder'
+          ? dataBrowser.classes.folder
+          : dataBrowser.classes.table,
+      ],
       propVals: {
-        [core.properties.shortname]: slug(rows.singular),
-        [core.properties.name]: rows.singular,
-        [core.properties.description]: `A row in ${options.name}.`,
-        [core.properties.recommends]: [core.properties.name],
+        // Named for what it holds, not for the app. Both appear in the sidebar
+        // under the app, and two entries with the same name is a question the
+        // reader has to answer every time. "Feeding sessions" also tells someone
+        // who never opens the app what is in here — which is the point of the
+        // rows being an ordinary table.
+        [core.properties.name]:
+          options.dataKind === 'folder' ? options.name : rows.plural,
+        ...(options.dataKind === 'folder'
+          ? {
+              [dataBrowser.properties.displayStyle]: classes.displayStyles.grid,
+            }
+          : {}),
+        [core.properties.classtype]: rowClass.subject,
       },
-    }));
-  if (!sharedClass) await rowClass.save();
-
-  // Registered on the ontology, or it is a class the app's own vocabulary
-  // does not list — and nothing that reads the ontology would find it.
-  const ontologyResource = await store.getResource(ontology.subject);
-  await ontologyResource.set(core.properties.classes, [rowClass.subject]);
-  await ontologyResource.save();
-
-  const data = await store.newResource({
-    parent: app.subject,
-    isA: [dataBrowser.classes.table],
-    propVals: {
-      // Named for what it holds, not for the app. Both appear in the sidebar
-      // under the app, and two entries with the same name is a question the
-      // reader has to answer every time. "Feeding sessions" also tells someone
-      // who never opens the app what is in here — which is the point of the
-      // rows being an ordinary table.
-      [core.properties.name]: rows.plural,
-      [core.properties.classtype]: rowClass.subject,
-    },
-  });
-  await data.save();
+    });
+    await data.save();
+  }
 
   const entrypoint = await store.newResource({
     parent: app.subject,
@@ -201,11 +237,14 @@ export async function createApp(
   const saved = await store.getResource(app.subject);
   await saved.set(server.properties.defaultOntology, ontology.subject);
   await saved.set(schema.properties.entrypoint, entrypoint.subject);
-  await saved.set(schema.properties['app-data'], data.subject);
+  if (data) await saved.set(schema.properties['app-data'], data.subject);
   // What it can show. Its own rows to begin with — an author who wants it
   // offered on someone else's table adds that class deliberately, rather than
   // every app being offered for every table.
-  await saved.set(schema.properties.renders, [rowClass.subject]);
+  await saved.set(
+    schema.properties.renders,
+    rowClass ? [rowClass.subject] : [],
+  );
 
   if (options.rowExtras?.length) {
     await saved.set(schema.properties['row-extras'], options.rowExtras);
@@ -234,12 +273,21 @@ export async function createApp(
     parent: await appIdentitiesFolder(store, options.drive, schema),
   });
 
+  if (data && options.dataKind === 'folder') {
+    await grantAccessAgent(
+      store as unknown as Store,
+      key.subject,
+      [data.subject],
+      true,
+    );
+  }
+
   return {
     app: app.subject,
     ontology: ontology.subject,
     entrypoint: entrypoint.subject,
-    data: data.subject,
-    rowClass: rowClass.subject,
+    data: data?.subject,
+    rowClass: rowClass?.subject,
     agent: key.subject,
     secret: key.secret,
   };

@@ -3208,3 +3208,17 @@ localId durability contract still uses one flush.
 Manual acceptance measurements and their limits are recorded in PR #2361.
 The private-dataset harness is kept outside the repository; it is not a CI
 speed assertion. Crash durability is covered by the abort test above.
+
+Resource-level drive-app views: `resource-app-view.test.ts` checks readable
+same-drive App bindings, hidden installation ancestry and foreign/cyclic
+renderer rejection. It also checks that table-only `renders` declarations never
+replace item resource pages; default resource views use `resource-renders` only.
+`catalog-app-layout.test.ts` covers in-place table-to-folder
+migration, repeated migration, note/baseline/identity preservation, the missing
+host-identity guard and refusal to use an unrelated app-data pointer as a native
+grant. `plugin-app.test.ts` covers hidden view-only installation without a table
+or row class and folder creation with native access for the existing app key.
+`hostStore.test.ts` distinguishes resource context from table grants, checks
+native app-key access to a moved dataset and refuses unrelated writes. These
+are offline tests; production deployment and live provider behavior are separate
+acceptance steps.
