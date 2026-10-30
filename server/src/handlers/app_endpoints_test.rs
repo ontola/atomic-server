@@ -17,6 +17,103 @@ use atomic_lib::{agents::Agent, db::app_agent::AppAgentKey, urls, Storelike, Val
 use crate::appstate::AppState;
 use crate::plugins::test_fixture::{fixture, genesis, Fixture};
 
+/// An interrupted browser install must be repeatable without changing identity,
+/// overwriting a replacement, or undoing revocation.
+#[actix_rt::test]
+async fn app_key_handover_initializes_once_and_never_revives_a_key() {
+    use actix_web::http::Method;
+    let fixture = fixture("app_key_handover").await;
+    let app = genesis(
+        &fixture.appstate.store,
+        vec![
+            (
+                urls::PARENT,
+                Value::AtomicUrl(fixture.drive.as_str().into()),
+            ),
+            (urls::NAME, Value::String("Offline app".into())),
+        ],
+    )
+    .await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let agent = Agent::new(Some("pending app")).unwrap();
+    let other = Agent::new(Some("replacement app")).unwrap();
+    let payload = |agent: &Agent| {
+        serde_json::json!({
+            "drive": fixture.drive, "app": app,
+            "secret": agent.build_secret().unwrap(), "initializeOnly": true
+        })
+        .to_string()
+    };
+    let post = |body: &str| {
+        signed_v2("/app-agent", &fixture.appstate, Method::POST, body, body).to_request()
+    };
+    let query = format!(
+        "/app-agent?drive={}&app={}&handover=true",
+        urlencoding::encode(&fixture.drive),
+        urlencoding::encode(&app)
+    );
+    let probe = test::call_service(
+        &service,
+        signed_v2(&query, &fixture.appstate, Method::GET, "", "").to_request(),
+    )
+    .await;
+    assert_eq!(probe.status(), 200);
+    let probe: serde_json::Value = serde_json::from_str(&body_of(probe)).unwrap();
+    assert_eq!(probe["handover"], "initialize-only-v1");
+    assert_eq!(probe["state"], "missing");
+
+    let body = payload(&agent);
+    let first = test::call_service(&service, post(&body)).await;
+    assert_eq!(first.status(), 200);
+    let first = body_of(first);
+    let again = test::call_service(&service, post(&body)).await;
+    assert_eq!(again.status(), 200);
+    assert_eq!(
+        body_of(again),
+        first,
+        "a lost response retries idempotently"
+    );
+    let replaced = test::call_service(&service, post(&payload(&other))).await;
+    assert_eq!(replaced.status(), 409);
+    let key = AppAgentKey::new(&fixture.drive, &app);
+    assert_eq!(
+        fixture
+            .appstate
+            .store
+            .get_app_agent_info(&key)
+            .unwrap()
+            .unwrap()
+            .agent,
+        agent.subject.to_string()
+    );
+
+    let deleted = test::call_service(
+        &service,
+        signed_v2(&query, &fixture.appstate, Method::DELETE, "", "").to_request(),
+    )
+    .await;
+    assert_eq!(deleted.status(), 200);
+    let stale = test::call_service(&service, post(&body)).await;
+    assert_eq!(
+        stale.status(),
+        409,
+        "a queued retry cannot revive a revoked identity"
+    );
+    assert!(fixture.appstate.store.app_agent_was_revoked(&key).unwrap());
+    let probe = test::call_service(
+        &service,
+        signed_v2(&query, &fixture.appstate, Method::GET, "", "").to_request(),
+    )
+    .await;
+    let probe: serde_json::Value = serde_json::from_str(&body_of(probe)).unwrap();
+    assert_eq!(probe["state"], "revoked");
+}
+
 /// Signs as the store's default agent, the way every other server test does.
 fn signed(path: &str, appstate: &AppState) -> TestRequest {
     let origin = appstate.config.get_origin();

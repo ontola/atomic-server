@@ -253,6 +253,12 @@ registerCustomDeleteDialogs();
 // Register global event handlers.
 registerHandlers(store);
 
+// App resources sync through the normal outbox; signing keys deliberately do
+// not. Resume their encrypted local handovers after that outbox has drained.
+import { startAppKeyRecovery } from './chunks/AppPage/appKeyHandover';
+const stopAppKeyRecovery = startAppKeyRecovery(store);
+if (import.meta.hot) import.meta.hot.dispose(stopAppKeyRecovery);
+
 // Make the Store available globally for debugging
 window.store = store;
 

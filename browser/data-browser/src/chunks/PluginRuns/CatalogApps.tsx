@@ -135,8 +135,8 @@ export function CatalogApps({
     try {
       const created = await installCatalogApp(store, { drive, app });
 
-      // As for an app from the New menu: it still works if this fails, but
-      // cannot write as itself while nobody is signed in.
+      // As for an app from the New menu, failed key handovers stay encrypted
+      // locally and resume when this node reconnects and resources have synced.
       try {
         await handOverAppKey(store, {
           drive,

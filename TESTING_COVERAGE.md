@@ -2810,3 +2810,20 @@ localId durability contract still uses one flush.
 Manual acceptance measurements and their limits are recorded in PR #2361.
 The private-dataset harness is kept outside the repository; it is not a CI
 speed assertion. Crash durability is covered by the abort test above.
+
+App identity handover recovery (2026-10-30):
+`browser/data-browser/src/chunks/AppPage/appKeyHandover.test.ts` reproduces a
+failed key handover losing its only copy, then covers an encrypted browser-local
+queue, retry after reload and resource sync, account/node/lock isolation,
+authenticated metadata, older-node compatibility, cancellation after revocation
+or replacement, failed requests, and the successful recovery notification.
+`server/src/handlers/app_endpoints_test.rs` checks the initialization-only protocol
+against a real store: first handover, an idempotent retry after a lost response,
+replacement refusal and a revoked key staying revoked. The existing
+`localDbKey.test.ts` checks the local cache key's wrapping primitive.
+`browser/e2e/tests/apps.spec.ts` blocks the handover POST, reloads the page,
+then unblocks it and verifies automatic frame recovery and a persisted app write.
+Existing installs whose secret was already discarded require reinstalling;
+this does not rotate an app identity or repair provider delegations. New online
+installations still work with older nodes; automatic replay requires a node
+that advertises the initialization-only protocol.
