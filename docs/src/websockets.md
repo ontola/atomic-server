@@ -64,13 +64,12 @@ earlier. Their names are never reused.
 
 **Deprecated clients.** The baseline for a current client is the client
 capability `canonical-scheme`, which every client since AtomicServer
-v0.41.0-beta.8 lists in its `HELLO`. A connection whose `HELLO` lacks it, or
-that authenticates and never sends a `HELLO`, gets one
-`ERROR{request_id 0, DEPRECATED_CLIENT (14)}` notice and a warning in the server
-log. It is a notice only: the connection keeps working and no request is
-affected. A client that receives it should log it and carry on, and a client
-that finds `canonical-scheme` missing from a server's `AUTH_OK` should warn the
-same way. Support for such clients will be removed in a coming release.
+v0.41.0-beta.8 lists in its `HELLO`. A connection whose `HELLO` lacks it gets
+one `ERROR{request_id 0, DEPRECATED_CLIENT (14)}` notice and a warning in the
+server log; one that authenticates and never sends a `HELLO` is only logged. It
+is a notice only: the connection keeps working and no request is affected. A
+client that receives it should log it and carry on. Support for such clients
+will be removed in a coming release.
 
 `AUTH_OK (0x02)`'s payload is a JSON array of capability names, UTF-8, with
 no length prefix. A responder with nothing to advertise sends a bare

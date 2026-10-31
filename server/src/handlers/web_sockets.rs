@@ -127,10 +127,6 @@ pub async fn web_socket_handler(
     Ok(result)
 }
 
-/// How long after a successful `AUTH` a connection may still send its
-/// `HELLO` before it counts as having sent none.
-const HELLO_GRACE: Duration = Duration::from_secs(3);
-
 pub struct WebSocketConnection {
     hb: Instant,
     /// `scheme://host[:port]` the upgrade request arrived on; one of the two
@@ -249,6 +245,15 @@ impl Actor for WebSocketConnection {
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
+        // A client that never sent a HELLO predates v0.41.0-beta.5, older
+        // still than the `DEPRECATED_CLIENT` baseline. It would not know the
+        // notice either, so it is only logged.
+        if self.is_authenticated() && self.client_capabilities.is_empty() {
+            tracing::warn!(
+                connection = %self.connection_id,
+                "deprecated client: authenticated without a HELLO"
+            );
+        }
         // Remove ourselves from every subscription map. Without this,
         // closed connections leave stale `Addr`s in `CommitMonitor`,
         // which every subsequent fanout iterates over (do_send to a
@@ -503,18 +508,6 @@ impl WebSocketConnection {
                         actor.agent = agent;
                         for response in responses {
                             ctx.binary(response);
-                        }
-                        // A client that authenticates without ever sending a
-                        // HELLO predates `canonical-scheme` too. The browser
-                        // sends its HELLO before AUTH, the Rust `WsClient`
-                        // right after `AUTH_OK`, so give a late HELLO a
-                        // moment before concluding there is none.
-                        if actor.is_authenticated() && !actor.deprecation_checked {
-                            ctx.run_later(HELLO_GRACE, |actor, ctx| {
-                                if actor.client_capabilities.is_empty() {
-                                    actor.notify_if_deprecated(ctx);
-                                }
-                            });
                         }
                     }),
                 );

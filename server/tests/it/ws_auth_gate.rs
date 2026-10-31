@@ -500,13 +500,6 @@ async fn auth_nonce_binds_the_proof_to_its_connection() {
     a.authenticate_with_frame(proof_for_a)
         .await
         .expect("the proof authenticates on the connection whose challenge it answers");
-    assert!(
-        a.server_capabilities()
-            .iter()
-            .any(|c| c == "canonical-scheme"),
-        "the server advertises canonical-scheme: {:?}",
-        a.server_capabilities()
-    );
 
     // A nonce-less proof for the origin (pre-2026-09 client) still works.
     let legacy = protocol::encode_auth(&alice, &server_url).unwrap();
@@ -566,13 +559,6 @@ async fn subscriptions_are_rebound_when_auth_changes_identity() {
 
     // The same socket re-authenticates as Mallory, who may not read the drive.
     ws.authenticate(&mallory).await.unwrap();
-    assert!(
-        ws.server_capabilities()
-            .iter()
-            .any(|c| c == "canonical-scheme"),
-        "{:?}",
-        ws.server_capabilities()
-    );
     // Give the monitor a moment to process the rebind.
     tokio::time::sleep(Duration::from_millis(300)).await;
     while rx.try_recv().is_ok() {}
@@ -762,39 +748,4 @@ async fn current_client_gets_no_deprecation_notice() {
     let (codes, keepalive) = raw::drain(&mut ws, 1500).await;
     assert!(codes.is_empty(), "no notice expected, got {codes:?}");
     assert!(keepalive);
-}
-
-/// A client that authenticates and never sends a `HELLO` is noticed too,
-/// once the grace period for a late `HELLO` has passed; one that sends its
-/// `HELLO` after `AUTH_OK` (the Rust `WsClient`) is not.
-#[tokio::test]
-async fn auth_without_hello_gets_deprecation_notice() {
-    let port = start_server("ws_gate_deprecated_no_hello");
-    wait_for_server(port).await;
-    let server_url = format!("http://localhost:{port}");
-    let client = Client::new(&server_url).await.unwrap();
-    let alice = client.new_agent("Alice").await.unwrap();
-
-    let mut silent = raw::connect(port).await;
-    raw::send(
-        &mut silent,
-        protocol::encode_auth(&alice, &server_url).unwrap(),
-    )
-    .await;
-    let (codes, _) = raw::drain(&mut silent, 5000).await;
-    assert_eq!(codes, vec![protocol::error_code::DEPRECATED_CLIENT]);
-
-    let mut late = raw::connect(port).await;
-    raw::send(
-        &mut late,
-        protocol::encode_auth(&alice, &server_url).unwrap(),
-    )
-    .await;
-    raw::send(
-        &mut late,
-        protocol::encode_hello_with_caps("late", protocol::CLIENT_CAPABILITIES),
-    )
-    .await;
-    let (codes, _) = raw::drain(&mut late, 5000).await;
-    assert!(codes.is_empty(), "no notice expected, got {codes:?}");
 }

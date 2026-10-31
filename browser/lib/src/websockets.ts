@@ -15,7 +15,6 @@ import {
   isBlobSubject,
   canonicalizeScheme,
   emitSubjectForCaps,
-  CAP_CANONICAL_SCHEME,
 } from './subject.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
@@ -1238,16 +1237,6 @@ export class WSClient {
     this.store.setServerConnected(connected, error);
   }
 
-  /** Deprecation warnings already logged by this socket. */
-  private _warned = new Set<string>();
-
-  private warnOnce(key: string, message: string): void {
-    if (this._warned.has(key)) return;
-
-    this._warned.add(key);
-    console.warn(message);
-  }
-
   private handleMessage(ev: MessageEvent) {
     // Any inbound frame proves the socket is alive.
     this._lastFrameAt = Date.now();
@@ -1278,13 +1267,6 @@ export class WSClient {
         // Resolved by waitForTag. The payload is the server's capability
         // list; remember it so features negotiate instead of guessing.
         this._serverCaps = decodeAuthOk(payload);
-
-        if (!this._serverCaps.includes(CAP_CANONICAL_SCHEME)) {
-          this.warnOnce(
-            'server',
-            '[WS] This server predates AtomicServer v0.41.0-beta.8; support for it will be removed in a coming release.',
-          );
-        }
 
         break;
 
@@ -1326,7 +1308,7 @@ export class WSClient {
           // `canonical-scheme` and will stop working in a coming release.
           // Nothing is pending on it, so neither `rejectAllPending` nor a
           // toast is right.
-          this.warnOnce('client', `[WS] ${msg.message}`);
+          console.warn(`[WS] ${msg.message}`);
         } else if (msg.code === ErrorCode.SYNC_REJECTED) {
           // Our SYNC_PUSH was refused as a whole (no write right on the
           // drive, quota, not enrolled). Nothing we sent landed and no

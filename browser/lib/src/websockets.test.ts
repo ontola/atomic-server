@@ -1194,7 +1194,7 @@ describe('WSClient.postCommit', () => {
     client.close();
   });
 
-  it('logs a DEPRECATED_CLIENT notice once and fails nothing', async ({
+  it('logs a DEPRECATED_CLIENT notice and fails nothing', async ({
     expect,
   }) => {
     const { client, socket } = await postingClient();
@@ -1204,13 +1204,13 @@ describe('WSClient.postCommit', () => {
     const pending = client.postCommit(signedCommit());
     await vi.waitFor(() => expect(sentRequestIds(socket)).toHaveLength(1));
 
-    const notice = encodeError(
-      0,
-      ErrorCode.DEPRECATED_CLIENT,
-      'This client predates AtomicServer v0.41.0-beta.8',
+    socket.receive(
+      encodeError(
+        0,
+        ErrorCode.DEPRECATED_CLIENT,
+        'This client predates AtomicServer v0.41.0-beta.8',
+      ),
     );
-    socket.receive(notice);
-    socket.receive(notice);
 
     expect(warn).toHaveBeenCalledTimes(1);
     expect(toast).not.toHaveBeenCalled();
