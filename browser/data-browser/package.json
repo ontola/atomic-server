@@ -31,7 +31,6 @@
     "@sentry/react": "^10.73.0",
     "@tanstack/react-router": "^1.170.7",
     "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-barcode-scanner": "^2.4.5",
     "@tiptap/core": "^3.30.4",
     "@tiptap/extension-drag-handle": "^3.30.4",
     "@tiptap/extension-drag-handle-react": "^3.30.4",
