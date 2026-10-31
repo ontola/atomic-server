@@ -69,6 +69,10 @@ https://github.com/user-attachments/assets/32e82de5-11ca-4c2e-8c25-b293d79f6023
 
 Check out the [documentation] for installation instructions, API docs, and more.
 
+## One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/AtomicServer/)
+
 ## Contribute
 
 Issues and PRs are welcome!
