@@ -410,6 +410,10 @@ export default defineConfig(({ mode }) => {
             ],
           },
           workbox: {
+            // The Sentry upload deletes the build's source maps, but workbox
+            // writes its own (`sw.js.map`, `workbox-*.js.map`) afterwards,
+            // which would then be served publicly. Never emit them.
+            sourcemap: false,
             // See https://github.com/atomicdata-dev/atomic-data-browser/issues/294
             // index.html is excluded from precaching because atomic-server injects
             // CSP nonces dynamically. Instead we use runtime caching with NetworkFirst
