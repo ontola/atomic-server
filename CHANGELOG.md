@@ -20,6 +20,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - Class constraints: `class_constraints::violations` (Rust) and `constraintViolations` (`@tomic/lib`) list every value of a resource that breaks its classes' constraints, so apps can check data that arrived by sync, which stays unchecked. `devtools.inspect` shows them.
 - Loro documents: strings that start with `[`, `{`, `atomic:`, `did:ad:` or `http(s)://` are tagged as `string` in the `datatypes` map so they are no longer read back as nested resources or URLs, and JSON `null` is kept inside nested maps and lists.
 - `RedbStore::flush` no longer returns before a concurrent flush's durable commit finishes, and keeps retrying after an early error #2378
+- A `SYNC_PUSH` imports an unstamped child (`parent` set, no `drive`) in the same frame as its parent regardless of entry order. The child is still skipped, with no snapshot left behind, when that parent is missing, rejected, or belongs to another drive. [#2063](https://github.com/ontola/atomic-server/issues/2063)
 
 ## [v0.41.0-beta.8] - 2026-10-10
 
