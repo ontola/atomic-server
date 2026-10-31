@@ -1557,6 +1557,73 @@ impl Commit {
         })
     }
 
+    /// Parses a signed JSON-AD commit straight into a [`Commit`], without
+    /// building an Atomic Resource first. A genesis commit omits `subject`;
+    /// it is derived from the signature. Unknown keys (`@id`, `isA`, ...)
+    /// are ignored: only the fields below are signed.
+    pub fn from_json_ad(json: &str) -> AtomicResult<Commit> {
+        let map: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(json).map_err(|e| {
+                crate::AtomicError::parse_error(&format!("Invalid JSON: {e}"), None, None)
+            })?;
+        Self::from_json_map(&map)
+    }
+
+    /// [`Commit::from_json_ad`] for an already parsed object.
+    pub fn from_json_map(map: &serde_json::Map<String, serde_json::Value>) -> AtomicResult<Commit> {
+        let bad = |msg: &str, prop: &str| crate::AtomicError::parse_error(msg, None, Some(prop));
+        let text = |prop: &str| -> AtomicResult<Option<String>> {
+            match map.get(prop) {
+                None => Ok(None),
+                Some(serde_json::Value::String(s)) => Ok(Some(s.clone())),
+                Some(_) => Err(bad("must be a string", prop)),
+            }
+        };
+        let flag = |prop: &str| -> AtomicResult<Option<bool>> {
+            match map.get(prop) {
+                None => Ok(None),
+                Some(serde_json::Value::Bool(b)) => Ok(Some(*b)),
+                Some(_) => Err(bad("must be a boolean", prop)),
+            }
+        };
+        let url_of = |prop: &str| -> AtomicResult<Option<String>> {
+            let found = text(prop)?;
+            if let Some(url) = &found {
+                crate::utils::check_valid_url(url)?;
+            }
+            Ok(found)
+        };
+        let signature = text(urls::SIGNATURE)?.ok_or_else(|| {
+            crate::AtomicError::parse_error("No signature field in Commit.", None, None)
+        })?;
+        let subject = match url_of(urls::SUBJECT)? {
+            Some(subject) => subject,
+            None => crate::identifiers::resource_subject(&signature),
+        };
+        let created_at = map
+            .get(urls::CREATED_AT)
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| bad("createdAt must be an integer", urls::CREATED_AT))?;
+        let signer = url_of(SIGNER)?.ok_or_else(|| bad("signer is required", SIGNER))?;
+        let loro_update = text(urls::LORO_UPDATE)?
+            .map(|b64| {
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &b64)
+                    .map_err(|e| format!("loroUpdate is not valid Base64: {e}"))
+            })
+            .transpose()?;
+        Ok(Commit {
+            subject: subject.into(),
+            created_at,
+            signer: signer.into(),
+            loro_update,
+            destroy: flag(urls::DESTROY)?,
+            previous_commit: url_of(urls::PREVIOUS_COMMIT)?,
+            is_genesis: flag(urls::IS_GENESIS)?,
+            url: Some(crate::identifiers::commit_subject(&signature)),
+            signature: Some(signature),
+        })
+    }
+
     /// Converts a Resource of a Commit into a Commit
     pub fn from_resource(resource: Resource) -> AtomicResult<Commit> {
         let subject = resource.get(urls::SUBJECT)?.to_string();

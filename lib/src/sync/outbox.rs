@@ -757,10 +757,7 @@ mod tests {
     /// binding records each with `mark_dirty`.
     async fn record_all(outbox: &Outbox, device: &Db, subject: &str) {
         for envelope in crate::envelopes::envelopes(device, subject) {
-            let resource = crate::parse::parse_json_ad_commit_resource(&envelope.json, device)
-                .await
-                .unwrap();
-            let commit = crate::commit::Commit::from_resource(resource).unwrap();
+            let commit = crate::commit::Commit::from_json_ad(&envelope.json).unwrap();
             let response = CommitResponse {
                 commit,
                 commit_resource: Resource::new("x".into()),
