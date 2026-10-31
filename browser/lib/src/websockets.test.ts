@@ -372,9 +372,12 @@ describe('WSClient handshake', () => {
       payload['https://atomicdata.dev/properties/auth/requestedSubject'],
     ).toBe('https://example.com#0badf00d');
 
-    socket.receive(encodeAuthOk(['auth-nonce', 'commit-ok-slim']));
+    socket.receive(encodeAuthOk(['canonical-scheme', 'commit-ok-slim']));
     await auth;
-    expect(client.serverCapabilities).toEqual(['auth-nonce', 'commit-ok-slim']);
+    expect(client.serverCapabilities).toEqual([
+      'canonical-scheme',
+      'commit-ok-slim',
+    ]);
     client.close();
   });
 
@@ -1188,6 +1191,36 @@ describe('WSClient.postCommit', () => {
     );
     await pending;
     expect(report).not.toHaveBeenCalled();
+    client.close();
+  });
+
+  it('logs a DEPRECATED_CLIENT notice once and fails nothing', async ({
+    expect,
+  }) => {
+    const { client, socket } = await postingClient();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const toast = vi.spyOn(client['store'], 'notifyError');
+
+    const pending = client.postCommit(signedCommit());
+    await vi.waitFor(() => expect(sentRequestIds(socket)).toHaveLength(1));
+
+    const notice = encodeError(
+      0,
+      ErrorCode.DEPRECATED_CLIENT,
+      'This client predates AtomicServer v0.41.0-beta.8',
+    );
+    socket.receive(notice);
+    socket.receive(notice);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(toast).not.toHaveBeenCalled();
+
+    // The request that was in flight is still answered normally.
+    socket.receive(
+      encodeCommitOkSlim(sentRequestIds(socket)[0], 'did:ad:commit:sig-abc'),
+    );
+    await pending;
+    warn.mockRestore();
     client.close();
   });
 

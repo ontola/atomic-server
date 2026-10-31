@@ -33,12 +33,7 @@ export const Tag = {
   SYNC_PUSH: 0x33,
   BLOB_REQUEST: 0x34,
   BLOB_RESPONSE: 0x35,
-  /**
-   * Reserved (do not reuse). Previously `QUERY_UPDATE` — retired in
-   * `planning/sync.md` ("QUERY_UPDATE removed"). Drive-wide membership signals now
-   * arrive as plain `UPDATE` (0x11) / `DESTROY` (0x12) frames.
-   */
-  QUERY_UPDATE_RESERVED: 0x36,
+  // 0x36 is reserved (previously `QUERY_UPDATE`, retired); never reuse it.
   /** Device name + capability list. Both peers send it on an Iroh stream
    *  after AUTH_OK; since 2026-09 a WebSocket client sends one on open too
    *  (`encodeHello`), listing the capabilities it speaks so the server can
@@ -143,6 +138,10 @@ export const ErrorCode = {
    *  message carries `retry_after_ms=<n>` (see `retryAfterMsFromMessage`).
    *  Not a failure: keep the local state, wait, then send one merged delta. */
   BUSY: 12,
+  /** A notice, not a refusal, sent once per connection with request id 0 to
+   *  a client that predates `canonical-scheme`: the connection keeps working
+   *  but will stop being supported. Log it; never fail a request over it. */
+  DEPRECATED_CLIENT: 14,
 } as const;
 
 /** The `retry_after_ms=<n>` hint of a BUSY error message (or an HTTP error
@@ -181,30 +180,16 @@ export function busyRetryAfterMs(
  *  `protocol::CAPABILITIES` in `lib/src/sync/protocol.rs`). A server that
  *  sends none is the pre-2026-09 baseline. */
 export type ServerCapability =
-  | 'auth-max-age'
   | 'keepalive'
-  /** Retired 2026-09: servers answered `RBSR_FP` range fingerprints. */
-  | 'rbsr'
-  | 'pull-from'
-  | 'signed-destroy'
-  | 'unsub'
-  /** Sends `CHALLENGE` on connect and verifies `{origin}#{nonce}` proofs. */
-  | 'auth-nonce'
   /** Answers COMMIT with `[request_id][commit_id]` for a client whose HELLO
    *  lists `commit-ok-slim`. */
   | 'commit-ok-slim'
-  /** Reads a client `HELLO` over WebSocket. */
-  | 'client-hello'
-  /** Re-checks this connection's subscriptions when an AUTH changes its
-   *  identity, dropping the ones it may no longer read. */
-  | 'rebind-on-auth'
   /** The binary `SYNC` payload may carry `probe` and `subjects`; a probe is
    *  answered with `SYNC_OK` or `SYNC_RESEND`. */
   | 'sync-probe'
   /** Understands `atomic:` subjects on the wire. A peer that does not list
    *  it receives `did:ad:` subjects. */
   | 'canonical-scheme'
-  | 'ephemeral'
   | 'get-many'
   /** Appends a `pace_ms` load hint to the slim COMMIT_OK of a client whose
    *  HELLO lists `commit-pace`, and may refuse commits with `BUSY`. */
@@ -428,8 +413,7 @@ export function encodeSub(driveSubject: string): Uint8Array {
  * `compute_drive_hash` / `computeDriveSyncState` produce), matching
  * `protocol::decode_sync`. The JSON tail is `{peers, resources}` plus,
  * optionally, `probe: true` (hash-first probe, answered with `SYNC_OK` or
- * `SYNC_RESEND`) and `subjects: [...]` (reconcile only these). Until
- * 2026-09-04 the browser sent the same JSON as the text frame `SYNC_VV`.
+ * `SYNC_RESEND`) and `subjects: [...]` (reconcile only these).
  */
 export function encodeSync(
   driveSubject: string,
@@ -927,9 +911,7 @@ export interface DecodedEphemeral {
 
 /**
  * EPHEMERAL (0x40): `[kind: u8] [subject_len: u16] [subject] [agent_len: u16]
- * [agent] [payload]`. Both directions over WebSocket since 2026-09-04, in
- * place of the text frames `LORO_SYNC_UPDATE`, `LORO_EPHEMERAL_UPDATE` and
- * `PRESENCE_UPDATE` (base64 JSON). Client-sent frames may leave `agent`
+ * [agent] [payload]`. Both directions over WebSocket. Client-sent frames may leave `agent`
  * empty: the server attributes them to the authenticated identity.
  */
 export function encodeEphemeral(
@@ -995,7 +977,6 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.SYNC_PUSH]: 'SYNC_PUSH',
   [Tag.BLOB_REQUEST]: 'BLOB_REQUEST',
   [Tag.BLOB_RESPONSE]: 'BLOB_RESPONSE',
-  [Tag.QUERY_UPDATE_RESERVED]: 'QUERY_UPDATE_RESERVED',
   [Tag.HELLO]: 'HELLO',
   [Tag.EPHEMERAL]: 'EPHEMERAL',
   [Tag.KEEPALIVE]: 'KEEPALIVE',
