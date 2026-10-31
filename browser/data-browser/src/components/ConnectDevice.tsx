@@ -1,7 +1,6 @@
 import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { Button } from './Button';
-import { ScanCodeButton } from './ConnectToDeviceForm';
 import { PairingCode } from './PairingCode';
 import { cardSurface } from './cardSurface';
 import { classifyConnectInput } from '../helpers/connectInput';
@@ -140,7 +139,6 @@ export function ConnectDevice({
               ? 'Paste a pairing code, or type the address of an always-on device.'
               : 'Type the address of an always-on device.'}
           </Hint>
-          <ScanCodeButton onCode={code => void connect(code)} />
           <Form
             onSubmit={e => {
               e.preventDefault();
