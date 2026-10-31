@@ -526,7 +526,7 @@ Everything else is open to an anonymous socket and gated per subject by
 | `10` | `IMMUTABLE_COMMIT` | The commit's subject is itself a Commit, which can never be edited. Terminal: drop the entry; nothing is lost. |
 | `11` | `CAUSALITY_CONFLICT` | A new Loro write lost against stored state. Keep the local edit; stop sending the same stale update until it is rebased. |
 | `12` | `BUSY` | The node is overloaded with writes, or the agent spent its write rate budget. Refused **before** any work; nothing landed. The message carries `retry_after_ms=<n>`. Not a failure: keep the edit, wait, send one merged delta, and do not retry over another transport. See [Write load and pacing](#write-load-and-pacing). |
-| `14` | `DEPRECATED_CLIENT` | A notice, not a refusal, sent once per connection with `request_id` 0 to a client that predates `canonical-scheme` (see [Versioning and capabilities](#versioning-and-capabilities)). The connection stays usable; log it and carry on. A client that predates the code sees an unknown code with request id 0. |
+| `14` | `DEPRECATED_CLIENT` | A notice, not a refusal, sent with `request_id` 0 in answer to the `HELLO` to a client that predates `canonical-scheme` (see [Versioning and capabilities](#versioning-and-capabilities)). The connection stays usable; log it and carry on. A client that predates the code sees an unknown code with request id 0. |
 
 Codes `1` to `4` and `9` to `12` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures

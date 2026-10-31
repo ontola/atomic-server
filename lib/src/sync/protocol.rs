@@ -289,21 +289,11 @@ pub mod error_code {
     /// signer may no longer share the drive, ...). The message is a plain
     /// sentence for the person. Nothing was granted.
     pub const INVITE_REFUSED: u16 = 13;
-    /// Notice, not a refusal: the connected client predates
-    /// [`DEPRECATED_CLIENT_BEFORE`] (its `HELLO` lacks `canonical-scheme`, or
-    /// it authenticated without any `HELLO`) and will stop working in a coming
-    /// release. Sent once per connection with `request_id = 0`. The connection
-    /// stays fully usable and no request is affected; log it and carry on. A
-    /// client that predates this code sees an unknown code with request id 0.
+    /// Notice, not a refusal, with `request_id = 0`: the client's `HELLO`
+    /// lacks `canonical-scheme`, so it predates v0.41.0-beta.8 and will stop
+    /// working in a coming release. Log it and carry on.
     pub const DEPRECATED_CLIENT: u16 = 14;
 }
-
-/// The release before which a client is deprecated: every client since then
-/// sends `canonical-scheme` in its `HELLO`.
-pub const DEPRECATED_CLIENT_BEFORE: &str = "v0.41.0-beta.8";
-
-/// The message of the `DEPRECATED_CLIENT` notice.
-pub const DEPRECATED_CLIENT_MESSAGE: &str = "This client predates AtomicServer v0.41.0-beta.8 and will stop working in a coming release; please update.";
 
 /// Pull the `retry_after_ms=<n>` hint out of a `BUSY` error message (or an
 /// HTTP error description). `None` when the message carries none.

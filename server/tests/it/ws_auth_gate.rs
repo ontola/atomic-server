@@ -706,7 +706,7 @@ mod raw {
 /// A client whose `HELLO` lacks `canonical-scheme` predates v0.41.0-beta.8:
 /// it gets one `DEPRECATED_CLIENT` notice, and the connection keeps working.
 #[tokio::test]
-async fn hello_without_canonical_scheme_gets_deprecation_notice_once() {
+async fn hello_without_canonical_scheme_gets_deprecation_notice() {
     let port = start_server("ws_gate_deprecated_hello");
     wait_for_server(port).await;
 
@@ -716,19 +716,9 @@ async fn hello_without_canonical_scheme_gets_deprecation_notice_once() {
         protocol::encode_hello_with_caps("old client", &["commit-ok-slim"]),
     )
     .await;
-    // A second HELLO must not repeat the notice.
-    raw::send(
-        &mut ws,
-        protocol::encode_hello_with_caps("old client", &["commit-ok-slim"]),
-    )
-    .await;
     raw::send(&mut ws, protocol::encode_keepalive()).await;
     let (codes, keepalive) = raw::drain(&mut ws, 1500).await;
-    assert_eq!(
-        codes,
-        vec![protocol::error_code::DEPRECATED_CLIENT],
-        "exactly one notice"
-    );
+    assert_eq!(codes, vec![protocol::error_code::DEPRECATED_CLIENT]);
     assert!(keepalive, "the connection still answers after the notice");
 }
 

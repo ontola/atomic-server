@@ -86,7 +86,6 @@ pub async fn web_socket_handler(
             request_origin,
             auth_nonce: atomic_lib::sync::protocol::new_challenge_nonce(),
             client_capabilities: Vec::new(),
-            deprecation_checked: false,
             fragments: None,
             commit_monitor_addr: appstate.commit_monitor.clone(),
             agent: for_agent,
@@ -140,9 +139,6 @@ pub struct WebSocketConnection {
     /// Capability names the client listed in a `HELLO` (0x37), if it sent
     /// one. Consulted before answering `COMMIT` with a slim `COMMIT_OK`.
     client_capabilities: Vec<String>,
-    /// Whether this connection already got (or was cleared of) the
-    /// `DEPRECATED_CLIENT` notice. It is sent at most once.
-    deprecation_checked: bool,
     /// A message arriving in continuation frames, until its last frame:
     /// whether it is text, and the bytes so far. See `handle_fragment`.
     fragments: Option<(bool, Vec<u8>)>,
@@ -404,35 +400,6 @@ impl WebSocketConnection {
         false
     }
 
-    /// Tell a client that predates `canonical-scheme` (see
-    /// `protocol::DEPRECATED_CLIENT_BEFORE`) that it will stop working: log a
-    /// warning and send one `ERROR{request_id 0, DEPRECATED_CLIENT}`. The
-    /// connection is unaffected. At most once per connection.
-    fn notify_if_deprecated(&mut self, ctx: &mut ws::WebsocketContext<Self>) {
-        use atomic_lib::sync::protocol as p;
-        if self.deprecation_checked
-            || self
-                .client_capabilities
-                .iter()
-                .any(|c| c == p::CAP_CANONICAL_SCHEME)
-        {
-            return;
-        }
-        self.deprecation_checked = true;
-        tracing::warn!(
-            connection = %self.connection_id,
-            caps = ?self.client_capabilities,
-            "deprecated client: lacks `{}` (predates {}); sent a DEPRECATED_CLIENT notice",
-            p::CAP_CANONICAL_SCHEME,
-            p::DEPRECATED_CLIENT_BEFORE,
-        );
-        ctx.binary(ws_v2::encode_error(
-            0,
-            p::error_code::DEPRECATED_CLIENT,
-            p::DEPRECATED_CLIENT_MESSAGE,
-        ));
-    }
-
     /// Handle a binary v2 frame.
     fn handle_binary(&mut self, bin: &[u8], ctx: &mut ws::WebsocketContext<Self>) {
         if bin.is_empty() {
@@ -668,14 +635,22 @@ impl WebSocketConnection {
             // own list rides on AUTH_OK); the list steers what this
             // connection is sent from here on, e.g. a slim `COMMIT_OK`.
             ws_v2::tag::HELLO => {
-                let caps = atomic_lib::sync::protocol::decode_hello_caps(&bin[1..]);
+                use atomic_lib::sync::protocol as p;
+                let caps = p::decode_hello_caps(&bin[1..]);
                 tracing::debug!(
                     connection = %self.connection_id,
                     ?caps,
                     "client HELLO"
                 );
+                if !caps.iter().any(|c| c == p::CAP_CANONICAL_SCHEME) {
+                    tracing::warn!(connection = %self.connection_id, ?caps, "deprecated client");
+                    ctx.binary(ws_v2::encode_error(
+                        0,
+                        p::error_code::DEPRECATED_CLIENT,
+                        "This client predates AtomicServer v0.41.0-beta.8 and will stop working in a coming release; please update.",
+                    ));
+                }
                 self.client_capabilities = caps;
-                self.notify_if_deprecated(ctx);
             }
 
             // Live collaboration: an edit in progress (`DOC`), cursors
