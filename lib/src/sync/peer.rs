@@ -4099,7 +4099,7 @@ mod accept_gate_tests {
         assert!(
             protocol::decode_auth_ok(&reply[1..])
                 .iter()
-                .any(|c| c == "signed-destroy"),
+                .any(|c| c == "canonical-scheme"),
             "AUTH_OK advertises this build's capabilities"
         );
 

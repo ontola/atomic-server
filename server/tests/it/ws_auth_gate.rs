@@ -500,11 +500,6 @@ async fn auth_nonce_binds_the_proof_to_its_connection() {
     a.authenticate_with_frame(proof_for_a)
         .await
         .expect("the proof authenticates on the connection whose challenge it answers");
-    assert!(
-        a.server_capabilities().iter().any(|c| c == "auth-nonce"),
-        "the server advertises auth-nonce: {:?}",
-        a.server_capabilities()
-    );
 
     // A nonce-less proof for the origin (pre-2026-09 client) still works.
     let legacy = protocol::encode_auth(&alice, &server_url).unwrap();
@@ -564,13 +559,6 @@ async fn subscriptions_are_rebound_when_auth_changes_identity() {
 
     // The same socket re-authenticates as Mallory, who may not read the drive.
     ws.authenticate(&mallory).await.unwrap();
-    assert!(
-        ws.server_capabilities()
-            .iter()
-            .any(|c| c == "rebind-on-auth"),
-        "{:?}",
-        ws.server_capabilities()
-    );
     // Give the monitor a moment to process the rebind.
     tokio::time::sleep(Duration::from_millis(300)).await;
     while rx.try_recv().is_ok() {}
@@ -610,8 +598,7 @@ async fn update_within(rx: &mut Receiver<WsMessage>, subject: &str, ms: u64) -> 
 
 /// The hash-first probe is binary: a `SYNC` whose payload says `probe` is
 /// answered with `SYNC_OK` when the drive hashes match and `SYNC_RESEND`
-/// when they do not, both binary. Until 2026-09-04 the browser sent a text
-/// `SYNC_VV` and got a text `SYNC_RESEND` back.
+/// when they do not, both binary.
 #[tokio::test]
 async fn sync_probe_miss_is_answered_with_sync_resend() {
     let port = start_server("ws_gate_sync_probe");
@@ -666,4 +653,89 @@ async fn keepalive_is_echoed() {
     })
     .await
     .expect("the server echoes KEEPALIVE within 5s");
+}
+
+/// A raw WebSocket, for tests that must see every frame. `WsClient` turns a
+/// `DEPRECATED_CLIENT` notice into a log line, so it cannot show one.
+mod raw {
+    use super::*;
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+
+    pub type Socket = tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >;
+
+    pub async fn connect(port: u16) -> Socket {
+        tokio_tungstenite::connect_async(format!("ws://localhost:{port}/ws"))
+            .await
+            .expect("websocket connects")
+            .0
+    }
+
+    pub async fn send(ws: &mut Socket, frame: Vec<u8>) {
+        ws.send(Message::Binary(frame.into())).await.unwrap();
+    }
+
+    /// Read binary frames for up to `ms`, returning the `ERROR` codes seen
+    /// with `request_id` 0 and whether a `KEEPALIVE` echo arrived.
+    pub async fn drain(ws: &mut Socket, ms: u64) -> (Vec<u16>, bool) {
+        let mut codes = Vec::new();
+        let mut keepalive = false;
+        let _ = tokio::time::timeout(Duration::from_millis(ms), async {
+            while let Some(Ok(msg)) = ws.next().await {
+                let Message::Binary(bin) = msg else { continue };
+                match bin.first() {
+                    Some(&protocol::tag::ERROR) => {
+                        if let Some(e) = protocol::decode_error(&bin[1..]) {
+                            if e.request_id == 0 {
+                                codes.push(e.code);
+                            }
+                        }
+                    }
+                    Some(&protocol::tag::KEEPALIVE) => keepalive = true,
+                    _ => {}
+                }
+            }
+        })
+        .await;
+        (codes, keepalive)
+    }
+}
+
+/// A client whose `HELLO` lacks `canonical-scheme` predates v0.41.0-beta.8:
+/// it gets one `DEPRECATED_CLIENT` notice, and the connection keeps working.
+#[tokio::test]
+async fn hello_without_canonical_scheme_gets_deprecation_notice() {
+    let port = start_server("ws_gate_deprecated_hello");
+    wait_for_server(port).await;
+
+    let mut ws = raw::connect(port).await;
+    raw::send(
+        &mut ws,
+        protocol::encode_hello_with_caps("old client", &["commit-ok-slim"]),
+    )
+    .await;
+    raw::send(&mut ws, protocol::encode_keepalive()).await;
+    let (codes, keepalive) = raw::drain(&mut ws, 1500).await;
+    assert_eq!(codes, vec![protocol::error_code::DEPRECATED_CLIENT]);
+    assert!(keepalive, "the connection still answers after the notice");
+}
+
+/// A current client (the caps this build sends) is not told anything.
+#[tokio::test]
+async fn current_client_gets_no_deprecation_notice() {
+    let port = start_server("ws_gate_current_client");
+    wait_for_server(port).await;
+
+    let mut ws = raw::connect(port).await;
+    raw::send(
+        &mut ws,
+        protocol::encode_hello_with_caps("current", protocol::CLIENT_CAPABILITIES),
+    )
+    .await;
+    raw::send(&mut ws, protocol::encode_keepalive()).await;
+    let (codes, keepalive) = raw::drain(&mut ws, 1500).await;
+    assert!(codes.is_empty(), "no notice expected, got {codes:?}");
+    assert!(keepalive);
 }

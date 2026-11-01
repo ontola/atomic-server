@@ -41,11 +41,7 @@ pub mod tag {
     pub const SYNC_PUSH: u8 = 0x33;
     pub const BLOB_REQUEST: u8 = 0x34;
     pub const BLOB_RESPONSE: u8 = 0x35;
-    /// Reserved (do not reuse). Previously `QUERY_UPDATE` — retired (see
-    /// `planning/sync.md`, "QUERY_UPDATE removed"). Drive-wide and
-    /// resource-level commits now travel exclusively as `UPDATE` (0x11) and
-    /// `DESTROY` (0x12) frames carrying the snapshot or delta + commit_id.
-    pub const QUERY_UPDATE_RESERVED: u8 = 0x36;
+    // 0x36 is reserved (previously `QUERY_UPDATE`, retired); never reuse it.
     /// Self-reported display name (plus, optionally, a capability list) on
     /// peer-sync streams. Sent by both sides right after `AUTH_OK`, before
     /// the binary `SYNC` handshake. Display only; never used for
@@ -71,10 +67,7 @@ pub mod tag {
     pub const CHALLENGE: u8 = 0x42;
     /// Responder → client, the negative answer to a `SYNC` probe:
     /// `[0x38] [drive_utf8]`. The drive hashes differ, so the client should
-    /// send its full version-vector `SYNC`. The positive answer is `SYNC_OK`. Until
-    /// 2026-09-04 this was the text frame `SYNC_RESEND <drive>` and the
-    /// probe itself was the text `SYNC_VV`; both transports now speak the
-    /// binary form.
+    /// send its full version-vector `SYNC`. The positive answer is `SYNC_OK`.
     pub const SYNC_RESEND: u8 = 0x38;
     /// Iroh only, dialer → responder: run an app export on the responder's
     /// node. `[0x50] [request_id: u16] [json CallRequest]`. Answered by
@@ -98,48 +91,21 @@ pub mod tag {
 /// rename or reuse a name once shipped. A peer that sends no list is treated
 /// as advertising nothing (the pre-2026-09 baseline).
 ///
-/// - `auth-max-age`: `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused
-///   and a failed `AUTH` carries `error_code::AUTH_FAILED`.
 /// - `keepalive`: understands `KEEPALIVE` (0x41); echoes it over WebSocket.
-/// - `rbsr` (retired 2026-09, no longer advertised; do not reuse): answered
-///   the `RBSR_FP` range-fingerprint frames. `RBSR_ITEMS` is still answered,
-///   as a drive inventory.
-/// - `pull-from`: `SYNC_DIFF` carries `pullFrom` version vectors.
-/// - `signed-destroy`: on a peer stream, destroys travel as signed `COMMIT`
-///   frames and a naked `DESTROY` from a peer is ignored.
-/// - `unsub`: `UNSUB` (0x21) actually cancels a drive subscription.
-/// - `auth-nonce`: sends `CHALLENGE` (0x42) on connect and verifies an
-///   `AUTH.requestedSubject` of the form `{origin}#{nonce}` against it.
 /// - `commit-ok-slim`: honours a client `HELLO` that lists `commit-ok-slim`
 ///   by answering `COMMIT` with `[0x14] [request_id] [commit_id]` instead of
 ///   the full commit JSON (see [`encode_commit_ok_slim`]).
-/// - `client-hello`: reads a `HELLO` (0x37) from a WebSocket client and
-///   records the capabilities it lists.
-/// - `rebind-on-auth`: re-evaluates this connection's subscriptions against
-///   the new identity when an `AUTH` lands, dropping the ones it may no
-///   longer read.
 /// - `sync-probe`: the binary `SYNC` payload may carry `probe` and
 ///   `subjects`; a probe is answered with `SYNC_OK` or `SYNC_RESEND` (0x38).
-/// - `ephemeral`: reads and writes `EPHEMERAL` (0x40) over WebSocket for
-///   edits in progress, cursors and drive presence, in place of the text
-///   frames `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE`.
 /// - `get-many`: answers `GET_MANY` (0x15) with one `GET_MANY_RESULT` (0x16),
 ///   so a client can fetch a whole list of subjects in one round trip.
 /// - `commit-pace`: appends a write-load hint to the slim `COMMIT_OK` of a
 ///   client whose `HELLO` lists `commit-pace` (see [`encode_commit_ok_paced`])
 ///   and may refuse commits with `error_code::BUSY` when overloaded.
 pub const CAPABILITIES: &[&str] = &[
-    "auth-max-age",
     "keepalive",
-    "pull-from",
-    "signed-destroy",
-    "unsub",
-    "auth-nonce",
     "commit-ok-slim",
-    "client-hello",
-    "rebind-on-auth",
     "sync-probe",
-    "ephemeral",
     "get-many",
     "canonical-scheme",
     "sparse-sync",
@@ -323,6 +289,10 @@ pub mod error_code {
     /// signer may no longer share the drive, ...). The message is a plain
     /// sentence for the person. Nothing was granted.
     pub const INVITE_REFUSED: u16 = 13;
+    /// Notice, not a refusal, with `request_id = 0`: the client's `HELLO`
+    /// lacks `canonical-scheme`, so it predates v0.41.0-beta.8 and will stop
+    /// working in a coming release. Log it and carry on.
+    pub const DEPRECATED_CLIENT: u16 = 14;
 }
 
 /// Pull the `retry_after_ms=<n>` hint out of a `BUSY` error message (or an
