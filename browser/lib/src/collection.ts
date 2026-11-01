@@ -807,17 +807,21 @@ export class Collection {
       this._optimisticAdds.add(subject);
       this._totalMembers += 1;
       this._memberIndex.set(subject, lastPageIdx);
-      this.writePageMembers(
-        lastPage,
-        this.withMemberInSortedPosition(
-          members,
-          subject,
-          this.pages.size === 1,
-        ),
-        this._totalMembers,
-      );
 
-      return 'member-added';
+      const sorted = this.withMemberInSortedPosition(
+        members,
+        subject,
+        this.pages.size === 1,
+      );
+      this.writePageMembers(lastPage, sorted.members, this._totalMembers);
+
+      // A row that arrives while the rows around it are still loading cannot be
+      // compared with them, so it went to the end. That stuck: after a reload
+      // the local database answered with the rows it had, a sync pushed the
+      // newest one in behind them, and a table showed the row inserted between
+      // two others below both for good. The optimistic add keeps the row on
+      // screen; the refresh puts it in the order the local index gives.
+      return sorted.placed ? 'member-added' : 'membership-stale';
     }
 
     if (!matches && currentlyMember) {
@@ -1100,21 +1104,28 @@ export class Collection {
    * else at the end. A local database that has only some of the members at
    * load (the rest arrive a moment later) would otherwise list them in the
    * order they arrive, so a row that belongs between two others ends up first.
+   *
+   * `placed` is false when the position is a guess: the new member has a key,
+   * but a member it had to be compared with is not in the store yet, so it was
+   * put at the end without being compared. The caller must have the order
+   * re-read from the local database, which sorts by its own index.
    */
   private withMemberInSortedPosition(
     members: string[],
     subject: string,
     wholeList: boolean,
-  ): string[] {
+  ): { members: string[]; placed: boolean } {
     const sortBy = this.params.sort_by;
 
-    if (!sortBy || !wholeList) return [...members, subject];
+    if (!sortBy || !wholeList)
+      return { members: [...members, subject], placed: true };
 
     const sortDesc = !!this.params.sort_desc;
     const key = this.sortKeyOf(subject, sortBy);
 
     // A member the store does not hold yet has no key to compare against.
-    if (key === undefined) return [...members, subject];
+    if (key === undefined)
+      return { members: [...members, subject], placed: true };
 
     // Walk back from the end only as far as the new member sorts before the
     // one it is compared with. A late arrival usually belongs at the end, so
@@ -1125,7 +1136,9 @@ export class Collection {
     while (at > 0) {
       const prev = this.sortKeyOf(members[at - 1]!, sortBy);
 
-      if (prev === undefined) return [...members, subject];
+      if (prev === undefined) {
+        return { members: [...members, subject], placed: false };
+      }
 
       if (
         compareSortKeys(prev, key, members[at - 1]!, subject, sortDesc) <= 0
@@ -1136,7 +1149,10 @@ export class Collection {
       at -= 1;
     }
 
-    return [...members.slice(0, at), subject, ...members.slice(at)];
+    return {
+      members: [...members.slice(0, at), subject, ...members.slice(at)],
+      placed: true,
+    };
   }
 
   /**
