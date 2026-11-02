@@ -18,7 +18,7 @@ import { useDialog } from '@components/Dialog/useDialog';
 import { FaGear, FaRegStar, FaStar } from 'react-icons/fa6';
 import { useEffect, useState, type JSX } from 'react';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
-import { useSavedDrives } from '@hooks/useSavedDrives';
+import { useSavedDriveToggle } from '@hooks/useSavedDriveToggle';
 import { useDriveHistory } from '@hooks/useDriveHistory';
 import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
@@ -53,9 +53,8 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
     canEdit && (filling || (empty && subResources.length === 0));
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
   const { privateDrive } = usePrivateDrive();
-  const [savedDrives, saveDrive, unsaveDrive] = useSavedDrives();
-  const [, addToHistory, removeFromHistory] = useDriveHistory();
-  const isSaved = savedDrives.includes(resource.subject);
+  const [isSaved, toggleSaved] = useSavedDriveToggle(resource.subject);
+  const [, addToHistory] = useDriveHistory();
   const canSave = !!privateDrive && !isPrivateDrive;
 
   // A drive opened by link shows up under Recently visited, where it can be
@@ -65,15 +64,6 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
       addToHistory(resource.subject);
     }
   }, [canSave, isSaved, resource.subject, addToHistory]);
-
-  const toggleSaved = () => {
-    if (isSaved) {
-      unsaveDrive(resource.subject);
-    } else {
-      saveDrive(resource.subject);
-      removeFromHistory(resource.subject);
-    }
-  };
 
   if (!baseURL) {
     setBaseURL(resource.subject);
