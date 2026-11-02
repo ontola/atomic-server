@@ -106,7 +106,8 @@
     "wuchale": "^0.25.6",
     "yjs": "^13.6.30",
     "zod": "^4.4.3",
-    "@tomic/service-ui": "workspace:*"
+    "@tomic/service-ui": "workspace:*",
+    "@tomic/table": "workspace:*"
   },
   "devDependencies": {
     "@sentry/vite-plugin": "^5.4.1",

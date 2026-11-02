@@ -2,12 +2,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ThemeProvider, type DefaultTheme } from 'styled-components';
-import { FancyTable } from './TableEditor';
+import { FancyTable } from './TableEditor.js';
 
-vi.mock('./DndWrapper', () => ({
+vi.mock('./DndWrapper.js', () => ({
   DndWrapper: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock('./TableHeader', () => ({ TableHeader: () => <div role='row' /> }));
+vi.mock('./TableHeader.js', () => ({ TableHeader: () => <div role='row' /> }));
 
 // Only the theme fields used by this grid fixture.
 const theme = {

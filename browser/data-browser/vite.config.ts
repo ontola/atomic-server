@@ -135,6 +135,10 @@ export default defineConfig(({ mode }) => {
       // Deduping forces a single shared instance so the `instanceof` holds.
       dedupe: ['prosemirror-view', 'prosemirror-state', 'prosemirror-model'],
       alias: [
+        {
+          find: /^@tomic\/table$/,
+          replacement: path.resolve(__dirname, '../table/src/index.ts'),
+        },
         // Force EVERY `loro-crdt` import (our `enableLoro`, plus
         // `loro-prosemirror` used by the editor) onto the `web` build.
         // The default entry resolves via the `module` field to the
@@ -349,9 +353,7 @@ export default defineConfig(({ mode }) => {
       // `node_modules`, so the compiler sees its hooks. Tests compile just
       // that package, so a hook the compiler would cache wrongly fails here.
       ...oxcReactCompiler(
-        isVitest
-          ? { only: /\/browser\/react\/src\// }
-          : { compile: true },
+        isVitest ? { only: /\/browser\/react\/src\// } : { compile: true },
       ),
       react(),
       !isVitest &&
@@ -633,7 +635,7 @@ export default defineConfig(({ mode }) => {
       // directly, so every watch rebuild shows up on a plain reload (the documented
       // workspace-link workaround). They don't drag in WASM/ProseMirror, so there's
       // no single-instance concern like `loro-crdt` below.
-      exclude: ['loro-crdt', '@tomic/lib', '@tomic/react'],
+      exclude: ['loro-crdt', '@tomic/lib', '@tomic/react', '@tomic/table'],
       //
       // Vite's boot-time dep scan only follows static imports from index.html, so
       // it never sees the deps behind `React.lazy` chunks (RTE/tiptap, AI SDK,

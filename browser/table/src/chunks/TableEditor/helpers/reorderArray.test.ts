@@ -1,4 +1,4 @@
-import { reorderArray } from './reorderArray';
+import { reorderArray } from './reorderArray.js';
 import { describe, it, expect } from 'vitest';
 
 describe('reorderArray', () => {

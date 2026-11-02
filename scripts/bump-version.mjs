@@ -53,6 +53,7 @@ const JS_PACKAGE_FILES = [
   'browser/package.json',
   'browser/lib/package.json',
   'browser/react/package.json',
+  'browser/table/package.json',
   'browser/svelte/package.json',
   'browser/plugin/package.json',
   'browser/cli/package.json',
