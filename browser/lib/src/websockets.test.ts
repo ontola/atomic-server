@@ -9,6 +9,7 @@ import {
   CLIENT_CAPABILITIES,
   decodeCommit,
   encodeEphemeral,
+  encodeSyncPush,
   decodeEphemeral,
   EphemeralKind,
   Flags,
@@ -129,6 +130,329 @@ describe('WSClient handshake', () => {
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
+
+  it('does not keep a SYNC_DIFF receipt if the drive becomes local-only while reading', async () => {
+    const { client, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    let release!: (value: Uint8Array | undefined) => void;
+    const snapshot = new Promise<Uint8Array | undefined>(resolve => {
+      release = resolve;
+    });
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: () => snapshot,
+    } as never);
+    const diff = (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:doc'], push: [] });
+    store.registerLocalOnlyDrive(drive);
+    release(undefined);
+    await diff;
+    store.unregisterLocalOnlyDrive(drive);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().lastDriveSync).toBeUndefined();
+    client.close();
+  });
+
+  it('reprobes a removal-only diff once, then leaves a repeated mismatch unconfirmed', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    const flush = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(store, 'getClientDb').mockReturnValue({ flush } as never);
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive,
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    } as never);
+    const diff = (
+      client as unknown as { handleSyncDiff: (value: unknown) => Promise<void> }
+    ).handleSyncDiff.bind(client);
+    store.startDriveSync();
+    await diff({ drive, pull: [], push: [], remove: ['atomic:gone'] });
+    assert(flush).toHaveBeenCalledOnce();
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(1);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    await diff({ drive, pull: [], push: [] });
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(1);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().syncInProgress).toBe(false);
+    client.close();
+  });
+
+  it('allows a new probe after an authorization refusal', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive,
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    } as never);
+    await client.resyncDrive(drive);
+    socket.receive(
+      encodeError(0, ErrorCode.AUTH_REQUIRED, 'authenticate again'),
+    );
+    await client.resyncDrive(drive);
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(2);
+    client.close();
+  });
+
+  it('allows a new probe after a local flush failure', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      flush: async () => {
+        throw new Error('flush failed');
+      },
+    } as never);
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive,
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    } as never);
+    await client.resyncDrive(drive);
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: [], push: [] });
+    await client.resyncDrive(drive);
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(2);
+    client.close();
+  });
+
+  it('does not send overlapping probes for the same drive', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive,
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    } as never);
+    const start = (
+      client as unknown as {
+        startVVSync: (drive: string, explicit: boolean) => Promise<void>;
+      }
+    ).startVVSync.bind(client);
+    await start(drive, true);
+    await start(drive, true);
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(1);
+    client.close();
+  });
+
+  it('does not let a delayed inbound flush undo a sync refusal', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let release!: () => void;
+    const flushed = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => new Uint8Array([1]),
+      envelopesFor: async () => ({}),
+      flush: () => flushed,
+    } as never);
+    store.startDriveSync();
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:one'], push: ['atomic:remote'] });
+    socket.receive(encodeSyncPush(drive, [], true));
+    socket.receive(
+      encodeError(
+        0,
+        ErrorCode.SYNC_REJECTED,
+        `SYNC_PUSH rejected for drive ${drive}: no access`,
+      ),
+    );
+    release();
+    await flushed;
+    await Promise.resolve();
+    vi.spyOn(store, 'applyIncoming').mockImplementation(() => {});
+    socket.receive(
+      encodeSyncPush(
+        drive,
+        [{ subject: 'atomic:late', loroBytes: new Uint8Array([1]) }],
+        true,
+      ),
+    );
+    await Promise.resolve();
+    assert(store.isDriveSyncPulling()).toBe(false);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().lastDriveSyncError?.message).toContain(
+      'no access',
+    );
+    client.close();
+  });
+
+  it('does not accept a late chunk acknowledgement after a sync refusal', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => new Uint8Array(50_000),
+      envelopesFor: async () => ({}),
+    } as never);
+    store.startDriveSync();
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:one', 'atomic:two'], push: [] });
+    socket.receive(
+      encodeError(
+        0,
+        ErrorCode.SYNC_REJECTED,
+        `SYNC_PUSH rejected for drive ${drive}: no access`,
+      ),
+    );
+    const bytes = new TextEncoder().encode(drive);
+    socket.receive(new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]));
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    client.close();
+  });
+
+  it('waits for the final outbound chunk acknowledgement', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => new Uint8Array(50_000),
+      envelopesFor: async () => ({}),
+    } as never);
+    store.startDriveSync();
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:one', 'atomic:two'], push: [] });
+    assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(2);
+    const bytes = new TextEncoder().encode(drive);
+    const ack = () =>
+      socket.receive(new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]));
+    ack();
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    ack();
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(true);
+    client.close();
+  });
+
+  it.each(['ack-first', 'pull-first'] as const)(
+    'requires both directions to finish (%s)',
+    async order => {
+      const { client, socket, store } = await connectedClient();
+      const drive = 'atomic:drive';
+      vi.mocked(store.getDrive).mockReturnValue(drive);
+      vi.spyOn(store, 'getClientDb').mockReturnValue({
+        getLoroSnapshot: async () => new Uint8Array([1, 2]),
+        envelopesFor: async () => ({}),
+      } as never);
+      store.startDriveSync();
+      await (
+        client as unknown as {
+          handleSyncDiff: (input: unknown) => Promise<void>;
+        }
+      ).handleSyncDiff({
+        drive,
+        pull: ['atomic:doc'],
+        push: ['atomic:remote'],
+      });
+      const bytes = new TextEncoder().encode(drive);
+      const ack = () =>
+        socket.receive(
+          new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]),
+        );
+      const pull = () => socket.receive(encodeSyncPush(drive, [], true));
+      if (order === 'ack-first') ack();
+      else pull();
+      assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+      if (order === 'ack-first') pull();
+      else ack();
+      assert(store.hasCompletedDriveSyncFor(drive)).toBe(true);
+      client.close();
+    },
+  );
+
+  it('does not certify a pushed drive until the server acknowledges it', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => new Uint8Array([1, 2]),
+      envelopesFor: async () => ({}),
+    } as never);
+    store.startDriveSync();
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:doc'], push: [] });
+    assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    const bytes = new TextEncoder().encode(drive);
+    socket.receive(new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]));
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(true);
+    client.close();
+  });
+
+  it('ignores a late SYNC_OK after a drive becomes local-only', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    store.startDriveSync();
+    (
+      client as unknown as { activeReconciles: Set<string> }
+    ).activeReconciles.add(drive);
+    store.registerLocalOnlyDrive(drive);
+    const bytes = new TextEncoder().encode(drive);
+    socket.receive(new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]));
+    store.unregisterLocalOnlyDrive(drive);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().lastDriveSync).toBeUndefined();
+    assert(store.getSyncStatus().syncInProgress).toBe(false);
+    client.close();
+  });
+
+  it.each(['server', 'agent', 'drive', 'local-only', 'unchanged'] as const)(
+    'records a deferred sync only when the context is unchanged (%s)',
+    async context => {
+      const { client, socket, store } = await connectedClient();
+      const drive = 'atomic:drive';
+      const getDrive = vi.mocked(store.getDrive);
+      getDrive.mockReturnValue(drive);
+      let release!: () => void;
+      const flush = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const flushDb = vi.fn(() => flush);
+      vi.spyOn(store, 'getClientDb').mockReturnValue({
+        flush: flushDb,
+      } as never);
+      const finished = vi.spyOn(store, 'finishDriveSync');
+      (
+        client as unknown as { activeReconciles: Set<string> }
+      ).activeReconciles.add(drive);
+      socket.receive(encodeSyncPush(drive, [], true));
+      await Promise.resolve();
+      assert(flushDb).toHaveBeenCalledOnce();
+      if (context === 'server') client.close();
+      if (context === 'agent') store.setAgent(undefined);
+      if (context === 'drive') getDrive.mockReturnValue('atomic:other');
+      if (context === 'local-only') store.registerLocalOnlyDrive(drive);
+      release();
+      await flush;
+      await Promise.resolve();
+      if (context === 'unchanged' || context === 'local-only') {
+        assert(finished).toHaveBeenCalledOnce();
+        assert(store.hasCompletedDriveSyncFor(drive)).toBe(
+          context === 'unchanged',
+        );
+      } else assert(finished).not.toHaveBeenCalled();
+      client.close();
+    },
+  );
 
   it.each([
     'atomic:workspace',

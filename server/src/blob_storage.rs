@@ -51,6 +51,24 @@ impl BlobBackend for ObjectBlobBackend {
         }
     }
 
+    async fn verification_token(&self, key: &[u8]) -> AtomicResult<Option<(u64, String)>> {
+        match self.store.head(&self.path(key)).await {
+            Ok(meta) => {
+                let version = meta
+                    .version
+                    .filter(|v| !v.is_empty() && v != "null")
+                    .map(|v| format!("version:{v}"));
+                let tag = meta
+                    .e_tag
+                    .filter(|v| !v.is_empty() && !v.starts_with("W/"))
+                    .map(|v| format!("etag:{v}"));
+                Ok(version.or(tag).map(|version| (meta.size, version)))
+            }
+            Err(object_store::Error::NotFound { .. }) => Ok(None),
+            Err(error) => Err(error.to_string().into()),
+        }
+    }
+
     /// Everything under the prefix whose name is a BLAKE3 hash. Objects with
     /// any other name are not ours (a shared bucket, the console's folders)
     /// and are left out, so a sweep can never touch them. S3 always records a
@@ -327,6 +345,22 @@ mod tests {
             )
             .unwrap(),
         )
+    }
+
+    #[tokio::test]
+    async fn confirmation_cache_does_not_trust_a_replaced_or_missing_object() {
+        let backend = remote();
+        let mut db = Db::init_redb(None).await.unwrap();
+        db.blob_backend = Some(backend.clone());
+        let bytes = b"good";
+        let hash = blake3::hash(bytes);
+        db.put_blob(hash.as_bytes(), bytes).await.unwrap();
+        assert!(db.verified_blob(hash.as_bytes()).await.unwrap());
+        assert!(db.verified_blob(hash.as_bytes()).await.unwrap());
+        db.put_blob(hash.as_bytes(), b"evil").await.unwrap();
+        assert!(!db.verified_blob(hash.as_bytes()).await.unwrap());
+        backend.delete(hash.as_bytes()).await.unwrap();
+        assert!(!db.verified_blob(hash.as_bytes()).await.unwrap());
     }
 
     #[tokio::test]

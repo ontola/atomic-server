@@ -63,6 +63,7 @@ describe('Local-only drives', () => {
     const result = await drive.save();
 
     expect(result).toBe('persisted');
+    expect(store.getCommitLog()[0]?.status).toBe('local');
     expect(posted).toHaveLength(0);
     expect(store.outbox.size).toBe(0);
     expect(isAtomicIdentifier(drive.subject)).toBe(true);

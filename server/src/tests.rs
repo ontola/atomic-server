@@ -2576,3 +2576,70 @@ async fn genesis_route_serves_only_the_certificate_of_a_drive() {
         );
     }
 }
+
+#[actix_rt::test]
+async fn drive_sync_confirmation_endpoint_is_signed_and_fail_closed() {
+    use clap::Parser;
+    let id = atomic_lib::utils::random_string(10);
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{id}/db"),
+        "--config-dir",
+        &format!("./.temp/{id}/config"),
+    ]);
+    let mut config = config::build_config(opts).unwrap();
+    config.search_index_path = format!("./.temp/{id}/search_index").into();
+    let appstate = AppState::init(config).await.unwrap();
+    let drive = atomic_lib::test_utils::create_test_drive(&appstate.store)
+        .await
+        .unwrap();
+    let (hash, _, _) =
+        atomic_lib::sync::confirmation::confirm_drive(&appstate.store, &drive, &ForAgent::Sudo, "")
+            .await
+            .unwrap();
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let path = format!(
+        "/drive-sync-confirmation?subject={}&hash={hash}&hashVersion=2",
+        urlencoding::encode(drive.as_str())
+    );
+    let response = test::call_service(
+        &app,
+        build_request_authenticated(&path, &appstate).to_request(),
+    )
+    .await;
+    assert!(
+        response.status().is_success(),
+        "status {}",
+        response.status()
+    );
+    assert_eq!(response.headers().get("cache-control").unwrap(), "no-store");
+    let body: serde_json::Value = serde_json::from_str(&get_body(response)).unwrap();
+    assert_eq!(body["version"], 1);
+    assert_eq!(body["driveHash"], hash);
+    assert_eq!(body["hashVersion"], 2);
+    assert_eq!(body["confirmed"], true);
+    let invalid = path.replace("hashVersion=2", "hashVersion=1");
+    let response = test::call_service(
+        &app,
+        build_request_authenticated(&invalid, &appstate).to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
+    let foreign = format!(
+        "/drive-sync-confirmation?subject={}&hash={hash}&hashVersion=2",
+        urlencoding::encode("https://foreign.invalid/drive")
+    );
+    let response = test::call_service(
+        &app,
+        build_request_authenticated(&foreign, &appstate).to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), actix_web::http::StatusCode::NOT_FOUND);
+}

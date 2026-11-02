@@ -439,6 +439,7 @@ pub struct Db {
     probe_cache: Arc<write_log::ProbeCache>,
     /// Optional remote file storage. Configure before sharing this Db.
     pub blob_backend: Option<Arc<dyn blob_backend::BlobBackend>>,
+    verified_blobs: Arc<blob_backend::VerificationCache>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
     /// The key this node wraps stored secrets with, set once at startup.
     ///
@@ -603,6 +604,7 @@ impl Db {
         Db {
             path,
             blob_backend: None,
+            verified_blobs: Default::default(),
             kv: Arc::new(compressed_kv::CompressedKv::with_log(kv, write_log.clone())),
             write_log,
             probe_cache: Default::default(),
