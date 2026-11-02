@@ -128,3 +128,21 @@ describe('versions', () => {
     expect(catalogAppState({ version: '0.2.0' }, {})).toBe('update');
   });
 });
+
+it('parses additive dataset and installation placement declarations', () => {
+  expect(
+    parseCatalogApp(
+      entry({ [p.dataKind]: 'none', [p.installationHidden]: true }),
+      CATALOG,
+    ),
+  ).toMatchObject({ dataKind: 'none', installationHidden: true });
+  expect(
+    parseCatalogApp(entry({ [p.dataKind]: 'folder' }), CATALOG),
+  ).toMatchObject({ dataKind: 'folder' });
+  expect(
+    parseCatalogApp(entry({ [p.dataKind]: 'invalid' }), CATALOG),
+  ).toBeUndefined();
+  expect(
+    parseCatalogApp(entry({ [p.installationHidden]: 'true' }), CATALOG),
+  ).toBeUndefined();
+});

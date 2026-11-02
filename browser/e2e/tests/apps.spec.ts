@@ -140,6 +140,11 @@ test.describe('apps', () => {
 
     await main.getByRole('button', { name: 'Add view' }).click();
     await page.getByRole('menuitem', { name: 'New app' }).click();
+    // This test only displays the existing rows; it grants no editing rights.
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Read-only', exact: true })
+      .click();
 
     // The app now renders these rows, in a tab of its own...
     await expect(main.locator('iframe[title="App"]')).toBeVisible();

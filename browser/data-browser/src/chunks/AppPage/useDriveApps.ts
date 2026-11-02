@@ -14,6 +14,8 @@ export interface DriveApp {
   name: string;
   /** The row classes this app can show. */
   renders: string[];
+  /** Classes rendered as resource pages; table compatibility alone does not imply this. */
+  resourceRenders?: string[];
 }
 
 export interface DriveApps {
@@ -54,12 +56,16 @@ export function readDriveApp(
   resource: Resource,
   appClass: string,
   rendersProperty: string | undefined,
+  resourceRendersProperty?: string,
 ): DriveApp | undefined {
   const classes = resource.get(core.properties.isA);
 
   if (!Array.isArray(classes) || !classes.includes(appClass)) return undefined;
 
   const renders = rendersProperty ? resource.get(rendersProperty) : undefined;
+  const resourceRenders = resourceRendersProperty
+    ? resource.get(resourceRendersProperty)
+    : undefined;
 
   return {
     subject: resource.subject,
@@ -67,6 +73,13 @@ export function readDriveApp(
     renders: Array.isArray(renders)
       ? renders.filter((c): c is string => typeof c === 'string')
       : [],
+    ...(Array.isArray(resourceRenders)
+      ? {
+          resourceRenders: resourceRenders.filter(
+            (c): c is string => typeof c === 'string',
+          ),
+        }
+      : {}),
   };
 }
 
@@ -76,7 +89,9 @@ const sameApp = (a: DriveApp | undefined, b: DriveApp | undefined) =>
     !!b &&
     a.name === b.name &&
     a.renders.length === b.renders.length &&
-    a.renders.every((c, i) => c === b.renders[i]));
+    a.renders.every((c, i) => c === b.renders[i]) &&
+    (a.resourceRenders?.length ?? 0) === (b.resourceRenders?.length ?? 0) &&
+    (a.resourceRenders ?? []).every((c, i) => c === b.resourceRenders?.[i]));
 
 /**
  * A resource whose state says nothing about what it is: a draft that has not
@@ -142,6 +157,7 @@ export function useDriveApps(drive: string | undefined): DriveApps {
 
     const known = new Map<string, DriveApp>();
     let rendersProperty: string | undefined;
+    let resourceRendersProperty: string | undefined;
 
     const fold = (subject: string, app: DriveApp | undefined) => {
       if (cancelled || sameApp(known.get(subject), app)) return;
@@ -155,7 +171,15 @@ export function useDriveApps(drive: string | undefined): DriveApps {
     const read = (resource: Resource) => {
       if (undecided(resource)) return;
 
-      fold(resource.subject, readDriveApp(resource, appClass, rendersProperty));
+      fold(
+        resource.subject,
+        readDriveApp(
+          resource,
+          appClass,
+          rendersProperty,
+          resourceRendersProperty,
+        ),
+      );
     };
 
     const load = async () => {
@@ -164,8 +188,12 @@ export function useDriveApps(drive: string | undefined): DriveApps {
 
       if (cancelled) return;
 
-      if (schema.properties?.renders !== rendersProperty) {
+      if (
+        schema.properties?.renders !== rendersProperty ||
+        schema.properties?.['resource-renders'] !== resourceRendersProperty
+      ) {
         rendersProperty = schema.properties?.renders;
+        resourceRendersProperty = schema.properties?.['resource-renders'];
 
         // What was folded without it has no `renders`; read it again.
         for (const subject of known.keys()) {
