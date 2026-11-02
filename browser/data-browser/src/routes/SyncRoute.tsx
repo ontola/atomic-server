@@ -127,6 +127,7 @@ import {
   PairingEnvelopeError,
   PAIRING_URI_PREFIX,
   signRequest,
+  isLoopbackHost,
 } from '@tomic/lib';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { PRODUCT_NAME } from '../helpers/managed/product';
@@ -1226,8 +1227,7 @@ function SyncPage() {
     ? new URL(status.serverUrl).hostname
     : undefined;
   const embeddedActive =
-    isNode &&
-    (serverHostname === 'localhost' || serverHostname === '127.0.0.1');
+    isNode && !!serverHostname && isLoopbackHost(serverHostname);
   // Show a server connection card whenever the active server isn't this
   // device's own embedded one (browser: always; Tauri: only a real remote) —
   // and is a server at all. The hosted build's shared origin is not (see
@@ -1262,7 +1262,7 @@ function SyncPage() {
     try {
       const { hostname } = new URL(server);
 
-      return hostname !== 'localhost' && hostname !== '127.0.0.1';
+      return !isLoopbackHost(hostname);
     } catch {
       return false;
     }

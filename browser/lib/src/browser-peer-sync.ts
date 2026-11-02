@@ -3,6 +3,7 @@ import type { Agent } from './agent.js';
 import type { ClientDbWorker } from './client-db.js';
 import type { Store } from './store.js';
 import { createAuthentication } from './authentication.js';
+import { isLoopbackHost } from './urls.js';
 import { WebRtcPeer } from './webrtc-peer.js';
 import { Tag, decodeCommit, encodeAuth, encodeSync } from './ws-v2.js';
 import type { WebRtcTransport } from './webrtc-transport.js';
@@ -103,10 +104,7 @@ export class BrowserPeerSync {
     const url = new URL(options.signalingUrl);
     if (
       url.protocol !== 'wss:' &&
-      !(
-        url.protocol === 'ws:' &&
-        ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-      )
+      !(url.protocol === 'ws:' && isLoopbackHost(url.hostname))
     )
       throw new Error('Peer discovery requires a secure WebSocket URL');
     this.connect();

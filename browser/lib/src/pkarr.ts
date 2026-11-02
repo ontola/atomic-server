@@ -15,6 +15,7 @@
 import { sha512 } from '@noble/hashes/sha2.js';
 import { getPublicKey, hashes, verify } from '@noble/ed25519';
 import { decodeB64 } from './base64.js';
+import { isLoopbackHost } from './urls.js';
 import { identifierBody } from './subject.js';
 
 // Match `genesis.ts`: the synchronous noble API needs sha512 installed.
@@ -113,8 +114,7 @@ export function toPublicHttpsOrigin(raw: unknown): string | undefined {
     host.startsWith('[') ||
     /^\d+(\.\d+){3}$/.test(host) ||
     !host.includes('.') ||
-    host === 'localhost' ||
-    host.endsWith('.localhost') ||
+    isLoopbackHost(host) ||
     host.endsWith('.local') ||
     host.endsWith('.internal')
   ) {

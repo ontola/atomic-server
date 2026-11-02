@@ -209,3 +209,7 @@ export const urls = {
   datatypes,
   instances,
 };
+
+/** Whether a URL hostname is this machine: localhost, *.localhost, 127.x.x.x, ::1. */
+export const isLoopbackHost = (hostname: string): boolean =>
+  /^(localhost|.+\.localhost|127(\.\d{1,3}){3}|\[?::1\]?)$/.test(hostname);
