@@ -17,6 +17,7 @@ import 'conversation_screen.dart';
 import 'embed_server.dart';
 import 'follow_controller.dart';
 import 'live_meeting_banner.dart';
+import 'meeting_call.dart';
 import 'meeting_lead.dart';
 import 'models.dart';
 import 'native_views.dart';
@@ -146,6 +147,9 @@ class _ResourceViewState extends State<ResourceView>
   /// The meeting this device leads (the app's, see [MeetingLead]); announced
   /// as the entry's `session` and pushed into the page as its active meeting.
   late final MeetingLead _lead;
+  // The shell's call; its meeting goes out as the presence `call`.
+  MeetingCall? _callCtl;
+  String? _announcedCall;
 
   /// What the web page owns of this device's presence entry (`presence` from
   /// the page): the cursor of its view, the thread being typed in, the
@@ -211,6 +215,7 @@ class _ResourceViewState extends State<ResourceView>
     _follow.addListener(_followChanged);
     _lead = ShellScope.maybeOf(context)?.lead ?? MeetingLead();
     _lead.addListener(_leadChanged);
+    _callCtl = ShellScope.maybeOf(context)?.call?..addListener(_callChanged);
     AppSidebarIcons.show.addListener(_tellSidebarIcons);
     _changes = widget.api.resourceChanges?.listen(_tellChanged);
     widget.api.storeChanges?.addListener(_storeChanged);
@@ -541,6 +546,7 @@ class _ResourceViewState extends State<ResourceView>
             following: _follow.agent,
             session: _lead.meetingIn(widget.drive) ?? _pageSession,
             extra: {
+              if (_callCtl?.meeting != null) 'call': _callCtl!.meeting,
               if (_pageData != null) 'data': _pageData,
               if (_pageTyping != null) 'typing': _pageTyping,
             })
@@ -572,6 +578,12 @@ class _ResourceViewState extends State<ResourceView>
     }
     _pushFollow(force: force);
     _pushMeeting(force: force);
+    if (force && _callCtl?.meeting != null) {
+      unawaited(page
+          .runJavaScript(
+              'window.atomicEmbed?.setCall(${jsonEncode(_callCtl!.meeting)})')
+          .catchError((Object _) {}));
+    }
   }
 
   /// Tells the page which meeting this device leads on its drive (null:
@@ -585,6 +597,21 @@ class _ResourceViewState extends State<ResourceView>
     unawaited(page
         .runJavaScript('window.atomicEmbed?.setMeeting($meeting)')
         .catchError((Object _) {}));
+  }
+
+  /// The call started or ended: the entry says so (the shell's call also
+  /// changes when it is shown or hidden, which is no news here).
+  void _callChanged() {
+    final meeting = _callCtl?.meeting;
+    if (meeting == _announcedCall) return;
+    _announcedCall = meeting;
+    if (_announcer == this) _announce();
+    final page = _page;
+    if (page != null && _announcer == this && !_menuOnly) {
+      unawaited(page
+          .runJavaScript('window.atomicEmbed?.setCall(${jsonEncode(meeting)})')
+          .catchError((Object _) {}));
+    }
   }
 
   /// The meeting changed (started, ended, or read back after a restart): the
@@ -681,7 +708,11 @@ class _ResourceViewState extends State<ResourceView>
     (background
             ? widget.api.clearPresence(drive)
             : widget.api.announcePresence(drive,
-                following: _follow.agent, session: _lead.meetingIn(drive)))
+                following: _follow.agent,
+                session: _lead.meetingIn(drive),
+                extra: {
+                  if (_callCtl?.meeting != null) 'call': _callCtl!.meeting,
+                }))
         .catchError((Object e) => debugPrint('[presence] not cleared: $e'));
   }
 
@@ -806,6 +837,7 @@ class _ResourceViewState extends State<ResourceView>
     _watch?.dispose();
     _follow.removeListener(_followChanged);
     _lead.removeListener(_leadChanged);
+    _callCtl?.removeListener(_callChanged);
     // Left by hand (a swipe back, the system back), not replaced by follow.
     // (After the tree is torn down: other pages listen to it.)
     if (!_replacing) scheduleMicrotask(_follow.stop);

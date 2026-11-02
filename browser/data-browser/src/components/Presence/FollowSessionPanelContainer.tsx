@@ -1,5 +1,9 @@
-import { lazy, Suspense, useState } from 'react';
-import { useResource } from '@tomic/react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import {
+  useDrivePresence,
+  useDrivePresenceManager,
+  useResource,
+} from '@tomic/react';
 import { styled } from 'styled-components';
 import { FaNoteSticky, FaVideo } from 'react-icons/fa6';
 import { RightPanel } from '../RightPanel/RightPanel';
@@ -18,6 +22,8 @@ import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { hasActionsHost } from '../../embed/hostActions';
 import { startHostCall } from '../../embed/joinCall';
+import { useHostCall } from '../../embed/presenceBridge';
+import { callStrip } from './callStrip';
 
 const ConferenceRoom = lazy(
   () => import('../../chunks/Conference/ConferenceRoom'),
@@ -67,6 +73,9 @@ export function FollowSessionChat({
     useMeetingParticipants(subject);
   const [ending, setEnding] = useState(false);
   const [inCall, setInCall] = useState(false);
+  const manager = useDrivePresenceManager();
+  const presence = useDrivePresence();
+  const hostCall = useHostCall();
   // The app answered false to a call: the button is no use here.
   const [hostCallRefused, setHostCallRefused] = useState(false);
 
@@ -99,6 +108,24 @@ export function FollowSessionChat({
 
     if (!started) setHostCallRefused(true);
   }
+
+  // The inline call is this session's; say so in presence while it is open
+  // (the app announces its own call).
+  useEffect(() => {
+    if (!inCall || embedded || !manager) return;
+
+    manager.patchLocal({ call: subject });
+
+    return () => manager.patchLocal({ call: undefined });
+  }, [inCall, embedded, manager, subject]);
+
+  // Others are in the call and this session is not: offer to join.
+  const strip = callStrip(
+    presence,
+    subject,
+    embedded ? hostCall === subject : inCall,
+  );
+  const canJoin = embedded ? hasActionsHost() && !hostCallRefused : true;
 
   // Only leader / joined attendee gets the End / Leave action.
   const showAction = leading || followedAgent === leaderAgent;
@@ -172,6 +199,34 @@ export function FollowSessionChat({
           <ConferenceRoom subject={subject} onLeave={() => setInCall(false)} />
         </Suspense>
       )}
+      {strip.show && canJoin && (
+        <CallStrip center justify='space-between'>
+          <Row center gap='0.5rem'>
+            <Facepile title={`${strip.agents.length} in the call`}>
+              {strip.agents.slice(0, 5).map(subj => (
+                <PresenceAvatarMenu
+                  key={subj}
+                  agentSubject={subj}
+                  size='1.5rem'
+                />
+              ))}
+              {strip.agents.length > 5 && (
+                <Overflow>+{strip.agents.length - 5}</Overflow>
+              )}
+            </Facepile>
+            <Column gap='0'>
+              <strong>Video call</strong>
+              <Overflow>{strip.agents.length} in the call</Overflow>
+            </Column>
+          </Row>
+          <TextAction
+            type='button'
+            onClick={() => (embedded ? void handleHostCall() : setInCall(true))}
+          >
+            Join
+          </TextAction>
+        </CallStrip>
+      )}
       <ChatRoomView resource={chatroom} noContainerPadding />
     </PanelWrapper>
   );
@@ -233,6 +288,13 @@ const TextAction = styled.button`
     opacity: 0.5;
     cursor: not-allowed;
   }
+`;
+
+const CallStrip = styled(Row)`
+  padding: ${p => p.theme.size(2)};
+  margin-bottom: ${p => p.theme.size(2)};
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg1};
 `;
 
 const CallFallback = styled.span`

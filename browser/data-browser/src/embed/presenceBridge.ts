@@ -167,6 +167,15 @@ export const setHostFollow = hostFollow.set;
 /** The agent the app is following; undefined when it follows nobody. */
 export const useHostFollow = hostFollow.use;
 
+// The meeting whose video call the app is in, as it last said (the app owns
+// the call: it runs in a web view of its own).
+const hostCall = hostValue<string>();
+
+/** The app joined (or left) the call of `meeting`. */
+export const setHostCall = hostCall.set;
+/** The meeting whose call the app is in; undefined when in none. */
+export const useHostCall = hostCall.use;
+
 // The meeting this device leads, as the app last said. The app owns it (a page
 // is recycled, so a page-side `sessionStorage` forgets it); the page only asks
 // to start or end one (`hostMeetingStarted` / `hostMeetingEnded`).

@@ -305,6 +305,34 @@ describe('relaying presence through a host', () => {
     unsubscribe();
   });
 
+  it('carries `call` on injected and local entries until cleared', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const drive = 'did:ad:test-drive-call';
+    store.registerLocalOnlyDrive(drive);
+
+    const manager = store.getPresence(drive);
+    const unsubscribe = manager.subscribe(() => {});
+
+    manager.injectEntry('app-1', {
+      agent: 'did:ad:agent:x',
+      call: 'did:ad:meeting',
+    });
+    expect(manager.getSnapshot().find(i => i.sessionId === 'app-1')?.call).toBe(
+      'did:ad:meeting',
+    );
+
+    const seen: unknown[] = [];
+
+    store.onLocalPresence((_d, entry) => seen.push(entry?.call));
+    manager.patchLocal({ call: 'did:ad:meeting' });
+    manager.patchLocal({ session: 'did:ad:other' });
+    manager.patchLocal({ call: undefined });
+    expect(seen).toEqual(['did:ad:meeting', 'did:ad:meeting', undefined]);
+    unsubscribe();
+  });
+
   it('tells onLocalPresence about every write of our own entry', async ({
     expect,
   }) => {

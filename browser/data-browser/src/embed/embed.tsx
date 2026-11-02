@@ -92,6 +92,7 @@ import {
   createPresenceBridge,
   relayLocalPresence,
   setHostFollow,
+  setHostCall,
   setHostMeeting,
 } from './presenceBridge';
 import { useNativeChatRoom } from './useNativeChatRoom';
@@ -180,6 +181,8 @@ declare global {
       /** The meeting this device leads on the page's drive (null: none); the
        * app keeps it. */
       setMeeting(meeting: string | null): void;
+      /** The meeting whose video call the app is in (null: none). */
+      setCall(meeting: string | null): void;
       /** `anchor`: the app's "more" button (right edge, top), in page px. */
       openMenu(anchor?: { x: number; y: number }): void;
       /** The app's native screen asks for its "more" menu over itself: this
@@ -506,6 +509,9 @@ window.atomicEmbed = {
   },
   setMeeting(meeting) {
     setHostMeeting(meeting);
+  },
+  setCall(meeting) {
+    setHostCall(meeting);
   },
   /** One step back in the page's own history; false when there is none. */
   back() {
