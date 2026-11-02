@@ -310,6 +310,11 @@ replacement: that document stays usable, its edits cannot dirty the current
 resource, and edits to the replacement still enqueue normally. These are
 in-memory observer lifecycle checks; they do not reset OPFS or replace stored
 resource history.
+`resource-loro-lifecycle.spec.ts` repeats the collection check against the real
+production browser web/WASM runtime: Chromium collects 40 temporary resources
+hydrated from snapshots while a deliberately retained resource and public
+document remain usable. Local browser validation also passed the existing
+ClientDb edit-persistence test.
 
 `browser/lib/src/client-db-open.test.ts` covers `ClientDb.open()` success,
 wrong-key cache recovery, and propagation of blocked/corrupt-storage errors.
