@@ -303,6 +303,14 @@ caught it, and if the answer is "none", that is the row to add.
 
 ## WASM database opening
 
+`browser/lib/src/resource-loro-lifecycle.test.ts` uses V8's full-GC object query
+to verify that abandoned hydrated Resources can be collected. It also retains
+the old public Loro document across `clearUnsafe()` and an authoritative snapshot
+replacement: that document stays usable, its edits cannot dirty the current
+resource, and edits to the replacement still enqueue normally. These are
+in-memory observer lifecycle checks; they do not reset OPFS or replace stored
+resource history.
+
 `browser/lib/src/client-db-open.test.ts` covers `ClientDb.open()` success,
 wrong-key cache recovery, and propagation of blocked/corrupt-storage errors.
 The save-state and crash-durability browser tests exercise the generated WASM
