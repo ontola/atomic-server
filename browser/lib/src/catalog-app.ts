@@ -1,5 +1,5 @@
 import { server } from './ontologies/server.js';
-import { grantAccessAgent } from './issue-access-agent.js';
+import { grantAccessAgent, grantedTargetsOf } from './issue-access-agent.js';
 import type { Store } from './store.js';
 import { pluginSchema } from './plugin-log.js';
 import { classes } from './urls.js';
@@ -381,7 +381,14 @@ export async function migrateCatalogAppLayout(
       throw new Error(
         'An app may only migrate its own dataset, not another resource named by app-data',
       );
-    if (!hasGrant)
+    // A previous attempt may have saved the ACL and then failed while
+    // recording its target on the Agent. Repair that record before moving
+    // the data, so revocation can still find this inherited folder grant.
+    const recordedTargets = await grantedTargetsOf(
+      store as unknown as Store,
+      agent,
+    );
+    if (!hasGrant || !recordedTargets.includes(data.subject))
       await grantAccessAgent(
         store as unknown as Store,
         agent,

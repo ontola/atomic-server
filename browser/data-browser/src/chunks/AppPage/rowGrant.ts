@@ -203,21 +203,27 @@ export async function canGrantRows(
   return canWrite;
 }
 
-const listeners = new Set<(target?: RowGrantTarget) => void>();
+/** Origin is lifecycle metadata, never additional write authority. */
+export type RowGrantChangeTarget = RowGrantTarget & {
+  view?: string;
+  via?: RowGrantVia | RowRevokeVia;
+};
+
+const listeners = new Set<(target?: RowGrantChangeTarget) => void>();
 
 /**
  * Called after this page grants or revokes, so the tab menu and an open app
  * see the same answer without polling. Returns an unsubscribe function.
  */
 export function onRowGrantChange(
-  listener: (target?: RowGrantTarget) => void,
+  listener: (target?: RowGrantChangeTarget) => void,
 ): () => void {
   listeners.add(listener);
 
   return () => listeners.delete(listener);
 }
 
-export function notifyRowGrantChange(target?: RowGrantTarget): void {
+export function notifyRowGrantChange(target?: RowGrantChangeTarget): void {
   for (const listener of listeners) listener(target);
 }
 

@@ -27,6 +27,12 @@ export function useAppFrameIdentity(context: FrameContext): string {
         (target.app !== app || target.drive !== drive || target.table !== table)
       )
         return;
+      // A request initiated by this guest must receive its reply before its
+      // controller continues (e.g. binding the table after Allow editing).
+      // Remounting here would discard that pending continuation. Other views
+      // still refresh, as do Add-view grants and menu revocations.
+      if (target?.via === 'request' && target.view === view) return;
+
       setPermissionRevision(revision => revision + 1);
     });
   }, [app, drive, table, view, resource]);

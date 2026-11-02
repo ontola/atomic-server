@@ -489,6 +489,8 @@ export {
 
 // The expansion functions live in `@tomic/lib/calendar-recurrence.js`: they
 // pull in the Temporal polyfill (~120 kB), which most apps never need.
+// Keep the established root validation API available to provider integrations.
+export { validateCalendarEvent } from './calendar-recurrence.js';
 export type {
   CalendarTime,
   CalendarEvent,

@@ -3230,3 +3230,10 @@ the guest so it reads current permission; revocation remounts it again. Initial 
 status; acknowledgements for unrelated apps, tables and drives are ignored.
 Individual-resource views never fetch or borrow a table grant. This uses the existing grant notification path,
 with no permission polling or provider operations.
+
+
+Permission-change frame lifecycle regressions also cover a guest awaiting its
+own requestRowAccess response: its acknowledged request does not remount that
+same view before the table-binding continuation finishes; other views still
+refresh. The calendar-public-api regression validates a provider event through
+the root library export used by the Calendar integration.

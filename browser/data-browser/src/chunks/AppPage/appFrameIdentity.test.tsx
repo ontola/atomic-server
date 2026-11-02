@@ -2,7 +2,14 @@
 // @wc-ignore-file
 import React, { useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { StoreContext, type Store } from '@tomic/react';
 import { useAppFrameIdentity } from './appFrameIdentity';
 import { fetchRowGrant, notifyRowGrantChange, type RowGrant } from './rowGrant';
@@ -112,5 +119,60 @@ it('keeps an already-granted guest mounted during initial status loading and ign
 
   // A legacy unscoped notification still invalidates actual table views.
   await act(async () => notifyRowGrantChange());
+  expect(mounts).toBe(2);
+});
+
+let pendingAccess: Promise<void>;
+
+function BindingGuest() {
+  const [bound, setBound] = useState(false);
+  useState(() => {
+    mounts++;
+  });
+
+  return (
+    <button
+      onClick={async () => {
+        await pendingAccess;
+        setBound(true);
+      }}
+    >
+      {bound ? 'Syncing Team hours' : 'Start syncing'}
+    </button>
+  );
+}
+
+function RequestFrame() {
+  const identity = useAppFrameIdentity({ ...target, view: 'view' });
+
+  return <BindingGuest key={identity} />;
+}
+
+it('keeps an in-frame permission request alive so its table-binding continuation can finish', async () => {
+  let allow!: () => void;
+  pendingAccess = new Promise<void>(resolve => {
+    allow = resolve;
+  });
+  render(<RequestFrame />);
+  fireEvent.click(screen.getByRole('button', { name: 'Start syncing' }));
+
+  // grantRowAccess notifies the host before AppFrame sends the request's
+  // successful reply. That notification must not destroy the requesting guest.
+  await act(async () =>
+    notifyRowGrantChange({ ...target, view: 'view', via: 'request' }),
+  );
+  expect(mounts).toBe(1);
+  await act(async () => allow());
+  await screen.findByRole('button', { name: 'Syncing Team hours' });
+  expect(mounts).toBe(1);
+});
+
+it('still refreshes a guest when another view of the same table requested the grant', async () => {
+  mount();
+  upstream = { id: 'other-view-grant' } as RowGrant;
+  await act(async () =>
+    notifyRowGrantChange({ ...target, view: 'other-view', via: 'request' }),
+  );
+  await screen.findByText('editable');
   expect(mounts).toBe(2);
 });

@@ -73,6 +73,61 @@ it('migrates the existing dataset in place while preserving notes, baseline and 
   expect(JSON.stringify([...resources])).toBe(after);
 });
 
+it('repairs the grant registry after an interrupted ACL-first migration before moving data', async () => {
+  const { store, resources } = fakeSchemaStore();
+  const created = await createApp(store, {
+    drive: 'drive',
+    name: 'Google Keep',
+    source,
+  });
+  const app = await release();
+  const getResource = store.getResource.bind(store);
+  let failRegistry = true;
+
+  store.getResource = async subject => {
+    const resource = await getResource(subject);
+    if (subject !== created.agent) return resource;
+
+    return {
+      ...resource,
+      set: async (property, value) => {
+        if (property === dataBrowser.properties.resources && failRegistry) {
+          failRegistry = false;
+          throw new Error('grant registry unavailable');
+        }
+
+        return resource.set(property, value);
+      },
+    };
+  };
+
+  const migrate = () =>
+    migrateCatalogAppLayout(store, {
+      drive: 'drive',
+      subject: created.app,
+      app,
+      agent: created.agent,
+    });
+
+  await expect(migrate()).rejects.toThrow('grant registry unavailable');
+  const data = resources.get(created.data)!;
+  expect(data[core.properties.read]).toContain(created.agent);
+  expect(data[core.properties.write]).toContain(created.agent);
+  expect(data[core.properties.parent]).toBe(created.app);
+  expect(
+    resources.get(created.agent)?.[dataBrowser.properties.resources],
+  ).not.toContain(created.data);
+
+  await migrate();
+  expect(resources.get(created.data)?.[core.properties.parent]).toBe('drive');
+  expect(
+    resources.get(created.agent)?.[dataBrowser.properties.resources],
+  ).toContain(created.data);
+  const after = JSON.stringify([...resources]);
+  await migrate();
+  expect(JSON.stringify([...resources])).toBe(after);
+});
+
 it('does not move a dataset until the host has supplied its actual signing identity', async () => {
   const { store, resources } = fakeSchemaStore();
   const created = await createApp(store, {
