@@ -1,8 +1,10 @@
 # Interface language
 
 Open **Settings** (`/app/settings`) and choose **Language** to use the
-databrowser in English, Spanish, French or German. Without a saved choice,
-the app uses a supported browser language, falling back to English.
+databrowser in English, Spanish, French, German, Dutch or Indonesian. Dutch
+appears as **Nederlands** and Indonesian as **Bahasa Indonesia** in the picker.
+Without a saved choice, the app uses a supported browser language, falling
+back to English.
 Your choice is saved in this browser for this app address.
 
 Changing the interface language changes buttons, menus and explanatory text.
@@ -16,7 +18,7 @@ languages. Resource content has its own [translation mechanisms](../schema/trans
 
 ## Contributing translations
 
-The UI catalogs are `browser/data-browser/src/locales/{en,es,fr,de}.po`.
+The UI catalogs are `browser/data-browser/src/locales/{en,es,fr,de,nl,id}.po`.
 Wuchale extracts messages from frontend code. From `browser/data-browser`, run:
 
 ```sh
@@ -38,6 +40,11 @@ numbered tags such as `<0>…</0>` and `<1/>`, and plural `#` count markers inta
 Translate complete sentences, including every plural form. Product names and
 technical identifiers may legitimately remain unchanged; matching English
 text is reported as a count, not automatically considered a missing translation.
+
+Dutch has separate singular and plural forms. Indonesian uses one form for
+all counts (`nplurals=1; plural=0;`). Its shared form must retain a variable
+count: for example, English `1 Change` / `# Changes` becomes `# perubahan`,
+so the number stays correct for zero, one and multiple changes.
 
 After changing rendered source text, serve the affected views with Vite to
 extract messages, then stop it, fill the new entries and review the catalog

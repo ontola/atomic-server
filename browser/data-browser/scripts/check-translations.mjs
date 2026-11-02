@@ -102,7 +102,13 @@ export function auditCatalogs(catalogs, sourceLocale = 'en') {
 
       for (let index = 0; index < forms.length; index++) {
         if (!forms[index].trim()) continue;
-        const sourceForm = index === 0 ? original.msgid : original.msgid_plural;
+        // A single target form also represents counts other than one. Compare
+        // it with the source plural so "1 Change" / "# Changes" keeps its
+        // dynamic count in Indonesian, rather than hard-coding "1".
+        const sourceForm =
+          (original.msgid_plural && nplurals === 1) || index > 0
+            ? original.msgid_plural
+            : original.msgid;
         if (!sourceForm) continue; // Unexpected forms are already incomplete.
         if (!placeholdersMatch(sourceForm, forms[index]))
           issue('placeholders', item, `Form ${index}`);

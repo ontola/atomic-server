@@ -19,7 +19,11 @@ const english = {
 
 type AccountLabels = typeof english;
 
-const languages: Array<{ locale: string; labels: AccountLabels }> = [
+const languages: Array<{
+  locale: string;
+  labels: AccountLabels;
+  pickerName?: string;
+}> = [
   {
     locale: 'es',
     labels: {
@@ -57,6 +61,34 @@ const languages: Array<{ locale: string; labels: AccountLabels }> = [
       privateDrive: 'Privates Laufwerk',
       appearance: 'Darstellung',
       switchDrive: 'Laufwerk wechseln',
+    },
+  },
+  {
+    locale: 'nl',
+    pickerName: 'Nederlands',
+    labels: {
+      user: 'Gebruiker',
+      drives: 'Mijn schijven',
+      name: 'Je naam',
+      profile: 'Meer profielvelden',
+      signOut: 'Uitloggen',
+      privateDrive: 'Privéschijf',
+      appearance: 'Uiterlijk',
+      switchDrive: 'Van schijf wisselen',
+    },
+  },
+  {
+    locale: 'id',
+    pickerName: 'Bahasa Indonesia',
+    labels: {
+      user: 'Pengguna',
+      drives: 'Drive saya',
+      name: 'Nama Anda',
+      profile: 'Kolom profil lainnya',
+      signOut: 'Keluar',
+      privateDrive: 'Drive pribadi',
+      appearance: 'Tampilan',
+      switchDrive: 'Ganti drive',
     },
   },
 ];
@@ -113,7 +145,7 @@ test.describe('interface language', () => {
   test.use({ locale: 'en-GB' });
   test.beforeEach(before);
 
-  for (const { locale, labels } of languages) {
+  for (const { locale, labels, pickerName } of languages) {
     test(`${locale}: account and drive menu translate, persist and switch back`, async ({
       page,
     }, testInfo) => {
@@ -128,6 +160,13 @@ test.describe('interface language', () => {
       await page.getByText(english.appearance, { exact: true }).click();
       const language = page.locator('#settings-language');
       await expect(language).toHaveValue('en');
+
+      if (pickerName) {
+        await expect(
+          language.getByRole('option', { name: pickerName, exact: true }),
+        ).toHaveAttribute('value', locale);
+      }
+
       await language.selectOption(locale);
       // Loading a locale remounts Settings with its sections collapsed.
       // Reopen Appearance only once its translated label has arrived.
@@ -161,3 +200,32 @@ test.describe('interface language', () => {
     });
   }
 });
+
+for (const { locale, labels, pickerName } of languages.filter(language =>
+  ['nl', 'id'].includes(language.locale),
+)) {
+  test.describe(`${locale}: browser language`, () => {
+    test.use({ locale: locale === 'nl' ? 'nl-NL' : 'id-ID' });
+    test.beforeEach(before);
+
+    test('loads the browser language before a saved choice', async ({
+      page,
+    }) => {
+      const driveTitle = await currentDriveTitle(page).innerText();
+      await page.goto(`${FRONTEND_URL}/app/agent`);
+      await expectAccount(page, labels, driveTitle);
+
+      await page.goto(`${FRONTEND_URL}/app/settings`);
+      await page.getByText(labels.appearance, { exact: true }).click();
+      const language = page.locator('#settings-language');
+      await expect(language).toHaveValue(locale);
+      await expect(language.locator('option:checked')).toHaveText(pickerName!);
+
+      // An explicit choice takes precedence over the browser after reload.
+      await language.selectOption('en');
+      await page.goto(`${FRONTEND_URL}/app/agent`);
+      await page.reload();
+      await expectAccount(page, english, driveTitle);
+    });
+  });
+}
