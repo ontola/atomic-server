@@ -1,3 +1,4 @@
+import { isLoopbackHost } from '@tomic/lib';
 import { ManagedReadCache } from './readCache';
 
 const metadataReads = new ManagedReadCache();
@@ -93,10 +94,7 @@ export function safePortalUrl(
   // Embedded credentials have no business in a portal address.
   if (parsed.username || parsed.password) return undefined;
 
-  const isLocalhost =
-    parsed.hostname === 'localhost' ||
-    parsed.hostname === '127.0.0.1' ||
-    parsed.hostname.endsWith('.localhost');
+  const isLocalhost = isLoopbackHost(parsed.hostname);
 
   if (
     parsed.protocol === 'https:' ||

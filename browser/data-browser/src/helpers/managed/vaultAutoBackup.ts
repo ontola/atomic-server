@@ -4,6 +4,7 @@ import {
   isNotFound,
   pageRequestSignal,
   type Store,
+  isLoopbackHost,
 } from '@tomic/lib';
 import {
   VaultSessionEndedError,
@@ -614,9 +615,7 @@ export async function restoreFromVault(
 export function isEmbeddedVaultDrive(store: Store): boolean {
   if (!isRunningInTauri()) return false;
 
-  return ['localhost', '127.0.0.1', '[::1]'].includes(
-    new URL(store.getServerUrl()).hostname,
-  );
+  return isLoopbackHost(new URL(store.getServerUrl()).hostname);
 }
 
 /**
