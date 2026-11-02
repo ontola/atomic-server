@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'backend.dart';
+import 'comments.dart';
 import 'exceptions.dart';
 import 'urls.dart';
 import 'value.dart';
@@ -22,7 +23,11 @@ import 'value.dart';
 /// in ignoring the Trash, in having no agent, signatures, sync or
 /// permissions, and in leaving the order of [childSubjects] to insertion
 /// order.
-class InMemoryBackend implements StoreBackend {
+///
+/// Comments ([CommentsBackend]) are kept in [comments], one page per
+/// resource and drive; [agent] writes them. Posting one announces a change
+/// of its page.
+class InMemoryBackend implements StoreBackend, CommentsBackend {
   InMemoryBackend([Map<String, Map<String, Value>> resources = const {}]) {
     resources.forEach((subject, props) => this.resources[subject] = Map.of(props));
   }
@@ -38,6 +43,12 @@ class InMemoryBackend implements StoreBackend {
 
   /// Throw this from the next call (then forget it).
   StoreException? failNext;
+
+  /// The agent who writes comments ([Comment.mine]).
+  String agent = 'did:ad:agent:test';
+
+  /// Every comment, oldest first.
+  final List<Comment> comments = [];
 
   int _next = 0;
   final Map<String, List<Completer<ResourceEventKind>>> _waiting = {};
@@ -282,5 +293,96 @@ class InMemoryBackend implements StoreBackend {
     } finally {
       timer.cancel();
     }
+  }
+
+  @override
+  Future<List<Comment>> readComments({String? about, String? drive}) async {
+    _enter('readComments ${about ?? ''}');
+    return [
+      for (final c in comments)
+        if ((about == null || c.about == about) &&
+            (drive == null || c.drive == drive))
+          _withMine(c)
+    ];
+  }
+
+  Comment _withMine(Comment c) => Comment(
+        id: c.id,
+        page: c.page,
+        drive: c.drive,
+        about: c.about,
+        author: c.author,
+        mine: c.author == agent,
+        text: c.text,
+        createdAt: c.createdAt,
+        replyTo: c.replyTo,
+        editedAt: c.editedAt,
+        mentions: c.mentions,
+      );
+
+  @override
+  Future<String> postComment(String about, String text,
+      {String? drive, String? replyTo}) async {
+    _enter('postComment $about');
+    final t = text.trim();
+    if (t.isEmpty) {
+      throw const StoreException(
+          StoreErrorKind.invalid, 'Cannot post an empty comment');
+    }
+    final scope = drive ?? _driveOf(about);
+    final page = 'did:ad:test:comments:${Uri.encodeComponent('$scope|$about')}';
+    final id = '$page#${++_next}';
+    comments.add(Comment(
+      id: id,
+      page: page,
+      drive: scope,
+      about: about,
+      author: agent,
+      text: t,
+      createdAt: DateTime.now(),
+      replyTo: replyTo,
+      mentions: Comment.mentionsIn(t),
+    ));
+    _emit(page, ResourceEventKind.changed);
+    return id;
+  }
+
+  int _own(String id) {
+    final i = comments.indexWhere((c) => c.id == id);
+    if (i < 0) {
+      throw StoreException(StoreErrorKind.notFound, 'No comment $id');
+    }
+    if (comments[i].author != agent) {
+      throw const StoreException(
+          StoreErrorKind.unauthorized, 'Only the author can change a comment');
+    }
+    return i;
+  }
+
+  @override
+  Future<void> editComment(String id, String text) async {
+    _enter('editComment $id');
+    final i = _own(id);
+    final c = comments[i];
+    comments[i] = Comment(
+      id: c.id,
+      page: c.page,
+      drive: c.drive,
+      about: c.about,
+      author: c.author,
+      text: text.trim(),
+      createdAt: c.createdAt,
+      replyTo: c.replyTo,
+      editedAt: DateTime.now(),
+      mentions: Comment.mentionsIn(text),
+    );
+    _emit(c.page, ResourceEventKind.changed);
+  }
+
+  @override
+  Future<void> deleteComment(String id) async {
+    _enter('deleteComment $id');
+    final c = comments.removeAt(_own(id));
+    _emit(c.page, ResourceEventKind.changed);
   }
 }

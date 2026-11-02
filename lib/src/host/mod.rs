@@ -51,6 +51,7 @@ pub mod activity_status;
 pub mod app_write;
 pub mod chat_rooms;
 pub mod chats;
+pub mod comments;
 pub mod context;
 pub mod conversations;
 pub mod create;

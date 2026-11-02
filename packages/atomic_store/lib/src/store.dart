@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'backend.dart';
+import 'comments.dart';
 import 'exceptions.dart';
 import 'resource.dart';
 import 'urls.dart';
@@ -22,6 +23,11 @@ class Store {
   Store({required this.backend, this.drive});
 
   final StoreBackend backend;
+
+  /// Comments on resources, when the backend keeps them (the bridge and
+  /// [InMemoryBackend] do).
+  CommentsBackend? get comments =>
+      backend is CommentsBackend ? backend as CommentsBackend : null;
 
   /// The drive this store works in; `null` searches every drive and makes
   /// [newResource] require a `parent`. Assign it to follow a drive switch

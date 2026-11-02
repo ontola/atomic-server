@@ -13393,3 +13393,17 @@ msgstr "Start this drive"
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
 msgstr "Give it a name, then fill it with a starter"
+
+#. 0: author; 1: on
+#. 0: who; 1: on
+#. 0: who; 1: target
+#: src/components/Notifications/MessageNotifier.tsx
+#: src/components/Notifications/NotificationList.tsx
+#: src/views/NotificationPage.tsx
+msgid "{0} mentioned you in {1}"
+msgstr "{0} mentioned you in {1}"
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} mentions of you in {2}"
+msgstr "{0}: {1} mentions of you in {2}"

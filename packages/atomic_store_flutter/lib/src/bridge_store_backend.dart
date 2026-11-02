@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:atomic_store/atomic_store.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
@@ -124,16 +126,51 @@ class _HandleApi implements BridgeResourceApi {
 ///     path: dir, agentSecret: secret, drive: driveSubject);
 /// final store = Store(backend: BridgeStoreBackend(handle), drive: driveSubject);
 /// ```
-class BridgeStoreBackend implements StoreBackend {
+class BridgeStoreBackend implements StoreBackend, CommentsBackend {
   /// A backend on [store], or on the default store when it is null.
   BridgeStoreBackend([bridge.AtomicStore? store])
-      : _api = store == null ? const _DefaultStoreApi() : _HandleApi(store);
+      : _api = store == null ? const _DefaultStoreApi() : _HandleApi(store),
+        _handle = store;
 
   /// A backend over any [BridgeResourceApi] (tests).
   @visibleForTesting
-  const BridgeStoreBackend.withApi(this._api);
+  const BridgeStoreBackend.withApi(this._api) : _handle = null;
 
   final BridgeResourceApi _api;
+
+  /// The handle comments go through; the default store has none.
+  final bridge.AtomicStore? _handle;
+
+  bridge.AtomicStore get _comments =>
+      _handle ??
+      (throw const StoreException(
+          StoreErrorKind.invalid, 'Comments need an AtomicStore handle'));
+
+  @override
+  Future<List<Comment>> readComments({String? about, String? drive}) =>
+      _guard(() async {
+        final raw = await _comments.readComments(about: about, drive: drive);
+        return [
+          for (final c in jsonDecode(raw) as List)
+            Comment.fromJson((c as Map).cast<String, dynamic>())
+        ];
+      }, about);
+
+  @override
+  Future<String> postComment(String about, String text,
+          {String? drive, String? replyTo}) =>
+      _guard(
+          () => _comments.postComment(
+              about: about, drive: drive, text: text, replyTo: replyTo),
+          about);
+
+  @override
+  Future<void> editComment(String id, String text) =>
+      _guard(() => _comments.editComment(id: id, text: text));
+
+  @override
+  Future<void> deleteComment(String id) =>
+      _guard(() => _comments.deleteComment(id: id));
 
   @override
   Future<ResourceSnapshot> getResource(String subject) => _guard(() async {

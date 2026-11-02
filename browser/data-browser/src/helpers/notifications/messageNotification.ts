@@ -7,7 +7,7 @@
 // so the rules can be tested as plain data.
 import { dataBrowser } from '@tomic/react';
 
-export type MessageNotificationKind = 'reply' | 'comment' | 'chat';
+export type MessageNotificationKind = 'mention' | 'reply' | 'comment' | 'chat';
 
 export interface MessageFacts {
   subject: string;
@@ -17,6 +17,15 @@ export interface MessageFacts {
   parent?: string;
   about?: string;
   replyTo?: string;
+  /** The text, for its mentions (`[@id="…" label="…"]`). */
+  text?: string;
+}
+
+/** The subjects mentioned in `text`: the `id` of each `[@id="…" …]`. */
+export function mentionedIn(text: string | undefined): string[] {
+  if (!text) return [];
+
+  return [...text.matchAll(/\[@[^\]]*?\bid="([^"]+)"[^\]]*\]/g)].map(m => m[1]);
 }
 
 /**
@@ -28,7 +37,7 @@ export function entryFacts(
   pageSubject: string,
   page: Pick<MessageFacts, 'parent' | 'about'>,
   key: string,
-  entry: { a: string; c: number; r?: string; k?: unknown },
+  entry: { a: string; c: number; r?: string; k?: unknown; t?: string },
 ): MessageFacts {
   return {
     subject: `${pageSubject}#${key}`,
@@ -43,6 +52,7 @@ export function entryFacts(
     parent: page.parent,
     about: page.about,
     replyTo: entry.r,
+    text: entry.t,
   };
 }
 
@@ -115,6 +125,11 @@ export function classifyMessage(
     target,
     openComments: isComment,
   };
+
+  // Being named outranks the rest: it is addressed to you.
+  if (ctx.me && mentionedIn(msg.text).includes(ctx.me)) {
+    return { ...base, kind: 'mention' };
+  }
 
   if (msg.replyTo && ctx.creatorOf(msg.replyTo) === ctx.me) {
     return { ...base, kind: 'reply' };

@@ -54,6 +54,7 @@ export function NotificationPage({
   if (target) {
     if (kind === 'comment') headline = `${who} commented on ${target}`;
     else if (kind === 'reply') headline = `${who} replied to you in ${target}`;
+    else if (kind === 'mention') headline = `${who} mentioned you in ${target}`;
     else if (kind === 'chat') headline = `${who} in ${target}`;
   }
 

@@ -122,6 +122,9 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// Returns its subject. `values` should include `isA` and `parent`.
   Future<String> createResourceWithValues({required List<PropValue> values});
 
+  /// Remove this agent's own comment `id`.
+  Future<void> deleteComment({required String id});
+
   /// Destroy `subject` and, recursively, its children: a signed destroy
   /// commit by this handle's agent, queued for the server like any write.
   /// [`AtomicError::NotFound`] when this device does not have it.
@@ -133,6 +136,9 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// The drive this handle works in: the one set on it, else the store's
   /// active drive.
   String? drive();
+
+  /// Replace the text of this agent's own comment `id`.
+  Future<void> editComment({required String id, required String text});
 
   /// Get a conversation onto this device and follow it: fetched from the
   /// connected server when missing, and its new messages arrive over the open
@@ -267,6 +273,17 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// Writes through this handle go out over it from now on.
   Future<void> openWsSync({required String serverOrigin});
 
+  /// Comment `text` (markdown; mentions as `[@id="<subject>" label="<name>"]`)
+  /// on `about` as this device's agent, as the web app's comment panel does.
+  /// It lands in the `Comments` folder of `drive` (the drive of `about` when
+  /// `None`), so that drive's readers read it. `reply_to` is the `id` of the
+  /// comment answered. Returns the comment's id (`<page>#<key>`).
+  Future<String> postComment(
+      {required String about,
+      String? drive,
+      required String text,
+      String? replyTo});
+
   /// The profile of the signing agent: what the store holds, else what the
   /// connected server has.
   Future<ProfileInfo> profile();
@@ -308,6 +325,13 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// `messages` as [`read_chat_room`] gives them. See [`read_chat_page`].
   Future<String> readChatRoomPage(
       {required String subject, String? before, required int limit});
+
+  /// The comments about `about` (every comment, when `None`), in `drive` or in
+  /// every drive this store holds, oldest first, as JSON `[{id, page, drive,
+  /// about, author, mine, text, c, reply_to?, edited?, mentions}]`. `drive` of
+  /// a comment is the drive its page lives in: who can read it. Read from the
+  /// local store, never waiting on the network.
+  Future<String> readComments({String? about, String? drive});
 
   /// The messages of a conversation, oldest first, as JSON `[{id, author,
   /// author_name, mine, text, c, reply_to?}]`: `id` the message's subject,

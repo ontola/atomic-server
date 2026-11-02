@@ -437,6 +437,67 @@ impl AtomicStore {
         .map_err(AtomicError::from)
     }
 
+    // ── Comments on any resource ─────────────────────────────────────────────
+
+    /// The comments about `about` (every comment, when `None`), in `drive` or in
+    /// every drive this store holds, oldest first, as JSON `[{id, page, drive,
+    /// about, author, mine, text, c, reply_to?, edited?, mentions}]`. `drive` of
+    /// a comment is the drive its page lives in: who can read it. Read from the
+    /// local store, never waiting on the network.
+    pub async fn read_comments(
+        &self,
+        about: Option<String>,
+        drive: Option<String>,
+    ) -> Result<String, AtomicError> {
+        json(
+            &atomic_lib::host::comments::read_comments(
+                &self.db,
+                about.as_deref(),
+                drive.as_deref(),
+            )
+            .await
+            .map_err(AtomicError::from)?,
+        )
+    }
+
+    /// Comment `text` (markdown; mentions as `[@id="<subject>" label="<name>"]`)
+    /// on `about` as this device's agent, as the web app's comment panel does.
+    /// It lands in the `Comments` folder of `drive` (the drive of `about` when
+    /// `None`), so that drive's readers read it. `reply_to` is the `id` of the
+    /// comment answered. Returns the comment's id (`<page>#<key>`).
+    pub async fn post_comment(
+        &self,
+        about: String,
+        drive: Option<String>,
+        text: String,
+        reply_to: Option<String>,
+    ) -> Result<String, AtomicError> {
+        atomic_lib::host::comments::post_comment(
+            &self.node(),
+            self.pusher().as_ref(),
+            &about,
+            drive.as_deref(),
+            &text,
+            reply_to.as_deref(),
+        )
+        .await
+        .map_err(AtomicError::from)
+    }
+
+    /// Replace the text of this agent's own comment `id`.
+    pub async fn edit_comment(&self, id: String, text: String) -> Result<(), AtomicError> {
+        atomic_lib::host::comments::edit_comment(&self.node(), self.pusher().as_ref(), &id, &text)
+            .await
+            .map_err(AtomicError::from)
+    }
+
+    /// Remove this agent's own comment `id`.
+    pub async fn delete_comment(&self, id: String) -> Result<(), AtomicError> {
+        atomic_lib::host::comments::delete_comment(&self.node(), self.pusher().as_ref(), &id)
+            .await
+            .map_err(AtomicError::from)
+    }
+
     /// Full-text search (type-ahead on the last word) across every drive of this
     /// store, or only in `drive` when given. JSON
     /// `[{subject, title, class_name, drive, score}]`, best first; `drive` is the

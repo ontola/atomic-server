@@ -154,6 +154,12 @@ function Headline({ group }: { group: NotificationGroup }): React.JSX.Element {
       ) : (
         <>{`${who}: ${count} comments on ${on}`}</>
       );
+    case 'mention':
+      return count === 1 ? (
+        <>{`${who} mentioned you in ${on}`}</>
+      ) : (
+        <>{`${who}: ${count} mentions of you in ${on}`}</>
+      );
     case 'reply':
       return count === 1 ? (
         <>{`${who} replied to you in ${on}`}</>
