@@ -26,7 +26,7 @@ retarget to develop after that dependency merges.
 - [x] Add browser-language, plural and production locale regression coverage.
 - [x] Update user/contributor documentation and coverage map.
 - [x] Build, lint, typecheck, tests and screenshots.
-- [ ] Review changes and open the stacked PR.
+- [x] Review changes and open the stacked PR.
 - [ ] Observe exact-head CI and remove this plan after required checks pass.
 
 ## Plural-library compatibility
@@ -57,3 +57,6 @@ every existing source literal is localized.
   Run `.e2e-runs/2026-11-02T10-02-42.860Z-pIqqJ5`; screenshots shared in chat.
 - Original four catalogs remain unchanged. Original checkout and parent
   feature checkout match recorded status baselines.
+
+PR: https://github.com/ontola/atomic-server/pull/2433 (ready for review).
+Required exact-head main CI remains pending; retain this plan until it passes.
