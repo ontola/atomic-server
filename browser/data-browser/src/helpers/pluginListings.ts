@@ -24,17 +24,23 @@ function strings(value: unknown): string[] {
 }
 
 /**
- * Reads the body of `/plugin-catalog`, which is untrusted: a node that has no
- * such route (older, or built without plugin routes) or a proxy in front of
- * one can answer 200 with JSON that is not a list, and the page filters it.
- * Throws so the page shows the problem instead of crashing.
+ * Reads the body of `/plugin-catalog`: older nodes return a bare array, while
+ * newer nodes wrap it in `entries` alongside host capability metadata. Only
+ * the listings are needed here. A node or proxy can also answer 200 with an
+ * unrelated JSON body; throw so the page shows the problem without crashing.
  */
 export function parseListings(body: unknown): Listing[] {
-  if (!Array.isArray(body)) {
+  const entries: unknown = Array.isArray(body)
+    ? body
+    : typeof body === 'object' && body !== null && 'entries' in body
+      ? body.entries
+      : undefined;
+
+  if (!Array.isArray(entries)) {
     throw new Error('The plugin catalog did not return a list of plugins.');
   }
 
-  return body
+  return entries
     .filter(
       (entry): entry is Listing => typeof entry === 'object' && entry !== null,
     )

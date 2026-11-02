@@ -3,7 +3,15 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { StrictMode } from 'react';
-import { beforeAll, afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  beforeAll,
+  beforeEach,
+  afterEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import {
   act,
   cleanup,
@@ -15,12 +23,14 @@ import {
 import { ThemeProvider } from 'styled-components';
 import {
   Datatype,
+  commits,
+  core,
   type JSONValue,
   LoroLoader,
   Store,
   StoreContext,
   type Property,
-  type Resource,
+  Resource,
 } from '@tomic/react';
 import { FancyTable } from '@chunks/TableEditor';
 import { buildTheme } from '../../styling';
@@ -45,6 +55,11 @@ vi.mock('./helpers/useColumnLabel', () => ({ useColumnLabel: () => 'Day' }));
 
 const DAY = 'https://example.com/properties/day';
 const STORED = '2026-09-25';
+const fetchResource = vi.fn<typeof fetch>(async input => {
+  throw new Error(
+    `Unexpected HTTP request in a TableCell test: ${String(input)}`,
+  );
+});
 
 const dayProperty: Property = {
   subject: DAY,
@@ -76,7 +91,13 @@ beforeAll(async () => {
     ResizeObserverStub as unknown as typeof ResizeObserver;
 });
 
-afterEach(cleanup);
+beforeEach(() => {
+  fetchResource.mockClear();
+});
+afterEach(() => {
+  cleanup();
+  expect(fetchResource).not.toHaveBeenCalled();
+});
 
 async function renderDateCell(): Promise<Resource> {
   return renderCell(dayProperty, STORED);
@@ -87,7 +108,30 @@ async function renderCell(
   stored: JSONValue,
 ): Promise<Resource> {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
-  // A `_new:` row stays local, so nothing here reaches for a server.
+  store.injectFetch(fetchResource);
+
+  // `connect: false` disables WebSockets, not HTTP metadata reads. Hydrate
+  // the column and the createdAt property TableCell validates on its first edit.
+  for (const definition of [
+    property,
+    {
+      subject: commits.properties.createdAt,
+      datatype: Datatype.TIMESTAMP,
+      shortname: 'createdAt',
+      description: '',
+    },
+  ]) {
+    const resource = new Resource(definition.subject);
+    resource.applyHydratedValues([
+      [core.properties.isA, [core.classes.property]],
+      [core.properties.datatype, definition.datatype],
+      [core.properties.shortname, definition.shortname],
+      [core.properties.description, definition.description],
+    ]);
+    store.addResource(resource);
+  }
+
+  // A `_new:` row stays local; these tests do not persist to a server.
   const row = await store.newResource({
     subject: '_new:day-row',
     noParent: true,
@@ -190,6 +234,7 @@ describe('typing on a selected date cell (#1822)', () => {
     });
 
     await waitFor(() => expect(row.get(DAY)).toBe('2026-10-02'));
+    expect(row.get(commits.properties.createdAt)).toEqual(expect.any(Number));
   });
 });
 
