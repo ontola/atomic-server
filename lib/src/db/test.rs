@@ -2302,10 +2302,7 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
     let wire_json = crate::client::commit_to_wire_json(&followup, &store)
         .await
         .unwrap();
-    let parsed = crate::parse::parse_json_ad_commit_resource(&wire_json, &store)
-        .await
-        .unwrap();
-    let followup_from_wire = Commit::from_resource(parsed).unwrap();
+    let followup_from_wire = Commit::from_json_ad(&wire_json).unwrap();
     store.apply_commit(followup_from_wire, &opts).await.unwrap();
 
     // (1) Plain get_resource path.

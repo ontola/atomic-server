@@ -4,56 +4,51 @@
 export interface Listing {
   subject: string;
   name: string;
-  emoji?: string | null;
+  emoji: string | null;
   description: string;
-  publisher?: string | null;
+  publisher: string | null;
   domains: string[];
   standards: string[];
   /** The Release resource URL an Installation pins. */
   release: string;
   /** The `blake3:` id, which `/plugin-package/{id}` takes. */
   releaseId: string;
-  runtime?: string | null;
-  world?: string | null;
+  runtime: string | null;
+  world: string | null;
 }
 
-export function parsePluginListings(value: unknown): Listing[] {
-  // Newer nodes include host capability metadata alongside their listings.
-  // Keep accepting bare arrays from nodes that predate that envelope.
-  const entries: unknown = Array.isArray(value)
-    ? value
-    : isRecord(value)
-      ? value.entries
+function strings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
+/**
+ * Reads the body of `/plugin-catalog`: older nodes return a bare array, while
+ * newer nodes wrap it in `entries` alongside host capability metadata. Only
+ * the listings are needed here. A node or proxy can also answer 200 with an
+ * unrelated JSON body; throw so the page shows the problem without crashing.
+ */
+export function parseListings(body: unknown): Listing[] {
+  const entries: unknown = Array.isArray(body)
+    ? body
+    : typeof body === 'object' && body !== null && 'entries' in body
+      ? body.entries
       : undefined;
 
-  if (!Array.isArray(entries) || !entries.every(isListing)) {
-    throw new Error('Invalid plugin catalog response');
+  if (!Array.isArray(entries)) {
+    throw new Error('The plugin catalog did not return a list of plugins.');
   }
 
-  return entries;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every(item => typeof item === 'string');
-}
-
-function isListing(value: unknown): value is Listing {
-  return (
-    isRecord(value) &&
-    ['subject', 'name', 'description', 'release', 'releaseId'].every(
-      key => typeof value[key] === 'string',
-    ) &&
-    isStringArray(value.domains) &&
-    isStringArray(value.standards) &&
-    ['emoji', 'publisher', 'runtime', 'world'].every(
-      key =>
-        value[key] === undefined ||
-        value[key] === null ||
-        typeof value[key] === 'string',
+  return entries
+    .filter(
+      (entry): entry is Listing => typeof entry === 'object' && entry !== null,
     )
-  );
+    .map(entry => ({
+      ...entry,
+      name: String(entry.name ?? ''),
+      description: String(entry.description ?? ''),
+      domains: strings(entry.domains),
+      standards: strings(entry.standards),
+    }));
 }

@@ -222,9 +222,15 @@ failure and successful server visibility. The provider setup browser flows
 
 Server marketplace discovery: `helpers/pluginListings.test.ts` covers legacy
 Listing arrays, catalog envelopes with `entries` and `hostFeatures`, empty
-catalogs and malformed responses. `integration-store-install.spec.ts` checks
+catalogs, invalid top-level responses and normalization of listing text and
+collection fields. `integration-store-install.spec.ts` checks
 search and Installation review with both response formats, and that invalid
 catalog data shows an alert while the Apps page remains available.
+
+Table cell editing: `TablePage/TableCell.test.tsx` supplies column and
+`createdAt` property metadata locally and asserts that editing makes no HTTP
+requests. The date-commit case exercises the real first-edit timestamp setter
+without depending on external metadata requests.
 
 Plugin discovery: `PluginRuns/pluginCatalog.test.tsx` covers parsing the remote
 plugin catalog, which entries unlock "Show experimental plugins" (entries

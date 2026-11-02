@@ -118,7 +118,7 @@ test('a malformed plugin catalog shows an alert while Apps remains usable', asyn
     page.getByRole('heading', { name: 'Apps', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('alert').filter({ hasText: /Invalid plugin catalog/i }),
+    page.getByRole('alert').filter({ hasText: /did not return a list/ }),
   ).toBeVisible();
   await expect(
     page.getByRole('textbox', { name: 'Search apps' }),

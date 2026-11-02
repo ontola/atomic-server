@@ -268,7 +268,13 @@ async fn rows_and_icons_carry_the_resources_own_emoji() {
     assert_eq!(icons.len(), 1);
     assert_eq!(icons[&with], "🦊");
 
-    // A drive's own icon comes with the drive list.
+    // A drive's own icon comes with the drive list. A drive of its own: the
+    // shared one is rewritten by the tests that update its lists (favorites,
+    // conversations), and a save from a stale copy drops the emoji again.
+    let drive = {
+        let _one_at_a_time = crate::api::simple::tests::PRIVATE_DRIVE.lock().await;
+        db().unwrap().create_drive("Icon drive").await.unwrap()
+    };
     set_emoji(drive.clone(), "🏔").await;
     let drives: Vec<Json> =
         serde_json::from_str(&crate::api::simple::list_drives_with_names().await.unwrap()).unwrap();

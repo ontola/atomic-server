@@ -19,8 +19,8 @@ Three classes describe a plugin's life on a server:
 
 The Apps page accepts both a JSON array of Listings from `GET /plugin-catalog`
 and an object with that array in `entries`. Additional response metadata, such
-as `hostFeatures`, does not change the listings. Invalid catalog responses show
-a catalog error while the rest of the page stays available.
+as `hostFeatures`, does not change the listings. A response without a listings
+array shows a catalog error while the rest of the page stays available.
 
 ## Installing a plugin
 

@@ -4054,18 +4054,6 @@ msgstr "Connecting…"
 msgid "Only on this device"
 msgstr "Only on this device"
 
-#: src/components/ConnectToDeviceForm.tsx
-msgid "Camera access is needed to scan a code."
-msgstr "Camera access is needed to scan a code."
-
-#: src/components/ConnectToDeviceForm.tsx
-msgid "Could not open the scanner."
-msgstr "Could not open the scanner."
-
-#: src/components/ConnectToDeviceForm.tsx
-msgid "<0/> Scan a QR code"
-msgstr "<0/> Scan a QR code"
-
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Your data is on another device"
 msgstr "Your data is on another device"
