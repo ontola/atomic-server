@@ -95,7 +95,7 @@ impl AtomicStore {
         json(&list)
     }
 
-    /// The notifications in the Inbox of the person's private drive (what the web
+    /// The notifications in the Inbox of the person's personal drive (what the web
     /// app recorded there), newest first, one per source, as JSON `[{subject,
     /// title, body, about, kind, actor, source, occurred_at, read}]`. Read from the
     /// local store; empty when there is no Inbox on this device.
@@ -213,7 +213,7 @@ impl AtomicStore {
     /// The person's conversations (DMs and group chats), as JSON
     /// `[{subject, title, class_name, opened_at, last_message, emoji?}]`, newest
     /// activity first (`opened_at` is the time of the last message in ms, 0 for an
-    /// empty or unreadable one, which come last in the order the private drive
+    /// empty or unreadable one, which come last in the order the personal drive
     /// lists them). A conversation has no name of its own: its title is who else is
     /// in it, as the web app shows it. `last_message` is the text of the newest
     /// message ("" when there is none or it cannot be opened). `class_name` is
@@ -478,7 +478,7 @@ impl AtomicStore {
         ))
     }
 
-    /// Start an AI chat named `name` in the agent's private drive, as the web
+    /// Start an AI chat named `name` in the agent's personal drive, as the web
     /// app's AI sidebar does. Returns the chat's subject.
     pub async fn create_ai_chat(&self, name: String) -> Result<String, AtomicError> {
         chats::create_ai_chat(&self.node(), self.pusher().as_ref(), &name)
@@ -549,7 +549,7 @@ impl AtomicStore {
     }
 
     /// Import a whole AI chat at once: an AI chat named `name` in the agent's
-    /// private drive with every message of `entries_json`, a JSON array of
+    /// personal drive with every message of `entries_json`, a JSON array of
     /// `{role, parts, c}` (`parts` as `append_chat_entry` takes them, as an array
     /// or its JSON string; `c` the message's time in ms, now when absent), oldest
     /// first. One commit per 256 messages instead of one per message. Returns the
@@ -595,9 +595,9 @@ impl AtomicStore {
 }
 
 /// Conversations are drives of their own, listed in neither `drives` nor (for
-/// ones someone else started) the private drive; so nothing else brings them
+/// ones someone else started) the personal drive; so nothing else brings them
 /// here or subscribes to them. This does, in the background and one run at a
-/// time per handle: for every conversation the private drive lists and every
+/// time per handle: for every conversation the personal drive lists and every
 /// one the connected server finds the person in (`GET /conversations`, as the
 /// web app asks), fetch it when missing, subscribe, and ask for what was said
 /// while this device was away. Errors (no session, no endpoint) are left for

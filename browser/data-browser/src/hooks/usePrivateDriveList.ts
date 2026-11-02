@@ -33,7 +33,7 @@ export function usePrivateDriveList(
       if (!privateDrive) {
         store.notifyError(
           new Error(
-            'Could not update your list: no private drive is set up for this account yet.',
+            'Could not update your list: no personal drive is set up for this account yet.',
           ),
         );
 

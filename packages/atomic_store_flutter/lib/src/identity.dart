@@ -34,7 +34,7 @@ class SignIn {
 
   final String agentSubject;
 
-  /// The drive the store now works in (the agent's private drive unless the
+  /// The drive the store now works in (the agent's personal drive unless the
   /// secret named another).
   final String? drive;
 
@@ -76,7 +76,7 @@ abstract interface class Identity {
   /// The signing agent's secret, `null` when signed out. Sensitive.
   String? get secret;
 
-  /// Makes a new agent called [name] and its private drive, signs as it from
+  /// Makes a new agent called [name] and its personal drive, signs as it from
   /// now on and works in the drive. Returns the new secret, to keep.
   Future<({String secret, String agentSubject, String drive})> create(
       String name);

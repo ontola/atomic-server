@@ -71,7 +71,7 @@ impl PeerDialer for IrohDialer {
     }
 }
 
-/// The drives to look for devices in: the active one, and the private drive,
+/// The drives to look for devices in: the active one, and the personal drive,
 /// which every device of the same agent holds (a device signed in with the
 /// secret starts there, while the others may have another workspace open).
 pub(crate) fn search_drives(store: &atomic_lib::Db) -> Vec<String> {

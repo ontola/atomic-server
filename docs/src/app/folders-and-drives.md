@@ -6,7 +6,7 @@ Everything you make needs a place to live, and a way to decide who can touch it.
 
 A *drive* is the top of a tree of resources, and the unit you sync and share.
 You get a home drive when you start.
-The drive switcher at the top of the sidebar lists *Private drive*, *New Drive* (for a team or project), *View all drives* and *Storage and hosting*.
+The drive switcher at the top of the sidebar lists *Personal drive*, *New Drive* (for a team or project), *View all drives* and *Storage and hosting*.
 Drive settings let you manage who has access, and what is installed.
 
 ![The drive switcher and the sidebar tree](../assets/app/drives.png)

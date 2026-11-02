@@ -125,8 +125,8 @@ export function DriveSwitcher({
       ? [
           {
             id: privateDrive,
-            label: 'Private drive',
-            helper: 'Switch to your personal drive.',
+            label: 'Personal drive',
+            helper: 'Switch to your own drive.',
             suffix: badge(privateDrive),
             disabled: false,
             onClick: (): void => switchTo(privateDrive),

@@ -3640,10 +3640,6 @@ msgid "{0}'s Drive"
 msgstr ""
 
 #: src/components/NewIdentitySection.tsx
-msgid "Create a new Agent on this server. We will set your username and create a private drive as your home."
-msgstr "Crea un nuevo Agente en este servidor. Estableceremos tu nombre de usuario y crearemos una unidad privada como tu espacio personal."
-
-#: src/components/NewIdentitySection.tsx
 msgid "Are you sure you've stored this secret somewhere safe? You cannot recover it if you lose it."
 msgstr "¿Estás seguro de que has guardado este secreto en un lugar seguro? No podrás recuperarlo si lo pierdes."
 
@@ -3962,10 +3958,6 @@ msgstr ""
 #. 0: ' '
 #: src/components/Presence/TypingIndicator.tsx
 msgid "<0/> and{0} <1/> are typing"
-msgstr ""
-
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Private drive"
 msgstr ""
 
 #: src/components/SideBar/DriveSwitcher.tsx
@@ -5638,30 +5630,6 @@ msgstr ""
 msgid "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
 msgstr ""
 
-#: src/views/Drive/DrivePage.tsx
-msgid "Your private drive keeps its name. It is tied to your account, not to a project."
-msgstr ""
-
-#: src/components/Drives/PrivateDriveBadge.tsx
-msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
-msgstr ""
-
-#: src/components/Share/ShareDialog.tsx
-msgid "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
-msgstr ""
-
-#: src/components/NewIdentitySection.tsx
-msgid "Creating your private drive…"
-msgstr ""
-
-#: src/hooks/usePrivateDriveList.ts
-msgid "Could not update your list: no private drive is set up for this account yet."
-msgstr ""
-
-#: src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr ""
-
 #: src/components/Drives/DrivesCard.tsx
 msgid "Drives"
 msgstr ""
@@ -5891,10 +5859,6 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "See plans"
-msgstr ""
-
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Switch to your personal drive."
 msgstr ""
 
 #: src/hooks/useDriveHostingStates.ts
@@ -12464,10 +12428,6 @@ msgid "This item hasn't reached this device yet"
 msgstr ""
 
 #: src/views/DriveUnavailable.tsx
-msgid "Your private drive is kept on your devices. It will appear here once the server or your other device answers."
-msgstr ""
-
-#: src/views/DriveUnavailable.tsx
 msgid "This device hasn't kept a copy of the drive and isn't connected to its server yet. It will open as soon as the server answers."
 msgstr ""
 
@@ -13379,4 +13339,46 @@ msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Create a new Agent on this server. We will set your username and create a personal drive as your home."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating your personal drive…"
+msgstr ""
+
+#: src/hooks/usePrivateDriveList.ts
+msgid "Could not update your list: no personal drive is set up for this account yet."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Your personal drive is always first. Unstar any other drive to move it back to recently visited."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "Your personal drive is kept on your devices. It will appear here once the server or your other device answers."
+msgstr ""
+
+#: src/components/Drives/PrivateDriveBadge.tsx
+msgid "This is your personal drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "This is your <0>personal drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
+msgstr ""
+
+#: src/components/SideBar/DriveSwitcher.tsx
+#: src/components/SideBar/SideBarDrive.tsx
+#: src/views/Drive/DrivePage.tsx
+msgid "Personal drive"
+msgstr ""
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Switch to your own drive."
+msgstr ""
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Your personal drive keeps its name. It is tied to your account, not to a project."
 msgstr ""

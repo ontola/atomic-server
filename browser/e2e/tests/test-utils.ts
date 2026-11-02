@@ -171,7 +171,7 @@ export const currentDriveTitle = (page: Page) =>
  * Opens the current drive's page. The sidebar header is the drive switcher,
  * not a link, so this goes to the drive the store has selected. Picking it
  * from the switcher menu raced its list: right after `newDrive` the menu did
- * not hold the new drive yet, the fallback picked "Private drive", and the
+ * not hold the new drive yet, the fallback picked "Personal drive", and the
  * share test invited to the dev drive instead.
  */
 export async function openCurrentDrive(page: Page) {

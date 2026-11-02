@@ -85,7 +85,7 @@ pub(crate) async fn ensure_sync_connectivity(store: &atomic_lib::Db) -> Result<(
     };
     let _ = drive;
     // `start_peer` also starts the search loop, which announces this device
-    // for the active and the private drive and keeps looking for the others.
+    // for the active and the personal drive and keeps looking for the others.
     let _ = start_peer().await?;
     Ok(())
 }

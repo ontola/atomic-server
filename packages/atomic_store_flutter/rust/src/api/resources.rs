@@ -384,7 +384,7 @@ impl AtomicStore {
         std::sync::Arc::ptr_eq(&self.db.kv, &other.db.kv)
     }
 
-    /// Create an agent named `name` and its private drive in this store, and
+    /// Create an agent named `name` and its personal drive in this store, and
     /// sign with that agent from now on, working in the new drive. Returns
     /// the agent's secret (to keep) and the drive's subject.
     pub async fn setup(&self, name: String) -> Result<StoreSetup, AtomicError> {
@@ -723,7 +723,7 @@ pub struct StoreSetup {
     /// The agent's secret: keep it to open the store as this agent again.
     pub agent_secret: String,
     pub agent_subject: String,
-    /// The agent's private drive.
+    /// The agent's personal drive.
     pub drive: String,
 }
 

@@ -215,7 +215,7 @@ const SettingsAgent: React.FunctionComponent = () => {
               <SectionHeader>
                 <Row center gap='1ch'>
                   <Heading as='h2'>My drives</Heading>
-                  <InfoHint title='Your private drive is always first. Unstar any other drive to move it back to recently visited.' />
+                  <InfoHint title='Your personal drive is always first. Unstar any other drive to move it back to recently visited.' />
                 </Row>
                 <Row gap='0.5rem'>
                   <NewInstanceButton

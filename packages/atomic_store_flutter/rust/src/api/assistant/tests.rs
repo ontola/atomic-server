@@ -38,7 +38,7 @@ async fn pump(rx: &mut tokio::sync::broadcast::Receiver<atomic_lib::db::DbEvent>
     }
 }
 
-/// Put `subjects` in a list property of the private drive, as the web app does.
+/// Put `subjects` in a list property of the personal drive, as the web app does.
 async fn set_home_list(property: &str, subjects: &[&str]) {
     let _one_at_a_time = crate::api::simple::tests::PRIVATE_DRIVE.lock().await;
     let store = db().unwrap();

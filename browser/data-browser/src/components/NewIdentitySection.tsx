@@ -480,7 +480,7 @@ export function NewIdentitySection({
         <Column key='idle' gap='1rem'>
           <p key='copy'>
             Create a new Agent on this server. We will set your username and
-            create a private drive as your home.
+            create a personal drive as your home.
           </p>
           {error && <ErrorText key='error'>{error}</ErrorText>}
           <Button key='create' onClick={handleCreate} disabled={loading}>
@@ -509,7 +509,7 @@ export function NewIdentitySection({
 
       {step === 'creating-drive' && (
         <Column key='creating-drive' gap='1rem'>
-          <p>Creating your private drive…</p>
+          <p>Creating your personal drive…</p>
         </Column>
       )}
 

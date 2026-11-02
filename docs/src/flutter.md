@@ -69,7 +69,7 @@ import 'package:atomic_store_flutter/atomic_store_flutter.dart';
 
 await AtomicFlutter.init(); // once, in main()
 
-// 1. Local node: database, signing agent and a private Drive.
+// 1. Local node: database, signing agent and a personal Drive.
 //    Nothing here needs a network.
 final node = await AtomicFlutter.open(path: appDir, agentName: 'Alice');
 await secureStorage.write(key: 'agent', value: node.agentSecret); // the secret is the account

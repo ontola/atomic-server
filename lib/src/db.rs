@@ -1722,11 +1722,11 @@ impl Db {
         let private_key = agent
             .private_key
             .as_ref()
-            .ok_or("Cannot derive a private drive without a private key")?;
+            .ok_or("Cannot derive a personal drive without a private key")?;
         crate::genesis::GenesisCert::private_drive_subject(private_key)
     }
 
-    /// Materialize the derived private drive if it is not already stored.
+    /// Materialize the derived personal drive if it is not already stored.
     /// Repeat genesis for the same subject merges.
     pub async fn ensure_private_drive(&self) -> AtomicResult<String> {
         let agent = self.get_default_agent()?;
@@ -1743,7 +1743,7 @@ impl Db {
         let private_key = agent
             .private_key
             .as_ref()
-            .ok_or("Cannot derive a private drive without a private key")?;
+            .ok_or("Cannot derive a personal drive without a private key")?;
         let did = crate::genesis::GenesisCert::private_drive_subject(private_key)?;
         if self.get_resource(&did.as_str().into()).await.is_ok() {
             return Ok(did);
@@ -1770,7 +1770,7 @@ impl Db {
         );
         builder.set(
             urls::DESCRIPTION.into(),
-            Value::String("Your private drive.".into()),
+            Value::String("Your personal drive.".into()),
         );
 
         let commit =
@@ -2230,7 +2230,7 @@ impl Db {
         Ok(result)
     }
 
-    /// Full onboarding: create an agent and a private drive in one call.
+    /// Full onboarding: create an agent and a personal drive in one call.
     /// The agent's secret will contain the drive DID for DHT discovery.
     /// Returns (agent, drive_subject).
     pub async fn setup(&self, agent_name: &str) -> AtomicResult<(crate::agents::Agent, String)> {

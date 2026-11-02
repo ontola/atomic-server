@@ -89,7 +89,7 @@ export function DriveUnavailable({
         {!hasBackup && (
           <Lead>
             {vault
-              ? 'Your private drive is kept on your devices. It will appear here once the server or your other device answers.'
+              ? 'Your personal drive is kept on your devices. It will appear here once the server or your other device answers.'
               : localOnly
                 ? "This drive isn't connected to a server, so it syncs directly between devices. Open it on a device that has it, and it will arrive here."
                 : serverFailed

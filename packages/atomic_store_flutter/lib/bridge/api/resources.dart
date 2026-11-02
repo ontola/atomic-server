@@ -93,7 +93,7 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// The server this handle's session was last opened on.
   String? connectedServer();
 
-  /// Start an AI chat named `name` in the agent's private drive, as the web
+  /// Start an AI chat named `name` in the agent's personal drive, as the web
   /// app's AI sidebar does. Returns the chat's subject.
   Future<String> createAiChat({required String name});
 
@@ -150,7 +150,7 @@ abstract class AtomicStore implements RustOpaqueInterface {
   Future<ResourceData> getResourceData({required String subject});
 
   /// Import a whole AI chat at once: an AI chat named `name` in the agent's
-  /// private drive with every message of `entries_json`, a JSON array of
+  /// personal drive with every message of `entries_json`, a JSON array of
   /// `{role, parts, c}` (`parts` as `append_chat_entry` takes them, as an array
   /// or its JSON string; `c` the message's time in ms, now when absent), oldest
   /// first. One commit per 256 messages instead of one per message. Returns the
@@ -196,7 +196,7 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// The person's conversations (DMs and group chats), as JSON
   /// `[{subject, title, class_name, opened_at, last_message, emoji?}]`, newest
   /// activity first (`opened_at` is the time of the last message in ms, 0 for an
-  /// empty or unreadable one, which come last in the order the private drive
+  /// empty or unreadable one, which come last in the order the personal drive
   /// lists them). A conversation has no name of its own: its title is who else is
   /// in it, as the web app shows it. `last_message` is the text of the newest
   /// message ("" when there is none or it cannot be opened). `class_name` is
@@ -212,7 +212,7 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// Favorites that are gone or unreadable are left out.
   Future<String> listFavorites({required int limit});
 
-  /// The notifications in the Inbox of the person's private drive (what the web
+  /// The notifications in the Inbox of the person's personal drive (what the web
   /// app recorded there), newest first, one per source, as JSON `[{subject,
   /// title, body, about, kind, actor, source, occurred_at, read}]`. Read from the
   /// local store; empty when there is no Inbox on this device.
@@ -389,7 +389,7 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// description) as a signed commit, synced like any edit.
   Future<void> setProfile({required String name, required String description});
 
-  /// Create an agent named `name` and its private drive in this store, and
+  /// Create an agent named `name` and its personal drive in this store, and
   /// sign with that agent from now on, working in the new drive. Returns
   /// the agent's secret (to keep) and the drive's subject.
   Future<StoreSetup> setup({required String name});
@@ -683,7 +683,7 @@ class StoreSetup {
   final String agentSecret;
   final String agentSubject;
 
-  /// The agent's private drive.
+  /// The agent's personal drive.
   final String drive;
 
   const StoreSetup({

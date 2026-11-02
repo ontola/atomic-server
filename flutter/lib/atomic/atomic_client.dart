@@ -210,7 +210,7 @@ class AtomicClient {
       AssistantJson.parseRecentResources(
           await assistant.listFavorites(limit: limit));
 
-  /// The notifications of the Inbox in the private drive, newest first.
+  /// The notifications of the Inbox in the personal drive, newest first.
   static Future<List<NotificationItem>> notifications({int limit = 50}) async =>
       AssistantJson.parseNotifications(
           await assistant.listNotifications(limit: limit));
@@ -293,7 +293,7 @@ class AtomicClient {
           _activityEntry(a),
       ];
 
-  /// Starts an AI chat named [name] in the private drive; returns its subject.
+  /// Starts an AI chat named [name] in the personal drive; returns its subject.
   static Future<String> createAiChat(String name) =>
       assistant.createAiChat(name: name);
 

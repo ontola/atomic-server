@@ -54,6 +54,8 @@ export interface EditableTitleProps {
    * decision.
    */
   lockedReason?: string;
+  /** Shown in place of the stored title (display only, never written). */
+  displayText?: string;
 }
 
 const opts = {
@@ -72,6 +74,7 @@ export function EditableTitle({
   // Destructured rather than left in `...props`, which is spread onto the
   // input — React would warn about an unknown DOM attribute.
   lockedReason,
+  displayText,
   ...props
 }: EditableTitleProps): JSX.Element {
   const store = useStore();
@@ -238,7 +241,9 @@ export function EditableTitle({
     >
       <>
         <TitleIcon resource={resource} onPickIcon={pickIcon} />
-        <TitleText data-title-text>{text || placeholder}</TitleText>
+        <TitleText data-title-text>
+          {displayText ?? (text || placeholder)}
+        </TitleText>
         {canEdit && <Icon />}
       </>
     </Title>

@@ -1,4 +1,10 @@
-import { Datatype, core, useCanWrite, type Server } from '@tomic/react';
+import {
+  Datatype,
+  core,
+  useCanWrite,
+  useTitle,
+  type Server,
+} from '@tomic/react';
 import { ContainerNarrow } from '@components/Containers';
 import { Button } from '@components/Button';
 import { useSettings } from '@helpers/AppSettings';
@@ -6,6 +12,7 @@ import { ResourcePageProps } from '../ResourcePage';
 import { EditableTitle } from '@components/EditableTitle';
 import { useVisibleDriveChildren } from '@hooks/useVisibleDriveChildren';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
+import { personalDriveName } from '@helpers/driveDisplayName';
 import { PrivateDriveBadge } from '@components/Drives/PrivateDriveBadge';
 import { ResourceCoverImage } from '@components/ResourceDecorations';
 import { Column, Row } from '@components/Row';
@@ -49,6 +56,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const showStart =
     canEdit && (filling || (empty && subResources.length === 0));
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
+  const [title] = useTitle(resource);
 
   if (!baseURL) {
     setBaseURL(resource.subject);
@@ -65,12 +73,18 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                 <EditableTitle
                   resource={resource}
                   withDecorations
+                  displayText={
+                    isPrivateDrive
+                      ? (personalDriveName(title, 'Personal drive') ??
+                        undefined)
+                      : undefined
+                  }
                   // Its subject is derived from your key: there is exactly one and
                   // it cannot be swapped. A name like "Q3 Launch" on it would be a
                   // name that lies about what the thing is.
                   lockedReason={
                     isPrivateDrive
-                      ? 'Your private drive keeps its name. It is tied to your account, not to a project.'
+                      ? 'Your personal drive keeps its name. It is tied to your account, not to a project.'
                       : undefined
                   }
                 />

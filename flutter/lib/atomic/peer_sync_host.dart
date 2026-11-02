@@ -63,7 +63,7 @@ class PeerSyncHost {
       driveSignalingUrl: _driveSignalingUrl,
       // Every drive joins its room, also one this app syncs through a Cloud
       // Server: the web joins it whenever its own server does not carry the
-      // drive (a private drive in the browser), and the two must meet.
+      // drive (a personal drive in the browser), and the two must meet.
       usesCloudServer: (_) async => false,
       portalUrl: portalUrl,
       onStatus: (drive, status) => debugPrint('Peer sync $drive: $status'),

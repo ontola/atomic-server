@@ -574,7 +574,7 @@ function PrivateDriveWarning(): JSX.Element {
     <PrivateDriveWarningBox role='alert'>
       <FaTriangleExclamation />
       <span>
-        This is your <strong>private drive</strong>. Sharing it shares your
+        This is your <strong>personal drive</strong>. Sharing it shares your
         drive list, favourites, notifications and AI chats along with it. To
         work with someone, make a drive for the work and share that instead.
       </span>

@@ -1,4 +1,7 @@
-import { driveDisplayName } from '../../helpers/driveDisplayName';
+import {
+  driveDisplayName,
+  personalDriveName,
+} from '../../helpers/driveDisplayName';
 import {
   dataBrowser,
   useCanWrite,
@@ -205,9 +208,12 @@ function DriveSwitcherTrigger({
   const [driveEmoji] = useString(driveResource, dataBrowser.properties.emoji);
   const [driveIcon] = useSubject(driveResource, dataBrowser.properties.icon);
   const hasCustomGlyph = !!(driveEmoji || driveIcon);
+  const shownTitle = isPrivateDrive
+    ? personalDriveName(title, 'Personal drive')
+    : title;
   const driveName = driveResource.isUnauthorized()
     ? 'Unauthorized'
-    : driveDisplayName(driveResource.error ? undefined : title, drive);
+    : driveDisplayName(driveResource.error ? undefined : shownTitle, drive);
 
   return (
     <TriggerButton

@@ -119,7 +119,7 @@ client, so paste-the-secret is the way in here.
   database in `path`, and returns an `AtomicNode`:
   - `node.store`: the `Store`, working in `node.drive`;
   - `node.agentSecret`: **the identity**. First run creates a new agent and a
-    private drive. `open` keeps the secret in the OS keychain and uses it on the
+    personal drive. `open` keeps the secret in the OS keychain and uses it on the
     next start (see below);
   - `node.connect(serverOrigin)` / `disconnect()`: sync with an Atomic Server
     over WebSocket (same as `node.sync.connect`);
@@ -135,7 +135,7 @@ same process is not safe. Keep the `AtomicNode`.
 ## Identity, restart and sync
 
 **Identity is the agent secret.** The first `open` creates an Ed25519 agent and
-a private drive, both on this device only; nothing is sent anywhere. The Rust
+a personal drive, both on this device only; nothing is sent anywhere. The Rust
 node does not remember its agent in the database file, so `open` keeps the
 secret itself: in `flutter_secure_storage` (the keychain on macOS/iOS), under a
 key made from `path`, and uses it when you pass no `agentSecret`. It is
@@ -208,7 +208,7 @@ If the server refuses the agent or the drive, the drive fetch fails quietly
 It does not retry or reconnect on its own: call `connect` again after a drop.
 
 **A second device**, same person: open there with the same `agentSecret` and a
-new `path`, and **no `drive:`**. The secret carries the agent's private drive,
+new `path`, and **no `drive:`**. The secret carries the agent's personal drive,
 so the node works in it (`node.drive`) and `node.driveNeedsSync` is `true`: the
 drive is not on this device yet, so the store is empty until you `connect` to
 the server both devices use. The drive is fetched from the server and from then
@@ -228,7 +228,7 @@ widgets and pass `node.peers` etc. in production.
 ### Identity (`node.identity`)
 
 ```dart
-final made = await node.identity.create('Alice');    // new agent + private drive
+final made = await node.identity.create('Alice');    // new agent + personal drive
 await secureStorage.write(key: 'agent', value: made.secret);
 
 final found = await node.identity.signIn(secret);    // an existing agent
@@ -242,7 +242,7 @@ await node.identity.signOut();                       // forget the agent here
 secret names (`node.drive`, `node.store.drive`).
 
 Signing in as a *different* agent brings the old one's work along: the old agent
-adds the new one to `write` on every drive it can write (its private drive only
+adds the new one to `write` on every drive it can write (its personal drive only
 if it holds something), and they are listed for the new agent. `SignIn.broughtAlong`
 has those drive subjects (show "your notes are in your account now"), and
 `SignIn.previousSecret` is the old agent's secret; the node archives it in the

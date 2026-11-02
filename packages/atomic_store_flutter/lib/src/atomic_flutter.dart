@@ -45,7 +45,7 @@ abstract final class AtomicFlutter {
   /// and returns a [Store] on it.
   ///
   /// - First run: pass no [agentSecret]. A new agent called [agentName] and
-  ///   its private drive are created; keep [AtomicNode.agentSecret] (secure
+  ///   its personal drive are created; keep [AtomicNode.agentSecret] (secure
   ///   storage) and pass it back on the next start.
   /// - Later runs: pass the saved [agentSecret]; the store works in [drive],
   ///   or in the drive the node was last on.

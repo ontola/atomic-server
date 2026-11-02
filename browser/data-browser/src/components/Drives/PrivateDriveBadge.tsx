@@ -13,7 +13,7 @@ import type { JSX } from 'react';
  */
 export function PrivateDriveBadge(): JSX.Element {
   return (
-    <Badge title='This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project.'>
+    <Badge title='This is your personal drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project.'>
       <FaLock />
       <span>Private</span>
     </Badge>
