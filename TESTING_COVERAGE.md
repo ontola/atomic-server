@@ -475,6 +475,26 @@ public deployment, and interactive rich-text editor/cursor acceptance.
 
 ## How to read this
 
+### Interface translations
+
+`browser/data-browser/scripts/check-translations.test.ts` audits all supported
+UI catalogs against the English source catalog. It checks missing/empty and
+fuzzy entries, duplicate/context keys, every plural form, locale headers and
+interpolation/markup/count placeholders. Fixture regressions cover multiline
+and obsolete PO records, valid unchanged product names, and damaged markup.
+The read-only `pnpm check:translations --json` command lists all gaps with
+source references. `wuchale check --full` separately checks extraction parity.
+These structural checks do not certify linguistic quality or detect every
+unextracted literal; runtime locale switching and production UI verification
+remain necessary. Resource content and plugin-supplied text are separate.
+
+`browser/e2e/tests/interface-language.spec.ts` switches from English to Spanish,
+French and German through Settings, checks translated account headings and
+drive menus, reloads to verify persistence, and switches back. A custom drive
+title remains unchanged. The tests attach account screenshots for each locale.
+`DefaultTrigger.test.tsx` checks render-time tooltip translation without
+replacing the dropdown button, plus the existing default and string-title API.
+
 Plugin catalog: the e2e suite runs against a static mock of the atomic-plugins
 catalog (`testdata/atomic-plugins-mock`: `catalog.json` plus the test plugins'
 `plugin.js` bundles in the published layout), which Playwright starts as a

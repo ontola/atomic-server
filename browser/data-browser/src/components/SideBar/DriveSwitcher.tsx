@@ -30,12 +30,15 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 
 const MAX_SHOWN_DRIVES = 10;
 
-const DefaultTrigger = buildDefaultTrigger(<FaCaretDown />, 'Switch Drive');
+const DefaultTrigger = buildDefaultTrigger(
+  <FaCaretDown />,
+  () => 'Switch Drive',
+);
 
 /** Up/down chevron trigger, for placing the switcher next to a drive title. */
 export const DriveSwitcherChevronTrigger = buildDefaultTrigger(
   <LuChevronsUpDown />,
-  'Switch Drive',
+  () => 'Switch Drive',
 );
 
 function getTitle(resource: Resource): string {

@@ -17,6 +17,7 @@ import { ResourceInline } from '../views/ResourceInline/ResourceInline';
 import { Button } from './Button';
 import { Row } from './Row';
 import { ResourceDiff, type AtomicDiff } from './ResourceDiff/ResourceDiff';
+import { plural } from '@helpers/plural';
 
 interface ForkBarProps {
   resource: Resource;
@@ -85,18 +86,18 @@ export function ForkBar({ resource }: ForkBarProps): React.JSX.Element | null {
   const mergeable = changes.length > 0 || hasBody;
 
   const merge = async () => {
+    const propertyNames = conflicts
+      .map(c => c.property.split('/').pop())
+      .join(', ');
+
     // Never let a merge silently overwrite a property that was also edited on
     // the original since the fork — make the reviewer choose.
     if (
       conflicts.length > 0 &&
       !window.confirm(
-        `${conflicts.length} propert${
-          conflicts.length === 1 ? 'y was' : 'ies were'
-        } also changed on the original since this fork was made (${conflicts
-          .map(c => c.property.split('/').pop())
-          .join(', ')}). Merging will overwrite ${
-          conflicts.length === 1 ? 'it' : 'them'
-        } with this fork's version. Continue?`,
+        conflicts.length === 1
+          ? `One property also changed on the original since this fork was made (${propertyNames}). Merging will overwrite it with this fork's version. Continue?`
+          : `${conflicts.length} properties also changed on the original since this fork was made (${propertyNames}). Merging will overwrite them with this fork's version. Continue?`,
       )
     ) {
       return;
@@ -134,13 +135,14 @@ export function ForkBar({ resource }: ForkBarProps): React.JSX.Element | null {
               ? hasBody
                 ? 'Edit the body, then merge.'
                 : 'No changes yet.'
-              : `${changes.length} changed propert${
-                  changes.length === 1 ? 'y' : 'ies'
-                }.`}
+              : plural(changes.length, [
+                  '# changed property.',
+                  '# changed properties.',
+                ])}
           </Subtle>
           {conflicts.length > 0 && (
             <Conflict>
-              {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'}
+              {plural(conflicts.length, ['# conflict', '# conflicts'])}
             </Conflict>
           )}
         </Row>

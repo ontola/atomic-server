@@ -41,7 +41,7 @@ interface Props {
 
 const BlockOptionsTrigger = buildDefaultTrigger(
   <FaEllipsis />,
-  'Block options',
+  () => 'Block options',
 );
 
 /** The widths offered in the menu, as a fraction of the 12-column grid. */

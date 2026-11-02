@@ -268,7 +268,7 @@ function useViewTypes(views: string[]): Map<string, string> {
   );
 }
 
-const AddViewTrigger = buildDefaultTrigger(<FaPlus />, 'Add view');
+const AddViewTrigger = buildDefaultTrigger(<FaPlus />, () => 'Add view');
 
 /** The `+` tab: a dropdown to add a new view of a chosen kind (Table/Kanban). */
 function AddViewMenu({
@@ -362,7 +362,7 @@ const SelectionCount = styled.span`
   color: ${p => p.theme.colors.textLight};
 `;
 
-const FilterTrigger = buildDefaultTrigger(<FaFilter />, 'Filter');
+const FilterTrigger = buildDefaultTrigger(<FaFilter />, () => 'Filter');
 
 /** Dropdown that adds a filter for one of the table's columns. */
 function FilterMenu({
@@ -697,7 +697,7 @@ function ViewTab({
 
 const ColumnsTrigger = buildDefaultTrigger(
   <FaTableColumns />,
-  'Toggle properties',
+  () => 'Toggle properties',
 );
 
 /**

@@ -18,7 +18,7 @@ import { RowActionDialog } from './RowActionDialog';
 import { dataTypeIconMap } from '../../helpers/iconMap';
 import { FaCode } from 'react-icons/fa6';
 
-const NewColumnTrigger = buildDefaultTrigger(<FaPlus />, 'Add column');
+const NewColumnTrigger = buildDefaultTrigger(<FaPlus />, () => 'Add column');
 
 const TextIcon = dataTypeIconMap.get(Datatype.STRING)!;
 const NumberIcon = dataTypeIconMap.get(Datatype.INTEGER)!;

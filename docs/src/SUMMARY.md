@@ -17,6 +17,7 @@
   - [Canvas](app/canvas.md)
   - [Folders and drives](app/folders-and-drives.md)
   - [Sharing](app/sharing.md)
+  - [Interface language](app/language.md)
   - [Apps](app/apps.md)
   - [Plugins](plugins.md)
     - [Creating Plugins](plugins/creating-plugins.md)
