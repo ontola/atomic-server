@@ -19,6 +19,7 @@ import type {
   ClientDbQueryOpts,
   ClientDbQueryResult,
 } from './client-db.js';
+import { asError } from './error.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
@@ -75,7 +76,7 @@ export class NodeClientDb {
       await this.db.populate();
       this.ready = true;
     } catch (e) {
-      this._initError = e instanceof Error ? e : new Error(String(e));
+      this._initError = asError(e);
       throw this._initError;
     }
   }

@@ -27,8 +27,8 @@ function useRouteTitle(): string | undefined {
       return 'Account';
     case pathNames.appSettings:
       return 'Settings';
-    case pathNames.integrations:
-      return 'Integrations';
+    case pathNames.apps:
+      return 'Apps';
     case pathNames.notifications:
       return 'Notifications';
     case pathNames.sync:

@@ -3,7 +3,7 @@
 //! Desktop feature from `planning/virtual-drive.md`: a read-write NFS server
 //! bound to loopback that the OS mounts. The mount root lists every Drive the
 //! node can see, Folders are directories, and Files stream their blob bytes.
-//! Neither mobile OS can mount NFS, so this module is compiled only on desktop
+//! `nfsserve` is unix-only, so this module is compiled only on unix
 //! (see the `cfg` gate on `mod vfs` in `lib.rs`).
 //!
 //! **Reads** are lazy (bytes only on `read`, never on readdir/getattr).

@@ -118,6 +118,11 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   const store = useStore();
   const drive = store.getDrive();
   const appClass = useAppClass(drive);
+  // The drive's schema can be unread on a device that has only part of the
+  // drive (the embedded app has no server to ask), so an app is also known
+  // by its class: the plugin schema's `app`.
+  const classResource = useResource(isA);
+  const [classShortname] = useString(classResource, core.properties.shortname);
   const websiteClass = useWebsiteClass(isAList.join('|'));
   const websiteExportClass = useWebsiteClass(
     isAList.join('|'),
@@ -235,7 +240,10 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
 
     // Like a plugin's, an app's class is minted per drive, so it cannot be a
     // case in `selectComponent`. An app opens to its own view.
-    if (appClass !== undefined && resource.hasClasses(appClass)) {
+    if (
+      (appClass !== undefined && resource.hasClasses(appClass)) ||
+      (appClass === undefined && classShortname === 'app')
+    ) {
       return (
         <Main subject={subject}>
           <ErrorBoundary>

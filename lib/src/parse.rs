@@ -327,72 +327,6 @@ fn resolve_reserved_local_id_keys(
     }
 }
 
-/// Parse a single Json AD string that represents an incoming Commit.
-/// WARNING: Does not match all props to datatypes (in Nested Resources), so it could result in invalid data,
-/// if the input data does not match the required datatypes.
-#[tracing::instrument(skip_all)]
-pub async fn parse_json_ad_commit_resource(
-    string: &str,
-    store: &impl crate::Storelike,
-) -> AtomicResult<Resource> {
-    // A body that is not a commit is the client's mistake, so these are parse
-    // errors (a server answers 400), not internal ones.
-    let mut json: Map<String, serde_json::Value> = serde_json::from_str(string)
-        .map_err(|e| AtomicError::parse_error(&format!("Invalid JSON: {}", e), None, None))?;
-    let malformed = |message: &str| AtomicError::parse_error(message, None, None);
-
-    // Get the signature - this is required for all commits
-    let signature = json
-        .get(urls::SIGNATURE)
-        .ok_or_else(|| malformed("No signature field in Commit."))?
-        .as_str()
-        .ok_or_else(|| malformed("Signature must be a string"))?
-        .to_string();
-
-    // Get or derive the subject.
-    // For genesis commits the client omits the subject; it is always derived
-    // from the signature as `did:ad:<signature>`.
-    let _target_subject = match json.get(urls::SUBJECT) {
-        Some(subj) => subj
-            .as_str()
-            .ok_or_else(|| malformed("Subject must be a string"))?
-            .to_string(),
-        None => {
-            let derived_subject = crate::identifiers::resource_subject(&signature);
-
-            // Insert the derived subject into the JSON so it gets parsed correctly
-            json.insert(
-                urls::SUBJECT.to_string(),
-                serde_json::Value::String(derived_subject.clone()),
-            );
-
-            derived_subject
-        }
-    };
-
-    // The canonical commit subject is always derived from the signature.
-    // Drop any client-supplied `@id` / `localId` first — `to_json_ad`
-    // serialises commits with their `@id` filled in, but the inner parser
-    // rejects an `@id` whenever an overwrite subject is also passed (it
-    // would otherwise leave the on-disk subject ambiguous between the
-    // two). Removing them here keeps the contract: signature-derived
-    // subject wins, body's `@id` is informational only.
-    json.remove("@id");
-    json.remove(urls::LOCAL_ID);
-    let commit_subject = crate::identifiers::commit_subject(&signature);
-
-    // Parse only. `Db::apply_commit` stores the commit resource once the
-    // commit is accepted; persisting it here would leave every rejected
-    // commit behind and make "is this commit already stored" unanswerable.
-    let opts = ParseOpts {
-        save: SaveOpts::DontSave,
-        ..ParseOpts::default()
-    };
-    let resource = parse_json_ad_map_to_resource(json, store, Some(commit_subject), &opts).await?;
-
-    Ok(resource)
-}
-
 /// Converts a string to a URL (subject), check for localid.
 /// For DID parents the synthesised subject doesn't exist, so we look up
 /// an existing imported resource by (parent, localId).
@@ -1132,8 +1066,9 @@ mod test {
         assert_eq!(found.get(urls::LOCAL_ID).unwrap().to_string(), local_id);
     }
     #[cfg(feature = "db")]
-    async fn create_db_and_importer() -> (crate::Db, crate::Subject) {
-        let store = crate::Db::init_temp("import_i18n_db").await.unwrap();
+    /// `id` names the store: two tests on one store file would race.
+    async fn create_db_and_importer(id: &str) -> (crate::Db, crate::Subject) {
+        let store = crate::Db::init_temp(id).await.unwrap();
         let mut importer = Resource::new_instance(urls::IMPORTER, &store)
             .await
             .unwrap();
@@ -1149,7 +1084,7 @@ mod test {
     #[cfg(feature = "db")]
     #[tokio::test]
     async fn import_keeps_scalar_values_that_equal_a_local_id() {
-        let (store, importer) = create_db_and_importer().await;
+        let (store, importer) = create_db_and_importer("import_scalar_local_id_db").await;
 
         let json = r#"[
         {
@@ -1209,7 +1144,7 @@ mod test {
     #[cfg(feature = "db")]
     #[tokio::test]
     async fn import_preserves_i18n_properties_db() {
-        let (store, importer) = create_db_and_importer().await;
+        let (store, importer) = create_db_and_importer("import_i18n_db").await;
         import_i18n_and_assert(&store, &importer).await;
     }
 

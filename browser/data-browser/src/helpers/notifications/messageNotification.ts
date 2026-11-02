@@ -56,9 +56,9 @@ export interface MessageContext {
   /** Creator of a resource, if it could be loaded. */
   creatorOf: (subject: string) => string | undefined;
   /**
-   * Whether a subject lives in a local-only drive (the demo, a template
-   * preview). Nobody else can write there, so a message by someone else is
-   * scripted, never a teammate; it must not reach the Inbox of a real account.
+   * Whether a subject lives in a local-only drive (a guest's Welcome
+   * drive). Nobody else can write there, so a message by someone else is
+   * never a teammate's; it must not reach the Inbox of a real account.
    */
   isLocalOnly?: (subject: string) => boolean;
 }

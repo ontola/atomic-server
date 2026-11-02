@@ -1,4 +1,3 @@
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
 import { isLoopbackHost } from './runtimeSetting';
 import { fetchManagedInfo } from './managedServer';
 import {
@@ -325,7 +324,6 @@ export async function discoverPeerDrives(store: Store): Promise<void> {
       if (!current()) return;
 
       if (
-        readTemplateDemo()?.drive === drive ||
         !isAtomicIdentifier(drive) ||
         !resource.isReady() ||
         resource.error ||

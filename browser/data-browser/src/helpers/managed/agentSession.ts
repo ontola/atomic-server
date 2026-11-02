@@ -35,8 +35,8 @@ export function resetAgentSessionAttempts(): void {
 
 /**
  * Whether this agent is known here as an account's identity: the account
- * binding names it, or this device holds the account's backup of it. A demo
- * guest or a local-only identity has neither, and is never sent to the
+ * binding names it, or this device holds the account's backup of it. A guest
+ * or another local-only identity has neither, and is never sent to the
  * account server.
  */
 function knownAccountIdentity(agentSubject: string): boolean {

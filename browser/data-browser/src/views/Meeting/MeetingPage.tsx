@@ -18,6 +18,7 @@ import {
   FormattingToolbarToggle,
   TitleRow,
 } from '../../chunks/RTE/useFormattingToolbarVisible';
+import { MeetingAttendees } from '../../components/Presence/MeetingAttendees';
 import { getMeetingPhase } from './meetingLifecycle';
 
 const CollaborativeEditor = lazy(
@@ -62,7 +63,12 @@ export function MeetingPage({
       <Page>
         <MeetingHeader>
           <Column gap='0.4rem'>
-            <Phase>{phase}</Phase>
+            <Row gap='0.6rem' center>
+              <Phase>{phase}</Phase>
+              {phase === 'notes' && (
+                <MeetingAttendees subject={resource.subject} />
+              )}
+            </Row>
             <TitleRow>
               <EditableTitle
                 resource={resource}

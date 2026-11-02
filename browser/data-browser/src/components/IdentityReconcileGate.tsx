@@ -17,19 +17,9 @@ import {
   syncDeviceDirectory,
   writeManagedAccountBinding,
 } from '../helpers/managed';
-import {
-  applyPendingDriveHandover,
-  handOverDrives,
-} from '../helpers/managed/driveHandover';
-import {
-  importDriveCarryOver,
-  stageDriveCarryOver,
-} from '../helpers/managed/driveCarryOver';
-import { isClientDbEnabled } from '../helpers/clientDbMode';
-import {
-  readInteractiveDemo,
-  readTemplateDemo,
-} from '../chunks/Templates/demoSession';
+import { applyPendingDriveHandover } from '../helpers/managed/driveHandover';
+import { importDriveCarryOver } from '../helpers/managed/driveCarryOver';
+import { handOverFrom } from '../helpers/bringAlong';
 import { paths } from '../routes/paths';
 import { Button } from './Button';
 import { Column } from './Row';
@@ -55,7 +45,7 @@ type Conflict = {
   to: string;
   /**
    * Whether its workspace can be brought into the account: only an identity
-   * that never hosted anything, like a demo guest. A hosted or synced drive
+   * that never hosted anything, like a guest started with Get started. A hosted or synced drive
    * has an enrollment tied to `from` that the account cannot take over from
    * here.
    */
@@ -94,18 +84,7 @@ async function handOverOrReport(
   to: string,
 ): Promise<boolean> {
   try {
-    await handOverDrives(store, {
-      from,
-      to,
-      personalDrive: store.getAgent()?.privateDrive,
-      skip: [readInteractiveDemo()?.drive, readTemplateDemo()?.drive],
-      archiveIdentity: archiveStoredAgent,
-      // Without a local database there is no identity database to leave the
-      // drives behind in.
-      carryOver: isClientDbEnabled()
-        ? drives => stageDriveCarryOver(store, { from, to, drives })
-        : undefined,
-    });
+    await handOverFrom(store, from, to);
 
     return true;
   } catch (error) {
@@ -175,14 +154,8 @@ export function IdentityReconcileGate({
 
   // Identity setup owns its transition. Reconciling a half-created dev agent
   // can classify it as disposable and redirect before its drive is saved.
-  // The demo is the same: it makes (or keeps) a guest identity itself, and a
-  // signed-in visitor is sent to their own drive from there. Holding it back
-  // for this check cost a first visit a cold round trip to the account
-  // server before setup could even start. The check runs as soon as the demo
-  // navigates on.
   const skip =
     pathname === paths.devDrive ||
-    pathname === paths.demo ||
     pathname === paths.welcome ||
     pathname.startsWith(`${paths.welcome}/`);
 
@@ -228,7 +201,7 @@ export function IdentityReconcileGate({
         if (!isCurrent()) return;
 
         if (workspace !== 'none' && from && to) {
-          // Only a demo guest's work moves into the account. A guest has no
+          // Only a guest's work (local-only, from Get started) moves into the account. A guest has no
           // account of its own, so its drives belong to whoever is signing in
           // here. Any other identity may be someone else's on a shared
           // browser: its key is kept on this device and nothing is copied or

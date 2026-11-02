@@ -350,12 +350,14 @@ describe('Sentry user', () => {
     identifyAgentInSentry(store as never);
     handler?.({ subject: 'did:ad:agent:one' });
     handler?.({ subject: 'did:ad:agent:two' });
-    await vi.waitFor(() => expect(Sentry.setUser).toHaveBeenCalled());
+    const newest = { id: await agentPseudonym('did:ad:agent:two') };
+    // Wait for the hash itself: a loaded runner can take longer than any
+    // fixed sleep, and the sign-out before it already called setUser(null).
+    await vi.waitFor(() =>
+      expect(Sentry.setUser).toHaveBeenLastCalledWith(newest),
+    );
     await new Promise(r => setTimeout(r, 20));
 
-    const calls = vi.mocked(Sentry.setUser).mock.calls;
-    expect(calls.at(-1)).toEqual([
-      { id: await agentPseudonym('did:ad:agent:two') },
-    ]);
+    expect(Sentry.setUser).toHaveBeenLastCalledWith(newest);
   });
 });

@@ -22,10 +22,10 @@ import { isHiddenFromChildLists } from '../helpers/hiddenFromChildLists';
  * through the Comments panel), the AI Chats folder (chats re-open through the AI
  * sidebar) the Inbox (opens from Notifications in the app menu) and the Trash folder
  * (reached from the account menu at the bottom of the sidebar).
- * Ontologies the user creates themselves still show. AI chats and Meetings
- * are hidden by class, and anything with an `about` (annotations such as
- * agent notes) is hidden too, wherever they sit (the AI sidebar and the meeting UI
- * reach them), which also covers legacy drives whose chats sit in a folder.
+ * Ontologies the user creates themselves still show. AI chats are hidden by
+ * class, and agent notes (a PlainText `about` an agent) are hidden too,
+ * wherever they sit (the AI sidebar and the agent's page reach them), which
+ * also covers legacy drives whose chats sit in a folder. Meetings show.
  *
  * `subjects` is the filtered list; `allSubjects` is what `useChildren`
  * returned, so callers can tell "nothing" from "only hidden resources".

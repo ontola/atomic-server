@@ -1,51 +1,75 @@
-# Using the AtomicServer GUI
+{{#title Using atomic.place}}
+# Using atomic.place
 
-After [running the server](installation.md), open it in your browser.
-By default, that's at [`http://localhost:9883`](http://localhost:9883).
-> Fun fact: `&#9883;` is HTML entity code for the Atom icon: ⚛
+Most workspace apps keep your documents, tables and chats on a server that someone else runs.
+If that server is down, you are down.
+If the company changes its mind, your data goes with it.
 
-The first screen should show you your main [_Drive_](https://atomicdata.dev/classes/Drive).
-You can think of this as the root of the server.
-It is the resource hosted at the root URL, effectively being the home page of your server.
+atomic.place is an all-in-one workspace where *your data lives in your own [personal data store](personal-data-store.md)*.
+It sits on your device, every change is signed with your key, and it [syncs](sync.md) to other devices and people.
+The same app also runs in a browser, on a desktop and on a server you own.
 
-In the sidebar you will see a list of resources in the current drive.
-At the start these will be:
+![A drive in atomic.place with its sidebar, recent activity and quick-create buttons](../assets/app/overview.png)
 
-- The setup invite that's used to configure the root agent.
-- A resource named `collections`. This is a group of collections that shows collections for all classes in the server, essentially a list of all resources.
-- The default ontology. Ontologies are used to define new classes and properties and show to relation between them.
+## Three ways to run it
 
-![The AtomicServer GUI](../assets/ui-guide/ui-guide-fresh-install.avif)
+It is one app.
+What differs is where your data is kept safe when your device is off.
 
-## Creating an agent
-To create data in AtomicServer you'll need an agent.
-An agent is like a user account, it signs the changes (commits) you make to data so that others can verify that you made them.
-Agents are identified by an identifier derived from their public key (`atomic:{publicKey}`), so they can be used on any AtomicServer without needing to be registered first.
+### In your browser, at atomic.place
 
-To get started, you can use the [demo invite](https://atomicdata.dev/invites/1) on atomicdata.dev, or the `/setup` invite on your own server.
+Open [atomic.place](https://atomic.place) and sign up.
+You get a drive of your own that is hosted for you, so it stays reachable and your collaborators can open it while you are offline.
+Nothing to install, nothing to maintain.
+The data is still stored on your device first, in the browser, and your key never leaves it.
 
-Click the "Accept as new user" button. The app will generate a key pair and your Agent will be created.
-Navigate to the User Settings page to find your agent secret. This secret is what you use to login, so keep it somewhere safe, like in a password manager. If you lose it you won't be able to recover your account.
+### The desktop app
 
-### Setting up the root Agent
-Next, we'll set up the root Agent that has write access to the Drive.
-If you've already accepted the `/setup` invite, you can skip this step.
+The desktop app is the same workspace in its own window.
+It has a small AtomicServer built in, bound to `127.0.0.1`, so the app works without any account or network.
+Your devices find each other and sync directly.
+On desktop it can also mount a drive as a folder in Finder or your file manager (the virtual drive).
 
-Head to the `setup` page by selecting it in the sidebar.
-You'll see a button that either says `Accept as <Your agent>` or `Accept as new user`.
-If it says "as new user", click on login, paste your secret in the input field and return to the invite page.
+You can get it from the [GitHub releases](https://github.com/ontola/atomic-server/releases): a `.dmg` for macOS, an `.exe` installer for Windows and an AppImage, `.deb` or `.rpm` for Linux.
+It is still a beta, so expect rough edges.
+Because the built-in server uses the same data directory as the `atomic-server` command, you cannot run both at once.
 
-After clicking the accept button you'll be redirected to the home page and you will have write access to the Drive.
-You can verify this by hovering over the description field, clicking the edit icon, and making a few changes.
-You can also press the menu button (three dots, top left) and press `Data view` to see your agent after the `write` field.
-Note that you can now edit every field.
+### On your own server
 
-The `/setup` invite can only be used once and will therefore not work anymore.
-If you want to re-enable the invite to change the root agent you can start AtomicServer with the `--initialize` flag.
+AtomicServer is a single binary (or Docker image) that stores your data, serves the web app, handles search and syncs your devices.
+Run it on a laptop, a Raspberry Pi or a VPS, open its address in a browser, and you have the same workspace under your own domain.
+See [installation](installation.md) to start it, and [self-hosting](../atomic-server.md) for what it does for you.
 
-## Creating your first Atomic Data
+On first start, open `/setup` on your server to claim it as the admin.
+The invite creates an [agent](../agents.md) (your identity) in your browser.
+Save the secret it shows you in a password manager.
+It is the only way back into your account, and nobody can recover it for you.
 
-Now that everything is up and running you can start creating some resources.
-To create a new resource, click the + button in the sidebar.
-You will be presented with a list of resource types to choose from like Tables, Folders, Documents etc.
-You can also create your own types by using ontologies.
+## Which one should I pick?
+
+| | Hosted | Desktop | Your own server |
+| --- | --- | --- | --- |
+| Install anything | No | Yes | Yes |
+| Works offline | Yes | Yes | Yes |
+| Reachable while your devices are off | Yes | No | Yes |
+| Someone else runs it | Yes | No | No |
+
+You do not have to choose forever.
+Your identity is a key, not an account on a server, so you can move a drive between these options without changing who you are.
+
+## What is in it
+
+Create things with the *+* button in the sidebar, or the quick buttons next to it.
+
+- [Documents](../app/documents.md): rich text that several people can edit at once.
+- [Tables](../app/tables.md): typed rows, with Kanban, calendar, timer, dashboard and issues views.
+- [Meetings](../app/meetings.md): an agenda, notes and minutes in one place, with a chat and an optional video call.
+- [Chat and messages](../app/chat.md): group chat rooms and private end-to-end encrypted conversations.
+- [AI chat](../app/ai-chat.md): bring your own model and tools.
+- [Canvas](../app/canvas.md): a shared drawing surface.
+- [Folders and drives](../app/folders-and-drives.md): how everything is organized.
+- [Sharing](../app/sharing.md): invite people to a drive, or to one folder.
+- [Apps](../app/apps.md): small apps that run inside your drive.
+
+Want to see how this fits together?
+Read the [all-in-one workspace](../all-in-one-workspace.md) page, or start [building your own app](../local-first-guide/1-index.md).

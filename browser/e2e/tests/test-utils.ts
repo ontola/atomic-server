@@ -167,6 +167,18 @@ export const topBarShareButton = (page: Page) =>
 export const editableTitle = (page: Page) => page.getByTestId('editable-title');
 export const currentDriveTitle = (page: Page) =>
   page.getByTestId('current-drive-title');
+/**
+ * Opens the current drive's page. The sidebar header is the drive switcher,
+ * not a link, so this goes to the drive the store has selected. Picking it
+ * from the switcher menu raced its list: right after `newDrive` the menu did
+ * not hold the new drive yet, the fallback picked "Private drive", and the
+ * share test invited to the dev drive instead.
+ */
+export async function openCurrentDrive(page: Page) {
+  const drive = await page.evaluate(() => window.store?.getDrive());
+  expect(drive, 'the store has a current drive').toBeTruthy();
+  await openSubject(page, drive as string);
+}
 export const contextMenu = '[data-test="context-menu"]';
 /**
  * The search input inside the search overlay (modal). Only visible after the
@@ -275,7 +287,6 @@ export async function typeInAddressBar(page: Page, text: string) {
  */
 export const addressBar = (page: Page) => searchInput(page);
 export const newDriveMenuItem = '[data-test="menu-item-new-drive"]';
-export const sidebarDriveButtonId = 'sidebar-drive-open';
 export const defaultDevServer = 'http://localhost:9883';
 export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
 // Fallback wait for the search index to catch up, for callers that can't
@@ -748,9 +759,6 @@ export async function newDrive(page: Page) {
   await waitForCurrentDialog(page);
 
   const dialog = currentDialog(page);
-  await dialog
-    .getByRole('button', { name: 'Create a blank drive', exact: true })
-    .click();
   await dialog.getByLabel('Drive name').fill(driveTitle);
 
   const createButton = dialog.locator('button', { hasText: 'Create' });
@@ -780,7 +788,7 @@ export async function newDrive(page: Page) {
 }
 
 export async function makeDrivePublic(page: Page) {
-  await currentDriveTitle(page).click();
+  await openCurrentDrive(page);
   await page.click(contextMenu);
   await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
 
@@ -2008,7 +2016,7 @@ export async function changeDrive(
   validate: boolean = true,
 ) {
   try {
-    const driveLink = page.getByTestId(sidebarDriveButtonId);
+    const driveLink = currentDriveTitle(page);
     await expect(driveLink).toBeVisible();
     await openConfigureDrive(page);
     // The input lives behind an "Open" disclosure now — the drives
@@ -2084,7 +2092,7 @@ export async function editTitle(title: string, page: Page) {
 
 /**
  * Opens the account menu behind the user row at the bottom of the sidebar
- * (Profile, Notifications, Integrations, Sync, Feedback, About) and returns
+ * (Profile, Notifications, Apps, Sync, Feedback, About) and returns
  * it. Settings is not in it: that is the gear button beside the user row,
  * `sidebar-settings-button`.
  */
@@ -2375,7 +2383,10 @@ export async function inDialog(
   await expect(page.locator('dialog[open]')).toHaveCount(0);
 }
 
-export async function acceptInvite(page: Page) {
+export async function acceptInvite(
+  page: Page,
+  name = `Test User ${timestamp()}`,
+) {
   // InvitePage CTA now reads "Create account and accept" (it generates a new
   // DID agent on the fly); the old "Accept as new user" button is gone. The
   // invite resource is loaded over WS, so under suite-wide load wait longer
@@ -2395,9 +2406,7 @@ export async function acceptInvite(page: Page) {
   });
   await acceptBtn.click();
 
-  await page
-    .getByLabel('Full name', { exact: true })
-    .fill(`Test User ${timestamp()}`);
+  await page.getByLabel('Full name', { exact: true }).fill(name);
   await page
     .getByRole('button', { name: 'Save and continue', exact: true })
     .click();

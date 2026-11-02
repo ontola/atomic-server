@@ -763,7 +763,7 @@ export class AtomicServer {
 
   /**
    * Flutter unit/widget tests + static analysis. The FFI plugin (cargokit)
-   * compiles `flutter/rust` against repo-root `lib/` (`atomic_lib`);
+   * compiles `packages/atomic_store_flutter/rust` against repo-root `lib/` (`atomic_lib`);
    * both trees are mounted under `/workspace/`.
    */
   @func()
@@ -796,8 +796,8 @@ export class AtomicServer {
         // Persist the rustup toolchain so a layer-cache miss doesn't
         // re-download rustc. Idempotent install below.
         .withMountedCache('/root/.rustup', flutterRustup)
-        // Update and install in one layer: a cached `apt-get update` layer can
-        // come back without its package lists, and the install then fails.
+        // One layer: a cached `apt-get update` layer can come back without
+        // its package lists, and the install then finds no packages.
         .withExec([
           'sh',
           '-c',
@@ -821,7 +821,7 @@ export class AtomicServer {
           '/workspace/packages',
           this.source.directory('packages'),
         )
-        .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
+        .withMountedCache('/workspace/packages/atomic_store_flutter/rust/target', flutterRustTarget, {
           sharing: CacheSharingMode.Locked,
         })
         .withWorkdir('/workspace/flutter')
@@ -865,7 +865,7 @@ export class AtomicServer {
           '-lc',
           `${pathPrefix} && ` +
             'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
-            'cargo test --manifest-path rust/Cargo.toml',
+            'cargo test --manifest-path ../packages/atomic_store_flutter/rust/Cargo.toml',
         ])
         .stdout()
     );
@@ -985,6 +985,17 @@ export class AtomicServer {
         .withFile(
           '/code/browser/form-renderer/shared/validation-cases.json',
           this.source.file('browser/form-renderer/shared/validation-cases.json'),
+        )
+        // server/build.rs copies the app view client from the browser into
+        // assets_tmp, and plugin_ui.rs's tests read the frame shell it pairs
+        // with. Mount only those two files.
+        .withFile(
+          '/code/browser/data-browser/src/chunks/AppPage/viewClient.js',
+          this.source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
+        )
+        .withFile(
+          '/code/browser/data-browser/src/chunks/AppPage/appFrameDocument.ts',
+          this.source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
         )
         .withMountedCache('/code/target', this.targetCache('rust-slim-target-v3'))
         .with(touchWorkspaceSources)
@@ -1420,6 +1431,14 @@ export class AtomicServer {
         this.source.directory('lib/test_files/loro-compat'),
       )
       .withFile('/Cargo.lock', this.source.file('Cargo.lock'))
+      // data-browser's identityHandback.test.ts opens the vector the Dart
+      // package tests against, by repository-root path. Mount only that file.
+      .withFile(
+        '/packages/atomic_flutter/test/fixtures/identity_handback_vector.json',
+        this.source.file(
+          'packages/atomic_flutter/test/fixtures/identity_handback_vector.json',
+        ),
+      )
       // Fixtures shared by the Rust and TS twins (class constraints, lenses,
       // JSON Schema interop, schema lockfiles), read by repository-root
       // path. Same /lib collision: mount only that directory.
@@ -1438,15 +1457,6 @@ export class AtomicServer {
       .withFile(
         '/lib/defaults/vocabularies.json',
         this.source.file('lib/defaults/vocabularies.json'),
-      )
-      // browser/e2e/tests/apps.spec.ts serves this checkout's embedded app SDK
-      // as a fixture, read with a plain `readFileSync` at
-      // `../../../server/src/plugins/assets/view-client.js`. From /app/e2e/tests
-      // that resolves to /server/..., and the Rust tree is not mounted here, so
-      // mount just this one file.
-      .withFile(
-        '/server/src/plugins/assets/view-client.js',
-        this.source.file('server/src/plugins/assets/view-client.js'),
       );
 
     return sourceContainer;
@@ -1537,6 +1547,16 @@ export class AtomicServer {
       .withFile(
         '/code/browser/form-renderer/shared/validation-cases.json',
         source.file('browser/form-renderer/shared/validation-cases.json'),
+      )
+      // build.rs embeds the app view client from the browser, and plugin_ui.rs's
+      // tests read the frame shell it pairs with: mount just those two files.
+      .withFile(
+        '/code/browser/data-browser/src/chunks/AppPage/viewClient.js',
+        source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
+      )
+      .withFile(
+        '/code/browser/data-browser/src/chunks/AppPage/appFrameDocument.ts',
+        source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
       )
       .withMountedCache('/code/target', this.targetCache('rust-target-v3'))
       .with(touchWorkspaceSources)
@@ -1778,6 +1798,17 @@ export class AtomicServer {
           '/code/browser/form-renderer/shared/validation-cases.json',
           source.file('browser/form-renderer/shared/validation-cases.json'),
         )
+        // server/build.rs copies the app view client from the browser into
+        // assets_tmp, and plugin_ui.rs's tests read the frame shell it pairs
+        // with. Mount only those two files.
+        .withFile(
+          '/code/browser/data-browser/src/chunks/AppPage/viewClient.js',
+          source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
+        )
+        .withFile(
+          '/code/browser/data-browser/src/chunks/AppPage/appFrameDocument.ts',
+          source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
+        )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
@@ -1911,6 +1942,21 @@ export class AtomicServer {
         '--no-default-features',
         '--features',
         'light,wasm-plugins',
+      ])
+      // The minimal `light` server, without the plugin runtime: catches code
+      // that uses `wasm-plugins`-gated modules or `AppState` fields without
+      // the same gate (#2412).
+      .withExec([
+        'cargo',
+        'clippy',
+        '--locked',
+        '-p',
+        'atomic-server',
+        '--no-deps',
+        '--all-targets',
+        '--no-default-features',
+        '--features',
+        'light',
       ])
       .stdout();
   }
@@ -2255,15 +2301,12 @@ export class AtomicServer {
         // playwright.config.ts starts testdata/atomic-plugins-mock/serve.mjs
         // (../../testdata from /app/e2e) as the suite's plugin catalog.
         .withDirectory('/testdata', this.source.directory('testdata'))
-        // Same shape, one file: apps.spec.ts reads the embedded app SDK with a
-        // plain `readFileSync` at `../../../server/src/plugins/assets/
-        // view-client.js`, which from /app/e2e/tests is /server/... . jsSource()
-        // mounts it for browser/plugin's unit test, but the specs run here, in a
-        // fresh Playwright image that copies only what is named, so this
-        // container needs its own copy.
+        // apps.spec.ts reads the app SDK with a plain `readFileSync` at
+        // `../../data-browser/src/chunks/AppPage/viewClient.js`; this fresh
+        // Playwright image copies only what is named, so mount that one file.
         .withFile(
-          '/server/src/plugins/assets/view-client.js',
-          this.source.file('server/src/plugins/assets/view-client.js'),
+          '/app/data-browser/src/chunks/AppPage/viewClient.js',
+          this.source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
         )
         .withWorkdir('/app/e2e')
         .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))

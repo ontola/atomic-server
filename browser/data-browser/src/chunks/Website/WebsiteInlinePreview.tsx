@@ -164,9 +164,7 @@ export function WebsiteInlinePreview({
         setSaved(true);
       })
       .catch(cause => {
-        store.notifyError(
-          cause instanceof Error ? cause : new Error(String(cause)),
-        );
+        store.notifyError(cause);
       })
       .finally(() => setSaving(false));
   };
@@ -204,9 +202,7 @@ export function WebsiteInlinePreview({
         onLoad={event => {
           void setup(event.currentTarget).catch(cause => {
             setError(String(cause));
-            store.notifyError(
-              cause instanceof Error ? cause : new Error(String(cause)),
-            );
+            store.notifyError(cause);
           });
         }}
       />

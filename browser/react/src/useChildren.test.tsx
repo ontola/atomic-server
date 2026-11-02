@@ -12,6 +12,7 @@ import { useChildren } from './useChildren.js';
 class FakeCollection {
   public refreshed = false;
   public stale = false;
+  public emptyUntilRefresh = false;
 
   public constructor(
     public readonly value: string,
@@ -19,7 +20,7 @@ class FakeCollection {
   ) {}
 
   public get totalMembers() {
-    return this.children.length;
+    return this.emptyUntilRefresh ? 0 : this.children.length;
   }
 
   public waitForReady = async () => {};
@@ -27,6 +28,7 @@ class FakeCollection {
   public refresh = async () => {
     this.refreshed = true;
     this.stale = false;
+    this.emptyUntilRefresh = false;
   };
 
   public getMemberWithIndex = async (i: number) =>
@@ -50,9 +52,12 @@ vi.mock('./useCollection.js', () => ({
   },
 }));
 
+const notified: Error[] = [];
+
 const store = {
   on: () => () => {},
   isDestroyed: () => false,
+  notifyError: (e: Error) => notified.push(e),
   getResource: async () => ({
     get: () => undefined,
     getCreatedAt: () => 0,
@@ -128,5 +133,31 @@ describe('useChildren across parents', () => {
     lagging = undefined;
     rerender({ parent: B });
     await waitFor(() => expect(result.current.subjects).toEqual(bChildren));
+  });
+
+  it('re-reads a first answer that was empty before the index had the children', async () => {
+    const stale = new FakeCollection(A, aChildren);
+    stale.emptyUntilRefresh = true;
+    collections.set(A, stale);
+
+    const { result } = renderHook(() => useChildren(A, { limit: 10 }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.subjects).toEqual(aChildren));
+    expect(stale.refreshed).toBe(true);
+  });
+
+  it('reports a failing read instead of staying silently empty', async () => {
+    const broken = new FakeCollection(A, aChildren);
+
+    broken.waitForReady = async () => {
+      throw new Error('query failed');
+    };
+
+    collections.set(A, broken);
+    notified.length = 0;
+
+    renderHook(() => useChildren(A, { limit: 10 }), { wrapper });
+    await waitFor(() => expect(notified[0]?.message).toBe('query failed'));
   });
 });

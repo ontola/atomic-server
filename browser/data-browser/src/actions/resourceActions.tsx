@@ -499,9 +499,7 @@ export const resourceActions: ActionDefinition[] = [
 
         if (ctx.currentSubject === ctx.subject) ctx.navigate('/');
       } catch (error) {
-        ctx.store.notifyError(
-          error instanceof Error ? error : new Error(String(error)),
-        );
+        ctx.store.notifyError(error);
       }
     },
   },

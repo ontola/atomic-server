@@ -39,10 +39,12 @@ import {
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
 import {
   AtomicError,
+  asError,
   RequestCancelledError,
   ErrorType,
   isTransportError,
   LOCAL_ONLY_NOT_FOUND_MESSAGE,
+  notInHostStoreMessage,
   NOT_AVAILABLE_LOCALLY_MESSAGE,
   NOT_AVAILABLE_SERVER_UNREACHABLE_MESSAGE,
 } from './error.js';
@@ -95,6 +97,7 @@ import {
   isAgentSubject,
   agentPublicKey,
   isAtomicIdentifier,
+  isMangledLegacySubject,
   isBlobSubject,
   isLensSubject,
   isPropertySubject,
@@ -122,7 +125,11 @@ import type {
   ClientDbQueryOpts,
   ClientDbQueryResult,
 } from './client-db.js';
-import { DrivePresenceManager } from './presence.js';
+import {
+  DrivePresenceManager,
+  type LocalPresenceListener,
+  type PresenceEntry,
+} from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
@@ -204,6 +211,14 @@ type DriveCallback = (drive: string) => void;
 /** Called when the server reports vector index activity for a drive (via websocket). */
 export type IndexingStatusCallback = (indexing: boolean) => void;
 
+/**
+ * Delivers a signed commit somewhere other than a server: a host app that
+ * holds the real store (the Flutter app's embedded renderer hands it to Rust
+ * over a JS channel). Resolves with the commit as stored, like a server's
+ * answer to `POST /commit`; rejects when the commit was refused.
+ */
+export type CommitTransport = (commit: Commit) => Promise<Commit>;
+
 /** How long a migration fetch may take before the answer stops being useful.
  *  These are servers the device may never reach; sign-in must not wait on
  *  them. */
@@ -269,6 +284,17 @@ export interface StoreOpts {
   connect?: boolean;
   /** Native shells have no ClientDb, so a disconnected node cannot save edits. */
   requireOnlineWrites?: boolean;
+  /** Where commits go instead of a server, see {@link Store.setCommitTransport}. */
+  commitTransport?: CommitTransport;
+  /**
+   * There is no server, and never will be: a host app holds the real store
+   * and answers through the client database (the Flutter app's embedded
+   * renderer). Every read comes from that database, nothing is fetched over
+   * HTTP and no auth cookie is made. Without this, a read that "asks the
+   * server" signed a request through the host (which signs only commits) and
+   * failed the resource it was meant to refresh. Implies `connect: false`.
+   */
+  noServer?: boolean;
 }
 
 export interface StoreSyncStatus {
@@ -684,6 +710,7 @@ export class Store {
   /** One presence manager per drive; managers remove themselves when
    *  their last subscriber leaves. */
   private presenceManagers: Map<string, DrivePresenceManager> = new Map();
+  private localPresenceListeners = new Set<LocalPresenceListener>();
   /** This tab's presence session, shared by every channel it announces in. */
   public readonly presenceSessionId: string = crypto.randomUUID();
   private injectedFetch: Fetch;
@@ -824,7 +851,7 @@ export class Store {
    * land instead of stranding until the next user keystroke.
    */
   private scheduleOutboxDrain(): void {
-    if (!this._serverConnected) return;
+    if (!this.canCommit) return;
     if (this.outbox.size === 0) return;
     if (!this.getAgent()) return;
     // Wake when the soonest entry is due (0 = due now), honoring per-entry
@@ -847,7 +874,7 @@ export class Store {
     if (this.outboxDrainTimer) clearTimeout(this.outboxDrainTimer);
     this.outboxDrainTimer = setTimeout(() => {
       this.outboxDrainTimer = undefined;
-      if (!this._serverConnected) return;
+      if (!this.canCommit) return;
       void this.syncDirtyResources().catch(() => undefined);
     }, delay);
   }
@@ -928,16 +955,23 @@ export class Store {
 
   private client: Client;
   public readonly requireOnlineWrites: boolean;
+  private commitTransport: CommitTransport | undefined;
+  /** See {@link StoreOpts.noServer}. */
+  public readonly noServer: boolean;
 
   public constructor(opts: StoreOpts = {}) {
     this.requireOnlineWrites = opts.requireOnlineWrites ?? false;
+    this.commitTransport = opts.commitTransport;
+    this.noServer = opts.noServer ?? false;
     initOntologies();
     this._resources = new Map();
     this.webSockets = new Map();
     this.subscribers = new Map();
 
     if (opts.serverUrl) {
-      this.setServerUrl(opts.serverUrl, { connect: opts.connect ?? true });
+      this.setServerUrl(opts.serverUrl, {
+        connect: !this.noServer && (opts.connect ?? true),
+      });
     }
 
     if (opts.agent) this.setAgent(opts.agent);
@@ -960,14 +994,12 @@ export class Store {
     let storedDrive: string | undefined = undefined;
 
     if (typeof window !== 'undefined') {
-      const raw = localStorage.getItem('drive');
+      try {
+        const raw = localStorage.getItem('drive');
 
-      if (raw) {
-        try {
-          storedDrive = JSON.parse(raw);
-        } catch {
-          // ignore corrupt value
-        }
+        if (raw) storedDrive = JSON.parse(raw);
+      } catch {
+        // ignore corrupt value, or storage that is blocked
       }
     }
 
@@ -1195,14 +1227,8 @@ export class Store {
   public registerLocalOnlyDrive(drive: string): void {
     const normalized = this.normalizeSubject(drive);
 
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(
-        'atomic.localOnlyDrives',
-        JSON.stringify([...new Set([...this.localOnlyDrives, normalized])]),
-      );
-    }
-
     this.localOnlyDrives.add(normalized);
+    this.persistLocalOnlyDrives();
   }
 
   /** The drive a subject belongs to, for naming it to the person. */
@@ -1354,11 +1380,22 @@ export class Store {
     // Normalized to match what `registerLocalOnlyDrive` stored.
     if (!this.localOnlyDrives.delete(this.normalizeSubject(drive))) return;
 
-    if (typeof localStorage !== 'undefined') {
+    this.persistLocalOnlyDrives();
+  }
+
+  /** Remember the local-only drives across reloads. Full or blocked storage
+   *  must not break the drive that was just registered, so a failure only
+   *  costs the persistence. */
+  private persistLocalOnlyDrives(): void {
+    if (typeof localStorage === 'undefined') return;
+
+    try {
       localStorage.setItem(
         'atomic.localOnlyDrives',
         JSON.stringify([...this.localOnlyDrives]),
       );
+    } catch (e) {
+      console.warn('[Store] could not persist local-only drives:', e);
     }
   }
 
@@ -1661,7 +1698,7 @@ export class Store {
           return isUnrecoverableCommitError(msg, code);
         },
         onRepeatedFailure: (entry, e) => {
-          const error = e instanceof Error ? e : new Error(String(e));
+          const error = asError(e);
           const report = () =>
             this.eventManager.emit(StoreEvents.CommitRepeatedlyFailing, {
               subject: entry.subject,
@@ -1918,7 +1955,7 @@ export class Store {
         resource.setLastCommitValue(commitId);
         resource.applyToStore('local-acked', { commitId });
         resource.markSynced();
-        await this.maybePushBlobForResource(resource).catch(() => undefined);
+        await this.pushBlobOrNotify(resource);
         // wasNew pipeline — first-time subscribe + save batched children
         this.subscribeWebSocket(subject);
         // The genesis POST IS a save — fire `ResourceSaved` so listeners
@@ -2196,7 +2233,7 @@ export class Store {
     }
 
     this.notifyResourceSaved(resource);
-    await this.maybePushBlobForResource(resource).catch(() => undefined);
+    await this.pushBlobOrNotify(resource);
 
     this.emitSyncStatus();
   };
@@ -2744,10 +2781,7 @@ export class Store {
         );
 
         if (!this.resources.get(subject)?.get(core.properties.isA)) {
-          this.failResource(
-            subject,
-            error instanceof Error ? error : new Error(String(error)),
-          );
+          this.failResource(subject, asError(error));
         }
       })
       .finally(() => {
@@ -3791,13 +3825,34 @@ export class Store {
     parent: string,
     localId: string,
   ): Promise<Resource | undefined> {
-    const { readConnectionSubjects } = await import('./plugin-connection.js');
-    const subjects = await readConnectionSubjects(
-      this,
-      drive,
-      core.properties.localId,
-      localId,
-    );
+    let subjects: string[];
+
+    if (this.noServer) {
+      // No server to answer `/query`: the host's database is the authority.
+      const local = await this.queryLocalDb({
+        drive,
+        property: core.properties.localId,
+        value: localId,
+        limit: 1000,
+      });
+
+      if (!local) {
+        throw new Error(
+          'Local database unavailable; refusing to infer that nothing has this localId',
+        );
+      }
+
+      subjects = local.subjects;
+    } else {
+      const { readConnectionSubjects } = await import('./plugin-connection.js');
+      subjects = await readConnectionSubjects(
+        this,
+        drive,
+        core.properties.localId,
+        localId,
+      );
+    }
+
     const matches: Resource[] = [];
 
     for (const subject of subjects) {
@@ -3959,6 +4014,10 @@ export class Store {
 
     if (r?.isReady() && !r?.new) {
       return true;
+    }
+
+    if (this.noServer) {
+      return !!(await this.fetchResourceFromClientDb(subject))?.isReady();
     }
 
     try {
@@ -4402,6 +4461,7 @@ export class Store {
     // bounded legacy-account lookup during sign-in). Keep OPFS as an offline
     // fallback, but do not make it a prerequisite for contacting the server.
     if (
+      !this.noServer &&
       /^https?:\/\//.test(subject) &&
       new URL(subject).origin !== new URL(this.serverUrl).origin &&
       !isEmbeddedVocabulary(subject) &&
@@ -4489,13 +4549,21 @@ export class Store {
     // above is authoritative. Without this guard a cache miss would GET
     // the subject from the server (a guaranteed 404 that also leaks
     // local-only subjects onto the wire).
-    if (this.isLocalOnlySubject(subject)) {
+    if (this.noServer || this.isLocalOnlySubject(subject)) {
       await askOnceAttached();
 
       if (!hasLocalData) {
         this.failResource(
           subject,
-          new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport),
+          this.noServer
+            ? new AtomicError(
+                notInHostStoreMessage(subject),
+                ErrorType.NotFound,
+              )
+            : new AtomicError(
+                LOCAL_ONLY_NOT_FOUND_MESSAGE,
+                ErrorType.Transport,
+              ),
         );
       }
 
@@ -4750,12 +4818,24 @@ export class Store {
 
     // A server cannot refresh a browser-only resource. In particular, explicit
     // refresh callers must not turn a valid local drive into a server 404.
-    if (this.isLocalOnlySubject(normalizedSubject)) {
+    // Without a server the client database is the authority: "refresh from
+    // the server" is a read from it.
+    if (this.noServer || this.isLocalOnlySubject(normalizedSubject)) {
       const local = this.resources.get(normalizedSubject);
-      if (local?.isReady()) return local as Resource<C>;
+      // An override asks for what the database holds now: the host wrote
+      // behind this page's back (a write as an app), so the copy kept here is
+      // the one from before it.
+      const reread = this.noServer && opts.forceOverride;
+      if (local?.isReady() && !reread) return local as Resource<C>;
       const stored = await this.fetchResourceFromClientDb(normalizedSubject);
       if (stored) return stored as Resource<C>;
-      throw new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport);
+      if (local?.isReady()) return local as Resource<C>;
+      throw this.noServer
+        ? new AtomicError(
+            notInHostStoreMessage(normalizedSubject),
+            ErrorType.NotFound,
+          )
+        : new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport);
     }
 
     // In-flight dedup. SideBarDrive and DrivePage both call
@@ -4862,10 +4942,7 @@ export class Store {
         const pending = this.getResolved(subject);
 
         if (pending && !this.hasRenderableContent(pending)) {
-          this.failResource(
-            subject,
-            error instanceof Error ? error : new Error(String(error)),
-          );
+          this.failResource(subject, asError(error));
 
           return pending as Resource<C>;
         }
@@ -5097,7 +5174,8 @@ export class Store {
     subject: string,
   ): Promise<HistoryAttribution | null> {
     // A drive that stays on this device has no history on the server.
-    if (!this.serverUrl || this.isLocalOnlySubject(subject)) return null;
+    if (!this.serverUrl || this.noServer || this.isLocalOnlySubject(subject))
+      return null;
 
     try {
       const url = new URL('/history-attribution', this.serverUrl);
@@ -5197,11 +5275,14 @@ export class Store {
       // here. Answer from what the store already knows instead of fetching:
       // the request can only 404, and the round-trip is what turned a row
       // that should have gone away into a "Resource with error" that stays.
-      if (!isNew && this.isDestroyed(normalized)) {
+      // A mangled legacy subject can never resolve either; asking only toasts a 404.
+      const unresolvable = isMangledLegacySubject(normalized);
+
+      if (!isNew && (unresolvable || this.isDestroyed(normalized))) {
         resource.loading = false;
         resource.setError(
           new AtomicError(
-            `Resource ${normalized} was destroyed`,
+            `Resource ${normalized} ${unresolvable ? 'is not a valid subject' : 'was destroyed'}`,
             ErrorType.NotFound,
           ),
         );
@@ -5738,8 +5819,8 @@ export class Store {
   /**
    * This is called when Errors occur in some of the library functions.
    */
-  public notifyError(e: Error | string): void {
-    const error = e instanceof Error ? e : new Error(e);
+  public notifyError(e: unknown): void {
+    const error = asError(e);
 
     if (this.eventManager.hasSubscriptions(StoreEvents.Error)) {
       this.eventManager.emit(StoreEvents.Error, error);
@@ -5748,12 +5829,52 @@ export class Store {
     }
   }
 
+  /** Like {@link notifyError}, but only the first time for this key. */
+  public notifyErrorOnce(key: string, e: unknown): void {
+    if (this._notifiedErrorKeys.has(key)) return;
+
+    this._notifiedErrorKeys.add(key);
+    this.notifyError(e);
+  }
+
+  /** Lets {@link notifyErrorOnce} report this key again. */
+  public clearNotifiedError(key: string): void {
+    this._notifiedErrorKeys.delete(key);
+  }
+
+  private _notifiedErrorKeys = new Set<string>();
+
   /**
    * Whether the Store has an active WebSocket connection to the server.
    * Use this to decide whether to attempt server operations or store locally.
    */
   public get serverConnected(): boolean {
     return this._serverConnected;
+  }
+
+  /**
+   * Whether a signed commit can be delivered right now: to the server, or to
+   * the {@link setCommitTransport commit transport}. The WRITE side asks
+   * this (save, destroy, the outbox drain); reads and live subscriptions keep
+   * asking {@link serverConnected}, so a transport never makes the store
+   * fetch from a server it does not have.
+   */
+  public get canCommit(): boolean {
+    return this._serverConnected || this.commitTransport !== undefined;
+  }
+
+  /**
+   * Send every commit to `transport` instead of a server. For a page whose
+   * store lives in a host app: the page runs `connect: false`, so without a
+   * transport its edits would only ever reach the offline path (snapshot and
+   * outbox rows in the local database), which such a host does not keep.
+   * With one, saving works as when online: the outbox drains, each commit is
+   * signed here and handed over, and `save()` resolves once the host has it.
+   */
+  public setCommitTransport(transport: CommitTransport | undefined): void {
+    this.commitTransport = transport;
+    this.emitSyncStatus();
+    this.scheduleOutboxDrain();
   }
 
   /** Called by WebSocket client when connection state changes. */
@@ -5857,7 +5978,7 @@ export class Store {
 
         if (r) {
           r.loading = false;
-          r.setError(e instanceof Error ? e : new Error(String(e)));
+          r.setError(asError(e));
           this.notify(r);
         }
       });
@@ -5866,7 +5987,7 @@ export class Store {
 
   private saveStatus = new SaveStatusCoordinator({
     getOutboxEntry: subject => this.outbox.getEntry(subject),
-    isConnected: () => this._serverConnected,
+    isConnected: () => this.canCommit,
     changePending: delta => {
       this._scheduledSaves += delta;
       this.emitSyncStatus();
@@ -5884,6 +6005,15 @@ export class Store {
     } = {},
   ): ScheduledSave {
     return this.saveStatus.createScheduler(resource, options);
+  }
+
+  /**
+   * Run every save a UI debounce timer is holding (`createSaveScheduler`,
+   * `useValue`'s commit debounce) now instead of when its timer fires, and
+   * wait for them. For a page about to go away: its timers would die with it.
+   */
+  public flushScheduledSaves(): Promise<void> {
+    return this.saveStatus.flushAll();
   }
 
   /** Read status is separate: a queued offline edit can still be fully readable. */
@@ -6370,7 +6500,7 @@ export class Store {
     this.scheduleOutboxDrain();
 
     if (agent && agent.subject) {
-      if (hasBrowserAPI()) {
+      if (hasBrowserAPI() && !this.noServer) {
         // Fire-and-forget here: this is a side effect on agent change,
         // not a precondition of a specific request. The HTTP request
         // path (`Client.fetchResourceHTTP`) re-installs the cookie if
@@ -6390,7 +6520,7 @@ export class Store {
       // it.
       void this.adoptLegacyAgentIdentity(agent);
     } else {
-      if (hasBrowserAPI()) {
+      if (hasBrowserAPI() && !this.noServer) {
         removeCookieAuthentication();
       }
     }
@@ -6635,10 +6765,7 @@ export class Store {
   ): boolean {
     if (isAtomicIdentifier(subject)) return true;
 
-    // The migration's mangled spelling. It survives serialization as a path
-    // segment containing a colon, which is not a subject this server can
-    // resolve — it is the `staging` subdomain welded onto the path.
-    if (/\/[^/]+:\//.test(subject.replace(/^https?:\/\//, ''))) return false;
+    if (isMangledLegacySubject(subject)) return false;
 
     try {
       const { origin } = new URL(subject);
@@ -6739,9 +6866,15 @@ export class Store {
     }
 
     if (supportsWebSockets()) {
-      const userDisconnected =
-        typeof localStorage !== 'undefined' &&
-        localStorage.getItem('ws-disconnected') === '1';
+      let userDisconnected = false;
+
+      try {
+        userDisconnected =
+          typeof localStorage !== 'undefined' &&
+          localStorage.getItem('ws-disconnected') === '1';
+      } catch {
+        // Blocked storage: treat the person as connected.
+      }
 
       if (!userDisconnected && url !== this.serverUrlWithoutSocket) {
         this.openWebSocket(url);
@@ -6780,7 +6913,14 @@ export class Store {
     }
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('drive', JSON.stringify(drive));
+      try {
+        localStorage.setItem('drive', JSON.stringify(drive));
+      } catch (e) {
+        // A full or blocked storage (QuotaExceededError, SecurityError) only
+        // costs the person this drive being remembered after a reload; it must
+        // not unwind the effect that selected it.
+        console.warn('[Store] could not persist the current drive:', e);
+      }
     }
 
     this.eventManager.emit(StoreEvents.DriveChanged, drive);
@@ -6871,7 +7011,11 @@ export class Store {
     }
 
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('ws-disconnected', '1');
+      try {
+        localStorage.setItem('ws-disconnected', '1');
+      } catch (e) {
+        console.warn('[Store] could not persist the disconnected state:', e);
+      }
     }
   }
 
@@ -7174,6 +7318,34 @@ export class Store {
         }
       },
     );
+  }
+
+  /**
+   * Hear every change to this session's own presence entry on any drive, as
+   * it is written (before it reaches a transport). For a host that carries the
+   * entry itself instead of the websocket (the Flutter embed). `undefined`
+   * means the entry was withdrawn.
+   */
+  public onLocalPresence(callback: LocalPresenceListener): () => void {
+    this.localPresenceListeners.add(callback);
+
+    return () => {
+      this.localPresenceListeners.delete(callback);
+    };
+  }
+
+  /** @internal A presence manager wrote its local entry. */
+  public __localPresenceChanged(
+    drive: string,
+    entry: PresenceEntry | undefined,
+  ): void {
+    for (const listener of this.localPresenceListeners) {
+      try {
+        listener(drive, entry);
+      } catch (e) {
+        console.error('[Presence] local listener threw:', e);
+      }
+    }
   }
 
   /** Broadcast raw presence bytes (Loro EphemeralStore update) to a
@@ -7611,12 +7783,28 @@ export class Store {
     // here meant tests/embedders overriding the store's fetch couldn't
     // observe or intercept blob pushes at all.
     const fetchImpl = this.injectedFetch ?? fetch;
-    await fetchImpl(url, {
+    const response = await fetchImpl(url, {
       method: 'PUT',
       // Cast: TS lib.dom marks Uint8Array<SharedArrayBuffer> incompatible with
       // BodyInit/BlobPart; at runtime our bytes are ArrayBuffer-backed.
       body: bytes as unknown as BodyInit,
       headers: { 'Content-Type': 'application/octet-stream' },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Uploading the file to the server failed (HTTP ${response.status}). ` +
+          `It stays on this device.`,
+      );
+    }
+  }
+
+  /** Push a resource's blob; a failure is shown once per resource, not per retry. */
+  private pushBlobOrNotify(resource: Resource): Promise<void> {
+    return this.maybePushBlobForResource(resource).catch(e => {
+      console.warn('[Store] blob push failed', resource.subject, e);
+
+      this.notifyErrorOnce(`blob:${resource.subject}`, e);
     });
   }
 
@@ -7630,6 +7818,7 @@ export class Store {
   public async uploadFiles(
     files: FileOrFileLike[],
     parent: string,
+    opts: { optimistic?: boolean } = {},
   ): Promise<string[]> {
     const agent = this.getAgent();
 
@@ -7734,7 +7923,14 @@ export class Store {
         resource.stashGenesis(genesis);
       }
 
-      await resource.save();
+      if (opts.optimistic) {
+        // The bytes are local, so the caller can show the file now. A failed
+        // sync is toasted, never swallowed.
+        void resource.save().catch(e => this.notifyError(e));
+      } else {
+        await resource.save();
+      }
+
       // The blob bytes are pushed to the server from the outbox drain
       // (via `Store.maybePushBlobForResource`) — that path covers both the
       // online-save case here AND the offline → reconnect retry path, where
@@ -7800,6 +7996,8 @@ export class Store {
    * commits still work; they just always reach every subscriber.
    */
   private async sendCommit(commit: Commit, endpoint: string): Promise<Commit> {
+    if (this.commitTransport) return this.commitTransport(commit);
+
     const ws = this.getWebSocketForEndpoint(endpoint);
 
     if (ws && ws.readyState === WebSocket.OPEN) {

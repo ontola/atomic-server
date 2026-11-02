@@ -12,6 +12,7 @@ import {
 } from '@tomic/react';
 import { useTableView, UseTableViewResult } from './useTableView';
 import { toAggregation } from './tableAggregates';
+import { getTableDrive } from './tableDrive';
 import { quantizedNow, splitFilters } from './tableFiltering';
 
 const PAGE_SIZE = 30;
@@ -81,6 +82,9 @@ export function useTableData(
     sort_by: sorting.prop,
     sort_desc: sorting.sortDesc,
     aggregation,
+    // The table's own drive, not the active one: a deep link can open a table
+    // from another drive, and the local index is keyed by drive.
+    drive: getTableDrive(store, resource),
   };
 
   const { collection, ready, invalidateCollection, mapAll } = useCollection(

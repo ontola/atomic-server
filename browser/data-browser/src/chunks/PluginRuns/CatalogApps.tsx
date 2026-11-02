@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import {
@@ -14,16 +14,46 @@ import {
 import { Card } from '@components/Card';
 import { Column, Row } from '@components/Row';
 import { Button } from '@components/Button';
+import { ShareLink } from '@components/ShareLink';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  useDialog,
+} from '@components/Dialog';
+import { FaShareNodes } from 'react-icons/fa6';
+import { getPluginCatalogUrl } from '@helpers/pluginCatalogUrl';
+import { paths } from '../../routes/paths';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { handOverAppKey } from '@chunks/AppPage/appAgent';
 import type { CatalogEntry } from './pluginCatalog';
 
+/**
+ * The link that opens the Apps page on one app. An app from a marketplace
+ * other than the primary one also names it, so the visitor can add it first.
+ */
+export function appShareLink(
+  origin: string,
+  shortname: string,
+  catalogUrl: string | undefined,
+  primaryUrl: string,
+): string {
+  const url = new URL(paths.apps, origin);
+  url.searchParams.set('app', shortname);
+
+  if (catalogUrl && catalogUrl !== primaryUrl) {
+    url.searchParams.set('marketplace', catalogUrl);
+  }
+
+  return url.href;
+}
+
 /** The catalog's app entries this visitor is offered, under the same gates as the rest of the page. */
 export function visibleCatalogApps(
   entries: CatalogEntry[],
   options: { query: string; showExperimental: boolean; showApi: boolean },
-): CatalogApp[] {
+): CatalogEntry[] {
   return entries
     .filter(
       entry =>
@@ -32,9 +62,8 @@ export function visibleCatalogApps(
         (!entry.experimental || options.showExperimental) &&
         (!entry.requiresApiPlugins || options.showApi),
     )
-    .map(entry => entry.app!)
-    .filter(app =>
-      [app.name, app.description ?? '', app.id]
+    .filter(({ app }) =>
+      [app!.name, app!.description ?? '', app!.id]
         .join(' ')
         .toLocaleLowerCase()
         .includes(options.query),
@@ -57,7 +86,10 @@ export function CatalogApps({
   query,
   showExperimental,
   showApi,
+  highlight,
 }: {
+  /** An app (shortname) to scroll to and mark, from a shared link. */
+  highlight?: string;
   entries: CatalogEntry[];
   drive: string;
   query: string;
@@ -68,6 +100,9 @@ export function CatalogApps({
   const navigate = useNavigateWithTransition();
   const [installed, setInstalled] = useState<InstalledCatalogApp[]>([]);
   const [busy, setBusy] = useState<string>();
+  const [sharing, setSharing] = useState<CatalogEntry>();
+  const [shareDialogProps, showShare, , shareOpen] = useDialog();
+  const highlighted = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(
     () =>
@@ -86,6 +121,11 @@ export function CatalogApps({
     showExperimental,
     showApi,
   });
+  const found = apps.some(({ app }) => app!.id === highlight);
+
+  useEffect(() => {
+    if (found) highlighted.current?.scrollIntoView?.({ block: 'center' });
+  }, [found]);
 
   if (apps.length === 0) return null;
 
@@ -138,12 +178,19 @@ export function CatalogApps({
           its code against the catalog before anything is saved.
         </p>
         <Grid>
-          {apps.map(app => {
+          {apps.map(entry => {
+            const app = entry.app!;
             const mine = installed.find(i => i.id === app.id);
             const state = catalogAppState(app, mine);
 
             return (
-              <Card key={app.id} data-catalog-app={app.id}>
+              <Card
+                key={app.id}
+                data-catalog-app={app.id}
+                highlight={app.id === highlight}
+                data-highlighted={app.id === highlight || undefined}
+                ref={app.id === highlight ? highlighted : undefined}
+              >
                 <Column gap='1rem'>
                   <Row justify='space-between' center>
                     <Avatar aria-hidden>{app.emoji ?? '🧩'}</Avatar>
@@ -187,6 +234,16 @@ export function CatalogApps({
                           : `Update to ${app.version}`}
                       </Button>
                     )}
+                    <Button
+                      ghost
+                      onClick={() => {
+                        setSharing(entry);
+                        showShare();
+                      }}
+                      aria-label={`Share ${app.name}`}
+                    >
+                      <FaShareNodes /> Share
+                    </Button>
                   </Row>
                 </Column>
               </Card>
@@ -194,6 +251,26 @@ export function CatalogApps({
           })}
         </Grid>
       </Column>
+      <Dialog {...shareDialogProps} width='30rem'>
+        {shareOpen && sharing?.app && (
+          <>
+            <DialogTitle>
+              <h1>Share {sharing.app.name}</h1>
+            </DialogTitle>
+            <DialogContent>
+              <ShareLink
+                url={appShareLink(
+                  window.location.origin,
+                  sharing.app.id,
+                  sharing.catalogUrl,
+                  getPluginCatalogUrl(),
+                )}
+                qrAlt={`QR code for the ${sharing.app.name} link`}
+              />
+            </DialogContent>
+          </>
+        )}
+      </Dialog>
     </section>
   );
 }

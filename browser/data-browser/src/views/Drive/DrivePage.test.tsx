@@ -75,6 +75,7 @@ vi.mock('@components/Dialog/useDialog', () => ({
   useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
 vi.mock('./GettingStartedCard', () => ({ GettingStartedCard: () => null }));
+vi.mock('./EmptyDriveStart', () => ({ EmptyDriveStart: () => <div /> }));
 vi.mock('./DriveSettingsDialog', () => ({
   DriveSettingsDialog: () => <div />,
 }));
@@ -132,6 +133,7 @@ describe('drive root file drops', () => {
       expect(state.store.uploadFiles).toHaveBeenCalledWith(
         files,
         resource.subject,
+        { optimistic: undefined },
       );
     },
   );

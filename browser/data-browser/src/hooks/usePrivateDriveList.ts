@@ -44,9 +44,7 @@ export function usePrivateDriveList(
       // missing write access) instead of letting the rejected promise vanish.
       void setList(next)
         .then(() => driveResource.stable.save())
-        .catch(e =>
-          store.notifyError(e instanceof Error ? e : new Error(String(e))),
-        );
+        .catch(e => store.notifyError(e));
     },
     [privateDrive, setList, driveResource.stable, store],
   );
