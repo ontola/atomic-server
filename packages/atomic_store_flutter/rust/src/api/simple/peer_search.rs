@@ -1,9 +1,9 @@
 //! The bridge's binding of `atomic_lib::host::peer_search`: pkarr is the
 //! directory, Iroh the dialer, the global store the drives.
 
-use atomic_lib::host::peer_search::{PeerDialer, PeerDirectory, PeerSearch, PeerSearchSchedule};
 use super::directory;
 use async_trait::async_trait;
+use atomic_lib::host::peer_search::{PeerDialer, PeerDirectory, PeerSearch, PeerSearchSchedule};
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
@@ -14,6 +14,10 @@ pub(crate) static PEER_SEARCH: LazyLock<Arc<PeerSearch>> =
 /// A record entry has a 300 s TTL and every device rewrites the record: ten
 /// minutes keeps this device in it without writing on every round.
 const ANNOUNCE_EVERY: Duration = Duration::from_secs(600);
+
+/// How often the background check for listed drives that are missing here
+/// runs; cheap (local reads) unless something is missing.
+const MISSING_DRIVES_EVERY: Duration = Duration::from_secs(20);
 
 struct PkarrDirectory;
 
@@ -62,8 +66,11 @@ impl PeerDialer for IrohDialer {
                 super::PEER_SYNC_ATTEMPT_TIMEOUT.as_secs()
             )
         })?
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+        // What the peer brought may be the personal drive, listing drives
+        // this device does not hold yet.
+        tokio::spawn(super::sync::follow_listed_drives_if_missing());
+        Ok(())
     }
 
     fn live(&self) -> Vec<String> {
@@ -120,6 +127,16 @@ pub(crate) fn spawn(store: atomic_lib::Db, me: String) {
         Arc::new(IrohDialer { store }),
         ANNOUNCE_EVERY,
     ));
+    // The personal drive can also arrive on a live peer stream, without a
+    // dial: look every so often whether it lists drives still missing here.
+    tokio::spawn(async {
+        loop {
+            tokio::time::sleep(MISSING_DRIVES_EVERY).await;
+            if !PEER_SEARCH.is_paused() {
+                super::sync::follow_listed_drives_if_missing().await;
+            }
+        }
+    });
     tokio::spawn(async {
         let mut count = atomic_lib::sync::peer::live_peer_count();
         loop {
