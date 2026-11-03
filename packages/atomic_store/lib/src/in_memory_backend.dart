@@ -377,6 +377,7 @@ class InMemoryBackend implements StoreBackend, CommentsBackend, FilesBackend {
       Props.parent: LinkValue(parent),
       Props.filename: StringValue(filename),
       Props.mimetype: StringValue(mimetype),
+      Props.filesize: IntegerValue(bytes.length),
     });
     fileBytes[subject] = bytes;
     return subject;

@@ -31,6 +31,7 @@ abstract final class Props {
   /// File properties (a [Classes.file]).
   static const filename = 'https://atomicdata.dev/properties/filename';
   static const mimetype = 'https://atomicdata.dev/properties/mimetype';
+  static const filesize = 'https://atomicdata.dev/properties/filesize';
   static const downloadUrl = 'https://atomicdata.dev/properties/downloadURL';
 }
 
