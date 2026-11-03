@@ -1525,3 +1525,43 @@ async fn e2e_probe_miss_falls_back_to_full_sync() {
     .await;
     assert!(on_a, "A should have B's canvas after the fallback");
 }
+
+/// A second device signed in with the same secret gets the private drive from
+/// the first one, and must learn from it which other drives the person has:
+/// `create_drive` records each on the private drive's `drives` list, and that
+/// list has to travel with the drive (a signed change, not a local write).
+#[tokio::test]
+async fn a_drive_created_on_one_device_is_listed_on_the_other() {
+    let pair = setup_pair("listed_drive").await;
+    let council = pair.db_a.create_drive("Council").await.unwrap();
+    pair.db_a.set_active_drive(&pair.drive).unwrap();
+    assert!(
+        pair.db_a
+            .list_drives()
+            .await
+            .unwrap()
+            .iter()
+            .any(|d| d.subject == council),
+        "A lists the drive it made"
+    );
+
+    sync_b_from_a(&pair).await;
+
+    let db_b = pair.db_b.clone();
+    let wanted = council.clone();
+    let listed = wait_until(std::time::Duration::from_secs(10), || {
+        let db_b = db_b.clone();
+        let wanted = wanted.clone();
+        async move {
+            db_b.list_drives()
+                .await
+                .map(|ds| ds.iter().any(|d| d.subject == wanted))
+                .unwrap_or(false)
+        }
+    })
+    .await;
+    assert!(
+        listed,
+        "B lists the drive made on A after syncing the private drive"
+    );
+}
