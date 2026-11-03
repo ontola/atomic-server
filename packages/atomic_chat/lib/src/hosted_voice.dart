@@ -16,6 +16,9 @@ const voiceEngineKey = 'voice_engine';
 /// absent means auto-detect.
 const voiceLanguageKey = 'voice_language';
 
+/// SharedPreferences key: the recogniser language the person picked.
+const voiceLocaleKey = 'voice_locale';
+
 const voiceEngineAccount = 'account';
 const voiceEngineDevice = 'device';
 
@@ -93,8 +96,20 @@ Future<HostedAvailability> accountVoiceAvailability(HostedAi? ai) async {
   return const HostedAvailability.available();
 }
 
+/// A transcription that failed with a message for the person, e.g. the one
+/// the person's own provider gave.
+class VoiceTranscribeError implements Exception {
+  final String message;
+
+  const VoiceTranscribeError(this.message);
+
+  @override
+  String toString() => message;
+}
+
 /// Plain wording for why a transcription failed.
 String hostedVoiceMessage(Object error) {
+  if (error is VoiceTranscribeError) return error.message;
   if (error is shared.AtomicVoiceError) {
     switch (error.failure) {
       case shared.AtomicVoiceFailure.notLinked:

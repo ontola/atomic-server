@@ -1738,6 +1738,9 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
   return saved;
 }
 
+const RATE_LIMITED =
+  'Too many requests for the encrypted recovery backup. Wait a minute and try again.';
+
 const pendingRecoveryReads = new Map<string, Promise<RecoverySecret | null>>();
 const recoveryReadCooldowns = new Map<string, number>();
 
@@ -1753,9 +1756,7 @@ export async function getRecoverySecret(): Promise<RecoverySecret | null> {
     if (until <= now) recoveryReadCooldowns.delete(readKey);
   }
 
-  if (recoveryReadCooldowns.has(key)) {
-    throw new Error('Could not load encrypted recovery backup.');
-  }
+  if (recoveryReadCooldowns.has(key)) throw new Error(RATE_LIMITED);
 
   const pending = pendingRecoveryReads.get(key);
   if (pending) return pending;
@@ -1801,6 +1802,8 @@ async function fetchRecoverySecret(
   ) {
     return null;
   }
+
+  if (response.status === 429) throw new Error(RATE_LIMITED);
 
   if (!response.ok) {
     throw new Error('Could not load encrypted recovery backup.');

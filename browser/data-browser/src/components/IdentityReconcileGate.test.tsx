@@ -28,7 +28,7 @@ const store = {
   getAgent: () => ({ ...state.agent, privateDrive: 'did:ad:home' }),
   getServerUrl: () => 'https://node.example',
   getDrive: () => 'did:ad:drive',
-  // A demo guest's own subject is registered as local-only.
+  // A guest's own subject is registered as local-only.
   isLocalOnlyDrive: (subject: string) =>
     state.guest && subject === 'did:ad:agent:old',
 };
@@ -64,10 +64,6 @@ vi.mock('../helpers/managed/driveCarryOver', () => ({
 vi.mock('../helpers/clientDbMode', () => ({ isClientDbEnabled: () => true }));
 vi.mock('../helpers/agentStorage', () => ({
   archiveStoredAgent: state.archive,
-}));
-vi.mock('../chunks/Templates/demoSession', () => ({
-  readInteractiveDemo: () => ({ drive: 'did:ad:demo', welcomeDoc: 'x' }),
-  readTemplateDemo: () => undefined,
 }));
 vi.mock('@sentry/react', () => ({ captureException: state.capture }));
 vi.mock('./Button', () => ({ Button: 'button' }));
@@ -192,7 +188,6 @@ it.each(['some', 'unknown'])(
         from: 'did:ad:agent:old',
         to: 'did:ad:agent:account',
         personalDrive: 'did:ad:home',
-        skip: ['did:ad:demo', undefined],
         carryOver: expect.any(Function),
       }),
     );

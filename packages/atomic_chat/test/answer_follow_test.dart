@@ -194,4 +194,56 @@ void main() {
     await c.close();
     await tester.pumpAndSettle();
   });
+
+  testWidgets('the start of a tall answer is held in every frame text arrives',
+      (tester) async {
+    final c = StreamController<String>();
+    await tester.pumpWidget(_app(ChatScreen(api: _Api(_ai(() => c.stream)))));
+    await tester.pumpAndSettle();
+    await _send(tester, 'Held question');
+    await _stream(tester, c, Iterable.generate(40, (i) => i));
+    final first = tester.getTopLeft(_text('Answer paragraph 0.')).dy;
+    // Nothing is pumped after a frame before it is measured: a correction
+    // applied after the frame would show here as a jump.
+    for (var i = 40; i < 50; i++) {
+      c.add('Answer paragraph $i.\n\n');
+      for (var f = 0; f < 4; f++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        expect(tester.getTopLeft(_text('Answer paragraph 0.')).dy,
+            moreOrLessEquals(first, epsilon: 0.5),
+            reason: 'section $i, frame $f');
+      }
+    }
+    await c.close();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('the button follows a held answer: shown, gone at the bottom',
+      (tester) async {
+    final c = StreamController<String>();
+    await tester.pumpWidget(_app(ChatScreen(api: _Api(_ai(() => c.stream)))));
+    await tester.pumpAndSettle();
+    final button = find.byKey(const Key('scroll-to-bottom'));
+    await _send(tester, 'Button question');
+    await _stream(tester, c, [0, 1]);
+    expect(button, findsNothing, reason: 'at the bottom');
+    // The held top is far above the bottom: no scroll event, only growth.
+    await _stream(tester, c, Iterable.generate(40, (i) => 2 + i));
+    expect(_pos(tester).pixels, greaterThan(120));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(button, findsOneWidget);
+    await c.close();
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -4000));
+    await tester.pumpAndSettle();
+    expect(_pos(tester).pixels, 0);
+    expect(button, findsNothing);
+    await tester.drag(find.byType(ListView), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(button, findsOneWidget);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(_pos(tester).pixels, 0);
+    expect(button, findsNothing);
+  });
 }

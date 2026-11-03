@@ -6,7 +6,8 @@ import {
   type NativeChannel,
 } from './client-db.native.js';
 import type { ClientDbWorker } from './client-db.js';
-import { isNotFound } from './error.js';
+import { isNotFound, NOT_IN_HOST_STORE_MESSAGE } from './error.js';
+import { createApp } from './plugin-app.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import { Store } from './store.js';
@@ -32,8 +33,10 @@ const driveJsonAd = JSON.stringify({
  * `atomic_lib::host::embed` does; reading makes no commit, so here every
  * signature is refused, as that host refused an auth cookie or a request.
  */
-async function embeddedPage(opts: { noServer: boolean }) {
+async function embeddedPage(opts: { noServer: boolean; agent?: Agent }) {
   const refused: string[] = [];
+  const queries: unknown[] = [];
+  const stored = new Map<string, string>([[DRIVE, driveJsonAd]]);
   const channel: NativeChannel = {
     async call(method, args) {
       switch (method) {
@@ -52,6 +55,8 @@ async function embeddedPage(opts: { noServer: boolean }) {
         case 'getResource':
           return args[0] === DRIVE ? driveJsonAd : null;
         case 'query':
+          queries.push(args[0]);
+
           return { subjects: [], resources: [], count: 0 };
         case 'outboxEntries':
           return [];
@@ -65,7 +70,7 @@ async function embeddedPage(opts: { noServer: boolean }) {
     serverUrl: 'https://embed.invalid',
     connect: false,
     noServer: opts.noServer,
-    agent: new Agent(new NativeCryptoProvider(channel), AGENT),
+    agent: opts.agent ?? new Agent(new NativeCryptoProvider(channel), AGENT),
     commitTransport: db.commitTransport,
   });
   store.setClientDb(db as unknown as ClientDbWorker);
@@ -75,7 +80,7 @@ async function embeddedPage(opts: { noServer: boolean }) {
   });
   store.injectFetch(fetch);
 
-  return { store, refused, fetch };
+  return { store, refused, fetch, queries, stored };
 }
 
 const g = globalThis as Record<string, unknown>;
@@ -139,5 +144,51 @@ describe('a store with no server (the embedded renderer)', () => {
 
     expect(isNotFound(missing.error)).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('names the subject it could not find', async () => {
+    const { store } = await embeddedPage({ noServer: true });
+    const subject = 'atomic:not-on-this-device';
+    const missing = await store.getResource(subject);
+
+    expect(String(missing.error?.message)).toContain(subject);
+    expect(String(missing.error?.message)).toContain(
+      NOT_IN_HOST_STORE_MESSAGE.slice(0, -1),
+    );
+  });
+
+  it('looks up a localId in the host database, not at a /query endpoint', async () => {
+    const { store, fetch, queries } = await embeddedPage({ noServer: true });
+
+    await expect(
+      store.findByLocalId(DRIVE, DRIVE, 'schema:ontology:x'),
+    ).resolves.toBeUndefined();
+    expect(queries).toEqual([
+      expect.objectContaining({
+        drive: DRIVE,
+        property: core.properties.localId,
+        value: 'schema:ontology:x',
+      }),
+    ]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('creates an app', async () => {
+    const keys = await Agent.generateKeyPair();
+    const agent = await Agent.fromSecret(
+      Agent.buildSecret(keys.privateKey, `did:ad:agent:${keys.publicKey}`),
+    );
+    const { store } = await embeddedPage({ noServer: true, agent });
+    const drive = await store.getResource(DRIVE);
+    const ontology = await store.createDefaultOntology(drive);
+    expect(ontology.error).toBeUndefined();
+
+    const created = await createApp(store as never, {
+      drive: DRIVE,
+      name: 'Habits',
+      source: 'export function view() {}',
+    });
+
+    expect(created.app).toBeTruthy();
   });
 });

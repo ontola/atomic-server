@@ -1357,23 +1357,18 @@ name = "atomic-server-tauri"
 version = "0.41.0-beta.8"
 dependencies = [
  "actix-rt",
- "android_system_properties",
  "async-trait",
  "atomic-server",
  "atomic_lib",
  "base64 0.22.1",
  "blake3",
- "clap",
  "fastcdc",
  "hex",
- "jni 0.22.4",
  "nfsserve",
- "rustls-platform-verifier",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
- "tauri-plugin-barcode-scanner",
  "tauri-plugin-deep-link",
  "tauri-plugin-mcp-bridge",
  "tauri-plugin-notification",
@@ -14221,20 +14216,6 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "walkdir",
-]
-
-[[package]]
-name = "tauri-plugin-barcode-scanner"
-version = "2.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3b68f0e3782b61a6e16a67380be40226e2b7233f3e36dadf6e5d03f07d2e7b3"
-dependencies = [
- "log",
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.18",
 ]
 
 [[package]]

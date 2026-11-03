@@ -9,7 +9,11 @@ export interface UseUploadResult {
   error: Error | undefined;
 }
 
-export function useUpload(parentResource: Resource): UseUploadResult {
+export function useUpload(
+  parentResource: Resource,
+  opts: { optimistic?: boolean } = {},
+): UseUploadResult {
+  const { optimistic } = opts;
   const store = useStore();
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<Error | undefined>(undefined);
@@ -25,6 +29,7 @@ export function useUpload(parentResource: Resource): UseUploadResult {
         const allUploaded = await store.uploadFiles(
           acceptedFiles,
           parentResource.subject,
+          { optimistic },
         );
         setIsUploading(false);
 
@@ -37,7 +42,7 @@ export function useUpload(parentResource: Resource): UseUploadResult {
         return [];
       }
     },
-    [parentResource, store],
+    [parentResource, store, optimistic],
   );
 
   return {

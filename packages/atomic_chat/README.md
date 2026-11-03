@@ -34,7 +34,7 @@ MaterialApp(
 | Shell | `AppShell`, `ShellController` (`ShellPage` kinds, `open`/`openPage`), `ShellScope`, `AppBottomBar`, `SlideBackRoute`, `CoveredInsetsFreeze` |
 | Screens | `ChatsScreen` (home sections, `timeAgo`, `groupChatsByAge`), `ChatScreen` (also `voiceMode`), `ConversationScreen`, `SearchScreen` (also `scopeDrive`), `NewDocumentSheet` |
 | Resources | `openResourceView` and the native view registry, `ResourceView`, `EmbedServer`, `ResourceWebView`, `ResourceRow`, `iconForClass` |
-| AI and voice | `HostedAi`, `voice.dart`, `hosted_voice.dart` (the `voice_*` SharedPreferences keys) |
+| AI and voice | `HostedAi`, `voice.dart`, `hosted_voice.dart` (the `voice_*` SharedPreferences keys), `VoiceSettings` (the voice section of the host's AI settings) |
 | Small widgets | `HoldFan` (from `atomic_flutter`, re-exported) |
 
 ## The bottom bar

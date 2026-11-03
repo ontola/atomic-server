@@ -9,7 +9,7 @@ import {
   ErrMessage,
 } from '@components/forms/InputStyles';
 import { Button } from '@components/Button';
-import { FaRotateLeft } from 'react-icons/fa6';
+import { FaRotateLeft, FaTrash } from 'react-icons/fa6';
 import { SettingsSection } from './SettingsSection';
 import {
   defaultIntegrationProxy,
@@ -17,8 +17,11 @@ import {
   useIntegrationProxy,
 } from '@helpers/integrationProxy';
 import {
+  addMarketplace,
   defaultPluginCatalogUrl,
+  removeMarketplace,
   setPluginCatalogUrl,
+  useExtraMarketplaces,
   usePluginCatalogUrl,
 } from '@helpers/pluginCatalogUrl';
 
@@ -37,7 +40,7 @@ export function IntegrationSettings() {
   return (
     <SettingsSection
       label='Integration'
-      childSearchKeywords='proxy catalog server url experimental plugins'
+      childSearchKeywords='proxy catalog marketplace server url experimental plugins'
     >
       <Column
         gap='1rem'
@@ -65,6 +68,7 @@ export function IntegrationSettings() {
         {error && <ErrMessage role='alert'>{error}</ErrMessage>}
         <ProxyForm key={proxy} proxy={proxy} />
         <CatalogUrlForm key={catalogUrl} catalogUrl={catalogUrl} />
+        <MarketplacesForm />
       </Column>
     </SettingsSection>
   );
@@ -195,6 +199,100 @@ function CatalogUrlForm({ catalogUrl }: { catalogUrl: string }) {
     </form>
   );
 }
+
+function MarketplacesForm() {
+  const marketplaces = useExtraMarketplaces();
+  const [value, setValue] = useState('');
+  const [error, setError] = useState('');
+
+  return (
+    <form
+      onSubmit={event => {
+        event.preventDefault();
+
+        try {
+          addMarketplace(value);
+          setValue('');
+          setError('');
+        } catch {
+          setError(
+            'Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file.',
+          );
+        }
+      }}
+    >
+      <Column gap='0.5rem'>
+        <SectionTitle>Marketplaces</SectionTitle>
+        <Description>
+          Apps from these catalogs are offered next to the one above. When two
+          have an app with the same name, the one listed first wins. This
+          setting is saved in this browser.
+        </Description>
+        {marketplaces.length > 0 && (
+          <MarketplaceList aria-label='Marketplaces'>
+            {marketplaces.map(url => (
+              <li key={url}>
+                <span title={url}>{url}</span>
+                <Button
+                  ghost
+                  type='button'
+                  aria-label={`Remove ${url}`}
+                  onClick={() => removeMarketplace(url)}
+                >
+                  <FaTrash aria-hidden />
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </MarketplaceList>
+        )}
+        <label htmlFor='marketplace-url'>Add marketplace URL</label>
+        <InputWrapper>
+          <InputStyled
+            id='marketplace-url'
+            type='url'
+            value={value}
+            placeholder='https://example.com/catalog.json'
+            onChange={event => setValue(event.target.value)}
+            aria-invalid={!!error}
+            aria-describedby={error ? 'marketplace-url-error' : undefined}
+          />
+        </InputWrapper>
+        {error && (
+          <ErrMessage id='marketplace-url-error' role='alert'>
+            {error}
+          </ErrMessage>
+        )}
+        <Row>
+          <Button type='submit' disabled={!value.trim()}>
+            Add
+          </Button>
+        </Row>
+      </Column>
+    </form>
+  );
+}
+
+const MarketplaceList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+  }
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85rem;
+  }
+`;
 
 /** Small end-aligned button inside a field that restores its default value. */
 function ResetButton({ onClick }: { onClick: () => void }) {

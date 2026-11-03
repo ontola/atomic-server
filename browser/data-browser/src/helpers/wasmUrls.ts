@@ -36,7 +36,7 @@ let compiled: Promise<WebAssembly.Module> | undefined;
  *
  * Three places instantiate it: the ClientDb worker, and on the main thread the
  * key wrapping a new identity's database needs and the recovery KDF. Each used
- * to download the 7 MB file for itself, so a first visit to the demo fetched it
+ * to download the 7 MB file for itself, so a first visit fetched it
  * twice over a connection that was busy with everything else. index.html starts
  * this compile before the app's JavaScript has even loaded; everyone shares it,
  * and a compiled module can be handed to a worker as is.

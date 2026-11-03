@@ -14,10 +14,6 @@ import {
   handOverDrives,
   listHandoverDrives,
 } from './managed/driveHandover';
-import {
-  readInteractiveDemo,
-  readTemplateDemo,
-} from '../chunks/Templates/demoSession';
 
 /**
  * Bringing work along when a sign-in replaces the identity this browser holds
@@ -35,11 +31,6 @@ export type SwitchOutcome =
   /** Kept on the device and its drives were handed to the new one. */
   | 'brought';
 
-/** The drives that are not the person's to bring: demo and preview drives. */
-function skippedDrives(): (string | undefined)[] {
-  return [readInteractiveDemo()?.drive, readTemplateDemo()?.drive];
-}
-
 /**
  * Hand `from`'s drives to `to` and keep `from`'s key (`driveHandover.ts`).
  * Throws when that fails, before anything has switched.
@@ -53,7 +44,6 @@ export async function handOverFrom(
     from,
     to,
     personalDrive: store.getAgent()?.privateDrive,
-    skip: skippedDrives(),
     archiveIdentity: archiveStoredAgent,
     // Without a local database there is no identity database to leave the
     // drives behind in.
@@ -80,14 +70,11 @@ export async function workToBring(
   if (workspace === 'unknown') return undefined;
 
   try {
-    const skip = skippedDrives();
-    const drives = await listHandoverDrives(
+    return await listHandoverDrives(
       store,
       from,
       store.getAgent()?.privateDrive,
     );
-
-    return drives.filter(drive => !skip.includes(drive));
   } catch {
     return undefined;
   }
@@ -123,7 +110,7 @@ export async function prepareIdentitySwitch(
 
   if (drives?.length === 0) return 'left';
 
-  // A demo guest has no account of its own: its work goes with whoever signs
+  // A guest has no account of its own: its work goes with whoever signs
   // in here, as the reconcile gate does, so there is nothing to ask.
   const guest = store.isLocalOnlyDrive(from);
 

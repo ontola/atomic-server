@@ -1866,21 +1866,28 @@ use the public server URL for generated configuration and signed requests.
 `chunks/Templates/model.test.ts` tests version-pinned composition, duplicate keys,
 missing dependencies and dependency cycles. `aiProposal.test.ts` tests catalog-only
 AI references, size limits and removal of undeclared authority/executable fields.
-`drive-template-onboarding.spec.ts` exercises a mobile local-only preview, edits it,
-then adopts a fresh workspace without the demo edit or sample rows; it also checks
-blank creation and that the mobile feedback footer cannot cover its action.
+`instantiate.test.ts` tests the document markup, including `- [ ]` / `- [x]` task
+lists, and that every starter and the welcome document carry a checklist.
+`drive-template-onboarding.spec.ts` creates a drive from a name alone on a phone
+(no gallery, preview or blank-drive choice; the feedback footer cannot cover the
+button), checks the empty drive offers Document, Table, Canvas and the Student,
+Team and Personal starters (not the welcome template), and that a starter fills
+the drive it was chosen in, the block then disappears, and its document shows a
+task list. `template-recovery.spec.ts` covers drive creation on a managed build
+with an unenrolled home, and reporting a failed create.
 Existing `table-templates.spec.ts` exercises the same table adapter.
+The scripted demo (`/app/demo`, `demo-chat.spec.ts`, `integration-demo.spec.ts`,
+`messageSpeaker.test.ts`, `startDemo.test.ts`) and the template preview/keep-edits
+flow (`keepTemplateDemo.test.ts`, `leaveTemplatePreview.test.ts`,
+`pendingTemplate.test.ts`) are removed along with their tests; the bring-along
+specs start their guest with Get started.
 Not covered: a live AI provider, durable interrupted-install resume, portable graph
 import/export, shared schema IDs, initial identity signup, physical mobile browsers.
-
-- Demo speaker attribution: `browser/data-browser/src/chunks/Demo/messageSpeaker.test.ts` covers local persona display and rejection outside the demo, without overriding verified creator metadata.
-
-Template adoption: `keepTemplateDemo.test.ts` covers retaining graph identity, saved-drive registration, failed-save retry preservation, and expired-preview rejection. `drive-template-onboarding.spec.ts` covers the keep-edits and fresh-template UI choices.
 
 Onboarding dialog feedback: the authorization/invite and chatroom cases in
 `e2e.spec.ts` verify Continue remains clickable while feedback is offered.
 `onboarding-storage.spec.ts` checks feedback availability;
-`drive-template-onboarding.spec.ts` checks mobile creation and dismissal.
+`drive-template-onboarding.spec.ts` checks mobile creation.
 ## Paged table hydration count (2026-09-08)
 
 `collection-page-assemble.test.ts` reproduces 90 rows becoming 150 when deferred

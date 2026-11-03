@@ -14,10 +14,12 @@ export 'package:atomic_flutter/atomic_flutter.dart'
 
 // The seam to the host's store, and what goes through it.
 export 'src/assistant_api.dart';
+export 'src/feedback_dialog.dart';
 export 'src/models.dart';
 export 'src/chat_parts.dart';
 export 'src/chat_window.dart';
 export 'src/scroll_to_bottom_button.dart';
+export 'src/ai_usage.dart';
 export 'src/hosted_ai.dart';
 export 'src/ai_tools.dart';
 export 'src/web_tool_bridge.dart';
@@ -34,6 +36,8 @@ export 'src/slide_back_route.dart';
 export 'src/covered_insets_freeze.dart';
 export 'src/toast.dart';
 export 'src/background_activity.dart';
+export 'src/meeting_lead.dart';
+export 'src/live_meeting_banner.dart';
 
 // Screens.
 export 'src/chats_screen.dart';
@@ -53,12 +57,16 @@ export 'src/follow_controller.dart';
 export 'src/warm_resource_web_view.dart';
 export 'src/resource_web_view.dart';
 export 'src/embed_server.dart';
+export 'src/meeting_call.dart';
+export 'src/meeting_call_overlay.dart';
+export 'src/call_permissions.dart';
 export 'src/resource_row.dart';
 export 'src/row_leading.dart';
 
 // Voice.
 export 'src/voice.dart';
 export 'src/hosted_voice.dart';
+export 'src/voice_settings.dart';
 
 // Small widgets.
 export 'src/markdown_view.dart';

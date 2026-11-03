@@ -46,7 +46,7 @@ Atomic Data Extended is a set of extra modules (on top of Atomic Data Core) that
 
 - [atomic.place](https://atomic.place) is the place to start: the hosted web app, plus the app downloads
 - The **web app**: documents, tables, chat, files and an ontology editor, working offline in the browser
-- The **desktop and mobile apps**, built with Tauri: the same app with a full node inside, so it can be paired with directly and act as an always-on device. Download them from [atomic.place](https://atomic.place) or the [GitHub releases](https://github.com/ontola/atomic-server/releases)
+- The **desktop apps**, built with Tauri: the same app with a full node inside, so it can be paired with directly and act as an always-on device. Download them from [atomic.place](https://atomic.place) or the [GitHub releases](https://github.com/ontola/atomic-server/releases)
 - Build a web app with [@tomic/lib](js.md), [@tomic/react](usecases/react.md) or [@tomic/svelte](svelte.md), or a native app with [Flutter / Dart](flutter.md), on top of the same Rust core
 - Prefer to run your own always-on device? [Self-host atomic-server](atomicserver/installation.md), a single binary
 - The command line tool [atomic-cli](rust-cli.md) and the Rust library [atomic_lib](rust-lib.md)

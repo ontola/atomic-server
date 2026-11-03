@@ -157,12 +157,13 @@ impl AtomicNode {
         Ok(response)
     }
 
-    /// Deliver queued writes over `transport` (`Outbox::drain`).
+    /// Deliver queued writes over `transport` (`Outbox::drain_all`): the node's
+    /// agent's first, then each app agent's.
     pub async fn drain_outbox<T: CommitTransport>(
         &self,
         transport: &mut T,
     ) -> AtomicResult<DrainReport> {
-        self.outbox().drain(transport).await
+        Outbox::drain_all(&self.db, transport).await
     }
 
     /// Ingest a signed JSON-AD commit under `policy`.

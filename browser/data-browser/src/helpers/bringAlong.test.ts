@@ -28,10 +28,6 @@ vi.mock('./managed/driveHandover', () => ({
   handOverDrives: m.handOver,
   listHandoverDrives: m.list,
 }));
-vi.mock('../chunks/Templates/demoSession', () => ({
-  readInteractiveDemo: () => ({ drive: 'did:ad:demo' }),
-  readTemplateDemo: () => undefined,
-}));
 vi.mock('@sentry/react', () => ({ captureException: m.capture }));
 
 import { prepareIdentitySwitch, workToBring } from './bringAlong';
@@ -82,8 +78,8 @@ describe('prepareIdentitySwitch', () => {
     expect(m.handOver).not.toHaveBeenCalled();
   });
 
-  it('does not ask for an empty home (only the demo is listed)', async () => {
-    m.list.mockResolvedValue(['did:ad:demo']);
+  it('does not ask when there are no drives to bring', async () => {
+    m.list.mockResolvedValue([]);
     const ask = vi.fn();
 
     expect(await prepareIdentitySwitch(store, B, ask)).toBe('left');
@@ -102,7 +98,7 @@ describe('prepareIdentitySwitch', () => {
     );
   });
 
-  it('brings a demo guest along without asking', async () => {
+  it('brings a guest along without asking', async () => {
     m.guests = [A];
     const ask = vi.fn();
 

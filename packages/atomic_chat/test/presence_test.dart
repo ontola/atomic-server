@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:atomic_chat/atomic_chat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +10,13 @@ import 'unimplemented_api.dart';
 class _PresenceApi extends UnimplementedApi {
   _PresenceApi(this.others);
   List<PresenceItem> others;
-  final announced = <({String drive, String? resource, String? following})>[];
+  final announced = <({
+    String drive,
+    String? resource,
+    String? following,
+    String? session,
+    Map<String, Object?>? extra
+  })>[];
   final cleared = <String>[];
 
   @override
@@ -17,8 +25,17 @@ class _PresenceApi extends UnimplementedApi {
   Future<List<PresenceItem>> presence(String drive) async => others;
   @override
   Future<void> announcePresence(String drive,
-      {String? resource, String? following}) async {
-    announced.add((drive: drive, resource: resource, following: following));
+      {String? resource,
+      String? following,
+      String? session,
+      Map<String, Object?>? extra}) async {
+    announced.add((
+      drive: drive,
+      resource: resource,
+      following: following,
+      session: session,
+      extra: extra
+    ));
   }
 
   @override
@@ -40,7 +57,8 @@ PresenceItem who(String agent,
         allowFollow: allowFollow);
 
 void main() {
-  setUp(() => ResourceView.pageFactory = (send) => FakePage(send));
+  late FakePage page;
+  setUp(() => ResourceView.pageFactory = (send) => page = FakePage(send));
   tearDown(() => ResourceView.pageFactory = null);
 
   Future<_PresenceApi> open(WidgetTester tester, List<PresenceItem> others,
@@ -143,6 +161,154 @@ void main() {
     await tester.tap(find.text('Stop following'));
     await tester.pumpAndSettle();
     expect(api.announced.last.following, isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  /// What the page calls: `{id, method, args}`.
+  void call(WidgetTester tester, String method, List<Object?> args) {
+    page.send(jsonEncode({'id': 7, 'method': method, 'args': args}));
+  }
+
+  testWidgets('parses and writes back the fields the page reads',
+      (tester) async {
+    final item = PresenceItem.fromJson({
+      'sessionId': 's1',
+      'agent': 'a',
+      'resource': 'r',
+      'session': 'meeting',
+      'data': {'cursor': 3},
+      'typing': 'room',
+      'allowFollow': false,
+      'updatedAt': 5,
+    });
+    expect(item.session, 'meeting');
+    expect(item.data, {'cursor': 3});
+    expect(item.typing, 'room');
+    expect(PresenceItem.fromJson(item.toJson()).toJson(), item.toJson());
+    expect(item.toJson()['allowFollow'], false);
+
+    final bare = PresenceItem.fromJson({'sessionId': 's', 'agent': 'a'});
+    expect(bare.session, isNull);
+    expect(bare.data, isNull);
+    expect(bare.typing, isNull);
+    expect(bare.toJson(), {'sessionId': 's', 'agent': 'a'});
+  });
+
+  testWidgets('pushes the others into the page, with who is followed',
+      (tester) async {
+    await open(tester, [
+      PresenceItem(
+          sessionId: 's1',
+          agent: 'a',
+          resource: 'page',
+          data: const {'cursor': 3},
+          typing: 'room',
+          session: 'meeting'),
+    ]);
+    final push =
+        page.scripts.lastWhere((s) => s.contains('atomicEmbed?.presence('));
+    expect(push, contains('presence("drive",['));
+    final items = jsonDecode(
+        push.substring(push.indexOf('[{'), push.lastIndexOf(']') + 1)) as List;
+    expect(items.single['agent'], 'a');
+    expect(items.single['data'], {'cursor': 3});
+    expect(items.single['typing'], 'room');
+    expect(items.single['session'], 'meeting');
+    expect(page.scripts, contains('window.atomicEmbed?.setFollow(null)'));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('a changed list is pushed again, an unchanged one is not',
+      (tester) async {
+    final api = await open(tester, [who('a')]);
+    int pushes() =>
+        page.scripts.where((s) => s.contains('atomicEmbed?.presence(')).length;
+    final before = pushes();
+    await tester.pump(const Duration(seconds: 6));
+    expect(pushes(), before);
+
+    api.others = [who('a'), who('b')];
+    await tester.pump(const Duration(seconds: 6));
+    expect(pushes(), before + 1);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('the page\'s presence fields join the next announcement',
+      (tester) async {
+    final api = await open(tester, const []);
+    final before = api.announced.length;
+    call(tester, 'presence', [
+      {
+        'data': {'cell': 'b2'},
+        'typing': 'room',
+        'session': 'meeting'
+      }
+    ]);
+    await tester.pump();
+    expect(api.announced.length, before + 1);
+    final last = api.announced.last;
+    // What the app owns stays.
+    expect(last.resource, 'page');
+    expect(last.following, isNull);
+    expect(last.session, 'meeting');
+    expect(last.extra, {
+      'data': {'cell': 'b2'},
+      'typing': 'room'
+    });
+    expect(page.scripts.last, contains('__atomicReply(7,true'));
+
+    // Nothing new: nothing announced.
+    call(tester, 'presence', [
+      {'typing': 'room'}
+    ]);
+    await tester.pump();
+    expect(api.announced.length, before + 1);
+
+    // Null clears one field and leaves the others.
+    call(tester, 'presence', [
+      {'typing': null}
+    ]);
+    await tester.pump();
+    expect(api.announced.last.extra, {
+      'data': {'cell': 'b2'}
+    });
+    expect(api.announced.last.session, 'meeting');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('follow and unfollow from the page set the app\'s follow state',
+      (tester) async {
+    final api = await open(tester, [who('a')]);
+    call(tester, 'follow', ['a']);
+    await tester.pumpAndSettle();
+    expect(api.announced.last.following, 'a');
+    expect(api.announced.last.resource, 'page');
+    expect(page.scripts, contains('window.atomicEmbed?.setFollow("a")'));
+    expect(page.scripts.last, contains('__atomicReply(7,true'));
+
+    call(tester, 'unfollow', const []);
+    await tester.pumpAndSettle();
+    expect(api.announced.last.following, isNull);
+    expect(page.scripts.last, contains('__atomicReply(7,true'));
+    expect(page.scripts.where((s) => s.contains('setFollow(null)')).length, 2);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('follow from the page navigates to the leader, once',
+      (tester) async {
+    final api = await open(tester, [who('a', resource: 'elsewhere')]);
+    call(tester, 'follow', ['a']);
+    await tester.pumpAndSettle();
+    // The app navigated: the page of the followed resource announces now.
+    expect(api.announced.last.resource, 'elsewhere');
+    expect(
+        api.announced.where((a) => a.resource == 'elsewhere').length, 1);
+    expect(find.byType(ResourceView), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 6));
   });

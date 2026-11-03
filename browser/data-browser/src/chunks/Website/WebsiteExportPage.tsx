@@ -37,9 +37,7 @@ export function WebsiteExportPage({
       .catch(cause => {
         if (!active) return;
         setError(String(cause));
-        store.notifyError(
-          cause instanceof Error ? cause : new Error(String(cause)),
-        );
+        store.notifyError(cause);
       });
 
     return () => {

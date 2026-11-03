@@ -226,6 +226,12 @@ pub async fn send_message(
     }
     let author = node.db().get_default_agent()?.subject.to_string();
     let mut entry = Entry::new(author, text, crate::utils::now());
+    // A trail line (`Viewing [title](subject)`, which a meeting's leader
+    // posts as they move) is a `FollowEvent`, as the web writes it, so every
+    // client shows it as a system line.
+    if parse_trail(text).is_some() {
+        entry.kinds = Some(urls::FOLLOW_EVENT.into());
+    }
     // The web app stores the entry key / message subject it replies to.
     entry.reply_to = reply_to.filter(|r| !r.is_empty()).map(str::to_string);
     append_entry(node, pusher, chat, &entry).await
@@ -771,5 +777,21 @@ mod tests {
         assert!(send_message(&d.node, &NoPush, &room, "   ", None)
             .await
             .is_err());
+    }
+
+    #[tokio::test]
+    async fn a_sent_trail_line_is_a_follow_event() {
+        let d = Device::new().await;
+        let room = d.new_chat("Trail").await;
+        send_message(&d.node, &NoPush, &room, "Viewing [Plan](did:ad:abc)", None)
+            .await
+            .unwrap();
+        send_message(&d.node, &NoPush, &room, "Viewing the plan", None)
+            .await
+            .unwrap();
+        let lines = rooms().read(&d.store, &room).await.unwrap();
+        assert_eq!(lines[0]["kind"], "event");
+        assert_eq!(lines[0]["about"], "did:ad:abc");
+        assert_eq!(lines[1]["kind"], "text");
     }
 }

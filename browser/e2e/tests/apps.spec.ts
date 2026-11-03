@@ -30,7 +30,7 @@ test.describe('apps', () => {
         const body = readFileSync(
           resolve(
             __dirname,
-            '../../../server/src/plugins/assets/view-client.js',
+            '../../data-browser/src/chunks/AppPage/viewClient.js',
           ),
           'utf8',
         );

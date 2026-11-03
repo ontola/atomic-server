@@ -185,7 +185,7 @@ const TARGETS = [
   {
     mark: 'atomic',
     root: SERVER_ROOT,
-    label: 'atomic-server: Tauri desktop + iOS',
+    label: 'atomic-server: Tauri desktop',
     dir: 'desktop/icons',
     files: [
       png('32x32.png', 32),
@@ -206,32 +206,6 @@ const TARGETS = [
       png('Square310x310Logo.png', 310),
       { kind: 'ico', to: 'icon.ico' },
       { kind: 'icns', to: 'icon.icns' },
-    ],
-  },
-  {
-    mark: 'atomic',
-    root: SERVER_ROOT,
-    label: 'atomic-server: Tauri iOS app icons (opaque — App Store requires no alpha)',
-    dir: 'desktop/icons/ios',
-    files: [
-      png('AppIcon-20x20@1x.png', 20, 'flat'),
-      png('AppIcon-20x20@2x.png', 40, 'flat'),
-      png('AppIcon-20x20@2x-1.png', 40, 'flat'),
-      png('AppIcon-20x20@3x.png', 60, 'flat'),
-      png('AppIcon-29x29@1x.png', 29, 'flat'),
-      png('AppIcon-29x29@2x.png', 58, 'flat'),
-      png('AppIcon-29x29@2x-1.png', 58, 'flat'),
-      png('AppIcon-29x29@3x.png', 87, 'flat'),
-      png('AppIcon-40x40@1x.png', 40, 'flat'),
-      png('AppIcon-40x40@2x.png', 80, 'flat'),
-      png('AppIcon-40x40@2x-1.png', 80, 'flat'),
-      png('AppIcon-40x40@3x.png', 120, 'flat'),
-      png('AppIcon-60x60@2x.png', 120, 'flat'),
-      png('AppIcon-60x60@3x.png', 180, 'flat'),
-      png('AppIcon-76x76@1x.png', 76, 'flat'),
-      png('AppIcon-76x76@2x.png', 152, 'flat'),
-      png('AppIcon-83.5x83.5@2x.png', 167, 'flat'),
-      png('AppIcon-512@2x.png', 1024, 'flat'),
     ],
   },
   {
@@ -317,21 +291,6 @@ const TARGETS = [
     };
   }),
 
-  // Android uses these checked-in launcher resources, not desktop/icons.
-  ...['mdpi:48:108', 'hdpi:72:162', 'xhdpi:96:216', 'xxhdpi:144:324', 'xxxhdpi:192:432'].map(d => {
-    const [density, size, foreground] = d.split(':');
-    return {
-      mark: 'atomic', root: SERVER_ROOT,
-      label: `atomic-server: Tauri Android ${density}`,
-      dir: `desktop/gen/android/app/src/main/res/mipmap-${density}`,
-      files: [
-        png('ic_launcher.png', Number(size), 'flat'),
-        png('ic_launcher_round.png', Number(size), 'flat'),
-        png('ic_launcher_foreground.png', Number(foreground), 'maskable'),
-      ],
-    };
-  }),
-
   /* Sibling repos — skipped when the checkout is not present. */
   {
     mark: 'place',
@@ -362,14 +321,6 @@ const TARGETS = [
 /* ------------------------------------------------------------------ */
 /* Driver                                                              */
 /* ------------------------------------------------------------------ */
-
-// Xcode builds from its own checked-in asset catalog, not desktop/icons/ios.
-const iosIcons = TARGETS.find(target => target.dir === 'desktop/icons/ios');
-TARGETS.push({
-  ...iosIcons,
-  label: 'atomic-server: Tauri Xcode app icon catalog',
-  dir: 'desktop/gen/apple/Assets.xcassets/AppIcon.appiconset',
-});
 
 const TMP = mkdtempSync(path.join(tmpdir(), 'atomic-brand-'));
 let written = 0;

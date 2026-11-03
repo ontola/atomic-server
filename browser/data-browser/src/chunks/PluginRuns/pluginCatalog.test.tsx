@@ -4,6 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   hasExperimentalEntries,
+  mergeCatalogs,
   parseCatalogEntries,
   useIntegrationCatalog,
   type CatalogEntry,
@@ -152,5 +153,82 @@ describe('hasExperimentalEntries', () => {
         entry({ requiresApiPlugins: true }),
       ]),
     ).toBe(false);
+  });
+});
+
+describe('mergeCatalogs', () => {
+  const e = (shortname: string, catalogUrl: string): CatalogEntry => ({
+    shortname,
+    experimental: false,
+    enabled: true,
+    requiresApiPlugins: false,
+    catalogUrl,
+  });
+
+  it('lets the earlier marketplace win a duplicate shortname', () => {
+    const { entries, errors } = mergeCatalogs([
+      { url: 'a', entries: [e('shared', 'a'), e('only-a', 'a')] },
+      { url: 'b', entries: [e('shared', 'b'), e('only-b', 'b')] },
+    ]);
+    expect(entries.map(x => [x.shortname, x.catalogUrl])).toEqual([
+      ['shared', 'a'],
+      ['only-a', 'a'],
+      ['only-b', 'b'],
+    ]);
+    expect(errors).toEqual([]);
+  });
+
+  it('reports a failing marketplace and keeps the others', () => {
+    const { entries, errors } = mergeCatalogs([
+      { url: 'a', entries: [e('one', 'a')] },
+      { url: 'b', error: 'Error: offline' },
+      { url: 'c', entries: [e('two', 'c')] },
+    ]);
+    expect(entries.map(x => x.shortname)).toEqual(['one', 'two']);
+    expect(errors).toEqual([{ url: 'b', error: 'Error: offline' }]);
+  });
+});
+
+describe('useIntegrationCatalog with several marketplaces', () => {
+  it('shows an unreachable extra marketplace as an error next to the rest', async () => {
+    const entry = (shortname: string) => ({
+      [IS_A]: [ENTRY_CLASS],
+      [SHORTNAME]: shortname,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('down.test')) throw new Error('offline');
+
+        return Response.json([
+          entry(url.includes('extra') ? 'extra-app' : 'main'),
+        ]);
+      }),
+    );
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) =>
+        key === 'plugin-marketplaces'
+          ? JSON.stringify([
+              'https://extra.test/catalog.json',
+              'https://down.test/catalog.json',
+            ])
+          : null,
+    });
+
+    function Probe() {
+      const { entries, ready, errors } = useIntegrationCatalog();
+
+      return (
+        <p>
+          {ready ? entries.map(x => x.shortname).join(',') : 'loading'}|
+          {errors.join(';')}
+        </p>
+      );
+    }
+
+    render(<Probe />);
+    expect(
+      await screen.findByText(/extra-app\|down\.test: Error: offline$/),
+    ).toBeTruthy();
   });
 });

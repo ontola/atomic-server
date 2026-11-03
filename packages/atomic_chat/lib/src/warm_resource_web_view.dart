@@ -1,16 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'dart:math' show Random;
 
 import 'package:atomic_flutter/atomic_flutter.dart' show Perf;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'assistant_api.dart';
+import 'call_permissions.dart';
 import 'resource_view.dart';
 import 'app_sidebar_icons.dart';
 import 'app_theme.dart';
@@ -41,6 +45,32 @@ abstract class WarmPage implements EmbedPage, ReleasablePage {
   set onLoaded(VoidCallback? handler);
 }
 
+/// A fresh secret for one web view's channel: 128 random bits, in hex.
+String newChannelToken([Random? random]) {
+  final r = random ?? Random.secure();
+  return [
+    for (var i = 0; i < 16; i++)
+      r.nextInt(256).toRadixString(16).padLeft(2, '0')
+  ].join();
+}
+
+/// [url] with `ch=[token]` in its fragment (next to anything already there).
+/// The page reads it once and removes it (`lockFlutterChannel`).
+Uri withChannelToken(Uri url, String token) => url.replace(
+    fragment: url.fragment.isEmpty ? 'ch=$token' : '${url.fragment}&ch=$token');
+
+/// True when [raw] comes from the page that was given [expected]: its
+/// messages are JSON objects that start with `"token"`. Android hands the
+/// channel to every frame of the web view, so an embedded app's frame can
+/// post to it too, but it was never given the token.
+bool acceptsChannelMessage(String expected, String raw) =>
+    expected.isNotEmpty && raw.startsWith('{"token":${jsonEncode(expected)},');
+
+/// The page's own "I am up" (`{"method":"ready"}`) as [acceptsChannelMessage]
+/// accepts it.
+String channelReadyMessage(String token) =>
+    '{"token":${jsonEncode(token)},"method":"ready"}';
+
 /// Makes a [WarmPage] that sends its messages to [onMessage] from the start
 /// (the page asks the store for the agent while it boots).
 typedef WarmPageBuilder = Future<WarmPage> Function(
@@ -59,6 +89,12 @@ class WebViewEmbedPage implements WarmPage {
   /// instead of making it again.
   final _hostKey = GlobalKey(debugLabel: 'embed page');
   final _ready = Completer<void>();
+
+  /// What the page shows full screen (Android hands the web view's own
+  /// fullscreen view to the host); null when it is not. [FullscreenHost]
+  /// puts it over the app.
+  final fullscreen = ValueNotifier<Widget?>(null);
+  VoidCallback? _onHidden;
   final _created = Stopwatch()..start();
   void Function(String message)? _onMessage;
   VoidCallback? _onLoaded;
@@ -80,20 +116,43 @@ class WebViewEmbedPage implements WarmPage {
   int get age => _created.elapsedMilliseconds;
 
   /// Loads [url] (the bundled page) into a new web view. Only pages of
-  /// [url]'s own origin are ever shown in it.
+  /// [url]'s own origin are ever shown in it. With [mediaPermissions] the
+  /// page may ask for the microphone and camera (the call page).
   static Future<WebViewEmbedPage> create(
     Uri url, {
     void Function(String message)? onMessage,
     VoidCallback? onLoaded,
     bool pollReady = false,
+    CallPermissions? mediaPermissions,
   }) async {
     late final WebViewEmbedPage page;
     final origin = url.origin;
-    final controller = WebViewController()
+    final token = newChannelToken();
+    // Only the call page gets a microphone and camera (and, on iOS, plays
+    // video inline and without a tap).
+    final media = mediaPermissions;
+    final controller = (media == null
+        ? WebViewController()
+        : WebViewController.fromPlatformCreationParams(
+            Platform.isIOS || Platform.isMacOS
+                ? WebKitWebViewControllerCreationParams(
+                    allowsInlineMediaPlayback: true,
+                    mediaTypesRequiringUserAction: const {},
+                  )
+                : const PlatformWebViewControllerCreationParams(),
+            onPermissionRequest: (request) => answerPermissionRequest(
+              types: request.types,
+              grant: request.grant,
+              deny: request.deny,
+              permissions: media,
+            ),
+          ))
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel('AtomicFlutter', onMessageReceived: (m) {
+        // Not from the page: a frame in it (an app) has no token.
+        if (!acceptsChannelMessage(token, m.message)) return;
         // The page's own "I am up" is not a call.
-        if (m.message.contains('"method":"ready"') && m.message.length < 40) {
+        if (m.message == channelReadyMessage(token)) {
           page._markReady();
           return;
         }
@@ -101,9 +160,17 @@ class WebViewEmbedPage implements WarmPage {
       })
       ..setOnConsoleMessage((m) => debugPrint('[embed:js] ${m.message}'))
       ..setNavigationDelegate(NavigationDelegate(
-        onNavigationRequest: (request) => request.url.startsWith(origin)
-            ? NavigationDecision.navigate
-            : NavigationDecision.prevent,
+        onNavigationRequest: (request) {
+          // Frames in the page (an app's sandboxed srcdoc) stay inline.
+          if (!request.isMainFrame) {
+            return request.url == 'about:srcdoc' || request.url == 'about:blank'
+                ? NavigationDecision.navigate
+                : NavigationDecision.prevent;
+          }
+          return request.url.startsWith(origin)
+              ? NavigationDecision.navigate
+              : NavigationDecision.prevent;
+        },
         onPageFinished: (_) {
           debugPrint('[embed] page loaded after ${page.age} ms');
           page._onLoaded?.call();
@@ -126,7 +193,22 @@ class WebViewEmbedPage implements WarmPage {
     if (!kReleaseMode && controller.platform is AndroidWebViewController) {
       await AndroidWebViewController.enableDebugging(true);
     }
-    unawaited(controller.loadRequest(url));
+    // Android's WebView only shows HTML fullscreen (an app's
+    // `requestFullscreen()`) when the host brings the view up itself.
+    final platform = controller.platform;
+    if (platform is AndroidWebViewController) {
+      unawaited(platform.setCustomWidgetCallbacks(
+        onShowCustomWidget: (widget, onHidden) {
+          page._onHidden = onHidden;
+          page.fullscreen.value = widget;
+        },
+        onHideCustomWidget: () {
+          page._onHidden = null;
+          page.fullscreen.value = null;
+        },
+      ));
+    }
+    unawaited(controller.loadRequest(withChannelToken(url, token)));
     return page;
   }
 
@@ -168,11 +250,15 @@ class WebViewEmbedPage implements WarmPage {
   @override
   Widget build() => KeyedSubtree(
         key: _hostKey,
-        child: WebViewWidget(
-          controller: controller,
-          gestureRecognizers: const {
-            Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
-          },
+        child: FullscreenHost(
+          fullscreen: fullscreen,
+          onExit: () => _onHidden?.call(),
+          child: WebViewWidget(
+            controller: controller,
+            gestureRecognizers: const {
+              Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+            },
+          ),
         ),
       );
 
@@ -182,6 +268,8 @@ class WebViewEmbedPage implements WarmPage {
     _released = true;
     _onMessage = null;
     _onLoaded = null;
+    _onHidden = null;
+    fullscreen.value = null;
     _fail('released');
     // webview_flutter has no dispose: leave the page empty so its memory
     // (the store, the WASM) can go.
@@ -190,6 +278,95 @@ class WebViewEmbedPage implements WarmPage {
         .then((_) => controller.loadHtmlString(''))
         .catchError((_) {}));
   }
+}
+
+/// Shows [child], and whatever [fullscreen] holds on a black route over the
+/// whole app (root navigator, immersive). Back calls [onExit] (the page's
+/// `onHidden`); when [fullscreen] goes null again (the page left fullscreen
+/// itself) the route is closed without it.
+class FullscreenHost extends StatefulWidget {
+  const FullscreenHost({
+    super.key,
+    required this.fullscreen,
+    required this.onExit,
+    required this.child,
+  });
+
+  final ValueListenable<Widget?> fullscreen;
+  final VoidCallback onExit;
+  final Widget child;
+
+  @override
+  State<FullscreenHost> createState() => _FullscreenHostState();
+}
+
+class _FullscreenHostState extends State<FullscreenHost> {
+  Route<void>? _route;
+  NavigatorState? _navigator;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.fullscreen.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(FullscreenHost old) {
+    super.didUpdateWidget(old);
+    if (old.fullscreen != widget.fullscreen) {
+      old.fullscreen.removeListener(_changed);
+      widget.fullscreen.addListener(_changed);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.fullscreen.removeListener(_changed);
+    _close();
+    super.dispose();
+  }
+
+  void _changed() {
+    if (widget.fullscreen.value == null) {
+      _close();
+    } else if (_route == null && mounted) {
+      _open();
+    }
+  }
+
+  void _open() {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = PageRouteBuilder<void>(
+      pageBuilder: (_, __, ___) => Scaffold(
+        backgroundColor: Colors.black,
+        body: ValueListenableBuilder<Widget?>(
+          valueListenable: widget.fullscreen,
+          builder: (_, view, __) => view ?? const SizedBox.shrink(),
+        ),
+      ),
+    );
+    _navigator = navigator;
+    _route = route;
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    unawaited(navigator.push(route).then((_) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      // Popped by back, not by the page leaving fullscreen: tell the page.
+      if (identical(_route, route)) {
+        _route = null;
+        widget.onExit();
+      }
+    }));
+  }
+
+  void _close() {
+    final route = _route;
+    if (route == null) return;
+    _route = null;
+    if (route.isActive) _navigator?.removeRoute(route);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Keeps one embedded page loaded and hidden (booted, Loro compiled), so
@@ -588,6 +765,17 @@ class WarmResourceWebView with WidgetsBindingObserver, ChangeNotifier {
       // A resource rendered ahead was not opened: not one for Recents.
       if (method == 'opened') {
         await page.runJavaScript('window.__atomicReply($id,true,null)');
+        return;
+      }
+      // A hidden spare opens no native screen over nobody: false makes the
+      // page draw the resource itself, if it ever asks. (Nor does it start a
+      // call: false hides the page's call button, and no chat: false makes
+      // "Fix it" fall back to the page's own handling.)
+      if (method == 'openNative' ||
+          method == 'joinCall' ||
+          method == 'askAssistant') {
+        await page.runJavaScript(
+            'window.__atomicReply($id,true,${jsonEncode('false')})');
         return;
       }
       // The page reports the saved theme as it boots, before anyone holds it.

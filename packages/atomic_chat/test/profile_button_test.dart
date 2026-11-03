@@ -240,4 +240,12 @@ void _menuTests() {
     await g.up();
     await tester.pumpAndSettle();
   });
+
+  testWidgets('Send feedback opens the feedback dialog', (tester) async {
+    await open(tester,
+        const ProfileIdentity(name: 'Joep', subject: 'did:ad:agent:abc'));
+    final g = await hold(tester);
+    await pick(tester, g, 'Send feedback');
+    expect(find.byType(FeedbackDialog), findsOneWidget);
+  });
 }

@@ -151,6 +151,7 @@ export function useCollection(
   const queryIdentity = [
     queryFilterMemo.property,
     queryFilterMemo.value,
+    queryFilterMemo.drive,
     filtersDep,
     queryFilterMemo.sort_by,
     String(!!queryFilterMemo.sort_desc),
@@ -220,6 +221,7 @@ export function useCollection(
       !col ||
       col.property !== queryFilterMemo.property ||
       col.value !== queryFilterMemo.value ||
+      col.drive !== queryFilterMemo.drive ||
       filtersKey(col.filters) !== filtersKey(queryFilterMemo.filters) ||
       col.sortBy !== queryFilterMemo.sort_by ||
       col.sortDesc !== !!queryFilterMemo.sort_desc ||

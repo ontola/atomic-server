@@ -254,11 +254,15 @@ class ChatHeader extends StatelessWidget {
   final String subtitle;
   final IconData? icon;
 
+  /// Called when the subtitle is tapped (the AI chat picks its model there).
+  final VoidCallback? onSubtitleTap;
+
   const ChatHeader({
     super.key,
     required this.title,
     this.subtitle = '',
     this.icon,
+    this.onSubtitleTap,
   });
 
   static const avatarSize = 36.0;
@@ -295,12 +299,21 @@ class ChatHeader extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       height: 1.2)),
               if (subtitle.isNotEmpty)
-                Text(subtitle,
-                    key: const Key('chat-header-subtitle'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: c.textSecondary, fontSize: 12.5, height: 1.2)),
+                GestureDetector(
+                  onTap: onSubtitleTap,
+                  child: Text(subtitle,
+                      key: const Key('chat-header-subtitle'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 12.5,
+                          height: 1.2,
+                          decoration: onSubtitleTap == null
+                              ? null
+                              : TextDecoration.underline,
+                          decorationStyle: TextDecorationStyle.dotted)),
+                ),
             ],
           ),
         ),

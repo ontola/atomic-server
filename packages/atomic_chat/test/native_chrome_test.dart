@@ -112,6 +112,12 @@ void main() {
     group('the $name', () {
       testWidgets('shows the breadcrumbs of the web page', (tester) async {
         final api = _TreeApi();
+        if (name == 'AI chat') {
+          // An AI chat is person-scoped: no drive trail over it.
+          await _push(tester, api, build(api));
+          expect(find.byKey(const Key('breadcrumbs')), findsNothing);
+          return;
+        }
         await _push(tester, api, build(api));
         final bar = find.byKey(const Key('breadcrumbs'));
         expect(find.descendant(of: bar, matching: find.text('Home')),

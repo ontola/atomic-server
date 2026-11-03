@@ -1,32 +1,9 @@
+import { asError } from '@tomic/react';
 import toast from 'react-hot-toast';
 import {
   handleErrorBugsnag,
   reportStoreError,
 } from '../helpers/loggingHandlers';
-
-/**
- * Coerces whatever was thrown into an Error.
- *
- * `window.onunhandledrejection` hands over `event.reason`, which is whatever
- * the rejecting code passed — a string, `undefined`, a DOM event, anything.
- * `window.onerror` can report a null error for a failure that crossed an
- * origin or came out of a worker.
- */
-function asError(thrown: unknown): Error {
-  if (thrown instanceof Error) {
-    return thrown;
-  }
-
-  if (typeof thrown === 'string' && thrown.length > 0) {
-    return new Error(thrown);
-  }
-
-  if (thrown === null || thrown === undefined) {
-    return new Error('Something failed, and reported no reason.');
-  }
-
-  return new Error(String(thrown));
-}
 
 /**
  * Logs the error, reports it, and shows it to the user.

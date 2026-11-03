@@ -12,6 +12,11 @@
 //! [`LocalWritePusher`]. There is no raw signing, so a script inside the page
 //! cannot get a signature over anything else.
 //!
+//! Apps: an app's own writes are signed by the app's agent, whose key the page
+//! hands over once (`setAppAgent`) and never gets back. The page asks for the
+//! write (`appWrite`, see [`super::app_write`]); `sign` still refuses every
+//! commit that is not the device agent's own.
+//!
 //! Reads: the page's store does not connect to a server, so an agent it shows
 //! (a chat's author, "created by", a member list) that this device does not
 //! hold would be "not found". Those are answered from the host's
@@ -24,7 +29,11 @@
 
 use super::{profiles::AgentProfiles, recents::RecentsIndex, LocalWritePusher};
 use crate::{
-    agents::ForAgent, runtime::AtomicNode, storelike::Query, Db, Resource, Storelike, Subject,
+    agents::ForAgent,
+    db::app_agent::{AppAgent, AppAgentKey},
+    runtime::AtomicNode,
+    storelike::Query,
+    Db, Resource, Storelike, Subject,
 };
 use serde_json::{json, Value as Json};
 use std::collections::HashMap;
@@ -199,6 +208,22 @@ async fn query(store: &Db, opts: &Json) -> Result<Json, String> {
     }))
 }
 
+/// The subject a short ref (`#<8+ chars>`, with or without the `#`) stands
+/// for: the stored resource whose subject body starts with it.
+fn expand_ref(store: &Db, reference: &str) -> Option<String> {
+    let body = reference.strip_prefix('#').unwrap_or(reference);
+    if body.len() < 8
+        || !body
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return None;
+    }
+    ["atomic:", "did:ad:"]
+        .iter()
+        .find_map(|scheme| store.subject_with_prefix(&format!("{scheme}{body}")))
+}
+
 fn search(store: &Db, args: &[Json]) -> Result<Json, String> {
     let q = str_arg(args, 0)?;
     let opts = args.get(1).cloned().unwrap_or(Json::Null);
@@ -241,6 +266,65 @@ fn version_vectors(store: &Db, subjects: Vec<String>) -> Json {
         }
     }
     json!(out)
+}
+
+/// The device's own agent, as the one who may use an app: its rights on the
+/// app are the person's rights. On the phone this agent is the store's own
+/// (`get_default_agent`), which `check_rights` treats as root, so the bound
+/// that matters there is the app agent's own rights; the check is kept for a
+/// host whose person is not the store's agent.
+fn person(store: &Db) -> Result<ForAgent, String> {
+    Ok(ForAgent::AgentSubject(
+        store.get_default_agent().map_err(err)?.subject,
+    ))
+}
+
+/// What may be said about an app's key: whose it is, never the key.
+fn app_agent_answer(store: &Db, key: &AppAgentKey) -> Result<Json, String> {
+    let info = store.get_app_agent_info(key).map_err(err)?;
+    serde_json::to_value(info).map_err(|e| e.to_string())
+}
+
+/// Gives `app` on `drive` the key it signs its writes with. Needs write rights
+/// on the app: giving it an identity changes what it can do. The key is
+/// checked now, so a malformed one fails here and not at the app's first write.
+async fn set_app_agent(store: &Db, drive: &str, app: &str, secret: &str) -> Result<Json, String> {
+    let resource = store
+        .get_resource(&app.into())
+        .await
+        .map_err(|e| format!("{app} could not be read: {e}"))?;
+    crate::hierarchy::check_write(store, &resource, &person(store)?)
+        .await
+        .map_err(err)?;
+
+    // The error of a secret that does not parse is not echoed with the secret.
+    let parsed = crate::agents::Agent::from_secret(secret)
+        .map_err(|e| format!("That is not an agent secret: {e}"))?;
+
+    let key = AppAgentKey::new(drive, app);
+    store
+        .set_app_agent(
+            &key,
+            &AppAgent::new(
+                parsed.subject.to_string(),
+                secret.to_string(),
+                crate::utils::now(),
+            ),
+        )
+        .map_err(err)?;
+    app_agent_answer(store, &key)
+}
+
+/// Whether `app` has a key on this device, and whose. Needs read rights on the app.
+async fn app_agent_info(store: &Db, drive: &str, app: &str) -> Result<Json, String> {
+    let resource = store
+        .get_resource(&app.into())
+        .await
+        .map_err(|e| format!("{app} could not be read: {e}"))?;
+    crate::hierarchy::check_read(store, &resource, &person(store)?)
+        .await
+        .map_err(err)?;
+    app_agent_answer(store, &AppAgentKey::new(drive, app))
 }
 
 /// Signs `payload` if it is a commit by this device's agent, and nothing else.
@@ -391,6 +475,8 @@ impl EmbedHost {
                 .map(|b| b64(&b))),
             "query" => query(store, args.first().unwrap_or(&Json::Null)).await?,
             "search" => search(store, &args)?,
+            // An AI's short ref (`#RbGIlHy6`): the start of a subject's body.
+            "expandRef" => json!(expand_ref(store, str_arg(&args, 0)?)),
             "allSubjects" => json!(store
                 .all_resources(true)
                 .map(|r| r.get_subject().to_string())
@@ -402,6 +488,26 @@ impl EmbedHost {
             .await
             .into_iter()
             .collect::<Vec<_>>()),
+            // "Where space goes" for this device's copy of a drive, in the
+            // rows of the server's `/drive-usage/breakdown`.
+            "driveUsageBreakdown" => {
+                let drive = subject_of(store, str_arg(&args, 0)?).to_string();
+                let rows = store
+                    .drive_usage_breakdown(&drive)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                json!(rows
+                    .iter()
+                    .map(|r| json!({
+                        "subject": r.subject,
+                        "name": r.name,
+                        "parent": r.parent,
+                        "isA": r.is_a,
+                        "loroBytes": r.loro_bytes,
+                        "blobBytes": r.blob_bytes,
+                    }))
+                    .collect::<Vec<_>>())
+            }
             "getVersionVectorsForDrive" => {
                 let subjects: Vec<String> = crate::sync::engine::collect_drive_subjects(
                     store,
@@ -470,6 +576,45 @@ impl EmbedHost {
                 });
                 Json::Null
             }
+            // `setAppAgent(drive, app, secret)`: hands the app's key to this
+            // node. Answers `{ agent, createdAt }`, never the secret.
+            "setAppAgent" => {
+                set_app_agent(
+                    store,
+                    str_arg(&args, 0)?,
+                    str_arg(&args, 1)?,
+                    str_arg(&args, 2)?,
+                )
+                .await?
+            }
+            // `appAgent(drive, app)`: `{ agent, createdAt }`, or null when the
+            // app has no key here.
+            "appAgent" => app_agent_info(store, str_arg(&args, 0)?, str_arg(&args, 1)?).await?,
+            // `appWrite(drive, app, request)`: the write is signed by the
+            // app's agent, queued in that agent's outbox and pushed on.
+            // Answers `{ subject }`.
+            "appWrite" => {
+                let outcome = super::app_write::app_write(
+                    store,
+                    str_arg(&args, 0)?,
+                    str_arg(&args, 1)?,
+                    args.get(2).unwrap_or(&Json::Null),
+                )
+                .await?;
+                // Nothing changed: nothing was signed, so nothing to deliver.
+                if outcome.commit.commit.signature.is_some() {
+                    crate::sync::outbox::Outbox::for_signer(store.clone(), outcome.signer)
+                        .mark_dirty(&outcome.commit)
+                        .await
+                        .map_err(err)?;
+                    let pusher = self.pusher.clone();
+                    let response = outcome.commit;
+                    tokio::spawn(async move {
+                        pusher.push(&response).await;
+                    });
+                }
+                json!({ "subject": outcome.subject })
+            }
             other => {
                 return Err(format!(
                     "{other}: not available in the embedded renderer yet"
@@ -537,6 +682,47 @@ mod tests {
             ask(&host(&d), "opened", json!(["x", d.drive])).await,
             json!(false)
         );
+    }
+
+    #[tokio::test]
+    async fn the_page_can_measure_a_drive_on_this_device() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let folder = d
+            .store
+            .create_resource(urls::FOLDER, &d.drive, "Measured folder", None)
+            .await
+            .unwrap();
+
+        let rows = ask(&h, "driveUsageBreakdown", json!([d.drive])).await;
+        let rows = rows.as_array().unwrap();
+        let row = rows
+            .iter()
+            .find(|r| r["subject"] == json!(folder))
+            .expect("the folder is measured");
+        assert_eq!(row["name"], json!("Measured folder"));
+        assert!(row["loroBytes"].as_u64().unwrap() > 0, "{row}");
+    }
+
+    #[tokio::test]
+    async fn a_short_ref_expands_to_its_subject() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let folder = d
+            .store
+            .create_resource(urls::FOLDER, &d.drive, "Ref folder", None)
+            .await
+            .unwrap();
+        let body = folder.split_once(':').unwrap().1;
+        let body = body.strip_prefix("ad:").unwrap_or(body);
+        let reference = format!("#{}", &body[..8]);
+
+        assert_eq!(
+            ask(&h, "expandRef", json!([reference])).await,
+            json!(folder)
+        );
+        assert_eq!(ask(&h, "expandRef", json!(["#zzzzzzzz"])).await, Json::Null);
+        assert_eq!(ask(&h, "expandRef", json!(["#short"])).await, Json::Null);
     }
 
     #[tokio::test]
@@ -1053,5 +1239,310 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("Made in the page"));
+    }
+
+    // ---- Apps: setAppAgent, appAgent, appWrite ----
+
+    use crate::{
+        agents::Agent,
+        sync::outbox::{raw as raw_outbox, Outbox},
+    };
+
+    /// An app (a folder in the device's drive), a key for it, and the right to
+    /// write the app for that key's agent, as the app's creator gives it.
+    struct AppFixture {
+        subject: String,
+        agent: Agent,
+        secret: String,
+    }
+
+    async fn new_app(d: &Device, grant_write: bool) -> AppFixture {
+        let subject = d
+            .store
+            .create_resource(urls::FOLDER, &d.drive, "An app", None)
+            .await
+            .unwrap();
+        let agent = Agent::new(Some("The app")).unwrap();
+        if grant_write {
+            crate::invite_token::grant_rights(&agent.subject.to_string(), &subject, true, &d.store)
+                .await
+                .unwrap();
+        }
+        let secret = agent.build_secret().unwrap();
+        AppFixture {
+            subject,
+            agent,
+            secret,
+        }
+    }
+
+    async fn give_key(h: &EmbedHost, d: &Device, app: &AppFixture) -> Json {
+        ask(h, "setAppAgent", json!([d.drive, app.subject, app.secret])).await
+    }
+
+    async fn app_write_call(
+        h: &EmbedHost,
+        drive: &str,
+        app: &str,
+        request: Json,
+    ) -> Result<String, String> {
+        h.call("appWrite", &json!([drive, app, request]).to_string())
+            .await
+    }
+
+    fn create_request(parent: &str, name: &str) -> Json {
+        json!({
+            "op": "create",
+            "parent": parent,
+            "isA": [urls::FOLDER],
+            "propVals": { urls::NAME: name },
+        })
+    }
+
+    #[tokio::test]
+    async fn the_answers_about_an_app_key_never_hold_the_secret() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let app = new_app(&d, true).await;
+
+        let set = give_key(&h, &d, &app).await;
+        let got = ask(&h, "appAgent", json!([d.drive, app.subject])).await;
+
+        for answer in [&set, &got] {
+            assert_eq!(answer["agent"], json!(app.agent.subject.to_string()));
+            assert!(answer["createdAt"].is_i64(), "{answer}");
+            let text = answer.to_string();
+            assert!(!text.contains(&app.secret), "{text}");
+            assert!(
+                !text.contains(app.agent.private_key.as_deref().unwrap()),
+                "{text}"
+            );
+        }
+
+        // A secret that is not one is refused, and not repeated.
+        let bad = "definitely-not-a-secret-7391";
+        let err = h
+            .call(
+                "setAppAgent",
+                &json!([d.drive, app.subject, bad]).to_string(),
+            )
+            .await
+            .unwrap_err();
+        assert!(!err.contains(bad), "{err}");
+    }
+
+    #[tokio::test]
+    async fn sign_still_refuses_a_commit_by_an_app_agent() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let app = new_app(&d, true).await;
+        give_key(&h, &d, &app).await;
+
+        let commit = json!({
+            urls::IS_A: [urls::COMMIT],
+            urls::SIGNER: app.agent.subject.to_string(),
+        });
+        let refused = h
+            .call("sign", &json!([commit.to_string()]).to_string())
+            .await;
+
+        assert!(refused.is_err(), "{refused:?}");
+    }
+
+    #[tokio::test]
+    async fn an_app_write_lands_signed_by_the_app_agent_and_is_queued_under_it() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let app = new_app(&d, true).await;
+        give_key(&h, &d, &app).await;
+        let device_agent = d.store.get_default_agent().unwrap();
+
+        let answer = ask(
+            &h,
+            "appWrite",
+            json!([
+                d.drive,
+                app.subject,
+                create_request(&app.subject, "Made by the app")
+            ]),
+        )
+        .await;
+        let subject = answer["subject"].as_str().unwrap().to_string();
+        assert!(subject.starts_with("did:ad:") || subject.starts_with("atomic:"));
+
+        let made = d
+            .store
+            .get_resource(&subject.as_str().into())
+            .await
+            .unwrap();
+        assert_eq!(made.get(urls::NAME).unwrap().to_string(), "Made by the app");
+        assert_eq!(
+            Subject::from(made.get(urls::PARENT).unwrap().to_string().as_str()).pure_id(),
+            Subject::from(app.subject.as_str()).pure_id()
+        );
+
+        // Queued for the app agent, with a genesis it signed; not for the person.
+        let app_outbox = Outbox::for_signer(d.store.clone(), app.agent.clone());
+        assert!(app_outbox.has_pending(&Subject::from(subject.as_str()).pure_id()));
+        let entry = &app_outbox.entries().unwrap()[0];
+        let envelope: Json = serde_json::from_str(entry.envelope_json.as_deref().unwrap()).unwrap();
+        let signer = envelope[urls::SIGNER].as_str().unwrap();
+        assert_eq!(
+            Subject::from(signer).pure_id(),
+            app.agent.subject.pure_id(),
+            "signed as the app"
+        );
+        assert_ne!(
+            Subject::from(signer).pure_id(),
+            device_agent.subject.pure_id()
+        );
+        assert!(
+            raw_outbox::entries(&d.store, &device_agent.subject.to_string())
+                .unwrap()
+                .is_empty(),
+            "not in the person's queue"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_app_write_is_pushed() {
+        let d = Device::new().await;
+        let pushed = Arc::new(Counting::default());
+        let h = EmbedHost::new(d.node.clone(), pushed.clone(), AgentProfiles::none());
+        let app = new_app(&d, true).await;
+        give_key(&h, &d, &app).await;
+
+        ask(
+            &h,
+            "appWrite",
+            json!([d.drive, app.subject, create_request(&app.subject, "Pushed")]),
+        )
+        .await;
+        // The push runs in the background; give it a turn.
+        for _ in 0..50 {
+            if pushed.0.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+
+        assert_eq!(pushed.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn an_app_write_where_the_app_agent_lacks_write_stores_nothing() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let app = new_app(&d, true).await;
+        give_key(&h, &d, &app).await;
+        // The person may write here (their drive), the app's agent may not.
+        let elsewhere = d
+            .store
+            .create_resource(urls::FOLDER, &d.drive, "Not the app's", None)
+            .await
+            .unwrap();
+        let before = d.store.all_resources(true).count();
+
+        let refused = h
+            .call(
+                "appWrite",
+                &json!([d.drive, app.subject, create_request(&elsewhere, "Sneaky")]).to_string(),
+            )
+            .await;
+
+        assert!(refused.is_err(), "{refused:?}");
+        assert_eq!(d.store.all_resources(true).count(), before);
+        assert!(Outbox::for_signer(d.store.clone(), app.agent.clone())
+            .entries()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_app_write_without_a_key_on_this_device_is_an_error() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let app = new_app(&d, true).await;
+
+        let refused = h
+            .call(
+                "appWrite",
+                &json!([d.drive, app.subject, create_request(&app.subject, "No key")]).to_string(),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            refused.contains("This app has no key on this device"),
+            "{refused}"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_app_can_save_remove_and_destroy_what_it_made() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let app = new_app(&d, true).await;
+        give_key(&h, &d, &app).await;
+        let write = |request: Json| app_write_call(&h, &d.drive, &app.subject, request);
+
+        let created = write(json!({
+            "op": "create",
+            "parent": app.subject,
+            "isA": [urls::FOLDER],
+            "propVals": { urls::NAME: "First", urls::DESCRIPTION: "to be removed" },
+        }))
+        .await
+        .unwrap();
+        let subject = serde_json::from_str::<Json>(&created).unwrap()["subject"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        let saved = write(json!({
+            "op": "save",
+            "subject": subject,
+            "propVals": { urls::NAME: "Second" },
+        }))
+        .await
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Json>(&saved).unwrap(),
+            json!({ "subject": subject })
+        );
+        let resource = d
+            .store
+            .get_resource(&subject.as_str().into())
+            .await
+            .unwrap();
+        assert_eq!(resource.get(urls::NAME).unwrap().to_string(), "Second");
+
+        write(json!({
+            "op": "remove",
+            "subject": subject,
+            "properties": [urls::DESCRIPTION],
+        }))
+        .await
+        .unwrap();
+        let resource = d
+            .store
+            .get_resource(&subject.as_str().into())
+            .await
+            .unwrap();
+        assert!(resource.get(urls::DESCRIPTION).is_err());
+        assert_eq!(resource.get(urls::NAME).unwrap().to_string(), "Second");
+
+        // An unknown op and a missing subject are refused.
+        assert!(write(json!({ "op": "explode" })).await.is_err());
+        assert!(write(json!({ "op": "save" })).await.is_err());
+
+        write(json!({ "op": "destroy", "subject": subject }))
+            .await
+            .unwrap();
+        assert!(d
+            .store
+            .get_resource(&subject.as_str().into())
+            .await
+            .is_err());
     }
 }

@@ -44,11 +44,11 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Camera is used to scan QR codes for device pairing</string>
+	<string>Camera is used to scan QR codes for device pairing and for video calls in meetings</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Speech recognition turns what you say into a chat message</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>The microphone is used to dictate chat messages</string>
+	<string>The microphone is used to dictate chat messages and for calls in meetings</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

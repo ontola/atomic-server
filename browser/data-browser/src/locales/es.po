@@ -114,6 +114,7 @@ msgstr "Agentes de IA"
 #: src/chunks/AppPage/ConnectDialog.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
@@ -140,6 +141,7 @@ msgstr "Agentes de IA"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -282,8 +284,6 @@ msgid "Choose a default model"
 msgstr "Elige un modelo predeterminado"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/components/DemoExitButton.tsx
-#: src/routes/NewDriveRoute.tsx
 msgid "Back"
 msgstr "Atrás"
 
@@ -313,7 +313,6 @@ msgid "Ollama"
 msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/components/AI/LocalNetworkNotice.tsx
 msgid "Continue"
 msgstr "Continuar"
@@ -590,7 +589,6 @@ msgstr "Campo obligatorio."
 msgid "Error: {0}"
 msgstr "Error: {0}"
 
-#: src/chunks/Demo/SimulatedTypist.ts
 #: src/chunks/RTE/applyPatchedJsonToLoroDocCollaborative.ts
 msgid "Editor was destroyed before it finished initializing"
 msgstr "El editor fue destruido antes de que terminara de inicializarse"
@@ -1531,6 +1529,7 @@ msgstr "Este dispositivo"
 
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/components/EditLanguagesDialog.tsx
+#: src/components/Settings/IntegrationSettings.tsx
 msgid "Add"
 msgstr "Añadir"
 
@@ -2673,7 +2672,7 @@ msgstr "Aún no hay etiquetas."
 msgid "Open tag page"
 msgstr "Abrir página de etiquetas"
 
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/components/ShareLink.tsx
 msgid "Link copied to clipboard"
 msgstr "Enlace copiado al portapapeles"
 
@@ -3080,7 +3079,6 @@ msgid "No alt text"
 msgstr "Sin texto alternativo"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
-#: src/chunks/Demo/SimulatedTypist.ts
 #: src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
@@ -3876,22 +3874,6 @@ msgstr ""
 msgid "Start meeting"
 msgstr ""
 
-#: src/routes/DemoRoute.tsx
-msgid "Could not start the demo"
-msgstr ""
-
-#: src/routes/DemoRoute.tsx
-msgid "The demo could not start"
-msgstr ""
-
-#: src/chunks/Demo/SimulatedTypist.ts
-msgid "Map"
-msgstr ""
-
-#: src/chunks/Demo/SimulatedTypist.ts
-msgid "List"
-msgstr ""
-
 #. 0: new Date().toLocaleString(undefined, { month\\: 'short', day\\: 'numeric', hour\\: '2-digit', minute\\: '2-digit', })
 #: src/components/Presence/FollowContext.tsx
 msgid "Meeting · {0}"
@@ -3918,7 +3900,9 @@ msgid "Leave"
 msgstr ""
 
 #. 0: participants.length
+#. 0: participants.length
 #: src/components/Presence/FollowSessionPanelContainer.tsx
+#: src/components/Presence/MeetingAttendees.tsx
 msgid "{0} here"
 msgstr ""
 
@@ -3939,10 +3923,6 @@ msgstr ""
 
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Join"
-msgstr ""
-
-#: src/routes/DemoRoute.tsx
-msgid "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
 msgstr ""
 
 #. 0: name
@@ -4002,11 +3982,6 @@ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "Recently visited"
-msgstr ""
-
-#: src/routes/DemoRoute.tsx
-#: src/routes/DemoRoute.tsx
-msgid "Setting up your demo…"
 msgstr ""
 
 #. 0: status.lastDriveSync.count.toLocaleString()
@@ -4073,18 +4048,6 @@ msgstr ""
 msgid "Only on this device"
 msgstr ""
 
-#: src/components/ConnectToDeviceForm.tsx
-msgid "Camera access is needed to scan a code."
-msgstr ""
-
-#: src/components/ConnectToDeviceForm.tsx
-msgid "Could not open the scanner."
-msgstr ""
-
-#: src/components/ConnectToDeviceForm.tsx
-msgid "<0/> Scan a QR code"
-msgstr ""
-
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Your data is on another device"
 msgstr ""
@@ -4118,7 +4081,6 @@ msgstr ""
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
-#: src/routes/DemoRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr ""
@@ -4135,7 +4097,6 @@ msgstr ""
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
-#: src/routes/NewDriveRoute.tsx
 msgid "Close"
 msgstr ""
 
@@ -4314,8 +4275,8 @@ msgstr ""
 msgid "Mounted at {0}"
 msgstr ""
 
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
 #: src/components/Settings/VirtualDriveSettings.tsx
+#: src/components/ShareLink.tsx
 msgid "<0/> Open"
 msgstr ""
 
@@ -4442,8 +4403,10 @@ msgid "Languages"
 msgstr ""
 
 #. 0: tag
+#. 0: url
 #. 0: email
 #: src/components/EditLanguagesDialog.tsx
+#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Share/EmailInviteInput.tsx
 msgid "Remove {0}"
 msgstr ""
@@ -4461,16 +4424,18 @@ msgstr ""
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Creating…"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Create drive"
 msgstr ""
 
 #: src/components/MetaSetter.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/routes/NewDriveRoute.tsx
+#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr ""
 
@@ -4492,6 +4457,7 @@ msgstr ""
 msgid "Leave video call"
 msgstr ""
 
+#: src/components/Presence/FollowSessionPanelContainer.tsx
 #: src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "Start video call"
 msgstr ""
@@ -5673,10 +5639,6 @@ msgstr ""
 msgid "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
 msgstr ""
 
-#: src/handlers/errorHandler.ts
-msgid "Something failed, and reported no reason."
-msgstr ""
-
 #: src/views/Drive/DrivePage.tsx
 msgid "Your private drive keeps its name. It is tied to your account, not to a project."
 msgstr ""
@@ -6442,7 +6404,6 @@ msgstr ""
 msgid "Sign in to join"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/views/PeerInvitePage.tsx
 msgid "Open drive"
 msgstr ""
@@ -6582,52 +6543,12 @@ msgstr ""
 msgid "<0/> Loading"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "The drive was created, but setup did not finish. Open it to inspect what was saved."
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Drive name"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/components/DemoExitButton.tsx
-#: src/routes/NewDriveRoute.tsx
-msgid "Back to templates"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Give your space a name"
-msgstr ""
-
-#. 0: template.title
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "{0} contents"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Preparing…"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Preview template"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Prefer a fresh start?"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Create a blank drive"
-msgstr ""
-
-#: src/components/DemoExitButton.tsx
-msgid "Use this template"
 msgstr ""
 
 #: src/chunks/Templates/TemplateChat.tsx
@@ -6635,51 +6556,15 @@ msgid "Atomic"
 msgstr ""
 
 #: src/chunks/Templates/TemplateChat.tsx
-msgid "Or, tell Atomic what you need"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "<0/> Include example content"
-msgstr ""
-
-#: src/chunks/Templates/TemplateChat.tsx
 msgid "Loading chat…"
 msgstr ""
 
-#: src/chunks/Templates/TemplateChat.tsx
-msgid "Nothing is created until you review it."
-msgstr ""
-
-#: src/chunks/Templates/TemplateChat.tsx
-msgid "Review this setup"
-msgstr ""
-
-#: src/chunks/Templates/TemplateChat.tsx
-#: src/chunks/Templates/TemplateChat.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Set up AI"
 msgstr ""
 
-#: src/chunks/Templates/TemplateChat.tsx
 #: src/components/AI/AISettings.tsx
 msgid "Loading AI settings…"
-msgstr ""
-
-#: src/routes/NewDriveRoute.tsx
-msgid "Could not open the preview. Please refresh."
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "/app/new-drive?blank=1"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "<0/> Keep demo content and my edits"
-msgstr ""
-
-#. 0: ' '
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Start with a template,{0} <0>create a blank drive</0> , or describe a space of your own."
 msgstr ""
 
 #: src/actions/resourceActions.tsx
@@ -6886,30 +6771,12 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
-#: src/components/MetaSetter.tsx
-#: src/components/SideBar/AccountMenu.tsx
-#: src/routes/IntegrationStore.tsx
-msgid "Integrations"
-msgstr ""
-
-#: src/components/SideBar/AccountMenu.tsx
-msgid "Discover published integrations"
-msgstr ""
-
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Review the saved proposal and run history before continuing."
 msgstr ""
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Resume saved run"
-msgstr ""
-
-#: src/routes/IntegrationStore.tsx
-msgid "Search integrations"
-msgstr ""
-
-#: src/routes/IntegrationStore.tsx
-msgid "Search integrations, domains or standards"
 msgstr ""
 
 #: src/routes/IntegrationStore.tsx
@@ -7096,10 +6963,6 @@ msgstr ""
 
 #: src/chunks/PluginRuns/CreateEventAutomation.tsx
 msgid "The next screen opens an editable JavaScript starter. Automatic execution stays off until you enable it."
-msgstr ""
-
-#: src/routes/IntegrationStore.tsx
-msgid "Connect your apps and keep your work in sync. Add automations when you need them."
 msgstr ""
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
@@ -8459,7 +8322,7 @@ msgstr ""
 msgid "The selected model is not in the zero-retention list. Choose another model."
 msgstr ""
 
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/components/ShareLink.tsx
 msgid "<0/> Copy link"
 msgstr ""
 
@@ -8700,8 +8563,12 @@ msgstr ""
 msgid "from {0}"
 msgstr ""
 
+#. 0: app.name
+#. 0: sharing.app.name
 #. 0: title
 #. 0: title
+#: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Share {0}"
@@ -8923,15 +8790,12 @@ msgid "Discover integrations from this catalog.json. This setting is saved in th
 msgstr ""
 
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/Settings/IntegrationSettings.tsx
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr ""
 
 #: src/components/SignInButton.tsx
 msgid "Go to the User page"
-msgstr ""
-
-#: src/routes/DemoRoute.tsx
-msgid "Demo setup stalled"
 msgstr ""
 
 #. 0: title || 'Untitled Chat'; 1: messages.length
@@ -9099,45 +8963,13 @@ msgid "This page no longer exists"
 msgstr ""
 
 #: src/views/ErrorPage.tsx
-msgid "It was deleted, for example when you left a demo or a preview."
-msgstr ""
-
-#: src/views/ErrorPage.tsx
 msgid "Open your drive"
 msgstr ""
 
-#: src/components/DemoExitButton.tsx
-#: src/routes/NewDriveRoute.tsx
 #: src/views/ErrorPage.tsx
 msgid "Choose a template"
 msgstr ""
 
-#: src/components/DemoExitButton.tsx
-msgid "Leave demo"
-msgstr ""
-
-#: src/components/DemoExitButton.tsx
-msgid "Demo workspace"
-msgstr ""
-
-#. 0: resource.title
-#: src/components/DemoExitButton.tsx
-msgid "Preview: {0}"
-msgstr ""
-
-#: src/components/SetupBar.tsx
-msgid "Setup"
-msgstr ""
-
-#: src/routes/NewDriveRoute.tsx
-msgid "Back to the demo"
-msgstr ""
-
-#: src/routes/NewDriveRoute.tsx
-msgid "Back to the preview"
-msgstr ""
-
-#: src/routes/NewDriveRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Name your drive"
 msgstr ""
@@ -9286,10 +9118,6 @@ msgstr "Permite que {0} edite las unidades creadas en este navegador y luego cam
 
 #: src/actions/resourceActions.tsx
 msgid "Add or remove tags"
-msgstr ""
-
-#: src/routes/DemoRoute.tsx
-msgid "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
 msgstr ""
 
 #: src/components/Vault/AICreditsService.tsx
@@ -9760,6 +9588,7 @@ msgid "Share form"
 msgstr ""
 
 #: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
 msgid "<0/> Share"
 msgstr ""
 
@@ -10667,10 +10496,6 @@ msgstr ""
 msgid "Change this view to"
 msgstr ""
 
-#: src/routes/DemoRoute.tsx
-msgid "Demo setup finished after stall"
-msgstr ""
-
 #. 0: providerName(portalUrl)
 #: src/components/Vault/LinkProviderPanel.tsx
 msgid "Connect this app to your existing {0} account to use your cloud services. This is free and does not purchase hosting or fetch a workspace."
@@ -10958,14 +10783,6 @@ msgstr ""
 
 #: src/actions/appMenuItems.tsx
 msgid "Reload the whole app, as if you opened it again."
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Opening sign-up…"
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -11416,22 +11233,12 @@ msgstr ""
 msgid "Usage"
 msgstr ""
 
-#. 0: step && ` Still busy with\\: ${STEP_LABELS[step]}.`
-#: src/routes/DemoRoute.tsx
-msgid "This is taking longer than usual. {0}"
-msgstr ""
-
-#: src/routes/IntegrationStore.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Loading integrations…"
 msgstr ""
 
 #: src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental plugins"
-msgstr ""
-
-#: src/routes/IntegrationStore.tsx
-msgid "Discover integrations"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -11539,10 +11346,6 @@ msgstr ""
 #. 0: trigger.queuedEvents
 #: src/chunks/PluginRuns/PluginTrigger.tsx
 msgid "{0} events queued. They remain saved while waiting for review."
-msgstr ""
-
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Loading AI setup…"
 msgstr ""
 
 #: src/components/AI/AISettings.tsx
@@ -12727,10 +12530,6 @@ msgid "<0/> Drive settings"
 msgstr "<0/> Ajustes del drive"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "Nothing here yet. Create something with New, or drop files on this page."
-msgstr "Aún no hay nada aquí. Crea algo con Nuevo o suelta archivos en esta página."
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Aún no hay nada aquí."
 
@@ -13242,22 +13041,6 @@ msgid "Not hosted yet"
 msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
-msgid "Give your drive a name: a project, company, team or household"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a project"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Pick a template for a team, a class or yourself"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "New project"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Talk to the AI"
 msgstr ""
 
@@ -13274,10 +13057,6 @@ msgid "Invite someone"
 msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
-msgid "Share your project with a teammate or a friend"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Invite"
 msgstr ""
 
@@ -13289,13 +13068,10 @@ msgstr ""
 msgid "Sign up with your email, save your secret or connect a device"
 msgstr ""
 
+#: src/views/Drive/DriveSettingsDialog.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Getting started"
-msgstr ""
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a project first"
 msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
@@ -13346,6 +13122,80 @@ msgstr ""
 msgid "Timed out fetching {0}"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/routes/IntegrationStore.tsx
+msgid "Apps"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Install apps into your drive, connect integrations and keep your work in sync. Add automations when you need them."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Search apps"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Search apps, integrations, domains or standards"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Loading apps…"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Discover apps"
+msgstr ""
+
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
+msgid "That marketplace link is not a valid catalog URL."
+msgstr ""
+
+#. 0: host
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
+msgid "Add marketplace {0}?"
+msgstr ""
+
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
+msgid "Apps from it can be installed into your drives. Only add marketplaces you trust."
+msgstr ""
+
+#: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
+msgid "Add marketplace"
+msgstr ""
+
+#. 0: sharing.app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "QR code for the {0} link"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "<0/> Remove"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Marketplaces"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Add marketplace URL"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Discover apps and integrations"
+msgstr ""
+
+#: src/helpers/managed/vaultAutoBackup.ts
+msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
+msgstr ""
+
+#: src/embed/MeetingChatOverlay.tsx
 #: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
 msgstr ""
@@ -13466,6 +13316,70 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Don't add, keep it in this browser only"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Give your drive a name: a team, company, class or household"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a drive"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Share a drive with a teammate or a friend"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Start a drive first"
+msgstr ""
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "It was deleted on this device."
+msgstr ""
+
+#: src/chunks/Templates/TemplateChat.tsx
+msgid "Nothing is created until you add it."
+msgstr ""
+
+#: src/chunks/Templates/TemplateChat.tsx
+msgid "Add to this drive"
+msgstr ""
+
+#: src/chunks/Templates/TemplateChat.tsx
+msgid "Or describe what you need"
+msgstr ""
+
+#: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Show Getting started on my drives"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Start with"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Adding…"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Use this starter"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Or fill this drive with a starter"
+msgstr ""
+
+#: src/views/Drive/EmptyDriveStart.tsx
+msgid "Start this drive"
+msgstr ""
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Give it a name, then fill it with a starter"
 msgstr ""
 
 #. 0: status.backedUpBy

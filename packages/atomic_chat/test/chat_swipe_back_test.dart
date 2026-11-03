@@ -83,6 +83,30 @@ void main() {
     expect(find.text('New chat'), findsOneWidget);
   });
 
+  testWidgets('a chat made from the AI chats list is in it on the way back',
+      (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final a = api();
+    await tester.pumpWidget(shellApp(ChatsScreen(drive: 'did:ad:drive', api: a)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show all (6)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chats-new')));
+    await tester.pumpAndSettle();
+    a.chatList.insert(0, (
+      subject: 'did:ad:new',
+      name: 'Fresh chat',
+      lastActivity: DateTime.now().millisecondsSinceEpoch + 1000,
+      emoji: null
+    ));
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(ChatScreen), findsNothing);
+    expect(find.text('Fresh chat'), findsOneWidget);
+  });
+
   for (final y in [120.0, 400.0, 740.0]) {
     testWidgets('a swipe right at $y in a new chat goes back', (tester) async {
       tester.view.physicalSize = const Size(400, 800);

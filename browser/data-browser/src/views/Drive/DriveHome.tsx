@@ -1,4 +1,5 @@
 import {
+  canvas,
   dataBrowser,
   isNotFound,
   isUnauthorized,
@@ -15,6 +16,7 @@ import {
   FaComment,
   FaFileLines,
   FaFolder,
+  FaPaintbrush,
   FaPlus,
   FaTable,
   FaVideo,
@@ -54,6 +56,11 @@ const QUICK_CREATE: { label: string; classSubject: string; Icon: IconType }[] =
       Icon: FaFileLines,
     },
     { label: 'Table', classSubject: dataBrowser.classes.table, Icon: FaTable },
+    {
+      label: 'Canvas',
+      classSubject: canvas.classes.canvas,
+      Icon: FaPaintbrush,
+    },
     {
       label: 'Folder',
       classSubject: dataBrowser.classes.folder,
@@ -297,7 +304,7 @@ export function ActivityFeed({
         continue;
       }
 
-      // AI chats, meetings and agent notes are reached elsewhere.
+      // AI chats and agent notes are reached elsewhere.
       if (
         isHiddenFromChildLists(
           resource.getClasses(),

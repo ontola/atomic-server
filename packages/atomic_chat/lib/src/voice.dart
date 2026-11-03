@@ -52,6 +52,50 @@ double normaliseSoundLevel(double db) {
   return ((db + 2) / 12).clamp(0.0, 1.0);
 }
 
+/// Joins the words of a recogniser's results over one listen.
+///
+/// Each result carries the whole utterance so far, which replaces the last.
+/// Some recognisers start a new utterance after a pause inside one listen
+/// (its words then begin again from the first one); taking that as a
+/// replacement would drop everything said before the pause, so the earlier
+/// words are kept in front.
+class RecognisedText {
+  String _committed = '';
+  String _last = '';
+
+  /// Everything heard in this listen.
+  String get text => _join(_committed, _last);
+
+  /// Takes the next result's words; returns everything heard so far.
+  String update(String next) {
+    if (_startsNewUtterance(_last, next)) _committed = text;
+    _last = next;
+    return text;
+  }
+
+  void clear() {
+    _committed = '';
+    _last = '';
+  }
+
+  /// A result that does not continue or revise [previous]: much shorter and
+  /// not beginning with the same word.
+  static bool _startsNewUtterance(String previous, String next) {
+    final a = previous.trim();
+    final b = next.trim();
+    if (a.isEmpty || b.isEmpty) return false;
+    if (b.length >= a.length * 0.6) return false;
+    final first = a.split(RegExp(r'\s+')).first.toLowerCase();
+    return b.split(RegExp(r'\s+')).first.toLowerCase() != first;
+  }
+
+  static String _join(String a, String b) {
+    if (a.isEmpty) return b;
+    if (b.isEmpty) return a;
+    return '$a $b';
+  }
+}
+
 /// Text to speech.
 abstract class SpeechOutput {
   /// Speaks [text]; completes when it has been spoken or was stopped.
@@ -65,9 +109,14 @@ class PluginSpeechInput implements SpeechInput {
   final SpeechToText _stt = SpeechToText();
   void Function(String text, bool isFinal)? _onText;
   void Function(String error)? _onError;
+  final RecognisedText _heard = RecognisedText();
   String _last = '';
   bool _finished = true;
   Timer? _doneTimer;
+
+  /// Completed when the recogniser reports it is listening: only then is
+  /// speech heard, so [start] completes then.
+  Completer<void>? _ready;
 
   @override
   Future<List<SpeechLocale>> locales() async {
@@ -103,6 +152,10 @@ class PluginSpeechInput implements SpeechInput {
       },
       onStatus: (s) {
         debugPrint('[voice] onStatus: $s');
+        if (s == 'listening') {
+          final ready = _ready;
+          if (ready != null && !ready.isCompleted) ready.complete();
+        }
         if (s == 'done') {
           _finish();
         } else if (s == 'notListening') {
@@ -142,12 +195,14 @@ class PluginSpeechInput implements SpeechInput {
       if (!ok) return false;
       debugPrint('[voice] listen locale: $localeId');
       _last = '';
+      _heard.clear();
       _finished = false;
+      final ready = _ready = Completer<void>();
       await _stt.listen(
         onResult: (r) {
           debugPrint(
               '[voice] onResult: "${r.recognizedWords}" final=${r.finalResult}');
-          _last = r.recognizedWords;
+          _last = _heard.update(r.recognizedWords);
           if (r.finalResult) {
             _finished = true;
             _onText?.call(_last, true);
@@ -167,6 +222,11 @@ class PluginSpeechInput implements SpeechInput {
           listenFor: const Duration(seconds: 60),
         ),
       );
+      // Words spoken before the recogniser is ready are lost, so the caller
+      // is told it listens only when it does (or after a short wait, for
+      // platforms that never report the status).
+      await ready.future.timeout(const Duration(milliseconds: 1500),
+          onTimeout: () {});
       return true;
     } catch (e) {
       debugPrint('[voice] start failed: $e');

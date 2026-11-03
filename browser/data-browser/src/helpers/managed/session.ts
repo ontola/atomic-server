@@ -111,7 +111,7 @@ export async function getManagedAccount(
   if (pendingLogouts > 0 || !hasManagedApi()) return null;
 
   // Callers asking at the same moment share one request. A page load asks from
-  // several places at once (the identity gate, the demo, sync status), and on a
+  // several places at once (the identity gate, sync status), and on a
   // first visit each one waited on its own cold cross-origin round trip.
   const generation = sessionGeneration;
   // A device linked in the meantime asks with a different credential.

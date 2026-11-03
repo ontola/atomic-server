@@ -57,7 +57,7 @@ class _ScrollToBottomButtonState extends State<ScrollToBottomButton>
   @override
   void initState() {
     super.initState();
-    _keeper.controller.addListener(_update);
+    _keeper.away.addListener(_update);
     _keeper.window.addListener(_update);
     _show.addStatusListener((_) {
       if (mounted) setState(() {});
@@ -75,7 +75,7 @@ class _ScrollToBottomButtonState extends State<ScrollToBottomButton>
 
   @override
   void dispose() {
-    _keeper.controller.removeListener(_update);
+    _keeper.away.removeListener(_update);
     _keeper.window.removeListener(_update);
     _show.dispose();
     _bounce.dispose();

@@ -2,16 +2,25 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:atomic_chat/atomic_chat.dart';
+import 'package:atomic_flutter/atomic_flutter.dart' show AtomicAiUsageTotal;
 import 'package:flutter/foundation.dart' show Listenable, debugPrint;
+import 'package:flutter/material.dart'
+    show BuildContext, MaterialPageRoute, Navigator;
 
 import '../atomic/account_store.dart';
 import '../atomic/atomic_client.dart';
+import '../atomic/own_ai.dart';
 import '../atomic/own_profile.dart';
+import '../screens/ai_settings_screen.dart';
 import 'package:atomic_store_flutter/bridge/api/assistant.dart'
     as ffi_assistant;
 import 'package:atomic_store_flutter/bridge/api/simple/drive.dart'
     as ffi_simple;
 import 'fake_ai.dart';
+import 'sentry_feedback.dart';
+
+/// Where reports go (`--dart-define=SENTRY_DSN=...`); none: no sending.
+const _sentryDsn = String.fromEnvironment('SENTRY_DSN');
 
 /// The app's [AssistantApi]: the local node through [AtomicClient] (the Rust
 /// bridge), and the linked account from [AccountStore].
@@ -81,11 +90,36 @@ class AtomicAssistantApi extends AssistantApi {
   Listenable? get presenceChanges => AtomicClient.presenceRevision;
   @override
   Future<void> announcePresence(String drive,
-          {String? resource, String? following}) =>
-      AtomicClient.setPresence(
-          drive, {'resource': resource, 'following': following});
+          {String? resource,
+          String? following,
+          String? session,
+          Map<String, Object?>? extra}) =>
+      AtomicClient.setPresence(drive, {
+        ...?extra,
+        'resource': resource,
+        'following': following,
+        'session': session,
+      });
   @override
   Future<void> clearPresence(String drive) => AtomicClient.clearPresence(drive);
+  @override
+  Future<Set<String>?> currentMeetings(String drive) async {
+    // The drive's `currentMeetings`, read the way the page reads a resource.
+    final raw =
+        await AtomicClient.embedCall('getResource', jsonEncode([drive]));
+    final json = jsonDecode(raw);
+    if (json is! Map) return null;
+    final list = json['https://atomicdata.dev/properties/currentMeetings'];
+    return {
+      if (list is List)
+        for (final e in list)
+          if (e is String)
+            e
+          else if (e is Map && e['@id'] is String)
+            e['@id'] as String
+    };
+  }
+
   @override
   Future<ProfileIdentity?> identityOf(String agent) async {
     final name = await AtomicClient.getProperty(
@@ -93,13 +127,14 @@ class AtomicAssistantApi extends AssistantApi {
         .catchError((Object _) => '');
     return name.isEmpty ? null : ProfileIdentity(name: name, subject: agent);
   }
+
   /// The existing direct conversation with [agent]. Starting a new one
   /// needs the conversation keys the app cannot make yet, so none is created.
   @override
   Future<String?> conversationWith(String agent) async {
     String key(String s) => s.replaceFirst(RegExp(r'^(atomic|did:ad):'), '');
-    final rows = jsonDecode(await ffi_assistant.listConversations(limit: 200))
-        as List;
+    final rows =
+        jsonDecode(await ffi_assistant.listConversations(limit: 200)) as List;
     for (final row in rows.cast<Map<String, dynamic>>()) {
       final peer = row['peer'];
       if (peer is Map && key('${peer['subject']}') == key(agent)) {
@@ -108,6 +143,7 @@ class AtomicAssistantApi extends AssistantApi {
     }
     return null;
   }
+
   @override
   Stream<List<String>>? get resourceChanges =>
       AtomicClient.resourceChanges.stream;
@@ -168,6 +204,9 @@ class AtomicAssistantApi extends AssistantApi {
   @override
   Future<HostedAi?> hostedAi() async {
     if (fakeAiEnabled) return fakeHostedAi();
+    // The person's own provider, when they switched to it.
+    final own = await OwnAi.hostedAi();
+    if (own != null) return own;
     var saved = await AccountStore.read();
     if (saved == null && await AccountStore.signInWithAgent()) {
       saved = await AccountStore.read();
@@ -177,9 +216,48 @@ class AtomicAssistantApi extends AssistantApi {
   }
 
   @override
+  Future<AtomicAiUsageTotal?> chatUsage(String chat) async =>
+      (await AccountStore.aiUsage())
+          ?.chats
+          .where((c) => c.id == chat)
+          .firstOrNull;
+
+  @override
+  bool get canOpenAiSettings => true;
+  @override
+  Future<void> openAiSettings(BuildContext context, {AiChatSettings? chat}) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => AiSettingsScreen(chat: chat)));
+
+  @override
+  bool get canSwitchAiSource => true;
+  @override
+  Future<bool> usesOwnAi() => OwnAi.enabled();
+  @override
+  Future<void> setUsesOwnAi(BuildContext context, bool own) async {
+    if (own && await OwnAi.apiKey() == null) {
+      // No key yet: the settings page asks for it and switches on saving.
+      if (context.mounted) await openAiSettings(context);
+      return;
+    }
+    await OwnAi.setEnabled(own);
+  }
+
+  @override
   bool get canSignUpForAi => !fakeAiEnabled;
   @override
   Future<void> signUpForAi(String email) => AccountStore.signUpWithAgent(email);
+
+  @override
+  bool get canSendFeedback => parseSentryDsn(_sentryDsn) != null;
+  @override
+  Future<void> sendFeedback(
+      {required String message, String? email, String source = 'app'}) {
+    final dsn = parseSentryDsn(_sentryDsn);
+    if (dsn == null) throw StateError('Feedback is not set up in this build');
+    return postSentryFeedback(dsn,
+        message: message, email: email, source: 'flutter-$source');
+  }
 
   @override
   Future<String> newChat(String name) => AtomicClient.createAiChat(name);

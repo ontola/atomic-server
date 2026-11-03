@@ -453,7 +453,7 @@ pub async fn list_recent_resources(
 
 /// What the web sidebar leaves out of a drive's child list: the standard
 /// folders a drive points at (default ontology, Comments, AI Chats, Inbox,
-/// Trash), AI chats and meetings (their own panels reach them) and a private
+/// Trash), AI chats (the AI sidebar reaches them) and a private
 /// note about an agent. `browser/data-browser/src/hooks/useVisibleDriveChildren.ts`.
 fn hidden_from_children(parent: &Resource) -> std::collections::HashSet<String> {
     [
@@ -529,7 +529,7 @@ pub async fn list_children(store: &Db, parent: &str, limit: usize) -> AtomicResu
         let Some(resource) = row_resource(store, &Subject::from(subject.as_str())).await else {
             continue;
         };
-        if resource.has_class(AI_CHAT) || resource.has_class(MEETING) {
+        if resource.has_class(AI_CHAT) {
             continue;
         }
         let about = resource
@@ -869,6 +869,7 @@ mod tests {
         let second = make("Apple second", urls::FOLDER).await;
         let third = make("Mango third", urls::CHATROOM).await;
         let chat = d.new_chat("A chat").await;
+        let meeting = make("Standup", MEETING).await;
         // The user drags the third one to the top.
         let mut r = d.store.get_resource(&third.as_str().into()).await.unwrap();
         r.set_unsafe(urls::SORT_ORDER.into(), crate::Value::Float(1.0))
@@ -882,6 +883,7 @@ mod tests {
         assert!(at(&third) < at(&first), "{order:?}");
         assert!(at(&first) < at(&second), "{order:?}");
         assert!(!order.contains(&chat.as_str()), "AI chats are hidden");
+        assert!(order.contains(&meeting.as_str()), "meetings are listed");
         assert_eq!(find(rows, &third)["expandable"], false);
         assert_eq!(find(rows, &first)["expandable"], true);
         assert_eq!(find(rows, &first)["title"], "Zebra first");

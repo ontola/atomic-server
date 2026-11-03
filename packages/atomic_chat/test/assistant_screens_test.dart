@@ -288,9 +288,11 @@ class FakeSpeechInput implements SpeechInput {
   @override
   Future<void> stop() async {
     stops++;
+    // A recogniser that already stopped delivers no second final result.
+    final wasOn = _on;
     _on = false;
     final text = finalOnStop;
-    if (text != null) {
+    if (text != null && wasOn) {
       if (finalDelay > Duration.zero) await Future<void>.delayed(finalDelay);
       onText?.call(text, true);
     }
@@ -1832,6 +1834,25 @@ void main() {
           expect(find.byIcon(Icons.mic), findsOneWidget);
         });
 
+        testWidgets('waits for a slow final result, not the partial',
+            (tester) async {
+          final (input, api) = await record(tester);
+          input.onText!('hello the', false);
+          await tester.pump();
+          input.finalOnStop = 'hello there';
+          input.finalDelay = const Duration(milliseconds: 1500);
+          await tester.tap(find.byTooltip('Stop and send'));
+          await tester.pump(const Duration(milliseconds: 1000));
+          expect(api.added, isEmpty);
+          // Past the final result, then past every wait of the send.
+          await tester.pump(const Duration(milliseconds: 600));
+          await tester.pumpAndSettle();
+          expect(api.added.where((m) => m.$2 == 'user').toList(), [
+            ('did:ad:new-chat', 'user', 'hello there'),
+          ]);
+          await tester.pump(const Duration(seconds: 3));
+        });
+
         testWidgets('uses the latest partial when no final arrives',
             (tester) async {
           final (input, api) = await record(tester);
@@ -2087,21 +2108,11 @@ void main() {
         expect(find.text('en-US'), findsOneWidget);
       });
 
-      testWidgets('a language chosen in the sheet is used and remembered',
+      testWidgets('the language chosen in the AI settings is used',
           (tester) async {
+        SharedPreferences.setMockInitialValues({'voice_locale': 'nl_NL'});
         final input = FakeSpeechInput();
         await open(tester, input, FakeSpeechOutput());
-        await tester.longPress(find.byIcon(Icons.mic));
-        await tester.pumpAndSettle();
-        expect(find.text('Suggested'), findsOneWidget);
-        await tester.enterText(find.byKey(const Key('locale-search')), 'dutch');
-        await tester.pumpAndSettle();
-        expect(find.text('German (Germany)'), findsNothing);
-        await tester.tap(find.text('Dutch (Netherlands)'));
-        await tester.pumpAndSettle();
-        expect(
-            (await SharedPreferences.getInstance()).getString('voice_locale'),
-            'nl_NL');
         await tester.tap(find.byIcon(Icons.mic));
         await tester.pump();
         expect(input.lastLocale, 'nl_NL');

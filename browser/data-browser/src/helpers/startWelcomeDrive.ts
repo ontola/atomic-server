@@ -9,8 +9,6 @@ import { onboardingKeys } from '../hooks/useOnboardingProgress';
  * drive, so an identity that stays on this device keeps its welcome drive
  * there too and a later sign-in can still bring it along.
  *
- * Not tracked as a demo drive: nothing may wipe it.
- *
  * Returns the drive, to open on its page, and the Welcome document in it.
  */
 export async function startWelcomeDrive(

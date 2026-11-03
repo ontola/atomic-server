@@ -8,6 +8,16 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test('an unreachable provider says whether it timed out or failed to connect',
+      () {
+    expect(AtomicAccountClient.unreachable(TimeoutException('x')),
+        'The account provider took too long to answer');
+    expect(
+        AtomicAccountClient.unreachable(
+            const SocketException('https://p/?device_code=secret')),
+        'Could not reach the account provider (SocketException)');
+  });
+
   final fixture =
       jsonDecode(File('test/fixtures/account-envelope.json').readAsStringSync())
           as Map<String, dynamic>;

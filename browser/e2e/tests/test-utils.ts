@@ -759,9 +759,6 @@ export async function newDrive(page: Page) {
   await waitForCurrentDialog(page);
 
   const dialog = currentDialog(page);
-  await dialog
-    .getByRole('button', { name: 'Create a blank drive', exact: true })
-    .click();
   await dialog.getByLabel('Drive name').fill(driveTitle);
 
   const createButton = dialog.locator('button', { hasText: 'Create' });
@@ -2095,7 +2092,7 @@ export async function editTitle(title: string, page: Page) {
 
 /**
  * Opens the account menu behind the user row at the bottom of the sidebar
- * (Profile, Notifications, Integrations, Sync, Feedback, About) and returns
+ * (Profile, Notifications, Apps, Sync, Feedback, About) and returns
  * it. Settings is not in it: that is the gear button beside the user row,
  * `sidebar-settings-button`.
  */
