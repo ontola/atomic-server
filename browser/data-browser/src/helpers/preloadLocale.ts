@@ -6,7 +6,7 @@ import { loadLocale } from 'wuchale/load-utils';
 // its own first commit: a serial hop in front of the first real render.
 //
 // No React imports here: this must stay the first import in index.tsx.
-export const SUPPORTED_LOCALES = ['en', 'es', 'fr', 'de'];
+export const SUPPORTED_LOCALES = ['en', 'es', 'fr', 'de', 'nl', 'id'];
 
 export function getBrowserLocale(): string {
   const locales = navigator.languages.map(x => x.trim().split(/-|_/)[0]);

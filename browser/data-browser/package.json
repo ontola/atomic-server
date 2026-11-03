@@ -128,7 +128,8 @@
     "vite": "^8.0.14",
     "vite-plugin-prismjs": "^0.0.11",
     "vite-plugin-pwa": "^1.3.0",
-    "vite-plugin-webfont-dl": "^3.12.0"
+    "vite-plugin-webfont-dl": "^3.12.0",
+    "pofile": "1.1.4"
   },
   "type": "module",
   "homepage": "https://atomicdata.dev/",
@@ -159,6 +160,7 @@
     "test": "vitest run --exclude scripts/integration-mcp.test.mjs && node --test scripts/integration-mcp.test.mjs",
     "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json",
     "check:react-compiler": "node scripts/check-react-compiler.mjs",
-    "clean-translations": "pnpm exec wuchale --clean"
+    "clean-translations": "pnpm exec wuchale --clean",
+    "check:translations": "node scripts/check-translations.mjs"
   }
 }

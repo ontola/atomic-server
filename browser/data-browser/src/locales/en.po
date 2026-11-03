@@ -3137,6 +3137,7 @@ msgstr "View"
 
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Filter"
 msgstr "Filter"
 
@@ -4187,11 +4188,6 @@ msgstr "Discard"
 msgid "No changes yet."
 msgstr "No changes yet."
 
-#. 0: changes.length; 1: changes.length === 1 ? 'y' \\: 'ies'
-#: src/components/ForkBar.tsx
-msgid "{0} changed propert{1}."
-msgstr "{0} changed propert{1}."
-
 #: src/components/ForkBar.tsx
 msgid "Edit the body, then merge."
 msgstr "Edit the body, then merge."
@@ -4239,11 +4235,6 @@ msgstr "Write this fork onto the resource it was forked from, as a single commit
 #: src/actions/resourceActions.tsx
 msgid "Open the resource this fork was forked from."
 msgstr "Open the resource this fork was forked from."
-
-#. 0: conflicts.length; 1: conflicts.length === 1 ? 'y was' \\: 'ies were'; 2: conflicts .map(c => c.property.split('/').pop()) .join(', '); 3: conflicts.length === 1 ? 'it' \\: 'them'
-#: src/components/ForkBar.tsx
-msgid "{0} propert{1} also changed on the original since this fork was made ({2}). Merging will overwrite {3} with this fork's version. Continue?"
-msgstr "{0} propert{1} also changed on the original since this fork was made ({2}). Merging will overwrite {3} with this fork's version. Continue?"
 
 #: src/components/ForkBar.tsx
 msgid "Fork of"
@@ -4895,6 +4886,7 @@ msgstr "Duration"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Toggle properties"
 msgstr "Toggle properties"
 
@@ -4940,6 +4932,7 @@ msgid "Remove computed column"
 msgstr "Remove computed column"
 
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
 msgid "Edit computed column"
 msgstr "Edit computed column"
 
@@ -4949,6 +4942,7 @@ msgstr "New computed column"
 
 #: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Add column"
 msgstr "Add column"
 
@@ -5174,6 +5168,7 @@ msgid "Remove action"
 msgstr "Remove action"
 
 #: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
 msgid "Edit action"
 msgstr "Edit action"
 
@@ -5433,7 +5428,7 @@ msgstr "{0} could not place this drive right now. This is usually "
 msgid "Could not enable {0} hosting (HTTP {1})."
 msgstr "Could not enable {0} hosting (HTTP {1})."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Manage account →"
 msgstr "Manage account →"
 
@@ -5555,7 +5550,8 @@ msgstr "Not synced yet"
 msgid "{0} failed: {1}"
 msgstr "{0} failed: {1}"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Sign in →"
 msgstr "Sign in →"
 
@@ -6296,10 +6292,6 @@ msgstr "Could not unlock with a passkey. Use your recovery code instead."
 msgid "Error: Sign in before syncing with another device"
 msgstr "Error: Sign in before syncing with another device"
 
-#: src/routes/SyncRoute.tsx
-msgid "Sign in to check recovery"
-msgstr "Sign in to check recovery"
-
 #: src/views/InvitePage.tsx
 msgid "Creating your account…"
 msgstr "Creating your account…"
@@ -6649,7 +6641,7 @@ msgstr "Store"
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Not signed in"
 msgstr "Not signed in"
 
@@ -11065,8 +11057,8 @@ msgstr "This drive’s plan does not include Cloud Server yet."
 msgid "Could not start Cloud Server."
 msgstr "Could not start Cloud Server."
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#. 0: email
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "{0} · Email recovery on"
 msgstr "{0} · Email recovery on"
 
@@ -11109,11 +11101,6 @@ msgstr "Backed up {0}"
 #: src/components/Vault/VaultPanel.tsx
 msgid "Backed up to {0}"
 msgstr "Backed up to {0}"
-
-#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'
-#: src/components/Vault/VaultPanel.tsx
-msgid "{0} object{1}"
-msgstr "{0} object{1}"
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Encrypted backup of your data. Only you can read it."
@@ -11207,19 +11194,9 @@ msgstr "Add a server"
 msgid "How to run your own server"
 msgstr "How to run your own server"
 
-#. 0: conflicts.length; 1: conflicts.length === 1 ? '' \\: 's'
-#: src/components/ForkBar.tsx
-msgid "{0} conflict{1}"
-msgstr "{0} conflict{1}"
-
 #: src/components/ForkBar.tsx
 msgid "Merging keeps the fork's version."
 msgstr "Merging keeps the fork's version."
-
-#. 0: total; 1: total !== 1 ? 's' \\: ''
-#: src/components/OverlayContainer.tsx
-msgid "{0} result{1}"
-msgstr "{0} result{1}"
 
 #: src/components/ResourceDecorations.tsx
 msgid "<0/> Add icon"
@@ -11289,11 +11266,6 @@ msgstr "Waiting for others to join…"
 #: src/chunks/AI/AISetupPanel.tsx
 msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
 msgstr "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
-
-#. 0: headerCount; 1: headerCount === 1 ? '' \\: 's'
-#: src/chunks/AI/MCPConfigTab.tsx
-msgid "{0} custom header {1}"
-msgstr "{0} custom header {1}"
 
 #. 0: omittedMessages
 #: src/chunks/AI/ReportAIChatDialog.tsx
@@ -11861,11 +11833,6 @@ msgstr "Invite people and manage who has access."
 #: src/components/ConnectedAppsCard.tsx
 msgid "No apps yet. An AI assistant connected through the Atomic MCP server shows up here."
 msgstr "No apps yet. An AI assistant connected through the Atomic MCP server shows up here."
-
-#. 0: report.failed.length; 1: report.failed.length === 1 ? 'resource' \\: 'resources'; 2: report.failed.map(f => f.reason).join('\; ')
-#: src/components/ConnectedAppsCard.tsx
-msgid "Still has access to {0} {1}: {2}"
-msgstr "Still has access to {0} {1}: {2}"
 
 #. 0: subject.slice(-8)
 #: src/components/ConnectedAppsCard.tsx
@@ -13310,6 +13277,8 @@ msgstr "Go back to your device."
 msgid "Could not send your identity"
 msgstr "Could not send your identity"
 
+#: src/components/SideBar/DriveSwitcher.tsx
+#: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Switch Drive"
@@ -13393,6 +13362,92 @@ msgstr "Start this drive"
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
 msgstr "Give it a name, then fill it with a starter"
+
+#. 0: conflicts.length; 1: propertyNames
+#: src/components/ForkBar.tsx
+msgid "{0} properties also changed on the original since this fork was made ({1}). Merging will overwrite them with this fork's version. Continue?"
+msgstr "{0} properties also changed on the original since this fork was made ({1}). Merging will overwrite them with this fork's version. Continue?"
+
+#: src/components/ForkBar.tsx
+msgid "# changed property."
+msgid_plural "# changed properties."
+msgstr[0] "# changed property."
+msgstr[1] "# changed properties."
+
+#: src/components/ForkBar.tsx
+msgid "# conflict"
+msgid_plural "# conflicts"
+msgstr[0] "# conflict"
+msgstr[1] "# conflicts"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# object"
+msgid_plural "# objects"
+msgstr[0] "# object"
+msgstr[1] "# objects"
+
+#: src/components/OverlayContainer.tsx
+msgid "# result"
+msgid_plural "# results"
+msgstr[0] "# result"
+msgstr[1] "# results"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "# custom header"
+msgid_plural "# custom headers"
+msgstr[0] "# custom header"
+msgstr[1] "# custom headers"
+
+#. 0: reasons
+#: src/components/ConnectedAppsCard.tsx
+msgid "Still has access to 1 resource: {0}"
+msgstr "Still has access to 1 resource: {0}"
+
+#. 0: report.failed.length; 1: reasons
+#: src/components/ConnectedAppsCard.tsx
+msgid "Still has access to {0} resources: {1}"
+msgstr "Still has access to {0} resources: {1}"
+
+#. 0: propertyNames
+#: src/components/ForkBar.tsx
+msgid "One property also changed on the original since this fork was made ({0}). Merging will overwrite it with this fork's version. Continue?"
+msgstr "One property also changed on the original since this fork was made ({0}). Merging will overwrite it with this fork's version. Continue?"
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Open context menu"
+msgstr "Open context menu"
+
+#: src/chunks/DashboardPage/DashboardBlock.tsx
+msgid "Block options"
+msgstr "Block options"
+
+#: src/chunks/DashboardPage/DashboardPage.tsx
+msgid "Add block"
+msgstr "Add block"
+
+#: src/chunks/FormBuilder/AddFieldMenu.tsx
+msgid "Add field"
+msgstr "Add field"
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Export invite links"
+msgstr "Export invite links"
+
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Lane options"
+msgstr "Lane options"
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+msgid "Add filter"
+msgstr "Add filter"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Edit column"
+msgstr "Edit column"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Add view"
 
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"

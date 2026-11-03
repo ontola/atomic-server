@@ -58,6 +58,16 @@ Remove when an upstream release isolates expression children in
 `adapter-utils/mixed-visitor.js`, then re-run `pnpm clean-translations` and
 check that no entries move.
 
+The patch also supports languages with a different plural-form count from
+English. `Hub.check()` uses each target locale's `nplurals` and checks every
+target form against the corresponding source form. A single target form is
+checked against the source plural. Compilation identifies plural messages
+from the source, retaining an array and plural rule even for Indonesian
+(`nplurals=1`); otherwise counts render incorrectly. Regression coverage:
+`data-browser/scripts/wuchale-plurals.test.ts`. Remove these hunks when an
+upstream release supports differing source/target plural counts and these
+tests pass without the patch. Upstream report remains to be filed.
+
 ## @wuchale/jsx@0.12.5.patch
 
 The runtime component that renders a message with markup in it (an icon next

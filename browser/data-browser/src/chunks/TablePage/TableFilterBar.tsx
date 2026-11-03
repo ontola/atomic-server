@@ -22,7 +22,7 @@ interface TableFilterBarProps {
   derivedColumns: DerivedColumnSpec[];
 }
 
-const AddFilterTrigger = buildDefaultTrigger(<FaPlus />, 'Add filter');
+const AddFilterTrigger = buildDefaultTrigger(<FaPlus />, () => 'Add filter');
 
 /**
  * The row of active filter chips shown above the table columns. Hidden when no

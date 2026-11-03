@@ -303,6 +303,19 @@ caught it, and if the answer is "none", that is the row to add.
 
 ## WASM database opening
 
+`browser/lib/src/resource-loro-lifecycle.test.ts` uses V8's full-GC object query
+to verify that abandoned hydrated Resources can be collected. It also retains
+the old public Loro document across `clearUnsafe()` and an authoritative snapshot
+replacement: that document stays usable, its edits cannot dirty the current
+resource, and edits to the replacement still enqueue normally. These are
+in-memory observer lifecycle checks; they do not reset OPFS or replace stored
+resource history.
+`resource-loro-lifecycle.spec.ts` repeats the collection check against the real
+production browser web/WASM runtime: Chromium collects 40 temporary resources
+hydrated from snapshots while a deliberately retained resource and public
+document remain usable. Local browser validation also passed the existing
+ClientDb edit-persistence test.
+
 `browser/lib/src/client-db-open.test.ts` covers `ClientDb.open()` success,
 wrong-key cache recovery, and propagation of blocked/corrupt-storage errors.
 The save-state and crash-durability browser tests exercise the generated WASM
@@ -474,6 +487,38 @@ Still uncovered: two physical devices, forced TURN, full Firefox drive sync,
 public deployment, and interactive rich-text editor/cursor acceptance.
 
 ## How to read this
+
+### Interface translations
+
+`browser/data-browser/scripts/check-translations.test.ts` audits all supported
+UI catalogs against the English source catalog. It checks missing/empty and
+fuzzy entries, duplicate/context keys, every plural form, locale headers and
+interpolation/markup/count placeholders. Fixture regressions cover multiline
+and obsolete PO records, valid unchanged product names, and damaged markup.
+The read-only `pnpm check:translations --json` command lists all gaps with
+source references. `wuchale check --full` separately checks extraction parity.
+These structural checks do not certify linguistic quality or detect every
+unextracted literal; runtime locale switching and production UI verification
+remain necessary. Resource content and plugin-supplied text are separate.
+Known source gaps: `AuthorizeMcpRoute` and `ConnectAgentRoute` interpolate
+unextracted English permission verbs, and `DerivedColumnDialog` interpolates
+an English column-name suggestion. These require complete localized sentences
+in a follow-up; catalog completeness does not cover them.
+
+`browser/e2e/tests/interface-language.spec.ts` switches from English to Spanish,
+French, German, Dutch and Indonesian through Settings, checks translated account
+headings and drive menus, reloads to verify persistence, and switches back. A custom drive
+title remains unchanged. The tests attach account screenshots for each locale.
+Dutch and Indonesian also start from regional browser preferences and verify
+that a saved selection overrides those preferences. `preloadLocale.test.ts`
+covers regional variants, preference order, fallback and configured-locale parity.
+`scripts/wuchale-plurals.test.ts` builds isolated catalogs through the actual
+Wuchale library, checking target-language form counts and interpolation damage.
+It verifies that Indonesian compiles a plural array and rule which render zero,
+one and multiple changes correctly; audit fixtures reject a fixed singular
+count in a single-form target.
+`DefaultTrigger.test.tsx` checks render-time tooltip translation without
+replacing the dropdown button, plus the existing default and string-title API.
 
 Plugin catalog: the e2e suite runs against a static mock of the atomic-plugins
 catalog (`testdata/atomic-plugins-mock`: `catalog.json` plus the test plugins'

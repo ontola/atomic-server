@@ -14,7 +14,7 @@ import {
   type AddableFieldType,
 } from './fieldTypes';
 
-const AddFieldTrigger = buildDefaultTrigger(<FaPlus />, 'Add field');
+const AddFieldTrigger = buildDefaultTrigger(<FaPlus />, () => 'Add field');
 
 interface AddFieldMenuProps {
   onAdd: (type: AddableFieldType, property?: Resource) => void;

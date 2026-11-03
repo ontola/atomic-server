@@ -50,7 +50,10 @@ interface TableHeadingMenuProps {
   ref?: Ref<TableHeadingMenuHandle>;
 }
 
-const Trigger = buildDefaultTrigger(<FaEllipsisVertical />, 'Edit column');
+const Trigger = buildDefaultTrigger(
+  <FaEllipsisVertical />,
+  () => 'Edit column',
+);
 
 const useIsExternalProperty = (property: Resource) => {
   const { tableClassSubject } = useContext(TablePageContext);

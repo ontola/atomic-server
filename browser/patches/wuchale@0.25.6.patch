@@ -1,5 +1,5 @@
 diff --git a/dist/adapter-utils/mixed-visitor.js b/dist/adapter-utils/mixed-visitor.js
-index 0a7d3e50aeb385e2e3bee3578df16bca4063e396..fff30ac2af09e02119cc4bd9eda7537cdaf4d547 100644
+index 0a7d3e50aeb385e2e3bee3578df16bca4063e396..054720f9aad889682cda0c89afbfccb0528f190b 100644
 --- a/dist/adapter-utils/mixed-visitor.js
 +++ b/dist/adapter-utils/mixed-visitor.js
 @@ -22,6 +22,8 @@ function trimText(msgStr) {
@@ -53,3 +53,39 @@ index 0a7d3e50aeb385e2e3bee3578df16bca4063e396..fff30ac2af09e02119cc4bd9eda7537c
                      this.#mod[props.scope] = mod;
                      mod.children.push(childMod);
                      let nestedNeedsCtx = false;
+diff --git a/dist/handler/index.js b/dist/handler/index.js
+index 2f191cbd3c493b5abf4ed5007a295a4e17e38c72..61c7c359ba3e05f57a823c0b3d0b3a1468ab4d7b 100644
+--- a/dist/handler/index.js
++++ b/dist/handler/index.js
+@@ -213,7 +213,7 @@ export class AdapterHandler {
+                 let compiled;
+                 const fallback = this.getCompiledFallback(index, loc);
+                 const transl = item.translations.get(loc);
+-                if (transl.length > 1) {
++                if (item.translations.get(this.sourceLocale).length > 1) {
+                     sharedCompiledLoc.hasPlurals = true;
+                     if (transl.join('').trim()) {
+                         compiled = transl;
+diff --git a/dist/hub.js b/dist/hub.js
+index 6091c97397d1271c84b152856269fa302b830418..632d235c25e654e3b93e24964a6e19a929a06327 100644
+--- a/dist/hub.js
++++ b/dist/hub.js
+@@ -367,12 +367,15 @@ export class Hub {
+                     if (translation.length === 0) {
+                         continue;
+                     }
+-                    if (translation.length > 0 && translation.length !== source.length) {
++                    const expectedForms = source.length > 1 ? state.pluralRules.get(locale).nplurals : 1;
++                    if (translation.length !== expectedForms) {
+                         errors.push(err);
+                         continue;
+                     }
+-                    for (const [i, sou] of sourceCompEntries.entries()) {
+-                        if (!isEquivalent(sou, compileTranslation(translation[i], ''))) {
++                    for (const [i, form] of translation.entries()) {
++                        const sourceIndex = expectedForms === 1 ? source.length - 1 : Math.min(i, source.length - 1);
++                        const sou = sourceCompEntries[sourceIndex];
++                        if (!isEquivalent(sou, compileTranslation(form, ''))) {
+                             err.type = 'notEquivalent';
+                             errors.push(err);
+                             break;
