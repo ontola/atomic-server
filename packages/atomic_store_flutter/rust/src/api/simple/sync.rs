@@ -621,11 +621,18 @@ pub(crate) async fn follow_listed_drives_if_missing() {
                 .ok()
                 .filter(|d| store.has_resource_locally(d))
         });
-    let Some(home) = home else { return };
+    let Some(home) = home else {
+        log_check_once(format!(
+            "[home] check: no drive here yet (active {:?}, private {:?})",
+            store.get_active_drive(),
+            store.private_drive_subject().ok()
+        ));
+        return;
+    };
     let drives = match store.list_drives().await {
         Ok(drives) => drives,
         Err(e) => {
-            tracing::info!("[home] cannot list drives: {e}");
+            log_check_once(format!("[home] cannot list drives: {e}"));
             return;
         }
     };
@@ -633,11 +640,39 @@ pub(crate) async fn follow_listed_drives_if_missing() {
         .iter()
         .filter(|d| !same_drive(&d.subject, &home) && !store.has_resource_locally(&d.subject))
         .count();
+    log_check_once(format!(
+        "[home] check: home {home}, {} drives listed, {missing} missing here: {:?}",
+        drives.len(),
+        drives
+            .iter()
+            .map(|d| format!(
+                "{}{}",
+                &d.subject[..d.subject.len().min(18)],
+                if store.has_resource_locally(&d.subject) {
+                    ""
+                } else {
+                    " (missing)"
+                }
+            ))
+            .collect::<Vec<_>>()
+    ));
     if !should_look_for_missing(missing, std::time::Instant::now()) {
         return;
     }
     tracing::info!("[home] {missing} listed drives missing here, fetching them");
     follow_listed_drives(home).await;
+}
+
+/// Log what the background check found, once per different finding (it runs
+/// every 20 s).
+fn log_check_once(line: String) {
+    static LAST: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+    if let Ok(mut last) = LAST.lock() {
+        if *last != line {
+            tracing::info!("{line}");
+            *last = line;
+        }
+    }
 }
 
 /// Whether `missing` drives are worth a run now.
