@@ -6,12 +6,6 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Project-Id-Version: \n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: \n"
-"PO-Revision-Date: \n"
-"Last-Translator: \n"
-"Language-Team: \n"
 
 #: src/chunks/AI/AISidebar.tsx
 msgid "Failed to save AI chat message"
@@ -5428,7 +5422,7 @@ msgstr "{0} n’a pas pu héberger ce lecteur pour le moment. C’est générale
 msgid "Could not enable {0} hosting (HTTP {1})."
 msgstr "Impossible d’activer l’hébergement {0} (HTTP {1})."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Manage account →"
 msgstr "Gérer le compte →"
 
@@ -5550,7 +5544,8 @@ msgstr "Pas encore synchronisé"
 msgid "{0} failed: {1}"
 msgstr "Échec de {0} : {1}"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Sign in →"
 msgstr "Se connecter →"
 
@@ -6291,10 +6286,6 @@ msgstr "Impossible de déverrouiller avec une clé d’accès. Utilisez votre co
 msgid "Error: Sign in before syncing with another device"
 msgstr "Erreur : connectez-vous avant de synchroniser avec un autre appareil"
 
-#: src/routes/SyncRoute.tsx
-msgid "Sign in to check recovery"
-msgstr "Connectez-vous pour vérifier la récupération"
-
 #: src/views/InvitePage.tsx
 msgid "Creating your account…"
 msgstr "Création de votre compte…"
@@ -6644,7 +6635,7 @@ msgstr "Stocker"
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Not signed in"
 msgstr "Non connecté"
 
@@ -11060,8 +11051,8 @@ msgstr "L’offre de ce lecteur n’inclut pas encore le serveur cloud."
 msgid "Could not start Cloud Server."
 msgstr "Impossible de démarrer le serveur cloud."
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#. 0: email
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "{0} · Email recovery on"
 msgstr "{0} · Récupération par e-mail activée"
 
@@ -13454,12 +13445,12 @@ msgstr "Ajouter une vue"
 
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
-msgstr ""
+msgstr "Invité"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> In My drives"
-msgstr ""
+msgstr "<0/> Dans Mes lecteurs"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
-msgstr ""
+msgstr "<0/> Ajouter à Mes lecteurs"

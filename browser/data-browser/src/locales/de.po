@@ -6,12 +6,6 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Project-Id-Version: \n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: \n"
-"PO-Revision-Date: \n"
-"Last-Translator: \n"
-"Language-Team: \n"
 
 #: src/chunks/AI/AISidebar.tsx
 msgid "Failed to save AI chat message"
@@ -5431,7 +5425,7 @@ msgstr "{0} konnte dieses Laufwerk gerade nicht unterbringen. Das liegt meist an
 msgid "Could not enable {0} hosting (HTTP {1})."
 msgstr "{0}-Hosting konnte nicht aktiviert werden (HTTP {1})."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Manage account →"
 msgstr "Konto verwalten →"
 
@@ -5553,7 +5547,8 @@ msgstr "Noch nicht synchronisiert"
 msgid "{0} failed: {1}"
 msgstr "{0} fehlgeschlagen: {1}"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Sign in →"
 msgstr "Anmelden →"
 
@@ -6294,10 +6289,6 @@ msgstr "Entsperren mit einem Passkey fehlgeschlagen. Verwende stattdessen deinen
 msgid "Error: Sign in before syncing with another device"
 msgstr "Fehler: Melde dich an, bevor du mit einem anderen Gerät synchronisierst"
 
-#: src/routes/SyncRoute.tsx
-msgid "Sign in to check recovery"
-msgstr "Anmelden, um die Wiederherstellung zu prüfen"
-
 #: src/views/InvitePage.tsx
 msgid "Creating your account…"
 msgstr "Dein Konto wird erstellt …"
@@ -6647,7 +6638,7 @@ msgstr "Speichern"
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Not signed in"
 msgstr "Nicht angemeldet"
 
@@ -11063,8 +11054,8 @@ msgstr "Der Tarif dieses Laufwerks enthält noch keinen Cloud Server."
 msgid "Could not start Cloud Server."
 msgstr "Cloud Server konnte nicht gestartet werden."
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#. 0: email
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "{0} · Email recovery on"
 msgstr "{0} · E-Mail-Wiederherstellung aktiviert"
 
@@ -13457,12 +13448,12 @@ msgstr "Ansicht hinzufügen"
 
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
-msgstr ""
+msgstr "Gast"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> In My drives"
-msgstr ""
+msgstr "<0/> In Meine Laufwerke"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
-msgstr ""
+msgstr "<0/> Zu Meine Laufwerke hinzufügen"

@@ -6,12 +6,6 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Project-Id-Version: \n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: \n"
-"PO-Revision-Date: \n"
-"Last-Translator: \n"
-"Language-Team: \n"
 
 #: src/chunks/AI/AISidebar.tsx
 msgid "Failed to save AI chat message"
@@ -5432,7 +5426,7 @@ msgstr "{0} tidak dapat menempatkan drive ini saat ini. Biasanya ini "
 msgid "Could not enable {0} hosting (HTTP {1})."
 msgstr "Tidak dapat mengaktifkan hosting {0} (HTTP {1})."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Manage account →"
 msgstr "Kelola akun →"
 
@@ -5554,7 +5548,8 @@ msgstr "Belum disinkronkan"
 msgid "{0} failed: {1}"
 msgstr "{0} gagal: {1}"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Sign in →"
 msgstr "Masuk →"
 
@@ -6295,10 +6290,6 @@ msgstr "Tidak dapat membuka dengan kunci sandi. Gunakan kode pemulihan Anda seba
 msgid "Error: Sign in before syncing with another device"
 msgstr "Kesalahan: Masuk sebelum menyinkronkan dengan perangkat lain"
 
-#: src/routes/SyncRoute.tsx
-msgid "Sign in to check recovery"
-msgstr "Masuk untuk memeriksa pemulihan"
-
 #: src/views/InvitePage.tsx
 msgid "Creating your account…"
 msgstr "Membuat akun Anda…"
@@ -6648,7 +6639,7 @@ msgstr "Simpan"
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "Not signed in"
 msgstr "Belum masuk"
 
@@ -11063,8 +11054,8 @@ msgstr "Paket drive ini belum mencakup Cloud Server."
 msgid "Could not start Cloud Server."
 msgstr "Tidak dapat memulai Cloud Server."
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#. 0: email
+#: src/components/Cloud/SyncProviderAccount.tsx
 msgid "{0} · Email recovery on"
 msgstr "{0} · Pemulihan melalui email aktif"
 
@@ -13449,3 +13440,15 @@ msgstr "Sunting kolom"
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Add view"
 msgstr "Tambahkan tampilan"
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Guest"
+msgstr "Tamu"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "<0/> In My drives"
+msgstr "<0/> Di Drive saya"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "<0/> Add to My drives"
+msgstr "<0/> Tambahkan ke Drive saya"
