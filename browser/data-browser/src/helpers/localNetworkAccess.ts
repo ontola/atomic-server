@@ -1,6 +1,6 @@
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { isRunningInTauri } from './tauri';
-import { isLoopbackHost } from './runtimeSetting';
+import { isLoopbackHost } from '@tomic/lib';
 
 /**
  * Chrome asks "wants to access other apps and services on this device" the

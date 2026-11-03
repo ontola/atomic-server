@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { createRoute } from '@tanstack/react-router';
-import { GrantAgentError, grantAgent, useStore } from '@tomic/react';
+import {
+  GrantAgentError,
+  grantAgent,
+  isLoopbackHost,
+  useStore,
+} from '@tomic/react';
 import { Button } from '../components/Button';
 import {
   ConnectAppForm,
@@ -62,7 +67,7 @@ export const AuthorizeMcpRoute = createRoute({
 
 function isLoopback(uri: string): boolean {
   try {
-    return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(uri).hostname);
+    return isLoopbackHost(new URL(uri).hostname);
   } catch {
     return false;
   }

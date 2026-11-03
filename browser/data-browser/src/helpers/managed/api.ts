@@ -1,4 +1,6 @@
+import { isLoopbackHost } from '@tomic/lib';
 import { ManagedReadCache } from './readCache';
+import { canHoldProviderCookie } from './providerCookie';
 
 const metadataReads = new ManagedReadCache();
 
@@ -93,10 +95,7 @@ export function safePortalUrl(
   // Embedded credentials have no business in a portal address.
   if (parsed.username || parsed.password) return undefined;
 
-  const isLocalhost =
-    parsed.hostname === 'localhost' ||
-    parsed.hostname === '127.0.0.1' ||
-    parsed.hostname.endsWith('.localhost');
+  const isLocalhost = isLoopbackHost(parsed.hostname);
 
   if (
     parsed.protocol === 'https:' ||
@@ -352,23 +351,31 @@ export function setManagedDeviceToken(
  *
  * Linked devices use a bearer token and omit browser cookies. Sending
  * credentialed cross-origin requests from the native WebView fails CORS even
- * after the portal has approved a valid device link. Unlinked browsers still
- * include their control-plane cookie.
+ * after the portal has approved a valid device link. Before linking, off-site
+ * browsers omit cookies too. Only a browser on the provider's own site can
+ * authenticate with its control-plane cookie.
  */
 export async function managedFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
   const token = getManagedDeviceToken();
+  const apiBase = getManagedApiBase();
   const headers = new Headers(init.headers);
 
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  return metadataReads.fetch(`${getManagedApiBase()}${path}`, {
+  // Explicit authorization must not compete with an ambient cookie session.
+  const credentials =
+    !headers.has('Authorization') && canHoldProviderCookie(apiBase)
+      ? 'include'
+      : 'omit';
+
+  return metadataReads.fetch(`${apiBase}${path}`, {
     ...init,
-    credentials: token ? 'omit' : 'include',
+    credentials,
     headers,
   });
 }

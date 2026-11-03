@@ -1,4 +1,5 @@
 import { useEffect, useState, type JSX } from 'react';
+import { isLoopbackHost } from '@tomic/react';
 import { styled } from 'styled-components';
 import { FaCheck } from 'react-icons/fa6';
 import { Dialog, DialogContent, DialogTitle, useDialog } from './Dialog';
@@ -72,8 +73,7 @@ export function ConnectServerDialog({
                 const { hostname } = new URL(server);
                 const active = server === activeServer;
                 const label =
-                  isNode &&
-                  (hostname === 'localhost' || hostname === '127.0.0.1')
+                  isNode && isLoopbackHost(hostname)
                     ? 'Embedded (this device)'
                     : hostname;
 

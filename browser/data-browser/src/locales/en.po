@@ -13393,3 +13393,15 @@ msgstr "Start this drive"
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
 msgstr "Give it a name, then fill it with a starter"
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Guest"
+msgstr "Guest"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "<0/> In My drives"
+msgstr "<0/> In My drives"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "<0/> Add to My drives"
+msgstr "<0/> Add to My drives"
