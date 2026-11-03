@@ -8,7 +8,8 @@ void main() {
     final backend = InMemoryBackend({
       'did:ad:a': {Props.name: const StringValue('Pelican')},
     });
-    addTearDown(backend.dispose); // ends pending waits, no timer outlives the test
+    addTearDown(
+        backend.dispose); // ends pending waits, no timer outlives the test
     final store = Store(backend: backend);
 
     final expectation = expectLater(

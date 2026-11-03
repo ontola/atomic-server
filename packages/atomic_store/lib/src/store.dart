@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'backend.dart';
 import 'comments.dart';
+import 'files.dart';
 import 'exceptions.dart';
 import 'resource.dart';
 import 'urls.dart';
@@ -28,6 +29,11 @@ class Store {
   /// [InMemoryBackend] do).
   CommentsBackend? get comments =>
       backend is CommentsBackend ? backend as CommentsBackend : null;
+
+  /// Files (blobs with a `File` resource), when the backend keeps them (the
+  /// bridge and [InMemoryBackend] do).
+  FilesBackend? get files =>
+      backend is FilesBackend ? backend as FilesBackend : null;
 
   /// The drive this store works in; `null` searches every drive and makes
   /// [newResource] require a `parent`. Assign it to follow a drive switch
@@ -79,7 +85,8 @@ class Store {
     final resource = Resource.internal(this, null, {}, isNew: true);
     final classes = isA.toList();
     if (classes.isNotEmpty) {
-      resource.set(Props.isA, ArrayValue([for (final c in classes) LinkValue(c)]));
+      resource.set(
+          Props.isA, ArrayValue([for (final c in classes) LinkValue(c)]));
     }
     resource.set(Props.parent, LinkValue(parentSubject));
     props.forEach(resource.set);
@@ -186,10 +193,15 @@ class Store {
     }
 
     bool same(List<String> a, List<String> b) =>
-        a.length == b.length && Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
+        a.length == b.length &&
+        Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
 
-    List<Resource> only(List<Resource> all) =>
-        isA == null ? all : [for (final r in all) if (r.isA(isA)) r];
+    List<Resource> only(List<Resource> all) => isA == null
+        ? all
+        : [
+            for (final r in all)
+              if (r.isA(isA)) r
+          ];
 
     Future<void> run() async {
       try {

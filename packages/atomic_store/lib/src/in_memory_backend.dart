@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'backend.dart';
 import 'comments.dart';
 import 'exceptions.dart';
+import 'files.dart';
 import 'urls.dart';
 import 'value.dart';
 
@@ -26,7 +28,7 @@ import 'value.dart';
 ///
 /// Comments ([CommentsBackend]) are kept in [comments], written by [agent],
 /// without the bridge's rules. Posting one announces a change of its page.
-class InMemoryBackend implements StoreBackend, CommentsBackend {
+class InMemoryBackend implements StoreBackend, CommentsBackend, FilesBackend {
   InMemoryBackend([Map<String, Map<String, Value>> resources = const {}]) {
     resources
         .forEach((subject, props) => this.resources[subject] = Map.of(props));
@@ -363,4 +365,23 @@ class InMemoryBackend implements StoreBackend, CommentsBackend {
         editedAt: edited,
         mentions: Comment.mentionsIn(text),
       );
+
+  /// The bytes of each uploaded File, by subject.
+  final Map<String, Uint8List> fileBytes = {};
+
+  @override
+  Future<String> uploadFile(
+      String parent, String filename, String mimetype, Uint8List bytes) async {
+    final subject = await createResource({
+      Props.isA: const ArrayValue([LinkValue(Classes.file)]),
+      Props.parent: LinkValue(parent),
+      Props.filename: StringValue(filename),
+      Props.mimetype: StringValue(mimetype),
+    });
+    fileBytes[subject] = bytes;
+    return subject;
+  }
+
+  @override
+  Future<Uint8List?> readFile(String file) async => fileBytes[file];
 }

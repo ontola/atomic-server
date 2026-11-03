@@ -131,6 +131,9 @@ async fn all_comment_pages(store: &Db, drive: Option<&str>) -> AtomicResult<Vec<
         q.drive = Some(scope);
         found.extend(store.query(&q).await?.subjects);
     }
+    // A page can turn up under more than one scope (a drive the query
+    // index does not tell apart): each page once.
+    let mut seen = std::collections::HashSet::new();
     Ok(found
         .iter()
         .filter(|s| {
@@ -140,6 +143,7 @@ async fn all_comment_pages(store: &Db, drive: Option<&str>) -> AtomicResult<Vec<
                 .is_some_and(|p| p.get(urls::ABOUT).is_ok())
         })
         .map(|s| s.to_string())
+        .filter(|s| seen.insert(s.clone()))
         .collect())
 }
 
@@ -398,7 +402,10 @@ mod tests {
         assert_eq!(comments[0]["drive"], d.drive.as_str());
         assert_eq!(comments[1]["reply_to"], first.as_str());
 
-        // All comments, and none about another resource.
+        // All comments, once each however many drives there are, and none
+        // about another resource.
+        d.store.create_drive("Nog een").await.unwrap();
+        d.store.set_active_drive(&d.drive).unwrap();
         assert_eq!(read_comments(&d.store, None, None).await.unwrap().len(), 2);
         let other = doc_in(&d, &d.drive, "Motie").await;
         assert!(read_comments(&d.store, Some(&other), None)

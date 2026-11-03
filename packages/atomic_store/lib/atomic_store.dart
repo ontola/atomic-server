@@ -8,6 +8,7 @@ library;
 export 'src/backend.dart';
 export 'src/comments.dart';
 export 'src/exceptions.dart';
+export 'src/files.dart';
 export 'src/resource.dart';
 export 'src/store.dart';
 export 'src/urls.dart';

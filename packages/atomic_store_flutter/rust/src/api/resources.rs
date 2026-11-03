@@ -695,6 +695,43 @@ impl AtomicStore {
     }
 }
 
+impl AtomicStore {
+    /// Keep `bytes` as a blob (named by its BLAKE3 hash) and create a `File`
+    /// for them under `parent`, as the web app does: the data browser shows
+    /// and opens it, and the server takes the blob on the next sync
+    /// (downloadable at `<server>/download/files/<hash>`). At most 64 MB.
+    /// Returns the File's subject.
+    pub async fn upload_file(
+        &self,
+        parent: String,
+        filename: String,
+        mimetype: String,
+        bytes: Vec<u8>,
+    ) -> Result<String, AtomicError> {
+        let origin = self.connected_server();
+        atomic_lib::host::files::upload_file(
+            &self.node(),
+            self.pusher().as_ref(),
+            &parent,
+            origin.as_deref(),
+            &filename,
+            &mimetype,
+            &bytes,
+        )
+        .await
+        .map_err(AtomicError::from)
+    }
+
+    /// The bytes of the File `file`, when this store holds them (uploaded
+    /// here, or synced in from a device or the server); `None` while they
+    /// have not arrived.
+    pub async fn read_file(&self, file: String) -> Result<Option<Vec<u8>>, AtomicError> {
+        atomic_lib::host::files::file_blob(&self.db, &file)
+            .await
+            .map_err(AtomicError::from)
+    }
+}
+
 /// What [`AtomicStore::load_agent`] found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoreAgentLoad {

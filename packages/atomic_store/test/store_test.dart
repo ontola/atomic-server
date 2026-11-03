@@ -85,8 +85,7 @@ void main() {
       final store = Store(backend: b);
       final r = await store.getResource('did:ad:test:a');
       r.set(Props.name, 'x');
-      b.failNext =
-          const StoreException(StoreErrorKind.network, 'offline');
+      b.failNext = const StoreException(StoreErrorKind.network, 'offline');
       await expectLater(r.save(), throwsA(isA<StoreException>()));
       expect(r.isDirty, isTrue);
       await r.save();
@@ -103,7 +102,8 @@ void main() {
       expect(r.get('p/int'), const IntegerValue(3));
       expect(r.get('p/bool'), const BooleanValue(true));
       expect(r.get('p/list'), const ArrayValue([LinkValue('did:ad:test:b')]));
-      expect(r.get('p/time'), TimestampValue(DateTime.utc(2026).millisecondsSinceEpoch));
+      expect(r.get('p/time'),
+          TimestampValue(DateTime.utc(2026).millisecondsSinceEpoch));
       expect(() => r.set('p/x', Object()), throwsA(isA<StoreException>()));
     });
 
@@ -121,8 +121,8 @@ void main() {
     test('is a draft until saved, then has a subject and is cached', () async {
       final b = backend();
       final store = Store(backend: b, drive: drive);
-      final r = store.newResource(
-          isA: [Classes.folder], props: {Props.name: 'Fresh'});
+      final r = store
+          .newResource(isA: [Classes.folder], props: {Props.name: 'Fresh'});
       expect(r.isNew, isTrue);
       expect(() => r.subject, throwsStateError);
       expect(r.parent, drive);
@@ -201,8 +201,8 @@ void main() {
 
     test('a failing read is an error event', () async {
       final store = Store(backend: backend());
-      await expectLater(store.watch('did:ad:test:none'),
-          emitsError(isA<StoreException>()));
+      await expectLater(
+          store.watch('did:ad:test:none'), emitsError(isA<StoreException>()));
     });
   });
 
@@ -222,7 +222,8 @@ void main() {
       expect(b.resources.keys, isNot(contains('did:ad:test:a1')));
       expect(await store.getResourceOrNull('did:ad:test:a'), isNull);
       await r.destroy(); // again: nothing happens
-      expect(b.calls.where((c) => c.startsWith('destroyResource')), hasLength(1));
+      expect(
+          b.calls.where((c) => c.startsWith('destroyResource')), hasLength(1));
     });
 
     test('ends a watch with the destroyed event, without a manual touch',
@@ -231,7 +232,8 @@ void main() {
       final store = Store(backend: b);
       final r = await store.getResource('did:ad:test:a');
       final done = Completer0();
-      final sub = store.watch('did:ad:test:a').listen((_) {}, onDone: done.complete);
+      final sub =
+          store.watch('did:ad:test:a').listen((_) {}, onDone: done.complete);
       await pump();
       await r.destroy();
       await done.future;
@@ -250,7 +252,8 @@ void main() {
       final draft = store.newResource(parent: drive);
       await draft.destroy();
       expect(draft.isDestroyed, isTrue);
-      expect(b.calls.where((c) => c.startsWith('destroyResource')), hasLength(1));
+      expect(
+          b.calls.where((c) => c.startsWith('destroyResource')), hasLength(1));
     });
   });
 
@@ -334,8 +337,8 @@ void main() {
     final store = Store(backend: b);
     expect((await store.search('SEABIRD')).map((h) => h.subject),
         ['did:ad:test:a']);
-    expect((await store.search('eron')).map((h) => h.subject),
-        ['did:ad:test:b']);
+    expect(
+        (await store.search('eron')).map((h) => h.subject), ['did:ad:test:b']);
   });
 
   group('moveTo', () {
@@ -347,14 +350,16 @@ void main() {
       heron.moveTo(folder.subject);
       expect(heron.get(Props.parent), LinkValue(folder.subject));
       expect(heron.isDirty, isTrue);
-      expect(b.resources['did:ad:test:b']![Props.parent], const LinkValue(drive));
+      expect(
+          b.resources['did:ad:test:b']![Props.parent], const LinkValue(drive));
       await heron.save();
       expect(b.resources['did:ad:test:b']![Props.parent],
           LinkValue(folder.subject));
       expect(await folder.childSubjects(), ['did:ad:test:b']);
     });
 
-    test('watchChildren drops the child from the old parent and lists it in the new',
+    test(
+        'watchChildren drops the child from the old parent and lists it in the new',
         () async {
       final b = backend();
       addTearDown(b.dispose);
@@ -424,7 +429,8 @@ void main() {
             Props.parent: const LinkValue(drive),
           },
           'did:ad:test:task': {
-            Props.isA: const ArrayValue([LinkValue('https://example.com/Task')]),
+            Props.isA:
+                const ArrayValue([LinkValue('https://example.com/Task')]),
             Props.name: const StringValue('Zebra task'),
             Props.parent: const LinkValue('did:ad:test:folder'),
           },
@@ -448,11 +454,9 @@ void main() {
       final all = await store.search('zebra', drive: '');
       expect(all.map((h) => h.subject), contains('did:ad:test:otherdrive'));
       // Any ancestor scopes, and so does the resource itself.
-      final inFolder =
-          await store.search('zebra', drive: 'did:ad:test:folder');
+      final inFolder = await store.search('zebra', drive: 'did:ad:test:folder');
       expect(inFolder, hasLength(2));
-      final self =
-          await store.search('boards', drive: 'did:ad:test:folder');
+      final self = await store.search('boards', drive: 'did:ad:test:folder');
       expect(self.single.subject, 'did:ad:test:folder');
     });
 
@@ -460,8 +464,7 @@ void main() {
         () async {
       final store = Store(backend: deep(), drive: drive);
       final hits = {
-        for (final h in await store.search('zebra', drive: ''))
-          h.subject: h
+        for (final h in await store.search('zebra', drive: '')) h.subject: h
       };
       final task = hits['did:ad:test:task']!;
       expect(task.drive, drive);
@@ -501,8 +504,14 @@ void main() {
     test('getJson and setJson hold any JSON', () async {
       final store = Store(backend: backend(), drive: drive);
       final r = await store.getResource('did:ad:test:b');
-      r.setJson(tags, {'a': [1, 2], 'b': 'x'});
-      expect(r.getJson(tags), {'a': [1, 2], 'b': 'x'});
+      r.setJson(tags, {
+        'a': [1, 2],
+        'b': 'x'
+      });
+      expect(r.getJson(tags), {
+        'a': [1, 2],
+        'b': 'x'
+      });
       expect(r.getStrings(tags), isEmpty); // an object is not a string list
       expect(r.getJson(Props.name), isNull); // not JSON
       expect(JsonValue.strings(['a']).json, '["a"]');
@@ -560,9 +569,12 @@ void main() {
   group('Value.of', () {
     test('nested maps and equality', () {
       final v = Value.of({'a': 'x', 'b': 2});
-      expect(v, const NestedValue({'a': StringValue('x'), 'b': IntegerValue(2)}));
-      expect(v.hashCode,
-          const NestedValue({'b': IntegerValue(2), 'a': StringValue('x')}).hashCode);
+      expect(
+          v, const NestedValue({'a': StringValue('x'), 'b': IntegerValue(2)}));
+      expect(
+          v.hashCode,
+          const NestedValue({'b': IntegerValue(2), 'a': StringValue('x')})
+              .hashCode);
     });
   });
 }

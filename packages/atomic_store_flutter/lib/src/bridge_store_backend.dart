@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:atomic_store/atomic_store.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -126,7 +127,8 @@ class _HandleApi implements BridgeResourceApi {
 ///     path: dir, agentSecret: secret, drive: driveSubject);
 /// final store = Store(backend: BridgeStoreBackend(handle), drive: driveSubject);
 /// ```
-class BridgeStoreBackend implements StoreBackend, CommentsBackend {
+class BridgeStoreBackend
+    implements StoreBackend, CommentsBackend, FilesBackend {
   /// A backend on [store], or on the default store when it is null.
   BridgeStoreBackend([bridge.AtomicStore? store])
       : _api = store == null ? const _DefaultStoreApi() : _HandleApi(store),
@@ -141,10 +143,24 @@ class BridgeStoreBackend implements StoreBackend, CommentsBackend {
   /// The handle comments go through; the default store has none.
   final bridge.AtomicStore? _handle;
 
+  /// Comments and files need a handle.
   bridge.AtomicStore get _comments =>
       _handle ??
       (throw const StoreException(
           StoreErrorKind.invalid, 'Comments need an AtomicStore handle'));
+
+  @override
+  Future<String> uploadFile(
+          String parent, String filename, String mimetype, Uint8List bytes) =>
+      _guard(() => _comments.uploadFile(
+          parent: parent,
+          filename: filename,
+          mimetype: mimetype,
+          bytes: bytes));
+
+  @override
+  Future<Uint8List?> readFile(String file) =>
+      _guard(() => _comments.readFile(file: file));
 
   @override
   Future<List<Comment>> readComments({String? about, String? drive}) =>
@@ -181,7 +197,8 @@ class BridgeStoreBackend implements StoreBackend, CommentsBackend {
   @override
   Future<void> saveChanges(
           String subject, Map<String, Value> set, List<String> remove) =>
-      _guard(() => _api.saveResourceChanges(subject, propsToBridge(set), remove),
+      _guard(
+          () => _api.saveResourceChanges(subject, propsToBridge(set), remove),
           subject);
 
   @override
@@ -301,7 +318,8 @@ Value valueFromBridge(bridge.AtomicValue v) {
     case bridge.Datatype.json:
       return JsonValue(v.text);
     case bridge.Datatype.localized:
-      return LocalizedValue({for (final p in v.props) p.property: p.value.text});
+      return LocalizedValue(
+          {for (final p in v.props) p.property: p.value.text});
     case bridge.Datatype.unsupported:
       return UnsupportedValue(v.unsupportedDatatype ?? '', v.text);
   }
@@ -335,15 +353,15 @@ bridge.AtomicValue valueToBridge(Value v) {
         items: const [],
         props: propsToBridge(props)),
     LocalizedValue(:final texts) => bridge.AtomicValue(
-        datatype: bridge.Datatype.localized,
-        text: '',
-        items: const [],
-        props: [
-          for (final e in texts.entries)
-            bridge.PropValue(
-                property: e.key,
-                value: scalar(bridge.Datatype.string, e.value)),
-        ]),
+          datatype: bridge.Datatype.localized,
+          text: '',
+          items: const [],
+          props: [
+            for (final e in texts.entries)
+              bridge.PropValue(
+                  property: e.key,
+                  value: scalar(bridge.Datatype.string, e.value)),
+          ]),
     UnsupportedValue(:final datatype, :final description) => bridge.AtomicValue(
         datatype: bridge.Datatype.unsupported,
         text: description,

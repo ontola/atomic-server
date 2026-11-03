@@ -352,6 +352,11 @@ abstract class AtomicStore implements RustOpaqueInterface {
   Future<String> readConversationPage(
       {required String subject, String? before, required int limit});
 
+  /// The bytes of the File `file`, when this store holds them (uploaded
+  /// here, or synced in from a device or the server); `None` while they
+  /// have not arrived.
+  Future<Uint8List?> readFile({required String file});
+
   /// Forget a paired device.
   void removeKnownPeer({required String nodeId});
 
@@ -452,6 +457,17 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// Sync this handle's drive with every paired and every connected device,
   /// at once, each bounded in time. Starts the peer when needed.
   Future<PeersSyncOutcome> syncWithPeers();
+
+  /// Keep `bytes` as a blob (named by its BLAKE3 hash) and create a `File`
+  /// for them under `parent`, as the web app does: the data browser shows
+  /// and opens it, and the server takes the blob on the next sync
+  /// (downloadable at `<server>/download/files/<hash>`). At most 64 MB.
+  /// Returns the File's subject.
+  Future<String> uploadFile(
+      {required String parent,
+      required String filename,
+      required String mimetype,
+      required List<int> bytes});
 
   /// Wait until `subject` changes or is destroyed, or `timeout_ms` passes.
   /// Call it in a loop (re-reading the resource on `Changed`) to watch a
