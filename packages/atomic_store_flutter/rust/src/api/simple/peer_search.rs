@@ -69,7 +69,9 @@ impl PeerDialer for IrohDialer {
         .map_err(|e| e.to_string())?;
         // What the peer brought may be the personal drive, listing drives
         // this device does not hold yet.
-        tokio::spawn(super::sync::follow_listed_drives_if_missing());
+        tokio::spawn(super::sync::follow_listed_drives_if_missing(
+            self.store.clone(),
+        ));
         Ok(())
     }
 
@@ -120,6 +122,7 @@ pub(crate) fn spawn(store: atomic_lib::Db, me: String) {
         return;
     }
     let drives_store = store.clone();
+    let check_store = store.clone();
     tokio::spawn(PEER_SEARCH.clone().run(
         me,
         move || search_drives(&drives_store),
@@ -129,11 +132,11 @@ pub(crate) fn spawn(store: atomic_lib::Db, me: String) {
     ));
     // The personal drive can also arrive on a live peer stream, without a
     // dial: look every so often whether it lists drives still missing here.
-    tokio::spawn(async {
+    tokio::spawn(async move {
         loop {
             tokio::time::sleep(MISSING_DRIVES_EVERY).await;
             if !PEER_SEARCH.is_paused() {
-                super::sync::follow_listed_drives_if_missing().await;
+                super::sync::follow_listed_drives_if_missing(check_store.clone()).await;
             }
         }
     });

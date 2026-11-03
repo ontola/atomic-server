@@ -608,8 +608,12 @@ pub(crate) const MISSING_DRIVES_RETRY: std::time::Duration = std::time::Duration
 /// the same secret got the personal drive and none of the drives it lists.
 /// Runs when the personal drive lists a drive this device lacks, and again
 /// for the same set only after [`MISSING_DRIVES_RETRY`].
-pub(crate) async fn follow_listed_drives_if_missing() {
-    let Ok(store) = db() else { return };
+///
+/// `store` is the store the peer serves: an app that opened its store as a
+/// handle (OpenMeeting) has no default store, and its missing drives can only
+/// come from the paired devices.
+pub(crate) async fn follow_listed_drives_if_missing(store: atomic_lib::Db) {
+    let is_default = db().is_ok_and(|d| std::sync::Arc::ptr_eq(&d.kv, &store.kv));
     // The drive in use, else the private drive: it is the one that lists
     // the others.
     let home = store
@@ -660,7 +664,39 @@ pub(crate) async fn follow_listed_drives_if_missing() {
         return;
     }
     tracing::info!("[home] {missing} listed drives missing here, fetching them");
-    follow_listed_drives(home).await;
+    if is_default {
+        follow_listed_drives(home).await;
+        return;
+    }
+    let wanted: Vec<String> = drives
+        .into_iter()
+        .map(|d| d.subject)
+        .filter(|d| !same_drive(d, &home) && !store.has_resource_locally(d))
+        .collect();
+    let mut followed = 0;
+    for drive in &wanted {
+        for node_id in peer_ids_to_try(&Default::default()) {
+            let attempt = tokio::time::timeout(
+                PEER_SYNC_ATTEMPT_TIMEOUT,
+                atomic_lib::sync::peer::sync_drive_with_peer_if_needed(&node_id, drive, &store),
+            )
+            .await;
+            if !matches!(attempt, Ok(Ok(_))) {
+                tracing::info!(
+                    "[home] {drive} at {}: {attempt:?}",
+                    &node_id[..node_id.len().min(12)]
+                );
+            }
+            if store.has_resource_locally(drive) {
+                followed += 1;
+                break;
+            }
+        }
+    }
+    tracing::info!(
+        "[home] other drives: {followed} followed from paired devices, {} not available",
+        wanted.len() - followed
+    );
 }
 
 /// Log what the background check found, once per different finding (it runs
