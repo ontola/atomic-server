@@ -673,15 +673,27 @@ pub(crate) async fn follow_listed_drives_if_missing(store: atomic_lib::Db) {
         .map(|d| d.subject)
         .filter(|d| !same_drive(d, &home) && !store.has_resource_locally(d))
         .collect();
+    // Taken once: a redial drops the live link for a moment, and a device
+    // found by the peer search is not in the known list, so asking again per
+    // drive would find no one.
+    let peers = peer_ids_to_try(&Default::default());
+    let mut unreachable: Vec<String> = Vec::new();
     let mut followed = 0;
     for drive in &wanted {
-        for node_id in peer_ids_to_try(&Default::default()) {
-            let attempt = fetch_drive_from_peer(&node_id, drive, &store).await;
+        for node_id in &peers {
+            if unreachable.contains(node_id) {
+                continue;
+            }
+            let attempt = fetch_drive_from_peer(node_id, drive, &store).await;
             if !matches!(attempt, Ok(Ok(_))) {
                 tracing::info!(
                     "[home] {drive} at {}: {attempt:?}",
                     &node_id[..node_id.len().min(12)]
                 );
+            }
+            if attempt.is_err() {
+                // Timed out: not asked again this run, but soon.
+                unreachable.push(node_id.clone());
             }
             if store.has_resource_locally(drive) {
                 followed += 1;
@@ -693,6 +705,20 @@ pub(crate) async fn follow_listed_drives_if_missing(store: atomic_lib::Db) {
         "[home] other drives: {followed} followed from paired devices, {} not available",
         wanted.len() - followed
     );
+    if !unreachable.is_empty() {
+        retry_missing_soon();
+    }
+}
+
+/// A device did not answer in time (asleep, or the link was being rebuilt):
+/// look again in a minute rather than after [`MISSING_DRIVES_RETRY`].
+fn retry_missing_soon() {
+    if let Ok(mut last) = LAST_MISSING_CHECK.lock() {
+        if let Some((at, count)) = *last {
+            let soon = MISSING_DRIVES_RETRY.saturating_sub(std::time::Duration::from_secs(60));
+            *last = Some((at.checked_sub(soon).unwrap_or(at), count));
+        }
+    }
 }
 
 /// Log what the background check found, once per different finding (it runs

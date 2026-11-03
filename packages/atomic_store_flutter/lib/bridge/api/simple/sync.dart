@@ -6,7 +6,7 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `catch_up_listed_drives`, `db_event_to_json`, `dial_all`, `drive_resource_exists`, `failure_summary`, `fetch_drive_from_peer`, `fetch_other_drive`, `follow_listed_drives_if_missing`, `follow_listed_drives`, `log_check_once`, `look_for_missing_again`, `peer_ids_to_try`, `pkarr_peers`, `same_drive`, `short_id`, `should_look_for_missing`, `sync_connectivity_inner`, `try_auto_peer_sync`
+// These functions are ignored because they are not marked as `pub`: `catch_up_listed_drives`, `db_event_to_json`, `dial_all`, `drive_resource_exists`, `failure_summary`, `fetch_drive_from_peer`, `fetch_other_drive`, `follow_listed_drives_if_missing`, `follow_listed_drives`, `log_check_once`, `look_for_missing_again`, `peer_ids_to_try`, `pkarr_peers`, `retry_missing_soon`, `same_drive`, `short_id`, `should_look_for_missing`, `sync_connectivity_inner`, `try_auto_peer_sync`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PkarrOutcome`, `SyncConnectivityReport`
 
 /// Open a WebSocket sync session to an Atomic Server. Authenticates, SUBs the active drive,
