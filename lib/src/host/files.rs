@@ -1,8 +1,8 @@
 //! Files as the web app stores them: the bytes are a content-addressed blob
 //! (`atomic:blob:<blake3-hex>`) in the store, described by a `File` resource
 //! (filename, filesize, mimetype, `internalId` = the hash, `blob`, and a
-//! `downloadURL` at `<server>/download/files/<hash>` when the server is
-//! known). The File is an ordinary child of its parent, so the data browser
+//! `downloadURL` at `<server>/download/files/<hash>`, a path when the
+//! server is not known). The File is an ordinary child of its parent, so the data browser
 //! shows and opens it; the server asks for the blob on the next sync.
 
 use super::{own_commit_opts, LocalWritePusher};
@@ -68,15 +68,17 @@ pub async fn upload_file(
         urls::BLOB.into(),
         Value::AtomicUrl(crate::identifiers::blob_subject(&hex).into()),
     );
-    if let Some(origin) = origin.filter(|o| o.starts_with("http")) {
-        builder.set(
-            urls::DOWNLOAD_URL.into(),
-            Value::String(format!(
-                "{}/download/files/{hex}",
-                origin.trim_end_matches('/')
-            )),
-        );
-    }
+    // `File` requires a `downloadURL`, and peers refuse a File without one.
+    // Without a known server it is the path every server serves the blob
+    // at, which the web app resolves against its own origin.
+    let origin = origin
+        .filter(|o| o.starts_with("http"))
+        .map(|o| o.trim_end_matches('/'))
+        .unwrap_or("");
+    builder.set(
+        urls::DOWNLOAD_URL.into(),
+        Value::String(format!("{origin}/download/files/{hex}")),
+    );
     let commit = Commit::create_did(builder, &agent, store).await?;
     let subject = commit.subject.to_string();
     let response = node.apply_local_commit(commit, &own_commit_opts()).await?;
@@ -137,5 +139,31 @@ mod tests {
         assert!(upload_file(&d.node, &NoPush, &d.drive, None, "x", "", b"")
             .await
             .is_err());
+    }
+
+    /// Without a server, a File still has every property its class requires,
+    /// or other devices refuse the commit (and the bytes never arrive).
+    #[tokio::test]
+    async fn a_file_uploaded_without_a_server_is_complete() {
+        let d = Device::new().await;
+        let bytes = b"%PDF-1.4 zonder server".to_vec();
+        let file = upload_file(
+            &d.node,
+            &NoPush,
+            &d.drive,
+            None,
+            "a.pdf",
+            "application/pdf",
+            &bytes,
+        )
+        .await
+        .unwrap();
+        let r = d.store.get_resource(&file.as_str().into()).await.unwrap();
+        let hex = blake3::hash(&bytes).to_hex().to_string();
+        assert_eq!(
+            r.get(urls::DOWNLOAD_URL).unwrap().to_string(),
+            format!("/download/files/{hex}")
+        );
+        r.check_required_props(&d.store).await.unwrap();
     }
 }
