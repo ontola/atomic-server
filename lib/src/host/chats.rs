@@ -533,23 +533,52 @@ pub async fn append_chat_entry(
     append_entry(node, pusher, chat, &entry).await
 }
 
-/// Add `entry` to the log of `chat`: on the newest `ChatLog` page with room
-/// (the same rule as the web app, so both fill one page), or on a new page.
-/// Returns the entry's id (`<page>#<key>`).
+/// The log an entry goes in: the `ChatLog` pages under a chat, or the
+/// comment pages about a resource in one drive (`about` set, under the
+/// drive's `Comments` folder; see [`super::comments`]).
+#[derive(Clone, Copy, Debug)]
+pub enum Log<'a> {
+    Chat(&'a str),
+    Comments { about: &'a str, drive: &'a str },
+}
+
+/// Add `entry` to the log of `chat`. See [`append_to_log`].
 pub async fn append_entry(
     node: &AtomicNode,
     pusher: &dyn LocalWritePusher,
     chat: &str,
     entry: &Entry,
 ) -> AtomicResult<String> {
+    append_to_log(node, pusher, Log::Chat(chat), entry).await
+}
+
+/// Add `entry` to `log`: on the newest `ChatLog` page with room (the same
+/// rule as the web app, so both fill one page), or on a new page. Returns the
+/// entry's id (`<page>#<key>`).
+pub async fn append_to_log(
+    node: &AtomicNode,
+    pusher: &dyn LocalWritePusher,
+    log: Log<'_>,
+    entry: &Entry,
+) -> AtomicResult<String> {
     let store = node.db();
 
     // The newest page, if it has room: one index read and one page decode,
-    // however long the chat is.
-    if let Some(newest) = older_pages(store, chat, None, 1).await?.into_iter().next() {
+    // however long the log is.
+    let newest = match log {
+        Log::Chat(chat) => older_pages(store, chat, None, 1)
+            .await?
+            .into_iter()
+            .next()
+            .map(|p| p.subject),
+        Log::Comments { about, drive } => super::comments::pages_about(store, about, Some(drive))
+            .await?
+            .pop(),
+    };
+    if let Some(newest) = newest {
         count_page_decode();
         let mut page = store
-            .get_resource(&crate::Subject::from(newest.subject.as_str()))
+            .get_resource(&crate::Subject::from(newest.as_str()))
             .await?;
         let room = page
             .live_doc()?
@@ -561,24 +590,31 @@ pub async fn append_entry(
             let key = page.add_chat_entry(entry)?;
             let response = node.save_locally(&mut page).await?;
             pusher.push(&response).await;
-            return Ok(format!("{}#{key}", newest.subject));
+            return Ok(format!("{newest}#{key}"));
         }
     }
 
-    // A first page.
-    let (page, keys) = new_page(node, pusher, chat, std::slice::from_ref(entry)).await?;
+    let (page, keys) = new_page(node, pusher, log, std::slice::from_ref(entry)).await?;
     Ok(format!("{page}#{}", keys[0]))
 }
 
-/// A new `ChatLog` page under `chat` holding `entries`, in one commit by the
-/// device's agent. Returns the page's subject and the entries' keys.
+/// A new `ChatLog` page of `log` holding `entries`, in one commit by the
+/// device's agent: under the chat, or under the drive's `Comments` folder
+/// with `about`. Returns the page's subject and the entries' keys.
 async fn new_page(
     node: &AtomicNode,
     pusher: &dyn LocalWritePusher,
-    chat: &str,
+    log: Log<'_>,
     entries: &[Entry],
 ) -> AtomicResult<(String, Vec<String>)> {
     let store = node.db();
+    let (parent, about) = match log {
+        Log::Chat(chat) => (chat.to_string(), None),
+        Log::Comments { about, drive } => (
+            super::comments::comments_folder(node, pusher, drive).await?,
+            Some(about),
+        ),
+    };
     let agent = store.get_default_agent()?;
     let doc = AtomicLoroDoc::new();
     let keys = entries
@@ -586,9 +622,12 @@ async fn new_page(
         .map(|entry| doc.add_entry(entry))
         .collect::<AtomicResult<Vec<_>>>()?;
     let is_a = Value::ResourceArray(vec![urls::CHAT_LOG.to_string().into()]);
-    let parent = Value::AtomicUrl(chat.into());
+    let parent = Value::AtomicUrl(parent.as_str().into());
     doc.set_property(urls::IS_A, &is_a)?;
     doc.set_property(urls::PARENT, &parent)?;
+    if let Some(about) = about {
+        doc.set_property(urls::ABOUT, &Value::AtomicUrl(about.into()))?;
+    }
     let mut builder = CommitBuilder::new("placeholder".into());
     builder.set(urls::PARENT.into(), parent);
     builder.set_loro_update(doc.export_snapshot());
@@ -635,7 +674,7 @@ pub async fn import_entries(
             tokio::time::sleep(std::time::Duration::from_millis(1)).await;
         }
         last = crate::utils::now();
-        pages.push(new_page(node, pusher, chat, page).await?.0);
+        pages.push(new_page(node, pusher, Log::Chat(chat), page).await?.0);
     }
     Ok(pages)
 }

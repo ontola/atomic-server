@@ -9,9 +9,14 @@
 //! holds (or from one drive), so a reader sees exactly the comments of the
 //! drives they can read.
 
-use super::{chats::count_page_decode, own_commit_opts, profiles::same_agent, LocalWritePusher};
+use super::{
+    chats::{append_to_log, count_page_decode, Log},
+    own_commit_opts,
+    profiles::same_agent,
+    LocalWritePusher,
+};
 use crate::{
-    chat_log::{Entry, CHAT_LOG_CAPACITY, ENTRIES},
+    chat_log::Entry,
     commit::CommitBuilder,
     errors::{AtomicErrorType, AtomicResult},
     loro::AtomicLoroDoc,
@@ -90,7 +95,11 @@ async fn scopes(store: &Db, drive: Option<&str>) -> AtomicResult<Vec<Subject>> {
 
 /// The `ChatLog` pages about `about`, in `drive` or in every drive this
 /// device holds, oldest first (by `createdAt`, then subject).
-async fn pages_about(store: &Db, about: &str, drive: Option<&str>) -> AtomicResult<Vec<String>> {
+pub(super) async fn pages_about(
+    store: &Db,
+    about: &str,
+    drive: Option<&str>,
+) -> AtomicResult<Vec<String>> {
     let mut found = Vec::new();
     for scope in scopes(store, drive).await? {
         let mut q = Query::new_prop_val(urls::ABOUT, about).class_filter(urls::CHAT_LOG);
@@ -205,33 +214,31 @@ pub async fn read_comments(
         let Some(doc) = page_doc(store, &page) else {
             continue;
         };
-        for (key, entry) in doc.entries() {
-            let Ok(fields) = serde_json::to_value(&entry) else {
+        for (key, value) in doc.entries() {
+            let Some(entry) = Entry::from_loro(&value) else {
                 continue;
             };
-            let text = fields.get("t").and_then(Json::as_str).unwrap_or_default();
-            if text.trim().is_empty() {
+            if entry.text.trim().is_empty() {
                 continue;
             }
-            let author = fields.get("a").and_then(Json::as_str).unwrap_or_default();
-            let c = fields.get("c").and_then(Json::as_i64).unwrap_or(0);
             let mut comment = json!({
                 "id": format!("{page}#{key}"),
                 "page": page,
                 "drive": page_drive,
                 "about": page_about,
-                "author": author,
-                "mine": !me.is_empty() && same_agent(author, &me),
-                "text": text,
-                "c": c,
-                "mentions": mentions(text),
+                "author": entry.author,
+                "mine": !me.is_empty() && same_agent(&entry.author, &me),
+                "text": entry.text,
+                "c": entry.created_at,
+                "mentions": mentions(&entry.text),
             });
-            if let Some(r) = fields.get("r").and_then(Json::as_str) {
+            if let Some(r) = &entry.reply_to {
                 comment["reply_to"] = json!(r);
             }
-            if let Some(e) = fields.get("e").and_then(Json::as_i64) {
+            if let Some(e) = entry.edited_at {
                 comment["edited"] = json!(e);
             }
+            let c = entry.created_at;
             out.push((c, key, comment));
         }
     }
@@ -271,44 +278,21 @@ pub async fn post_comment(
     let mut entry = Entry::new(author, text, crate::utils::now());
     entry.reply_to = reply_to.filter(|r| !r.is_empty()).map(str::to_string);
 
-    if let Some(newest) = pages_about(store, about, Some(&drive)).await?.pop() {
-        count_page_decode();
-        let mut page = store.get_resource(&Subject::from(newest.as_str())).await?;
-        let room = page.live_doc()?.doc().get_map(ENTRIES).len() < CHAT_LOG_CAPACITY;
-        if room {
-            let key = page.add_chat_entry(&entry)?;
-            let response = node.save_locally(&mut page).await?;
-            pusher.push(&response).await;
-            return Ok(format!("{newest}#{key}"));
-        }
-    }
-
-    let folder = comments_folder(node, pusher, &drive).await?;
-    let agent = store.get_default_agent()?;
-    let doc = AtomicLoroDoc::new();
-    let key = doc.add_entry(&entry)?;
-    let is_a = Value::ResourceArray(vec![urls::CHAT_LOG.to_string().into()]);
-    let parent = Value::AtomicUrl(folder.as_str().into());
-    let about_value = Value::AtomicUrl(about.into());
-    doc.set_property(urls::IS_A, &is_a)?;
-    doc.set_property(urls::PARENT, &parent)?;
-    doc.set_property(urls::ABOUT, &about_value)?;
-    let mut builder = CommitBuilder::new("placeholder".into());
-    builder.set(urls::PARENT.into(), parent);
-    builder.set_loro_update(doc.export_snapshot());
-    let commit = Commit::create_did(builder, &agent, store).await?;
-    let page = commit.subject.to_string();
-    let response = node.apply_local_commit(commit, &own_commit_opts()).await?;
-    pusher.push(&response).await;
-    Ok(format!("{page}#{key}"))
+    append_to_log(
+        node,
+        pusher,
+        Log::Comments {
+            about,
+            drive: &drive,
+        },
+        &entry,
+    )
+    .await
 }
 
 /// The page and the entry of a comment `id` (`<page>#<key>`), if the entry is
 /// this device's agent's own.
-async fn own_entry(
-    store: &Db,
-    id: &str,
-) -> AtomicResult<(crate::Resource, String, serde_json::Map<String, Json>)> {
+async fn own_entry(store: &Db, id: &str) -> AtomicResult<(crate::Resource, String, Entry)> {
     let (page, key) = id
         .rsplit_once('#')
         .ok_or_else(|| format!("Not a comment id: {id}"))?;
@@ -316,16 +300,14 @@ async fn own_entry(
     let entry = resource
         .live_doc()?
         .get_entry(key)
+        .as_ref()
+        .and_then(Entry::from_loro)
         .ok_or_else(|| format!("No comment {id}"))?;
-    let Ok(Json::Object(fields)) = serde_json::to_value(&entry) else {
-        return Err(format!("No comment {id}").into());
-    };
     let me = store.get_default_agent()?.subject.to_string();
-    let author = fields.get("a").and_then(Json::as_str).unwrap_or_default();
-    if !same_agent(author, &me) {
+    if !same_agent(&entry.author, &me) {
         return Err("Only the author can change a comment".into());
     }
-    Ok((resource, key.to_string(), fields))
+    Ok((resource, key.to_string(), entry))
 }
 
 /// Replace the text of this agent's own comment `id`, marking it edited.
@@ -339,22 +321,9 @@ pub async fn edit_comment(
     if text.is_empty() {
         return Err("Cannot save an empty comment".into());
     }
-    let (mut page, key, fields) = own_entry(node.db(), id).await?;
-    let mut entry = Entry::new(
-        fields.get("a").and_then(Json::as_str).unwrap_or_default(),
-        text,
-        fields.get("c").and_then(Json::as_i64).unwrap_or(0),
-    );
-    entry.reply_to = fields.get("r").and_then(Json::as_str).map(str::to_string);
+    let (mut page, key, mut entry) = own_entry(node.db(), id).await?;
+    entry.text = text.to_string();
     entry.edited_at = Some(crate::utils::now());
-    if let Some(k) = fields.get("k") {
-        entry.kinds = Some(json_to_loro(k));
-    }
-    for (name, value) in &fields {
-        if !["a", "t", "c", "r", "e", "k"].contains(&name.as_str()) {
-            entry.extra.insert(name.clone(), json_to_loro(value));
-        }
-    }
     page.live_doc()?.put_entry(&key, &entry)?;
     page.live_doc()?.commit();
     let response = node.save_locally(&mut page).await?;
@@ -374,24 +343,6 @@ pub async fn delete_comment(
     let response = node.save_locally(&mut page).await?;
     pusher.push(&response).await;
     Ok(())
-}
-
-fn json_to_loro(value: &Json) -> loro::LoroValue {
-    match value {
-        Json::Null => loro::LoroValue::Null,
-        Json::Bool(b) => (*b).into(),
-        Json::Number(n) => match n.as_i64() {
-            Some(i) => i.into(),
-            None => n.as_f64().unwrap_or(0.0).into(),
-        },
-        Json::String(s) => s.as_str().into(),
-        Json::Array(list) => list.iter().map(json_to_loro).collect::<Vec<_>>().into(),
-        Json::Object(map) => map
-            .iter()
-            .map(|(k, v)| (k.clone(), json_to_loro(v)))
-            .collect::<std::collections::HashMap<_, _>>()
-            .into(),
-    }
 }
 
 #[cfg(test)]

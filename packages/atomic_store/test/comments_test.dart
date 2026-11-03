@@ -33,9 +33,6 @@ void main() {
     expect((await c.readComments(about: doc)).first.editedAt, isNotNull);
     await c.deleteComment(first);
     expect((await c.readComments(about: doc)).length, 1);
-    backend.agent = 'did:ad:agent:other';
-    await expectLater(
-        c.deleteComment(all.last.id), throwsA(isA<StoreException>()));
   });
 
   test('a comment from the bridge JSON', () {

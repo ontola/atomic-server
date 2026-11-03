@@ -88,6 +88,43 @@ impl Entry {
         }
     }
 
+    /// The entry stored as `value`, the inverse of [`Self::to_loro_value`].
+    /// `None` when `value` is not a map; missing fields read as empty.
+    pub fn from_loro(value: &LoroValue) -> Option<Self> {
+        let LoroValue::Map(map) = value else {
+            return None;
+        };
+        let mut entry = Self::new(
+            entry_author(value).unwrap_or_default(),
+            entry_text(value).unwrap_or_default(),
+            entry_created_at(value).unwrap_or(0),
+        );
+        entry.reply_to = match map.get(FIELD_REPLY_TO) {
+            Some(LoroValue::String(s)) => Some(s.to_string()),
+            _ => None,
+        };
+        entry.edited_at = match map.get(FIELD_EDITED_AT) {
+            Some(LoroValue::I64(i)) => Some(*i),
+            Some(LoroValue::Double(f)) if f.is_finite() => Some(*f as i64),
+            _ => None,
+        };
+        entry.kinds = map.get(FIELD_KINDS).cloned();
+        const KNOWN: [&str; 6] = [
+            FIELD_AUTHOR,
+            FIELD_TEXT,
+            FIELD_CREATED_AT,
+            FIELD_REPLY_TO,
+            FIELD_EDITED_AT,
+            FIELD_KINDS,
+        ];
+        for (name, v) in map.iter() {
+            if !KNOWN.contains(&name.as_str()) {
+                entry.extra.insert(name.clone(), v.clone());
+            }
+        }
+        Some(entry)
+    }
+
     /// The plain Loro map value stored under the entry key.
     pub fn to_loro_value(&self) -> LoroValue {
         let mut map: HashMap<String, LoroValue> = HashMap::new();
@@ -328,5 +365,16 @@ mod tests {
             m.insert(FIELD_CREATED_AT.into(), c);
             assert_eq!(entry_created_at(&LoroValue::from(m)), Some(42));
         }
+    }
+
+    #[test]
+    fn an_entry_reads_back_from_its_loro_value() {
+        let mut entry = Entry::new("did:ad:agent:x", "hoi", 7);
+        entry.reply_to = Some("1-2".into());
+        entry.edited_at = Some(9);
+        entry.kinds = Some(LoroValue::from(vec![LoroValue::from("FollowEvent")]));
+        entry.extra.insert("role".into(), "user".into());
+        assert_eq!(Entry::from_loro(&entry.to_loro_value()), Some(entry));
+        assert_eq!(Entry::from_loro(&LoroValue::from("not a map")), None);
     }
 }
