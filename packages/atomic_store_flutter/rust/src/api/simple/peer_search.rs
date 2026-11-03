@@ -123,6 +123,7 @@ pub(crate) fn spawn(store: atomic_lib::Db, me: String) {
     }
     let drives_store = store.clone();
     let check_store = store.clone();
+    let joined_store = store.clone();
     tokio::spawn(PEER_SEARCH.clone().run(
         me,
         move || search_drives(&drives_store),
@@ -140,10 +141,17 @@ pub(crate) fn spawn(store: atomic_lib::Db, me: String) {
             }
         }
     });
-    tokio::spawn(async {
+    tokio::spawn(async move {
         let mut count = atomic_lib::sync::peer::live_peer_count();
         loop {
             let now = atomic_lib::sync::peer::wait_for_peer_count_change(count).await;
+            if now > count {
+                // A device came online: it may hold the drives missing here.
+                super::sync::look_for_missing_again();
+                tokio::spawn(super::sync::follow_listed_drives_if_missing(
+                    joined_store.clone(),
+                ));
+            }
             if now < count {
                 tracing::info!("[peer_search] live peers {count} → {now}, searching again");
                 search_again_now();

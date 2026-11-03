@@ -600,7 +600,7 @@ static LAST_MISSING_CHECK: std::sync::Mutex<Option<(std::time::Instant, usize)>>
 
 /// Looked for again at most this often while the same number is missing: a
 /// listed drive that no device here holds is not dialled for every round.
-pub(crate) const MISSING_DRIVES_RETRY: std::time::Duration = std::time::Duration::from_secs(300);
+pub(crate) const MISSING_DRIVES_RETRY: std::time::Duration = std::time::Duration::from_secs(900);
 
 /// [`follow_listed_drives`] for a device whose personal drive arrived after
 /// sign-in, from a paired device: the sign-in path only follows the listed
@@ -676,11 +676,7 @@ pub(crate) async fn follow_listed_drives_if_missing(store: atomic_lib::Db) {
     let mut followed = 0;
     for drive in &wanted {
         for node_id in peer_ids_to_try(&Default::default()) {
-            let attempt = tokio::time::timeout(
-                PEER_SYNC_ATTEMPT_TIMEOUT,
-                atomic_lib::sync::peer::sync_drive_with_peer_if_needed(&node_id, drive, &store),
-            )
-            .await;
+            let attempt = fetch_drive_from_peer(&node_id, drive, &store).await;
             if !matches!(attempt, Ok(Ok(_))) {
                 tracing::info!(
                     "[home] {drive} at {}: {attempt:?}",
@@ -708,6 +704,39 @@ fn log_check_once(line: String) {
             tracing::info!("{line}");
             *last = line;
         }
+    }
+}
+
+/// Ask `node_id` for `drive`, a drive this device does not hold. A peer
+/// already connected live only streams the drives the link was opened for,
+/// and the plain dial skips a live peer, so for one the link is redialled for
+/// this drive (it goes live again afterwards).
+async fn fetch_drive_from_peer(
+    node_id: &str,
+    drive: &str,
+    store: &atomic_lib::Db,
+) -> Result<atomic_lib::errors::AtomicResult<usize>, tokio::time::error::Elapsed> {
+    let live = atomic_lib::sync::peer::live_peer_ids()
+        .contains(&atomic_lib::sync::peer::normalize_node_id(node_id));
+    tokio::time::timeout(PEER_SYNC_ATTEMPT_TIMEOUT, async {
+        match atomic_lib::sync::peer::endpoint() {
+            Some(endpoint) => {
+                atomic_lib::sync::peer::sync_drive_with_peer_using(
+                    endpoint, node_id, drive, store, live,
+                )
+                .await
+            }
+            None => Err("Iroh peer not started".into()),
+        }
+    })
+    .await
+}
+
+/// Look again on the next check, whatever was missing before: a peer just
+/// connected, so a drive no one had may be there now.
+pub(crate) fn look_for_missing_again() {
+    if let Ok(mut last) = LAST_MISSING_CHECK.lock() {
+        *last = None;
     }
 }
 
@@ -827,11 +856,7 @@ pub(crate) async fn fetch_other_drive(
         Err(_) => tracing::info!("[home] {drive}: pkarr timed out"),
     }
     for node_id in candidates.into_iter().take(6) {
-        let attempt = tokio::time::timeout(
-            PEER_SYNC_ATTEMPT_TIMEOUT,
-            atomic_lib::sync::peer::sync_drive_with_peer_if_needed(&node_id, &drive, store),
-        )
-        .await;
+        let attempt = fetch_drive_from_peer(&node_id, &drive, store).await;
         match attempt {
             Ok(Ok(_)) if store.has_resource_locally(&drive) => return true,
             Ok(Ok(_)) => {}
