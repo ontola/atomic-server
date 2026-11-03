@@ -68,13 +68,13 @@ const IGNORED_FILE_PARTS = ['.test', '.spec'];
 
 export default defineConfig({
   // sourceLocale is en by default
-  locales: ['en', 'es', 'fr', 'de'],
+  locales: ['en', 'es', 'fr', 'de', 'nl', 'id'],
   // `group` batches all target locales into ONE model request instead of one
   // request per locale. In dev this matters a lot: wuchale's Vite transform
   // BLOCKS the module (and thus the HMR update) until translation finishes,
-  // so ungrouped locales cost 3 sequential-ish OpenRouter round-trips
+  // so ungrouped locales cost multiple sequential-ish OpenRouter round-trips
   // (~6.5s measured) for every new string, vs ~1 round-trip grouped.
-  ai: openRouterTranslator({ group: { en: [['es', 'fr', 'de']] } }),
+  ai: openRouterTranslator({ group: { en: [['es', 'fr', 'de', 'nl', 'id']] } }),
   adapters: {
     main: jsx({
       loader: 'react',

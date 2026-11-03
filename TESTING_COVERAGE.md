@@ -500,11 +500,23 @@ source references. `wuchale check --full` separately checks extraction parity.
 These structural checks do not certify linguistic quality or detect every
 unextracted literal; runtime locale switching and production UI verification
 remain necessary. Resource content and plugin-supplied text are separate.
+Known source gaps: `AuthorizeMcpRoute` and `ConnectAgentRoute` interpolate
+unextracted English permission verbs, and `DerivedColumnDialog` interpolates
+an English column-name suggestion. These require complete localized sentences
+in a follow-up; catalog completeness does not cover them.
 
 `browser/e2e/tests/interface-language.spec.ts` switches from English to Spanish,
-French and German through Settings, checks translated account headings and
-drive menus, reloads to verify persistence, and switches back. A custom drive
+French, German, Dutch and Indonesian through Settings, checks translated account
+headings and drive menus, reloads to verify persistence, and switches back. A custom drive
 title remains unchanged. The tests attach account screenshots for each locale.
+Dutch and Indonesian also start from regional browser preferences and verify
+that a saved selection overrides those preferences. `preloadLocale.test.ts`
+covers regional variants, preference order, fallback and configured-locale parity.
+`scripts/wuchale-plurals.test.ts` builds isolated catalogs through the actual
+Wuchale library, checking target-language form counts and interpolation damage.
+It verifies that Indonesian compiles a plural array and rule which render zero,
+one and multiple changes correctly; audit fixtures reject a fixed singular
+count in a single-form target.
 `DefaultTrigger.test.tsx` checks render-time tooltip translation without
 replacing the dropdown button, plus the existing default and string-title API.
 

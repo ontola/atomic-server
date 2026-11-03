@@ -61,6 +61,43 @@ describe('translation completeness', () => {
     expect(auditCatalogs({ en: source, es }).issues).toEqual([]);
   });
 
+  it('preserves counts when one target form covers every source plural form', () => {
+    const en = po(
+      'en',
+      'msgid "1 Change"\nmsgid_plural "# Changes"\nmsgstr[0] "1 Change"\nmsgstr[1] "# Changes"',
+    );
+    const id = po(
+      'id',
+      'msgid "1 Change"\nmsgid_plural "# Changes"\nmsgstr[0] "# perubahan"',
+      'nplurals=1; plural=0;',
+    );
+    expect(auditCatalogs({ en, id }).issues).toEqual([]);
+    expect(
+      auditCatalogs({
+        en,
+        id: id.replace('# perubahan', '1 perubahan'),
+      }).issues.map(issue => issue.type),
+    ).toEqual(['plural-count']);
+    expect(
+      auditCatalogs({ en, id: `${id}msgstr[1] "# perubahan"\n` }).issues.map(
+        issue => issue.type,
+      ),
+    ).toEqual(['missing-translation']);
+  });
+
+  it('allows a single markerless plural form when the source has no count marker', () => {
+    const en = po(
+      'en',
+      'msgid "edit"\nmsgid_plural "edits"\nmsgstr[0] "edit"\nmsgstr[1] "edits"',
+    );
+    const id = po(
+      'id',
+      'msgid "edit"\nmsgid_plural "edits"\nmsgstr[0] "suntingan"',
+      'nplurals=1; plural=0;',
+    );
+    expect(auditCatalogs({ en, id }).issues).toEqual([]);
+  });
+
   it('distinguishes contexts and reports duplicate active keys', () => {
     const entries = 'msgctxt "button"\nmsgid "Save"\nmsgstr "Guardar"';
     expect(types(po('es', entries))).toEqual(['extra', 'missing-entry']);
