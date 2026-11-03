@@ -531,6 +531,65 @@ async fn e2e_new_resource_after_bulk_resync() {
     );
 }
 
+/// A file uploaded under a document while the link is up reaches the other
+/// device live: the File, its bytes and the document's link to it, as when
+/// one tablet uploads a PDF and the other shows it.
+#[tokio::test]
+async fn e2e_a_file_uploaded_during_a_live_link_arrives_with_its_bytes() {
+    let pair = setup_pair("e2e_file_live").await;
+    let doc = pair
+        .db_a
+        .create_resource(FOLDER_CLASS, &pair.drive, "Raadsvoorstel", None)
+        .await
+        .unwrap();
+    sync_b_from_a(&pair).await;
+    wait_for_live_peers(1, std::time::Duration::from_secs(3)).await;
+
+    let bytes = b"%PDF-1.4 live upload".to_vec();
+    let node = crate::runtime::AtomicNode::from_db(pair.db_a.clone());
+    let file = crate::host::files::upload_file(
+        &node,
+        &crate::host::NoPush,
+        &doc,
+        None,
+        "voorstel.pdf",
+        "application/pdf",
+        &bytes,
+    )
+    .await
+    .unwrap();
+    const FILE_LINK: &str = "https://example.com/properties/file";
+    let mut d = pair.db_a.get_resource(&doc.as_str().into()).await.unwrap();
+    d.ensure_materialized().unwrap();
+    d.set_unsafe(
+        FILE_LINK.into(),
+        crate::Value::AtomicUrl(file.clone().into()),
+    )
+    .unwrap();
+    d.save_locally(&pair.db_a).await.unwrap();
+
+    let arrived = wait_until(std::time::Duration::from_secs(5), || async {
+        crate::host::files::file_blob(&pair.db_b, &file)
+            .await
+            .ok()
+            .flatten()
+            .is_some()
+    })
+    .await;
+    let linked = pair
+        .db_b
+        .get_resource(&doc.as_str().into())
+        .await
+        .ok()
+        .and_then(|r| r.get(FILE_LINK).ok().map(|v| v.to_string()));
+    assert_eq!(linked.as_deref(), Some(file.as_str()), "the link arrives");
+    assert!(
+        pair.db_b.get_resource(&file.as_str().into()).await.is_ok(),
+        "the File arrives"
+    );
+    assert!(arrived, "the bytes arrive");
+}
+
 /// Engine pull still works when live is unavailable (documents mobile fallback path).
 #[tokio::test]
 async fn e2e_engine_pull_after_iroh_bulk_sync() {

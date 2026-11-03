@@ -410,7 +410,7 @@ impl AtomicStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::simple::peers::peer_serves;
+    use crate::api::simple::peers::{is_peer_store, peer_serves};
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -459,6 +459,16 @@ mod tests {
         assert!(peer_serves(None, 1).is_ok());
         assert!(peer_serves(Some(1), 1).is_ok());
         assert!(peer_serves(Some(1), 2).is_err());
+    }
+
+    /// A write on the store the peer serves reaches the other devices, also
+    /// when that is an app's own store (OpenMeeting) and not the default.
+    #[test]
+    fn writes_go_to_peers_from_the_store_the_peer_serves() {
+        assert!(is_peer_store(Some(7), 7, false));
+        assert!(!is_peer_store(Some(7), 8, true));
+        assert!(is_peer_store(None, 8, true));
+        assert!(!is_peer_store(None, 8, false));
     }
 
     #[tokio::test]

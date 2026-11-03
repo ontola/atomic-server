@@ -38,17 +38,16 @@ pub(crate) async fn push_local_write(
 
 /// Hand a commit a handle just signed to whoever can take it. The server
 /// session of that handle gets the queued commit. Live peers, paired devices
-/// and the bulk reconcile (the Iroh peer is one per process) serve the
-/// default store only, so they are tried for a handle on that store.
+/// and the bulk reconcile (the Iroh peer is one per process) get it when the
+/// handle is on the store the peer serves: the default store, or the store
+/// of an app that opens its own (OpenMeeting) and started the peer on it.
 pub(crate) async fn push_write(
     response: &atomic_lib::commit::CommitResponse,
     store: &atomic_lib::Db,
     session: &ws_sync::SyncSession,
 ) {
-    let on_default_store = state::db()
-        .map(|d| std::sync::Arc::ptr_eq(&d.kv, &store.kv))
-        .unwrap_or(false);
-    if on_default_store {
+    let serves_peers = super::peers::serves_peers(store);
+    if serves_peers {
         if let Some(bytes) = &response.commit.loro_update {
             if !bytes.is_empty() {
                 let subject_key = response.commit.subject.pure_id();
@@ -57,7 +56,7 @@ pub(crate) async fn push_write(
         }
     }
     let ws_ok = session.drain_outbox(store).await;
-    if !on_default_store {
+    if !serves_peers {
         return;
     }
     // No hub in reach: a paired peer takes the signed commit instead
