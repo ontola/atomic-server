@@ -156,7 +156,7 @@ export function FormAccessSection({
 
 const ExportTrigger = buildDefaultTrigger(
   <FaDownload />,
-  'Export invite links',
+  () => 'Export invite links',
 );
 
 function InviteCodeManager({ resource }: FormAccessSectionProps): JSX.Element {
