@@ -12142,7 +12142,7 @@ msgstr "personas pueden unirse"
 msgid "{0} Viewers are free."
 msgstr "{0} Los lectores son gratis."
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Signed in"
 msgstr "Sesión iniciada"
 
@@ -13425,7 +13425,7 @@ msgstr "Editar columna"
 msgid "Add view"
 msgstr "Añadir vista"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Invitado"
 

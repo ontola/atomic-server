@@ -12145,7 +12145,7 @@ msgstr "orang dapat bergabung"
 msgid "{0} Viewers are free."
 msgstr "{0} Pemirsa gratis."
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Signed in"
 msgstr "Sudah masuk"
 
@@ -13423,7 +13423,7 @@ msgstr "Sunting kolom"
 msgid "Add view"
 msgstr "Tambahkan tampilan"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Tamu"
 

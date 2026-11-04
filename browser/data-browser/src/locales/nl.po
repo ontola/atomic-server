@@ -12148,7 +12148,7 @@ msgstr "personen kunnen deelnemen"
 msgid "{0} Viewers are free."
 msgstr "{0} Kijkers zijn gratis."
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Signed in"
 msgstr "Ingelogd"
 
@@ -13431,7 +13431,7 @@ msgstr "Kolom bewerken"
 msgid "Add view"
 msgstr "Weergave toevoegen"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Gast"
 

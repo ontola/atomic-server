@@ -12145,7 +12145,7 @@ msgstr "Personen können beitreten"
 msgid "{0} Viewers are free."
 msgstr "{0} Betrachter sind kostenlos."
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Signed in"
 msgstr "Angemeldet"
 
@@ -13428,7 +13428,7 @@ msgstr "Spalte bearbeiten"
 msgid "Add view"
 msgstr "Ansicht hinzufügen"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Gast"
 
