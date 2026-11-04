@@ -24,7 +24,6 @@ import 'package:atomic_chat/atomic_chat.dart'
 import '../assistant/atomic_assistant_api.dart';
 import '../atomic/account_store.dart';
 import '../atomic/settings_backend.dart';
-import 'account_link_dialog.dart';
 import 'ai_settings_screen.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
@@ -477,7 +476,7 @@ class _AccountSectionState extends State<_AccountSection> {
         await showDialog<bool>(
           context: context,
           barrierDismissible: false,
-          builder: (_) => AccountLinkDialog(
+          builder: (_) => shared.AtomicAccountLinkDialog(
             client: shared.AtomicAccountClient(portal),
             deviceName: widget.info.deviceName.isEmpty
                 ? 'atomic.place'

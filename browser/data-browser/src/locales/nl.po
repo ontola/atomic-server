@@ -13474,3 +13474,17 @@ msgstr "Van deze schijf maakt {0} een back-up. Alleen dat account kan dit wijzig
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by another account. Only that account can change it."
 msgstr "Van deze schijf maakt een ander account een back-up. Alleen dat account kan dit wijzigen."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "Openen in {0}"
+
+#. 0: app.name
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Open de homepage van {0}"
+
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Apps in this drive"
+msgstr "Apps in deze schijf"
