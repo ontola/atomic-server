@@ -8368,6 +8368,7 @@ msgstr "Local copy unavailable"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Report this error"
 
@@ -10203,6 +10204,7 @@ msgstr "You missed a message while you were away"
 msgid "You missed {0} messages while you were away"
 msgstr "You missed {0} messages while you were away"
 
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
 msgid "Not now"
 msgstr "Not now"
@@ -12781,6 +12783,8 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "A Cloud Server keeps this drive online for everyone, so nobody has to keep a browser open."
 
 #. 0: CLOUD_SERVER_PRICE
+#. 0: CLOUD_SERVER_PRICE
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Upgrade to Cloud Server from {0}"
@@ -13171,10 +13175,6 @@ msgstr "Add marketplace URL"
 msgid "Discover apps and integrations"
 msgstr "Discover apps and integrations"
 
-#: src/helpers/managed/vaultAutoBackup.ts
-msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
-msgstr "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
-
 #: src/embed/MeetingChatOverlay.tsx
 #: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
@@ -13462,6 +13462,10 @@ msgstr "<0/> In My drives"
 msgid "<0/> Add to My drives"
 msgstr "<0/> Add to My drives"
 
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault is full, so this drive is not being backed up."
+msgstr "Cloud Vault is full, so this drive is not being backed up."
+
 #. 0: status.backedUpBy
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by {0}. Only that account can change it."
@@ -13470,3 +13474,17 @@ msgstr "This drive is backed up by {0}. Only that account can change it."
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by another account. Only that account can change it."
 msgstr "This drive is backed up by another account. Only that account can change it."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "Open in {0}"
+
+#. 0: app.name
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Open the {0} homepage"
+
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Apps in this drive"
+msgstr "Apps in this drive"

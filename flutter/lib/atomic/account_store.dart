@@ -1,6 +1,7 @@
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
-import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:atomic_store_flutter/atomic_store_flutter.dart'
+    show SecureAccountSessionStore;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'atomic_auth.dart';
 import 'atomic_client.dart';
@@ -28,45 +29,19 @@ class AccountSummary {
   final Map<String, dynamic>? server;
 }
 
-/// The linked account's session. It is a bearer token or cookie for one portal, so it
-/// lives in platform secure storage like the agent secret, never in prefs.
+/// The linked account's session, kept by the shared secure store
+/// (`SecureAccountSessionStore`): a bearer token or cookie for one portal.
 class AccountStore {
-  static const _key = 'atomic_account_session';
-  static final FlutterSecureStorage _secure = createSecureStorage();
+  static shared.AtomicAccountSessionStore _store =
+      SecureAccountSessionStore(storage: createSecureStorage());
 
-  /// This run's session, for when the Keychain will not keep it.
-  static String? _memory;
+  @visibleForTesting
+  static set store(shared.AtomicAccountSessionStore store) => _store = store;
 
-  /// Saving never throws: an unavailable Keychain only means the link is not
-  /// remembered after this run.
-  static Future<void> save(String session) async {
-    _memory = session;
-    try {
-      await _secure.write(key: _key, value: session);
-    } catch (e) {
-      debugPrint('Saving the account session failed: $e');
-    }
-  }
-
-  static Future<void> clear() async {
-    _memory = null;
-    try {
-      await _secure.delete(key: _key);
-    } catch (e) {
-      debugPrint('Deleting the account session failed: $e');
-    }
-  }
-
-  /// The saved session, for a client to restore; null when no account is
-  /// linked (or the Keychain is unavailable and nothing is held in memory).
-  static Future<String?> read() async {
-    try {
-      return await _secure.read(key: _key) ?? _memory;
-    } catch (e) {
-      debugPrint('Reading the account session failed: $e');
-      return _memory;
-    }
-  }
+  static shared.AtomicAccountSessionStore get sessionStore => _store;
+  static Future<void> save(String session) => _store.save(session);
+  static Future<void> clear() => _store.clear();
+  static Future<String?> read() => _store.read();
 
   /// The portal agents sign in to when no portal is linked yet.
   static const defaultPortal = 'https://atomic.place';
@@ -174,7 +149,7 @@ class AccountStore {
   /// portal offers no included AI. Throws when the portal cannot be reached,
   /// so the caller can keep showing the last known balance.
   static Future<shared.AtomicAiCredits?> aiCredits() async {
-    final saved = await _secure.read(key: _key);
+    final saved = await read();
     if (saved == null) return null;
     final origin = shared.AtomicAccountClient.sessionOrigin(saved);
     final client = shared.AtomicAccountClient(origin.toString())
@@ -190,7 +165,7 @@ class AccountStore {
   /// linked or the portal has no usage report (older portals). Throws when
   /// the portal cannot be reached.
   static Future<shared.AtomicAiUsage?> aiUsage() async {
-    final saved = await _secure.read(key: _key);
+    final saved = await read();
     if (saved == null) return null;
     final origin = shared.AtomicAccountClient.sessionOrigin(saved);
     final client = shared.AtomicAccountClient(origin.toString())
@@ -206,7 +181,7 @@ class AccountStore {
   /// linked or the portal has no list (older portals). Throws when the portal
   /// cannot be reached.
   static Future<List<shared.AtomicAiModel>?> aiModels() async {
-    final saved = await _secure.read(key: _key);
+    final saved = await read();
     if (saved == null) return null;
     final origin = shared.AtomicAccountClient.sessionOrigin(saved);
     final client = shared.AtomicAccountClient(origin.toString())
@@ -222,7 +197,7 @@ class AccountStore {
   /// Throws when it is linked but the portal cannot be read, so a failed read
   /// is not shown as "not linked".
   static Future<AccountSummary?> summary(String? drive) async {
-    final saved = await _secure.read(key: _key);
+    final saved = await read();
     if (saved == null) return null;
     final origin = shared.AtomicAccountClient.sessionOrigin(saved);
     final client = shared.AtomicAccountClient(origin.toString())

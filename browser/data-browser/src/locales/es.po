@@ -8362,6 +8362,7 @@ msgstr "Copia local no disponible"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Informar de este error"
 
@@ -10197,6 +10198,7 @@ msgstr "Te has perdido un mensaje mientras no estabas"
 msgid "You missed {0} messages while you were away"
 msgstr "Te has perdido {0} mensajes mientras no estabas"
 
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
 msgid "Not now"
 msgstr "Ahora no"
@@ -12775,6 +12777,8 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "Un servidor en la nube mantiene esta unidad en línea para todos, así que nadie tiene que mantener un navegador abierto."
 
 #. 0: CLOUD_SERVER_PRICE
+#. 0: CLOUD_SERVER_PRICE
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Mejorar a un servidor en la nube desde {0}"
@@ -13165,10 +13169,6 @@ msgstr "Añadir URL de tienda"
 msgid "Discover apps and integrations"
 msgstr "Descubrir aplicaciones e integraciones"
 
-#: src/helpers/managed/vaultAutoBackup.ts
-msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
-msgstr "La bóveda en la nube está llena, así que no se está haciendo una copia de seguridad de esta unidad. Libera espacio o mejora tu plan."
-
 #: src/embed/MeetingChatOverlay.tsx
 #: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
@@ -13456,6 +13456,10 @@ msgstr "<0/> En Mis unidades"
 msgid "<0/> Add to My drives"
 msgstr "<0/> Añadir a Mis unidades"
 
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault is full, so this drive is not being backed up."
+msgstr "La bóveda en la nube está llena, así que no se está haciendo una copia de seguridad de esta unidad."
+
 #. 0: status.backedUpBy
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by {0}. Only that account can change it."
@@ -13464,3 +13468,17 @@ msgstr "{0} hace la copia de seguridad de esta unidad. Solo esa cuenta puede cam
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by another account. Only that account can change it."
 msgstr "Otra cuenta hace la copia de seguridad de esta unidad. Solo esa cuenta puede cambiarlo."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "Abrir en {0}"
+
+#. 0: app.name
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Abrir la página de inicio de {0}"
+
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Apps in this drive"
+msgstr "Apps en esta unidad"

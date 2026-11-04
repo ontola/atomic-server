@@ -8365,6 +8365,7 @@ msgstr "Lokale Kopie nicht verfügbar"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Diesen Fehler melden"
 
@@ -10200,6 +10201,7 @@ msgstr "Du hast während deiner Abwesenheit eine Nachricht verpasst"
 msgid "You missed {0} messages while you were away"
 msgstr "Du hast während deiner Abwesenheit {0} Nachrichten verpasst"
 
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
 msgid "Not now"
 msgstr "Nicht jetzt"
@@ -12778,6 +12780,8 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "Ein Cloud Server hält dieses Laufwerk für alle online, sodass niemand einen Browser geöffnet lassen muss."
 
 #. 0: CLOUD_SERVER_PRICE
+#. 0: CLOUD_SERVER_PRICE
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Ab {0} auf Cloud Server upgraden"
@@ -13168,10 +13172,6 @@ msgstr "Marktplatz-URL hinzufügen"
 msgid "Discover apps and integrations"
 msgstr "Apps und Integrationen entdecken"
 
-#: src/helpers/managed/vaultAutoBackup.ts
-msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
-msgstr "Cloud Vault ist voll, daher wird dieses Laufwerk nicht gesichert. Gib Speicherplatz frei oder erweitere deinen Tarif."
-
 #: src/embed/MeetingChatOverlay.tsx
 #: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
@@ -13459,6 +13459,10 @@ msgstr "<0/> In Meine Laufwerke"
 msgid "<0/> Add to My drives"
 msgstr "<0/> Zu Meine Laufwerke hinzufügen"
 
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault is full, so this drive is not being backed up."
+msgstr "Cloud Vault ist voll, daher wird dieses Laufwerk nicht gesichert."
+
 #. 0: status.backedUpBy
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by {0}. Only that account can change it."
@@ -13467,3 +13471,17 @@ msgstr "Dieses Laufwerk wird von {0} gesichert. Nur dieses Konto kann das änder
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by another account. Only that account can change it."
 msgstr "Dieses Laufwerk wird von einem anderen Konto gesichert. Nur dieses Konto kann das ändern."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "In {0} öffnen"
+
+#. 0: app.name
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Startseite von {0} öffnen"
+
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Apps in this drive"
+msgstr "Apps in diesem Laufwerk"

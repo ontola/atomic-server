@@ -259,9 +259,10 @@ fn sentry_script(dsn: Option<&str>) -> String {
             .unwrap_or_else(|_| "\"\"".into())
     };
     format!(
-        "window.__ATOMIC_SENTRY__={{dsn:{},environment:{}}};",
+        "window.__ATOMIC_SENTRY__={{dsn:{},environment:{},tunnel:{}}};",
         encode(dsn),
-        encode(&environment)
+        encode(&environment),
+        encode(super::client_reports::TUNNEL_PATH)
     )
 }
 
