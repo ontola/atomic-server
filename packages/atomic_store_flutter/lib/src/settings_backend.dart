@@ -7,6 +7,9 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
+import 'account_session.dart';
 import 'atomic_flutter.dart';
 import 'drives.dart';
 import 'identity.dart';
@@ -20,17 +23,31 @@ import 'sharing.dart';
 /// ```dart
 /// AppBar(title: Text('Notes'), actions: [AtomicAccountButton(node: node)])
 /// ```
+///
+/// With an [accountProvider] the panel also offers to sign in with the account
+/// at that provider; see [AtomicNodeSettings].
 class AtomicAccountButton extends StatelessWidget {
-  const AtomicAccountButton({super.key, required this.node});
+  const AtomicAccountButton(
+      {super.key,
+      required this.node,
+      this.accountProvider,
+      this.accountProviderLabel,
+      this.accountSession});
 
   final AtomicParts node;
+  final Uri? accountProvider;
+  final String? accountProviderLabel;
+  final ui.AtomicAccountSessionStore? accountSession;
 
   @override
   Widget build(BuildContext context) => IconButton(
         icon: const Icon(Icons.account_circle_outlined),
         tooltip: 'Account',
-        onPressed: () =>
-            ui.showAtomicUserDialog(context, backend: AtomicNodeSettings(node)),
+        onPressed: () => ui.showAtomicUserDialog(context,
+            backend: AtomicNodeSettings(node,
+                accountProvider: accountProvider,
+                accountProviderLabel: accountProviderLabel,
+                accountSession: accountSession)),
       );
 }
 
@@ -41,10 +58,30 @@ class AtomicAccountButton extends StatelessWidget {
 /// The secret of the account you were signed in as before a sign-in is kept
 /// by the node's `AgentSecretStore`; [onPreviousSecret] also gets it, if the
 /// app wants to keep it elsewhere.
+///
+/// Signing in with an account provider is off unless [accountProvider] (an
+/// HTTPS origin) is given. Then the panel offers "Sign in with <provider>"
+/// (named by [accountProviderLabel], else the provider's host): the account's
+/// identity comes back from the system browser and replaces the node's agent
+/// like a pasted secret does. The account's session is kept in
+/// [accountSession] (the keychain by default) and removed on sign-out.
 class AtomicNodeSettings extends ui.AtomicSettingsBackend {
-  AtomicNodeSettings(this.node, {this.onPreviousSecret});
+  AtomicNodeSettings(this.node,
+      {this.onPreviousSecret,
+      this.accountProvider,
+      this.accountProviderLabel,
+      ui.AtomicAccountSessionStore? accountSession,
+      this.openUrl})
+      : accountSession = accountSession ??
+            (accountProvider == null ? null : SecureAccountSessionStore());
 
   final AtomicParts node;
+  final Uri? accountProvider;
+  final String? accountProviderLabel;
+  final ui.AtomicAccountSessionStore? accountSession;
+
+  /// Opens the provider's approval page; the system browser by default.
+  final Future<void> Function(Uri url)? openUrl;
   final void Function(String secret)? onPreviousSecret;
   List<DriveInfo> _drives = const [];
 
@@ -188,27 +225,66 @@ class AtomicNodeSettings extends ui.AtomicSettingsBackend {
   void Function()? get searchAgain => node.peers.searchAgain;
 
   @override
-  Future<void> Function()? get signOut => _identity.signOut;
+  Future<void> Function()? get signOut => () async {
+        await _identity.signOut();
+        await accountSession?.clear();
+      };
+
+  @override
+  String? get accountProviderName => accountProvider == null
+      ? null
+      : ui.accountProviderName(accountProvider!, accountProviderLabel);
+
+  @override
+  Future<String?> linkedAccount() async =>
+      accountSession == null ? null : ui.linkedAccountLabel(accountSession!);
+
+  @override
+  Future<String?> Function(BuildContext context)? get signInWithAccount =>
+      accountProvider == null
+          ? null
+          : (context) async {
+              final found = await ui.signInWithAccountProvider(context,
+                  provider: accountProvider!,
+                  store: accountSession!,
+                  deviceName: node.peers.deviceName,
+                  openUrl: openUrl ??
+                      (url) async {
+                        if (!await launchUrl(url,
+                            mode: LaunchMode.externalApplication)) {
+                          throw StateError('Could not open the browser.');
+                        }
+                      });
+              if (found == null) return null;
+              try {
+                return await _signInWithSecret(found.secret);
+              } catch (_) {
+                await accountSession!.clear();
+                rethrow;
+              }
+            };
 
   @override
   Future<String> Function(String secret)? get signInWithSecret =>
-      (secret) async {
-        final found = await _identity.signIn(secret);
-        final previous = found.previousSecret;
-        if (previous != null) onPreviousSecret?.call(previous);
-        final drives = await node.drives.list();
-        final names = [
-          for (final subject in found.broughtAlong)
-            '"${drives.where((d) => d.subject == subject).map((d) => d.name).firstOrNull ?? 'Untitled drive'}"'
-        ];
-        return [
-          'You are signed in.',
-          if (names.isNotEmpty)
-            'Added to your account: ${names.length < 2 ? names.join() : '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}'}.',
-          if (found.needsSync)
-            'Your drive is not on this device yet. Connect to a server or add a device to get it.',
-        ].join(' ');
-      };
+      _signInWithSecret;
+
+  Future<String> _signInWithSecret(String secret) async {
+    final found = await _identity.signIn(secret);
+    final previous = found.previousSecret;
+    if (previous != null) onPreviousSecret?.call(previous);
+    final drives = await node.drives.list();
+    final names = [
+      for (final subject in found.broughtAlong)
+        '"${drives.where((d) => d.subject == subject).map((d) => d.name).firstOrNull ?? 'Untitled drive'}"'
+    ];
+    return [
+      'You are signed in.',
+      if (names.isNotEmpty)
+        'Added to your account: ${names.length < 2 ? names.join() : '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}'}.',
+      if (found.needsSync)
+        'Your drive is not on this device yet. Connect to a server or add a device to get it.',
+    ].join(' ');
+  }
 
   @override
   Future<String> Function({required bool canEdit})? get inviteLink =>

@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
-import 'package:atomic_app/screens/account_link_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -39,7 +38,7 @@ void main() {
         builder: (context) => TextButton(
           onPressed: () async => result = await showDialog<bool>(
             context: context,
-            builder: (_) => AccountLinkDialog(
+            builder: (_) => shared.AtomicAccountLinkDialog(
               client: client,
               deviceName: 'Phone',
               save: (session) async => saved = session,
@@ -71,7 +70,7 @@ void main() {
     final client = shared.AtomicAccountClient('https://portal.example',
         client: MockClient((_) async => http.Response('no', 500)));
     await tester.pumpWidget(MaterialApp(
-      home: AccountLinkDialog(
+      home: shared.AtomicAccountLinkDialog(
         client: client,
         deviceName: 'Phone',
         save: (_) async {},
@@ -108,7 +107,7 @@ void main() {
         builder: (context) => TextButton(
           onPressed: () => showDialog<bool>(
             context: context,
-            builder: (_) => AccountLinkDialog(
+            builder: (_) => shared.AtomicAccountLinkDialog(
               client: client,
               deviceName: 'Phone',
               save: (session) async => saved = session,
