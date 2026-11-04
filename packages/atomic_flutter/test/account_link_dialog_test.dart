@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
@@ -125,5 +126,26 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
     expect(saved, isNotNull);
+  });
+
+  testWidgets('closing the dialog never saves a late response',
+      (tester) async {
+    final response = Completer<http.Response>();
+    var saved = false;
+    final client = shared.AtomicAccountClient('https://portal.example',
+        client: MockClient((r) => response.future));
+    await tester.pumpWidget(MaterialApp(
+        home: shared.AtomicAccountLinkDialog(
+            client: client,
+            deviceName: 'test',
+            save: (_) async => saved = true)));
+    await tester.pumpWidget(const SizedBox());
+    response.complete(http.Response(
+        '{"device_code":"private","user_code":"PUBLIC","expires_in":300,"interval":1}',
+        200));
+    await tester.pump(const Duration(seconds: 5));
+    expect(saved, isFalse);
+    expect(tester.takeException(), isNull);
+    client.close();
   });
 }
