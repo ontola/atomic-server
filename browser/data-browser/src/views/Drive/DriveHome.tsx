@@ -273,7 +273,10 @@ export function ActivityFeed({
   drive: string;
 }): JSX.Element {
   const store = useStore();
-  const recent = useMemo(() => getRecentResources(drive), [drive]);
+  const recent = useMemo(
+    () => getRecentResources(store.getAgent()?.subject, drive),
+    [store, drive],
+  );
   const children = useMemo(() => new Set(subjects), [subjects]);
   const commented = useRecentComments(drive);
   const hidden = useHiddenDriveSubjects(drive);

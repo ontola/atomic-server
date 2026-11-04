@@ -12,7 +12,9 @@ const getSubjectsWithoutQuery = async (
   drive: string,
   exclude: string | undefined,
 ): Promise<string[]> => {
-  const subjects = getRecentResources(drive).filter(s => s !== exclude);
+  const subjects = getRecentResources(store.getAgent()?.subject, drive).filter(
+    s => s !== exclude,
+  );
 
   if (subjects.length < MAX_MENTION_SUGGESTIONS) {
     try {
