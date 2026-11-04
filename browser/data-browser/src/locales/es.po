@@ -5429,6 +5429,7 @@ msgstr "Gestionar cuenta →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Bóveda en la nube"
 
@@ -13454,3 +13455,12 @@ msgstr "<0/> En Mis unidades"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Añadir a Mis unidades"
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "{0} hace la copia de seguridad de esta unidad. Solo esa cuenta puede cambiarlo."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Otra cuenta hace la copia de seguridad de esta unidad. Solo esa cuenta puede cambiarlo."

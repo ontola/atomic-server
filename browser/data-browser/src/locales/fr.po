@@ -5429,6 +5429,7 @@ msgstr "Gérer le compte →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Coffre cloud"
 
@@ -13454,3 +13455,12 @@ msgstr "<0/> Dans Mes lecteurs"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Ajouter à Mes lecteurs"
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Ce lecteur est sauvegardé par {0}. Seul ce compte peut le modifier."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Ce lecteur est sauvegardé par un autre compte. Seul ce compte peut le modifier."
