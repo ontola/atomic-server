@@ -106,7 +106,8 @@ mod tests {
 
     #[test]
     fn reads_dsn_from_envelope_header() {
-        let body = b"{\"dsn\":\"https://k@o.io/1\",\"event_id\":\"x\"}\n{\"type\":\"feedback\"}\n{}";
+        let body =
+            b"{\"dsn\":\"https://k@o.io/1\",\"event_id\":\"x\"}\n{\"type\":\"feedback\"}\n{}";
         assert_eq!(envelope_dsn(body).as_deref(), Some("https://k@o.io/1"));
         assert_eq!(envelope_dsn(b"not json"), None);
     }
