@@ -5,6 +5,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 ## UNRELEASED
 
 - New drive no longer asks for a name: it creates "My drive" at once, makes it the current drive and opens it; rename it from the drive page. `/app/new-drive` does the same on load and shows an error with a retry if it fails.
+- Privacy: the drive switcher's recently used drives are kept per identity (`driveHistory:<agent>`), not in one list for the whole browser, so a new guest identity no longer sees the drives another identity opened in the same browser. The old shared list is deleted, not migrated. `useLocalStorage` re-reads storage when its key changes.
 - Internal: one `isPlainObject` in @tomic/lib replaces 5 local type guards.
 - Internal: one `isLoopbackHost` in @tomic/lib replaces 12 inline localhost checks.
 - Removed the dead mobile-Tauri frontend code: Android back-button handling, the native QR scanner ("Scan a QR code" button) and the `@tauri-apps/plugin-barcode-scanner` dependency. The mobile app is the Flutter app; Tauri is desktop only. Pairing codes are still pasted or typed.
