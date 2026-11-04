@@ -5435,6 +5435,7 @@ msgstr "Account beheren →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Cloud Vault"
 
@@ -13463,4 +13464,13 @@ msgstr "<0/> Toevoegen aan Mijn schijven"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
-msgstr"Cloud Vault is vol, dus er wordt geen back-up van deze schijf gemaakt."
+msgstr "Cloud Vault is vol, dus er wordt geen back-up van deze schijf gemaakt."
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Van deze schijf maakt {0} een back-up. Alleen dat account kan dit wijzigen."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Van deze schijf maakt een ander account een back-up. Alleen dat account kan dit wijzigen."

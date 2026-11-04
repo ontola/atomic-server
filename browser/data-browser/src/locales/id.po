@@ -5433,6 +5433,7 @@ msgstr "Kelola akun →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Cloud Vault"
 
@@ -13455,4 +13456,13 @@ msgstr "<0/> Tambahkan ke Drive saya"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
-msgstr"Cloud Vault penuh, sehingga drive ini tidak dicadangkan."
+msgstr "Cloud Vault penuh, sehingga drive ini tidak dicadangkan."
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Drive ini dicadangkan oleh {0}. Hanya akun tersebut yang dapat mengubahnya."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Drive ini dicadangkan oleh akun lain. Hanya akun tersebut yang dapat mengubahnya."

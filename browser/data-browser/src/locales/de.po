@@ -5432,6 +5432,7 @@ msgstr "Konto verwalten →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Cloud Vault"
 
@@ -13460,4 +13461,13 @@ msgstr "<0/> Zu Meine Laufwerke hinzufügen"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
-msgstr"Cloud Vault ist voll, daher wird dieses Laufwerk nicht gesichert."
+msgstr "Cloud Vault ist voll, daher wird dieses Laufwerk nicht gesichert."
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Dieses Laufwerk wird von {0} gesichert. Nur dieses Konto kann das ändern."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Dieses Laufwerk wird von einem anderen Konto gesichert. Nur dieses Konto kann das ändern."

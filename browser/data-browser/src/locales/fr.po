@@ -5429,6 +5429,7 @@ msgstr "Gérer le compte →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Coffre cloud"
 
@@ -13457,4 +13458,13 @@ msgstr "<0/> Ajouter à Mes lecteurs"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
-msgstr"Le coffre cloud est plein ; ce lecteur n’est donc plus sauvegardé."
+msgstr "Le coffre cloud est plein ; ce lecteur n’est donc plus sauvegardé."
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Ce lecteur est sauvegardé par {0}. Seul ce compte peut le modifier."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Ce lecteur est sauvegardé par un autre compte. Seul ce compte peut le modifier."
