@@ -13472,13 +13472,13 @@ msgstr "Ce lecteur est sauvegardé par un autre compte. Seul ce compte peut le m
 #. 0: app.name
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Open in {0}"
-msgstr ""
+msgstr "Ouvrir dans {0}"
 
 #. 0: app.name
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Open the {0} homepage"
-msgstr ""
+msgstr "Ouvrir la page d'accueil de {0}"
 
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Apps in this drive"
-msgstr ""
+msgstr "Applications dans ce lecteur"

@@ -13475,13 +13475,13 @@ msgstr "Dieses Laufwerk wird von einem anderen Konto gesichert. Nur dieses Konto
 #. 0: app.name
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Open in {0}"
-msgstr ""
+msgstr "In {0} öffnen"
 
 #. 0: app.name
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Open the {0} homepage"
-msgstr ""
+msgstr "Startseite von {0} öffnen"
 
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Apps in this drive"
-msgstr ""
+msgstr "Apps in diesem Laufwerk"

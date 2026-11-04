@@ -13470,13 +13470,13 @@ msgstr "Drive ini dicadangkan oleh akun lain. Hanya akun tersebut yang dapat men
 #. 0: app.name
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Open in {0}"
-msgstr ""
+msgstr "Buka di {0}"
 
 #. 0: app.name
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Open the {0} homepage"
-msgstr ""
+msgstr "Buka beranda {0}"
 
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Apps in this drive"
-msgstr ""
+msgstr "Aplikasi di drive ini"

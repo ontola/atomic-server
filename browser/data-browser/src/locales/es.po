@@ -13472,13 +13472,13 @@ msgstr "Otra cuenta hace la copia de seguridad de esta unidad. Solo esa cuenta p
 #. 0: app.name
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Open in {0}"
-msgstr ""
+msgstr "Abrir en {0}"
 
 #. 0: app.name
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Open the {0} homepage"
-msgstr ""
+msgstr "Abrir la página de inicio de {0}"
 
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Apps in this drive"
-msgstr ""
+msgstr "Apps en esta unidad"
