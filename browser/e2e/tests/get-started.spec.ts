@@ -130,11 +130,26 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   // Self-hosted, with no portal: nothing here asks for an email.
   await expect(row.getByRole('button')).toHaveText('Connect a device');
 
-  // The panel's Save your work row opens the dialog and leaves the page where it is.
+  // The panel's Save your work row does not open anything: it points at the
+  // row where it is done, until the X closes it.
   const drive = page.url();
   await panel
     .getByRole('button', { name: 'Save your work', exact: true })
     .click();
+  const hint = page.getByTestId('ui-hint-save-row');
+  await expect(hint).toBeVisible();
+  await expect(hint).toHaveText('Connect a device here');
+  await page.getByTestId('ui-hint-close').click();
+  await expect(hint).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Using the thing the hint points at opens the dialog and leaves the page where it is.
+  await panel
+    .getByRole('button', { name: 'Save your work', exact: true })
+    .click();
+  await expect(hint).toBeVisible();
+  await row.getByRole('button').click();
+  await expect(hint).toHaveCount(0);
   const dialog = page.getByRole('dialog');
   await expect(
     dialog.getByRole('heading', { name: 'Save your work' }),
@@ -143,14 +158,6 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   await expect(page).toHaveURL(drive);
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-
-  // So does the row.
-  await row.getByRole('button').click();
-  await expect(
-    page.getByRole('dialog').getByRole('heading', { name: 'Save your work' }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Not now' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(row).toBeVisible();
 });
 
@@ -200,11 +207,11 @@ test('Creating a new drive leaves exactly one Getting started panel', async ({
   await expect(page.getByTestId('current-drive-title')).toHaveText('My drive', {
     timeout: 30_000,
   });
-  // A one-time hint points at the switcher, and goes on any click.
-  const hint = page.getByTestId('drive-switcher-hint');
+  // A one-time hint points at the switcher, and closes on its X.
+  const hint = page.getByTestId('ui-hint-drive-switcher');
   await expect(hint).toBeVisible({ timeout: 30_000 });
   await expect(hint).toHaveText('Switch back to your previous drive here');
-  await page.mouse.click(700, 400);
+  await page.getByTestId('ui-hint-close').click();
   await expect(hint).toHaveCount(0);
 
   await expect(panels).toHaveCount(1, { timeout: 30_000 });
@@ -228,7 +235,14 @@ test('Name your drive renames the drive, not the document on screen', async ({
     timeout: 30_000,
   });
 
+  // The step goes to the drive's page and points at its title.
   await panel.getByRole('button', { name: 'Name your drive' }).click();
+  const hint = page.getByTestId('ui-hint-drive-title');
+  await expect(hint).toBeVisible({ timeout: 15_000 });
+  await expect(hint).toHaveText('Click to name your drive');
+  await expect(editableTitle(page)).toHaveText('Welcome to Atomic');
+  await editableTitle(page).click();
+  await expect(hint).toHaveCount(0);
   await expect(editableTitle(page)).toHaveRole('textbox', { timeout: 15_000 });
   await page.keyboard.press(
     process.platform === 'darwin' ? 'Meta+a' : 'Control+a',
@@ -244,4 +258,34 @@ test('Name your drive renames the drive, not the document on screen', async ({
   await expect(editableTitle(page)).toHaveText('Start here', {
     timeout: 30_000,
   });
+});
+
+test('Start a drive points at the switcher, and the X or Escape closes it', async ({
+  page,
+}) => {
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  const panel = page.getByTestId('getting-started');
+  await expect(panel).toBeVisible({ timeout: 60_000 });
+  await page.keyboard.press('Escape');
+
+  const step = panel.getByRole('button', { name: 'Start a drive' });
+  const hint = page.getByTestId('ui-hint-drive-switcher');
+
+  // Hovering only rings the place; no text yet.
+  await step.hover();
+  await expect(hint).toHaveCount(0);
+  await expect(
+    page.getByTestId('sidebar').locator('[style*="outline"]'),
+  ).toHaveCount(1);
+
+  await step.click();
+  await expect(hint).toHaveText('Make a new drive here');
+  await page.getByTestId('ui-hint-close').click();
+  await expect(hint).toHaveCount(0);
+
+  await step.click();
+  await expect(hint).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(hint).toHaveCount(0);
 });

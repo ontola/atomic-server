@@ -3,7 +3,7 @@ import { useSettings } from '../helpers/AppSettings';
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
 import { constructOpenURL } from '../helpers/navigation';
 import { prepareTemplateDrive } from '../chunks/Templates/prepareTemplateDrive';
-import { showDriveSwitcherHint } from './driveSwitcherHint';
+import { showUiHint } from './uiHint';
 import { useNavigateWithTransition } from './useNavigateWithTransition';
 
 /** One creation at a time, so a double click or a StrictMode re-run shares it. */
@@ -32,7 +32,13 @@ export function useCreateDrive(): (options?: {
         await store.notifyResourceManuallyCreated(resource);
         // Only worth pointing at the switcher when there is a drive to go back to.
         if (previousDrive && previousDrive !== resource.subject)
-          showDriveSwitcherHint();
+          showUiHint(
+            'drive-switcher',
+            'Switch back to your previous drive here',
+            {
+              force: true,
+            },
+          );
         setDrive(resource.subject);
 
         return resource;

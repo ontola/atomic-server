@@ -3,6 +3,7 @@ import { FaFloppyDisk } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { useCurrentAgent } from '@tomic/react';
 import { Button } from '../Button';
+import { UiHint } from '../UiHint';
 import { openSaveWorkDialog } from '../SaveWork/saveWorkDialogState';
 import { useIsLinkedToAccount } from '../../hooks/useIsLinkedToAccount';
 import { useKnownPortalUrl } from '../../hooks/useKnownPortalUrl';
@@ -25,13 +26,15 @@ export function GuestSaveRow(): JSX.Element | null {
         <FaFloppyDisk aria-hidden />
         <span>Saved on this device</span>
       </Label>
-      <Button
-        subtle
-        onClick={openSaveWorkDialog}
-        data-testid='guest-save-button'
-      >
-        {portalUrl ? 'Add your email' : 'Connect a device'}
-      </Button>
+      <UiHint target='save-row'>
+        <Button
+          subtle
+          onClick={openSaveWorkDialog}
+          data-testid='guest-save-button'
+        >
+          {portalUrl ? 'Add your email' : 'Connect a device'}
+        </Button>
+      </UiHint>
     </Wrapper>
   );
 }

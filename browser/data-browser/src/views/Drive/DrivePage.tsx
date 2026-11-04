@@ -83,6 +83,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               <Row align='center' wrapItems gap='1rem'>
                 <EditableTitle
                   resource={resource}
+                  pointedAt
                   // Its subject is derived from your key: there is exactly one and
                   // it cannot be swapped. A name like "Q3 Launch" on it would be a
                   // name that lies about what the thing is.

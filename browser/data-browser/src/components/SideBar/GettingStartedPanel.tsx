@@ -30,6 +30,12 @@ import {
   SideBarMenuRowLabel,
 } from './SideBarMenuItem';
 import { SideBarPanel } from './SideBarPanel';
+import {
+  dismissUiHint,
+  previewUiHint,
+  showUiHint,
+  type UiHintTarget,
+} from '@hooks/uiHint';
 
 /**
  * The first things worth trying, as a sidebar panel on a drive of your own.
@@ -60,44 +66,85 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   const [agent] = useCurrentAgent();
   const portalUrl = useKnownPortalUrl();
   const navigate = useNavigateWithTransition();
+  const { setSideBarLocked } = useSettings();
+
+  // Hints on the page need the drawer out of the way; sidebar ones are
+  // already in view, since the step was clicked there.
+  const closeDrawer = () => {
+    if (sidebarCoversPage()) setSideBarLocked(false);
+  };
 
   if (doneCount === steps.length) return null;
 
   const copy: Record<
     OnboardingStep['id'],
-    { title: string; hint: string; run: () => void }
+    {
+      title: string;
+      hint: string;
+      run: () => void;
+      target: UiHintTarget;
+    }
   > = {
     name: {
       title: 'Name your drive',
       hint: 'Give your drive a name: a team, company, class or household',
+      target: 'drive-title',
       run: () => {
         // The title on screen may belong to a document: go to the drive's own
-        // page first, then edit its title once that page has rendered.
+        // page, where the hint points at that page's title.
+        closeDrawer();
         navigate(constructOpenURL(drive.subject));
-        editDriveTitleWhenRendered(drive.subject);
+        showUiHint('drive-title', 'Click to name your drive', {
+          scope: drive.subject,
+          force: true,
+        });
       },
     },
     project: {
       title: 'Start a drive',
       hint: 'Fill it with a starter',
-      run: () => createNewResource(server.classes.drive, agent?.subject ?? ''),
+      target: 'drive-switcher',
+      run: () =>
+        pointAt('drive-switcher', 'Make a new drive here', () =>
+          createNewResource(server.classes.drive, agent?.subject ?? ''),
+        ),
     },
     ai: {
       title: 'Talk to the AI',
       hint: 'Ask it to find, write or organize things in your drive',
-      run: () => openChat(undefined, { withoutContext: true }),
+      target: 'ai-button',
+      run: () => {
+        closeDrawer();
+        pointAt('ai-button', 'Talk to the AI here', () =>
+          openChat(undefined, { withoutContext: true }),
+        );
+      },
     },
     invite: {
       title: 'Invite someone',
       hint: 'Share a drive with a teammate or a friend',
-      run: () => projectDrive && openShareDialog(projectDrive),
+      target: 'share-button',
+      run: () => {
+        if (!projectDrive) return;
+        closeDrawer();
+        navigate(constructOpenURL(projectDrive));
+        pointAt('share-button', 'Share a drive here', () =>
+          openShareDialog(projectDrive),
+        );
+      },
     },
     save: {
       title: portalUrl ? 'Save & register' : 'Save your work',
       hint: portalUrl
         ? 'Add your email to keep it safe on every device'
         : 'Connect a device to open your work on it',
-      run: openSaveWorkDialog,
+      target: 'save-row',
+      run: () =>
+        pointAt(
+          'save-row',
+          portalUrl ? 'Add your email here' : 'Connect a device here',
+          openSaveWorkDialog,
+        ),
     },
   };
 
@@ -114,7 +161,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       }
     >
       {steps.map(step => {
-        const { title, hint, run } = copy[step.id];
+        const { title, hint, run, target } = copy[step.id];
         const need =
           step.needs === 'project'
             ? 'Start a drive first'
@@ -134,7 +181,20 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
             aria-disabled={inert}
             title={tooltip}
             data-done={step.done}
-            onClick={run}
+            onClick={() => {
+              previewUiHint(undefined);
+              dismissUiHint();
+              run();
+            }}
+            onPointerEnter={e => {
+              if (!inert && e.pointerType === 'mouse') previewUiHint(target);
+            }}
+            onPointerLeave={() => previewUiHint(undefined)}
+            onFocus={e => {
+              if (!inert && e.currentTarget.matches(':focus-visible'))
+                previewUiHint(target);
+            }}
+            onBlur={() => previewUiHint(undefined)}
           >
             <IconSlot aria-hidden>
               {step.done ? <FaCircleCheck /> : <FaRegCircle />}
@@ -147,23 +207,30 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   );
 }
 
-/** Clicks the drive page's own title, waiting up to 5s for the page to render. */
-function editDriveTitleWhenRendered(subject: string): void {
-  const deadline = Date.now() + 5000;
+/**
+ * Points at where the step is done, so people learn where things live. Falls
+ * back to doing the step when that place is not on screen (a top bar item in
+ * a More menu, say), waiting a moment for the page just navigated to.
+ */
+function pointAt(
+  target: UiHintTarget,
+  text: string,
+  fallback: () => void,
+  scope?: string,
+): void {
+  const deadline = Date.now() + 3000;
 
   const attempt = () => {
-    const title = [
-      ...document.querySelectorAll<HTMLElement>(
-        'h1[data-testid="editable-title"]',
-      ),
-    ].find(el => el.closest('main[about]')?.getAttribute('about') === subject);
-
-    if (title) title.click();
-    else if (Date.now() < deadline) setTimeout(attempt, 100);
+    if (showUiHint(target, text, { scope })) return;
+    if (Date.now() < deadline) setTimeout(attempt, 100);
+    else fallback();
   };
 
   attempt();
 }
+
+/** Below the width where the sidebar is a drawer over the page (see SideBar). */
+const sidebarCoversPage = () => window.matchMedia('(max-width: 599px)').matches;
 
 /** A sidebar menu row that is a button: same box, font and hover as the rest. */
 const StepRow = styled(SideBarMenuRow)`

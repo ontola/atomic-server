@@ -4093,6 +4093,8 @@ msgstr "Ouvrir l’espace de travail"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/UiHint.tsx
+#: src/components/UiHint.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Close"
@@ -13238,6 +13240,7 @@ msgstr "Impossible d’envoyer votre identité"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
+#: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Changer de lecteur"
 
@@ -13449,6 +13452,30 @@ msgstr "Connectez un appareil pour y ouvrir votre travail"
 msgid "Save & register"
 msgstr "Enregistrer et s'inscrire"
 
-#: src/components/SideBar/SideBarDrive.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
+msgstr ""
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Click to name your drive"
+msgstr ""
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a new drive here"
+msgstr ""
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Talk to the AI here"
+msgstr ""
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share a drive here"
+msgstr ""
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add your email here"
+msgstr ""
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Connect a device here"
 msgstr ""

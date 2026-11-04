@@ -4099,6 +4099,8 @@ msgstr "Werkruimte openen"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/UiHint.tsx
+#: src/components/UiHint.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Close"
@@ -13244,6 +13246,7 @@ msgstr "Kan je identiteit niet verzenden"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
+#: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Van schijf wisselen"
 
@@ -13455,6 +13458,30 @@ msgstr "Verbind een apparaat om je werk daarop te openen"
 msgid "Save & register"
 msgstr "Opslaan en registreren"
 
-#: src/components/SideBar/SideBarDrive.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
 msgstr "Wissel hier terug naar je vorige schijf"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Click to name your drive"
+msgstr "Klik hier om je drive een naam te geven"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a new drive here"
+msgstr "Maak hier een nieuwe drive"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Talk to the AI here"
+msgstr "Praat hier met de AI"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share a drive here"
+msgstr "Deel hier een drive"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add your email here"
+msgstr "Voeg hier je e-mailadres toe"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Connect a device here"
+msgstr "Verbind hier een apparaat"
