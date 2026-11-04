@@ -613,6 +613,25 @@ impl AtomicStore {
         .map_err(AtomicError::from)
     }
 
+    /// A document named `name` under `parent` whose body is a copy of the
+    /// document `source` (a template). Returns its subject.
+    pub async fn create_document_from(
+        &self,
+        parent: String,
+        name: String,
+        source: String,
+    ) -> Result<String, AtomicError> {
+        atomic_lib::host::create::create_document_from(
+            &self.node(),
+            self.pusher().as_ref(),
+            &parent,
+            &name,
+            &source,
+        )
+        .await
+        .map_err(AtomicError::from)
+    }
+
     /// Move `subject` under `new_parent` at `index` among the parent's children as
     /// the sidebar lists them (an index past the end appends), as the web app's
     /// drag and drop does: `parent` when it changes, a fractional `sortOrder`

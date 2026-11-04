@@ -229,6 +229,20 @@ class AtomicNode implements AtomicParts {
     }
   }
 
+  /// A document called [name] under [parent] whose body is a copy of the
+  /// document [source], such as a template. Returns its subject.
+  Future<String> createDocumentFrom(
+      {required String parent,
+      required String name,
+      required String source}) async {
+    try {
+      return await handle.createDocumentFrom(
+          parent: parent, name: name, source: source);
+    } on bridge.AtomicError catch (e) {
+      throw storeExceptionFromBridge(e);
+    }
+  }
+
   /// One call of the embedded web renderer's page (`AtomicDocumentView` of
   /// `atomic_embed`), answered from this node's store and signed by its
   /// agent: pass it as the view's `call`.

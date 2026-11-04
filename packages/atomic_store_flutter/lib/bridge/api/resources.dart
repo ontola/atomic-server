@@ -103,6 +103,11 @@ abstract class AtomicStore implements RustOpaqueInterface {
   Future<String> createDocument(
       {required String parent, required String name, required String text});
 
+  /// A document named `name` under `parent` whose body is a copy of the
+  /// document `source` (a template). Returns its subject.
+  Future<String> createDocumentFrom(
+      {required String parent, required String name, required String source});
+
   /// A signed invite for `target` (a drive or any resource): whoever opens
   /// the link `<server>/app/invite?token=<token>` and accepts gets read, or
   /// with `write` read and write, access. Stateless, like `generateInviteToken`

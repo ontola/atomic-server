@@ -15,7 +15,8 @@
 use std::{collections::BTreeMap, sync::LazyLock};
 
 use loro::{
-    ExpandType, LoroDoc, LoroList, LoroMap, LoroText, LoroValue, StyleConfig, StyleConfigMap,
+    Container, ExpandType, LoroDoc, LoroList, LoroMap, LoroText, LoroValue, StyleConfig,
+    StyleConfigMap, ValueOrContainer,
 };
 use regex::Regex;
 
@@ -84,9 +85,8 @@ static LIST_ITEM: LazyLock<Regex> =
 static TASK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[([ xX])\]\s+(.*)$").unwrap());
 static LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[([^\]]+)\]\(([^)\s]+)\)").unwrap());
 
-/// Replaces the body of `doc` with `text`. The caller saves the resource.
-pub fn write_document_text(doc: &LoroDoc, text: &str) -> AtomicResult<()> {
-    // Marks need their style registered, as the editor does on load.
+/// Marks need their style registered, as the editor does on load.
+fn configure_styles(doc: &LoroDoc) {
     let mut styles = StyleConfigMap::new();
     for name in MARK_NAMES {
         let expand = if name == "link" || name == "code" {
@@ -97,6 +97,78 @@ pub fn write_document_text(doc: &LoroDoc, text: &str) -> AtomicResult<()> {
         styles.insert(name.into(), StyleConfig { expand });
     }
     doc.config_text_style(styles);
+}
+
+/// Replaces the body of `to` with a copy of the body of `from`: the same
+/// nodes, attributes, and text with its marks. For a document made from
+/// another one, such as a template. The caller saves the resource.
+pub fn copy_document_body(from: &LoroDoc, to: &LoroDoc) -> AtomicResult<()> {
+    configure_styles(to);
+    let source = from.get_map("doc");
+    let root = to.get_map("doc");
+    root.insert("nodeName", "doc").map_err(le)?;
+    let attrs = root
+        .insert_container("attributes", LoroMap::new())
+        .map_err(le)?;
+    copy_attributes(&source, &attrs)?;
+    let children = root
+        .insert_container("children", LoroList::new())
+        .map_err(le)?;
+    if let Some(ValueOrContainer::Container(Container::List(list))) = source.get("children") {
+        copy_children(&list, &children)?;
+    }
+    to.commit();
+    Ok(())
+}
+
+fn copy_attributes(node: &LoroMap, into: &LoroMap) -> AtomicResult<()> {
+    if let Some(ValueOrContainer::Container(Container::Map(attrs))) = node.get("attributes") {
+        if let LoroValue::Map(values) = attrs.get_deep_value() {
+            for (key, value) in values.iter() {
+                into.insert(key, value.clone()).map_err(le)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn copy_children(from: &LoroList, into: &LoroList) -> AtomicResult<()> {
+    for i in 0..from.len() {
+        match from.get(i) {
+            Some(ValueOrContainer::Container(Container::Text(text))) => {
+                let copy = into.push_container(LoroText::new()).map_err(le)?;
+                copy.apply_delta(&text.to_delta()).map_err(le)?;
+            }
+            Some(ValueOrContainer::Container(Container::Map(node))) => {
+                let copy = into.push_container(LoroMap::new()).map_err(le)?;
+                if let Some(ValueOrContainer::Value(name)) = node.get("nodeName") {
+                    copy.insert("nodeName", name).map_err(le)?;
+                }
+                let attrs = copy
+                    .insert_container("attributes", LoroMap::new())
+                    .map_err(le)?;
+                copy_attributes(&node, &attrs)?;
+                let children = copy
+                    .insert_container("children", LoroList::new())
+                    .map_err(le)?;
+                if let Some(ValueOrContainer::Container(Container::List(list))) =
+                    node.get("children")
+                {
+                    copy_children(&list, &children)?;
+                }
+            }
+            Some(ValueOrContainer::Value(value)) => {
+                into.push(value).map_err(le)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Replaces the body of `doc` with `text`. The caller saves the resource.
+pub fn write_document_text(doc: &LoroDoc, text: &str) -> AtomicResult<()> {
+    configure_styles(doc);
 
     let root = doc.get_map("doc");
     root.insert("nodeName", "doc").map_err(le)?;
@@ -554,5 +626,42 @@ mod tests {
             runs[5].marks.get("link"),
             Some(&Mark::Link("https://e".into()))
         );
+    }
+
+    #[test]
+    fn a_body_is_copied_with_its_marks() {
+        let from = LoroDoc::new();
+        write_document_text(
+            &from,
+            "# Motie\n\nDe raad, **in vergadering** bijeen,\n\n- een [link](https://x.nl)",
+        )
+        .unwrap();
+        let to = LoroDoc::new();
+        write_document_text(&to, "oud").unwrap();
+        copy_document_body(&from, &to).unwrap();
+        assert_eq!(
+            from.get_map("doc").get_deep_value(),
+            to.get_map("doc").get_deep_value()
+        );
+        let delta = |d: &LoroDoc| {
+            let ValueOrContainer::Container(Container::List(children)) =
+                d.get_map("doc").get("children").unwrap()
+            else {
+                panic!()
+            };
+            let ValueOrContainer::Container(Container::Map(p)) = children.get(1).unwrap() else {
+                panic!()
+            };
+            let ValueOrContainer::Container(Container::List(runs)) = p.get("children").unwrap()
+            else {
+                panic!()
+            };
+            let ValueOrContainer::Container(Container::Text(t)) = runs.get(0).unwrap() else {
+                panic!()
+            };
+            format!("{:?}", t.to_delta())
+        };
+        assert_eq!(delta(&from), delta(&to));
+        assert!(delta(&to).contains("bold"), "{}", delta(&to));
     }
 }
