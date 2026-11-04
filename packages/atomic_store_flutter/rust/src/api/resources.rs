@@ -1280,6 +1280,59 @@ mod tests {
         assert!(!rows[0]["snapshot"].as_str().unwrap().is_empty());
     }
 
+    /// A document made from a template keeps its text when the app then
+    /// sets its own properties on it (OpenMeeting: the kind and the author).
+    #[tokio::test]
+    async fn a_template_document_keeps_its_text_through_a_property_save() {
+        let dir = temp_dir("template-doc");
+        let h = open(&dir).await;
+        let setup = h.setup("Writer".into()).await.unwrap();
+        let doc = h
+            .create_document(
+                setup.drive.clone(),
+                "Motie".into(),
+                "# Motie\n\n## Constaterende dat\n\n- er te weinig bankjes zijn".into(),
+            )
+            .await
+            .unwrap();
+        let text = |r: &atomic_lib::Resource| {
+            r.build_state_doc()
+                .unwrap()
+                .extract_document_plain_text()
+        };
+        let r = h.db.get_resource(&doc.as_str().into()).await.unwrap();
+        assert!(text(&r).contains("Constaterende dat"), "{}", text(&r));
+
+        h.save_resource_changes(
+            doc.clone(),
+            vec![PropValue {
+                property: "https://openmeeting.nl/ns/properties/docKind".into(),
+                value: scalar(Datatype::String, "motie"),
+            }],
+            vec![],
+        )
+        .await
+        .unwrap();
+        let r = h.db.get_resource(&doc.as_str().into()).await.unwrap();
+        assert!(text(&r).contains("Constaterende dat"), "{}", text(&r));
+
+        // What the embedded editor reads: the snapshot carries the body.
+        let rows: serde_json::Value = serde_json::from_str(
+            &h.embed_call(
+                "getResourcesWithSnapshots".into(),
+                serde_json::json!([[doc]]).to_string(),
+            )
+            .await
+            .unwrap(),
+        )
+        .unwrap();
+        let snapshot = rows[0]["snapshot"].as_str().unwrap();
+        assert!(snapshot.len() > 200, "{snapshot}");
+        if let Ok(out) = std::env::var("DUMP_SNAPSHOT") {
+            std::fs::write(out, rows.to_string()).unwrap();
+        }
+    }
+
     #[tokio::test]
     async fn list_edits_undo_and_redo_one_step_at_a_time() {
         let dir = temp_dir("lists");

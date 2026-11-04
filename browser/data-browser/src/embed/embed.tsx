@@ -293,6 +293,24 @@ const EmbedHeader = styled.header`
   }
 `;
 
+/** The whole page area for the resource: a locked page has no header. */
+const FullHeight = styled.div`
+  display: contents;
+  ${CalculatedPageHeight.define(OuterHeight)}
+`;
+
+/**
+ * `?lock=1`: the host shows this one resource as a screen of its own (an
+ * editor in another app, such as OpenMeeting's caucus documents). No
+ * breadcrumbs or menu, and nothing inside the page leads away from it: a
+ * link to another resource goes back to this one.
+ */
+const lockedTo = (() => {
+  const params = new URLSearchParams(location.search);
+
+  return params.get('lock') === '1' ? (params.get('subject') ?? '') : '';
+})();
+
 /** Gives the page (whose `main` scrolls) the height left under the header. */
 const BelowHeader = styled.div`
   display: contents;
@@ -393,8 +411,33 @@ const showRoute = createRoute({
       return () => cancelAnimationFrame(frame);
     }, [subject, menu]);
 
-    if (!subject || (menu && driveOf !== subject)) {
+    // A locked page stays on its resource.
+    const strayed = !!lockedTo && subject !== lockedTo;
+
+    useEffect(() => {
+      if (strayed) {
+        void router.navigate({
+          to: '/app/show',
+          search: { subject: lockedTo },
+          replace: true,
+        });
+      }
+    }, [strayed]);
+
+    if (!subject || strayed || (menu && driveOf !== subject)) {
       return null;
+    }
+
+    if (lockedTo) {
+      return (
+        <ShowFrame>
+          <FullHeight>
+            {driveOf === subject && (
+              <ResourcePage key={subject} subject={subject} />
+            )}
+          </FullHeight>
+        </ShowFrame>
+      );
     }
 
     if (menu) {

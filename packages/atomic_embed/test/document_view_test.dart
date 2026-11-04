@@ -41,6 +41,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('page')), findsOneWidget);
     expect(opened!.queryParameters['subject'], 'did:ad:doc');
+    // The page stays on the document: no breadcrumbs to walk away with.
+    expect(opened!.queryParameters['lock'], '1');
 
     send(jsonEncode({'id': 1, 'method': 'getResource', 'args': ['did:ad:doc']}));
     // Asks for something only an app with its own screens has: not the store.

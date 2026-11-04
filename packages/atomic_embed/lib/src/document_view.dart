@@ -88,12 +88,18 @@ class AtomicDocumentViewState extends State<AtomicDocumentView>
                 server.page.replace(queryParameters: {
                   'subject': widget.subject,
                   'scheme': scheme,
+                  // Only this resource: no breadcrumbs, no way out of it.
+                  'lock': '1',
                 }),
                 onMessage: onMessage,
                 pollReady: true);
           };
       final page = await make(
-          Uri(queryParameters: {'subject': widget.subject, 'scheme': scheme}),
+          Uri(queryParameters: {
+            'subject': widget.subject,
+            'scheme': scheme,
+            'lock': '1',
+          }),
           _onMessage);
       if (!mounted) {
         if (page is ReleasablePage) (page as ReleasablePage).release();
