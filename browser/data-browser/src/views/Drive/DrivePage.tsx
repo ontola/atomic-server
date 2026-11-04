@@ -25,7 +25,6 @@ import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { FileDropZone } from '@components/forms/FileDropzone/FileDropzone';
 import { DriveSettingsDialog } from './DriveSettingsDialog';
-import { GettingStartedCard } from './GettingStartedCard';
 import { EmptyDriveStart } from './EmptyDriveStart';
 import {
   ActivityFeed,
@@ -131,8 +130,6 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
             {showStart && (
               <EmptyDriveStart drive={resource.subject} onActive={setFilling} />
             )}
-
-            <GettingStartedCard drive={resource} canEdit={canEdit} />
 
             <ValueFormAddButton
               resource={resource}

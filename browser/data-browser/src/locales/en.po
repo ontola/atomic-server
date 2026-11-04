@@ -1359,13 +1359,13 @@ msgstr "Alt text"
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -2795,7 +2795,6 @@ msgstr "Empty"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Hide"
 
@@ -3492,7 +3491,7 @@ msgid "Click to add a value"
 msgstr "Click to add a value"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Rename"
 msgstr "Rename"
 
@@ -4424,8 +4423,8 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 
 #: src/components/MetaSetter.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/NewDriveRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "New drive"
 
@@ -5480,12 +5479,12 @@ msgstr "{0} resources"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: doneCount; 1: steps.length
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SyncRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
 
@@ -6545,7 +6544,7 @@ msgstr "Atomic"
 msgid "Loading chat…"
 msgstr "Loading chat…"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Set up AI"
 msgstr "Set up AI"
 
@@ -8314,8 +8313,8 @@ msgstr "<0/> Copy link"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr "Done"
 
@@ -8963,7 +8962,7 @@ msgstr "Open your drive"
 msgid "Choose a template"
 msgstr "Choose a template"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Name your drive"
 msgstr "Name your drive"
 
@@ -13009,41 +13008,39 @@ msgstr "Cloud Server isn’t on for this drive. This server only accepts it for 
 msgid "Not hosted yet"
 msgstr "Not hosted yet"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI"
 msgstr "Talk to the AI"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Ask it to find, write or organize things in your drive"
 msgstr "Ask it to find, write or organize things in your drive"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a chat"
 msgstr "Start a chat"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Invite someone"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite"
 msgstr "Invite"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Save your work"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-#: src/views/Drive/GettingStartedCard.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Getting started"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Needs an AI source: your own key or Ollama"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Not done yet"
 msgstr "Not done yet"
 
@@ -13285,19 +13282,19 @@ msgstr "Add to my account"
 msgid "Don't add, keep it in this browser only"
 msgstr "Don't add, keep it in this browser only"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Give your drive a name: a team, company, class or household"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive"
 msgstr "Start a drive"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share a drive with a teammate or a friend"
 msgstr "Share a drive with a teammate or a friend"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive first"
 msgstr "Start a drive first"
 
@@ -13320,10 +13317,6 @@ msgstr "Add to this drive"
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Or describe what you need"
 msgstr "Or describe what you need"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "Show Getting started on my drives"
 
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
@@ -13447,7 +13440,7 @@ msgstr "<0/> Add to My drives"
 msgid "Creating your drive…"
 msgstr "Creating your drive…"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Fill it with a starter"
 msgstr "Fill it with a starter"
 
@@ -13476,7 +13469,7 @@ msgstr "Keep your work"
 msgid "Add your email"
 msgstr "Add your email"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email to keep it safe on every device"
 msgstr "Add your email to keep it safe on every device"
 
@@ -13484,6 +13477,6 @@ msgstr "Add your email to keep it safe on every device"
 msgid "Saved on this device"
 msgstr "Saved on this device"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Connect a device to open your work on it"

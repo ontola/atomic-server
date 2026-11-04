@@ -1359,13 +1359,13 @@ msgstr "Teks alternatif"
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -2794,7 +2794,6 @@ msgstr "Kosong"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Sembunyikan"
 
@@ -3490,7 +3489,7 @@ msgid "Click to add a value"
 msgstr "Klik untuk menambahkan nilai"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Rename"
 msgstr "Ganti nama"
 
@@ -4422,8 +4421,8 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr "Penyimpanan lokal nonaktif, jadi server ini adalah satu-satunya sumber data. Aktifkan penyimpanan lokal di bawah untuk bekerja tanpa koneksi."
 
 #: src/components/MetaSetter.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/NewDriveRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "Drive baru"
 
@@ -5478,12 +5477,12 @@ msgstr "{0} sumber daya"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: doneCount; 1: steps.length
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SyncRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} dari {1}"
 
@@ -6543,7 +6542,7 @@ msgstr "Atomic"
 msgid "Loading chat…"
 msgstr "Memuat obrolan…"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Set up AI"
 msgstr "Siapkan AI"
 
@@ -8312,8 +8311,8 @@ msgstr "<0/> Salin tautan"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr "Selesai"
 
@@ -8960,7 +8959,7 @@ msgstr "Buka drive Anda"
 msgid "Choose a template"
 msgstr "Pilih templat"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Name your drive"
 msgstr "Beri nama drive Anda"
 
@@ -13006,41 +13005,39 @@ msgstr "Cloud Server belum aktif untuk drive ini. Server ini hanya menerimanya u
 msgid "Not hosted yet"
 msgstr "Belum dihosting"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI"
 msgstr "Bicara dengan AI"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Ask it to find, write or organize things in your drive"
 msgstr "Minta AI mencari, menulis, atau mengatur hal-hal dalam drive Anda"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a chat"
 msgstr "Mulai obrolan"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Undang seseorang"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite"
 msgstr "Undang"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Simpan pekerjaan Anda"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-#: src/views/Drive/GettingStartedCard.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Memulai"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Memerlukan sumber AI: kunci Anda sendiri atau Ollama"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Not done yet"
 msgstr "Belum selesai"
 
@@ -13282,19 +13279,19 @@ msgstr "Tambahkan ke akun saya"
 msgid "Don't add, keep it in this browser only"
 msgstr "Jangan tambahkan, simpan hanya di browser ini"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Beri nama drive Anda: tim, perusahaan, kelas, atau rumah tangga"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive"
 msgstr "Mulai drive"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share a drive with a teammate or a friend"
 msgstr "Bagikan drive dengan rekan tim atau teman"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive first"
 msgstr "Mulai drive terlebih dahulu"
 
@@ -13317,10 +13314,6 @@ msgstr "Tambahkan ke drive ini"
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Or describe what you need"
 msgstr "Atau jelaskan kebutuhan Anda"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "Tampilkan Memulai di drive saya"
 
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
@@ -13439,7 +13432,7 @@ msgstr "<0/> Tambahkan ke Drive saya"
 msgid "Creating your drive…"
 msgstr "Membuat drive Anda…"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Fill it with a starter"
 msgstr "Isi dengan templat awal"
 
@@ -13468,7 +13461,7 @@ msgstr "Simpan pekerjaanmu"
 msgid "Add your email"
 msgstr "Tambahkan emailmu"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email to keep it safe on every device"
 msgstr "Tambahkan emailmu agar aman di setiap perangkat"
 
@@ -13476,6 +13469,6 @@ msgstr "Tambahkan emailmu agar aman di setiap perangkat"
 msgid "Saved on this device"
 msgstr "Tersimpan di perangkat ini"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"

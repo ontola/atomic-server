@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { FRONTEND_URL, openDriveSettings } from './test-utils';
+import { FRONTEND_URL } from './test-utils';
 
 /**
  * A new visitor starts without an account: one tap makes a real identity on
@@ -13,15 +13,15 @@ test('Get started opens a workspace of your own, without an account', async ({
   await page.getByRole('button', { name: 'Get started' }).click();
   await expect(page).not.toHaveURL(/\/app\/welcome/, { timeout: 60_000 });
 
-  // They land on the page of the ready-made drive: the Getting started card
-  // on top, the Welcome document as its first row.
+  // They land on the page of the ready-made drive: the Getting started panel
+  // in the sidebar, the Welcome document as its first row.
   await expect(page.getByTestId('current-drive-title')).toHaveText(
     'Welcome to Atomic',
   );
-  const card = page.getByTestId('getting-started');
-  await expect(card).toBeVisible({ timeout: 30_000 });
-  await expect(card).toContainText('Getting started');
-  await expect(card).toContainText('0 of 5');
+  const panel = page.getByTestId('getting-started');
+  await expect(panel).toBeVisible({ timeout: 30_000 });
+  await expect(panel).toContainText('Getting started');
+  await expect(panel).toContainText('0 of 5');
 
   for (const step of [
     'Name your drive',
@@ -30,12 +30,12 @@ test('Get started opens a workspace of your own, without an account', async ({
     'Invite someone',
     'Save your work',
   ]) {
-    await expect(card.getByText(step, { exact: true })).toBeVisible();
+    await expect(panel.getByText(step, { exact: true })).toBeVisible();
   }
 
   // Inviting needs a drive first, and says so.
-  await expect(card.getByRole('button', { name: 'Invite' })).toBeDisabled();
-  await expect(card).toContainText('Start a drive first');
+  await expect(panel.getByRole('button', { name: 'Invite' })).toBeDisabled();
+  await expect(panel).toContainText('Start a drive first');
   await expect(
     page.getByRole('link', { name: 'Start here' }).first(),
   ).toBeVisible();
@@ -80,54 +80,31 @@ test('Get started opens a workspace of your own, without an account', async ({
   await expect(page).not.toHaveURL(/\/app\/welcome/);
 });
 
-test('Hide removes the Getting started card and it stays away after a reload', async ({
+test('The Getting started sidebar panel is open, folds away and opens again, also after a reload', async ({
   page,
 }) => {
   await page.goto(`${FRONTEND_URL}/app/welcome`);
   await page.getByRole('button', { name: 'Get started' }).click();
-  const card = page.getByTestId('getting-started');
-  await expect(card).toBeVisible({ timeout: 60_000 });
-
-  // A new drive opens with its title in edit mode, and the first click would
-  // only end that.
+  const panel = page.getByTestId('getting-started');
+  await expect(panel).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('Escape');
-  await card.getByRole('button', { name: 'Hide' }).click();
-  await expect(card).toHaveCount(0);
+
+  const fold = panel.getByRole('button', { name: /Collapse Getting started/ });
+  await fold.click();
+  await expect(panel.getByText('Name your drive')).toBeHidden();
+  await expect(panel).toContainText('0 of 5');
 
   await page.reload();
   await expect(page.getByTestId('current-drive-title')).toHaveText(
     'Welcome to Atomic',
     { timeout: 30_000 },
   );
-  await expect(card).toHaveCount(0);
-});
+  await expect(panel.getByText('Name your drive')).toBeHidden({
+    timeout: 30_000,
+  });
 
-test('Drive settings bring the Getting started card back after Hide', async ({
-  page,
-}) => {
-  await page.goto(`${FRONTEND_URL}/app/welcome`);
-  await page.getByRole('button', { name: 'Get started' }).click();
-  const card = page.getByTestId('getting-started');
-  await expect(card).toBeVisible({ timeout: 60_000 });
-  await page.keyboard.press('Escape');
-  await card.getByRole('button', { name: 'Hide' }).click();
-  await expect(card).toHaveCount(0);
-
-  const dialog = await openDriveSettings(page);
-  await dialog
-    .getByRole('checkbox', {
-      name: 'Show Getting started on my drives',
-    })
-    .check();
-  await page.keyboard.press('Escape');
-  await expect(card).toBeVisible();
-
-  await page.reload();
-  await expect(page.getByTestId('current-drive-title')).toHaveText(
-    'Welcome to Atomic',
-    { timeout: 30_000 },
-  );
-  await expect(card).toBeVisible({ timeout: 30_000 });
+  await panel.getByRole('button', { name: /Expand Getting started/ }).click();
+  await expect(panel.getByText('Name your drive')).toBeVisible();
 });
 
 test('A guest sees what to do next and the Save dialog opens in place', async ({
@@ -135,8 +112,8 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
 }) => {
   await page.goto(`${FRONTEND_URL}/app/welcome`);
   await page.getByRole('button', { name: 'Get started' }).click();
-  const card = page.getByTestId('getting-started');
-  await expect(card).toBeVisible({ timeout: 60_000 });
+  const panel = page.getByTestId('getting-started');
+  await expect(panel).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('Escape');
 
   // Not linked to an account: the sidebar says so, with the next step.
@@ -145,9 +122,9 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   // Self-hosted, with no portal: nothing here asks for an email.
   await expect(row.getByRole('button')).toHaveText('Connect a device');
 
-  // The card's Save button opens the dialog and leaves the page where it is.
+  // The panel's Save button opens the dialog and leaves the page where it is.
   const drive = page.url();
-  await card.getByRole('button', { name: 'Save', exact: true }).click();
+  await panel.getByRole('button', { name: 'Save', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(
     dialog.getByRole('heading', { name: 'Keep your work' }),

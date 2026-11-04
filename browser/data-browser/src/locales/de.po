@@ -1359,13 +1359,13 @@ msgstr "Alternativtext"
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -2795,7 +2795,6 @@ msgstr "Leer"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Ausblenden"
 
@@ -3492,7 +3491,7 @@ msgid "Click to add a value"
 msgstr "Klicken, um einen Wert hinzuzufügen"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Rename"
 msgstr "Umbenennen"
 
@@ -4421,8 +4420,8 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr "Lokaler Speicher ist deaktiviert. Dieser Server ist daher die einzige Datenquelle. Aktiviere unten den lokalen Speicher, um ohne Verbindung zu arbeiten."
 
 #: src/components/MetaSetter.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/NewDriveRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "Neues Laufwerk"
 
@@ -5477,12 +5476,12 @@ msgstr "{0} Ressourcen"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: doneCount; 1: steps.length
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SyncRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} von {1}"
 
@@ -6542,7 +6541,7 @@ msgstr "Atomic"
 msgid "Loading chat…"
 msgstr "Chat wird geladen …"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Set up AI"
 msgstr "KI einrichten"
 
@@ -8311,8 +8310,8 @@ msgstr "<0/> Link kopieren"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr "Fertig"
 
@@ -8960,7 +8959,7 @@ msgstr "Dein Laufwerk öffnen"
 msgid "Choose a template"
 msgstr "Vorlage auswählen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Name your drive"
 msgstr "Dein Laufwerk benennen"
 
@@ -13006,41 +13005,39 @@ msgstr "Cloud Server ist für dieses Laufwerk nicht aktiviert. Dieser Server akz
 msgid "Not hosted yet"
 msgstr "Noch nicht gehostet"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI"
 msgstr "Mit der KI sprechen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Ask it to find, write or organize things in your drive"
 msgstr "Bitte sie, Dinge in deinem Laufwerk zu finden, zu schreiben oder zu organisieren"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a chat"
 msgstr "Chat starten"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Jemanden einladen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite"
 msgstr "Einladen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Deine Arbeit sichern"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-#: src/views/Drive/GettingStartedCard.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Erste Schritte"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Benötigt eine KI-Quelle: deinen eigenen Schlüssel oder Ollama"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Not done yet"
 msgstr "Noch nicht erledigt"
 
@@ -13282,19 +13279,19 @@ msgstr "Zu meinem Konto hinzufügen"
 msgid "Don't add, keep it in this browser only"
 msgstr "Nicht hinzufügen, nur in diesem Browser behalten"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Benenne dein Laufwerk: ein Team, Unternehmen, eine Klasse oder einen Haushalt"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive"
 msgstr "Laufwerk starten"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share a drive with a teammate or a friend"
 msgstr "Laufwerk mit einem Teammitglied oder Freund teilen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive first"
 msgstr "Starte zuerst ein Laufwerk"
 
@@ -13317,10 +13314,6 @@ msgstr "Zu diesem Laufwerk hinzufügen"
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Or describe what you need"
 msgstr "Oder beschreibe, was du brauchst"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "„Erste Schritte“ auf meinen Laufwerken anzeigen"
 
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
@@ -13444,7 +13437,7 @@ msgstr "<0/> Zu Meine Laufwerke hinzufügen"
 msgid "Creating your drive…"
 msgstr "Dein Laufwerk wird erstellt…"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Fill it with a starter"
 msgstr "Fülle es mit einer Vorlage"
 
@@ -13473,7 +13466,7 @@ msgstr "Behalte deine Arbeit"
 msgid "Add your email"
 msgstr "E-Mail hinzufügen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email to keep it safe on every device"
 msgstr "Füge deine E-Mail-Adresse hinzu, damit es auf jedem Gerät sicher ist"
 
@@ -13481,6 +13474,6 @@ msgstr "Füge deine E-Mail-Adresse hinzu, damit es auf jedem Gerät sicher ist"
 msgid "Saved on this device"
 msgstr "Auf diesem Gerät gespeichert"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Verbinde ein Gerät, um deine Arbeit darauf zu öffnen"
