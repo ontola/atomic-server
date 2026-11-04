@@ -126,4 +126,24 @@ describe('catalog reports', () => {
     await expect(reports.send('k', '[]')).resolves.toBe(remote);
     expect(post).toHaveBeenCalledTimes(2);
   });
+
+  it('expire() asks again after an answer, but keeps sharing one in flight', async () => {
+    let resolve!: (value: unknown) => void;
+    const post = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise(r => (resolve = r)))
+      .mockResolvedValue(remote);
+    const reports = shareCatalogReports(post);
+    const first = reports.send('k', '[]');
+    reports.expire();
+    const second = reports.send('k', '[]');
+    expect(post).toHaveBeenCalledTimes(1);
+    resolve(remote);
+    await Promise.all([first, second]);
+
+    // Back online with the same catalog: the server is asked again.
+    reports.expire();
+    await reports.send('k', '[]');
+    expect(post).toHaveBeenCalledTimes(2);
+  });
 });

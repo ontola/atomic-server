@@ -118,8 +118,15 @@ export function useAccountDriveCatalog(local: string[]) {
 
     void refresh();
     const interval = window.setInterval(refresh, 30000);
-    window.addEventListener('focus', refresh);
-    window.addEventListener('online', refresh);
+
+    // Focus and reconnect must ask the server again, not reuse the last answer.
+    const refreshNow = () => {
+      catalogReports.expire();
+      void refresh();
+    };
+
+    window.addEventListener('focus', refreshNow);
+    window.addEventListener('online', refreshNow);
     const logout = onManagedLogout(() => {
       catalogReports.reset();
 
@@ -139,8 +146,8 @@ export function useAccountDriveCatalog(local: string[]) {
       sync.reset();
       logout();
       window.clearInterval(interval);
-      window.removeEventListener('focus', refresh);
-      window.removeEventListener('online', refresh);
+      window.removeEventListener('focus', refreshNow);
+      window.removeEventListener('online', refreshNow);
     };
   }, [store, agent, key]);
   const current = snapshot?.agent === agent ? snapshot : null;
