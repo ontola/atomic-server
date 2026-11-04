@@ -3,8 +3,7 @@ import { core, urls, useCurrentAgent, useResources } from '@tomic/react';
 import { canonicalizeScheme } from '@tomic/lib';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useDriveChats } from '@components/SideBar/AIPanel';
-import { readManagedAccountBinding } from '@helpers/managed/binding';
-import { isDeviceLinked } from '@helpers/managed/deviceLink';
+import { useIsLinkedToAccount } from './useIsLinkedToAccount';
 import { useLocalStorage } from './useLocalStorage';
 import { usePrivateDrive } from './usePrivateDrive';
 import { useSavedDrives } from './useSavedDrives';
@@ -21,12 +20,11 @@ export interface OnboardingStep {
 }
 
 /**
- * The card keeps three local flags per agent. Nothing is written to a drive:
+ * The card keeps two local flags per agent. Nothing is written to a drive:
  * what the card shows is derived from what exists, and these only remember a
  * choice or a fact that leaves no trace to derive from.
  */
 export const onboardingKeys = {
-  hidden: (agent?: string) => `atomic.gettingStarted.hidden:${agent}`,
   /** The drive `startWelcomeDrive` made; it stays the Welcome drive when renamed. */
   welcomeDrive: (agent?: string) => `atomic.gettingStarted.welcome:${agent}`,
   /** An invite link was made. Joining leaves rights; a link nobody used does not. */
@@ -99,10 +97,7 @@ export function useOnboardingProgress(driveName?: string) {
     onboardingKeys.invited(agent?.subject),
     false,
   );
-  const [hidden, setHidden] = useLocalStorage(
-    onboardingKeys.hidden(agent?.subject),
-    false,
-  );
+  const accountLinked = useIsLinkedToAccount();
   const base = { savedDrives, privateDrive, welcomeDrive } as OnboardingInput;
   const projects = projectDrives(base);
   const resources = useResources(projects);
@@ -123,7 +118,7 @@ export function useOnboardingProgress(driveName?: string) {
     aiAvailable: enableAI && availableProviders.length > 0,
     otherAgentsOnProjects: others,
     invited,
-    accountLinked: !!readManagedAccountBinding() || isDeviceLinked(),
+    accountLinked,
   };
   const steps = deriveOnboardingSteps(input);
 
@@ -132,7 +127,5 @@ export function useOnboardingProgress(driveName?: string) {
     /** Where Invite points: the project drive made last. */
     projectDrive: projects.at(-1),
     doneCount: steps.filter(s => s.done).length,
-    hidden,
-    hide: () => setHidden(true),
   };
 }

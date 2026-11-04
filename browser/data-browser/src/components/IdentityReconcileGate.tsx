@@ -13,6 +13,7 @@ import {
   localAgentWorkspace,
   logoutManagedSession,
   PRODUCT_NAME,
+  readManagedAccountBinding,
   sameAgent,
   syncDeviceDirectory,
   writeManagedAccountBinding,
@@ -20,6 +21,7 @@ import {
 import { applyPendingDriveHandover } from '../helpers/managed/driveHandover';
 import { importDriveCarryOver } from '../helpers/managed/driveCarryOver';
 import { handOverFrom } from '../helpers/bringAlong';
+import { onManagedSessionChanged } from '../helpers/managed/session';
 import { paths } from '../routes/paths';
 import { Button } from './Button';
 import { Column } from './Row';
@@ -258,6 +260,15 @@ export function IdentityReconcileGate({
         );
       }
 
+      // Signed in, nothing disagrees, but no binding was written yet (the
+      // account already knew this identity): record it, so "linked to an
+      // account" reads the same everywhere.
+      if (result.ok && result.managedAccount && localAgent) {
+        if (!readManagedAccountBinding()) {
+          writeManagedAccountBinding(result.managedAccount.email, localAgent);
+        }
+      }
+
       // Keep `serverUrl` pointed at the node actually hosting the active
       // drive — silently, like the agent check above. Needed once the app is
       // served from a fixed origin instead of the node's own domain: a fresh
@@ -297,6 +308,13 @@ export function IdentityReconcileGate({
 
     return () => controller.abort();
   }, [converge, reconcileAttempt]);
+
+  // A sign-in that lands without a reload (passkey, email link, device link,
+  // the Save your work dialog) is adopted at once, not at the next page load.
+  useEffect(
+    () => onManagedSessionChanged(() => setReconcileAttempt(n => n + 1)),
+    [],
+  );
 
   /** Switch this browser to the account's identity: the recover flow does it. */
   function switchToAccount() {

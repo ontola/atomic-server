@@ -40,6 +40,9 @@ import { shortcuts } from '../../actions/shortcuts';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useInbox } from '../../hooks/useInbox';
 import { useHasManagedAccount } from '../../hooks/useHasManagedAccount';
+import { useIsLinkedToAccount } from '../../hooks/useIsLinkedToAccount';
+import { fallbackAccountName } from './accountRowName';
+import { useAccountAddress } from './useAccountAddress';
 import { DropdownMenu, type DropdownItem } from '../Dropdown';
 import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
 import { IconButton } from '../IconButton/IconButton';
@@ -320,13 +323,16 @@ function AccountTrigger({
   // A local key without a profile name is a guest unless an account session
   // exists. Only say so once the account check settled with "none".
   const hasAccount = useHasManagedAccount();
+  const linked = useIsLinkedToAccount();
+  const accountAddress = useAccountAddress();
   const name = agent
     ? (agentName ??
-      (agentResource.loading
-        ? ''
-        : hasAccount === false
-          ? 'Guest'
-          : 'Signed in'))
+      fallbackAccountName({
+        loading: agentResource.loading,
+        hasAccount,
+        linked,
+        email: accountAddress,
+      }))
     : 'Login / New User';
 
   return (
@@ -355,7 +361,9 @@ function AccountTrigger({
           <FaUser aria-hidden />
         )}
       </SideBarMenuRowIcon>
-      <SideBarMenuRowLabel>{name}</SideBarMenuRowLabel>
+      <SideBarMenuRowLabel title={name || undefined}>
+        {name}
+      </SideBarMenuRowLabel>
       {unread > 0 && <UnreadDot aria-hidden />}
       <LuChevronsUpDown aria-hidden />
     </TriggerButton>

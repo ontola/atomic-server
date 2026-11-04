@@ -67,6 +67,8 @@ vi.mock('@components/Drives/PrivateDriveBadge', () => ({
 }));
 vi.mock('@components/ResourceDecorations', () => ({
   ResourceCoverImage: () => <div />,
+  TitleDecorationAffordances: () => <button>Add icon</button>,
+  IconPickerDialog: () => <div />,
 }));
 vi.mock('@components/Row', () => ({
   Column: ({ children }: { children: React.ReactNode }) => (
@@ -80,7 +82,6 @@ vi.mock('react-icons/fa6', () => ({
 vi.mock('@components/Dialog/useDialog', () => ({
   useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
-vi.mock('./GettingStartedCard', () => ({ GettingStartedCard: () => null }));
 vi.mock('./EmptyDriveStart', () => ({ EmptyDriveStart: () => <div /> }));
 vi.mock('./DriveSettingsDialog', () => ({
   DriveSettingsDialog: () => <div />,

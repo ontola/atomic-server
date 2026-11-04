@@ -141,7 +141,6 @@ msgstr "Agen AI"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -1360,13 +1359,13 @@ msgstr "Teks alternatif"
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -2795,7 +2794,6 @@ msgstr "Kosong"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Sembunyikan"
 
@@ -3491,7 +3489,7 @@ msgid "Click to add a value"
 msgstr "Klik untuk menambahkan nilai"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Rename"
 msgstr "Ganti nama"
 
@@ -4086,6 +4084,7 @@ msgstr "Memasangkan perangkat"
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Coba lagi"
@@ -4294,6 +4293,8 @@ msgstr "Data Anda berada di perangkat yang terhubung dengan Anda."
 
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GuestSaveRow.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -4419,18 +4420,9 @@ msgstr "Properti ini dikelola oleh server dan tidak dapat disunting."
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Penyimpanan lokal nonaktif, jadi server ini adalah satu-satunya sumber data. Aktifkan penyimpanan lokal di bawah untuk bekerja tanpa koneksi."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Membuat…"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Buat drive"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/NewDriveRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "Drive baru"
 
@@ -5485,12 +5477,12 @@ msgstr "{0} sumber daya"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: doneCount; 1: steps.length
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SyncRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} dari {1}"
 
@@ -6538,13 +6530,9 @@ msgstr "Tanya AI"
 msgid "<0/> Loading"
 msgstr "<0/> Memuat"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Drive saya"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Nama drive"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -6554,7 +6542,7 @@ msgstr "Atomic"
 msgid "Loading chat…"
 msgstr "Memuat obrolan…"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Set up AI"
 msgstr "Siapkan AI"
 
@@ -8323,8 +8311,8 @@ msgstr "<0/> Salin tautan"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr "Selesai"
 
@@ -8971,7 +8959,7 @@ msgstr "Buka drive Anda"
 msgid "Choose a template"
 msgstr "Pilih templat"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Name your drive"
 msgstr "Beri nama drive Anda"
 
@@ -10200,6 +10188,7 @@ msgid "You missed {0} messages while you were away"
 msgstr "Anda melewatkan {0} pesan saat tidak di sini"
 
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
 msgstr "Jangan sekarang"
 
@@ -10854,6 +10843,7 @@ msgid "Welcome"
 msgstr "Selamat datang"
 
 #: src/components/MetaSetter.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Account"
 msgstr "Akun"
 
@@ -12155,10 +12145,6 @@ msgstr "orang dapat bergabung"
 msgid "{0} Viewers are free."
 msgstr "{0} Pemirsa gratis."
 
-#: src/components/SideBar/AccountMenu.tsx
-msgid "Signed in"
-msgstr "Sudah masuk"
-
 #: src/components/Vault/VaultRestoreAction.tsx
 msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
 msgstr "Penyimpanan perangkat ini tidak merespons. Tutup jendela atau tab atomic.place lainnya, lalu coba lagi."
@@ -13016,45 +13002,39 @@ msgstr "Cloud Server belum aktif untuk drive ini. Server ini hanya menerimanya u
 msgid "Not hosted yet"
 msgstr "Belum dihosting"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI"
 msgstr "Bicara dengan AI"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Ask it to find, write or organize things in your drive"
 msgstr "Minta AI mencari, menulis, atau mengatur hal-hal dalam drive Anda"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a chat"
 msgstr "Mulai obrolan"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Undang seseorang"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite"
 msgstr "Undang"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Simpan pekerjaan Anda"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Sign up with your email, save your secret or connect a device"
-msgstr "Daftar dengan email, simpan kunci rahasia, atau hubungkan perangkat"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-#: src/views/Drive/GettingStartedCard.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Memulai"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Memerlukan sumber AI: kunci Anda sendiri atau Ollama"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Not done yet"
 msgstr "Belum selesai"
 
@@ -13296,19 +13276,19 @@ msgstr "Tambahkan ke akun saya"
 msgid "Don't add, keep it in this browser only"
 msgstr "Jangan tambahkan, simpan hanya di browser ini"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Beri nama drive Anda: tim, perusahaan, kelas, atau rumah tangga"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive"
 msgstr "Mulai drive"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share a drive with a teammate or a friend"
 msgstr "Bagikan drive dengan rekan tim atau teman"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive first"
 msgstr "Mulai drive terlebih dahulu"
 
@@ -13332,10 +13312,6 @@ msgstr "Tambahkan ke drive ini"
 msgid "Or describe what you need"
 msgstr "Atau jelaskan kebutuhan Anda"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "Tampilkan Memulai di drive saya"
-
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
 msgstr "Mulai dengan"
@@ -13355,10 +13331,6 @@ msgstr "Atau isi drive ini dengan paket awal"
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start this drive"
 msgstr "Mulai drive ini"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Beri nama, lalu isi dengan paket awal"
 
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
@@ -13441,14 +13413,51 @@ msgstr "Sunting kolom"
 msgid "Add view"
 msgstr "Tambahkan tampilan"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Tamu"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> In My drives"
-msgstr "<0/> Di Drive saya"
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Membuat drive Anda…"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> Add to My drives"
-msgstr "<0/> Tambahkan ke Drive saya"
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Fill it with a starter"
+msgstr "Isi dengan templat awal"
+
+#. 0: email
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saved as {0}"
+msgstr "Disimpan sebagai {0}"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. To open it on other devices and not lose it, connect another device."
+msgstr "Pekerjaanmu tersimpan di perangkat ini. Hubungkan perangkat lain untuk membukanya di sana dan agar tidak hilang."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saving your work to your account…"
+msgstr "Menyimpan pekerjaanmu ke akunmu…"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
+msgstr "Pekerjaanmu tersimpan di perangkat ini. Tambahkan emailmu agar bisa dibuka di perangkat lain dan tidak hilang."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Keep your work"
+msgstr "Simpan pekerjaanmu"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Add your email"
+msgstr "Tambahkan emailmu"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add your email to keep it safe on every device"
+msgstr "Tambahkan emailmu agar aman di setiap perangkat"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Saved on this device"
+msgstr "Tersimpan di perangkat ini"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Connect a device to open your work on it"
+msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"

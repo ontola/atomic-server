@@ -7,6 +7,25 @@ const listeners = new Map<
 
 export type SetLocalStorageValue<T> = (value: T | ((val: T) => T)) => void;
 
+function readItem<T>(key: string, initialValue: T, storage: Storage): T {
+  try {
+    // Get from local storage by key
+    const item = storage.getItem(key);
+
+    if (item === 'undefined') {
+      return initialValue;
+    }
+
+    // Parse stored json or if none return initialValue
+    return item ? JSON.parse(item) : initialValue;
+  } catch (error) {
+    // If error also return initialValue
+    console.error(`Error finding ${key} in localStorage:`, error);
+
+    return initialValue;
+  }
+}
+
 export function useLocalStorage<T>(
   key: string,
   initialValue: T,
@@ -14,28 +33,27 @@ export function useLocalStorage<T>(
 ): [T, SetLocalStorageValue<T>] {
   // State to store our value
   // Pass initial state function to useState so logic is only executed once
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    try {
-      // Get from local storage by key
-      const item = storage.getItem(key);
-
-      if (item === 'undefined') {
-        return initialValue;
-      }
-
-      // Parse stored json or if none return initialValue
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      // If error also return initialValue
-      console.error(`Error finding ${key} in localStorage:`, error);
-
-      return initialValue;
-    }
-  });
+  const [storedValue, setStoredValue] = useState<T>(() =>
+    readItem(key, initialValue, storage),
+  );
 
   // The latest value, kept in a ref so `setValue` keeps one identity. A setter
   // that changed after every write made effects depending on it loop (#2212).
   const valueRef = useRef(storedValue);
+
+  // The key (or storage) can change without a remount, for example when the
+  // identity behind a per-agent key switches. Re-read, or the old key's value
+  // would be shown and then written to the new key. Adjusting state during
+  // render is the React way to reset state on a prop change.
+  const [loadedFrom, setLoadedFrom] = useState({ key, storage });
+
+  if (loadedFrom.key !== key || loadedFrom.storage !== storage) {
+    const fresh = readItem(key, initialValue, storage);
+
+    setLoadedFrom({ key, storage });
+    setStoredValue(fresh);
+    valueRef.current = fresh;
+  }
 
   // Return a wrapped version of useState's setter function that
   // persists the new value to localStorage.

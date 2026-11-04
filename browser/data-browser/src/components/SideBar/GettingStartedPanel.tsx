@@ -2,6 +2,8 @@ import {
   core,
   server,
   useCurrentAgent,
+  useCanWrite,
+  useResource,
   useString,
   type Resource,
 } from '@tomic/react';
@@ -9,62 +11,51 @@ import type { JSX } from 'react';
 import { FaCircleCheck, FaRegCircle } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Button } from '@components/Button';
-import { Card } from '@components/Card';
 import { Column, Row } from '@components/Row';
+import { useSettings } from '@helpers/AppSettings';
 import { useAISidebar } from '@components/AI/AISidebarContext';
 import { openShareDialog } from '@components/Share/shareDialogState';
+import { useKnownPortalUrl } from '@hooks/useKnownPortalUrl';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
-import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
   useOnboardingProgress,
   type OnboardingStep,
 } from '@hooks/useOnboardingProgress';
 import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
-import { paths } from '../../routes/paths';
+import { openSaveWorkDialog } from '@components/SaveWork/saveWorkDialogState';
+import { SideBarPanel } from './SideBarPanel';
 
 /**
- * The first things worth trying, on the drive page of a drive of your own.
- * Every tick is derived from what exists, so deleting a drive un-ticks it;
- * only "Hide" is remembered, on this device. Drive settings can bring it back.
+ * The first things worth trying, as a sidebar panel on a drive of your own.
+ * Every tick is derived from what exists, so deleting a drive un-ticks it.
+ * Folding the panel is the panel's own, always reversible; it goes away by
+ * itself once every step is done.
  */
-export function GettingStartedCard({
-  drive,
-  canEdit,
-}: {
-  drive: Resource;
-  canEdit: boolean;
-}): JSX.Element | null {
-  const agent = useGettingStartedAgent(drive, canEdit);
-
-  // Keyed by agent: the hidden flag is stored per agent and read once.
-  return agent ? <Steps key={agent} drive={drive} /> : null;
-}
-
-/** The agent the card applies for: a drive of your own, that you can edit. */
-export function useGettingStartedAgent(
-  drive: Resource,
-  canEdit: boolean,
-): string | undefined {
+export function GettingStartedPanel(): JSX.Element | null {
+  const { drive } = useSettings();
+  const resource = useResource(drive);
+  const canEdit = useCanWrite(resource);
   const [agent] = useCurrentAgent();
-  const isPrivate = useIsPrivateDrive(drive.subject);
+  const isPrivate = useIsPrivateDrive(resource.subject);
   // Whoever made the drive is its first writer; people invited later come after.
-  const mine = (drive.get(core.properties.write) as string[] | undefined)?.[0];
+  const mine = (
+    resource.get(core.properties.write) as string[] | undefined
+  )?.[0];
 
-  return canEdit && !isPrivate && agent && mine === agent.subject
-    ? agent.subject
-    : undefined;
+  return canEdit && !isPrivate && agent && mine === agent.subject ? (
+    <Steps drive={resource} />
+  ) : null;
 }
 
 function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   const [name] = useString(drive, core.properties.name);
-  const { steps, projectDrive, doneCount, hidden, hide } =
-    useOnboardingProgress(name);
+  const { steps, projectDrive, doneCount } = useOnboardingProgress(name);
   const { openChat } = useAISidebar();
-  const navigate = useNavigateWithTransition();
   const createNewResource = useNewResourceUI();
   const [agent] = useCurrentAgent();
+  const portalUrl = useKnownPortalUrl();
 
-  if (hidden || doneCount === steps.length) return null;
+  if (doneCount === steps.length) return null;
 
   const copy: Record<
     OnboardingStep['id'],
@@ -81,7 +72,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     },
     project: {
       title: 'Start a drive',
-      hint: 'Give it a name, then fill it with a starter',
+      hint: 'Fill it with a starter',
       action: 'New drive',
       run: () => createNewResource(server.classes.drive, agent?.subject ?? ''),
     },
@@ -99,24 +90,27 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     },
     save: {
       title: 'Save your work',
-      hint: 'Sign up with your email, save your secret or connect a device',
+      hint: portalUrl
+        ? 'Add your email to keep it safe on every device'
+        : 'Connect a device to open your work on it',
       action: 'Save',
-      run: () => navigate(paths.sync),
+      run: openSaveWorkDialog,
     },
   };
 
   return (
-    <Card aria-label='Getting started' data-testid='getting-started'>
-      <Column gap='0.75rem'>
-        <Row center gap='0.75rem'>
-          <Heading>Getting started</Heading>
-          <Count>
-            {doneCount} of {steps.length}
-          </Count>
-          <Button subtle onClick={hide}>
-            Hide
-          </Button>
-        </Row>
+    <SideBarPanel
+      title='Getting started'
+      heightStorageKey='gettingStartedPanelHeight'
+      initialHeight={280}
+      data-testid='getting-started'
+      actions={
+        <Count>
+          {doneCount} of {steps.length}
+        </Count>
+      }
+    >
+      <Column gap='0.5rem'>
         {steps.map(step => {
           const { title, hint, action, run } = copy[step.id];
           const need =
@@ -128,39 +122,48 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
           const blocked = step.needs === 'project';
 
           return (
-            <Row key={step.id} center gap='0.75rem' data-done={step.done}>
+            <StepRow key={step.id} center gap='0.5rem' data-done={step.done}>
               {step.done ? (
                 <FaCircleCheck aria-label='Done' />
               ) : (
                 <FaRegCircle aria-label='Not done yet' />
               )}
-              <Text>
+              <Text title={hint}>
                 <strong>{title}</strong>
-                <small>{need ?? hint}</small>
+                {need && <small>{need}</small>}
               </Text>
-              <Button
+              <ActionButton
                 subtle
                 disabled={blocked}
                 title={blocked ? need : undefined}
                 onClick={run}
               >
                 {step.needs === 'ai-source' ? 'Set up AI' : action}
-              </Button>
-            </Row>
+              </ActionButton>
+            </StepRow>
           );
         })}
       </Column>
-    </Card>
+    </SideBarPanel>
   );
 }
 
-const Heading = styled.h2`
-  flex: 1;
-  margin: 0;
-  font-size: 1.1rem;
+const StepRow = styled(Row)`
+  padding-inline: 0.5rem;
+  font-size: 0.85rem;
+  line-height: 1.25;
+`;
+
+const ActionButton = styled(Button)`
+  flex-shrink: 0;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
 `;
 
 const Count = styled.small`
+  white-space: nowrap;
+  padding-right: 0.5rem;
   color: ${p => p.theme.colors.textLight};
 `;
 
@@ -171,6 +174,7 @@ const Text = styled.span`
   min-width: 0;
 
   small {
+    font-size: 0.7rem;
     color: ${p => p.theme.colors.textLight};
   }
 `;

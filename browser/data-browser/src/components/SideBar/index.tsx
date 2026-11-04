@@ -15,6 +15,7 @@ import {
 } from '../../hooks/useResizable';
 import { useCombineRefs } from '../../hooks/useCombineRefs';
 import { AccountMenu } from './AccountMenu';
+import { GuestSaveRow } from './GuestSaveRow';
 import { SideBarHomePanels } from './SideBarHomePanels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useSidebarSwipe } from '../../hooks/useSidebarSwipe';
@@ -26,6 +27,7 @@ import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
 import { CalculatedPageHeight } from '../../globalCssVars';
 import { AIChatsPanel } from './AIPanel';
+import { GettingStartedPanel } from './GettingStartedPanel';
 import { ChromeTheme } from '../../styling';
 import { PanelBackdrop, PanelLayout, panelTransition } from '../PanelLayout';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
@@ -149,6 +151,7 @@ export function SideBar(): JSX.Element {
             <SidebarDropZones draggingResource={draggingResource} />
             <MenuWrapper $hidden={!!draggingResource}>
               <Column gap='0.125rem' align='stretch'>
+                <GettingStartedPanel key={drive} />
                 <SideBarHomePanels onItemClick={closeSideBar} />
                 {enabledPanels.has(Panel.AIChats) && (
                   <AIChatsPanel key={drive} />
@@ -164,6 +167,7 @@ export function SideBar(): JSX.Element {
                     <OntologiesPanel />
                   </SideBarPanel>
                 )}
+                <GuestSaveRow />
                 <AccountMenu onItemClick={closeSideBar} />
               </Column>
             </MenuWrapper>

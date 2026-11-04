@@ -305,7 +305,14 @@ export function TitleIcon({
 export function TitleDecorationAffordances({
   resource,
   onPickIcon,
-}: TitleIconProps): JSX.Element | null {
+  bare,
+}: TitleIconProps & {
+  /**
+   * Render only the buttons, always visible, so the caller can lay them out in
+   * its own row (the drive page header) instead of the hover-revealed row.
+   */
+  bare?: boolean;
+}): JSX.Element | null {
   const canEdit = useCanWrite(resource);
   const [emoji] = useString(resource, dataBrowser.properties.emoji, valueOpts);
   const [iconImage] = useSubject(resource, dataBrowser.properties.icon);
@@ -318,20 +325,24 @@ export function TitleDecorationAffordances({
     return null;
   }
 
+  const buttons = (
+    <>
+      {!hasIcon && (
+        <Button ghost onClick={onPickIcon}>
+          <FaFaceSmile key='icon' aria-hidden /> Add icon
+        </Button>
+      )}
+      {!cover && (
+        <Button ghost onClick={() => setShowPicker(true)}>
+          <FaImage key='cover' aria-hidden /> Add cover
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <>
-      <AffordanceRow gap='0.5rem'>
-        {!hasIcon && (
-          <Button ghost onClick={onPickIcon}>
-            <FaFaceSmile key='icon' aria-hidden /> Add icon
-          </Button>
-        )}
-        {!cover && (
-          <Button ghost onClick={() => setShowPicker(true)}>
-            <FaImage key='cover' aria-hidden /> Add cover
-          </Button>
-        )}
-      </AffordanceRow>
+      {bare ? buttons : <AffordanceRow gap='0.5rem'>{buttons}</AffordanceRow>}
       {!cover && (
         <CoverPicker
           resource={resource}

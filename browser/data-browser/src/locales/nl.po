@@ -141,7 +141,6 @@ msgstr "AI-agenten"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -1360,13 +1359,13 @@ msgstr "Alternatieve tekst"
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -2796,7 +2795,6 @@ msgstr "Leeg"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Verbergen"
 
@@ -3493,7 +3491,7 @@ msgid "Click to add a value"
 msgstr "Klik om een waarde toe te voegen"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Rename"
 msgstr "Hernoemen"
 
@@ -4088,6 +4086,7 @@ msgstr "Apparaat koppelen"
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Opnieuw proberen"
@@ -4296,6 +4295,8 @@ msgstr "Je gegevens staan op het apparaat waarmee je verbonden bent."
 
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GuestSaveRow.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -4421,18 +4422,9 @@ msgstr "Deze eigenschap wordt door de server beheerd en kan niet worden bewerkt.
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Lokale opslag is uitgeschakeld, dus deze server is de enige gegevensbron. Schakel hieronder lokale opslag in om zonder verbinding te werken."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Maken…"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Schijf maken"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/NewDriveRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "Nieuwe schijf"
 
@@ -5487,12 +5479,12 @@ msgstr "{0} resources"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: doneCount; 1: steps.length
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SyncRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} van {1}"
 
@@ -6540,13 +6532,9 @@ msgstr "Vraag AI"
 msgid "<0/> Loading"
 msgstr "<0/> Laden"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Mijn schijf"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Schijfnaam"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -6556,7 +6544,7 @@ msgstr "Atomic"
 msgid "Loading chat…"
 msgstr "Chat laden…"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Set up AI"
 msgstr "AI instellen"
 
@@ -8325,8 +8313,8 @@ msgstr "<0/> Link kopiëren"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr "Klaar"
 
@@ -8974,7 +8962,7 @@ msgstr "Je schijf openen"
 msgid "Choose a template"
 msgstr "Kies een sjabloon"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Name your drive"
 msgstr "Geef je schijf een naam"
 
@@ -10203,6 +10191,7 @@ msgid "You missed {0} messages while you were away"
 msgstr "Je hebt {0} berichten gemist terwijl je weg was"
 
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
 msgstr "Niet nu"
 
@@ -10857,6 +10846,7 @@ msgid "Welcome"
 msgstr "Welkom"
 
 #: src/components/MetaSetter.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Account"
 msgstr "Account"
 
@@ -12158,10 +12148,6 @@ msgstr "personen kunnen deelnemen"
 msgid "{0} Viewers are free."
 msgstr "{0} Kijkers zijn gratis."
 
-#: src/components/SideBar/AccountMenu.tsx
-msgid "Signed in"
-msgstr "Ingelogd"
-
 #: src/components/Vault/VaultRestoreAction.tsx
 msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
 msgstr "De opslag van dit apparaat reageert niet. Sluit andere atomic.place-vensters of -tabbladen en probeer het opnieuw."
@@ -13019,45 +13005,39 @@ msgstr "Cloud Server staat niet aan voor deze schijf. Deze server accepteert de 
 msgid "Not hosted yet"
 msgstr "Nog niet gehost"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI"
 msgstr "Praat met de AI"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Ask it to find, write or organize things in your drive"
 msgstr "Vraag om dingen op je schijf te vinden, schrijven of ordenen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a chat"
 msgstr "Een chat starten"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Iemand uitnodigen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite"
 msgstr "Uitnodigen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Sla je werk op"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Sign up with your email, save your secret or connect a device"
-msgstr "Meld je aan met je e-mail, bewaar je geheime sleutel of verbind een apparaat"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-#: src/views/Drive/GettingStartedCard.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Aan de slag"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Vereist een AI-bron: je eigen sleutel of Ollama"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Not done yet"
 msgstr "Nog niet klaar"
 
@@ -13299,19 +13279,19 @@ msgstr "Aan mijn account toevoegen"
 msgid "Don't add, keep it in this browser only"
 msgstr "Niet toevoegen, alleen in deze browser bewaren"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Geef je schijf een naam: een team, bedrijf, klas of huishouden"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive"
 msgstr "Een schijf starten"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share a drive with a teammate or a friend"
 msgstr "Deel een schijf met een teamgenoot of vriend"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Start a drive first"
 msgstr "Start eerst een schijf"
 
@@ -13335,10 +13315,6 @@ msgstr "Aan deze schijf toevoegen"
 msgid "Or describe what you need"
 msgstr "Of beschrijf wat je nodig hebt"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "Aan de slag tonen op mijn schijven"
-
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
 msgstr "Begin met"
@@ -13358,10 +13334,6 @@ msgstr "Of vul deze schijf met een startpakket"
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start this drive"
 msgstr "Deze schijf starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Geef deze een naam en vul deze met een startpakket"
 
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
@@ -13449,14 +13421,51 @@ msgstr "Kolom bewerken"
 msgid "Add view"
 msgstr "Weergave toevoegen"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Gast"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> In My drives"
-msgstr "<0/> In Mijn schijven"
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Je schijf wordt gemaakt…"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> Add to My drives"
-msgstr "<0/> Toevoegen aan Mijn schijven"
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Fill it with a starter"
+msgstr "Vul hem met een starter"
+
+#. 0: email
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saved as {0}"
+msgstr "Opgeslagen als {0}"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. To open it on other devices and not lose it, connect another device."
+msgstr "Je werk staat op dit apparaat. Verbind een ander apparaat om het ook daar te openen en het niet kwijt te raken."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saving your work to your account…"
+msgstr "Je werk wordt opgeslagen in je account…"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
+msgstr "Je werk staat op dit apparaat. Voeg je e-mailadres toe, dan kun je het op andere apparaten openen en raak je het niet kwijt."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Keep your work"
+msgstr "Bewaar je werk"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Add your email"
+msgstr "Voeg je e-mail toe"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add your email to keep it safe on every device"
+msgstr "Voeg je e-mail toe om het veilig te houden op elk apparaat"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Saved on this device"
+msgstr "Opgeslagen op dit apparaat"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Connect a device to open your work on it"
+msgstr "Verbind een apparaat om je werk daarop te openen"
