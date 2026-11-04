@@ -260,4 +260,27 @@ mod tests {
         move_resource(&d.node, &pushed, &b, &a, 0).await.unwrap();
         assert_eq!(pushed.0.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
+
+    #[tokio::test]
+    async fn a_resource_moved_to_another_drive_is_listed_there() {
+        let d = Device::new().await;
+        let other = d.store.create_drive("Raad").await.unwrap();
+        let item = folder(&d, &other, "Agendapunt").await;
+        let doc = folder(&d, &d.drive, "Motie").await;
+
+        move_resource(&d.node, &NoPush, &doc, &item, 0)
+            .await
+            .unwrap();
+        assert_eq!(order(&d, &item).await, ["Motie"]);
+        assert!(!order(&d, &d.drive).await.contains(&"Motie".to_string()));
+
+        // A later edit keeps it there: `drive` is not read back from before.
+        let mut r = d.store.get_resource(&doc.as_str().into()).await.unwrap();
+        r.set_unsafe(urls::NAME.into(), Value::String("Motie 2".into()))
+            .unwrap();
+        d.node.save_locally(&mut r).await.unwrap();
+        let r = d.store.get_resource(&doc.as_str().into()).await.unwrap();
+        assert_eq!(r.get(urls::DRIVE_PROP).unwrap().to_string(), other);
+        assert_eq!(order(&d, &item).await, ["Motie 2"]);
+    }
 }
