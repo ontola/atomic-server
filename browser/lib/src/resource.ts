@@ -1902,6 +1902,15 @@ export class Resource<C extends OptionalClass = any> {
       if (!this._loroDoc) {
         this.#cache = resourceB.#cache;
         this._auxValues = new Map(resourceB._auxValues);
+
+        // Loro is still loading, so the incoming state is only bytes: take
+        // them, or `getLoroDoc()` later builds this doc from the JSON alone.
+        // A document's body is in no JSON property, so its editor opened
+        // empty and saved that empty body over the real one.
+        if (incomingSnapshot?.length) {
+          this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
+          this.materializeWhenLoroLoads();
+        }
       }
     }
 
@@ -4266,6 +4275,20 @@ export class Resource<C extends OptionalClass = any> {
     this.resetLoroState();
   }
 
+  /** Imports the buffered snapshot bytes once Loro has loaded, and tells the
+   * store, so whatever shows this resource renders it from its full state. */
+  private materializeWhenLoroLoads(): void {
+    LoroLoader.onReady(() => {
+      if (!this._loroDoc && this._loroSnapshotBytes) {
+        this.getLoroDoc();
+        // Re-notify THROUGH THE STORE — `useResource`/`useValue` re-render
+        // only on `store.notify` (snapshot-tuple bump), NOT on the Resource's
+        // own eventManager.
+        this._store?.notifyResourceUpdated(this);
+      }
+    });
+  }
+
   /** Import committed Loro bytes (snapshot or update) into the doc.
    *  Returns `{ complete }` — `false` when the bytes couldn't fully
    *  apply (threw, or left pending ops awaiting base deps we don't
@@ -4320,15 +4343,7 @@ export class Resource<C extends OptionalClass = any> {
       // `initializedFromSnapshot` branch). Without this, the resource is stuck
       // showing its bare subject until something else pokes it — the flaky "dev
       // drive sometimes doesn't show" bug.
-      LoroLoader.onReady(() => {
-        if (!this._loroDoc && this._loroSnapshotBytes) {
-          this.getLoroDoc();
-          // Re-notify THROUGH THE STORE — `useResource`/`useValue` re-render
-          // only on `store.notify` (snapshot-tuple bump), NOT on the Resource's
-          // own eventManager.
-          this._store?.notifyResourceUpdated(this);
-        }
-      });
+      this.materializeWhenLoroLoads();
 
       // Not applied yet, but not a failure — `getLoroDoc()` will
       // import the buffer and the `loading` getter keeps it gated.
