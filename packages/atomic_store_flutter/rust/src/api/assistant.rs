@@ -464,13 +464,17 @@ impl AtomicStore {
     /// on `about` as this device's agent, as the web app's comment panel does.
     /// It lands in the `Comments` folder of `drive` (the drive of `about` when
     /// `None`), so that drive's readers read it. `reply_to` is the `id` of the
-    /// comment answered. Returns the comment's id (`<page>#<key>`).
+    /// comment answered. `anchor` places it at a spot in `about` (a W3C Web
+    /// Annotation `FragmentSelector` value; for a PDF an RFC 3778 fragment
+    /// such as `page=3&viewrect=120,300,0,0`); `readComments` gives it back.
+    /// Returns the comment's id (`<page>#<key>`).
     pub async fn post_comment(
         &self,
         about: String,
         drive: Option<String>,
         text: String,
         reply_to: Option<String>,
+        anchor: Option<String>,
     ) -> Result<String, AtomicError> {
         atomic_lib::host::comments::post_comment(
             &self.node(),
@@ -479,6 +483,7 @@ impl AtomicStore {
             drive.as_deref(),
             &text,
             reply_to.as_deref(),
+            anchor.as_deref(),
         )
         .await
         .map_err(AtomicError::from)

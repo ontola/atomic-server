@@ -289,12 +289,16 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// on `about` as this device's agent, as the web app's comment panel does.
   /// It lands in the `Comments` folder of `drive` (the drive of `about` when
   /// `None`), so that drive's readers read it. `reply_to` is the `id` of the
-  /// comment answered. Returns the comment's id (`<page>#<key>`).
+  /// comment answered. `anchor` places it at a spot in `about` (a W3C Web
+  /// Annotation `FragmentSelector` value; for a PDF an RFC 3778 fragment
+  /// such as `page=3&viewrect=120,300,0,0`); `readComments` gives it back.
+  /// Returns the comment's id (`<page>#<key>`).
   Future<String> postComment(
       {required String about,
       String? drive,
       required String text,
-      String? replyTo});
+      String? replyTo,
+      String? anchor});
 
   /// The profile of the signing agent: what the store holds, else what the
   /// connected server has.

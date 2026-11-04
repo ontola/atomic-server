@@ -46,6 +46,11 @@ nothing lasting.
     `r` reply-to entry key, `e` edited-at, `k` extra kinds (`FollowEvent`).
   - AI chat: `role` and `parts` (the parts that are now child resources).
   - DMs: `s` the sealed payload instead of `t`.
+  - Comments: optional `sel`, where in the commented resource the comment is
+    placed (a W3C Web Annotation `FragmentSelector` value; for a PDF an RFC
+    3778 fragment `page=3&viewrect=120,300,0,0`). OpenMeeting's notes on a
+    PDF are comments with a `sel`; readers that do not know it show a plain
+    comment.
 - **Delete:** remove the key.
 - **Link to one message:** `<page subject>#<entry key>`.
 

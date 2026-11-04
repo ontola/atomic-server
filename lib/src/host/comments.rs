@@ -30,6 +30,10 @@ use serde_json::{json, Value as Json};
 /// names it.
 pub const COMMENTS_FOLDER_NAME: &str = "Comments";
 
+/// Entry field holding where in `about` a comment is placed (a W3C Web
+/// Annotation `FragmentSelector` value, see [`post_comment`]).
+pub const FIELD_ANCHOR: &str = "sel";
+
 /// The `Comments` folder of `drive`, created (and pointed to from the drive)
 /// on first use, as the web app's `getOrCreateCommentsFolder` does. A pointer
 /// to a folder that no longer exists is stale and replaced; any other read
@@ -188,7 +192,9 @@ pub fn mentions(text: &str) -> Vec<String> {
 /// about, author, mine, text, c, reply_to?, edited?, mentions}]`: `id` is
 /// `<page>#<key>`, `drive` the drive the page lives in (its audience),
 /// `reply_to` the `id` answered, `edited` the time of the last edit (ms) and
-/// `mentions` the subjects mentioned in the text. Read from the local store.
+/// `mentions` the subjects mentioned in the text, and `anchor` where in `about`
+/// the comment is placed, when it is (see [`post_comment`]). Read from the
+/// local store.
 pub async fn read_comments(
     store: &Db,
     about: Option<&str>,
@@ -242,6 +248,9 @@ pub async fn read_comments(
             if let Some(e) = entry.edited_at {
                 comment["edited"] = json!(e);
             }
+            if let Some(loro::LoroValue::String(a)) = entry.extra.get(FIELD_ANCHOR) {
+                comment["anchor"] = json!(a.to_string());
+            }
             let c = entry.created_at;
             out.push((c, key, comment));
         }
@@ -256,6 +265,12 @@ pub async fn read_comments(
 /// answered. The entry goes on the newest page about `about` in that drive
 /// with room, or on a new page in the drive's `Comments` folder. Returns the
 /// entry's id (`<page>#<key>`).
+///
+/// `anchor` places the comment at a spot in `about`: the value of a W3C Web
+/// Annotation `FragmentSelector`, for a PDF an RFC 3778 fragment such as
+/// `page=3&viewrect=120,300,0,0` (PDF points from the top left). Stored as
+/// the entry's `sel` field; a reader that does not know it shows a plain
+/// comment.
 pub async fn post_comment(
     node: &AtomicNode,
     pusher: &dyn LocalWritePusher,
@@ -263,6 +278,7 @@ pub async fn post_comment(
     drive: Option<&str>,
     text: &str,
     reply_to: Option<&str>,
+    anchor: Option<&str>,
 ) -> AtomicResult<String> {
     let text = text.trim();
     if text.is_empty() {
@@ -281,6 +297,9 @@ pub async fn post_comment(
     let author = store.get_default_agent()?.subject.to_string();
     let mut entry = Entry::new(author, text, crate::utils::now());
     entry.reply_to = reply_to.filter(|r| !r.is_empty()).map(str::to_string);
+    if let Some(anchor) = anchor.map(str::trim).filter(|a| !a.is_empty()) {
+        entry.extra.insert(FIELD_ANCHOR.into(), anchor.into());
+    }
 
     append_to_log(
         node,
@@ -372,10 +391,10 @@ mod tests {
     async fn a_comment_lands_in_the_comments_folder_and_is_read_back() {
         let d = Device::new().await;
         let doc = doc_in(&d, &d.drive, "Raadsvoorstel").await;
-        let first = post_comment(&d.node, &NoPush, &doc, None, "Eens", None)
+        let first = post_comment(&d.node, &NoPush, &doc, None, "Eens", None, None)
             .await
             .unwrap();
-        let second = post_comment(&d.node, &NoPush, &doc, None, "Ik niet", Some(&first))
+        let second = post_comment(&d.node, &NoPush, &doc, None, "Ik niet", Some(&first), None)
             .await
             .unwrap();
         // One page, in the drive's Comments folder, about the document.
@@ -419,10 +438,10 @@ mod tests {
         let d = Device::new().await;
         let doc = doc_in(&d, &d.drive, "Raadsvoorstel").await;
         let team = d.store.create_drive("Fractie").await.unwrap();
-        post_comment(&d.node, &NoPush, &doc, None, "Openbaar", None)
+        post_comment(&d.node, &NoPush, &doc, None, "Openbaar", None, None)
             .await
             .unwrap();
-        post_comment(&d.node, &NoPush, &doc, Some(&team), "Alleen fractie", None)
+        post_comment(&d.node, &NoPush, &doc, Some(&team), "Alleen fractie", None, None)
             .await
             .unwrap();
         let all = read_comments(&d.store, Some(&doc), None).await.unwrap();
@@ -436,10 +455,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_placed_comment_keeps_its_anchor_through_an_edit() {
+        let d = Device::new().await;
+        let doc = doc_in(&d, &d.drive, "Motie").await;
+        let at = "page=3&viewrect=120,300,0,0";
+        let id = post_comment(&d.node, &NoPush, &doc, None, "Hier", None, Some(at))
+            .await
+            .unwrap();
+        post_comment(&d.node, &NoPush, &doc, None, "Algemeen", None, None)
+            .await
+            .unwrap();
+        edit_comment(&d.node, &NoPush, &id, "Precies hier").await.unwrap();
+        let comments = read_comments(&d.store, Some(&doc), None).await.unwrap();
+        assert_eq!(comments[0]["text"], "Precies hier");
+        assert_eq!(comments[0]["anchor"], at);
+        assert!(comments[1].get("anchor").is_none());
+    }
+
+    #[tokio::test]
     async fn an_own_comment_can_be_edited_and_deleted() {
         let d = Device::new().await;
         let doc = doc_in(&d, &d.drive, "Motie").await;
-        let id = post_comment(&d.node, &NoPush, &doc, None, "Eerst", None)
+        let id = post_comment(&d.node, &NoPush, &doc, None, "Eerst", None, None)
             .await
             .unwrap();
         edit_comment(&d.node, &NoPush, &id, "Daarna").await.unwrap();
@@ -451,7 +488,7 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
-        assert!(post_comment(&d.node, &NoPush, &doc, None, "  ", None)
+        assert!(post_comment(&d.node, &NoPush, &doc, None, "  ", None, None)
             .await
             .is_err());
     }

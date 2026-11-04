@@ -2338,6 +2338,7 @@ fn wire__crate__api__resources__AtomicStore_post_comment_impl(
             let api_drive = <Option<String>>::sse_decode(&mut deserializer);
             let api_text = <String>::sse_decode(&mut deserializer);
             let api_reply_to = <Option<String>>::sse_decode(&mut deserializer);
+            let api_anchor = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, crate::api::error::AtomicError>(
@@ -2365,6 +2366,7 @@ fn wire__crate__api__resources__AtomicStore_post_comment_impl(
                             api_drive,
                             api_text,
                             api_reply_to,
+                            api_anchor,
                         )
                         .await?;
                         Ok(output_ok)

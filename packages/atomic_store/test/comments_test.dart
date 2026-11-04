@@ -54,4 +54,17 @@ void main() {
     expect(c.replyTo, 'p#j');
     expect(c.mentions, ['m']);
   });
+
+  test('a comment placed on a PDF keeps its spot', () async {
+    final backend = InMemoryBackend();
+    final c = Store(backend: backend).comments!;
+    const spot = PdfSpot(3, 120.25, 300);
+    expect(spot.anchor, 'page=3&viewrect=120.3,300.0,0,0');
+    final id = await c.postComment('did:ad:doc', 'Hier', anchor: spot.anchor);
+    await c.editComment(id, 'Precies hier');
+    final read = (await c.readComments(about: 'did:ad:doc')).single;
+    expect(PdfSpot.parse(read.anchor), const PdfSpot(3, 120.3, 300));
+    expect(PdfSpot.parse('page=2'), const PdfSpot(2, 0, 0));
+    expect(PdfSpot.parse('t=10'), isNull);
+  });
 }

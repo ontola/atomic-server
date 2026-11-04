@@ -311,18 +311,20 @@ class InMemoryBackend
         if ((about == null || c.about == about) &&
             (drive == null || c.drive == drive))
           _comment(c.id, c.page, c.about, c.drive, c.author, c.text,
-              c.createdAt, c.replyTo, c.editedAt)
+              c.createdAt, c.replyTo, c.editedAt,
+              anchor: c.anchor)
     ];
   }
 
   @override
   Future<String> postComment(String about, String text,
-      {String? drive, String? replyTo}) async {
+      {String? drive, String? replyTo, String? anchor}) async {
     _enter('postComment $about');
     final page = 'did:ad:test:comments:${Uri.encodeComponent(about)}';
     final id = '$page#${++_next}';
     comments.add(_comment(id, page, about, drive ?? _driveOf(about), agent,
-        text, DateTime.now(), replyTo, null));
+        text, DateTime.now(), replyTo, null,
+        anchor: anchor == null || anchor.trim().isEmpty ? null : anchor));
     _emit(page, ResourceEventKind.changed);
     return id;
   }
@@ -333,7 +335,8 @@ class InMemoryBackend
     final i = comments.indexWhere((c) => c.id == id);
     final c = comments[i];
     comments[i] = _comment(id, c.page, c.about, c.drive, c.author, text,
-        c.createdAt, c.replyTo, DateTime.now());
+        c.createdAt, c.replyTo, DateTime.now(),
+        anchor: c.anchor);
     _emit(c.page, ResourceEventKind.changed);
   }
 
@@ -354,8 +357,10 @@ class InMemoryBackend
           String text,
           DateTime at,
           String? replyTo,
-          DateTime? edited) =>
+          DateTime? edited,
+          {String? anchor}) =>
       Comment(
+        anchor: anchor,
         id: id,
         page: page,
         about: about,

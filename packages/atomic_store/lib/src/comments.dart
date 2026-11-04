@@ -18,6 +18,7 @@ class Comment {
     this.replyTo,
     this.editedAt,
     this.mentions = const [],
+    this.anchor,
   });
 
   /// `<page>#<key>`: what [CommentsBackend.editComment] and
@@ -50,6 +51,12 @@ class Comment {
   /// The subjects mentioned in [text], in order, each once.
   final List<String> mentions;
 
+  /// Where in [about] the comment is placed, when it is: the value of a W3C
+  /// Web Annotation `FragmentSelector`; for a PDF an RFC 3778 fragment such
+  /// as `page=3&viewrect=120,300,0,0` (PDF points from the top left). See
+  /// [PdfSpot] to make and read one.
+  final String? anchor;
+
   /// From the JSON the bridge's `readComments` gives.
   factory Comment.fromJson(Map<String, dynamic> json) => Comment(
         id: json['id'] as String? ?? '',
@@ -70,6 +77,7 @@ class Comment {
           for (final m in json['mentions'] as List? ?? const [])
             if (m is String) m
         ],
+        anchor: json['anchor'] as String?,
       );
 
   /// The mention markup of the web app for [subject], shown as [label].
@@ -102,12 +110,47 @@ abstract interface class CommentsBackend {
 
   /// Comment [text] on [about] as this store's agent, in [drive] (the drive of
   /// [about] when null). Returns the comment's id.
+  /// With [anchor], the comment is placed at that spot in [about]
+  /// ([Comment.anchor]).
   Future<String> postComment(String about, String text,
-      {String? drive, String? replyTo});
+      {String? drive, String? replyTo, String? anchor});
 
   /// Replace the text of an own comment.
   Future<void> editComment(String id, String text);
 
   /// Remove an own comment.
   Future<void> deleteComment(String id);
+}
+
+/// A spot on a page of a PDF, as a [Comment.anchor]: the RFC 3778 fragment
+/// `page=<n>&viewrect=<x>,<y>,0,0` (PDF points from the top left).
+class PdfSpot {
+  const PdfSpot(this.page, this.x, this.y);
+
+  final int page;
+  final double x;
+  final double y;
+
+  /// The [Comment.anchor] for this spot.
+  String get anchor => 'page=$page&viewrect=${_n(x)},${_n(y)},0,0';
+
+  static String _n(double v) => ((v * 10).round() / 10).toString();
+
+  /// The spot [anchor] names; null for an anchor that is not a PDF spot.
+  static PdfSpot? parse(String? anchor) {
+    if (anchor == null) return null;
+    final m = RegExp(r'(?:^|&)page=(\d+)(?:&viewrect=([-\d.]+),([-\d.]+))?')
+        .firstMatch(anchor);
+    if (m == null) return null;
+    final page = int.parse(m.group(1)!);
+    return PdfSpot(page, double.tryParse(m.group(2) ?? '') ?? 0,
+        double.tryParse(m.group(3) ?? '') ?? 0);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is PdfSpot && other.page == page && other.x == x && other.y == y;
+
+  @override
+  int get hashCode => Object.hash(page, x, y);
 }

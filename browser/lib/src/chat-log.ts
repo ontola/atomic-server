@@ -33,6 +33,12 @@ export interface ChatLogEntry {
   e?: number;
   /** Extra kinds, for example `FollowEvent`. */
   k?: JSONValue;
+  /**
+   * Where in the commented resource a comment is placed: a W3C Web Annotation
+   * `FragmentSelector` value, for a PDF an RFC 3778 fragment such as
+   * `page=3&viewrect=120,300,0,0`. Written by the Flutter apps (OpenMeeting).
+   */
+  sel?: string;
   /** Further fields pass through untouched. */
   [extra: string]: JSONValue | undefined;
 }

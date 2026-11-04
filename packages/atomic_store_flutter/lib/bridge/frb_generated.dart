@@ -246,7 +246,8 @@ abstract class RustLibApi extends BaseApi {
       required String about,
       String? drive,
       required String text,
-      String? replyTo});
+      String? replyTo,
+      String? anchor});
 
   Future<ProfileInfo> crateApiResourcesAtomicStoreProfile(
       {required AtomicStore that});
@@ -1856,7 +1857,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       required String about,
       String? drive,
       required String text,
-      String? replyTo}) {
+      String? replyTo,
+      String? anchor}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1866,6 +1868,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(drive, serializer);
         sse_encode_String(text, serializer);
         sse_encode_opt_String(replyTo, serializer);
+        sse_encode_opt_String(anchor, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 40, port: port_);
       },
@@ -1874,7 +1877,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_atomic_error,
       ),
       constMeta: kCrateApiResourcesAtomicStorePostCommentConstMeta,
-      argValues: [that, about, drive, text, replyTo],
+      argValues: [that, about, drive, text, replyTo, anchor],
       apiImpl: this,
     ));
   }
@@ -1882,7 +1885,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiResourcesAtomicStorePostCommentConstMeta =>
       const TaskConstMeta(
         debugName: "AtomicStore_post_comment",
-        argNames: ["that", "about", "drive", "text", "replyTo"],
+        argNames: ["that", "about", "drive", "text", "replyTo", "anchor"],
       );
 
   @override
@@ -8331,14 +8334,23 @@ class AtomicStoreImpl extends RustOpaque implements AtomicStore {
   /// on `about` as this device's agent, as the web app's comment panel does.
   /// It lands in the `Comments` folder of `drive` (the drive of `about` when
   /// `None`), so that drive's readers read it. `reply_to` is the `id` of the
-  /// comment answered. Returns the comment's id (`<page>#<key>`).
+  /// comment answered. `anchor` places it at a spot in `about` (a W3C Web
+  /// Annotation `FragmentSelector` value; for a PDF an RFC 3778 fragment
+  /// such as `page=3&viewrect=120,300,0,0`); `readComments` gives it back.
+  /// Returns the comment's id (`<page>#<key>`).
   Future<String> postComment(
           {required String about,
           String? drive,
           required String text,
-          String? replyTo}) =>
+          String? replyTo,
+          String? anchor}) =>
       RustLib.instance.api.crateApiResourcesAtomicStorePostComment(
-          that: this, about: about, drive: drive, text: text, replyTo: replyTo);
+          that: this,
+          about: about,
+          drive: drive,
+          text: text,
+          replyTo: replyTo,
+          anchor: anchor);
 
   /// The profile of the signing agent: what the store holds, else what the
   /// connected server has.

@@ -197,10 +197,14 @@ class BridgeStoreBackend
 
   @override
   Future<String> postComment(String about, String text,
-          {String? drive, String? replyTo}) =>
+          {String? drive, String? replyTo, String? anchor}) =>
       _guard(
           () => _comments.postComment(
-              about: about, drive: drive, text: text, replyTo: replyTo),
+              about: about,
+              drive: drive,
+              text: text,
+              replyTo: replyTo,
+              anchor: anchor),
           about);
 
   @override
