@@ -30,6 +30,12 @@ export interface SideBarPanelProps {
   defaultOpen?: boolean;
   /** When set, a context menu on the header lists the panels to show or hide. */
   panel?: Panel;
+  /**
+   * Controlled open state, for a panel whose fold state is stored elsewhere
+   * (the user's settings). Without these it lives in localStorage.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** Tighter padding when nested inside the drive tree (e.g. Shared with me) */
   embedded?: boolean;
   'data-testid'?: string;
@@ -44,12 +50,16 @@ export function SideBarPanel({
   defaultOpen = true,
   embedded = false,
   panel,
+  open: controlledOpen,
+  onOpenChange,
   'data-testid': dataTestId,
 }: React.PropsWithChildren<SideBarPanelProps>): JSX.Element {
-  const [open, setOpen] = useLocalStorage(
+  const [localOpen, setLocalOpen] = useLocalStorage(
     `${heightStorageKey}.open`,
     defaultOpen,
   );
+  const open = controlledOpen ?? localOpen;
+  const setOpen = onOpenChange ?? setLocalOpen;
   const contentRef = useRef<HTMLDivElement>(null);
   // The last height a drag ended at that showed at least one row. Ending a
   // drag below that is a request to close the section; opening it again comes

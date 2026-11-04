@@ -65,6 +65,10 @@ export const properties = {
   isA: 'https://atomicdata.dev/properties/isA',
   isDynamic: 'https://atomicdata.dev/properties/isDynamic',
   name: 'https://atomicdata.dev/properties/name',
+  /** On the personal drive: is the Getting started panel unfolded. */
+  onboardingPanelOpen: 'https://atomicdata.dev/properties/onboardingPanelOpen',
+  /** On the personal drive: the drive made at first start. */
+  welcomeDrive: 'https://atomicdata.dev/properties/welcomeDrive',
   parent: 'https://atomicdata.dev/properties/parent',
   paymentPointer: 'https://atomicdata.dev/properties/paymentPointer',
   read: 'https://atomicdata.dev/properties/read',

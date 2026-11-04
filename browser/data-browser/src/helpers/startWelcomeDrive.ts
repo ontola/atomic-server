@@ -1,4 +1,4 @@
-import { type Store } from '@tomic/react';
+import { type Store, urls } from '@tomic/react';
 import { TEMPLATE_CATALOG } from '../chunks/Templates/catalog';
 import { planTemplate } from '../chunks/Templates/model';
 import { onboardingKeys } from '../hooks/useOnboardingProgress';
@@ -31,7 +31,17 @@ export async function startWelcomeDrive(
   await store.notifyResourceManuallyCreated(drive);
 
   // Remembered so the Getting started card can tell it from a project drive
-  // after it is renamed.
+  // after it is renamed: on the personal drive, so every device knows, and
+  // locally as the fallback if that write fails.
+  try {
+    const home = await store.getResource(personalDrive);
+
+    await home.set(urls.properties.welcomeDrive, drive.subject);
+    await home.save();
+  } catch {
+    /* The local copy below is then moved onto the drive by the next load. */
+  }
+
   try {
     localStorage.setItem(
       onboardingKeys.welcomeDrive(store.getAgent()?.subject),

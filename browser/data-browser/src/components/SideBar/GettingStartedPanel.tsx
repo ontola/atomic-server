@@ -29,6 +29,7 @@ import {
   SideBarMenuRow,
   SideBarMenuRowLabel,
 } from './SideBarMenuItem';
+import { userSettingProps, useUserSetting } from '@hooks/useUserSetting';
 import { SideBarPanel } from './SideBarPanel';
 import {
   dismissUiHint,
@@ -61,6 +62,11 @@ export function GettingStartedPanel(): JSX.Element | null {
 function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   const [name] = useString(drive, core.properties.name);
   const { steps, projectDrive, doneCount } = useOnboardingProgress(name);
+  const [panelOpen, setPanelOpen] = useUserSetting<boolean>(
+    userSettingProps.onboardingPanelOpen,
+    'gettingStartedPanelHeight.open',
+    true,
+  );
   const { openChat } = useAISidebar();
   const createNewResource = useNewResourceUI();
   const [agent] = useCurrentAgent();
@@ -153,6 +159,8 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       title='Getting started'
       heightStorageKey='gettingStartedPanelHeight'
       initialHeight={280}
+      open={panelOpen}
+      onOpenChange={setPanelOpen}
       data-testid='getting-started'
       actions={
         <Count>

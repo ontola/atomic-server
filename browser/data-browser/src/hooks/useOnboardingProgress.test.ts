@@ -6,6 +6,7 @@ vi.mock('@components/AI/AISettingsContext', () => ({}));
 vi.mock('@components/SideBar/AIPanel', () => ({}));
 vi.mock('./usePrivateDrive', () => ({}));
 vi.mock('./useSavedDrives', () => ({}));
+vi.mock('./useUserSetting', () => ({}));
 vi.mock('@helpers/managed/binding', () => ({}));
 vi.mock('@helpers/managed/deviceLink', () => ({}));
 
@@ -20,7 +21,6 @@ const base = {
   hasAIChat: false,
   aiAvailable: true,
   otherAgentsOnProjects: false,
-  invited: false,
   accountLinked: false,
 };
 const done = (input = base) =>
@@ -66,8 +66,11 @@ describe('deriveOnboardingSteps', () => {
     expect(deriveOnboardingSteps(base)[2].needs).toBeUndefined();
   });
 
-  it('blocks Invite until there is a project, then accepts a link or another agent', () => {
-    const blocked = deriveOnboardingSteps({ ...base, invited: true })[3];
+  it('blocks Invite until there is a project, then waits for another agent', () => {
+    const blocked = deriveOnboardingSteps({
+      ...base,
+      otherAgentsOnProjects: true,
+    })[3];
 
     expect(blocked.needs).toBe('project');
 
@@ -80,7 +83,6 @@ describe('deriveOnboardingSteps', () => {
       done: false,
       needs: undefined,
     });
-    expect(done({ ...withProject, invited: true }).invite).toBe(true);
     expect(done({ ...withProject, otherAgentsOnProjects: true }).invite).toBe(
       true,
     );

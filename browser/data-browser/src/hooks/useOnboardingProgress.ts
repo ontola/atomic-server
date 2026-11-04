@@ -4,9 +4,9 @@ import { canonicalizeScheme } from '@tomic/lib';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useDriveChats } from '@components/SideBar/AIPanel';
 import { useIsLinkedToAccount } from './useIsLinkedToAccount';
-import { useLocalStorage } from './useLocalStorage';
 import { usePrivateDrive } from './usePrivateDrive';
 import { useSavedDrives } from './useSavedDrives';
+import { userSettingProps, useUserSetting } from './useUserSetting';
 
 export type OnboardingStepId = 'name' | 'project' | 'ai' | 'invite' | 'save';
 
@@ -20,15 +20,13 @@ export interface OnboardingStep {
 }
 
 /**
- * The card keeps two local flags per agent. Nothing is written to a drive:
- * what the card shows is derived from what exists, and these only remember a
- * choice or a fact that leaves no trace to derive from.
+ * What the card shows is derived from what exists. The one fact that leaves no
+ * trace to derive from, which drive is the Welcome drive, is a user setting on
+ * the personal drive (`useUserSetting`); these keys are its offline fallback.
  */
 export const onboardingKeys = {
   /** The drive `startWelcomeDrive` made; it stays the Welcome drive when renamed. */
   welcomeDrive: (agent?: string) => `atomic.gettingStarted.welcome:${agent}`,
-  /** An invite link was made. Joining leaves rights; a link nobody used does not. */
-  invited: (agent?: string) => `atomic.gettingStarted.invited:${agent}`,
 };
 
 const same = (a: string, b?: string) =>
@@ -49,7 +47,6 @@ export interface OnboardingInput {
   aiAvailable: boolean;
   /** Agents with rights on each project drive, other than the signed-in one. */
   otherAgentsOnProjects: boolean;
-  invited: boolean;
   accountLinked: boolean;
 }
 
@@ -76,7 +73,7 @@ export function deriveOnboardingSteps(
     },
     {
       id: 'invite',
-      done: input.invited || input.otherAgentsOnProjects,
+      done: input.otherAgentsOnProjects,
       needs: hasProject ? undefined : 'project',
     },
     { id: 'save', done: input.accountLinked },
@@ -89,13 +86,10 @@ export function useOnboardingProgress(driveName?: string) {
   const [savedDrives] = useSavedDrives();
   const { enableAI, availableProviders } = useAISettings();
   const chats = useDriveChats(privateDrive);
-  const [welcomeDrive] = useLocalStorage<string | undefined>(
+  const [welcomeDrive] = useUserSetting<string | undefined>(
+    userSettingProps.welcomeDrive,
     onboardingKeys.welcomeDrive(agent?.subject),
     undefined,
-  );
-  const [invited] = useLocalStorage(
-    onboardingKeys.invited(agent?.subject),
-    false,
   );
   const accountLinked = useIsLinkedToAccount();
   const base = { savedDrives, privateDrive, welcomeDrive } as OnboardingInput;
@@ -117,7 +111,6 @@ export function useOnboardingProgress(driveName?: string) {
     hasAIChat: chats.length > 0,
     aiAvailable: enableAI && availableProviders.length > 0,
     otherAgentsOnProjects: others,
-    invited,
     accountLinked,
   };
   const steps = deriveOnboardingSteps(input);

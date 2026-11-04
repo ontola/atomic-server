@@ -1,6 +1,9 @@
 import { test, expect } from './fixtures';
 import {
   FRONTEND_URL,
+  devDrive,
+  getDevDriveSecret,
+  openNewSubjectWindow,
   editableTitle,
   sideBarDriveSwitcher,
 } from './test-utils';
@@ -113,6 +116,35 @@ test('The Getting started sidebar panel is open, folds away and opens again, als
 
   await expand.click();
   await expect(panel.getByText('Name your drive')).toBeVisible();
+});
+
+test('Folding the Getting started panel is remembered for the user on another device', async ({
+  page,
+  browser,
+}) => {
+  test.slow();
+  await devDrive(page);
+  const secret = await getDevDriveSecret(page);
+  // The panel shows on a drive of your own: make one.
+  await sideBarDriveSwitcher(page).click();
+  await page.getByTestId('menu-item-new-drive').click();
+  await expect(page.getByTestId('current-drive-title')).toHaveText('My drive', {
+    timeout: 30_000,
+  });
+  const panel = page.getByTestId('getting-started');
+  await expect(panel).toBeVisible({ timeout: 60_000 });
+  await panel.getByRole('button', { name: /Collapse Getting started/ }).click();
+  await expect(panel.getByText('Name your drive')).toBeHidden();
+
+  // The same agent on a second device: no local state, same drive.
+  const other = await openNewSubjectWindow(browser, page.url(), secret);
+  await other.getByRole('button', { name: 'Set as current drive' }).click();
+  const otherPanel = other.getByTestId('getting-started');
+  await expect(
+    otherPanel.getByRole('button', { name: /Expand Getting started/ }),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(otherPanel.getByText('Name your drive')).toBeHidden();
+  await other.context().close();
 });
 
 test('A guest sees what to do next and the Save dialog opens in place', async ({

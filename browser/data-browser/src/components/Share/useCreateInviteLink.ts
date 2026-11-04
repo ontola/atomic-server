@@ -10,8 +10,6 @@ import {
 } from '../../helpers/browserPeerSync';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import { isOriginWithoutNode } from '../../helpers/originNode';
-import { onboardingKeys } from '../../hooks/useOnboardingProgress';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 export interface InviteLinkOptions {
   write: boolean;
@@ -32,10 +30,6 @@ export function useCreateInviteLink(
   const store = useStore();
   const [agent] = useCurrentAgent();
   const isSaas = !!getManagedPortalUrl();
-  const [, markInvited] = useLocalStorage(
-    onboardingKeys.invited(agent?.subject),
-    false,
-  );
 
   return async ({ write, expiresAt, maxUsages }) => {
     if (!agent) {
@@ -82,7 +76,6 @@ export function useCreateInviteLink(
       browserPeer,
       maxUsages,
     );
-    markInvited(true);
 
     if (browserPeer) {
       savePeerLink(store, {

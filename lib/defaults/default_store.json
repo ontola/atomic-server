@@ -283,6 +283,27 @@
     "https://atomicdata.dev/properties/shortname": "favorites"
   },
   {
+    "@id": "https://atomicdata.dev/properties/onboardingPanelOpen",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Set on an agent's personal drive: whether the Getting started panel is unfolded. Stored with the user so every device they use shows the same state.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "onboarding-panel-open"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/welcomeDrive",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Drive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Set on an agent's personal drive: the drive the app made for them when they started. It stays the Welcome drive when renamed.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "welcome-drive"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/availableDomains",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
     "https://atomicdata.dev/properties/description": "The set of domains where this resource should be available. Allows multi-server accessibility while maintaining DID identity. If this is concerns a `did:ad:` resource, it will be available on the `/did` endpoint of that domain.",

@@ -30,6 +30,13 @@ vi.mock('@hooks/useOnboardingProgress', () => ({
     doneCount: steps.filter(s => s.done).length,
   }),
 }));
+vi.mock('@hooks/useUserSetting', () => ({
+  userSettingProps: {},
+  useUserSetting: (_p: string, _k: string, fallback: unknown) => [
+    fallback,
+    () => {},
+  ],
+}));
 vi.mock('@hooks/useIsPrivateDrive', () => ({
   useIsPrivateDrive: () => isPrivate,
 }));
