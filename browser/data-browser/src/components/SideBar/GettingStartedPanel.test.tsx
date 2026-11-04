@@ -20,13 +20,12 @@ vi.mock('@tomic/react', () => ({
   useString: () => ['Welcome to Atomic'],
   useCurrentAgent: () => [agent ? { subject: agent } : undefined],
 }));
-vi.mock('@components/forms/NewForm/useNewResourceUI', () => ({
-  useNewResourceUI: () => vi.fn(),
+vi.mock('@helpers/useNewRoute', () => ({
+  useNewRoute: () => vi.fn(),
 }));
 vi.mock('@hooks/useOnboardingProgress', () => ({
   useOnboardingProgress: () => ({
     steps,
-    projectDrive: 'did:ad:project',
     doneCount: steps.filter(s => s.done).length,
   }),
 }));
@@ -86,14 +85,13 @@ const render = () =>
     </ThemeProvider>,
   );
 const fresh = (): Step[] =>
-  ['name', 'project', 'ai', 'invite', 'save'].map(id => ({
+  ['name', 'create', 'ai', 'invite', 'save'].map(id => ({
     id,
     done: false,
   }));
 
 beforeEach(() => {
   steps = fresh();
-  steps[3].needs = 'project';
   agent = 'did:ad:agent:me';
   writers = ['did:ad:agent:me'];
   isPrivate = false;
@@ -101,22 +99,19 @@ beforeEach(() => {
 });
 
 describe('GettingStartedPanel', () => {
-  it('shows the count and every step, as rows, with Invite disabled for a reason', () => {
+  it('shows the count and every step, as rows, without a blocked row', () => {
     steps[0].done = true;
     const html = render();
 
     expect(html).toMatch(/1\s*(<!-- -->)?\s*of/);
     for (const title of [
       'Name your drive',
-      'Start a drive',
+      'Make something',
       'Talk to the AI',
       'Invite someone',
       'Save &amp; register',
     ])
       expect(html).toContain(title);
-    expect(html).toMatch(
-      /<button[^>]*disabled=""[^>]*title="Start a drive first"[^>]*>.*Invite someone/,
-    );
   });
 
   it('keeps hints in the tooltip and done rows inert', () => {

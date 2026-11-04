@@ -32,7 +32,7 @@ test('Get started opens a workspace of your own, without an account', async ({
 
   for (const step of [
     'Name your drive',
-    'Start a drive',
+    'Make something',
     'Talk to the AI',
     'Invite someone',
     'Save your work',
@@ -40,10 +40,10 @@ test('Get started opens a workspace of your own, without an account', async ({
     await expect(panel.getByText(step, { exact: true })).toBeVisible();
   }
 
-  // Inviting needs a drive first, and says so.
-  const invite = panel.getByRole('button', { name: 'Invite someone' });
-  await expect(invite).toBeDisabled();
-  await expect(invite).toHaveAttribute('title', 'Start a drive first');
+  // Every step can be started right away.
+  await expect(
+    panel.getByRole('button', { name: 'Invite someone' }),
+  ).toBeEnabled();
   await expect(
     page.getByRole('link', { name: 'Start here' }).first(),
   ).toBeVisible();
@@ -292,7 +292,7 @@ test('Name your drive renames the drive, not the document on screen', async ({
   });
 });
 
-test('Start a drive points at the switcher, and the X or Escape closes it', async ({
+test('Make something points at the New row, and the X or Escape closes it', async ({
   page,
 }) => {
   await page.goto(`${FRONTEND_URL}/app/welcome`);
@@ -301,8 +301,8 @@ test('Start a drive points at the switcher, and the X or Escape closes it', asyn
   await expect(panel).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('Escape');
 
-  const step = panel.getByRole('button', { name: 'Start a drive' });
-  const hint = page.getByTestId('ui-hint-drive-switcher');
+  const step = panel.getByRole('button', { name: 'Make something' });
+  const hint = page.getByTestId('ui-hint-new-row');
 
   // Hovering only rings the place; no text yet.
   await step.hover();
@@ -312,7 +312,7 @@ test('Start a drive points at the switcher, and the X or Escape closes it', asyn
   ).toHaveCount(1);
 
   await step.click();
-  await expect(hint).toHaveText('Make a new drive here');
+  await expect(hint).toHaveText('Make a document or table here');
   await page.getByTestId('ui-hint-close').click();
   await expect(hint).toHaveCount(0);
 

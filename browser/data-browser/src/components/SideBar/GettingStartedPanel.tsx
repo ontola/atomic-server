@@ -1,6 +1,5 @@
 import {
   core,
-  server,
   useCurrentAgent,
   useArray,
   useCanWrite,
@@ -22,7 +21,7 @@ import {
   useOnboardingProgress,
   type OnboardingStep,
 } from '@hooks/useOnboardingProgress';
-import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
+import { useNewRoute } from '@helpers/useNewRoute';
 import { openSaveWorkDialog } from '@components/SaveWork/saveWorkDialogState';
 import {
   IconSlot,
@@ -61,17 +60,16 @@ export function GettingStartedPanel(): JSX.Element | null {
 
 function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   const [name] = useString(drive, core.properties.name);
-  const { steps, projectDrive, doneCount } = useOnboardingProgress(name);
+  const { steps, doneCount } = useOnboardingProgress(drive.subject, name);
   const [panelOpen, setPanelOpen] = useUserSetting<boolean>(
     userSettingProps.onboardingPanelOpen,
     'gettingStartedPanelHeight.open',
     true,
   );
   const { openChat } = useAISidebar();
-  const createNewResource = useNewResourceUI();
-  const [agent] = useCurrentAgent();
   const portalUrl = useKnownPortalUrl();
   const navigate = useNavigateWithTransition();
+  const navigateToNewRoute = useNewRoute(drive.subject);
   const { setSideBarLocked } = useSettings();
 
   // Hints on the page need the drawer out of the way; sidebar ones are
@@ -106,14 +104,14 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
         });
       },
     },
-    project: {
-      title: 'Start a drive',
-      hint: 'Fill it with a starter',
-      target: 'drive-switcher',
-      run: () =>
-        pointAt('drive-switcher', 'Make a new drive here', () =>
-          createNewResource(server.classes.drive, agent?.subject ?? ''),
-        ),
+    create: {
+      title: 'Make something',
+      hint: 'Add a document or table to this drive',
+      target: 'new-row',
+      run: () => {
+        closeDrawer();
+        pointAt('new-row', 'Make a document or table here', navigateToNewRoute);
+      },
     },
     ai: {
       title: 'Talk to the AI',
@@ -128,14 +126,13 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     },
     invite: {
       title: 'Invite someone',
-      hint: 'Share a drive with a teammate or a friend',
+      hint: 'Share this drive with a teammate or a friend',
       target: 'share-button',
       run: () => {
-        if (!projectDrive) return;
         closeDrawer();
-        navigate(constructOpenURL(projectDrive));
-        pointAt('share-button', 'Share a drive here', () =>
-          openShareDialog(projectDrive),
+        navigate(constructOpenURL(drive.subject));
+        pointAt('share-button', 'Share this drive here', () =>
+          openShareDialog(drive.subject),
         );
       },
     },
@@ -171,14 +168,11 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       {steps.map(step => {
         const { title, hint, run, target } = copy[step.id];
         const need =
-          step.needs === 'project'
-            ? 'Start a drive first'
-            : step.needs === 'ai-source'
-              ? 'Needs an AI source: your own key or Ollama'
-              : undefined;
-        const blocked = step.needs === 'project';
-        const inert = blocked || step.done;
-        const tooltip = blocked ? need : need ? `${hint}. ${need}` : hint;
+          step.needs === 'ai-source'
+            ? 'Needs an AI source: your own key or Ollama'
+            : undefined;
+        const inert = step.done;
+        const tooltip = need ? `${hint}. ${need}` : hint;
 
         return (
           <StepRow

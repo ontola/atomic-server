@@ -44,6 +44,8 @@ import {
   accountAddress,
   getManagedAccount,
 } from '../../helpers/managed/session';
+import { useIsLinkedToAccount } from '@hooks/useIsLinkedToAccount';
+import { openSaveWorkDialog } from '../SaveWork/saveWorkDialogState';
 import { sendShareInvites } from '../../helpers/managed/shareInvites';
 import { EmailInviteInput, isEmailAddress } from './EmailInviteInput';
 import { describeEditorSeats, useEditorSeats } from './useEditorSeats';
@@ -200,6 +202,7 @@ function ShareOverview({
   onDone: () => void;
 }): JSX.Element {
   const isSaas = !!getManagedPortalUrl();
+  const accountLinked = useIsLinkedToAccount();
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
   const store = useStore();
   const isUnhostedDrive =
@@ -374,6 +377,17 @@ function ShareOverview({
             </>
           )}
           {err && <ErrorLook>{err.message}</ErrorLook>}
+          {err && isSaas && !accountLinked && (
+            <Button
+              subtle
+              onClick={() => {
+                onDone();
+                openSaveWorkDialog();
+              }}
+            >
+              Save your work
+            </Button>
+          )}
         </Stack>
       </Dialog.Content>
       <Actions>

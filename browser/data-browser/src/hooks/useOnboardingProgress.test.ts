@@ -7,20 +7,20 @@ vi.mock('@components/SideBar/AIPanel', () => ({}));
 vi.mock('./usePrivateDrive', () => ({}));
 vi.mock('./useSavedDrives', () => ({}));
 vi.mock('./useUserSetting', () => ({}));
+vi.mock('./useVisibleDriveChildren', () => ({}));
 vi.mock('@helpers/managed/binding', () => ({}));
 vi.mock('@helpers/managed/deviceLink', () => ({}));
 
-const { deriveOnboardingSteps, isDefaultDriveName, projectDrives } =
+const { deriveOnboardingSteps, isDefaultDriveName } =
   await import('./useOnboardingProgress');
 
 const base = {
   driveName: 'Welcome to Atomic',
-  savedDrives: ['atomic:home', 'atomic:welcome'],
-  privateDrive: 'atomic:home',
-  welcomeDrive: 'atomic:welcome',
+  childCount: 4,
+  templateChildCount: 4,
   hasAIChat: false,
   aiAvailable: true,
-  otherAgentsOnProjects: false,
+  otherAgentsOnDrives: false,
   accountLinked: false,
 };
 const done = (input = base) =>
@@ -32,7 +32,7 @@ describe('deriveOnboardingSteps', () => {
 
     expect(steps.map(s => s.id)).toEqual([
       'name',
-      'project',
+      'create',
       'ai',
       'invite',
       'save',
@@ -47,15 +47,15 @@ describe('deriveOnboardingSteps', () => {
     expect(done({ ...base, driveName: 'Acme' }).name).toBe(true);
   });
 
-  it('counts a project as a drive besides home and Welcome, even renamed', () => {
-    expect(done().project).toBe(false);
-    const withProject = {
-      ...base,
-      savedDrives: [...base.savedDrives, 'did:ad:p'],
-    };
-
-    expect(done(withProject).project).toBe(true);
-    expect(projectDrives(withProject)).toEqual(['did:ad:p']);
+  it('counts Make something once the drive has more than its template gave', () => {
+    expect(done().create).toBe(false);
+    expect(done({ ...base, childCount: 5 }).create).toBe(true);
+    expect(done({ ...base, childCount: 0, templateChildCount: 0 }).create).toBe(
+      false,
+    );
+    expect(done({ ...base, childCount: 1, templateChildCount: 0 }).create).toBe(
+      true,
+    );
   });
 
   it('is done for the AI once a chat exists, and names the missing source', () => {
@@ -66,26 +66,9 @@ describe('deriveOnboardingSteps', () => {
     expect(deriveOnboardingSteps(base)[2].needs).toBeUndefined();
   });
 
-  it('blocks Invite until there is a project, then waits for another agent', () => {
-    const blocked = deriveOnboardingSteps({
-      ...base,
-      otherAgentsOnProjects: true,
-    })[3];
-
-    expect(blocked.needs).toBe('project');
-
-    const withProject = {
-      ...base,
-      savedDrives: [...base.savedDrives, 'did:ad:p'],
-    };
-
-    expect(deriveOnboardingSteps(withProject)[3]).toMatchObject({
-      done: false,
-      needs: undefined,
-    });
-    expect(done({ ...withProject, otherAgentsOnProjects: true }).invite).toBe(
-      true,
-    );
+  it('is done for Invite once another agent has rights on a drive', () => {
+    expect(done().invite).toBe(false);
+    expect(done({ ...base, otherAgentsOnDrives: true }).invite).toBe(true);
   });
 
   it('is done for Save once an account is linked', () => {

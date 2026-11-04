@@ -13013,6 +13013,7 @@ msgid "Invite someone"
 msgstr "Undang seseorang"
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Simpan pekerjaan Anda"
@@ -13267,18 +13268,6 @@ msgstr "Jangan tambahkan, simpan hanya di browser ini"
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Beri nama drive Anda: tim, perusahaan, kelas, atau rumah tangga"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Start a drive"
-msgstr "Mulai drive"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Share a drive with a teammate or a friend"
-msgstr "Bagikan drive dengan rekan tim atau teman"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Start a drive first"
-msgstr "Mulai drive terlebih dahulu"
-
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
 msgstr "Skrip berjalan di server, dan perangkat ini tidak memilikinya. Buka drive ini di server untuk menjalankannya."
@@ -13408,10 +13397,6 @@ msgstr "Tamu"
 msgid "Creating your drive…"
 msgstr "Membuat drive Anda…"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Fill it with a starter"
-msgstr "Isi dengan templat awal"
-
 #. 0: email
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Saved as {0}"
@@ -13459,16 +13444,8 @@ msgid "Click to name your drive"
 msgstr "Klik di sini untuk memberi nama drive Anda"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Make a new drive here"
-msgstr "Buat drive baru di sini"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI here"
 msgstr "Bicara dengan AI di sini"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Share a drive here"
-msgstr "Bagikan drive di sini"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email here"
@@ -13477,3 +13454,23 @@ msgstr "Tambahkan email Anda di sini"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device here"
 msgstr "Hubungkan perangkat di sini"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make something"
+msgstr "Buat sesuatu"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add a document or table to this drive"
+msgstr "Tambahkan dokumen atau tabel ke drive ini"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a document or table here"
+msgstr "Buat dokumen atau tabel di sini"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive with a teammate or a friend"
+msgstr "Bagikan drive ini dengan rekan tim atau teman"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive here"
+msgstr "Bagikan drive ini di sini"

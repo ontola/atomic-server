@@ -133,12 +133,14 @@ export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
             )}
             {agentCanWrite && (
               <NewResourceRow gap='0' center>
-                <QuickCreateRow
-                  parent={drive}
-                  newResourceButtonTestId='sidebar-new-resource'
-                  highlightUntilUsed
-                  onItemClick={onItemClick}
-                />
+                <UiHint target='new-row'>
+                  <QuickCreateRow
+                    parent={drive}
+                    newResourceButtonTestId='sidebar-new-resource'
+                    highlightUntilUsed
+                    onItemClick={onItemClick}
+                  />
+                </UiHint>
               </NewResourceRow>
             )}
           </ListWrapper>

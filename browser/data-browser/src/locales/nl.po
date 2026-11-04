@@ -13016,6 +13016,7 @@ msgid "Invite someone"
 msgstr "Iemand uitnodigen"
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Sla je werk op"
@@ -13270,18 +13271,6 @@ msgstr "Niet toevoegen, alleen in deze browser bewaren"
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Geef je schijf een naam: een team, bedrijf, klas of huishouden"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Start a drive"
-msgstr "Een schijf starten"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Share a drive with a teammate or a friend"
-msgstr "Deel een schijf met een teamgenoot of vriend"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Start a drive first"
-msgstr "Start eerst een schijf"
-
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
 msgstr "Scripts draaien op een server en dit apparaat heeft er geen. Open deze schijf op een server om het uit te voeren."
@@ -13416,10 +13405,6 @@ msgstr "Gast"
 msgid "Creating your drive…"
 msgstr "Je schijf wordt gemaakt…"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Fill it with a starter"
-msgstr "Vul hem met een starter"
-
 #. 0: email
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Saved as {0}"
@@ -13467,16 +13452,8 @@ msgid "Click to name your drive"
 msgstr "Klik hier om je schijf een naam te geven"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Make a new drive here"
-msgstr "Maak hier een nieuwe schijf"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI here"
 msgstr "Praat hier met de AI"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Share a drive here"
-msgstr "Deel hier een schijf"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email here"
@@ -13485,3 +13462,23 @@ msgstr "Voeg hier je e-mailadres toe"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device here"
 msgstr "Verbind hier een apparaat"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make something"
+msgstr "Maak iets"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add a document or table to this drive"
+msgstr "Voeg een document of tabel toe aan deze schijf"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a document or table here"
+msgstr "Maak hier een document of tabel"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive with a teammate or a friend"
+msgstr "Deel deze schijf met een teamgenoot of vriend"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive here"
+msgstr "Deel deze schijf hier"

@@ -13013,6 +13013,7 @@ msgid "Invite someone"
 msgstr "Jemanden einladen"
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Deine Arbeit sichern"
@@ -13267,18 +13268,6 @@ msgstr "Nicht hinzufügen, nur in diesem Browser behalten"
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Benenne dein Laufwerk: ein Team, Unternehmen, eine Klasse oder einen Haushalt"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Start a drive"
-msgstr "Laufwerk starten"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Share a drive with a teammate or a friend"
-msgstr "Laufwerk mit einem Teammitglied oder Freund teilen"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Start a drive first"
-msgstr "Starte zuerst ein Laufwerk"
-
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
 msgstr "Skripte laufen auf einem Server, und dieses Gerät hat keinen. Öffne dieses Laufwerk auf einem Server, um es auszuführen."
@@ -13413,10 +13402,6 @@ msgstr "Gast"
 msgid "Creating your drive…"
 msgstr "Dein Laufwerk wird erstellt…"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Fill it with a starter"
-msgstr "Fülle es mit einer Vorlage"
-
 #. 0: email
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Saved as {0}"
@@ -13464,16 +13449,8 @@ msgid "Click to name your drive"
 msgstr "Klicke hier, um deinem Drive einen Namen zu geben"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Make a new drive here"
-msgstr "Erstelle hier einen neuen Drive"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI here"
 msgstr "Sprich hier mit der KI"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Share a drive here"
-msgstr "Teile hier einen Drive"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email here"
@@ -13482,3 +13459,23 @@ msgstr "Füge hier deine E-Mail-Adresse hinzu"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device here"
 msgstr "Verbinde hier ein Gerät"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make something"
+msgstr "Etwas erstellen"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add a document or table to this drive"
+msgstr "Füge diesem Laufwerk ein Dokument oder eine Tabelle hinzu"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a document or table here"
+msgstr "Erstelle hier ein Dokument oder eine Tabelle"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive with a teammate or a friend"
+msgstr "Teile dieses Laufwerk mit einem Teammitglied oder Freund"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive here"
+msgstr "Teile dieses Laufwerk hier"

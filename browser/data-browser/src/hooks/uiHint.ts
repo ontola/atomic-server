@@ -9,6 +9,7 @@ import { useSyncExternalStore } from 'react';
 export type UiHintTarget =
   | 'drive-title'
   | 'drive-switcher'
+  | 'new-row'
   | 'ai-button'
   | 'share-button'
   | 'save-row';

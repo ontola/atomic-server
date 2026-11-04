@@ -1,5 +1,7 @@
 // @wc-ignore-file
 import { core, urls, useCurrentAgent, useResources } from '@tomic/react';
+import { TEMPLATE_CATALOG } from '../chunks/Templates/catalog';
+import { useVisibleDriveChildren } from './useVisibleDriveChildren';
 import { canonicalizeScheme } from '@tomic/lib';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useDriveChats } from '@components/SideBar/AIPanel';
@@ -8,10 +10,10 @@ import { usePrivateDrive } from './usePrivateDrive';
 import { useSavedDrives } from './useSavedDrives';
 import { userSettingProps, useUserSetting } from './useUserSetting';
 
-export type OnboardingStepId = 'name' | 'project' | 'ai' | 'invite' | 'save';
+export type OnboardingStepId = 'name' | 'create' | 'ai' | 'invite' | 'save';
 
 /** What a step is waiting for before its button can do anything. */
-export type OnboardingNeed = 'project' | 'ai-source';
+export type OnboardingNeed = 'ai-source';
 
 export interface OnboardingStep {
   id: OnboardingStepId;
@@ -39,48 +41,34 @@ export function isDefaultDriveName(name: string | undefined): boolean {
 
 export interface OnboardingInput {
   driveName?: string;
-  /** Drives on the private drive's list, in the order they were added. */
-  savedDrives: string[];
-  privateDrive?: string;
-  welcomeDrive?: string;
+  /** Visible children of the drive the panel is for, and how many its template gave. */
+  childCount: number;
+  templateChildCount: number;
   hasAIChat: boolean;
   aiAvailable: boolean;
-  /** Agents with rights on each project drive, other than the signed-in one. */
-  otherAgentsOnProjects: boolean;
+  /** Agents with rights on any of the user's non-personal drives, other than the signed-in one. */
+  otherAgentsOnDrives: boolean;
   accountLinked: boolean;
-}
-
-/** The project drive: the most recently added one that is neither home nor Welcome. */
-export function projectDrives(input: OnboardingInput): string[] {
-  return input.savedDrives.filter(
-    d => !same(d, input.privateDrive) && !same(d, input.welcomeDrive),
-  );
 }
 
 /** The steps in order, each with a derived `done` and, if blocked, why. */
 export function deriveOnboardingSteps(
   input: OnboardingInput,
 ): OnboardingStep[] {
-  const hasProject = projectDrives(input).length > 0;
-
   return [
     { id: 'name', done: !isDefaultDriveName(input.driveName) },
-    { id: 'project', done: hasProject },
+    { id: 'create', done: input.childCount > input.templateChildCount },
     {
       id: 'ai',
       done: input.hasAIChat,
       needs: input.aiAvailable ? undefined : 'ai-source',
     },
-    {
-      id: 'invite',
-      done: input.otherAgentsOnProjects,
-      needs: hasProject ? undefined : 'project',
-    },
+    { id: 'invite', done: input.otherAgentsOnDrives },
     { id: 'save', done: input.accountLinked },
   ];
 }
 
-export function useOnboardingProgress(driveName?: string) {
+export function useOnboardingProgress(drive: string, driveName?: string) {
   const [agent] = useCurrentAgent();
   const { privateDrive } = usePrivateDrive();
   const [savedDrives] = useSavedDrives();
@@ -92,9 +80,13 @@ export function useOnboardingProgress(driveName?: string) {
     undefined,
   );
   const accountLinked = useIsLinkedToAccount();
-  const base = { savedDrives, privateDrive, welcomeDrive } as OnboardingInput;
-  const projects = projectDrives(base);
-  const resources = useResources(projects);
+  const { subjects: children } = useVisibleDriveChildren(drive);
+  // The Welcome template fills its drive; anything past that is the person's.
+  const templateChildCount = same(drive, welcomeDrive)
+    ? TEMPLATE_CATALOG.find(t => t.id === 'welcome')!.parts.length
+    : 0;
+  const shared = savedDrives.filter(d => !same(d, privateDrive));
+  const resources = useResources(shared);
   const others = [...resources.values()].some(r =>
     [r.get(core.properties.read), r.get(core.properties.write)]
       .flat()
@@ -106,19 +98,18 @@ export function useOnboardingProgress(driveName?: string) {
       ),
   );
   const input: OnboardingInput = {
-    ...base,
     driveName,
+    childCount: children.length,
+    templateChildCount,
     hasAIChat: chats.length > 0,
     aiAvailable: enableAI && availableProviders.length > 0,
-    otherAgentsOnProjects: others,
+    otherAgentsOnDrives: others,
     accountLinked,
   };
   const steps = deriveOnboardingSteps(input);
 
   return {
     steps,
-    /** Where Invite points: the project drive made last. */
-    projectDrive: projects.at(-1),
     doneCount: steps.filter(s => s.done).length,
   };
 }
