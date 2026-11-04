@@ -184,7 +184,7 @@ function parseAt(json: unknown, depth: number): Constraint {
         );
       }
     } else if (keyword === 'const') {
-      out.const = v;
+      out.const = v as JSONValue;
     } else if (keyword === 'type') {
       const names = Array.isArray(v) ? v : [v];
       const types: ConstraintType[] = [];
