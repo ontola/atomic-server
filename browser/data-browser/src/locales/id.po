@@ -10199,6 +10199,7 @@ msgstr "Anda melewatkan pesan saat tidak di sini"
 msgid "You missed {0} messages while you were away"
 msgstr "Anda melewatkan {0} pesan saat tidak di sini"
 
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
 msgid "Not now"
 msgstr "Jangan sekarang"
@@ -12777,6 +12778,8 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "Cloud Server menjaga drive ini tetap online untuk semua orang, sehingga tidak ada yang harus membiarkan browser tetap terbuka."
 
 #. 0: CLOUD_SERVER_PRICE
+#. 0: CLOUD_SERVER_PRICE
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Tingkatkan ke Cloud Server mulai dari {0}"
@@ -13167,10 +13170,6 @@ msgstr "Tambahkan URL marketplace"
 msgid "Discover apps and integrations"
 msgstr "Temukan aplikasi dan integrasi"
 
-#: src/helpers/managed/vaultAutoBackup.ts
-msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
-msgstr "Cloud Vault penuh, sehingga drive ini tidak dicadangkan. Kosongkan ruang atau tingkatkan paket Anda."
-
 #: src/embed/MeetingChatOverlay.tsx
 #: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
@@ -13452,3 +13451,7 @@ msgstr "<0/> Di Drive saya"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Tambahkan ke Drive saya"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault is full, so this drive is not being backed up."
+msgstr"Cloud Vault penuh, sehingga drive ini tidak dicadangkan."
