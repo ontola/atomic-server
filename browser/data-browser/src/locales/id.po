@@ -141,7 +141,6 @@ msgstr "Agen AI"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -4086,6 +4085,7 @@ msgstr "Memasangkan perangkat"
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Coba lagi"
@@ -4419,16 +4419,7 @@ msgstr "Properti ini dikelola oleh server dan tidak dapat disunting."
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Penyimpanan lokal nonaktif, jadi server ini adalah satu-satunya sumber data. Aktifkan penyimpanan lokal di bawah untuk bekerja tanpa koneksi."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Membuat…"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Buat drive"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/routes/NewDriveRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
@@ -6538,13 +6529,9 @@ msgstr "Tanya AI"
 msgid "<0/> Loading"
 msgstr "<0/> Memuat"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Drive saya"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Nama drive"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -13356,10 +13343,6 @@ msgstr "Atau isi drive ini dengan paket awal"
 msgid "Start this drive"
 msgstr "Mulai drive ini"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Beri nama, lalu isi dengan paket awal"
-
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
 msgid "{0} properties also changed on the original since this fork was made ({1}). Merging will overwrite them with this fork's version. Continue?"
@@ -13452,3 +13435,11 @@ msgstr "<0/> Di Drive saya"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Tambahkan ke Drive saya"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Membuat drive Anda…"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Fill it with a starter"
+msgstr "Isi dengan templat awal"

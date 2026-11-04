@@ -141,7 +141,6 @@ msgstr "AI-agenten"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -4088,6 +4087,7 @@ msgstr "Apparaat koppelen"
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Opnieuw proberen"
@@ -4421,16 +4421,7 @@ msgstr "Deze eigenschap wordt door de server beheerd en kan niet worden bewerkt.
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Lokale opslag is uitgeschakeld, dus deze server is de enige gegevensbron. Schakel hieronder lokale opslag in om zonder verbinding te werken."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Maken…"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Schijf maken"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/routes/NewDriveRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
@@ -6540,13 +6531,9 @@ msgstr "Vraag AI"
 msgid "<0/> Loading"
 msgstr "<0/> Laden"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Mijn schijf"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Schijfnaam"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -13359,10 +13346,6 @@ msgstr "Of vul deze schijf met een startpakket"
 msgid "Start this drive"
 msgstr "Deze schijf starten"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Geef deze een naam en vul deze met een startpakket"
-
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
 msgid "{0} properties also changed on the original since this fork was made ({1}). Merging will overwrite them with this fork's version. Continue?"
@@ -13460,3 +13443,11 @@ msgstr "<0/> In Mijn schijven"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Toevoegen aan Mijn schijven"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Je schijf wordt gemaakt…"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Fill it with a starter"
+msgstr "Vul hem met een starter"

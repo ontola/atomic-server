@@ -141,7 +141,6 @@ msgstr "KI-Agenten"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -4085,6 +4084,7 @@ msgstr "Gerät wird gekoppelt"
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Erneut versuchen"
@@ -4418,16 +4418,7 @@ msgstr "Diese Eigenschaft wird vom Server verwaltet und kann nicht bearbeitet we
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Lokaler Speicher ist deaktiviert. Dieser Server ist daher die einzige Datenquelle. Aktiviere unten den lokalen Speicher, um ohne Verbindung zu arbeiten."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Wird erstellt …"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Laufwerk erstellen"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/routes/NewDriveRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
@@ -6537,13 +6528,9 @@ msgstr "KI fragen"
 msgid "<0/> Loading"
 msgstr "<0/> Wird geladen"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Mein Laufwerk"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Laufwerkname"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -13356,10 +13343,6 @@ msgstr "Oder fülle dieses Laufwerk mit einer Startvorlage"
 msgid "Start this drive"
 msgstr "Dieses Laufwerk starten"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Gib ihm einen Namen und fülle es dann mit einer Startvorlage"
-
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
 msgid "{0} properties also changed on the original since this fork was made ({1}). Merging will overwrite them with this fork's version. Continue?"
@@ -13457,3 +13440,11 @@ msgstr "<0/> In Meine Laufwerke"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Zu Meine Laufwerke hinzufügen"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Dein Laufwerk wird erstellt…"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Fill it with a starter"
+msgstr "Fülle es mit einer Vorlage"

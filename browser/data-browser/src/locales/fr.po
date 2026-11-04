@@ -141,7 +141,6 @@ msgstr "Agents IA"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -4082,6 +4081,7 @@ msgstr "Association de l’appareil"
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Réessayer"
@@ -4415,16 +4415,7 @@ msgstr "Cette propriété est gérée par le serveur et ne peut pas être modifi
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Le stockage local est désactivé : ce serveur est donc la seule source de données. Activez le stockage local ci-dessous pour travailler sans connexion."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Création…"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Créer un lecteur"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/routes/NewDriveRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
@@ -6534,13 +6525,9 @@ msgstr "Demander à l’IA"
 msgid "<0/> Loading"
 msgstr "<0/> Chargement"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Mon lecteur"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Nom du lecteur"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -13353,10 +13340,6 @@ msgstr "Ou remplir ce lecteur avec un modèle de départ"
 msgid "Start this drive"
 msgstr "Démarrer ce lecteur"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Donnez-lui un nom, puis remplissez-le avec un modèle de départ"
-
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
 msgid "{0} properties also changed on the original since this fork was made ({1}). Merging will overwrite them with this fork's version. Continue?"
@@ -13454,3 +13437,11 @@ msgstr "<0/> Dans Mes lecteurs"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Ajouter à Mes lecteurs"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Création de votre lecteur…"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Fill it with a starter"
+msgstr "Remplissez-le avec un modèle de départ"

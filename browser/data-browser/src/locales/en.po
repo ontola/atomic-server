@@ -141,7 +141,6 @@ msgstr "AI Agents"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -4088,6 +4087,7 @@ msgstr "Pairing device"
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Try again"
@@ -4421,16 +4421,7 @@ msgstr "This property is server-managed and cannot be edited."
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Creating…"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Create drive"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/routes/NewDriveRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
@@ -6540,13 +6531,9 @@ msgstr "Ask AI"
 msgid "<0/> Loading"
 msgstr "<0/> Loading"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "My drive"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Drive name"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -13359,10 +13346,6 @@ msgstr "Or fill this drive with a starter"
 msgid "Start this drive"
 msgstr "Start this drive"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Give it a name, then fill it with a starter"
-
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
 msgid "{0} properties also changed on the original since this fork was made ({1}). Merging will overwrite them with this fork's version. Continue?"
@@ -13460,3 +13443,11 @@ msgstr "<0/> In My drives"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Add to My drives"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Creating your drive…"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Fill it with a starter"
+msgstr "Fill it with a starter"

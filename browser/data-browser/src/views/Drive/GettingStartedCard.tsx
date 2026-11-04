@@ -81,7 +81,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     },
     project: {
       title: 'Start a drive',
-      hint: 'Give it a name, then fill it with a starter',
+      hint: 'Fill it with a starter',
       action: 'New drive',
       run: () => createNewResource(server.classes.drive, agent?.subject ?? ''),
     },
