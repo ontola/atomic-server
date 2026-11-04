@@ -8365,7 +8365,6 @@ msgstr "Lokale Kopie nicht verfügbar"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
-#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Diesen Fehler melden"
 

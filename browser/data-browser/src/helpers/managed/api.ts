@@ -6,14 +6,7 @@ const metadataReads = new ManagedReadCache();
 
 // A portal sign-in in another tab can replace the cookie session. Never
 // carry cached identity metadata across a return to this app.
-// `pageshow` also fires on every first load, often while the page's first
-// reads are in flight; only a return from the back/forward cache counts.
-const resetMetadataReads = (event?: Event) => {
-  if (event?.type === 'pageshow' && !(event as PageTransitionEvent).persisted)
-    return;
-  metadataReads.invalidate();
-};
-
+const resetMetadataReads = () => metadataReads.invalidate();
 const windowEvents = ['focus', 'pageshow', 'storage'] as const;
 
 if (typeof window !== 'undefined') {

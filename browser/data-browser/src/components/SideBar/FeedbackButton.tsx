@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type RefObject } from 'react';
+import { useId, useRef, useState, type RefObject } from 'react';
 import { FaComment } from 'react-icons/fa6';
 import * as Sentry from '@sentry/react';
 import {
@@ -22,8 +22,6 @@ interface UseFeedbackDialogOptions {
   reportError?: Error;
   /** Receives focus again when the dialog closes. */
   triggerRef?: RefObject<HTMLElement | null>;
-  /** Called once the dialog has closed. */
-  onClosed?: () => void;
 }
 
 /**
@@ -34,7 +32,6 @@ interface UseFeedbackDialogOptions {
 export function useFeedbackDialog({
   reportError,
   triggerRef,
-  onClosed,
 }: UseFeedbackDialogOptions = {}) {
   const feedbackTitle = reportError ? 'Report this error' : 'Send feedback';
   const messageId = useId();
@@ -42,8 +39,6 @@ export function useFeedbackDialog({
   const emailRef = useRef<HTMLInputElement>(null);
   const [dialogProps, showDialog, hideDialog] = useDialog({
     triggerRef: triggerRef as RefObject<HTMLElement>,
-    onCancel: onClosed,
-    onSuccess: onClosed,
   });
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
@@ -61,10 +56,9 @@ export function useFeedbackDialog({
       await submitFeedback(message, email, reportError ? 'error' : 'sidebar');
       setSent(true);
       setMessage('');
-      setBusy(false);
     } catch {
-      // No `finally`: the React Compiler skips components that use it.
       setFailed(true);
+    } finally {
       setBusy(false);
     }
   }
@@ -157,29 +151,6 @@ export function useFeedbackDialog({
   );
 
   return { open, dialog };
-}
-
-/**
- * The "Report this error" dialog for `error`, open as soon as it mounts. Used
- * by the error toast; the caller unmounts it from `onClosed`.
- */
-export function ErrorReportDialog({
-  error,
-  onClosed,
-}: {
-  error: Error;
-  onClosed: () => void;
-}) {
-  const { open, dialog } = useFeedbackDialog({ reportError: error, onClosed });
-  const opened = useRef(false);
-
-  useEffect(() => {
-    if (opened.current) return;
-    opened.current = true;
-    open();
-  });
-
-  return dialog;
 }
 
 /** A floating "Feedback" button that opens the feedback dialog. */

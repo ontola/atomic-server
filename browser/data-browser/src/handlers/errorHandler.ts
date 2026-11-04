@@ -1,13 +1,12 @@
 import { asError } from '@tomic/react';
+import toast from 'react-hot-toast';
 import {
   handleErrorBugsnag,
   reportStoreError,
 } from '../helpers/loggingHandlers';
-import { toastReportableError } from './reportableErrors';
 
 /**
- * Logs the error, reports it, and shows it to the user in a toast that offers
- * to report it through the feedback dialog.
+ * Logs the error, reports it, and shows it to the user.
  *
  * Takes `unknown` rather than `Error` because it is wired to the two browser
  * hooks that hand over arbitrary values, and it used to read `.message` off
@@ -22,5 +21,5 @@ export const errorHandler = (thrown: unknown) => {
   handleErrorBugsnag(e);
   reportStoreError(e);
 
-  toastReportableError(e);
+  toast.error(e.message);
 };

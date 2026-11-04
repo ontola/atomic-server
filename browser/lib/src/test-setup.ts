@@ -1,5 +1,3 @@
-import { beforeEach } from 'vitest';
-import { resetOriginBackoff } from './origin-backoff.js';
 import { enableLoro } from './loro-loader.js';
 
 // Loro is the default CRDT engine — initialize it before all tests.
@@ -64,6 +62,3 @@ console.warn = (...args: unknown[]) => {
 
   warn(...args);
 };
-
-// One test's unreachable origin must not pause the next test's fetches.
-beforeEach(() => resetOriginBackoff());

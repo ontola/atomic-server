@@ -8366,7 +8366,6 @@ msgstr "Salinan lokal tidak tersedia"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
-#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Laporkan kesalahan ini"
 

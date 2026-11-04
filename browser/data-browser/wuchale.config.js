@@ -66,36 +66,6 @@ const IGNORED_FUNCTIONS = ['effectFetch', 'JSON.stringify', 'JSON.parse'];
 
 const IGNORED_FILE_PARTS = ['.test', '.spec'];
 
-/**
- * Whether translated strings in `funcName` may call a React hook.
- *
- * Copy of `defaultRuntime` from `@wuchale/jsx` (not exported), with one
- * change: wuchale names class methods and static blocks `ClassName.method` /
- * `ClassName.[static]`. The default rule ("starts with `use` or an uppercase
- * letter") then treats every method of a class as a component, so a
- * translated string in e.g. an error constructor compiled to
- * `useW_load_rx_()`, a hook called outside React (React error #321 when
- * `new NoEncryptionKeyError()` ran in an event handler). A name with a `.`
- * is never a component or hook, so those use the plain runtime.
- * @param {import('wuchale').DecideReactiveDetails} details
- */
-const isReactiveFunction = ({ funcName, nested }) =>
-  typeof funcName === 'string' &&
-  !nested &&
-  !funcName.includes('.') &&
-  ((funcName.startsWith('use') && funcName.length > 3) ||
-    /[A-Z]/.test(funcName[0]));
-
-/** @type {import('wuchale').RuntimeConf} */
-const runtime = {
-  // `null` at the top level: no runtime is initialised outside functions.
-  initReactive: details =>
-    typeof details.funcName === 'string' ? isReactiveFunction(details) : null,
-  useReactive: isReactiveFunction,
-  reactive: { wrapInit: expr => expr, wrapUse: expr => expr },
-  plain: { wrapInit: expr => expr, wrapUse: expr => expr },
-};
-
 export default defineConfig({
   // sourceLocale is en by default
   locales: ['en', 'es', 'fr', 'de', 'nl', 'id'],
@@ -108,7 +78,6 @@ export default defineConfig({
   adapters: {
     main: jsx({
       loader: 'react',
-      runtime,
       // Tests never reach the vite plugin, so the CLI (`pnpm
       // clean-translations`) must skip them too; otherwise the two extract
       // different catalogs and every dev-server start rewrites them.
