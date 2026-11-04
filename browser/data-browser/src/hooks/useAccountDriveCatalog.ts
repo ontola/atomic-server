@@ -10,8 +10,21 @@ import {
   catalogCacheKey,
   readCatalogCache,
   catalogSubjects,
+  shareCatalogReports,
   type CatalogSnapshot,
 } from '../helpers/managed/driveCatalog';
+
+/** One report per moment, however many drive lists are mounted. */
+const catalogReports = shareCatalogReports(async body => {
+  const response = await managedFetch('/drives/catalog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+  if (!response.ok) throw new Error('Could not refresh account drives');
+
+  return response.json();
+});
 
 /** Reconcile account membership separately from the user's favorite pointers. */
 export function useAccountDriveCatalog(local: string[]) {
@@ -34,15 +47,10 @@ export function useAccountDriveCatalog(local: string[]) {
           ? { agent, email: result.managedAccount.email }
           : null;
       },
-      send: async entries => {
-        const response = await managedFetch('/drives/catalog', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(entries),
-        });
-        if (!response.ok) throw new Error('Could not refresh account drives');
+      send: entries => {
+        const body = JSON.stringify(entries);
 
-        return response.json();
+        return catalogReports.send(JSON.stringify([agent, body]), body);
       },
       changed: next => {
         if (!stopped) {
@@ -113,6 +121,8 @@ export function useAccountDriveCatalog(local: string[]) {
     window.addEventListener('focus', refresh);
     window.addEventListener('online', refresh);
     const logout = onManagedLogout(() => {
+      catalogReports.reset();
+
       if (sync.snapshot) {
         try {
           localStorage.removeItem(catalogCacheKey(sync.snapshot));

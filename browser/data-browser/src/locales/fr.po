@@ -8362,6 +8362,7 @@ msgstr "Copie locale indisponible"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Signaler cette erreur"
 
