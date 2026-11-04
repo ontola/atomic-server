@@ -13464,11 +13464,11 @@ msgstr "Wissel hier terug naar je vorige schijf"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Click to name your drive"
-msgstr "Klik hier om je drive een naam te geven"
+msgstr "Klik hier om je schijf een naam te geven"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make a new drive here"
-msgstr "Maak hier een nieuwe drive"
+msgstr "Maak hier een nieuwe schijf"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI here"
@@ -13476,7 +13476,7 @@ msgstr "Praat hier met de AI"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share a drive here"
-msgstr "Deel hier een drive"
+msgstr "Deel hier een schijf"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email here"
