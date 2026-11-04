@@ -10843,6 +10843,7 @@ msgid "Welcome"
 msgstr "Selamat datang"
 
 #: src/components/MetaSetter.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Account"
 msgstr "Akun"
 
@@ -12143,10 +12144,6 @@ msgstr "orang dapat bergabung"
 #: src/components/Share/useEditorSeats.ts
 msgid "{0} Viewers are free."
 msgstr "{0} Pemirsa gratis."
-
-#: src/components/SideBar/accountRowName.ts
-msgid "Signed in"
-msgstr "Sudah masuk"
 
 #: src/components/Vault/VaultRestoreAction.tsx
 msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."

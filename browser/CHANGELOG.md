@@ -3,6 +3,7 @@
 This changelog covers all five packages, as they are (for now) updated as a whole
 
 ## UNRELEASED
+- Sidebar account row: an identity saved to an account but without a profile name now shows the account's email (truncated, full address on hover) instead of "Signed in"; "Account" if no address is known, "Guest" if not linked. It follows sign-in and sign-out live.
 - Getting started is a panel at the top of the sidebar instead of a card on the drive page. It is open by default, folds like any other panel (so it can always be brought back, and the "Show Getting started" setting in Drive settings is gone), and disappears once every step is done.
 - Save your work: the Getting started card's Save step and a fixed "Saved on this device" row at the bottom of the sidebar (shown until the identity is saved to an account) open one "Keep your work" dialog in place, instead of sending a guest to the Sync page. With an account portal it shows the same sign-in options as every other screen and, once signed in, the identity gate adopts this device's key as the account's at once (no reload) and a "Saved as <email>" toast closes the dialog. Without a portal it offers connecting a device. The step and the row follow the sign-in live.
 - Drive page header: the drive switcher, Add icon, Add cover and Drive settings sit in one row under the title, always visible. The "In My drives" / "Add to My drives" toggle is gone from the drive page (the star in the drives lists still saves a drive).
