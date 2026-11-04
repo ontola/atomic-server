@@ -8367,6 +8367,7 @@ msgstr "Lokale kopie niet beschikbaar"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Deze fout melden"
 
