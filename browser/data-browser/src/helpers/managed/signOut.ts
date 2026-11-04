@@ -1,5 +1,6 @@
 import { saveAgentToIDB } from '../agentStorage';
 import { getManagedApiBase, hasManagedApi } from './api';
+import { clearManagedAccountBinding } from './binding';
 import { forgetCachedRecoverySecret } from './recovery';
 import { logoutManagedSession } from './session';
 
@@ -8,7 +9,8 @@ import { logoutManagedSession } from './session';
  * sign-out. The account session ends first, so a sign-in that follows cannot
  * have its new cookie cleared by a late logout response; then the identity's
  * key leaves this device. `forget` also drops the device's copy of the
- * encrypted backup, for a shared or borrowed machine.
+ * encrypted backup, for a shared or borrowed machine. The account binding
+ * goes too, so the next identity on this device is not shown as linked.
  *
  * The caller updates what is on screen (agent, drive, route).
  */
@@ -19,6 +21,7 @@ export async function signOutEverywhere({
   if (forget) forgetCachedRecoverySecret(agentSubject);
   await logoutManagedSession();
   await saveAgentToIDB(undefined);
+  clearManagedAccountBinding();
 }
 
 /**
