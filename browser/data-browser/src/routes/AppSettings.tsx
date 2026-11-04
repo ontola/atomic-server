@@ -53,6 +53,8 @@ export const AppSettingsRoute = createRoute({
 });
 
 const getLocaleName = (locale: string) => {
+  if (locale === 'id') return /* @wc-ignore */ 'Bahasa Indonesia';
+
   const names = new Intl.DisplayNames([locale], { type: 'language' });
 
   return names.of(locale);

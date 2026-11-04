@@ -33,7 +33,7 @@ patchedDependencies:
   '@wuchale/jsx@0.12.5': c62a6c8ae50964c9b52a44a8f50a85ccd1e7bd003758e3143f2e985b9051e8e6
   loro-prosemirror@0.4.3: cfeb56b4474c59fdd4a3feb56f010825ca89494fca7a5bb422aef1a84e626bf8
   playwright-core@1.63.0: 51ccaaf15d34f7f1a82e936ef746184b5ff972a17b05ddff80d43daf6d89d86b
-  wuchale@0.25.6: 3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9
+  wuchale@0.25.6: 511c67ffd9eb6bf2eb31fa7c28a0333018922baa4709799b976e33184a78b5ac
 
 importers:
 
@@ -411,7 +411,7 @@ importers:
         version: 7.4.1
       wuchale:
         specifier: ^0.25.6
-        version: 0.25.6(patch_hash=3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9)
+        version: 0.25.6(patch_hash=511c67ffd9eb6bf2eb31fa7c28a0333018922baa4709799b976e33184a78b5ac)
       yjs:
         specifier: ^13.6.30
         version: 13.6.30
@@ -464,6 +464,9 @@ importers:
       oxc-transform-react:
         specifier: 0.145.0
         version: 0.145.0
+      pofile:
+        specifier: 1.1.4
+        version: 1.1.4
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -14927,7 +14930,7 @@ snapshots:
     dependencies:
       '@sveltejs/acorn-typescript': 1.0.10(acorn@8.18.0)
       acorn: 8.18.0
-      wuchale: 0.25.6(patch_hash=3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9)
+      wuchale: 0.25.6(patch_hash=511c67ffd9eb6bf2eb31fa7c28a0333018922baa4709799b976e33184a78b5ac)
     optionalDependencies:
       react: 19.2.6
 
@@ -21311,7 +21314,7 @@ snapshots:
       is-wsl: 3.1.1
       powershell-utils: 0.1.0
 
-  wuchale@0.25.6(patch_hash=3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9):
+  wuchale@0.25.6(patch_hash=511c67ffd9eb6bf2eb31fa7c28a0333018922baa4709799b976e33184a78b5ac):
     dependencies:
       '@sveltejs/acorn-typescript': 1.0.10(acorn@8.18.0)
       acorn: 8.18.0

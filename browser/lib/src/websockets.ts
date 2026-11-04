@@ -1267,6 +1267,7 @@ export class WSClient {
         // Resolved by waitForTag. The payload is the server's capability
         // list; remember it so features negotiate instead of guessing.
         this._serverCaps = decodeAuthOk(payload);
+
         break;
 
       case Tag.KEEPALIVE:
@@ -1302,6 +1303,12 @@ export class WSClient {
           } else {
             this.takePendingCommit(msg.requestId)?.reject(err);
           }
+        } else if (msg.code === ErrorCode.DEPRECATED_CLIENT) {
+          // A notice, not a failure: the server says this client predates
+          // `canonical-scheme` and will stop working in a coming release.
+          // Nothing is pending on it, so neither `rejectAllPending` nor a
+          // toast is right.
+          console.warn(`[WS] ${msg.message}`);
         } else if (msg.code === ErrorCode.SYNC_REJECTED) {
           // Our SYNC_PUSH was refused as a whole (no write right on the
           // drive, quota, not enrolled). Nothing we sent landed and no

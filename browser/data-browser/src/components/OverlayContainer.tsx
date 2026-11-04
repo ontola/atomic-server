@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type JSX, useMemo } from 'react';
+import { plural } from '@helpers/plural';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
 import { displayShortcut, shortcuts } from '../actions/shortcuts';
@@ -779,9 +780,7 @@ function SearchOverlay(): JSX.Element {
               </span>
             </FooterHints>
             {total > 0 && (
-              <span>
-                {total} result{total !== 1 ? 's' : ''}
-              </span>
+              <span>{plural(total, ['# result', '# results'])}</span>
             )}
           </FooterRow>
         </>

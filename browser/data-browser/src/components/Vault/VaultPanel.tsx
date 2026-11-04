@@ -12,6 +12,7 @@ import { UsageMeter } from '../Cloud/UsageMeter';
 import { VaultStorage } from './VaultStorage';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
+import { plural } from '@helpers/plural';
 
 /**
  * Cloud Vault for one drive, as one {@link ServiceRow}.
@@ -164,9 +165,7 @@ export function VaultPanel({
       : enrollment.last_backup_at
         ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
         : `Backed up to ${PRODUCT_NAME}`;
-  const objects = `${details.confirmed_objects} object${
-    details.confirmed_objects === 1 ? '' : 's'
-  }`;
+  const objects = plural(details.confirmed_objects, ['# object', '# objects']);
 
   // Included in Cloud Server, the vault's allowance is part of that plan, whose
   // own meter carries the limit. Quoting it here reads as the vault's limit.

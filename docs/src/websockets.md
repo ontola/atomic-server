@@ -57,6 +57,20 @@ There is no version number on the wire. A responder advertises named
 capabilities and a client adapts to them. Anything not advertised is assumed
 absent, which is the pre-2026-09 baseline.
 
+Capabilities that every build since the 2026-09 baseline speaks (`auth-max-age`,
+`pull-from`, `signed-destroy`, `unsub`, `auth-nonce`, `client-hello`,
+`rebind-on-auth`, `ephemeral`) are no longer advertised, and `rbsr` was retired
+earlier. Their names are never reused.
+
+**Deprecated clients.** The baseline for a current client is the client
+capability `canonical-scheme`, which every client since AtomicServer
+v0.41.0-beta.8 lists in its `HELLO`. A connection whose `HELLO` lacks it gets
+one `ERROR{request_id 0, DEPRECATED_CLIENT (14)}` notice and a warning in the
+server log; one that authenticates and never sends a `HELLO` is only logged. It
+is a notice only: the connection keeps working and no request is affected. A
+client that receives it should log it and carry on. Support for such clients
+will be removed in a coming release.
+
 `AUTH_OK (0x02)`'s payload is a JSON array of capability names, UTF-8, with
 no length prefix. A responder with nothing to advertise sends a bare
 `[0x02]`, which is what every pre-2026-09 build sends; decoders match on the
@@ -68,18 +82,9 @@ The current list (`protocol::CAPABILITIES`):
 
 | Name | Meaning |
 | --- | --- |
-| `auth-max-age` | `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused, and a failed `AUTH` answers with `AUTH_FAILED (8)`. |
 | `keepalive` | Understands `KEEPALIVE (0x41)`, and echoes it over WebSocket. |
-| `rbsr` | *Retired 2026-09, no longer advertised; never reuse.* Answered the `RBSR_FP` range-fingerprint frames. |
-| `pull-from` | `SYNC_DIFF` carries a `pullFrom` map of per-subject version vectors. |
-| `signed-destroy` | On a peer stream, destroys travel as signed `COMMIT` frames; a naked `DESTROY` from a peer is ignored. |
-| `unsub` | `UNSUB (0x21)` actually cancels a drive subscription. |
-| `auth-nonce` | Sends `CHALLENGE (0x42)` as its first frame on a WebSocket and verifies an `AUTH.requestedSubject` of the form `{origin}#{nonce}` against it. |
 | `commit-ok-slim` | Answers `COMMIT` with the slim `COMMIT_OK` (`[request_id] [commit_id]`) for a client whose `HELLO` lists `commit-ok-slim`. |
-| `client-hello` | Reads a `HELLO (0x37)` from a WebSocket client and records the capabilities it lists. |
-| `rebind-on-auth` | Re-evaluates the connection's subscriptions against the new identity when an `AUTH` lands, dropping the ones it may no longer read. |
 | `sync-probe` | Reads the `probe` and `subjects` keys of a `SYNC (0x30)` JSON tail and answers a stale probe with `SYNC_RESEND (0x38)`. |
-| `ephemeral` | Reads and writes `EPHEMERAL (0x40)` over WebSocket for edits in progress, cursors and drive presence, in place of the `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE` text frames. |
 | `commit-pace` | Appends the node's write-load hint (`pace_ms`) to the slim `COMMIT_OK` of a client whose `HELLO` lists `commit-pace`, and may refuse a `COMMIT` with `BUSY (12)` when overloaded. See [Write load and pacing](#write-load-and-pacing). |
 | `get-many` | Answers `GET_MANY (0x15)`, a list of subjects, with one `GET_MANY_RESULT (0x16)` holding an `UPDATE` or `ERROR` entry per subject, so a client fetches a whole list in one round trip. |
 
@@ -93,7 +98,7 @@ too: the browser and `WsClient` send a `HELLO` on open, listing what they
 speak (`protocol::CLIENT_CAPABILITIES`, `CLIENT_CAPABILITIES` in `ws-v2.ts`).
 The server answers nothing (its own list rides on `AUTH_OK`); the list steers
 what that connection is sent from then on. The one name a responder acts on
-today are `commit-ok-slim` and `commit-pace`. A server that predates `client-hello` drops the
+today are `commit-ok-slim` and `commit-pace`. A server that predates client `HELLO`s drops the
 frame unread, and the client gets the pre-2026-09 behaviour.
 
 
@@ -123,7 +128,7 @@ logged and dropped, not answered.
 | `0x33` | `SYNC_PUSH` | either | engine (both transports) |
 | `0x34` | `BLOB_REQUEST` | either | engine (both transports); the browser also answers from its local blob store |
 | `0x35` | `BLOB_RESPONSE` | either | engine (both transports) |
-| `0x36` | *reserved* | nobody | nobody. Previously `QUERY_UPDATE`; retired, never reuse. |
+| `0x36` | *reserved* | nobody | nobody. Previously `QUERY_UPDATE`; retired, never reuse. It has no constant in the code, only this note. |
 | `0x37` | `HELLO` | both peers on an Iroh stream; a WebSocket client on open | Iroh handshake and live loop; the WS handler records the client's capabilities. The WS server never sends one (its capabilities ride on `AUTH_OK`). |
 | `0x38` | `SYNC_RESEND` | responder, answering a `SYNC` probe whose hash is stale | client only (browser, Iroh initiator). Tells the client to send its full version-vector `SYNC`. |
 | `0x40` | `EPHEMERAL` | Iroh peers; WS client and server, both ways | Iroh live loop; WS handler (`require_auth`, then the broadcaster). The server relays between the two transports. |
@@ -521,6 +526,7 @@ Everything else is open to an anonymous socket and gated per subject by
 | `10` | `IMMUTABLE_COMMIT` | The commit's subject is itself a Commit, which can never be edited. Terminal: drop the entry; nothing is lost. |
 | `11` | `CAUSALITY_CONFLICT` | A new Loro write lost against stored state. Keep the local edit; stop sending the same stale update until it is rebased. |
 | `12` | `BUSY` | The node is overloaded with writes, or the agent spent its write rate budget. Refused **before** any work; nothing landed. The message carries `retry_after_ms=<n>`. Not a failure: keep the edit, wait, send one merged delta, and do not retry over another transport. See [Write load and pacing](#write-load-and-pacing). |
+| `14` | `DEPRECATED_CLIENT` | A notice, not a refusal, sent with `request_id` 0 in answer to the `HELLO` to a client that predates `canonical-scheme` (see [Versioning and capabilities](#versioning-and-capabilities)). The connection stays usable; log it and carry on. A client that predates the code sees an unknown code with request id 0. |
 
 Codes `1` to `4` and `9` to `12` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
@@ -689,11 +695,7 @@ depends on the subject:
   a commit subject;
 - **any other resource**: a per-resource subscription on that one subject.
 
-No `AUTH` needed; gated on `check_read` of the subject. Until 2026-09-04 the
-per-resource case was a separate text frame (`SUBSCRIBE <subject>`, `AUTH`
-required, no unsubscribe), and a filter subscription (`SUBSCRIBE_QUERY`)
-existed that no client outside the Rust integration tests ever sent; both
-are gone.
+No `AUTH` needed; gated on `check_read` of the subject.
 
 **`UNSUB (0x21) <subject>`** cancels it, under the same raw string `SUB`
 registered with, so the fan-out entry is actually found. It removes the
