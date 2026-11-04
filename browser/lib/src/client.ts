@@ -16,6 +16,11 @@ import {
 } from './error.js';
 import { busyRetryAfterMs, DEFAULT_BUSY_RETRY_MS, ErrorCode } from './ws-v2.js';
 import { pageRequestSignal } from './page-request-signal.js';
+import {
+  noteOriginReachable,
+  noteOriginUnreachable,
+  originBackoffError,
+} from './origin-backoff.js';
 // Import directly from the modules to avoid a circular dep through `./index.js`
 // — under some bundlers the re-exported binding lands as `undefined` at runtime
 // (TypeError: serializeDeterministically is not a function), which surfaces in
@@ -389,6 +394,9 @@ export class Client {
       // Store keep local state instead of overwriting it with this
       // failure, and retry the resource when the connection returns.
       let response: Response;
+      const backingOff = originBackoffError(url);
+
+      if (backingOff) throw backingOff;
 
       try {
         response = await this.fetch(url, {
@@ -397,7 +405,9 @@ export class Client {
           body: bodyReq,
           signal,
         });
+        noteOriginReachable(url);
       } catch (e) {
+        if (!signal?.aborted) noteOriginUnreachable(url);
         throw new AtomicError(
           `Could not reach ${url}: ${e instanceof Error ? e.message : e}`,
           ErrorType.Transport,

@@ -50,6 +50,36 @@ export function parseCatalog(value: unknown): DriveCatalog {
   return c;
 }
 
+/**
+ * Every mounted drive list (the sidebar's switcher, the account page) reports
+ * the same catalog on mount, on focus and every 30 s. A report identical to
+ * the last one, sent less than `ttlMs` ago or still in flight, shares its
+ * answer instead of posting again. A failed report is not shared.
+ */
+export function shareCatalogReports<T>(
+  post: (body: string) => Promise<T>,
+  ttlMs = 25_000,
+) {
+  let last: { key: string; at: number; result: Promise<T> } | undefined;
+
+  return {
+    send(key: string, body: string): Promise<T> {
+      if (last?.key === key && Date.now() - last.at < ttlMs) return last.result;
+
+      const entry = { key, at: Date.now(), result: post(body) };
+      last = entry;
+      entry.result.catch(() => {
+        if (last === entry) last = undefined;
+      });
+
+      return entry.result;
+    },
+    reset() {
+      last = undefined;
+    },
+  };
+}
+
 export class DriveCatalogSync {
   private generation = 0;
   snapshot: CatalogSnapshot | null = null;
