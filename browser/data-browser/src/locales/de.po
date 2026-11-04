@@ -13457,28 +13457,28 @@ msgstr "Speichern und registrieren"
 
 #: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
-msgstr ""
+msgstr "Wechsle hier zurück zu deinem vorherigen Drive"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Click to name your drive"
-msgstr ""
+msgstr "Klicke hier, um deinem Drive einen Namen zu geben"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make a new drive here"
-msgstr ""
+msgstr "Erstelle hier einen neuen Drive"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI here"
-msgstr ""
+msgstr "Sprich hier mit der KI"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share a drive here"
-msgstr ""
+msgstr "Teile hier einen Drive"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email here"
-msgstr ""
+msgstr "Füge hier deine E-Mail-Adresse hinzu"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device here"
-msgstr ""
+msgstr "Verbinde hier ein Gerät"

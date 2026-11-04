@@ -13454,28 +13454,28 @@ msgstr "Enregistrer et s'inscrire"
 
 #: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
-msgstr ""
+msgstr "Revenez ici à votre drive précédent"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Click to name your drive"
-msgstr ""
+msgstr "Cliquez ici pour nommer votre drive"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make a new drive here"
-msgstr ""
+msgstr "Créez ici un nouveau drive"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI here"
-msgstr ""
+msgstr "Parlez ici à l'IA"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share a drive here"
-msgstr ""
+msgstr "Partagez ici un drive"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email here"
-msgstr ""
+msgstr "Ajoutez ici votre e-mail"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device here"
-msgstr ""
+msgstr "Connectez ici un appareil"
