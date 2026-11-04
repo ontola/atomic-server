@@ -19,6 +19,7 @@ export const server = {
     release: 'https://atomicdata.dev/classes/Release',
     installation: 'https://atomicdata.dev/classes/Installation',
     listing: 'https://atomicdata.dev/classes/Listing',
+    connectedApp: 'https://atomicdata.dev/classes/ConnectedApp',
   },
   properties: {
     agent: 'https://atomicdata.dev/properties/invite/agent',
@@ -79,6 +80,9 @@ export const server = {
     standards: 'https://atomicdata.dev/properties/standards',
     evidence: 'https://atomicdata.dev/properties/evidence',
     supportTier: 'https://atomicdata.dev/properties/supportTier',
+    homepage: 'https://atomicdata.dev/properties/homepage',
+    openUrlTemplate: 'https://atomicdata.dev/properties/openUrlTemplate',
+    handlesClasses: 'https://atomicdata.dev/properties/handlesClasses',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -177,6 +181,14 @@ export const server = {
       'https://atomicdata.dev/properties/evidence',
       'https://atomicdata.dev/properties/supportTier',
     ],
+    ['https://atomicdata.dev/classes/ConnectedApp']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/homepage',
+      'https://atomicdata.dev/properties/emoji',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/openUrlTemplate',
+      'https://atomicdata.dev/properties/handlesClasses',
+    ],
   },
 } as const satisfies OntologyBaseObject;
 
@@ -193,6 +205,7 @@ export namespace Server {
   export type Release = typeof server.classes.release;
   export type Installation = typeof server.classes.installation;
   export type Listing = typeof server.classes.listing;
+  export type ConnectedApp = typeof server.classes.connectedApp;
 }
 
 declare module '../index.js' {
@@ -316,6 +329,17 @@ declare module '../index.js' {
         | typeof server.properties.evidence
         | typeof server.properties.supportTier;
     };
+    [server.classes.connectedApp]: {
+      requires:
+        | BaseProps
+        | 'https://atomicdata.dev/properties/name'
+        | typeof server.properties.homepage;
+      recommends:
+        | 'https://atomicdata.dev/properties/emoji'
+        | 'https://atomicdata.dev/properties/description'
+        | typeof server.properties.openUrlTemplate
+        | typeof server.properties.handlesClasses;
+    };
   }
 
   interface PropTypeMapping {
@@ -374,6 +398,9 @@ declare module '../index.js' {
     [server.properties.standards]: string[];
     [server.properties.evidence]: JSONValue;
     [server.properties.supportTier]: string;
+    [server.properties.homepage]: string;
+    [server.properties.openUrlTemplate]: string;
+    [server.properties.handlesClasses]: string[];
   }
 
   interface PropSubjectToNameMapping {
@@ -432,5 +459,8 @@ declare module '../index.js' {
     [server.properties.standards]: 'standards';
     [server.properties.evidence]: 'evidence';
     [server.properties.supportTier]: 'supportTier';
+    [server.properties.homepage]: 'homepage';
+    [server.properties.openUrlTemplate]: 'openUrlTemplate';
+    [server.properties.handlesClasses]: 'handlesClasses';
   }
 }

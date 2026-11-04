@@ -444,6 +444,57 @@
     "https://atomicdata.dev/properties/subresources": []
   },
   {
+    "@id": "https://atomicdata.dev/properties/homepage",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/uri",
+    "https://atomicdata.dev/properties/description": "The web address of an app's homepage. Identifies a ConnectedApp within a drive.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "homepage"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/openUrlTemplate",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Where to open a resource in an app: a URL containing `{subject}`, which is replaced by the URL-encoded subject of the resource.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "open-url-template"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/handlesClasses",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The classes an app can open. The web app offers \"Open in <app>\" on resources of these classes.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "handles-classes",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Class"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/ConnectedApp",
+    "https://atomicdata.dev/properties/description": "An app that uses this drive, such as a native app that writes its own classes into it. The app registers itself as a child of the drive, so the web app can list it and offer to open resources in it. Not an Installation: nothing is run or activated.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/emoji",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/openUrlTemplate",
+      "https://atomicdata.dev/properties/handlesClasses"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/homepage"
+    ],
+    "https://atomicdata.dev/properties/shortname": "connected-app",
+    "https://atomicdata.dev/properties/subresources": []
+  },
+  {
     "@id": "https://atomicdata.dev/classes/Lease",
     "https://atomicdata.dev/properties/description": "The right to run an Installation's background work (triggers, schedules) on one node, for a limited time. Created and renewed by the holder with ordinary signed commits, taken over after expiry by a new Lease naming the previous one. The current holder is the Lease with the highest generation, ties broken by the lowest holder node id.",
     "https://atomicdata.dev/properties/isA": [

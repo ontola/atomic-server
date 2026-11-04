@@ -13464,3 +13464,17 @@ msgstr "{0} hace la copia de seguridad de esta unidad. Solo esa cuenta puede cam
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by another account. Only that account can change it."
 msgstr "Otra cuenta hace la copia de seguridad de esta unidad. Solo esa cuenta puede cambiarlo."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr ""
+
+#. 0: app.name
+#: src/views/Drive/ConnectedAppList.tsx
+msgid "Open the {0} homepage"
+msgstr ""
+
+#: src/views/Drive/ConnectedAppList.tsx
+msgid "Apps in this drive"
+msgstr ""

@@ -13462,3 +13462,17 @@ msgstr "Drive ini dicadangkan oleh {0}. Hanya akun tersebut yang dapat mengubahn
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by another account. Only that account can change it."
 msgstr "Drive ini dicadangkan oleh akun lain. Hanya akun tersebut yang dapat mengubahnya."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr ""
+
+#. 0: app.name
+#: src/views/Drive/ConnectedAppList.tsx
+msgid "Open the {0} homepage"
+msgstr ""
+
+#: src/views/Drive/ConnectedAppList.tsx
+msgid "Apps in this drive"
+msgstr ""

@@ -13470,3 +13470,17 @@ msgstr "This drive is backed up by {0}. Only that account can change it."
 #: src/components/Vault/VaultPanel.tsx
 msgid "This drive is backed up by another account. Only that account can change it."
 msgstr "This drive is backed up by another account. Only that account can change it."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "Open in {0}"
+
+#. 0: app.name
+#: src/views/Drive/ConnectedAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Open the {0} homepage"
+
+#: src/views/Drive/ConnectedAppList.tsx
+msgid "Apps in this drive"
+msgstr "Apps in this drive"
