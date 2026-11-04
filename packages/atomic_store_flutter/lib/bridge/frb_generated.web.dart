@@ -152,7 +152,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Uint8List> dco_decode_list_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<ListReplace> dco_decode_list_list_replace(dynamic raw);
+
+  @protected
   List<LivePeerInfo> dco_decode_list_live_peer_info(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
+
+  @protected
+  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
 
   @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
@@ -165,6 +174,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(String, int)> dco_decode_list_record_string_u_32(dynamic raw);
+
+  @protected
+  ListReplace dco_decode_list_replace(dynamic raw);
 
   @protected
   List<SearchHit> dco_decode_list_search_hit(dynamic raw);
@@ -375,8 +387,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<ListReplace> sse_decode_list_list_replace(SseDeserializer deserializer);
+
+  @protected
   List<LivePeerInfo> sse_decode_list_live_peer_info(
       SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
+
+  @protected
+  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
 
   @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
@@ -390,6 +411,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<(String, int)> sse_decode_list_record_string_u_32(
       SseDeserializer deserializer);
+
+  @protected
+  ListReplace sse_decode_list_replace(SseDeserializer deserializer);
 
   @protected
   List<SearchHit> sse_decode_list_search_hit(SseDeserializer deserializer);
@@ -607,8 +631,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<Uint8List> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_list_replace(
+      List<ListReplace> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_live_peer_info(
       List<LivePeerInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_u_32_loose(
+      List<int> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_u_32_strict(
+      Uint32List self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
@@ -624,6 +660,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_string_u_32(
       List<(String, int)> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_replace(ListReplace self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_search_hit(

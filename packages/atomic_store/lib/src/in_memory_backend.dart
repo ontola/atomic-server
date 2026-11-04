@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'backend.dart';
 import 'comments.dart';
 import 'exceptions.dart';
 import 'files.dart';
+import 'lists.dart';
 import 'urls.dart';
 import 'value.dart';
 
@@ -28,7 +30,8 @@ import 'value.dart';
 ///
 /// Comments ([CommentsBackend]) are kept in [comments], written by [agent],
 /// without the bridge's rules. Posting one announces a change of its page.
-class InMemoryBackend implements StoreBackend, CommentsBackend, FilesBackend {
+class InMemoryBackend
+    implements StoreBackend, CommentsBackend, FilesBackend, ListsBackend {
   InMemoryBackend([Map<String, Map<String, Value>> resources = const {}]) {
     resources
         .forEach((subject, props) => this.resources[subject] = Map.of(props));
@@ -385,4 +388,65 @@ class InMemoryBackend implements StoreBackend, CommentsBackend, FilesBackend {
 
   @override
   Future<Uint8List?> readFile(String file) async => fileBytes[file];
+
+  // Undo and redo per subject: the whole resource before each list edit.
+  final Map<String, List<Map<String, Value>>> _undo = {};
+  final Map<String, List<Map<String, Value>>> _redo = {};
+
+  @override
+  Future<void> editList(String subject, String property,
+      {Map<int, Object?> replace = const {},
+      List<int> delete = const [],
+      List<Object?> push = const []}) async {
+    _enter('editList $subject');
+    final props = resources[subject];
+    if (props == null) {
+      throw StoreException(StoreErrorKind.notFound, 'Not found: $subject',
+          subject: subject);
+    }
+    final items = switch (props[property]) {
+      JsonValue(:final json) => List<Object?>.of(jsonDecode(json) as List),
+      _ => <Object?>[],
+    };
+    final gone = delete.toSet().toList()..sort();
+    for (final i in [...replace.keys, ...gone]) {
+      if (i < 0 || i >= items.length) {
+        throw StoreException(StoreErrorKind.invalid,
+            'Index $i out of bounds for $property (len ${items.length})',
+            subject: subject);
+      }
+    }
+    (_undo[subject] ??= []).add(Map.of(props));
+    _redo.remove(subject);
+    replace.forEach((i, item) => items[i] = item);
+    for (final i in gone.reversed) {
+      items.removeAt(i);
+    }
+    items.addAll(push);
+    props[property] = JsonValue.encode(items);
+    _emit(subject, ResourceEventKind.changed);
+  }
+
+  @override
+  Future<bool> undo(String subject) async {
+    _enter('undo $subject');
+    return _step(subject, _undo, _redo);
+  }
+
+  @override
+  Future<bool> redo(String subject) async {
+    _enter('redo $subject');
+    return _step(subject, _redo, _undo);
+  }
+
+  bool _step(String subject, Map<String, List<Map<String, Value>>> from,
+      Map<String, List<Map<String, Value>>> to) {
+    final props = resources[subject];
+    final states = from[subject];
+    if (props == null || states == null || states.isEmpty) return false;
+    (to[subject] ??= []).add(Map.of(props));
+    resources[subject] = states.removeLast();
+    _emit(subject, ResourceEventKind.changed);
+    return true;
+  }
 }

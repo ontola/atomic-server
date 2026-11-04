@@ -3,6 +3,7 @@ import 'dart:async';
 import 'backend.dart';
 import 'comments.dart';
 import 'files.dart';
+import 'lists.dart';
 import 'exceptions.dart';
 import 'resource.dart';
 import 'urls.dart';
@@ -34,6 +35,11 @@ class Store {
   /// bridge and [InMemoryBackend] do).
   FilesBackend? get files =>
       backend is FilesBackend ? backend as FilesBackend : null;
+
+  /// Item-by-item edits of JSON arrays with undo and redo, when the backend
+  /// has them (the bridge and [InMemoryBackend] do).
+  ListsBackend? get lists =>
+      backend is ListsBackend ? backend as ListsBackend : null;
 
   /// The drive this store works in; `null` searches every drive and makes
   /// [newResource] require a `parent`. Assign it to follow a drive switch

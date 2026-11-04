@@ -1183,6 +1183,66 @@ impl Resource {
         Ok(())
     }
 
+    /// Edit the JSON array [property] as one change and one undo step:
+    /// first `replace` items in place, then `delete` items (by their index
+    /// before the deletes), then `push` items at the end. CRDT-friendly, like
+    /// [`Self::push_list_item`]: list operations that merge with edits from
+    /// other devices, never a replaced array. An eraser that wipes three
+    /// strokes is one step, so one undo brings all three back.
+    pub fn edit_list_items(
+        &mut self,
+        property: &str,
+        replace: Vec<(usize, serde_json::Value)>,
+        delete: Vec<usize>,
+        push: Vec<serde_json::Value>,
+    ) -> crate::errors::AtomicResult<()> {
+        if replace.is_empty() && delete.is_empty() && push.is_empty() {
+            return Ok(());
+        }
+        self.ensure_materialized()?;
+        let doc = self.loro();
+        for (index, item) in &replace {
+            doc.delete_from_loro_list(property, *index)?;
+            doc.insert_into_loro_list(property, *index, item)?;
+        }
+        let mut delete = delete;
+        delete.sort_unstable();
+        delete.dedup();
+        for index in delete.into_iter().rev() {
+            doc.delete_from_loro_list(property, index)?;
+        }
+        for item in &push {
+            doc.push_to_loro_list(property, item)?;
+        }
+        doc.commit();
+        // Keep the base the next save exports from, so it sends only this edit.
+        let base = self.propvals.get(urls::LORO_UPDATE).cloned();
+        self.sync_propvals_from_loro();
+        if let Some(base) = base {
+            self.propvals.insert(urls::LORO_UPDATE.into(), base);
+        }
+        let _ = self.record_undo_checkpoint();
+        Ok(())
+    }
+
+    /// Bring this resource, kept in memory for editing, up to date with
+    /// `stored`, the store's copy of it, which may hold edits from other
+    /// devices since. The undo history stays: undo still takes back only
+    /// this resource's own edits, now on top of theirs.
+    pub fn catch_up_with(&mut self, stored: &Resource) -> crate::errors::AtomicResult<()> {
+        let Ok(Value::LoroDoc(snapshot)) = stored.get(urls::LORO_UPDATE) else {
+            return Ok(());
+        };
+        let snapshot = snapshot.clone();
+        self.ensure_materialized()?;
+        self.loro().import_update(&snapshot)?;
+        self.sync_propvals_from_loro();
+        // The store's state is the base the next save exports from.
+        self.propvals
+            .insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
+        Ok(())
+    }
+
     /// Undo the last local Loro operation on this resource.
     /// Returns true if something was undone.
     /// After undo, call `save_locally()` to persist and sync the change.
@@ -2416,6 +2476,91 @@ mod test {
             stroke_count(&resource),
             0,
             "one undo tap should revert the user-visible stroke, not just the dateEdited tick"
+        );
+    }
+
+    /// One `edit_list_items` call is one undo step, also after another
+    /// device's edit was caught up with: undo and redo take back only ours.
+    #[tokio::test]
+    async fn edit_list_items_is_one_undo_step_over_a_peers_edit() {
+        let store: crate::Db = init_store().await;
+        let (_agent, drive) = store.setup("test").await.unwrap();
+        let canvas = store
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive,
+                "List edit undo",
+                Some(vec![(
+                    STROKE_DATA,
+                    Value::Json(serde_json::Value::Array(vec![])),
+                )]),
+            )
+            .await
+            .unwrap();
+        let subject: Subject = canvas.as_str().into();
+        let stroke = |n: i64| serde_json::json!({"color": n, "width": 2.0, "path": [[0.0, 0.0]]});
+        let colors = |r: &Resource| match r.get(STROKE_DATA) {
+            Ok(Value::Json(serde_json::Value::Array(a))) => a
+                .iter()
+                .map(|s| s["color"].as_i64().unwrap())
+                .collect::<Vec<_>>(),
+            _ => vec![],
+        };
+
+        let mut mine = store.get_resource(&subject).await.unwrap();
+        mine.ensure_editable().unwrap();
+        mine.edit_list_items(
+            STROKE_DATA,
+            vec![],
+            vec![],
+            vec![stroke(1), stroke(2), stroke(3)],
+        )
+        .unwrap();
+        mine.save_locally(&store).await.unwrap();
+
+        // Another session (another device) adds a stroke.
+        let mut theirs = store.get_resource(&subject).await.unwrap();
+        theirs.push_list_item(STROKE_DATA, stroke(9)).unwrap();
+        theirs.save_locally(&store).await.unwrap();
+
+        mine.catch_up_with(&store.get_resource(&subject).await.unwrap())
+            .unwrap();
+        assert_eq!(colors(&mine), vec![1, 2, 3, 9]);
+
+        // An eraser wiping two strokes and an edited note: one step.
+        mine.edit_list_items(STROKE_DATA, vec![(1, stroke(5))], vec![0, 2], vec![])
+            .unwrap();
+        let response = mine.save_locally(&store).await.unwrap();
+        assert_eq!(colors(&mine), vec![5, 9]);
+        let update = response.commit.loro_update.unwrap();
+        let whole = mine.loro().export_snapshot().len();
+        assert!(
+            update.len() < whole / 2,
+            "the save sends this edit, not the whole document ({} of {whole} bytes)",
+            update.len()
+        );
+
+        assert!(mine.undo().unwrap());
+        assert_eq!(
+            colors(&mine),
+            vec![1, 2, 3, 9],
+            "one undo for the whole edit"
+        );
+        mine.save_locally(&store).await.unwrap();
+        assert!(mine.redo().unwrap());
+        assert_eq!(colors(&mine), vec![5, 9]);
+        mine.save_locally(&store).await.unwrap();
+        assert!(mine.undo().unwrap());
+        assert!(mine.undo().unwrap());
+        assert_eq!(
+            colors(&mine),
+            vec![9],
+            "undo keeps the other device's stroke"
+        );
+        mine.save_locally(&store).await.unwrap();
+        assert_eq!(
+            colors(&store.get_resource(&subject).await.unwrap()),
+            vec![9]
         );
     }
 

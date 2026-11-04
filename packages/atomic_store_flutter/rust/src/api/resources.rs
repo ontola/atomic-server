@@ -99,6 +99,15 @@ pub struct PropValue {
     pub value: AtomicValue,
 }
 
+/// One item of a JSON array property put in place of the item at `index`
+/// ([`AtomicStore::edit_list`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListReplace {
+    pub index: u32,
+    /// The new item, as JSON.
+    pub item: String,
+}
+
 /// A resource as the local store holds it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResourceData {
@@ -282,6 +291,10 @@ pub struct AtomicStore {
     pub(crate) profiles: AgentProfiles,
     /// A run of `follow_conversations` is going.
     pub(crate) following: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Resources edited through [`AtomicStore::edit_list`], kept in memory so
+    /// their undo history ([`AtomicStore::undo`]) lasts between calls.
+    editing:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, atomic_lib::Resource>>>,
 }
 
 impl AtomicStore {
@@ -303,6 +316,7 @@ impl AtomicStore {
             chat_rooms: ChatRooms::new(profiles.clone()),
             profiles,
             following: Default::default(),
+            editing: Default::default(),
         }
     }
 
@@ -508,6 +522,90 @@ impl AtomicStore {
         let response = self.node().save_locally(&mut resource).await?;
         self.push(&response).await;
         Ok(())
+    }
+
+    /// Edit the JSON array `property` of `subject` as one signed commit and
+    /// one undo step: `replace` items in place, then `delete` items (by their
+    /// index before the deletes), then `push` items (JSON) at the end. List
+    /// operations, not a replaced array, so edits from other devices merge.
+    /// [`AtomicStore::undo`] takes the edit back.
+    pub async fn edit_list(
+        &self,
+        subject: String,
+        property: String,
+        replace: Vec<ListReplace>,
+        delete: Vec<u32>,
+        push: Vec<String>,
+    ) -> Result<(), AtomicError> {
+        let json = |s: &str| {
+            serde_json::from_str::<serde_json::Value>(s)
+                .map_err(|e| AtomicError::invalid(format!("Not JSON: {e}")))
+        };
+        let replace = replace
+            .iter()
+            .map(|r| Ok((r.index as usize, json(&r.item)?)))
+            .collect::<Result<Vec<_>, AtomicError>>()?;
+        let push = push
+            .iter()
+            .map(|p| json(p))
+            .collect::<Result<Vec<_>, _>>()?;
+        let delete = delete.into_iter().map(|i| i as usize).collect();
+        self.edit(&subject, |r| {
+            r.edit_list_items(&property, replace, delete, push)?;
+            Ok(true)
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Take back this handle's last [`AtomicStore::edit_list`] on `subject`
+    /// (not another device's), as a signed commit like any edit. False when
+    /// there is nothing to undo, also after the app restarted.
+    pub async fn undo(&self, subject: String) -> Result<bool, AtomicError> {
+        self.edit(&subject, |r| r.undo()).await
+    }
+
+    /// Do again what [`AtomicStore::undo`] took back on `subject`.
+    pub async fn redo(&self, subject: String) -> Result<bool, AtomicError> {
+        self.edit(&subject, |r| r.redo()).await
+    }
+
+    /// Run `change` on the editing copy of `subject` (caught up with the
+    /// store first) and save it when it changed something.
+    #[flutter_rust_bridge::frb(ignore)]
+    async fn edit(
+        &self,
+        subject: &str,
+        change: impl FnOnce(&mut atomic_lib::Resource) -> atomic_lib::errors::AtomicResult<bool>,
+    ) -> Result<bool, AtomicError> {
+        let stored = self.db.get_resource(&subject.into()).await?;
+        let kept = self.editing.lock().unwrap().remove(subject);
+        let mut resource = match kept {
+            Some(mut r) => {
+                r.catch_up_with(&stored)?;
+                r
+            }
+            None => {
+                let mut r = stored;
+                r.ensure_editable()?;
+                r
+            }
+        };
+        // On an error the copy is dropped: the next edit starts afresh.
+        if !change(&mut resource)? {
+            self.editing
+                .lock()
+                .unwrap()
+                .insert(subject.into(), resource);
+            return Ok(false);
+        }
+        let response = self.node().save_locally(&mut resource).await?;
+        self.editing
+            .lock()
+            .unwrap()
+            .insert(subject.into(), resource);
+        self.push(&response).await;
+        Ok(true)
     }
 
     /// Create a resource with a new subject (a DID derived from the signed
@@ -1147,6 +1245,72 @@ mod tests {
             property: property.into(),
             value: scalar(Datatype::Link, subject),
         }
+    }
+
+    #[tokio::test]
+    async fn list_edits_undo_and_redo_one_step_at_a_time() {
+        let dir = temp_dir("lists");
+        let h = open(&dir).await;
+        let setup = h.setup("Drawer".into()).await.unwrap();
+        let strokes = "https://atomicdata.dev/ontology/canvas/property/strokeData";
+        let mut values = folder("Canvas", &setup.drive);
+        values.push(PropValue {
+            property: strokes.into(),
+            value: scalar(Datatype::Json, "[]"),
+        });
+        let canvas = h.create_resource_with_values(values).await.unwrap();
+        let read = || async {
+            let data = h.get_resource_data(canvas.clone()).await.unwrap();
+            let text = data
+                .props
+                .iter()
+                .find(|p| p.property == strokes)
+                .map(|p| p.value.text.clone())
+                .unwrap_or_default();
+            // Numbers come back as floats (Loro keeps JSON numbers as f64).
+            serde_json::from_str::<Vec<f64>>(&text)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|n| n as i64)
+                .collect::<Vec<_>>()
+        };
+        let edit = |replace: Vec<ListReplace>, delete: Vec<u32>, push: Vec<&str>| {
+            h.edit_list(
+                canvas.clone(),
+                strokes.into(),
+                replace,
+                delete,
+                push.into_iter().map(String::from).collect(),
+            )
+        };
+
+        edit(vec![], vec![], vec!["1", "2"]).await.unwrap();
+        edit(vec![], vec![], vec!["3"]).await.unwrap();
+        edit(
+            vec![ListReplace {
+                index: 0,
+                item: "7".into(),
+            }],
+            vec![1],
+            vec![],
+        )
+        .await
+        .unwrap();
+        assert_eq!(read().await, vec![7, 3]);
+
+        assert!(h.undo(canvas.clone()).await.unwrap());
+        assert_eq!(read().await, vec![1, 2, 3], "one undo per edit");
+        assert!(h.undo(canvas.clone()).await.unwrap());
+        assert_eq!(read().await, vec![1, 2]);
+        assert!(h.redo(canvas.clone()).await.unwrap());
+        assert_eq!(read().await, vec![1, 2, 3]);
+        assert!(h.undo(canvas.clone()).await.unwrap());
+        assert!(h.undo(canvas.clone()).await.unwrap());
+        assert_eq!(read().await, Vec::<i64>::new());
+        assert!(
+            !h.undo(canvas.clone()).await.unwrap(),
+            "nothing left to undo"
+        );
     }
 
     #[tokio::test]

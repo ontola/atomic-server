@@ -128,7 +128,7 @@ class _HandleApi implements BridgeResourceApi {
 /// final store = Store(backend: BridgeStoreBackend(handle), drive: driveSubject);
 /// ```
 class BridgeStoreBackend
-    implements StoreBackend, CommentsBackend, FilesBackend {
+    implements StoreBackend, CommentsBackend, FilesBackend, ListsBackend {
   /// A backend on [store], or on the default store when it is null.
   BridgeStoreBackend([bridge.AtomicStore? store])
       : _api = store == null ? const _DefaultStoreApi() : _HandleApi(store),
@@ -161,6 +161,29 @@ class BridgeStoreBackend
   @override
   Future<Uint8List?> readFile(String file) =>
       _guard(() => _comments.readFile(file: file));
+
+  @override
+  Future<void> editList(String subject, String property,
+          {Map<int, Object?> replace = const {},
+          List<int> delete = const [],
+          List<Object?> push = const []}) =>
+      _guard(() => _comments.editList(
+          subject: subject,
+          property: property,
+          replace: [
+            for (final MapEntry(:key, :value) in replace.entries)
+              bridge.ListReplace(index: key, item: jsonEncode(value)),
+          ],
+          delete: delete,
+          push: [for (final item in push) jsonEncode(item)]));
+
+  @override
+  Future<bool> undo(String subject) =>
+      _guard(() => _comments.undo(subject: subject));
+
+  @override
+  Future<bool> redo(String subject) =>
+      _guard(() => _comments.redo(subject: subject));
 
   @override
   Future<List<Comment>> readComments({String? about, String? drive}) =>

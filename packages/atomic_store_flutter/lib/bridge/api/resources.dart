@@ -9,8 +9,8 @@ import 'error.dart';
 import 'node.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `atomic_to_sub_resource`, `atomic_to_value`, `build`, `global`, `list_to_propvals`, `new_default`, `node`, `parse`, `pin_drive`, `propvals_to_list`, `push`, `pusher`, `scalar`, `sub_resource_to_value`, `value_to_atomic`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `atomic_to_sub_resource`, `atomic_to_value`, `build`, `edit`, `global`, `list_to_propvals`, `new_default`, `node`, `parse`, `pin_drive`, `propvals_to_list`, `push`, `pusher`, `scalar`, `sub_resource_to_value`, `value_to_atomic`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// [`AtomicStore::get_resource_data`] on the default store.
 Future<ResourceData> getResourceData({required String subject}) =>
@@ -139,6 +139,18 @@ abstract class AtomicStore implements RustOpaqueInterface {
 
   /// Replace the text of this agent's own comment `id`.
   Future<void> editComment({required String id, required String text});
+
+  /// Edit the JSON array `property` of `subject` as one signed commit and
+  /// one undo step: `replace` items in place, then `delete` items (by their
+  /// index before the deletes), then `push` items (JSON) at the end. List
+  /// operations, not a replaced array, so edits from other devices merge.
+  /// [`AtomicStore::undo`] takes the edit back.
+  Future<void> editList(
+      {required String subject,
+      required String property,
+      required List<ListReplace> replace,
+      required List<int> delete,
+      required List<String> push});
 
   /// Get a conversation onto this device and follow it: fetched from the
   /// connected server when missing, and its new messages arrive over the open
@@ -357,6 +369,9 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// have not arrived.
   Future<Uint8List?> readFile({required String file});
 
+  /// Do again what [`AtomicStore::undo`] took back on `subject`.
+  Future<bool> redo({required String subject});
+
   /// Forget a paired device.
   void removeKnownPeer({required String nodeId});
 
@@ -457,6 +472,11 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// Sync this handle's drive with every paired and every connected device,
   /// at once, each bounded in time. Starts the peer when needed.
   Future<PeersSyncOutcome> syncWithPeers();
+
+  /// Take back this handle's last [`AtomicStore::edit_list`] on `subject`
+  /// (not another device's), as a signed commit like any edit. False when
+  /// there is nothing to undo, also after the app restarted.
+  Future<bool> undo({required String subject});
 
   /// Keep `bytes` as a blob (named by its BLAKE3 hash) and create a `File`
   /// for them under `parent`, as the web app does: the data browser shows
@@ -571,6 +591,31 @@ enum Datatype {
   /// document, an unknown datatype); `unsupported_datatype` names it.
   unsupported,
   ;
+}
+
+/// One item of a JSON array property put in place of the item at `index`
+/// ([`AtomicStore::edit_list`]).
+class ListReplace {
+  final int index;
+
+  /// The new item, as JSON.
+  final String item;
+
+  const ListReplace({
+    required this.index,
+    required this.item,
+  });
+
+  @override
+  int get hashCode => index.hashCode ^ item.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ListReplace &&
+          runtimeType == other.runtimeType &&
+          index == other.index &&
+          item == other.item;
 }
 
 /// One property of a resource.

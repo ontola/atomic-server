@@ -1,4 +1,5 @@
 import 'exceptions.dart';
+import 'lists.dart';
 import 'store.dart';
 import 'urls.dart';
 import 'value.dart';
@@ -189,6 +190,40 @@ class Resource {
     }
     _destroyed = true;
   }
+
+  /// Edit the JSON array [property] item by item, saved right away as one
+  /// undo step ([ListsBackend.editList]): [replace] items by index, then
+  /// [delete] by index, then [push] at the end. Unlike [setJson] and [save],
+  /// edits from other devices to other items are kept. Throws
+  /// [StoreException] (`invalid` when the backend has no list edits).
+  Future<void> editList(String property,
+      {Map<int, Object?> replace = const {},
+      List<int> delete = const [],
+      List<Object?> push = const []}) async {
+    await _lists.editList(subject, property,
+        replace: replace, delete: delete, push: push);
+    await reload();
+  }
+
+  /// Take back the last [editList] on this resource made here. `false` when
+  /// there is nothing to undo.
+  Future<bool> undo() async {
+    final done = await _lists.undo(subject);
+    if (done) await reload();
+    return done;
+  }
+
+  /// Do again what [undo] took back. `false` when there is nothing to redo.
+  Future<bool> redo() async {
+    final done = await _lists.redo(subject);
+    if (done) await reload();
+    return done;
+  }
+
+  ListsBackend get _lists =>
+      _store.lists ??
+      (throw const StoreException(
+          StoreErrorKind.invalid, 'This store cannot edit lists'));
 
   /// Read the resource again from the store, keeping unsaved changes.
   Future<void> reload() async {
