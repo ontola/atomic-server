@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'embed_page.dart';
@@ -163,12 +164,17 @@ class AtomicDocumentViewState extends State<AtomicDocumentView>
     if (embedHostOnlyMethods.contains(method)) {
       reply = 'true,${jsonEncode('true')}';
     } else {
+      final args = jsonEncode(request['args'] is List ? request['args'] : []);
       try {
-        final args = request['args'];
-        final answer = await widget.call(
-            '$method', jsonEncode(args is List ? args : const []));
+        final answer = await widget.call('$method', args);
         reply = 'true,${jsonEncode(answer)}';
+        // What the page reads and writes, to follow in logcat.
+        if (kDebugMode) {
+          debugPrint('[embed] $method(${_short(args)}) -> '
+              '${answer.length} chars');
+        }
       } catch (e) {
+        debugPrint('[embed] $method(${_short(args)}) failed: $e');
         reply = 'false,${jsonEncode('$e')}';
       }
     }
@@ -190,3 +196,5 @@ class AtomicDocumentViewState extends State<AtomicDocumentView>
     return page.build();
   }
 }
+
+String _short(String s) => s.length <= 120 ? s : '${s.substring(0, 120)}…';
