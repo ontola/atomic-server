@@ -3,6 +3,7 @@ import { useSettings } from '../helpers/AppSettings';
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
 import { constructOpenURL } from '../helpers/navigation';
 import { prepareTemplateDrive } from '../chunks/Templates/prepareTemplateDrive';
+import { showDriveSwitcherHint } from './driveSwitcherHint';
 import { useNavigateWithTransition } from './useNavigateWithTransition';
 
 /** One creation at a time, so a double click or a StrictMode re-run shares it. */
@@ -17,7 +18,7 @@ export function useCreateDrive(): (options?: {
   skipNavigation?: boolean;
 }) => Promise<Resource> {
   const store = useStore();
-  const { setDrive } = useSettings();
+  const { drive: previousDrive, setDrive } = useSettings();
   const navigate = useNavigateWithTransition();
 
   return options => {
@@ -29,6 +30,9 @@ export function useCreateDrive(): (options?: {
           localOnly: !!getManagedPortalUrl(),
         });
         await store.notifyResourceManuallyCreated(resource);
+        // Only worth pointing at the switcher when there is a drive to go back to.
+        if (previousDrive && previousDrive !== resource.subject)
+          showDriveSwitcherHint();
         setDrive(resource.subject);
 
         return resource;

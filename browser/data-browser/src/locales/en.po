@@ -8735,7 +8735,11 @@ msgid "Install {0}"
 msgstr "Install {0}"
 
 #. 0: app.name
+#. 0: driveName
+#. 0: driveName
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/components/SideBar/SideBarDrive.tsx
+#: src/components/SideBar/SideBarDrive.tsx
 msgid "Open {0}"
 msgstr "Open {0}"
 
@@ -13240,7 +13244,6 @@ msgstr "Could not send your identity"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Switch Drive"
 
@@ -13451,3 +13454,7 @@ msgstr "Connect a device to open your work on it"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save & register"
 msgstr "Save & register"
+
+#: src/components/SideBar/SideBarDrive.tsx
+msgid "Switch back to your previous drive here"
+msgstr "Switch back to your previous drive here"

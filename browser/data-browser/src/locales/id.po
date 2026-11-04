@@ -8733,7 +8733,11 @@ msgid "Install {0}"
 msgstr "Instal {0}"
 
 #. 0: app.name
+#. 0: driveName
+#. 0: driveName
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/components/SideBar/SideBarDrive.tsx
+#: src/components/SideBar/SideBarDrive.tsx
 msgid "Open {0}"
 msgstr "Buka {0}"
 
@@ -13237,7 +13241,6 @@ msgstr "Tidak dapat mengirim identitas Anda"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Ganti drive"
 
@@ -13443,3 +13446,7 @@ msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save & register"
 msgstr "Simpan dan daftar"
+
+#: src/components/SideBar/SideBarDrive.tsx
+msgid "Switch back to your previous drive here"
+msgstr ""

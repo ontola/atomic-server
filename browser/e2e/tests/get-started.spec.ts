@@ -200,6 +200,13 @@ test('Creating a new drive leaves exactly one Getting started panel', async ({
   await expect(page.getByTestId('current-drive-title')).toHaveText('My drive', {
     timeout: 30_000,
   });
+  // A one-time hint points at the switcher, and goes on any click.
+  const hint = page.getByTestId('drive-switcher-hint');
+  await expect(hint).toBeVisible({ timeout: 30_000 });
+  await expect(hint).toHaveText('Switch back to your previous drive here');
+  await page.mouse.click(700, 400);
+  await expect(hint).toHaveCount(0);
+
   await expect(panels).toHaveCount(1, { timeout: 30_000 });
   await expect(panels).toBeVisible();
   // Give a stale panel the time it would need to linger.

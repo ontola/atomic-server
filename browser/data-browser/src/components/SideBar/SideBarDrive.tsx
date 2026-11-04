@@ -30,6 +30,12 @@ import { SIDEBAR_CHILD_LIMIT, SideBarMoreRow } from './SideBarMoreRow';
 import { LoaderInline } from '../Loader';
 import { QuickCreateRow } from '../NewInstanceButton';
 import { ResourceGlyph } from '../ResourceGlyph';
+import * as RadixPopover from '@radix-ui/react-popover';
+import { Popover } from '../Popover';
+import {
+  dismissDriveSwitcherHint,
+  useDriveSwitcherHint,
+} from '../../hooks/driveSwitcherHint';
 import { useIsPrivateDrive } from '../../hooks/useIsPrivateDrive';
 import { useVisibleDriveChildren } from '../../hooks/useVisibleDriveChildren';
 
@@ -69,7 +75,12 @@ export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
     <>
       <SideBarHeader>
         <DriveTitleLink onItemClick={onItemClick} />
-        <DriveSwitcher Trigger={DriveSwitcherTrigger} onSwitch={onItemClick} />
+        <SwitcherHint>
+          <DriveSwitcher
+            Trigger={DriveSwitcherTrigger}
+            onSwitch={onItemClick}
+          />
+        </SwitcherHint>
       </SideBarHeader>
       <SidebarSelectionProvider current={currentSubject} ancestry={ancestry}>
         <StyledScrollArea>
@@ -223,6 +234,54 @@ const DriveSwitcherTrigger = buildDefaultTrigger(
   () => 'Switch Drive',
   SwitcherButton,
 );
+
+/**
+ * Points at the switcher once, right after a drive was made. Goes on a click
+ * anywhere (which includes using the switcher), or after a few seconds.
+ */
+function SwitcherHint({ children }: React.PropsWithChildren): JSX.Element {
+  const show = useDriveSwitcherHint();
+
+  useEffect(() => {
+    if (!show) return;
+    const timer = setTimeout(dismissDriveSwitcherHint, 8000);
+    // Our own listener, not the popover's dismissal: a new drive's title takes
+    // focus on arrival, which the popover would count as an outside interaction
+    // and close the hint at once.
+    document.addEventListener('pointerdown', dismissDriveSwitcherHint, true);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener(
+        'pointerdown',
+        dismissDriveSwitcherHint,
+        true,
+      );
+    };
+  }, [show]);
+
+  return (
+    <Popover
+      open={show}
+      noLock
+      side='bottom'
+      onOpenChange={() => {}}
+      onOpenAutoFocus={e => e.preventDefault()}
+      onCloseAutoFocus={e => e.preventDefault()}
+      Trigger={
+        <RadixPopover.Anchor asChild>
+          <div style={{ display: 'flex', alignItems: 'stretch' }}>
+            {children}
+          </div>
+        </RadixPopover.Anchor>
+      }
+    >
+      <p data-testid='drive-switcher-hint' style={{ margin: 0 }}>
+        Switch back to your previous drive here
+      </p>
+    </Popover>
+  );
+}
 
 /** Left half of the header: glyph and name, goes to the drive's page. */
 function DriveTitleLink({
