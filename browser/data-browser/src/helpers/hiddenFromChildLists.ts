@@ -1,4 +1,4 @@
-import { ai, dataBrowser, isAgentSubject } from '@tomic/lib';
+import { ai, dataBrowser, isAgentSubject, server } from '@tomic/lib';
 
 /**
  * Classes kept out of child lists (the AI sidebar reaches them), with the
@@ -7,6 +7,8 @@ import { ai, dataBrowser, isAgentSubject } from '@tomic/lib';
  */
 export const HIDDEN_CLASS_LABELS: Record<string, string> = {
   [ai.classes.aiChat]: 'AI chats',
+  // Records of apps that use the drive; listed in Drive settings instead.
+  [server.classes.connectedApp]: 'App records',
 };
 
 /**
