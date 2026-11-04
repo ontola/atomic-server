@@ -1,4 +1,4 @@
-import type { JSONValue } from './value.js';
+import { isPlainObject, type JSONValue } from './value.js';
 
 /**
  * The contract for a plugin's `run` export.
@@ -451,10 +451,6 @@ function localRefsOf(intent: Intent): string[] {
 
 function err(message: string): Problem {
   return { severity: 'error', message };
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isJsonValue(value: unknown): boolean {

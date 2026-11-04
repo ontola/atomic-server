@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Internal: one `isPlainObject` in @tomic/lib replaces 5 local type guards.
 - Internal: one `isLoopbackHost` in @tomic/lib replaces 12 inline localhost checks.
 - Removed the dead mobile-Tauri frontend code: Android back-button handling, the native QR scanner ("Scan a QR code" button) and the `@tauri-apps/plugin-barcode-scanner` dependency. The mobile app is the Flutter app; Tauri is desktop only. Pairing codes are still pasted or typed.
 - `@tomic/lib`: `ErrorCode.DEPRECATED_CLIENT (14)` is a notice, logged with `console.warn` without rejecting pending requests or showing a toast. `Tag.QUERY_UPDATE_RESERVED` and the eight unread capability names are removed from `ws-v2.ts`.
