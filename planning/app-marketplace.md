@@ -39,9 +39,9 @@ still good integration.
 5. **"Apps" is the user-facing word** for everything installable. Integrations
    are a category of apps. The Integrations Store route becomes Apps.
 
-6. **Native apps register as `ConnectedApp`.** An app in its own repo (a Flutter
+6. **Native apps register as `ExternalApp`.** An app in its own repo (a Flutter
    app writing its own classes) is not installed, so it records itself as a
-   `ConnectedApp` child of the drive (`store.registerApp` in `atomic_store`).
+   `ExternalApp` child of the drive (`store.registerApp` in `atomic_store`).
    The drive settings list them and the resource menu offers "Open in <app>"
    for classes in `handlesClasses`. See `docs/src/plugins.md`.
 

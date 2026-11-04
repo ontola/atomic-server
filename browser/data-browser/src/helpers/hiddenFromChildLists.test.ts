@@ -10,8 +10,8 @@ describe('isHiddenFromChildLists', () => {
     expect(isHiddenFromChildLists([dataBrowser.classes.meeting])).toBe(false);
   });
 
-  it('hides app records (ConnectedApp)', () => {
-    expect(isHiddenFromChildLists([server.classes.connectedApp])).toBe(true);
+  it('hides app records (ExternalApp)', () => {
+    expect(isHiddenFromChildLists([server.classes.externalApp])).toBe(true);
   });
 
   it('hides a private note on an agent', () => {

@@ -8,7 +8,7 @@ import { ai, dataBrowser, isAgentSubject, server } from '@tomic/lib';
 export const HIDDEN_CLASS_LABELS: Record<string, string> = {
   [ai.classes.aiChat]: 'AI chats',
   // Records of apps that use the drive; listed in Drive settings instead.
-  [server.classes.connectedApp]: 'App records',
+  [server.classes.externalApp]: 'App records',
 };
 
 /**

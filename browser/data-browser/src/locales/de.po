@@ -13474,10 +13474,10 @@ msgid "Open in {0}"
 msgstr ""
 
 #. 0: app.name
-#: src/views/Drive/ConnectedAppList.tsx
+#: src/views/Drive/ExternalAppList.tsx
 msgid "Open the {0} homepage"
 msgstr ""
 
-#: src/views/Drive/ConnectedAppList.tsx
+#: src/views/Drive/ExternalAppList.tsx
 msgid "Apps in this drive"
 msgstr ""

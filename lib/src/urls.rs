@@ -318,8 +318,8 @@ pub const DOMAINS: &str = "https://atomicdata.dev/properties/domains";
 pub const STANDARDS: &str = "https://atomicdata.dev/properties/standards";
 pub const EVIDENCE: &str = "https://atomicdata.dev/properties/evidence";
 pub const SUPPORT_TIER: &str = "https://atomicdata.dev/properties/supportTier";
-// ... for ConnectedApp (an app that uses a drive)
-pub const CONNECTED_APP: &str = "https://atomicdata.dev/classes/ConnectedApp";
+// ... for ExternalApp (an app that uses a drive)
+pub const EXTERNAL_APP: &str = "https://atomicdata.dev/classes/ExternalApp";
 pub const HOMEPAGE: &str = "https://atomicdata.dev/properties/homepage";
 pub const OPEN_URL_TEMPLATE: &str = "https://atomicdata.dev/properties/openUrlTemplate";
 pub const HANDLES_CLASSES: &str = "https://atomicdata.dev/properties/handlesClasses";

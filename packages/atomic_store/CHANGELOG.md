@@ -1,7 +1,7 @@
 ## Unreleased
 
-* `Store.registerApp` records an app as a `ConnectedApp` in a drive, so the
-  web app can list it and offer "Open in <app>" (`Classes.connectedApp`).
+* `Store.registerApp` records an app as a `ExternalApp` in a drive, so the
+  web app can list it and offer "Open in <app>" (`Classes.externalApp`).
 * `Resource.moveTo`; `set` stores a `String` as a link for `Props.parent` and
   `Props.isA` (`Props.linkProperties`).
 * `JsonValue.strings` / `.encode` / `.data`, `Resource.setStrings`,

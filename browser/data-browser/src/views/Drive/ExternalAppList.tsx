@@ -3,15 +3,15 @@ import { FaArrowUpRightFromSquare } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import ResourceRow from '../ResourceRow';
 import { SettingsSection } from '@components/Settings';
-import { useConnectedApps } from '@hooks/useConnectedApps';
+import { useExternalApps } from '@hooks/useExternalApps';
 
 /**
- * The apps registered in a drive (`ConnectedApp`), such as native apps that
+ * The apps registered in a drive (`ExternalApp`), such as native apps that
  * write their own classes into it. The whole section is hidden when there
  * are none.
  */
-export const ConnectedAppList: React.FC<{ drive: string }> = ({ drive }) => {
-  const apps = useConnectedApps(drive);
+export const ExternalAppList: React.FC<{ drive: string }> = ({ drive }) => {
+  const apps = useExternalApps(drive);
 
   if (apps.length === 0) {
     return null;

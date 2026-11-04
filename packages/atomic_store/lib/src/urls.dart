@@ -33,7 +33,7 @@ abstract final class Props {
   static const mimetype = 'https://atomicdata.dev/properties/mimetype';
   static const downloadUrl = 'https://atomicdata.dev/properties/downloadURL';
 
-  /// A [Classes.connectedApp]: its icon, homepage, the URL that opens a
+  /// A [Classes.externalApp]: its icon, homepage, the URL that opens a
   /// resource in it (with `{subject}`) and the classes it handles.
   static const emoji = 'https://atomicdata.dev/properties/emoji';
   static const homepage = 'https://atomicdata.dev/properties/homepage';
@@ -55,5 +55,5 @@ abstract final class Classes {
   static const tag = 'https://atomicdata.dev/classes/Tag';
 
   /// An app that uses a drive; see [Store.registerApp].
-  static const connectedApp = 'https://atomicdata.dev/classes/ConnectedApp';
+  static const externalApp = 'https://atomicdata.dev/classes/ExternalApp';
 }

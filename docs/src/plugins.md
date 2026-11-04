@@ -19,9 +19,9 @@ Three classes describe a plugin's life on a server:
 
 ## Apps that use a drive
 
-A native app that has its own repository and writes its own classes into a drive (a Flutter council app, say) is not a plugin and is never run by the server, so it leaves no trace in the drive by itself. It records itself as a **ConnectedApp** (`https://atomicdata.dev/classes/ConnectedApp`), a child of the drive. Required: `name` and `homepage`. Recommended: `emoji`, `description`, `openUrlTemplate` (a URL containing `{subject}`, replaced by the URL-encoded subject of a resource) and `handlesClasses` (the class URLs the app can open).
+A native app that has its own repository and writes its own classes into a drive (a Flutter council app, say) is not a plugin and is never run by the server, so it leaves no trace in the drive by itself. It records itself as an **ExternalApp** (`https://atomicdata.dev/classes/ExternalApp`), a child of the drive. Required: `name` and `homepage`. Recommended: `emoji`, `description`, `openUrlTemplate` (a URL containing `{subject}`, replaced by the URL-encoded subject of a resource) and `handlesClasses` (the class URLs the app can open).
 
-The web app lists the ConnectedApps under 'Apps in this drive' in the drive settings, and adds 'Open in <app>' to the menu of a resource whose class is in `handlesClasses`. Nothing is activated or granted: it is a label, not an Installation. In Dart, `store.registerApp(...)` from `atomic_store` creates or updates it, and is safe to call on every start.
+The web app lists the ExternalApps under 'Apps in this drive' in the drive settings, and adds 'Open in <app>' to the menu of a resource whose class is in `handlesClasses`. Nothing is activated or granted: it is a label, not an Installation. In Dart, `store.registerApp(...)` from `atomic_store` creates or updates it, and is safe to call on every start.
 
 ## Installing a plugin
 

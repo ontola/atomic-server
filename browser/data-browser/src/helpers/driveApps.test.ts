@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   appsForResource,
   buildOpenUrl,
-  type ConnectedAppInfo,
+  type ExternalAppInfo,
 } from './driveApps';
 
 const GREMIUM = 'https://openmeeting.nl/ns/classes/Gremium';
-const app = (over: Partial<ConnectedAppInfo> = {}): ConnectedAppInfo => ({
+const app = (over: Partial<ExternalAppInfo> = {}): ExternalAppInfo => ({
   subject: 'did:ad:app',
   name: 'OpenMeeting',
   homepage: 'https://openmeeting.nl',

@@ -597,7 +597,7 @@ const embeddedVocabulary = new Set<string>([
   server.classes.release,
   server.classes.installation,
   server.classes.listing,
-  server.classes.connectedApp,
+  server.classes.externalApp,
   server.properties.homepage,
   server.properties.openUrlTemplate,
   server.properties.handlesClasses,

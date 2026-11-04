@@ -37,7 +37,7 @@ import { ResourceInline } from '../../views/ResourceInline';
 import { ResourceUsage } from '../ResourceUsage';
 import { getDeleteDialog } from './deleteDialogRegistry';
 import { useAfterResourceDelete } from '../../hooks/useAfterResourceDelete';
-import { useConnectedApps } from '../../hooks/useConnectedApps';
+import { useExternalApps } from '../../hooks/useExternalApps';
 import { appsForResource } from '../../helpers/driveApps';
 
 const CreateTableFormDialog = lazy(() =>
@@ -182,7 +182,7 @@ export function ResourceContextMenu({
   const CustomDeleteDialog = getDeleteDialog(ctx.resource.getClasses()[0]);
   const afterDelete = useAfterResourceDelete(subject, onAfterDelete);
   const appMenu = useAppMenuItems();
-  const connectedApps = useConnectedApps(currentDrive);
+  const externalApps = useExternalApps(currentDrive);
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
 
   const handleBindActive = useCallback(
@@ -327,7 +327,7 @@ export function ResourceContextMenu({
 
   // Native apps registered in this drive that handle the resource's class.
   for (const { app, url } of appsForResource(
-    connectedApps,
+    externalApps,
     ctx.resource.getClasses(),
     subject,
   )) {

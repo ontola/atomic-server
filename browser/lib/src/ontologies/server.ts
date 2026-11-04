@@ -19,7 +19,7 @@ export const server = {
     release: 'https://atomicdata.dev/classes/Release',
     installation: 'https://atomicdata.dev/classes/Installation',
     listing: 'https://atomicdata.dev/classes/Listing',
-    connectedApp: 'https://atomicdata.dev/classes/ConnectedApp',
+    externalApp: 'https://atomicdata.dev/classes/ExternalApp',
   },
   properties: {
     agent: 'https://atomicdata.dev/properties/invite/agent',
@@ -181,7 +181,7 @@ export const server = {
       'https://atomicdata.dev/properties/evidence',
       'https://atomicdata.dev/properties/supportTier',
     ],
-    ['https://atomicdata.dev/classes/ConnectedApp']: [
+    ['https://atomicdata.dev/classes/ExternalApp']: [
       'https://atomicdata.dev/properties/name',
       'https://atomicdata.dev/properties/homepage',
       'https://atomicdata.dev/properties/emoji',
@@ -205,7 +205,7 @@ export namespace Server {
   export type Release = typeof server.classes.release;
   export type Installation = typeof server.classes.installation;
   export type Listing = typeof server.classes.listing;
-  export type ConnectedApp = typeof server.classes.connectedApp;
+  export type ExternalApp = typeof server.classes.externalApp;
 }
 
 declare module '../index.js' {
@@ -329,7 +329,7 @@ declare module '../index.js' {
         | typeof server.properties.evidence
         | typeof server.properties.supportTier;
     };
-    [server.classes.connectedApp]: {
+    [server.classes.externalApp]: {
       requires:
         | BaseProps
         | 'https://atomicdata.dev/properties/name'

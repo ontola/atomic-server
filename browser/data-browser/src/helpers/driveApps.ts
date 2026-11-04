@@ -1,5 +1,5 @@
-/** What the web app needs to know about a `ConnectedApp` resource. */
-export interface ConnectedAppInfo {
+/** What the web app needs to know about a `ExternalApp` resource. */
+export interface ExternalAppInfo {
   subject: string;
   name: string;
   homepage?: string;
@@ -32,7 +32,7 @@ export function buildOpenUrl(
 }
 
 export interface OpenInApp {
-  app: ConnectedAppInfo;
+  app: ExternalAppInfo;
   url: string;
 }
 
@@ -41,7 +41,7 @@ export interface OpenInApp {
  * `handlesClasses` overlap `resourceClasses` and whose template is usable.
  */
 export function appsForResource(
-  apps: ConnectedAppInfo[],
+  apps: ExternalAppInfo[],
   resourceClasses: string[],
   subject: string,
 ): OpenInApp[] {

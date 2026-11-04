@@ -446,7 +446,7 @@
   {
     "@id": "https://atomicdata.dev/properties/homepage",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/uri",
-    "https://atomicdata.dev/properties/description": "The web address of an app's homepage. Identifies a ConnectedApp within a drive.",
+    "https://atomicdata.dev/properties/description": "The web address of an app's homepage. Identifies an ExternalApp within a drive.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],
@@ -475,8 +475,8 @@
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Class"
   },
   {
-    "@id": "https://atomicdata.dev/classes/ConnectedApp",
-    "https://atomicdata.dev/properties/description": "An app that uses this drive, such as a native app that writes its own classes into it. The app registers itself as a child of the drive, so the web app can list it and offer to open resources in it. Not an Installation: nothing is run or activated.",
+    "@id": "https://atomicdata.dev/classes/ExternalApp",
+    "https://atomicdata.dev/properties/description": "An app outside the drive that reads and writes it, such as a native app that writes its own classes into it. The app registers itself as a child of the drive, so the web app can list it and offer to open resources in it. Not an Installation: nothing is run or activated.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],
@@ -491,7 +491,7 @@
       "https://atomicdata.dev/properties/name",
       "https://atomicdata.dev/properties/homepage"
     ],
-    "https://atomicdata.dev/properties/shortname": "connected-app",
+    "https://atomicdata.dev/properties/shortname": "external-app",
     "https://atomicdata.dev/properties/subresources": []
   },
   {

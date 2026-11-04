@@ -39,11 +39,11 @@ Future<Resource> register(Store store, {String name = 'OpenMeeting'}) =>
     );
 
 void main() {
-  test('creates a ConnectedApp under the drive', () async {
+  test('creates an ExternalApp under the drive', () async {
     final store = Store(backend: InMemoryBackend(seed()));
     final app = await register(store);
 
-    expect(app.isA(Classes.connectedApp), isTrue);
+    expect(app.isA(Classes.externalApp), isTrue);
     expect(app.parent, drive);
     expect(app.name, 'OpenMeeting');
     expect(app.getString(Props.homepage), 'https://openmeeting.nl');
