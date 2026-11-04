@@ -14,7 +14,7 @@ import 'app_theme.dart';
 import 'assistant_api.dart';
 import 'chat_screen.dart';
 import 'conversation_screen.dart';
-import 'embed_server.dart';
+import 'package:atomic_embed/atomic_embed.dart';
 import 'follow_controller.dart';
 import 'live_meeting_banner.dart';
 import 'meeting_lead.dart';
@@ -109,13 +109,6 @@ const _readMethods = {
   'init',
   'agent',
 };
-
-/// What the screen needs of the page: run a script in it, and show it.
-abstract class EmbedPage {
-  Future<void> runJavaScript(String script);
-  Future<Object> runJavaScriptReturningResult(String script);
-  Widget build();
-}
 
 class _ResourceViewState extends State<ResourceView>
     with WidgetsBindingObserver {

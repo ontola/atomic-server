@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:atomic_chat/src/warm_resource_web_view.dart';
+import 'package:atomic_embed/atomic_embed.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

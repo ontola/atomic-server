@@ -97,6 +97,12 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// app's AI sidebar does. Returns the chat's subject.
   Future<String> createAiChat({required String name});
 
+  /// A document named `name` under `parent`, its body written from the
+  /// Markdown `text` (a template). Returns its subject. Pushed like every
+  /// local write.
+  Future<String> createDocument(
+      {required String parent, required String name, required String text});
+
   /// A signed invite for `target` (a drive or any resource): whoever opens
   /// the link `<server>/app/invite?token=<token>` and accepts gets read, or
   /// with `write` read and write, access. Stateless, like `generateInviteToken`
@@ -151,6 +157,11 @@ abstract class AtomicStore implements RustOpaqueInterface {
       required List<ListReplace> replace,
       required List<int> delete,
       required List<String> push});
+
+  /// [`embed_call`] answered from this handle's store, signing as its agent
+  /// and pushing its writes through its own session: for an app that opened
+  /// its store with `AtomicStore.open` instead of `open_db`.
+  Future<String> embedCall({required String method, required String argsJson});
 
   /// Get a conversation onto this device and follow it: fetched from the
   /// connected server when missing, and its new messages arrive over the open

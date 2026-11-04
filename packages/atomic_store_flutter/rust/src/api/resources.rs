@@ -1247,6 +1247,39 @@ mod tests {
         }
     }
 
+    /// The embedded editor of an app that opened its own handle (not
+    /// `open_db`) reads that handle's store and signs as its agent.
+    #[tokio::test]
+    async fn the_embed_reads_and_signs_through_its_own_handle() {
+        let dir = temp_dir("embed");
+        let h = open(&dir).await;
+        let setup = h.setup("Writer".into()).await.unwrap();
+        let doc = h
+            .create_resource_with_values(folder("Fractie-inbreng", &setup.drive))
+            .await
+            .unwrap();
+
+        let agent: serde_json::Value =
+            serde_json::from_str(&h.embed_call("agent".into(), "[]".into()).await.unwrap())
+                .unwrap();
+        assert_eq!(agent, serde_json::json!(setup.agent_subject));
+
+        let rows: serde_json::Value = serde_json::from_str(
+            &h.embed_call(
+                "getResourcesWithSnapshots".into(),
+                serde_json::json!([[doc]]).to_string(),
+            )
+            .await
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(rows[0]["jsonAd"]
+            .as_str()
+            .unwrap()
+            .contains("Fractie-inbreng"));
+        assert!(!rows[0]["snapshot"].as_str().unwrap().is_empty());
+    }
+
     #[tokio::test]
     async fn list_edits_undo_and_redo_one_step_at_a_time() {
         let dir = temp_dir("lists");

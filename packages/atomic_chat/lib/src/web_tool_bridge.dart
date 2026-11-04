@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'assistant_api.dart';
 import 'resource_view.dart';
-import 'warm_resource_web_view.dart';
+import 'package:atomic_embed/atomic_embed.dart';
 
 /// A tool the web app offers its AI chat: what the model is told of it.
 class ToolDef {

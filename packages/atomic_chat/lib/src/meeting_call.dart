@@ -5,9 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'assistant_api.dart';
-import 'call_permissions.dart';
+import 'package:atomic_embed/atomic_embed.dart';
 import 'resource_view.dart';
-import 'warm_resource_web_view.dart';
 
 /// The audio/video call of a meeting, in a web view of its own.
 ///

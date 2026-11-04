@@ -593,6 +593,26 @@ impl AtomicStore {
         .map_err(AtomicError::from)
     }
 
+    /// A document named `name` under `parent`, its body written from the
+    /// Markdown `text` (a template). Returns its subject. Pushed like every
+    /// local write.
+    pub async fn create_document(
+        &self,
+        parent: String,
+        name: String,
+        text: String,
+    ) -> Result<String, AtomicError> {
+        atomic_lib::host::create::create_document(
+            &self.node(),
+            self.pusher().as_ref(),
+            &parent,
+            &name,
+            &text,
+        )
+        .await
+        .map_err(AtomicError::from)
+    }
+
     /// Move `subject` under `new_parent` at `index` among the parent's children as
     /// the sidebar lists them (an index past the end appends), as the web app's
     /// drag and drop does: `parent` when it changes, a fractional `sortOrder`

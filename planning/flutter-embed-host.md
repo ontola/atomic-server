@@ -68,6 +68,17 @@ Each step ships on its own and has a test that fails without it.
   `EmbedServer.assetRoot`. `AppColors` moved to `atomic_flutter`. Tests moved
   with the code (`packages/atomic_chat/test`, on fakes); CI runs both packages
   (`atomic-flutter.yml`).
+- [x] **0b2. The embed on its own.** The web view parts moved from
+  `atomic_chat` to `packages/atomic_embed` (`EmbedServer`, `WebViewEmbedPage`,
+  the channel token, `CallPermissions`), re-exported by `atomic_chat`, so an
+  app without the assistant shell can show a resource:
+  `AtomicDocumentView(subject:, call: node.embedCall)`. `AtomicStore.embedCall`
+  answers from that handle's own store (the global `embed_call` needs
+  `open_db`), and `AtomicStore.createDocument` makes a `DocumentV2` with a
+  Markdown body (`host::create::create_document`, for templates). First user:
+  OpenMeeting's caucus documents (motions, amendments). Tests:
+  `document_view_test.dart`, `the_embed_reads_and_signs_through_its_own_handle`,
+  `a_document_from_a_template_has_its_text`.
 - [x] **0c. More from the bottom bar.** A reusable `HoldFan` (tap = default,
   touch-and-hold-drag = a vertical list of choices;
   `packages/atomic_flutter`) on New (AI chat, AI voice, Document, Other) and

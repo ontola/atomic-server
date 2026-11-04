@@ -56,10 +56,9 @@ export 'src/presence_facepile.dart';
 export 'src/follow_controller.dart';
 export 'src/warm_resource_web_view.dart';
 export 'src/resource_web_view.dart';
-export 'src/embed_server.dart';
+export 'package:atomic_embed/atomic_embed.dart';
 export 'src/meeting_call.dart';
 export 'src/meeting_call_overlay.dart';
-export 'src/call_permissions.dart';
 export 'src/resource_row.dart';
 export 'src/row_leading.dart';
 

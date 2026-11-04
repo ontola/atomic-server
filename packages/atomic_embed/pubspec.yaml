@@ -1,0 +1,21 @@
+name: atomic_embed
+description: The Atomic web renderer (documents, tables, folders) in a Flutter web view, reading from the app's own store. Used by atomic_chat and other Atomic Flutter apps.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.44.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.10.0
+  webview_flutter_wkwebview: ^3.26.2
+  permission_handler: ^13.0.2
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true
