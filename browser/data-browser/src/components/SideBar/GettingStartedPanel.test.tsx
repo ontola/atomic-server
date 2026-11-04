@@ -67,21 +67,6 @@ vi.mock('./SideBarPanel', () => ({
     </section>
   ),
 }));
-vi.mock('@components/Button', () => ({
-  Button: ({
-    children,
-    disabled,
-  }: {
-    children: React.ReactNode;
-    disabled?: boolean;
-  }) => <button disabled={disabled}>{children}</button>,
-}));
-vi.mock('@components/Row', () => ({
-  Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Column: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-}));
 const drive: never = {
   subject: 'did:ad:drive',
   get: (p: string) => (p === 'write' ? writers : 'Welcome to Atomic'),
@@ -108,7 +93,7 @@ beforeEach(() => {
 });
 
 describe('GettingStartedPanel', () => {
-  it('shows the count and every step, with Invite disabled for a reason', () => {
+  it('shows the count and every step, as rows, with Invite disabled for a reason', () => {
     steps[0].done = true;
     const html = render();
 
@@ -118,19 +103,25 @@ describe('GettingStartedPanel', () => {
       'Start a drive',
       'Talk to the AI',
       'Invite someone',
-      'Save your work',
+      'Save &amp; register',
     ])
       expect(html).toContain(title);
-    expect(html).toContain('Start a drive first');
-    expect(html).toMatch(/<button disabled="">Invite<\/button>/);
+    expect(html).toMatch(
+      /<button[^>]*disabled=""[^>]*title="Start a drive first"[^>]*>.*Invite someone/,
+    );
   });
 
-  it('says what the AI needs and offers setup instead', () => {
+  it('keeps hints in the tooltip and done rows inert', () => {
+    steps[0].done = true;
     steps[2].needs = 'ai-source';
     const html = render();
 
     expect(html).toContain('Needs an AI source');
-    expect(html).toContain('Set up AI');
+    expect(html).not.toMatch(/<strong/);
+    const row = (title: string) =>
+      html.split('<button').find(b => b.includes(`>${title}<`));
+    expect(row('Name your drive')).toContain('disabled=""');
+    expect(row('Talk to the AI')).not.toContain('disabled=""');
   });
 
   it("is gone when finished, read-only, private or someone else's", () => {

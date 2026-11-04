@@ -1359,7 +1359,6 @@ msgstr "Teks alternatif"
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -3489,7 +3488,6 @@ msgid "Click to add a value"
 msgstr "Klik untuk menambahkan nilai"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Rename"
 msgstr "Ganti nama"
 
@@ -4421,7 +4419,6 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr "Penyimpanan lokal nonaktif, jadi server ini adalah satu-satunya sumber data. Aktifkan penyimpanan lokal di bawah untuk bekerja tanpa koneksi."
 
 #: src/components/MetaSetter.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/NewDriveRoute.tsx
 msgid "New drive"
 msgstr "Drive baru"
@@ -6542,10 +6539,6 @@ msgstr "Atomic"
 msgid "Loading chat…"
 msgstr "Memuat obrolan…"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Set up AI"
-msgstr "Siapkan AI"
-
 #: src/components/AI/AISettings.tsx
 msgid "Loading AI settings…"
 msgstr "Memuat pengaturan AI…"
@@ -8311,7 +8304,6 @@ msgstr "<0/> Salin tautan"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SendIdentityRoute.tsx
 msgid "Done"
 msgstr "Selesai"
@@ -13011,17 +13003,10 @@ msgid "Ask it to find, write or organize things in your drive"
 msgstr "Minta AI mencari, menulis, atau mengatur hal-hal dalam drive Anda"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Start a chat"
-msgstr "Mulai obrolan"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Undang seseorang"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Invite"
-msgstr "Undang"
-
+#: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Simpan pekerjaan Anda"
@@ -13033,10 +13018,6 @@ msgstr "Memulai"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Memerlukan sumber AI: kunci Anda sendiri atau Ollama"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Not done yet"
-msgstr "Belum selesai"
 
 #: src/views/getting-started/WorkspaceLoading.tsx
 msgid "Setting up your workspace on this device…"
@@ -13442,10 +13423,6 @@ msgstr "Menyimpan pekerjaanmu ke akunmu…"
 msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
 msgstr "Pekerjaanmu tersimpan di perangkat ini. Tambahkan emailmu agar bisa dibuka di perangkat lain dan tidak hilang."
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Keep your work"
-msgstr "Simpan pekerjaanmu"
-
 #: src/components/SideBar/GuestSaveRow.tsx
 msgid "Add your email"
 msgstr "Tambahkan emailmu"
@@ -13461,3 +13438,8 @@ msgstr "Tersimpan di perangkat ini"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save & register"
+msgstr "Simpan dan daftar"

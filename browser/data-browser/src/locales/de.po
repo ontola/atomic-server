@@ -1359,7 +1359,6 @@ msgstr "Alternativtext"
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -3491,7 +3490,6 @@ msgid "Click to add a value"
 msgstr "Klicken, um einen Wert hinzuzufügen"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Rename"
 msgstr "Umbenennen"
 
@@ -4420,7 +4418,6 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr "Lokaler Speicher ist deaktiviert. Dieser Server ist daher die einzige Datenquelle. Aktiviere unten den lokalen Speicher, um ohne Verbindung zu arbeiten."
 
 #: src/components/MetaSetter.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/NewDriveRoute.tsx
 msgid "New drive"
 msgstr "Neues Laufwerk"
@@ -6541,10 +6538,6 @@ msgstr "Atomic"
 msgid "Loading chat…"
 msgstr "Chat wird geladen …"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Set up AI"
-msgstr "KI einrichten"
-
 #: src/components/AI/AISettings.tsx
 msgid "Loading AI settings…"
 msgstr "KI-Einstellungen werden geladen …"
@@ -8310,7 +8303,6 @@ msgstr "<0/> Link kopieren"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/routes/SendIdentityRoute.tsx
 msgid "Done"
 msgstr "Fertig"
@@ -13011,17 +13003,10 @@ msgid "Ask it to find, write or organize things in your drive"
 msgstr "Bitte sie, Dinge in deinem Laufwerk zu finden, zu schreiben oder zu organisieren"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Start a chat"
-msgstr "Chat starten"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Jemanden einladen"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Invite"
-msgstr "Einladen"
-
+#: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Deine Arbeit sichern"
@@ -13033,10 +13018,6 @@ msgstr "Erste Schritte"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Benötigt eine KI-Quelle: deinen eigenen Schlüssel oder Ollama"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Not done yet"
-msgstr "Noch nicht erledigt"
 
 #: src/views/getting-started/WorkspaceLoading.tsx
 msgid "Setting up your workspace on this device…"
@@ -13447,10 +13428,6 @@ msgstr "Deine Arbeit wird in deinem Konto gespeichert…"
 msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
 msgstr "Deine Arbeit ist auf diesem Gerät gespeichert. Füge deine E-Mail-Adresse hinzu, damit du sie auf anderen Geräten öffnen kannst und nicht verlierst."
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Keep your work"
-msgstr "Behalte deine Arbeit"
-
 #: src/components/SideBar/GuestSaveRow.tsx
 msgid "Add your email"
 msgstr "E-Mail hinzufügen"
@@ -13466,3 +13443,8 @@ msgstr "Auf diesem Gerät gespeichert"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Verbinde ein Gerät, um deine Arbeit darauf zu öffnen"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save & register"
+msgstr "Speichern und registrieren"

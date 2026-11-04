@@ -29,7 +29,7 @@ export const SideBarMenuRowLabel = styled.span`
 `;
 
 /** Icon column for sidebar menu rows (account, Shared with me) (matches tree LeadingSlot). */
-const IconSlot = styled.span`
+export const IconSlot = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;

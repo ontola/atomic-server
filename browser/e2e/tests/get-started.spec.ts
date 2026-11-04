@@ -34,8 +34,9 @@ test('Get started opens a workspace of your own, without an account', async ({
   }
 
   // Inviting needs a drive first, and says so.
-  await expect(panel.getByRole('button', { name: 'Invite' })).toBeDisabled();
-  await expect(panel).toContainText('Start a drive first');
+  const invite = panel.getByRole('button', { name: 'Invite someone' });
+  await expect(invite).toBeDisabled();
+  await expect(invite).toHaveAttribute('title', 'Start a drive first');
   await expect(
     page.getByRole('link', { name: 'Start here' }).first(),
   ).toBeVisible();
@@ -122,12 +123,14 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   // Self-hosted, with no portal: nothing here asks for an email.
   await expect(row.getByRole('button')).toHaveText('Connect a device');
 
-  // The panel's Save button opens the dialog and leaves the page where it is.
+  // The panel's Save your work row opens the dialog and leaves the page where it is.
   const drive = page.url();
-  await panel.getByRole('button', { name: 'Save', exact: true }).click();
+  await panel
+    .getByRole('button', { name: 'Save your work', exact: true })
+    .click();
   const dialog = page.getByRole('dialog');
   await expect(
-    dialog.getByRole('heading', { name: 'Keep your work' }),
+    dialog.getByRole('heading', { name: 'Save your work' }),
   ).toBeVisible();
   await expect(dialog).toContainText('saved on this device');
   await expect(page).toHaveURL(drive);
@@ -137,7 +140,7 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   // So does the row.
   await row.getByRole('button').click();
   await expect(
-    page.getByRole('dialog').getByRole('heading', { name: 'Keep your work' }),
+    page.getByRole('dialog').getByRole('heading', { name: 'Save your work' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Not now' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);

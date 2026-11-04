@@ -10,8 +10,6 @@ import {
 import type { JSX } from 'react';
 import { FaCircleCheck, FaRegCircle } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
 import { useSettings } from '@helpers/AppSettings';
 import { useAISidebar } from '@components/AI/AISidebarContext';
 import { openShareDialog } from '@components/Share/shareDialogState';
@@ -23,6 +21,11 @@ import {
 } from '@hooks/useOnboardingProgress';
 import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
 import { openSaveWorkDialog } from '@components/SaveWork/saveWorkDialogState';
+import {
+  IconSlot,
+  SideBarMenuRow,
+  SideBarMenuRowLabel,
+} from './SideBarMenuItem';
 import { SideBarPanel } from './SideBarPanel';
 
 /**
@@ -59,12 +62,11 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
 
   const copy: Record<
     OnboardingStep['id'],
-    { title: string; hint: string; action: string; run: () => void }
+    { title: string; hint: string; run: () => void }
   > = {
     name: {
       title: 'Name your drive',
       hint: 'Give your drive a name: a team, company, class or household',
-      action: 'Rename',
       run: () =>
         document
           .querySelector<HTMLElement>('h1[data-testid="editable-title"]')
@@ -73,27 +75,23 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     project: {
       title: 'Start a drive',
       hint: 'Fill it with a starter',
-      action: 'New drive',
       run: () => createNewResource(server.classes.drive, agent?.subject ?? ''),
     },
     ai: {
       title: 'Talk to the AI',
       hint: 'Ask it to find, write or organize things in your drive',
-      action: 'Start a chat',
       run: () => openChat(undefined, { withoutContext: true }),
     },
     invite: {
       title: 'Invite someone',
       hint: 'Share a drive with a teammate or a friend',
-      action: 'Invite',
       run: () => projectDrive && openShareDialog(projectDrive),
     },
     save: {
-      title: 'Save your work',
+      title: portalUrl ? 'Save & register' : 'Save your work',
       hint: portalUrl
         ? 'Add your email to keep it safe on every device'
         : 'Connect a device to open your work on it',
-      action: 'Save',
       run: openSaveWorkDialog,
     },
   };
@@ -110,71 +108,56 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
         </Count>
       }
     >
-      <Column gap='0.5rem'>
-        {steps.map(step => {
-          const { title, hint, action, run } = copy[step.id];
-          const need =
-            step.needs === 'project'
-              ? 'Start a drive first'
-              : step.needs === 'ai-source'
-                ? 'Needs an AI source: your own key or Ollama'
-                : undefined;
-          const blocked = step.needs === 'project';
+      {steps.map(step => {
+        const { title, hint, run } = copy[step.id];
+        const need =
+          step.needs === 'project'
+            ? 'Start a drive first'
+            : step.needs === 'ai-source'
+              ? 'Needs an AI source: your own key or Ollama'
+              : undefined;
+        const blocked = step.needs === 'project';
+        const inert = blocked || step.done;
+        const tooltip = blocked ? need : need ? `${hint}. ${need}` : hint;
 
-          return (
-            <StepRow key={step.id} center gap='0.5rem' data-done={step.done}>
-              {step.done ? (
-                <FaCircleCheck aria-label='Done' />
-              ) : (
-                <FaRegCircle aria-label='Not done yet' />
-              )}
-              <Text title={hint}>
-                <strong>{title}</strong>
-                {need && <small>{need}</small>}
-              </Text>
-              <ActionButton
-                subtle
-                disabled={blocked}
-                title={blocked ? need : undefined}
-                onClick={run}
-              >
-                {step.needs === 'ai-source' ? 'Set up AI' : action}
-              </ActionButton>
-            </StepRow>
-          );
-        })}
-      </Column>
+        return (
+          <StepRow
+            key={step.id}
+            as='button'
+            type='button'
+            disabled={inert}
+            aria-disabled={inert}
+            title={tooltip}
+            data-done={step.done}
+            onClick={run}
+          >
+            <IconSlot aria-hidden>
+              {step.done ? <FaCircleCheck /> : <FaRegCircle />}
+            </IconSlot>
+            <SideBarMenuRowLabel>{title}</SideBarMenuRowLabel>
+          </StepRow>
+        );
+      })}
     </SideBarPanel>
   );
 }
 
-const StepRow = styled(Row)`
-  padding-inline: 0.5rem;
-  font-size: 0.85rem;
-  line-height: 1.25;
-`;
+/** A sidebar menu row that is a button: same box, font and hover as the rest. */
+const StepRow = styled(SideBarMenuRow)`
+  border: 0;
+  font: inherit;
+  cursor: pointer;
 
-const ActionButton = styled(Button)`
-  flex-shrink: 0;
-  padding: 0.2rem 0.6rem;
-  font-size: 0.8rem;
-  white-space: nowrap;
+  &:disabled {
+    color: ${p => p.theme.colors.textLight};
+    cursor: default;
+    opacity: 0.6;
+    background-color: transparent;
+  }
 `;
 
 const Count = styled.small`
   white-space: nowrap;
   padding-right: 0.5rem;
   color: ${p => p.theme.colors.textLight};
-`;
-
-const Text = styled.span`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-
-  small {
-    font-size: 0.7rem;
-    color: ${p => p.theme.colors.textLight};
-  }
 `;
