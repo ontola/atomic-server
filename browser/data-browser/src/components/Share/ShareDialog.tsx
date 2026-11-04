@@ -385,7 +385,7 @@ function ShareOverview({
                 openSaveWorkDialog();
               }}
             >
-              Save your work
+              Save & register
             </Button>
           )}
         </Stack>

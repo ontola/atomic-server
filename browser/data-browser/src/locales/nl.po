@@ -13016,7 +13016,6 @@ msgid "Invite someone"
 msgstr "Iemand uitnodigen"
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save your work"
 msgstr "Sla je werk op"
@@ -13439,6 +13438,7 @@ msgid "Connect a device to open your work on it"
 msgstr "Verbind een apparaat om je werk daarop te openen"
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Save & register"
 msgstr "Opslaan en registreren"
