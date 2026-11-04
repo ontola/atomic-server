@@ -2,8 +2,8 @@
 ## WebSockets
 
 Binary-first WebSocket protocol (v2). All resource data travels as raw Loro bytes.
-Text messages are only used for Loro collaborative editing sync (LORO_SYNC_*) and
-query subscription updates (QUERY_UPDATE), which will migrate to binary later.
+Every message is a binary `[tag][payload]` frame; the text verbs of earlier
+protocol versions are gone.
 
 **Canonical wire-format spec:** `docs/src/websockets.md` (published as
 <https://docs.atomicdata.dev/websockets.html>). Frame encoders/decoders live
@@ -241,6 +241,15 @@ impl Actor for WebSocketConnection {
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
+        // A client that never sent a HELLO predates v0.41.0-beta.5, older
+        // still than the `DEPRECATED_CLIENT` baseline. It would not know the
+        // notice either, so it is only logged.
+        if self.is_authenticated() && self.client_capabilities.is_empty() {
+            tracing::warn!(
+                connection = %self.connection_id,
+                "deprecated client: authenticated without a HELLO"
+            );
+        }
         // Remove ourselves from every subscription map. Without this,
         // closed connections leave stale `Addr`s in `CommitMonitor`,
         // which every subsequent fanout iterates over (do_send to a
@@ -625,15 +634,22 @@ impl WebSocketConnection {
             // the capabilities it speaks. Nothing is answered (the server's
             // own list rides on AUTH_OK); the list steers what this
             // connection is sent from here on, e.g. a slim `COMMIT_OK`.
-            // Until 2026-09 this tag was Iroh-only and fell through to the
-            // debug log below.
             ws_v2::tag::HELLO => {
-                let caps = atomic_lib::sync::protocol::decode_hello_caps(&bin[1..]);
+                use atomic_lib::sync::protocol as p;
+                let caps = p::decode_hello_caps(&bin[1..]);
                 tracing::debug!(
                     connection = %self.connection_id,
                     ?caps,
                     "client HELLO"
                 );
+                if !caps.iter().any(|c| c == p::CAP_CANONICAL_SCHEME) {
+                    tracing::warn!(connection = %self.connection_id, ?caps, "deprecated client");
+                    ctx.binary(ws_v2::encode_error(
+                        0,
+                        p::error_code::DEPRECATED_CLIENT,
+                        "This client predates AtomicServer v0.41.0-beta.8 and will stop working in a coming release; please update.",
+                    ));
+                }
                 self.client_capabilities = caps;
             }
 
@@ -644,9 +660,7 @@ impl WebSocketConnection {
             // for `DOC`), which is where the access check lives. The frame's
             // own `agent` field is ignored on the
             // way in: the broadcaster attributes it to the identity this
-            // connection proved, and stamps that on the way out. Until
-            // 2026-09-04 these were the text frames `LORO_SYNC_UPDATE`,
-            // `LORO_EPHEMERAL_UPDATE` and `PRESENCE_UPDATE` (base64 JSON).
+            // connection proved, and stamps that on the way out.
             ws_v2::tag::EPHEMERAL => {
                 if !self.require_auth("EPHEMERAL", ctx) {
                     return;

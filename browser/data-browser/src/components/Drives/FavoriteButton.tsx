@@ -1,8 +1,6 @@
-import { useCallback } from 'react';
 import { FaRegStar, FaStar } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { useDriveHistory } from '../../hooks/useDriveHistory';
-import { useSavedDrives } from '../../hooks/useSavedDrives';
+import { useSavedDriveToggle } from '../../hooks/useSavedDriveToggle';
 
 interface FavoriteButtonProps {
   subject: string;
@@ -10,28 +8,8 @@ interface FavoriteButtonProps {
 }
 
 export function FavoriteButton({ subject, className }: FavoriteButtonProps) {
-  const [savedDrives, addSaveDrive, removeSaveDrive] = useSavedDrives();
-  const [_, addDriveToHistory, removeFromHistory] = useDriveHistory();
-
-  const isFavorite = savedDrives.includes(subject);
+  const [isFavorite, handleClick] = useSavedDriveToggle(subject);
   const Icon = isFavorite ? FaStar : FaRegStar;
-
-  const handleClick = useCallback(() => {
-    if (isFavorite) {
-      removeSaveDrive(subject);
-      addDriveToHistory(subject);
-    } else {
-      addSaveDrive(subject);
-      removeFromHistory(subject);
-    }
-  }, [
-    subject,
-    removeFromHistory,
-    addDriveToHistory,
-    addSaveDrive,
-    removeSaveDrive,
-    isFavorite,
-  ]);
 
   return (
     <StyledButton

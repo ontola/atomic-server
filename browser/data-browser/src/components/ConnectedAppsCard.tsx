@@ -102,10 +102,11 @@ function ConnectedApp({
       const report = await revokeAgent(store, subject);
 
       if (report.failed.length > 0) {
+        const reasons = report.failed.map(f => f.reason).join('; ');
         setError(
-          `Still has access to ${report.failed.length} ${
-            report.failed.length === 1 ? 'resource' : 'resources'
-          }: ${report.failed.map(f => f.reason).join('; ')}`,
+          report.failed.length === 1
+            ? `Still has access to 1 resource: ${reasons}`
+            : `Still has access to ${report.failed.length} resources: ${reasons}`,
         );
       } else {
         await forgetConnectedApp(store, home, subject);

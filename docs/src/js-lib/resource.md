@@ -380,6 +380,14 @@ Property changes are written to the Loro doc and synced via `loroUpdate` commits
 To access the Loro document for a resource, use `.getLoroDoc()`.
 The method returns `undefined` while the Loro WASM module is still loading.
 
+Keep a reference to the `Resource` while editing its document. The library's
+internal Loro observers do not keep discarded resources alive. An authoritative
+snapshot replacement or `clearUnsafe()` detaches those observers from the old
+document; obtain the current document again before making further edits. A
+previously returned document remains readable, but edits to it no longer queue
+writes for the resource's replacement. This cleanup does not delete persisted
+data or reset the browser database.
+
 ```typescript
 import { LoroLoader } from '@tomic/lib';
 
