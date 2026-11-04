@@ -10197,6 +10197,7 @@ msgstr "Te has perdido un mensaje mientras no estabas"
 msgid "You missed {0} messages while you were away"
 msgstr "Te has perdido {0} mensajes mientras no estabas"
 
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
 msgid "Not now"
 msgstr "Ahora no"
@@ -12775,6 +12776,8 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "Un servidor en la nube mantiene esta unidad en línea para todos, así que nadie tiene que mantener un navegador abierto."
 
 #. 0: CLOUD_SERVER_PRICE
+#. 0: CLOUD_SERVER_PRICE
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Mejorar a un servidor en la nube desde {0}"
@@ -13165,10 +13168,6 @@ msgstr "Añadir URL de tienda"
 msgid "Discover apps and integrations"
 msgstr "Descubrir aplicaciones e integraciones"
 
-#: src/helpers/managed/vaultAutoBackup.ts
-msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
-msgstr "La bóveda en la nube está llena, así que no se está haciendo una copia de seguridad de esta unidad. Libera espacio o mejora tu plan."
-
 #: src/embed/MeetingChatOverlay.tsx
 #: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
@@ -13455,3 +13454,7 @@ msgstr "<0/> En Mis unidades"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Añadir a Mis unidades"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault is full, so this drive is not being backed up."
+msgstr"La bóveda en la nube está llena, así que no se está haciendo una copia de seguridad de esta unidad."

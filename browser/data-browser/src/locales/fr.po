@@ -10197,6 +10197,7 @@ msgstr "Vous avez manqué un message pendant votre absence"
 msgid "You missed {0} messages while you were away"
 msgstr "Vous avez manqué {0} messages pendant votre absence"
 
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
 msgid "Not now"
 msgstr "Pas maintenant"
@@ -12775,6 +12776,8 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "Un serveur cloud garde ce lecteur en ligne pour tout le monde, sans que personne ait à garder un navigateur ouvert."
 
 #. 0: CLOUD_SERVER_PRICE
+#. 0: CLOUD_SERVER_PRICE
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Passer au serveur cloud à partir de {0}"
@@ -13165,10 +13168,6 @@ msgstr "Ajouter une URL de place de marché"
 msgid "Discover apps and integrations"
 msgstr "Découvrir des applications et des intégrations"
 
-#: src/helpers/managed/vaultAutoBackup.ts
-msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
-msgstr "Le coffre cloud est plein ; ce lecteur n’est donc plus sauvegardé. Libérez de l’espace ou passez à une offre supérieure."
-
 #: src/embed/MeetingChatOverlay.tsx
 #: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
@@ -13455,3 +13454,7 @@ msgstr "<0/> Dans Mes lecteurs"
 #: src/views/Drive/DrivePage.tsx
 msgid "<0/> Add to My drives"
 msgstr "<0/> Ajouter à Mes lecteurs"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault is full, so this drive is not being backed up."
+msgstr"Le coffre cloud est plein ; ce lecteur n’est donc plus sauvegardé."
