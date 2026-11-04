@@ -14,6 +14,8 @@ import { styled } from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
 import { useAISidebar } from '@components/AI/AISidebarContext';
 import { openShareDialog } from '@components/Share/shareDialogState';
+import { constructOpenURL } from '@helpers/navigation';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { useKnownPortalUrl } from '@hooks/useKnownPortalUrl';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import {
@@ -57,6 +59,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   const createNewResource = useNewResourceUI();
   const [agent] = useCurrentAgent();
   const portalUrl = useKnownPortalUrl();
+  const navigate = useNavigateWithTransition();
 
   if (doneCount === steps.length) return null;
 
@@ -67,10 +70,12 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     name: {
       title: 'Name your drive',
       hint: 'Give your drive a name: a team, company, class or household',
-      run: () =>
-        document
-          .querySelector<HTMLElement>('h1[data-testid="editable-title"]')
-          ?.click(),
+      run: () => {
+        // The title on screen may belong to a document: go to the drive's own
+        // page first, then edit its title once that page has rendered.
+        navigate(constructOpenURL(drive.subject));
+        editDriveTitleWhenRendered(drive.subject);
+      },
     },
     project: {
       title: 'Start a drive',
@@ -140,6 +145,24 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       })}
     </SideBarPanel>
   );
+}
+
+/** Clicks the drive page's own title, waiting up to 5s for the page to render. */
+function editDriveTitleWhenRendered(subject: string): void {
+  const deadline = Date.now() + 5000;
+
+  const attempt = () => {
+    const title = [
+      ...document.querySelectorAll<HTMLElement>(
+        'h1[data-testid="editable-title"]',
+      ),
+    ].find(el => el.closest('main[about]')?.getAttribute('about') === subject);
+
+    if (title) title.click();
+    else if (Date.now() < deadline) setTimeout(attempt, 100);
+  };
+
+  attempt();
 }
 
 /** A sidebar menu row that is a button: same box, font and hover as the rest. */

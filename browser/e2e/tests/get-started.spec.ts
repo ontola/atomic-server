@@ -1,5 +1,9 @@
 import { test, expect } from './fixtures';
-import { FRONTEND_URL, sideBarDriveSwitcher } from './test-utils';
+import {
+  FRONTEND_URL,
+  editableTitle,
+  sideBarDriveSwitcher,
+} from './test-utils';
 
 /**
  * A new visitor starts without an account: one tap makes a real identity on
@@ -201,4 +205,36 @@ test('Creating a new drive leaves exactly one Getting started panel', async ({
   // Give a stale panel the time it would need to linger.
   await page.waitForTimeout(2000);
   await expect(panels).toHaveCount(1);
+});
+
+test('Name your drive renames the drive, not the document on screen', async ({
+  page,
+}) => {
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  const panel = page.getByTestId('getting-started');
+  await expect(panel).toBeVisible({ timeout: 60_000 });
+  await page.keyboard.press('Escape');
+
+  await page.locator('[data-sidebar-id]', { hasText: 'Start here' }).click();
+  await expect(editableTitle(page)).toHaveText('Start here', {
+    timeout: 30_000,
+  });
+
+  await panel.getByRole('button', { name: 'Name your drive' }).click();
+  await expect(editableTitle(page)).toHaveRole('textbox', { timeout: 15_000 });
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+a' : 'Control+a',
+  );
+  await page.keyboard.type('Garden Club');
+  await page.keyboard.press('Enter');
+
+  await expect(page.getByTestId('current-drive-title')).toHaveText(
+    'Garden Club',
+    { timeout: 30_000 },
+  );
+  await page.locator('[data-sidebar-id]', { hasText: 'Start here' }).click();
+  await expect(editableTitle(page)).toHaveText('Start here', {
+    timeout: 30_000,
+  });
 });
