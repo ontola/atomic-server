@@ -13425,14 +13425,6 @@ msgstr "Ansicht hinzufügen"
 msgid "Guest"
 msgstr "Gast"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> In My drives"
-msgstr "<0/> In Meine Laufwerke"
-
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> Add to My drives"
-msgstr "<0/> Zu Meine Laufwerke hinzufügen"
-
 #: src/routes/NewDriveRoute.tsx
 msgid "Creating your drive…"
 msgstr "Dein Laufwerk wird erstellt…"

@@ -13422,14 +13422,6 @@ msgstr "Añadir vista"
 msgid "Guest"
 msgstr "Invitado"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> In My drives"
-msgstr "<0/> En Mis unidades"
-
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> Add to My drives"
-msgstr "<0/> Añadir a Mis unidades"
-
 #: src/routes/NewDriveRoute.tsx
 msgid "Creating your drive…"
 msgstr "Creando tu unidad…"

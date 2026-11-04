@@ -67,6 +67,8 @@ vi.mock('@components/Drives/PrivateDriveBadge', () => ({
 }));
 vi.mock('@components/ResourceDecorations', () => ({
   ResourceCoverImage: () => <div />,
+  TitleDecorationAffordances: () => <button>Add icon</button>,
+  IconPickerDialog: () => <div />,
 }));
 vi.mock('@components/Row', () => ({
   Column: ({ children }: { children: React.ReactNode }) => (

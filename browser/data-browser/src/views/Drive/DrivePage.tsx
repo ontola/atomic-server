@@ -7,7 +7,11 @@ import { EditableTitle } from '@components/EditableTitle';
 import { useVisibleDriveChildren } from '@hooks/useVisibleDriveChildren';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { PrivateDriveBadge } from '@components/Drives/PrivateDriveBadge';
-import { ResourceCoverImage } from '@components/ResourceDecorations';
+import {
+  IconPickerDialog,
+  ResourceCoverImage,
+  TitleDecorationAffordances,
+} from '@components/ResourceDecorations';
 import { Column, Row } from '@components/Row';
 import {
   DriveSwitcher,
@@ -15,7 +19,7 @@ import {
 } from '@components/SideBar/DriveSwitcher';
 import { styled } from 'styled-components';
 import { useDialog } from '@components/Dialog/useDialog';
-import { FaGear, FaRegStar, FaStar } from 'react-icons/fa6';
+import { FaGear } from 'react-icons/fa6';
 import { useEffect, useState, type JSX } from 'react';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { useSavedDriveToggle } from '@hooks/useSavedDriveToggle';
@@ -41,6 +45,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
     resource.subject,
   );
   const [dialogProps, showSettings, , settingsOpen] = useDialog();
+  const [iconPickerOpen, setIconPickerOpen] = useState<boolean>();
 
   const vectorIndexing = useVectorIndexStatus();
 
@@ -52,7 +57,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
     canEdit && (filling || (empty && subResources.length === 0));
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
   const { privateDrive } = usePrivateDrive();
-  const [isSaved, toggleSaved] = useSavedDriveToggle(resource.subject);
+  const [isSaved] = useSavedDriveToggle(resource.subject);
   const [, addToHistory] = useDriveHistory();
   const canSave = !!privateDrive && !isPrivateDrive;
 
@@ -78,7 +83,6 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               <Row align='center' wrapItems gap='1rem'>
                 <EditableTitle
                   resource={resource}
-                  withDecorations
                   // Its subject is derived from your key: there is exactly one and
                   // it cannot be swapped. A name like "Q3 Launch" on it would be a
                   // name that lies about what the thing is.
@@ -88,42 +92,29 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                       : undefined
                   }
                 />
-                <DriveSwitcher Trigger={DriveSwitcherChevronTrigger} />
                 {isPrivateDrive && <PrivateDriveBadge />}
                 {vectorIndexing && <VectorIndexingIndicator />}
               </Row>
-              <Row align='center' wrapItems gap='0.75rem'>
+              <Row align='center' wrapItems gap='0.5rem'>
+                <DriveSwitcher Trigger={DriveSwitcherChevronTrigger} />
+                <TitleDecorationAffordances
+                  resource={resource}
+                  onPickIcon={() => setIconPickerOpen(true)}
+                  bare
+                />
+                <Button
+                  ghost
+                  onClick={showSettings}
+                  data-testid='drive-settings-button'
+                >
+                  <FaGear /> Drive settings
+                </Button>
                 <DrivePeople />
                 {baseURL !== resource.subject && (
                   <Button subtle onClick={() => setBaseURL(resource.subject)}>
                     Set as current drive
                   </Button>
                 )}
-                {canSave && (
-                  <Button
-                    subtle
-                    onClick={toggleSaved}
-                    aria-pressed={isSaved}
-                    data-testid='drive-save-button'
-                  >
-                    {isSaved ? (
-                      <>
-                        <FaStar /> In My drives
-                      </>
-                    ) : (
-                      <>
-                        <FaRegStar /> Add to My drives
-                      </>
-                    )}
-                  </Button>
-                )}
-                <Button
-                  subtle
-                  onClick={showSettings}
-                  data-testid='drive-settings-button'
-                >
-                  <FaGear /> Drive settings
-                </Button>
               </Row>
             </Header>
 
@@ -164,6 +155,13 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
           </Column>
         </ContainerNarrow>
       </FileDropZone>
+      {iconPickerOpen !== undefined && (
+        <IconPickerDialog
+          resource={resource}
+          show={iconPickerOpen}
+          onShowChange={setIconPickerOpen}
+        />
+      )}
       <DriveSettingsDialog
         drive={resource}
         dialogProps={dialogProps}
@@ -200,8 +198,7 @@ export default DrivePage;
 
 const Header = styled.div`
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
 `;

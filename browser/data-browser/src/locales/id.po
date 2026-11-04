@@ -13420,14 +13420,6 @@ msgstr "Tambahkan tampilan"
 msgid "Guest"
 msgstr "Tamu"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> In My drives"
-msgstr "<0/> Di Drive saya"
-
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> Add to My drives"
-msgstr "<0/> Tambahkan ke Drive saya"
-
 #: src/routes/NewDriveRoute.tsx
 msgid "Creating your drive…"
 msgstr "Membuat drive Anda…"
