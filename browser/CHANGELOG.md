@@ -3,6 +3,7 @@
 This changelog covers all five packages, as they are (for now) updated as a whole
 
 ## UNRELEASED
+- Save your work: the Getting started card's Save step and a fixed "Saved on this device" row at the bottom of the sidebar (shown until the identity is saved to an account) open one "Keep your work" dialog in place, instead of sending a guest to the Sync page. With an account portal it shows the same sign-in options as every other screen and, once signed in, the identity gate adopts this device's key as the account's at once (no reload) and a "Saved as <email>" toast closes the dialog. Without a portal it offers connecting a device. The step and the row follow the sign-in live.
 - New drive no longer asks for a name: it creates "My drive" at once, makes it the current drive and opens it; rename it from the drive page. `/app/new-drive` does the same on load and shows an error with a retry if it fails.
 - Privacy: the drive switcher's recently used drives, drive visits and the recently opened resources of the `@` menu and search overlay are kept per identity (`driveHistory:<agent>`, `driveVisits:<agent>`, `recentResources:<agent>`), not in one list for the whole browser, so a new guest identity no longer sees what another identity opened in the same browser. The old shared lists are deleted, not migrated. `useLocalStorage` re-reads storage when its key changes.
 - Internal: one `isPlainObject` in @tomic/lib replaces 5 local type guards.

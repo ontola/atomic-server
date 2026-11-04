@@ -13,14 +13,14 @@ import { Card } from '@components/Card';
 import { Column, Row } from '@components/Row';
 import { useAISidebar } from '@components/AI/AISidebarContext';
 import { openShareDialog } from '@components/Share/shareDialogState';
+import { useKnownPortalUrl } from '@hooks/useKnownPortalUrl';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
-import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
   useOnboardingProgress,
   type OnboardingStep,
 } from '@hooks/useOnboardingProgress';
 import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
-import { paths } from '../../routes/paths';
+import { openSaveWorkDialog } from '@components/SaveWork/saveWorkDialogState';
 
 /**
  * The first things worth trying, on the drive page of a drive of your own.
@@ -60,9 +60,9 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   const { steps, projectDrive, doneCount, hidden, hide } =
     useOnboardingProgress(name);
   const { openChat } = useAISidebar();
-  const navigate = useNavigateWithTransition();
   const createNewResource = useNewResourceUI();
   const [agent] = useCurrentAgent();
+  const portalUrl = useKnownPortalUrl();
 
   if (hidden || doneCount === steps.length) return null;
 
@@ -99,9 +99,11 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     },
     save: {
       title: 'Save your work',
-      hint: 'Sign up with your email, save your secret or connect a device',
+      hint: portalUrl
+        ? 'Add your email to keep it safe on every device'
+        : 'Connect a device to open your work on it',
       action: 'Save',
-      run: () => navigate(paths.sync),
+      run: openSaveWorkDialog,
     },
   };
 

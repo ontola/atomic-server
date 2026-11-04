@@ -38,6 +38,12 @@ vi.mock('@hooks/useNavigateWithTransition', () => ({
 vi.mock('@components/AI/AISidebarContext', () => ({
   useAISidebar: () => ({ openChat: () => {} }),
 }));
+vi.mock('@hooks/useKnownPortalUrl', () => ({
+  useKnownPortalUrl: () => 'https://portal.example',
+}));
+vi.mock('@components/SaveWork/saveWorkDialogState', () => ({
+  openSaveWorkDialog: vi.fn(),
+}));
 vi.mock('@components/Share/shareDialogState', () => ({
   openShareDialog: () => {},
 }));

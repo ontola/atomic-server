@@ -15,6 +15,7 @@ import {
 } from '../../hooks/useResizable';
 import { useCombineRefs } from '../../hooks/useCombineRefs';
 import { AccountMenu } from './AccountMenu';
+import { GuestSaveRow } from './GuestSaveRow';
 import { SideBarHomePanels } from './SideBarHomePanels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useSidebarSwipe } from '../../hooks/useSidebarSwipe';
@@ -164,6 +165,7 @@ export function SideBar(): JSX.Element {
                     <OntologiesPanel />
                   </SideBarPanel>
                 )}
+                <GuestSaveRow />
                 <AccountMenu onItemClick={closeSideBar} />
               </Column>
             </MenuWrapper>

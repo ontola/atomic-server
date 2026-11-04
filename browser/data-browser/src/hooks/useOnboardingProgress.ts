@@ -3,8 +3,7 @@ import { core, urls, useCurrentAgent, useResources } from '@tomic/react';
 import { canonicalizeScheme } from '@tomic/lib';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useDriveChats } from '@components/SideBar/AIPanel';
-import { readManagedAccountBinding } from '@helpers/managed/binding';
-import { isDeviceLinked } from '@helpers/managed/deviceLink';
+import { useIsLinkedToAccount } from './useIsLinkedToAccount';
 import { useLocalStorage } from './useLocalStorage';
 import { usePrivateDrive } from './usePrivateDrive';
 import { useSavedDrives } from './useSavedDrives';
@@ -103,6 +102,7 @@ export function useOnboardingProgress(driveName?: string) {
     onboardingKeys.hidden(agent?.subject),
     false,
   );
+  const accountLinked = useIsLinkedToAccount();
   const base = { savedDrives, privateDrive, welcomeDrive } as OnboardingInput;
   const projects = projectDrives(base);
   const resources = useResources(projects);
@@ -123,7 +123,7 @@ export function useOnboardingProgress(driveName?: string) {
     aiAvailable: enableAI && availableProviders.length > 0,
     otherAgentsOnProjects: others,
     invited,
-    accountLinked: !!readManagedAccountBinding() || isDeviceLinked(),
+    accountLinked,
   };
   const steps = deriveOnboardingSteps(input);
 

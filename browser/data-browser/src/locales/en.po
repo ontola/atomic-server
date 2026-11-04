@@ -4296,6 +4296,8 @@ msgstr "Your data lives on the device you’re connected to."
 
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GuestSaveRow.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -10190,6 +10192,7 @@ msgid "You missed {0} messages while you were away"
 msgstr "You missed {0} messages while you were away"
 
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
 msgstr "Not now"
 
@@ -13030,10 +13033,6 @@ msgstr "Invite"
 msgid "Save your work"
 msgstr "Save your work"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Sign up with your email, save your secret or connect a device"
-msgstr "Sign up with your email, save your secret or connect a device"
-
 #: src/views/Drive/DriveSettingsDialog.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
@@ -13451,3 +13450,40 @@ msgstr "Creating your drive…"
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Fill it with a starter"
 msgstr "Fill it with a starter"
+
+#. 0: email
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saved as {0}"
+msgstr "Saved as {0}"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. To open it on other devices and not lose it, connect another device."
+msgstr "Your work is saved on this device. To open it on other devices and not lose it, connect another device."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saving your work to your account…"
+msgstr "Saving your work to your account…"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
+msgstr "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Keep your work"
+msgstr "Keep your work"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Add your email"
+msgstr "Add your email"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Add your email to keep it safe on every device"
+msgstr "Add your email to keep it safe on every device"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Saved on this device"
+msgstr "Saved on this device"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Connect a device to open your work on it"
+msgstr "Connect a device to open your work on it"

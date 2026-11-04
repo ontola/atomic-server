@@ -129,3 +129,40 @@ test('Drive settings bring the Getting started card back after Hide', async ({
   );
   await expect(card).toBeVisible({ timeout: 30_000 });
 });
+
+test('A guest sees what to do next and the Save dialog opens in place', async ({
+  page,
+}) => {
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  const card = page.getByTestId('getting-started');
+  await expect(card).toBeVisible({ timeout: 60_000 });
+  await page.keyboard.press('Escape');
+
+  // Not linked to an account: the sidebar says so, with the next step.
+  const row = page.getByTestId('guest-save-row');
+  await expect(row).toContainText('Saved on this device');
+  // Self-hosted, with no portal: nothing here asks for an email.
+  await expect(row.getByRole('button')).toHaveText('Connect a device');
+
+  // The card's Save button opens the dialog and leaves the page where it is.
+  const drive = page.url();
+  await card.getByRole('button', { name: 'Save', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(
+    dialog.getByRole('heading', { name: 'Keep your work' }),
+  ).toBeVisible();
+  await expect(dialog).toContainText('saved on this device');
+  await expect(page).toHaveURL(drive);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+
+  // So does the row.
+  await row.getByRole('button').click();
+  await expect(
+    page.getByRole('dialog').getByRole('heading', { name: 'Keep your work' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Not now' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(row).toBeVisible();
+});

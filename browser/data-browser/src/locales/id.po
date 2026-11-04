@@ -4294,6 +4294,8 @@ msgstr "Data Anda berada di perangkat yang terhubung dengan Anda."
 
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GuestSaveRow.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -10187,6 +10189,7 @@ msgid "You missed {0} messages while you were away"
 msgstr "Anda melewatkan {0} pesan saat tidak di sini"
 
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
 msgstr "Jangan sekarang"
 
@@ -13027,10 +13030,6 @@ msgstr "Undang"
 msgid "Save your work"
 msgstr "Simpan pekerjaan Anda"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Sign up with your email, save your secret or connect a device"
-msgstr "Daftar dengan email, simpan kunci rahasia, atau hubungkan perangkat"
-
 #: src/views/Drive/DriveSettingsDialog.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
@@ -13443,3 +13442,40 @@ msgstr "Membuat drive Anda…"
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Fill it with a starter"
 msgstr "Isi dengan templat awal"
+
+#. 0: email
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saved as {0}"
+msgstr "Disimpan sebagai {0}"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. To open it on other devices and not lose it, connect another device."
+msgstr "Pekerjaanmu tersimpan di perangkat ini. Hubungkan perangkat lain untuk membukanya di sana dan agar tidak hilang."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saving your work to your account…"
+msgstr "Menyimpan pekerjaanmu ke akunmu…"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
+msgstr "Pekerjaanmu tersimpan di perangkat ini. Tambahkan emailmu agar bisa dibuka di perangkat lain dan tidak hilang."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Keep your work"
+msgstr "Simpan pekerjaanmu"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Add your email"
+msgstr "Tambahkan emailmu"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Add your email to keep it safe on every device"
+msgstr "Tambahkan emailmu agar aman di setiap perangkat"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Saved on this device"
+msgstr "Tersimpan di perangkat ini"
+
+#: src/views/Drive/GettingStartedCard.tsx
+msgid "Connect a device to open your work on it"
+msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"

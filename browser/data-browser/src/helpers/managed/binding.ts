@@ -9,6 +9,19 @@
 
 const BINDING_KEY = 'atomic-managed-account-binding';
 
+const listeners = new Set<() => void>();
+
+/** Runs when this tab writes or clears the binding, so a screen can follow it. */
+export function onManagedBindingChanged(listener: () => void): () => void {
+  listeners.add(listener);
+
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+const notify = () => listeners.forEach(listener => listener());
+
 export type ManagedAccountBinding = {
   owner_email: string;
   expected_agent_subject: string;
@@ -29,6 +42,7 @@ export function writeManagedAccountBinding(
         expected_agent_subject: expectedAgentSubject,
       } satisfies ManagedAccountBinding),
     );
+    notify();
   } catch {
     // Ignore quota / private-mode failures — the binding is an optimization.
   }
@@ -65,6 +79,7 @@ export function clearManagedAccountBinding(): void {
 
   try {
     localStorage.removeItem(BINDING_KEY);
+    notify();
   } catch {
     // ignore
   }
