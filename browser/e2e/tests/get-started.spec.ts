@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { FRONTEND_URL } from './test-utils';
+import { FRONTEND_URL, sideBarDriveSwitcher } from './test-utils';
 
 /**
  * A new visitor starts without an account: one tap makes a real identity on
@@ -100,11 +100,14 @@ test('The Getting started sidebar panel is open, folds away and opens again, als
     'Welcome to Atomic',
     { timeout: 30_000 },
   );
-  await expect(panel.getByText('Name your drive')).toBeHidden({
-    timeout: 30_000,
-  });
+  // The panel needs the drive's rights and the agent's drive list before it
+  // shows, so it arrives after the title. Wait for it folded, not for its
+  // absence, or "hidden" passes before the panel has even rendered.
+  const expand = panel.getByRole('button', { name: /Expand Getting started/ });
+  await expect(expand).toBeVisible({ timeout: 30_000 });
+  await expect(panel.getByText('Name your drive')).toBeHidden();
 
-  await panel.getByRole('button', { name: /Expand Getting started/ }).click();
+  await expand.click();
   await expect(panel.getByText('Name your drive')).toBeVisible();
 });
 
@@ -177,4 +180,25 @@ test('The sidebar drive header is split: the name opens the drive, the chevron t
   await expect(page).not.toHaveURL(here);
   await open.click();
   await expect(page).toHaveURL(here);
+});
+
+test('Creating a new drive leaves exactly one Getting started panel', async ({
+  page,
+}) => {
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  const panels = page.getByTestId('getting-started');
+  await expect(panels).toHaveCount(1, { timeout: 60_000 });
+  await page.keyboard.press('Escape');
+
+  await sideBarDriveSwitcher(page).click();
+  await page.getByTestId('menu-item-new-drive').click();
+  await expect(page.getByTestId('current-drive-title')).toHaveText('My drive', {
+    timeout: 30_000,
+  });
+  await expect(panels).toHaveCount(1, { timeout: 30_000 });
+  await expect(panels).toBeVisible();
+  // Give a stale panel the time it would need to linger.
+  await page.waitForTimeout(2000);
+  await expect(panels).toHaveCount(1);
 });

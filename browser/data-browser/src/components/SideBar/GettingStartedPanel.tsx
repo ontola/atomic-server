@@ -2,6 +2,7 @@ import {
   core,
   server,
   useCurrentAgent,
+  useArray,
   useCanWrite,
   useResource,
   useString,
@@ -41,9 +42,8 @@ export function GettingStartedPanel(): JSX.Element | null {
   const [agent] = useCurrentAgent();
   const isPrivate = useIsPrivateDrive(resource.subject);
   // Whoever made the drive is its first writer; people invited later come after.
-  const mine = (
-    resource.get(core.properties.write) as string[] | undefined
-  )?.[0];
+  const [writers] = useArray(resource, core.properties.write);
+  const mine = writers?.[0];
 
   return canEdit && !isPrivate && agent && mine === agent.subject ? (
     <Steps drive={resource} />

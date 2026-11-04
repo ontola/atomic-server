@@ -15,6 +15,7 @@ vi.mock('@tomic/react', () => ({
   core: { properties: { name: 'name', write: 'write' } },
   useResource: () => drive,
   useCanWrite: () => canEdit,
+  useArray: () => [writers],
   server: { classes: { drive: 'drive' } },
   useString: () => ['Welcome to Atomic'],
   useCurrentAgent: () => [agent ? { subject: agent } : undefined],

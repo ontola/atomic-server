@@ -756,15 +756,8 @@ export async function newDrive(page: Page) {
   const newDriveButton = page.getByTestId('menu-item-new-drive');
   await expect(newDriveButton).toBeVisible({ timeout: 10000 });
   await newDriveButton.click();
-  await waitForCurrentDialog(page);
-
-  const dialog = currentDialog(page);
-  await dialog.getByLabel('Drive name').fill(driveTitle);
-
-  const createButton = dialog.locator('button', { hasText: 'Create' });
-  await createButton.waitFor({ state: 'attached' });
-  await expect(createButton).toBeEnabled();
-  await createButton.click();
+  // Creating a drive is immediate: no dialog, and it is named 'My drive'.
+  // Rename it afterwards, as a user would.
 
   // Wait for the URL to change to did:ad: (newly created drive)
   await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
@@ -778,9 +771,27 @@ export async function newDrive(page: Page) {
   // blown. Being marginal rather than short is why it presents as a flake,
   // `saved-drives.spec.ts:81` red 4 of 10, reporting the title of the previous
   // drive rather than a missing one. 30s, matching the `waitForURL` above it.
+  await expect(currentDriveTitle(page)).toHaveText('My drive', {
+    timeout: 30_000,
+  });
+  const titleEl = editableTitle(page);
+  await titleEl.click();
+  await expect(titleEl).toHaveRole('textbox', { timeout: 10_000 });
+  await titleEl.fill('');
+  await titleEl.type(driveTitle, { delay: 20 });
+  await page.keyboard.press('Escape');
   await expect(currentDriveTitle(page)).toHaveText(driveTitle, {
     timeout: 30_000,
   });
+  await page.waitForFunction(
+    () => {
+      const status = window.store?.getSyncStatus();
+
+      return status.serverConnected && status.pendingDirtyCount === 0;
+    },
+    undefined,
+    { timeout: 30_000 },
+  );
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();
 

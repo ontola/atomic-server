@@ -220,7 +220,7 @@ const SwitcherButton = styled(IconButton)`
 
 const DriveSwitcherTrigger = buildDefaultTrigger(
   <LuChevronsUpDown />,
-  'Switch Drive',
+  () => 'Switch Drive',
   SwitcherButton,
 );
 
