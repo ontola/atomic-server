@@ -168,8 +168,8 @@ export const editableTitle = (page: Page) => page.getByTestId('editable-title');
 export const currentDriveTitle = (page: Page) =>
   page.getByTestId('current-drive-title');
 /**
- * Opens the current drive's page. The sidebar header is the drive switcher,
- * not a link, so this goes to the drive the store has selected. Picking it
+ * Opens the current drive's page. The sidebar header's chevron is the drive
+ * switcher, so this goes to the drive the store has selected. Picking it
  * from the switcher menu raced its list: right after `newDrive` the menu did
  * not hold the new drive yet, the fallback picked "Private drive", and the
  * share test invited to the dev drive instead.

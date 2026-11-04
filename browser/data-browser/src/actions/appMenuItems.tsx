@@ -95,7 +95,7 @@ export function useAppMenuItems(): {
         requestAnimationFrame(() =>
           document
             .querySelector<HTMLElement>(
-              '[data-testid="sidebar-drive-switcher"]',
+              '[data-testid="sidebar"] [title="Switch Drive"]',
             )
             ?.click(),
         );

@@ -146,3 +146,35 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(row).toBeVisible();
 });
+
+test('The sidebar drive header is split: the name opens the drive, the chevron the switcher', async ({
+  page,
+}) => {
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  await expect(page.getByTestId('getting-started')).toBeVisible({
+    timeout: 60_000,
+  });
+  await page.keyboard.press('Escape');
+
+  const sidebar = page.getByTestId('sidebar');
+  const open = sidebar.getByRole('button', {
+    name: 'Open Welcome to Atomic',
+  });
+  const switcher = sidebar.getByRole('button', { name: 'Switch Drive' });
+  await expect(open).toBeVisible();
+  await expect(switcher).toBeVisible();
+
+  // The chevron opens the menu and leaves the page where it is.
+  const here = page.url();
+  await switcher.click();
+  await expect(page.getByRole('menuitem', { name: 'New Drive' })).toBeVisible();
+  await expect(page).toHaveURL(here);
+  await page.keyboard.press('Escape');
+
+  // The name goes to the drive's page.
+  await sidebar.getByRole('button', { name: 'Start here' }).first().click();
+  await expect(page).not.toHaveURL(here);
+  await open.click();
+  await expect(page).toHaveURL(here);
+});

@@ -11,6 +11,7 @@ import {
 import { Fragment, useEffect, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
+import { constructOpenURL } from '../../helpers/navigation';
 import { Button } from '../Button';
 import { ResourceSideBar } from './ResourceSideBar/ResourceSideBar';
 import { SidebarSelectionProvider } from './ResourceSideBar/SidebarSelection';
@@ -18,7 +19,9 @@ import { SideBarHeader } from './SideBarHeader';
 import { SimpleErrorBlock } from '../ErrorLook';
 import { DriveSwitcher } from './DriveSwitcher';
 import { Row } from '../Row';
-import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
+import { IconButton } from '../IconButton/IconButton';
+import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { LuChevronsUpDown } from 'react-icons/lu';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ScrollArea } from '../ScrollArea';
@@ -65,6 +68,7 @@ export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
   return (
     <>
       <SideBarHeader>
+        <DriveTitleLink onItemClick={onItemClick} />
         <DriveSwitcher Trigger={DriveSwitcherTrigger} onSwitch={onItemClick} />
       </SideBarHeader>
       <SidebarSelectionProvider current={currentSubject} ancestry={ancestry}>
@@ -158,23 +162,23 @@ const DriveTitle = styled.h2`
   text-overflow: ellipsis;
 `;
 
-const Chevron = styled(LuChevronsUpDown)`
-  flex-shrink: 0;
-  margin-left: auto;
-  font-size: 0.85rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-/** The whole header is one button: glyph, drive name and a hint chevron. */
-const TriggerButton = styled(Button)<{ current?: boolean }>`
+/**
+ * The title and the drive-switcher chevron form one segmented control: the
+ * left part opens the drive, the right part opens the switcher menu. Flush
+ * inner edges, shared outer rounding, each half highlights on its own.
+ */
+const TitleButton = styled(Button)<{ current?: boolean }>`
   display: flex;
   align-items: center;
   gap: 0.5rem;
   text-align: left;
+  /* Fill the header so the chevron is always pinned to the right; the name
+     truncates when longer than the sidebar. */
   flex: 1;
   min-width: 0;
   padding: 0.35rem 0.5rem;
   border: none;
+  border-radius: ${p => p.theme.radius} 0 0 ${p => p.theme.radius};
 
   ${({ current, theme }) => current && `color: ${theme.colors.main};`}
 
@@ -188,18 +192,50 @@ const TriggerButton = styled(Button)<{ current?: boolean }>`
   }
 `;
 
-function DriveSwitcherTrigger({
-  onClick,
-  menuId,
-  isActive,
-  ref,
-  id,
-}: DropdownTriggerProps) {
+const SwitcherButton = styled(IconButton)`
+  align-self: stretch;
+  height: auto;
+  width: auto;
+  padding-inline: 0.35rem;
+  border: none;
+  border-radius: 0 ${p => p.theme.radius} ${p => p.theme.radius} 0;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.85rem;
+
+  &:focus-visible {
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
+  /* Touch keeps :hover after a tap; only apply it with a real hover. */
+  @media (hover: hover) {
+    &:hover {
+      background-color: ${p => p.theme.colors.bg1};
+      color: ${p => p.theme.colors.text};
+    }
+  }
+  &:active {
+    background-color: ${p => p.theme.colors.bg2};
+  }
+`;
+
+const DriveSwitcherTrigger = buildDefaultTrigger(
+  <LuChevronsUpDown />,
+  'Switch Drive',
+  SwitcherButton,
+);
+
+/** Left half of the header: glyph and name, goes to the drive's page. */
+function DriveTitleLink({
+  onItemClick,
+}: {
+  onItemClick: () => unknown;
+}): JSX.Element {
   const { drive, showSidebarIcons } = useSettings();
   const driveResource = useResource(drive);
   const [title] = useTitle(driveResource);
   const isPrivateDrive = useIsPrivateDrive(drive);
   const [currentSubject] = useCurrentSubject();
+  const navigate = useNavigateWithTransition();
   // A drive with its own emoji or icon shows that; the private drive is
   // "home" by default, any other drive falls back to the class icon.
   const [driveEmoji] = useString(driveResource, dataBrowser.properties.emoji);
@@ -210,17 +246,16 @@ function DriveSwitcherTrigger({
     : driveDisplayName(driveResource.error ? undefined : title, drive);
 
   return (
-    <TriggerButton
+    <TitleButton
       clean
       current={drive === currentSubject}
-      id={id}
-      aria-controls={menuId}
-      aria-expanded={isActive}
-      aria-haspopup='menu'
-      onClick={onClick}
-      ref={ref}
-      title='Switch Drive'
-      data-testid='sidebar-drive-switcher'
+      title={`Open ${driveName}`}
+      aria-label={`Open ${driveName}`}
+      data-testid='sidebar-drive-open'
+      onClick={() => {
+        onItemClick();
+        navigate(constructOpenURL(drive));
+      }}
     >
       {showSidebarIcons && (
         <DriveGlyph aria-hidden>
@@ -232,8 +267,7 @@ function DriveSwitcherTrigger({
         </DriveGlyph>
       )}
       <DriveTitle data-testid='current-drive-title'>{driveName}</DriveTitle>
-      <Chevron aria-hidden />
-    </TriggerButton>
+    </TitleButton>
   );
 }
 
