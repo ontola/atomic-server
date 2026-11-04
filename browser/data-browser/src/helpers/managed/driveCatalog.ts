@@ -55,24 +55,38 @@ export function parseCatalog(value: unknown): DriveCatalog {
  * the same catalog on mount, on focus and every 30 s. A report identical to
  * the last one, sent less than `ttlMs` ago or still in flight, shares its
  * answer instead of posting again. A failed report is not shared.
+ * `expire()` drops an answer that already arrived, for a refresh the user or
+ * the network asked for (focus, back online): those must reach the server,
+ * while a report still in flight keeps being shared.
  */
 export function shareCatalogReports<T>(
   post: (body: string) => Promise<T>,
   ttlMs = 25_000,
 ) {
-  let last: { key: string; at: number; result: Promise<T> } | undefined;
+  let last:
+    | { key: string; at: number; result: Promise<T>; settled: boolean }
+    | undefined;
 
   return {
     send(key: string, body: string): Promise<T> {
       if (last?.key === key && Date.now() - last.at < ttlMs) return last.result;
 
-      const entry = { key, at: Date.now(), result: post(body) };
+      const entry = { key, at: Date.now(), result: post(body), settled: false };
       last = entry;
-      entry.result.catch(() => {
-        if (last === entry) last = undefined;
-      });
+      entry.result.then(
+        () => {
+          entry.settled = true;
+        },
+        () => {
+          entry.settled = true;
+          if (last === entry) last = undefined;
+        },
+      );
 
       return entry.result;
+    },
+    expire() {
+      if (last?.settled) last = undefined;
     },
     reset() {
       last = undefined;
