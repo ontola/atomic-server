@@ -12427,7 +12427,7 @@ msgstr "De lijst met objecten en hun inhoud komen niet overeen."
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr "Oudere back-upkopieën worden verwijderd, evenals de bewerkingsgeschiedenis van de back-up: alleen de huidige staat van elk item blijft behouden. Herstellen hieruit brengt je werkruimte terug zoals deze nu is, zonder versiegeschiedenis. Onlangs verwijderde items kunnen niet meer uit de back-up worden hersteld. Je apparaten behouden hun eigen bewerkingsgeschiedenis en je werkruimte wordt niet gewijzigd."
 
-#: src/components/ConnectDevice.tsx
+#: src/helpers/connectInput.ts
 msgid "Could not reach that address."
 msgstr "Kan dat adres niet bereiken."
 
@@ -13510,3 +13510,23 @@ msgstr "Een snapshot herstellen"
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore this backup?"
 msgstr "Deze back-up herstellen?"
+
+#. 0: url; 1: url.replace('https://', 'http://')
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+msgstr "Kon {0} niet bereiken. Een server op je eigen computer spreekt meestal gewoon http, probeer dus {1}."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+msgstr "Kon {0} niet bereiken. Controleer of de server draait en of deze site andere apps en diensten op dit apparaat mag benaderen (het slotje in de adresbalk, dan site-instellingen). De server moet ook de origin van deze site toestaan."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running on that port."
+msgstr "Kon {0} niet bereiken. Controleer of de server op die poort draait."
+
+#. 0: response.status; 1: apiHost()
+#: src/helpers/managed/recovery.ts
+msgid "HTTP {0} from {1}"
+msgstr "HTTP {0} van {1}"

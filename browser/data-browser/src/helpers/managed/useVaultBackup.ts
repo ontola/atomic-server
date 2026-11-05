@@ -480,6 +480,9 @@ export function useVaultBackup({
             // to a device that is gone ever becomes prunable.
             devicePubkey: devicePubkey!,
             driveKey: key.driveKey,
+            // The epoch the key was sealed under; restoreDrive's default of 1 is
+            // wrong after a re-key and the import then fails to open anything.
+            keyEpoch: key.keyEpoch,
             onProgress: (done, total) =>
               setRestoreProgress(total === 0 ? 1 : done / total),
           });

@@ -12424,7 +12424,7 @@ msgstr "Die Objektliste und ihre Inhalte stimmen nicht überein."
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr "Ältere Sicherungskopien und der Bearbeitungsverlauf der Sicherung werden entfernt. Nur der aktuelle Zustand jedes Elements bleibt erhalten. Eine Wiederherstellung stellt deinen Arbeitsbereich im jetzigen Zustand ohne Versionsverlauf wieder her. Kürzlich gelöschte Elemente können nicht mehr aus der Sicherung wiederhergestellt werden. Deine Geräte behalten ihren eigenen Bearbeitungsverlauf und dein Arbeitsbereich bleibt unverändert."
 
-#: src/components/ConnectDevice.tsx
+#: src/helpers/connectInput.ts
 msgid "Could not reach that address."
 msgstr "Diese Adresse ist nicht erreichbar."
 
@@ -13507,3 +13507,23 @@ msgstr "Einen Snapshot wiederherstellen"
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore this backup?"
 msgstr "Dieses Backup wiederherstellen?"
+
+#. 0: url; 1: url.replace('https://', 'http://')
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+msgstr "{0} ist nicht erreichbar. Ein Server auf deinem eigenen Rechner spricht meist einfaches http, versuche also {1}."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+msgstr "{0} ist nicht erreichbar. Prüfe, ob der Server läuft und ob diese Seite auf andere Apps und Dienste auf diesem Gerät zugreifen darf (das Schloss-Symbol in der Adressleiste, dann Website-Einstellungen). Der Server muss auch den Origin dieser Seite erlauben."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running on that port."
+msgstr "{0} ist nicht erreichbar. Prüfe, ob der Server auf diesem Port läuft."
+
+#. 0: response.status; 1: apiHost()
+#: src/helpers/managed/recovery.ts
+msgid "HTTP {0} from {1}"
+msgstr "HTTP {0} von {1}"
