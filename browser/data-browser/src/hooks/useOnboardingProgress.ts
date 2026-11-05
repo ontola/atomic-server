@@ -1,5 +1,13 @@
 // @wc-ignore-file
-import { core, urls, useCurrentAgent, useResources } from '@tomic/react';
+import {
+  contacts,
+  core,
+  urls,
+  useCollection,
+  useCollectionPage,
+  useCurrentAgent,
+  useResources,
+} from '@tomic/react';
 import { TEMPLATE_CATALOG } from '../chunks/Templates/catalog';
 import { useVisibleDriveChildren } from './useVisibleDriveChildren';
 import { canonicalizeScheme } from '@tomic/lib';
@@ -48,6 +56,8 @@ export interface OnboardingInput {
   aiAvailable: boolean;
   /** Agents with rights on any of the user's non-personal drives, other than the signed-in one. */
   otherAgentsOnDrives: boolean;
+  /** An email invite was sent for one of those drives (not necessarily accepted yet). */
+  inviteSent?: boolean;
   accountLinked: boolean;
 }
 
@@ -63,9 +73,23 @@ export function deriveOnboardingSteps(
       done: input.hasAIChat,
       needs: input.aiAvailable ? undefined : 'ai-source',
     },
-    { id: 'invite', done: input.otherAgentsOnDrives },
+    { id: 'invite', done: input.otherAgentsOnDrives || !!input.inviteSent },
     { id: 'save', done: input.accountLinked },
   ];
+}
+
+/**
+ * Whether any email-invite Contact points at one of `drives`. Such a Contact
+ * lives in the inviter's own private drive (see `pendingInvites.ts`), so it is
+ * by construction one this agent created.
+ */
+export function hasInviteForDrives(
+  invitedTargets: Array<string | undefined>,
+  drives: string[],
+): boolean {
+  return invitedTargets.some(
+    t => typeof t === 'string' && drives.some(d => same(d, t)),
+  );
 }
 
 export function useOnboardingProgress(drive: string, driveName?: string) {
@@ -85,7 +109,10 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
   const templateChildCount = same(drive, welcomeDrive)
     ? TEMPLATE_CATALOG.find(t => t.id === 'welcome')!.parts.length
     : 0;
-  const shared = savedDrives.filter(d => !same(d, privateDrive));
+  // The panel's own drive counts even when it is not on the saved list yet.
+  const shared = [...new Set([...savedDrives, drive])].filter(
+    d => !same(d, privateDrive),
+  );
   const resources = useResources(shared);
   const others = [...resources.values()].some(r =>
     [r.get(core.properties.read), r.get(core.properties.write)]
@@ -97,6 +124,23 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
           a !== urls.instances.publicAgent,
       ),
   );
+  const { collection } = useCollection(
+    {
+      property: contacts.properties.invitedTo,
+      drive: privateDrive,
+    },
+    { pageSize: 100 },
+  );
+  const inviteMembers = useCollectionPage(collection, 0);
+  const inviteContacts = useResources(privateDrive ? inviteMembers : []);
+  const inviteSent = hasInviteForDrives(
+    [...inviteContacts.values()].map(r => {
+      const t = r.get(contacts.properties.invitedTo);
+
+      return typeof t === 'string' ? t : undefined;
+    }),
+    shared,
+  );
   const input: OnboardingInput = {
     driveName,
     childCount: children.length,
@@ -104,6 +148,7 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     hasAIChat: chats.length > 0,
     aiAvailable: enableAI && availableProviders.length > 0,
     otherAgentsOnDrives: others,
+    inviteSent,
     accountLinked,
   };
   const steps = deriveOnboardingSteps(input);

@@ -1,7 +1,11 @@
 // @wc-ignore-file
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@tomic/react', () => ({ core: {}, urls: { instances: {} } }));
+vi.mock('@tomic/react', () => ({
+  contacts: { properties: {} },
+  core: {},
+  urls: { instances: {} },
+}));
 vi.mock('@components/AI/AISettingsContext', () => ({}));
 vi.mock('@components/SideBar/AIPanel', () => ({}));
 vi.mock('./usePrivateDrive', () => ({}));
@@ -11,10 +15,12 @@ vi.mock('./useVisibleDriveChildren', () => ({}));
 vi.mock('@helpers/managed/binding', () => ({}));
 vi.mock('@helpers/managed/deviceLink', () => ({}));
 
-const { deriveOnboardingSteps, isDefaultDriveName } =
+import type { OnboardingInput } from './useOnboardingProgress';
+
+const { deriveOnboardingSteps, hasInviteForDrives, isDefaultDriveName } =
   await import('./useOnboardingProgress');
 
-const base = {
+const base: OnboardingInput = {
   driveName: 'Welcome to Atomic',
   childCount: 4,
   templateChildCount: 4,
@@ -69,9 +75,21 @@ describe('deriveOnboardingSteps', () => {
   it('is done for Invite once another agent has rights on a drive', () => {
     expect(done().invite).toBe(false);
     expect(done({ ...base, otherAgentsOnDrives: true }).invite).toBe(true);
+    expect(done({ ...base, inviteSent: true }).invite).toBe(true);
+    expect(done(base).invite).toBe(false);
   });
 
   it('is done for Save once an account is linked', () => {
     expect(done({ ...base, accountLinked: true }).save).toBe(true);
+  });
+});
+
+describe('hasInviteForDrives', () => {
+  it('matches an invite target against the drives', () => {
+    expect(hasInviteForDrives(['did:ad:a'], ['did:ad:a'])).toBe(true);
+    expect(hasInviteForDrives(['did:ad:b', undefined], ['did:ad:a'])).toBe(
+      false,
+    );
+    expect(hasInviteForDrives([], ['did:ad:a'])).toBe(false);
   });
 });
