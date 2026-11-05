@@ -34,6 +34,8 @@ function memoryStorage(): Storage {
 
 const SUBJECT = 'did:ad:test:1';
 const NAME = 'https://atomicdata.dev/properties/name';
+const IS_A = 'https://atomicdata.dev/properties/isA';
+const DOCUMENT_V2 = 'https://atomicdata.dev/classes/DocumentV2';
 
 describe('the memory host (?host=memory)', () => {
   it('serves a resource the page that shows the editor put there', async () => {
@@ -80,6 +82,47 @@ describe('the memory host (?host=memory)', () => {
 
     expect(again.getText('content').toString()).toBe('Verzoekt het college');
     expect(JSON.parse(row.jsonAd)[NAME]).toBe('Speeltuin');
+  });
+
+  it('writes the body of a document seeded with Markdown text', async () => {
+    const storage = memoryStorage();
+    storage.setItem(
+      MEMORY_HOST_PREFIX + SUBJECT,
+      JSON.stringify({
+        jsonAd: { [NAME]: 'Motie', [IS_A]: [DOCUMENT_V2] },
+        snapshot: null,
+        text: '## Verzoekt het college\n\n- de **speeltuin** te behouden\n',
+      }),
+    );
+    const host = createMockHost(storage);
+    const [row] = (await host.call('getResourcesWithSnapshots', [
+      [SUBJECT],
+    ])) as Array<{ jsonAd: string; snapshot: string }>;
+    const doc = new Loro.LoroDoc();
+    doc.import(decodeB64(row.snapshot));
+    const body = doc.getMap('doc').toJSON() as {
+      children: Array<{
+        nodeName: string;
+        attributes: object;
+        children: unknown[];
+      }>;
+    };
+
+    expect(body.children.map(c => c.nodeName)).toEqual([
+      'heading',
+      'bulletList',
+    ]);
+    expect(body.children[0].attributes).toEqual({ level: 2 });
+    expect(JSON.stringify(body.children[1])).toContain('speeltuin');
+    // Its properties stay what they were.
+    expect(doc.getMap('properties').get(NAME)).toBe('Motie');
+    expect(JSON.parse(row.jsonAd)[NAME]).toBe('Motie');
+    // Written once: the next page reads the same snapshot.
+    const again = createMockHost(storage);
+    const [second] = (await again.call('getResourcesWithSnapshots', [
+      [SUBJECT],
+    ])) as Array<{ snapshot: string }>;
+    expect(second.snapshot).toBe(row.snapshot);
   });
 
   it('signs as an agent of its own, the same one for the whole tab', async () => {

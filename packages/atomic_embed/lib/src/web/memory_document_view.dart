@@ -10,8 +10,11 @@ const memoryHostPrefix = 'atomic-embed-memory:';
 
 /// Puts [jsonAd] (a JSON-AD object; `@id` is set to [subject]) into the
 /// page's memory store, unless the page already has the resource: what was
-/// typed in it stays.
-void seedMemoryResource(String subject, Map<String, Object?> jsonAd) {
+/// typed in it stays. A document's body can come with it as Markdown [text]
+/// (a template): the page writes it into the document the first time it
+/// opens, as the Rust host does when it creates one.
+void seedMemoryResource(String subject, Map<String, Object?> jsonAd,
+    {String? text}) {
   final key = '$memoryHostPrefix$subject';
   if (web.window.sessionStorage.getItem(key) != null) return;
   web.window.sessionStorage.setItem(
@@ -19,6 +22,7 @@ void seedMemoryResource(String subject, Map<String, Object?> jsonAd) {
       jsonEncode({
         'jsonAd': {...jsonAd, '@id': subject},
         'snapshot': null,
+        if (text != null && text.trim().isNotEmpty) 'text': text,
       }));
 }
 

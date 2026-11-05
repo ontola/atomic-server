@@ -9,6 +9,7 @@ import {
   signBytesWithKey,
   type NativeChannel,
 } from '@tomic/lib';
+import { writeDocumentText } from './documentText';
 import baseModels from '@repo-lib-defaults/default_base_models.json';
 import defaultStore from '@repo-lib-defaults/default_store.json';
 
@@ -56,6 +57,30 @@ async function memoryAgent(
 const SUBJECT = 'https://atomicdata.dev/properties/subject';
 const LORO_UPDATE = 'https://atomicdata.dev/properties/loroUpdate';
 
+/** A resource's Loro snapshot: its properties, as the Rust host keeps them,
+ *  and a body written from Markdown `body`. */
+function documentSnapshot(r: JsonAd, body: string): Uint8Array {
+  const { LoroDoc, LoroList } = LoroLoader.Loro;
+  const doc = new LoroDoc();
+  const properties = doc.getMap('properties');
+
+  for (const [prop, value] of Object.entries(r)) {
+    if (prop === '@id') continue;
+
+    if (Array.isArray(value)) {
+      const list = properties.setContainer(prop, new LoroList());
+
+      for (const v of value) list.push(v as never);
+    } else {
+      properties.set(prop, value as never);
+    }
+  }
+
+  writeDocumentText(doc, body);
+
+  return doc.export({ mode: 'snapshot' });
+}
+
 const fromB64Url = (value: string) =>
   decodeB64(value.replace(/-/g, '+').replace(/_/g, '/'));
 
@@ -76,6 +101,9 @@ export function createMockHost(storage?: Storage): NativeChannel & {
 } {
   const resources = new Map<string, JsonAd>();
   const snapshots = new Map<string, string>();
+  /** Bodies to write on first read: a document made from a template by the
+   *  page that seeded it (`text`, Markdown), which has no Loro of its own. */
+  const texts = new Map<string, string>();
   /** Every call the page made, newest last: for looking at in a console. */
   const calls: Array<[string, unknown[]]> = [];
   // `did:ad:X` and `atomic:X` are one resource.
@@ -122,6 +150,7 @@ export function createMockHost(storage?: Storage): NativeChannel & {
         const row = JSON.parse(storage.getItem(name) ?? 'null') as {
           jsonAd?: JsonAd;
           snapshot?: string | null;
+          text?: string;
         } | null;
         const subject = name.slice(MEMORY_HOST_PREFIX.length);
 
@@ -130,6 +159,7 @@ export function createMockHost(storage?: Storage): NativeChannel & {
         resources.set(subject, { ...row.jsonAd, '@id': subject });
 
         if (row.snapshot) snapshots.set(subject, row.snapshot);
+        else if (row.text) texts.set(subject, row.text);
       } catch {
         // A row that is not ours: left alone.
       }
@@ -171,10 +201,21 @@ export function createMockHost(storage?: Storage): NativeChannel & {
     resources.get(id) ??
     [...resources.values()].find(r => key(r['@id']) === key(id));
 
-  const snapshotOf = (id: string) => {
+  const snapshotOf = async (id: string) => {
     const r = find(id);
 
-    return (r && snapshots.get(r['@id'])) ?? null;
+    if (!r) return null;
+
+    const body = texts.get(r['@id']);
+
+    if (body !== undefined && !snapshots.has(r['@id'])) {
+      texts.delete(r['@id']);
+      await enableLoro();
+      snapshots.set(r['@id'], encodeB64(documentSnapshot(r, body)));
+      save(r['@id']);
+    }
+
+    return snapshots.get(r['@id']) ?? null;
   };
 
   const put = (json: string, snapshot?: string | null) => {
@@ -242,10 +283,12 @@ export function createMockHost(storage?: Storage): NativeChannel & {
     init: () => true,
     getResource: ([s]) => text(s as string),
     getResourcesWithSnapshots: ([subjects]) =>
-      (subjects as string[]).map(s => ({
-        jsonAd: text(s),
-        snapshot: snapshotOf(s),
-      })),
+      Promise.all(
+        (subjects as string[]).map(async s => ({
+          snapshot: await snapshotOf(s),
+          jsonAd: text(s),
+        })),
+      ),
     getLoroSnapshot: ([s]) => snapshotOf(s as string),
     allSubjects: () => [...resources.keys()],
     getDriveSubjects: () => [...resources.keys()],

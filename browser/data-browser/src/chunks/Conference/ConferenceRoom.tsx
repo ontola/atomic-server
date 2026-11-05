@@ -250,13 +250,7 @@ export default function ConferenceRoom({
 
 /** One remote participant: their live video (which also carries their
  *  audio), with an avatar + name badge once they've introduced themselves. */
-function PeerTile({
-  peer,
-  compact,
-}: {
-  peer: PeerState;
-  compact?: boolean;
-}) {
+function PeerTile({ peer, compact }: { peer: PeerState; compact?: boolean }) {
   const agentResource = useResource(peer.agent);
   const [name] = useTitle(agentResource);
 
