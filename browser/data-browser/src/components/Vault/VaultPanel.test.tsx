@@ -6,12 +6,22 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
 import { VaultPanel } from './VaultPanel';
 import { buildTheme } from '../../styling';
+import { DialogGlobalContextProvider } from '../Dialog/DialogGlobalContextProvider';
+import { RootWelcomeLayoutProvider } from '../../context/RootWelcomeLayoutContext';
+
+const usageMock = vi.hoisted(() => vi.fn());
+
+vi.mock('../../helpers/managed/vault', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../helpers/managed/vault')>()),
+  getVaultUsage: usageMock,
+}));
 
 const theme = buildTheme(false, '#1b50d8');
 const GB = 1024 ** 3;
@@ -50,9 +60,23 @@ const show = (
 ) =>
   render(
     <ThemeProvider theme={theme}>
-      <VaultPanel vault={vault} included={included} />
+      <RootWelcomeLayoutProvider>
+        <DialogGlobalContextProvider>
+          <VaultPanel vault={vault} included={included} />
+        </DialogGlobalContextProvider>
+      </RootWelcomeLayoutProvider>
     </ThemeProvider>,
   );
+
+// jsdom has no modal <dialog>; opening one is all these tests need from it.
+HTMLDialogElement.prototype.showModal = function showModal() {
+  this.setAttribute('open', '');
+};
+
+HTMLDialogElement.prototype.close = function close() {
+  this.removeAttribute('open');
+  this.dispatchEvent(new Event('close'));
+};
 
 afterEach(cleanup);
 
@@ -112,4 +136,47 @@ it('restores from a picked file and clears the input', async () => {
 
   await waitFor(() => expect(onRestored).toHaveBeenCalled());
   expect(vault.restoreFromFile).toHaveBeenCalledWith(file);
+});
+
+it('restores at once when there is a single snapshot', async () => {
+  usageMock.mockResolvedValue({
+    snapshots: [
+      { id: 'a', created_at: 1_700_000_000, bytes: 1, is_latest: true },
+    ],
+  });
+  const vault = vaultWith(1000);
+  show(1000, false, vault);
+
+  fireEvent.click(screen.getByTestId('vault-restore'));
+
+  await waitFor(() => expect(vault.restore).toHaveBeenCalledWith(undefined));
+});
+
+it('lets the person pick a snapshot, newest preselected, then confirm', async () => {
+  usageMock.mockResolvedValue({
+    snapshots: [
+      { id: 'new', created_at: 1_700_000_000, bytes: 1, is_latest: true },
+      { id: 'old', created_at: 1_690_000_000, bytes: 1, is_latest: false },
+    ],
+  });
+  const vault = vaultWith(1000);
+  show(1000, false, vault);
+
+  fireEvent.click(screen.getByTestId('vault-restore'));
+
+  const newest = (await screen.findByTestId(
+    'vault-restore-snapshot-new',
+  )) as HTMLInputElement;
+  expect(newest.checked).toBe(true);
+  expect(vault.restore).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByTestId('vault-restore-snapshot-old'));
+  fireEvent.click(
+    within(document.querySelector('dialog') as HTMLElement).getByRole(
+      'button',
+      { name: 'Restore' },
+    ),
+  );
+
+  await waitFor(() => expect(vault.restore).toHaveBeenCalledWith('old'));
 });

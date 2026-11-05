@@ -69,7 +69,8 @@ export type UseVaultBackup = {
    * (`error` says why).
    */
   compact: (includeUndoWindow: boolean) => Promise<CompactResult | null>;
-  restore: () => Promise<RestoreOutcome | null>;
+  /** Restore the newest snapshot, or the one with this id. */
+  restore: (snapshotId?: string) => Promise<RestoreOutcome | null>;
   /**
    * Save the sealed backup to this device as one `.atomic-vault` file. Resolves
    * to `'saved'`, `'cancelled'` (no location chosen), `'empty'` (nothing is
@@ -427,31 +428,38 @@ export function useVaultBackup({
     ],
   );
 
-  const restore = useCallback(async () => {
-    if (status.state !== 'on') return null;
+  const restore = useCallback(
+    async (snapshotId?: string) => {
+      if (status.state !== 'on') return null;
 
-    return run(async () => {
-      const key = await ensureKey(status.enrollment.drive_pseudonym);
-      setRestoreProgress(0);
+      return run(async () => {
+        const key = await ensureKey(status.enrollment.drive_pseudonym);
+        setRestoreProgress(0);
 
-      try {
-        return await restoreDrive({
-          db: db!,
-          drivePseudonym: status.enrollment.drive_pseudonym,
-          // This device's lane, so the import can record which *other* lanes it
-          // now provably holds. That is what lets a checkpoint published from
-          // here later claim coverage for them — the only way a lane belonging
-          // to a device that is gone ever becomes prunable.
-          devicePubkey: devicePubkey!,
-          driveKey: key.driveKey,
-          onProgress: (done, total) =>
-            setRestoreProgress(total === 0 ? 1 : done / total),
-        });
-      } finally {
-        setRestoreProgress(null);
-      }
-    });
-  }, [run, status, ensureKey, db, devicePubkey]);
+        try {
+          return await restoreDrive({
+            db: db!,
+            drivePseudonym: status.enrollment.drive_pseudonym,
+            // This device's lane, so the import can record which *other* lanes it
+            // now provably holds. That is what lets a checkpoint published from
+            // here later claim coverage for them — the only way a lane belonging
+            // to a device that is gone ever becomes prunable.
+            devicePubkey: devicePubkey!,
+            driveKey: key.driveKey,
+            // The epoch the key was sealed under; restoreDrive's default of 1 is
+            // wrong after a re-key and the import then fails to open anything.
+            keyEpoch: key.keyEpoch,
+            snapshotId,
+            onProgress: (done, total) =>
+              setRestoreProgress(total === 0 ? 1 : done / total),
+          });
+        } finally {
+          setRestoreProgress(null);
+        }
+      });
+    },
+    [run, status, ensureKey, db, devicePubkey],
+  );
 
   const downloadBackup = useCallback(async () => {
     if (status.state !== 'on') return null;

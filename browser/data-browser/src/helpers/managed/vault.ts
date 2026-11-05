@@ -1040,10 +1040,49 @@ export async function downloadVaultObjects<T>(
   return fetched;
 }
 
+const checkpointNumber = (objectKey: string): number | null => {
+  const match = /\/ckpt-(\d+)\.loro$/.exec(objectKey);
+
+  return match ? Number(match[1]) : null;
+};
+
+/**
+ * Drop the snapshots newer than the chosen one, so the importer anchors on it.
+ * Changes recorded after it are still replayed on top.
+ */
+export function withoutNewerSnapshots(
+  objects: VaultObject[],
+  snapshotId?: string,
+): VaultObject[] {
+  if (!snapshotId) return objects;
+
+  const chosen = objects.find(
+    o => o.kind === 'checkpoint' && o.object_id === snapshotId,
+  );
+  const n = chosen ? checkpointNumber(chosen.object_key) : null;
+
+  if (n === null) {
+    throw new Error(
+      'That snapshot is no longer in the backup. Close this and try again.',
+    );
+  }
+
+  return objects.filter(
+    o => o.kind !== 'checkpoint' || (checkpointNumber(o.object_key) ?? 0) <= n,
+  );
+}
+
 /** The cloud vault as a {@link RestoreSource}. */
-export function cloudRestoreSource(drivePseudonym: string): RestoreSource {
+export function cloudRestoreSource(
+  drivePseudonym: string,
+  /** Restore this snapshot (a checkpoint object id) instead of the newest. */
+  snapshotId?: string,
+): RestoreSource {
   return async onProgress => {
-    const objects = await listVaultObjects(drivePseudonym);
+    const objects = withoutNewerSnapshots(
+      await listVaultObjects(drivePseudonym),
+      snapshotId,
+    );
 
     const bodies = await downloadVaultObjects(
       drivePseudonym,
@@ -1080,7 +1119,8 @@ export async function restoreDrive({
   driveKey,
   keyEpoch = 1,
   onProgress,
-  source = cloudRestoreSource(drivePseudonym),
+  snapshotId,
+  source = cloudRestoreSource(drivePseudonym, snapshotId),
 }: {
   db: VaultCapableDb;
   drivePseudonym: string;
@@ -1088,6 +1128,8 @@ export async function restoreDrive({
   driveKey: Uint8Array;
   keyEpoch?: number;
   onProgress?: (downloaded: number, total: number) => void;
+  /** Restore this snapshot rather than the newest. See {@link withoutNewerSnapshots}. */
+  snapshotId?: string;
   source?: RestoreSource;
 }): Promise<RestoreOutcome> {
   const fetched = await source(onProgress);

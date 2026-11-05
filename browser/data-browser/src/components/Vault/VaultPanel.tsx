@@ -10,6 +10,15 @@ import { Button } from '../Button';
 import { ServiceRow, type ServiceStanding } from '../Cloud/ServiceRow';
 import { UsageMeter } from '../Cloud/UsageMeter';
 import { VaultStorage } from './VaultStorage';
+import {
+  ConfirmationDialog,
+  ConfirmationDialogTheme,
+} from '../ConfirmationDialog';
+import { RadioGroup, RadioInput } from '../forms/RadioInput';
+import {
+  getVaultUsage,
+  type VaultSnapshotUsage,
+} from '../../helpers/managed/vault';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
 import { plural } from '@helpers/plural';
@@ -41,6 +50,8 @@ export function VaultPanel({
   const [storageOpen, setStorageOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [snapshots, setSnapshots] = useState<VaultSnapshotUsage[] | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
   // What Cloud Vault is: the same sentence in every state. Declared in here,
   // not at module level, so the translation extractor sees it.
   const tagline = 'Encrypted backup of your data. Only you can read it.';
@@ -51,8 +62,29 @@ export function VaultPanel({
       : 'current'
     : null;
 
+  // With more than one snapshot the person picks which; with one (or when the
+  // list cannot be read) there is nothing to choose and it restores at once.
   async function handleRestore() {
-    const outcome = await vault.restore();
+    if (status.state === 'on') {
+      try {
+        const usage = await getVaultUsage(status.enrollment.drive_pseudonym);
+
+        if (usage.snapshots && usage.snapshots.length > 1) {
+          setSnapshots(usage.snapshots);
+          setChosen(usage.snapshots[0].id);
+
+          return;
+        }
+      } catch {
+        // Fall through: restoring the newest is still right.
+      }
+    }
+
+    await restoreSnapshot();
+  }
+
+  async function restoreSnapshot(snapshotId?: string) {
+    const outcome = await vault.restore(snapshotId);
 
     if (outcome) onRestored?.();
   }
@@ -284,6 +316,36 @@ export function VaultPanel({
             >
               <FaFileImport /> <span>Restore from file</span>
             </Button>
+            <ConfirmationDialog
+              show={snapshots !== null}
+              bindShow={open => {
+                if (!open) setSnapshots(null);
+              }}
+              title='Restore which snapshot?'
+              confirmLabel='Restore'
+              theme={ConfirmationDialogTheme.Default}
+              onConfirm={() => void restoreSnapshot(chosen ?? undefined)}
+            >
+              <RadioGroup data-testid='vault-restore-snapshots'>
+                {(snapshots ?? []).map((snap, i) => (
+                  <RadioInput
+                    key={snap.id}
+                    name='vault-restore-snapshot'
+                    data-testid={`vault-restore-snapshot-${snap.id}`}
+                    checked={chosen === snap.id}
+                    onChange={() => setChosen(snap.id)}
+                  >
+                    <span>
+                      {new Date(snap.created_at * 1000).toLocaleString(
+                        undefined,
+                        { dateStyle: 'medium', timeStyle: 'short' },
+                      )}
+                      {i === 0 && <span> (newest)</span>}
+                    </span>
+                  </RadioInput>
+                ))}
+              </RadioGroup>
+            </ConfirmationDialog>
             <HiddenInput
               ref={fileInput}
               data-testid='vault-file-input'
