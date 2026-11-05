@@ -74,6 +74,24 @@ function show(v = vault()) {
   return v;
 }
 
+/**
+ * Wait for the restore dialog, then read its radios.
+ *
+ * Opening it is a resolved promise and a few effects, so it is the waiting that
+ * must not depend on speed: `findAllByRole` over the whole page recomputes the
+ * accessibility tree on every poll, a few hundred ms each in jsdom, and on a
+ * loaded CI runner that alone ran past its 1 s. Waiting on the open <dialog>
+ * is a plain selector, and the radios are then read from that small subtree.
+ */
+async function openRadios() {
+  await waitFor(() => expect(usageMock).toHaveBeenCalled());
+  await waitFor(() =>
+    expect(document.querySelector('dialog[open]')).toBeTruthy(),
+  );
+
+  return dialog().queryAllByRole('radio') as HTMLInputElement[];
+}
+
 const dialog = () => {
   const all = document.querySelectorAll('dialog');
 
@@ -101,7 +119,7 @@ it('offers a choice of snapshots, newest preselected, and warns before restoring
 
   fireEvent.click(screen.getByTestId('vault-restore'));
 
-  const radios = (await screen.findAllByRole('radio')) as HTMLInputElement[];
+  const radios = await openRadios();
   expect(radios).toHaveLength(4);
   expect(radios.map(r => r.checked)).toEqual([true, false, false, false]);
   expect(v.restore).not.toHaveBeenCalled();
@@ -133,10 +151,12 @@ it('restores nothing when the dialog is cancelled', async () => {
   const v = show();
 
   fireEvent.click(screen.getByTestId('vault-restore'));
-  await screen.findAllByRole('radio');
+  expect(await openRadios()).toHaveLength(4);
   fireEvent.click(dialog().getByText('Cancel'));
 
-  await waitFor(() => expect(screen.queryAllByRole('radio')).toHaveLength(0));
+  await waitFor(() =>
+    expect(document.querySelector('input[type=radio]')).toBeNull(),
+  );
   expect(v.restore).not.toHaveBeenCalled();
 });
 
@@ -145,10 +165,7 @@ it('with one snapshot only asks to confirm', async () => {
   const v = show();
 
   fireEvent.click(screen.getByTestId('vault-restore'));
-  await waitFor(() =>
-    expect(document.querySelector('dialog[open]')).toBeTruthy(),
-  );
-  expect(screen.queryAllByRole('radio')).toHaveLength(0);
+  expect(await openRadios()).toHaveLength(0);
   expect(v.restore).not.toHaveBeenCalled();
 
   fireEvent.click(dialog().getByText('Restore'));
