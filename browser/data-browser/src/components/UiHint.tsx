@@ -69,13 +69,29 @@ export function UiHint({
       if (!content) return;
 
       // Toward the target: up for a callout below it, down when flipped.
-      const dir = content.dataset.side === 'top' ? 4 : -4;
+      const top = content.dataset.side === 'top';
+      const dir = top ? 6 : -6;
       const at = (n: number) => `0 ${n}px`;
+      const arrow = content.querySelector('svg');
+      const box = content.getBoundingClientRect();
+      const tip = arrow?.getBoundingClientRect();
 
-      content.animate(
-        { translate: ['0 0', at(dir), '0 0', at(dir / 2), '0 0'] },
-        { duration: 400, easing: 'ease-in-out' },
+      // Grow from the arrow tip, so the bubble swells out of its target.
+      const x = tip ? tip.left + tip.width / 2 - box.left : box.width / 2;
+
+      content.style.transformOrigin = `${x}px ${top ? '100%' : '0'}`;
+
+      const anim = content.animate(
+        {
+          scale: ['1', '1.12', '0.96', '1.05', '1'],
+          translate: ['0 0', at(dir), '0 0', at(dir / 2), '0 0'],
+        },
+        { duration: 600, easing: 'ease-in-out' },
       );
+
+      anim.onfinish = () => {
+        content.style.transformOrigin = '';
+      };
     }, 150);
 
     return () => clearTimeout(t);
@@ -136,7 +152,7 @@ export function UiHint({
           <LuX />
         </IconButton>
       </HintBody>
-      <RadixPopover.Arrow asChild width={14} height={7}>
+      <RadixPopover.Arrow asChild width={20} height={10}>
         <svg viewBox='0 0 30 10' preserveAspectRatio='none'>
           {/* Covers the bubble's border under the arrow's base. */}
           <rect x='2' y='-3' width='26' height='3.5' />
@@ -149,8 +165,8 @@ export function UiHint({
 
 const HintPopover = styled(Popover)`
   max-width: min(16rem, calc(100vw - 2rem));
-  padding: ${p => p.theme.size(2)};
-  font-size: 0.85rem;
+  padding: ${p => p.theme.size(2)} ${p => p.theme.size(3)};
+  font-size: 1rem;
   color: ${p => p.theme.colors.text};
 
   background-color: ${p => p.theme.colors.bgBody};
@@ -170,12 +186,12 @@ const HintPopover = styled(Popover)`
 
 const HintBody = styled.div`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: ${p => p.theme.size(2)};
 `;
 
 const HintText = styled.p`
   margin: 0;
   flex: 1;
-  line-height: 1.4;
+  line-height: normal;
 `;
