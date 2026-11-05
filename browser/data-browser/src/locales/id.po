@@ -6048,6 +6048,7 @@ msgstr "Tidak dapat menyiapkan file. Pilih lagi untuk mencoba kembali."
 
 #: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore"
 msgstr "Pulihkan"
 
@@ -12423,7 +12424,7 @@ msgstr "Daftar objek dan isinya tidak cocok."
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr "Salinan cadangan lama dihapus, begitu pula riwayat suntingan cadangan: hanya keadaan terkini setiap item yang disimpan. Memulihkan darinya mengembalikan ruang kerja seperti sekarang, tanpa riwayat versinya. Item yang baru dihapus tidak lagi dapat dipulihkan dari cadangan. Perangkat Anda tetap menyimpan riwayat suntingannya sendiri dan ruang kerja Anda tidak berubah."
 
-#: src/components/ConnectDevice.tsx
+#: src/helpers/connectInput.ts
 msgid "Could not reach that address."
 msgstr "Tidak dapat menghubungi alamat itu."
 
@@ -13480,3 +13481,44 @@ msgstr "Buka beranda {0}"
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Apps in this drive"
 msgstr "Aplikasi di drive ini"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Snapshot"
+msgstr "Snapshot"
+
+#. 0: when
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
+msgstr "Drive kamu akan kembali seperti pada {0}. Perubahan setelah saat itu akan hilang bagi semua orang yang menggunakan drive ini."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
+msgstr "Item yang ditambahkan sejak itu dipindahkan ke Sampah, dan pemulihan disimpan sebagai perubahan baru, sehingga Riwayat setiap item tetap menyimpan apa yang digantikan."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore a snapshot"
+msgstr "Pulihkan snapshot"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore this backup?"
+msgstr "Pulihkan cadangan ini?"
+
+#. 0: url; 1: url.replace('https://', 'http://')
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+msgstr "Tidak dapat menjangkau {0}. Server di mesinmu sendiri biasanya memakai http biasa, jadi coba {1}."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+msgstr "Tidak dapat menjangkau {0}. Pastikan server berjalan, dan situs ini diizinkan mengakses aplikasi dan layanan lain di perangkat ini (ikon gembok di bilah alamat, lalu setelan situs). Server juga harus mengizinkan origin situs ini."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running on that port."
+msgstr "Tidak dapat menjangkau {0}. Pastikan server berjalan di port tersebut."
+
+#. 0: response.status; 1: apiHost()
+#: src/helpers/managed/recovery.ts
+msgid "HTTP {0} from {1}"
+msgstr "HTTP {0} dari {1}"

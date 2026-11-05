@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyConnectInput } from './connectInput';
+import { classifyConnectInput, describeUnreachable } from './connectInput';
 
 const NODE = 'a'.repeat(64);
 
@@ -37,5 +37,32 @@ describe('classifyConnectInput', () => {
   it('rejects text that is neither', () => {
     expect(classifyConnectInput('not an address').kind).toBe('invalid');
     expect(classifyConnectInput('did:ad:abc').kind).toBe('invalid');
+  });
+});
+
+describe('local servers', () => {
+  it.each([
+    ['localhost:9883', 'http://localhost:9883'],
+    ['http://localhost:9883', 'http://localhost:9883'],
+    ['https://localhost:9883', 'https://localhost:9883'],
+    ['127.0.0.1:9883', 'http://127.0.0.1:9883'],
+    ['[::1]:9883', 'http://[::1]:9883'],
+  ])('accepts %s', (typed, url) => {
+    expect(classifyConnectInput(typed)).toEqual({ kind: 'server', url });
+  });
+
+  it('suggests http when a local server was tried over https', () => {
+    expect(describeUnreachable('https://localhost:9883')).toContain(
+      'http://localhost:9883',
+    );
+  });
+
+  it('names the likely cause for a local server, and stays generic otherwise', () => {
+    expect(describeUnreachable('http://127.0.0.1:9883')).toContain(
+      'server is running',
+    );
+    expect(describeUnreachable('https://example.com')).toBe(
+      'Could not reach that address.',
+    );
   });
 });

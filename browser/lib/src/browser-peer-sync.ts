@@ -335,7 +335,9 @@ export class BrowserPeerSync {
     error: unknown,
   ): void {
     if (this.stopped || this.connections.get(id) !== connection) return;
-    const message = error instanceof Error ? error.message : String(error);
+    const raw = error instanceof Error ? error.message : String(error);
+    const message = describePeerFailure(raw);
+    if (message !== raw) console.warn('[browser-peer-sync] peer failed:', raw);
     // Kept so the next status() does not wipe it with a bare "Waiting".
     this.lastError = message;
     this.remove(id, connection);
@@ -353,6 +355,27 @@ export class BrowserPeerSync {
       );
     }
   }
+}
+
+/** Errors the frame transport raises when the other side sends bytes it cannot parse. */
+const UNREADABLE_FRAME_ERRORS = new Set([
+  'Invalid Atomic frame size',
+  'Missing Atomic frame length',
+  'Atomic frame overflow',
+  'Expected binary Atomic frame',
+  'Atomic receive queue full',
+  'Truncated Atomic frame',
+]);
+
+/**
+ * What a person can read for a peer failure. The transport's own wording
+ * ("Invalid Atomic frame size") says nothing to a user; the raw text stays in
+ * the console. Anything not recognised passes through unchanged.
+ */
+export function describePeerFailure(message: string): string {
+  return UNREADABLE_FRAME_ERRORS.has(message)
+    ? 'A peer sent data this version could not read. Reload or update the app on both devices'
+    : message;
 }
 
 class BrowserPeerConnection {
