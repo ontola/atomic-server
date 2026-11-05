@@ -6044,7 +6044,6 @@ msgstr "No se ha podido preparar el archivo. Selecciónalo de nuevo para volver 
 
 #: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
-#: src/components/Vault/VaultPanel.tsx
 msgid "Restore"
 msgstr "Restaurar"
 
@@ -13499,15 +13498,7 @@ msgstr ""
 msgid "Could not reach {0}. Check that the server is running on that port."
 msgstr ""
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Restore which snapshot?"
-msgstr ""
-
 #. 0: response.status; 1: apiHost()
 #: src/helpers/managed/recovery.ts
 msgid "HTTP {0} from {1}"
-msgstr ""
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "(newest)"
 msgstr ""

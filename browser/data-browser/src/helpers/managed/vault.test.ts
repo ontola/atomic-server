@@ -8,7 +8,6 @@ import {
   vaultLaneId,
   backupDrive,
   restoreDrive,
-  withoutNewerSnapshots,
   setUpVaultForDrive,
   recoverDriveKey,
   nextSegmentFor,
@@ -1942,32 +1941,5 @@ describe('compacting the backup', () => {
     }
 
     expect(calls).toEqual([]);
-  });
-});
-
-describe('withoutNewerSnapshots', () => {
-  const obj = (id: string, key: string, kind: string) =>
-    ({ object_id: id, object_key: key, kind }) as never;
-  const objects = [
-    obj('c1', 'vault/p/checkpoints/ckpt-000001.loro', 'checkpoint'),
-    obj('c2', 'vault/p/checkpoints/ckpt-000002.loro', 'checkpoint'),
-    obj('p1', 'vault/p/lanes/d/seg-000001.pack', 'pack'),
-  ];
-
-  it('keeps everything when no snapshot is chosen', () => {
-    expect(withoutNewerSnapshots(objects)).toBe(objects);
-  });
-
-  it('drops snapshots newer than the chosen one and keeps packs', () => {
-    expect(withoutNewerSnapshots(objects, 'c1').map(o => o.object_id)).toEqual([
-      'c1',
-      'p1',
-    ]);
-  });
-
-  it('says so when the snapshot is gone', () => {
-    expect(() => withoutNewerSnapshots(objects, 'gone')).toThrow(
-      /no longer in the backup/,
-    );
   });
 });
