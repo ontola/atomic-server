@@ -6050,6 +6050,7 @@ msgstr "Could not prepare file. Select it again to retry."
 
 #: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Restore"
 msgstr "Restore"
 
@@ -12426,7 +12427,7 @@ msgstr "The list of objects and their contents do not match."
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 
-#: src/components/ConnectDevice.tsx
+#: src/helpers/connectInput.ts
 msgid "Could not reach that address."
 msgstr "Could not reach that address."
 
@@ -13488,3 +13489,31 @@ msgstr "Open the {0} homepage"
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Apps in this drive"
 msgstr "Apps in this drive"
+
+#. 0: url; 1: url.replace('https://', 'http://')
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+msgstr "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+msgstr "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running on that port."
+msgstr "Could not reach {0}. Check that the server is running on that port."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restore which snapshot?"
+msgstr "Restore which snapshot?"
+
+#. 0: response.status; 1: apiHost()
+#: src/helpers/managed/recovery.ts
+msgid "HTTP {0} from {1}"
+msgstr "HTTP {0} from {1}"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "(newest)"
+msgstr "(newest)"
