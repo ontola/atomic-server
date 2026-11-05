@@ -108,9 +108,28 @@ AppBar(title: Text('Notes'), actions: [AtomicAccountButton(node: node)])
 The panel lives in `package:atomic_flutter`; `AtomicNodeSettings(node)` is its
 backend over your node, so `showAtomicUserDialog(context, backend:
 AtomicNodeSettings(node))` opens it from anywhere. Inviting needs a server
-(`node.connect(origin)`). "Sign in with atomic.place" in the browser is not part
-of the package: it lives in the app in `flutter/` together with its account
-client, so paste-the-secret is the way in here.
+(`node.connect(origin)`).
+
+### Sign in with an account provider (off by default)
+
+By default the only way in is a pasted secret. To also let people sign in with
+a hosted account, name its provider (an HTTPS origin):
+
+```dart
+AtomicAccountButton(
+  node: node,
+  accountProvider: Uri.parse('https://atomic.place'), // your provider
+  accountProviderLabel: 'Atomic', // optional; the host is shown by default
+)
+```
+
+The panel then shows "Sign in with <provider>". It opens the provider's
+approval page in the system browser; the account's identity comes back sealed
+and replaces the node's agent, exactly like a pasted secret. The account's
+session is kept in the keychain (`SecureAccountSessionStore`, or pass your own
+`AtomicAccountSessionStore` as `accountSession`), the panel shows which account
+is linked, and sign-out removes it. `AtomicNodeSettings(node, accountProvider:
+...)` takes the same parameters. Opening the browser uses `url_launcher` (pass `openUrl` to change that).
 
 ## What you get
 
@@ -419,7 +438,6 @@ final sharing = Sharing(store, (t, w, e, m) => 'token');      // real rights log
 
 ## Still on you
 
-- Sign in through the atomic.place website; the app in `flutter/` has it.
 - Which server to use and remembering it: `sync.connect` takes an origin you
   choose, `sync.discover(drive)` finds one for a drive.
 - Catching an `atomic:invite` link opened from outside the app (a URL scheme or

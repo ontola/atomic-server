@@ -17,7 +17,7 @@ import {
   type OntologyPropertyInput,
 } from './ontology-input.js';
 import type { SchemaStore } from './plugin-schema.js';
-import type { JSONObject, JSONValue } from './value.js';
+import { isPlainObject, type JSONObject, type JSONValue } from './value.js';
 
 /**
  * JSON Schema (draft 2020-12) in and out of an Atomic ontology. The Rust twin
@@ -344,9 +344,6 @@ function readNestedKeywords(
     );
   }
 }
-
-const isPlainObject = (v: unknown): v is Obj =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /**
  * Reads a schema nested inside a json value into the constraint vocabulary of

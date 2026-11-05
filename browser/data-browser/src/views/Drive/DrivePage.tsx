@@ -15,9 +15,12 @@ import {
 } from '@components/SideBar/DriveSwitcher';
 import { styled } from 'styled-components';
 import { useDialog } from '@components/Dialog/useDialog';
-import { FaGear } from 'react-icons/fa6';
+import { FaGear, FaRegStar, FaStar } from 'react-icons/fa6';
 import { useEffect, useState, type JSX } from 'react';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
+import { useSavedDriveToggle } from '@hooks/useSavedDriveToggle';
+import { useDriveHistory } from '@hooks/useDriveHistory';
+import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { FileDropZone } from '@components/forms/FileDropzone/FileDropzone';
@@ -49,6 +52,18 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const showStart =
     canEdit && (filling || (empty && subResources.length === 0));
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
+  const { privateDrive } = usePrivateDrive();
+  const [isSaved, toggleSaved] = useSavedDriveToggle(resource.subject);
+  const [, addToHistory] = useDriveHistory();
+  const canSave = !!privateDrive && !isPrivateDrive;
+
+  // A drive opened by link shows up under Recently visited, where it can be
+  // starred later, unless it is already one of My drives.
+  useEffect(() => {
+    if (canSave && !isSaved) {
+      addToHistory(resource.subject);
+    }
+  }, [canSave, isSaved, resource.subject, addToHistory]);
 
   if (!baseURL) {
     setBaseURL(resource.subject);
@@ -83,6 +98,24 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                 {baseURL !== resource.subject && (
                   <Button subtle onClick={() => setBaseURL(resource.subject)}>
                     Set as current drive
+                  </Button>
+                )}
+                {canSave && (
+                  <Button
+                    subtle
+                    onClick={toggleSaved}
+                    aria-pressed={isSaved}
+                    data-testid='drive-save-button'
+                  >
+                    {isSaved ? (
+                      <>
+                        <FaStar /> In My drives
+                      </>
+                    ) : (
+                      <>
+                        <FaRegStar /> Add to My drives
+                      </>
+                    )}
                   </Button>
                 )}
                 <Button

@@ -1,5 +1,5 @@
 import { canonicalizeScheme, toLegacyScheme } from './subject.js';
-import type { JSONObject, JSONValue } from './value.js';
+import { isPlainObject, type JSONValue } from './value.js';
 
 /**
  * Value constraints that live on a Class, not on its Properties. The Rust twin
@@ -94,9 +94,6 @@ export class ConstraintError extends Error {
   }
 }
 
-const isObject = (v: unknown): v is JSONObject =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
 const isNumber = (v: unknown): v is number =>
   typeof v === 'number' && Number.isFinite(v);
 
@@ -139,7 +136,7 @@ function parseAt(json: unknown, depth: number): Constraint {
     throw new Error(`Constraints nest deeper than ${MAX_DEPTH} levels`);
   }
 
-  if (!isObject(json)) {
+  if (!isPlainObject(json)) {
     throw new Error(
       `A constraint must be a JSON object, got ${JSON.stringify(json)}`,
     );
@@ -187,7 +184,7 @@ function parseAt(json: unknown, depth: number): Constraint {
         );
       }
     } else if (keyword === 'const') {
-      out.const = v;
+      out.const = v as JSONValue;
     } else if (keyword === 'type') {
       const names = Array.isArray(v) ? v : [v];
       const types: ConstraintType[] = [];
@@ -210,7 +207,7 @@ function parseAt(json: unknown, depth: number): Constraint {
 
       out.type = types;
     } else if (keyword === 'properties') {
-      if (!isObject(v)) {
+      if (!isPlainObject(v)) {
         throw new Error(
           `Constraint \`properties\` must be an object, got ${JSON.stringify(v)}`,
         );
@@ -239,7 +236,7 @@ function parseAt(json: unknown, depth: number): Constraint {
     } else if (keyword === 'additionalProperties') {
       if (typeof v === 'boolean') {
         out.additionalProperties = v;
-      } else if (isObject(v)) {
+      } else if (isPlainObject(v)) {
         out.additionalProperties = parseNested(
           'additionalProperties',
           '',
@@ -293,7 +290,7 @@ export function parseConstraints(json: unknown): Constraints {
   const parsed =
     typeof json === 'string' ? (JSON.parse(json) as unknown) : json;
 
-  if (!isObject(parsed)) {
+  if (!isPlainObject(parsed)) {
     throw new Error(
       `\`constraints\` must be a JSON object, got ${JSON.stringify(parsed)}`,
     );
@@ -322,7 +319,7 @@ const jsonEq = (a: unknown, b: unknown): boolean => {
     return a.length === b.length && a.every((x, i) => jsonEq(x, b[i]));
   }
 
-  if (isObject(a) && isObject(b)) {
+  if (isPlainObject(a) && isPlainObject(b)) {
     const keys = Object.keys(a);
 
     return (
@@ -346,7 +343,7 @@ const typeMatches = (name: ConstraintType, v: unknown): boolean => {
     case 'null':
       return v === null;
     case 'object':
-      return isObject(v);
+      return isPlainObject(v);
     case 'array':
       return Array.isArray(v);
     case 'number':
@@ -366,7 +363,9 @@ const typeNameOf = (v: unknown): string =>
  * an object, as `atomic_lib` does.
  */
 const plain = (v: unknown): unknown =>
-  isObject(v) && typeof v['@id'] === 'string' && Object.keys(v).length === 1
+  isPlainObject(v) &&
+  typeof v['@id'] === 'string' &&
+  Object.keys(v).length === 1
     ? v['@id']
     : v;
 
@@ -472,7 +471,7 @@ function checkAt(
         checkAt(c.items!, item, [...path, String(i)], depth + 1),
       );
     }
-  } else if (isObject(value)) {
+  } else if (isPlainObject(value)) {
     for (const name of c.required ?? []) {
       if (!Object.hasOwn(value, name))
         fail('required', `missing property ${JSON.stringify(name)}`);
@@ -488,7 +487,7 @@ function checkAt(
 
       if (!listed && extra === false) {
         fail('additionalProperties', 'property is not allowed', [...path, key]);
-      } else if (!listed && isObject(extra)) {
+      } else if (!listed && isPlainObject(extra)) {
         schema = extra as Constraint;
       }
 

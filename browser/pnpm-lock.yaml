@@ -33,7 +33,7 @@ patchedDependencies:
   '@wuchale/jsx@0.12.5': c62a6c8ae50964c9b52a44a8f50a85ccd1e7bd003758e3143f2e985b9051e8e6
   loro-prosemirror@0.4.3: cfeb56b4474c59fdd4a3feb56f010825ca89494fca7a5bb422aef1a84e626bf8
   playwright-core@1.63.0: 51ccaaf15d34f7f1a82e936ef746184b5ff972a17b05ddff80d43daf6d89d86b
-  wuchale@0.25.6: 3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9
+  wuchale@0.25.6: 511c67ffd9eb6bf2eb31fa7c28a0333018922baa4709799b976e33184a78b5ac
 
 importers:
 
@@ -190,9 +190,6 @@ importers:
       '@tauri-apps/api':
         specifier: ^2.11.1
         version: 2.11.1
-      '@tauri-apps/plugin-barcode-scanner':
-        specifier: ^2.4.5
-        version: 2.4.5
       '@tiptap/core':
         specifier: ^3.30.4
         version: 3.31.3(@tiptap/pm@3.31.3)
@@ -417,7 +414,7 @@ importers:
         version: 7.4.1
       wuchale:
         specifier: ^0.25.6
-        version: 0.25.6(patch_hash=3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9)
+        version: 0.25.6(patch_hash=511c67ffd9eb6bf2eb31fa7c28a0333018922baa4709799b976e33184a78b5ac)
       yjs:
         specifier: ^13.6.30
         version: 13.6.30
@@ -470,6 +467,9 @@ importers:
       oxc-transform-react:
         specifier: 0.145.0
         version: 0.145.0
+      pofile:
+        specifier: 1.1.4
+        version: 1.1.4
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -4214,9 +4214,6 @@ packages:
 
   '@tauri-apps/api@2.11.1':
     resolution: {integrity: sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==}
-
-  '@tauri-apps/plugin-barcode-scanner@2.4.5':
-    resolution: {integrity: sha512-sIPRYEfxww8/y8skZ2LcAp/h5bwvlHkQiq+3w6QEl+2BHs13xnpn7hP+pv4fkBs8DyDfpUbOBIYS5YBwP7x1QQ==}
 
   '@testing-library/dom@10.4.2':
     resolution: {integrity: sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==}
@@ -14161,10 +14158,6 @@ snapshots:
 
   '@tauri-apps/api@2.11.1': {}
 
-  '@tauri-apps/plugin-barcode-scanner@2.4.5':
-    dependencies:
-      '@tauri-apps/api': 2.11.1
-
   '@testing-library/dom@10.4.2':
     dependencies:
       '@babel/code-frame': 7.29.7
@@ -14985,7 +14978,7 @@ snapshots:
     dependencies:
       '@sveltejs/acorn-typescript': 1.0.10(acorn@8.18.0)
       acorn: 8.18.0
-      wuchale: 0.25.6(patch_hash=3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9)
+      wuchale: 0.25.6(patch_hash=511c67ffd9eb6bf2eb31fa7c28a0333018922baa4709799b976e33184a78b5ac)
     optionalDependencies:
       react: 19.2.6
 
@@ -21397,7 +21390,7 @@ snapshots:
       is-wsl: 3.1.1
       powershell-utils: 0.1.0
 
-  wuchale@0.25.6(patch_hash=3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9):
+  wuchale@0.25.6(patch_hash=511c67ffd9eb6bf2eb31fa7c28a0333018922baa4709799b976e33184a78b5ac):
     dependencies:
       '@sveltejs/acorn-typescript': 1.0.10(acorn@8.18.0)
       acorn: 8.18.0

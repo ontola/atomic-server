@@ -12,6 +12,7 @@ import { UsageMeter } from '../Cloud/UsageMeter';
 import { VaultStorage } from './VaultStorage';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
+import { plural } from '@helpers/plural';
 
 /**
  * Cloud Vault for one drive, as one {@link ServiceRow}.
@@ -100,6 +101,30 @@ export function VaultPanel({
     );
   }
 
+  // Someone else's vault: say it is there and whose it is, offer nothing.
+  if (status.state === 'other') {
+    return (
+      <ServiceRow
+        data-testid='vault-panel'
+        data-vault-state='other'
+        kind='vault'
+        title='Cloud Vault'
+        standing='included'
+        tagline={tagline}
+        status={{
+          tone: status.suspended ? 'waiting' : 'ok',
+          text: (
+            <span data-testid='vault-managed-elsewhere'>
+              {status.backedUpBy
+                ? `This drive is backed up by ${status.backedUpBy}. Only that account can change it.`
+                : 'This drive is backed up by another account. Only that account can change it.'}
+            </span>
+          ),
+        }}
+      />
+    );
+  }
+
   if (status.state === 'off') {
     return (
       <ServiceRow
@@ -140,9 +165,7 @@ export function VaultPanel({
       : enrollment.last_backup_at
         ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
         : `Backed up to ${PRODUCT_NAME}`;
-  const objects = `${details.confirmed_objects} object${
-    details.confirmed_objects === 1 ? '' : 's'
-  }`;
+  const objects = plural(details.confirmed_objects, ['# object', '# objects']);
 
   // Included in Cloud Server, the vault's allowance is part of that plan, whose
   // own meter carries the limit. Quoting it here reads as the vault's limit.

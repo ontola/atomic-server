@@ -404,19 +404,8 @@ pub async fn handle_frame_full_for_caps(
             match protocol::decode_commit(payload) {
                 Some(decoded) => {
                     let request_id = decoded.request_id;
-                    match apply_peer_commit(store, decoded.commit_json).await {
-                        Ok(commit_json) => {
-                            vec![protocol::encode_commit_ok(request_id, &commit_json)]
-                        }
-                        Err(e) => {
-                            let msg = e.to_string();
-                            vec![protocol::encode_error(
-                                request_id,
-                                protocol::classify_commit_error(&msg),
-                                &msg,
-                            )]
-                        }
-                    }
+                    let result = apply_peer_commit(store, decoded.commit_json).await;
+                    vec![CommitAck::FULL.frame(request_id, &result, 0)]
                 }
                 None => vec![protocol::encode_error(
                     0,
@@ -799,6 +788,70 @@ impl CommitIngestOpts {
     }
 }
 
+/// Which `COMMIT_OK` shape a session was negotiated to receive. Every
+/// transport answers a `COMMIT` through [`CommitAck::frame`], so the
+/// encodings live in one place: the full commit resource (legacy, and what
+/// peers get), the slim commit id (`commit-ok-slim`), or the slim id plus the
+/// node's write-load hint (`commit-ok-slim` and `commit-pace`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CommitAck {
+    pub slim: bool,
+    pub paced: bool,
+}
+
+impl CommitAck {
+    /// The legacy full-commit ack; every format a client did not ask for.
+    pub const FULL: Self = Self {
+        slim: false,
+        paced: false,
+    };
+
+    /// Pick the ack from a client's `HELLO` capabilities. The load hint only
+    /// rides on the slim form.
+    pub fn negotiated(caps: &[String]) -> Self {
+        let has = |cap: &str| caps.iter().any(|c| c == cap);
+        let slim = has(protocol::CAP_COMMIT_OK_SLIM);
+        Self {
+            slim,
+            paced: slim && has(protocol::CAP_COMMIT_PACE),
+        }
+    }
+
+    /// The `COMMIT_OK` or `ERROR` frame answering request `request_id`.
+    /// `pace_ms` is only sent in the paced form.
+    pub fn frame<E: ToString>(
+        self,
+        request_id: u16,
+        result: &Result<String, E>,
+        pace_ms: u32,
+    ) -> Vec<u8> {
+        match result {
+            Ok(commit_json) => {
+                // A slim client only wants the id it must chain the next
+                // commit on; it already holds the commit it just signed.
+                let slim_id = self.slim.then(|| {
+                    serde_json::from_str::<serde_json::Value>(commit_json)
+                        .ok()
+                        .and_then(|v| v.get("@id")?.as_str().map(str::to_owned))
+                });
+                match slim_id.flatten() {
+                    Some(id) if self.paced => {
+                        protocol::encode_commit_ok_paced(request_id, &id, pace_ms)
+                    }
+                    Some(id) => protocol::encode_commit_ok_slim(request_id, &id),
+                    None => protocol::encode_commit_ok(request_id, commit_json),
+                }
+            }
+            Err(e) => {
+                // Classify so the outbox can switch on a structured code
+                // instead of pattern-matching the message text.
+                let msg = e.to_string();
+                protocol::encode_error(request_id, protocol::classify_commit_error(&msg), &msg)
+            }
+        }
+    }
+}
+
 /// Parse a JSON-AD commit and verify its signature, returning the signer it
 /// proves. This is the identity check alone: no schema, timestamp, rights,
 /// ownership or Loro checks run, and nothing is stored.
@@ -813,8 +866,7 @@ pub async fn verify_commit_signer(
     store: &impl crate::Storelike,
     commit_json: &str,
 ) -> crate::errors::AtomicResult<crate::Subject> {
-    let resource = crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
-    let commit = crate::commit::Commit::from_resource(resource)?;
+    let commit = crate::commit::Commit::from_json_ad(commit_json)?;
     commit.validate_signature(store).await?;
     Ok(commit.signer)
 }
@@ -851,16 +903,16 @@ pub async fn ingest_commit(
     commit_json: &str,
     opts: &CommitIngestOpts,
 ) -> crate::errors::AtomicResult<crate::commit::CommitResponse> {
-    let incoming_commit_resource =
-        crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
+    let incoming: serde_json::Map<String, serde_json::Value> = serde_json::from_str(commit_json)
+        .map_err(|e| crate::AtomicError::parse_error(&format!("Invalid JSON: {e}"), None, None))?;
 
     // Reject commits with deprecated set/push/remove fields — use loroUpdate instead.
-    // Checked on the parsed commit's properties, not by substring-matching
+    // Checked on the parsed commit's keys, not by substring-matching
     // the raw body: a commit whose subject *is* one of these Property
     // resources, or whose values merely mention them, must not be refused.
     if [crate::urls::SET, crate::urls::PUSH, crate::urls::REMOVE]
         .iter()
-        .any(|legacy| incoming_commit_resource.get(legacy).is_ok())
+        .any(|legacy| incoming.contains_key(*legacy))
     {
         return Err(
             "Commits with `set`, `push`, or `remove` fields are no longer accepted. Use `loroUpdate` instead."
@@ -868,7 +920,7 @@ pub async fn ingest_commit(
         );
     }
 
-    let incoming_commit = crate::commit::Commit::from_resource(incoming_commit_resource)?;
+    let incoming_commit = crate::commit::Commit::from_json_map(&incoming)?;
 
     // Log incoming commit details for debugging
     if let Some(loro_bytes) = &incoming_commit.loro_update {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { parseCatalogApp, type CatalogApp } from '@tomic/react';
+import { isPlainObject, parseCatalogApp, type CatalogApp } from '@tomic/react';
 import { useMarketplaceUrls } from '@helpers/pluginCatalogUrl';
 
 const CATALOG_ENTRY_CLASS =
@@ -25,10 +25,6 @@ export interface CatalogEntry {
   catalogUrl?: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /** Malformed entries are skipped, so one bad row can't hide the rest. */
 export function parseCatalogEntries(
   raw: unknown,
@@ -37,7 +33,7 @@ export function parseCatalogEntries(
   if (!Array.isArray(raw)) return [];
 
   return raw.flatMap((resource): CatalogEntry[] => {
-    if (!isRecord(resource)) return [];
+    if (!isPlainObject(resource)) return [];
     const isA = resource[IS_A_PROP];
     const shortname = resource[SHORTNAME_PROP];
 

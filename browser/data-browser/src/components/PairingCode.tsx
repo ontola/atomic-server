@@ -2,7 +2,11 @@ import { useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { renderSVG } from 'uqr';
-import { encodePairingEnvelope, type PairingEnvelope } from '@tomic/lib';
+import {
+  encodePairingEnvelope,
+  isLoopbackHost,
+  type PairingEnvelope,
+} from '@tomic/lib';
 import { Button } from './Button';
 import { useSettings } from '../helpers/AppSettings';
 
@@ -38,9 +42,7 @@ export function PairingCode({ nodeDid }: PairingCodeProps): JSX.Element {
     try {
       const parsed = new URL(baseURL);
 
-      return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
-        ? undefined
-        : baseURL;
+      return isLoopbackHost(parsed.hostname) ? undefined : baseURL;
     } catch {
       return undefined;
     }

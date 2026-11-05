@@ -123,3 +123,10 @@ export function bytesToHex(bytes: Uint8Array): string {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 }
+
+/** True for a non-null, non-array object. */
+export function isPlainObject(
+  value: unknown,
+): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

@@ -42,10 +42,10 @@ export function initClientDb(
   options: { deferAnonymous?: boolean } = {},
 ): void {
   // NOT `SharedWorker`: the implementation moved to a dedicated Worker long
-  // ago, and Android WebView (the Tauri mobile app) has no SharedWorker — a
-  // stale SharedWorker guard silently disabled the entire local database
-  // there, so every collection query fell back to the server and local-only
-  // drives rendered empty. Missing locks/OPFS on insecure
+  // ago, and Android WebView has no SharedWorker — a stale SharedWorker guard
+  // silently disabled the entire local database there, so every collection
+  // query fell back to the server and local-only drives rendered empty.
+  // Missing locks/OPFS on insecure
   // contexts is handled inside ClientDbWorker with a clear message.
   if (typeof Worker === 'undefined') return;
 

@@ -55,6 +55,12 @@ vi.mock('@hooks/useVisibleDriveChildren', () => ({
     total: 0,
   }),
 }));
+vi.mock('@hooks/useSavedDriveToggle', () => ({
+  useSavedDriveToggle: () => [false, () => undefined],
+}));
+vi.mock('@hooks/useDriveHistory', () => ({
+  useDriveHistory: () => [[], () => undefined, () => undefined],
+}));
 vi.mock('@hooks/useIsPrivateDrive', () => ({ useIsPrivateDrive: () => false }));
 vi.mock('@components/Drives/PrivateDriveBadge', () => ({
   PrivateDriveBadge: () => <span />,

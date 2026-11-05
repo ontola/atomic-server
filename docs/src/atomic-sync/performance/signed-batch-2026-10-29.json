@@ -1,0 +1,157 @@
+{
+  "base": "f570405eb2ff14570ca26d4e91e82e5dafd338b5",
+  "rows": [
+    {
+      "phase": "legacy-10k",
+      "mode": "legacy",
+      "syncSeconds": 38.748249208,
+      "titleSearchSeconds": 45.372633458,
+      "wireMB": 253.601853,
+      "proofCount": 0,
+      "legacyEnvelopeCount": 10018,
+      "proofBytes": 0,
+      "imported": 10018,
+      "chunks": 201,
+      "genesisCertificatesVerifiedOutsideTimer": 10018,
+      "signingAndFramingSeconds": 2.973908292,
+      "verificationSecondsExcluded": 37.059936167,
+      "receiverBytes": 538972160,
+      "host": {
+        "before": {
+          "loadOneMinute": 9.95,
+          "swapMiB": 13545.56
+        },
+        "after": {
+          "loadOneMinute": 9.09,
+          "swapMiB": 14690.12
+        }
+      }
+    },
+    {
+      "phase": "batch1-10k-a",
+      "mode": "batch1",
+      "syncSeconds": 30.501468333,
+      "titleSearchSeconds": 34.936070541,
+      "wireMB": 214.483504,
+      "proofCount": 10018,
+      "legacyEnvelopeCount": 0,
+      "proofBytes": 108192756,
+      "imported": 10018,
+      "chunks": 201,
+      "genesisCertificatesVerifiedOutsideTimer": 10018,
+      "signingAndFramingSeconds": 3.4901295,
+      "verificationSecondsExcluded": 33.527951666999996,
+      "receiverBytes": 1077940224,
+      "host": {
+        "before": {
+          "loadOneMinute": 9.0,
+          "swapMiB": 14690.12
+        },
+        "after": {
+          "loadOneMinute": 10.94,
+          "swapMiB": 14562.12
+        }
+      }
+    },
+    {
+      "phase": "batch50-10k-a",
+      "mode": "batch50",
+      "syncSeconds": 23.057478833,
+      "titleSearchSeconds": 27.290060167,
+      "wireMB": 211.597306,
+      "proofCount": 201,
+      "legacyEnvelopeCount": 0,
+      "proofBytes": 105345826,
+      "imported": 10018,
+      "chunks": 201,
+      "genesisCertificatesVerifiedOutsideTimer": 10018,
+      "signingAndFramingSeconds": 3.2199132500000003,
+      "verificationSecondsExcluded": 44.7455885,
+      "receiverBytes": 1077940224,
+      "host": {
+        "before": {
+          "loadOneMinute": 10.54,
+          "swapMiB": 14562.12
+        },
+        "after": {
+          "loadOneMinute": 10.96,
+          "swapMiB": 14482.12
+        }
+      }
+    },
+    {
+      "phase": "batch50-10k-b",
+      "mode": "batch50",
+      "syncSeconds": 23.529601167,
+      "titleSearchSeconds": 27.632628334,
+      "wireMB": 211.597306,
+      "proofCount": 201,
+      "legacyEnvelopeCount": 0,
+      "proofBytes": 105345826,
+      "imported": 10018,
+      "chunks": 201,
+      "genesisCertificatesVerifiedOutsideTimer": 10018,
+      "signingAndFramingSeconds": 3.049780125,
+      "verificationSecondsExcluded": 44.074281917,
+      "receiverBytes": 1077940224,
+      "host": {
+        "before": {
+          "loadOneMinute": 10.96,
+          "swapMiB": 14482.12
+        },
+        "after": {
+          "loadOneMinute": 11.07,
+          "swapMiB": 14457.5
+        }
+      }
+    },
+    {
+      "phase": "batch1-10k-b",
+      "mode": "batch1",
+      "syncSeconds": 27.569998083,
+      "titleSearchSeconds": 31.870909583,
+      "wireMB": 214.483504,
+      "proofCount": 10018,
+      "legacyEnvelopeCount": 0,
+      "proofBytes": 108192756,
+      "imported": 10018,
+      "chunks": 201,
+      "genesisCertificatesVerifiedOutsideTimer": 10018,
+      "signingAndFramingSeconds": 3.488920542,
+      "verificationSecondsExcluded": 30.164889458,
+      "receiverBytes": 1077932032,
+      "host": {
+        "before": {
+          "loadOneMinute": 10.83,
+          "swapMiB": 14457.5
+        },
+        "after": {
+          "loadOneMinute": 6.18,
+          "swapMiB": 14433.5
+        }
+      }
+    }
+  ],
+  "payloadStreamSha256": "049f335eaf8bd0cdcc66a79c384f2f270b80d6a56316b8715dabe2574b2bcb50",
+  "fixtureSha256": "dcd407c52117d893969f26e7528009d12330d371f0ca40aab1a73ea462b036b4",
+  "batch50VsBatch1MedianRatio": 0.8022370171655284,
+  "allFiveRunsVerified": true,
+  "scope": "Initial same-owner full-state attestation prototype. batch1 versus batch50 isolates grouping in this format. Legacy differs in format, historical proof semantics and proof storage compression. Shared host, two runs per experimental mode; not a production protocol or statistical latency guarantee.",
+  "measurementDate": "2026-10-29",
+  "fixtureBytes": 44560516,
+  "fixtureIssues": 10000,
+  "embeddedComments": 30900,
+  "validation": {
+    "newFocusedTests": 2,
+    "existingSyncPushTests": 21,
+    "correctedSmokeLanes": 3,
+    "verified10kRuns": 5
+  },
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "buildProfile": "harness release opt-level=2,lto=false,codegen-units=16",
+  "binarySha256": "56d74c51d2858b12c72730684b75baf67c1c67510fbbddd8f123a5b770f27ed2",
+  "sourceOverlaySha256": "142f8eb3f515cb76f1db2a5d4ead023a7c314d2bb6135b539871030e10424af7",
+  "status": "Local experimental protocol extension; not enabled in candidate25 or compatible with ordinary envelope verification.",
+  "timer": "Initial request to native LAST import/flush return; excludes source preparation, signing/framing and offline verification.",
+  "proofSemantics": "Full-state attestation, not the existing per-commit audit interface. Shared proofs use uncompressed PluginMeta storage."
+}
