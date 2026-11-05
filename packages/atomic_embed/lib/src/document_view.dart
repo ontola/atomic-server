@@ -9,7 +9,8 @@ import 'embed_server.dart';
 
 /// Answers one call of the page to the store: a method and its arguments (a
 /// JSON array), as JSON. `AtomicStore.embedCall` of `atomic_store_flutter`.
-typedef EmbedStoreCall = Future<String> Function(String method, String argsJson);
+typedef EmbedStoreCall = Future<String> Function(
+    String method, String argsJson);
 
 /// Calls of the page that ask the host app for something of its own (open a
 /// native screen, start a call, follow someone). A plain document view has

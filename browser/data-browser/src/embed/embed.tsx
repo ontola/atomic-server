@@ -214,7 +214,15 @@ lockFlutterChannel();
 
 const channel: NativeChannel =
   window.atomicHost ??
-  (flutterChannel() ? createFlutterHost(flutterChannel()!) : createMockHost());
+  (flutterChannel()
+    ? createFlutterHost(flutterChannel()!)
+    : // `?host=memory`: a web demo's editor in an iframe keeps its documents
+      // in the tab's sessionStorage (`mockHost.ts`).
+      createMockHost(
+        new URLSearchParams(location.search).get('host') === 'memory'
+          ? sessionStorage
+          : undefined,
+      ));
 // Only the app can open its own screens; the mock host answers nothing to that.
 setActionsHost(window.atomicHost || window.AtomicFlutter ? channel : undefined);
 
