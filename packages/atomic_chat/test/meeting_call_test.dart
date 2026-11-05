@@ -78,7 +78,7 @@ void main() {
 
   group('MeetingCall', () {
     test('starts the call page of a meeting, expanded', () async {
-      final call = MeetingCall(api: _StoreApi());
+      final call = MeetingCall(call: _StoreApi().embedCall);
       expect(call.active, isFalse);
 
       await call.start('did:ad:meeting', scheme: 'dark');
@@ -92,7 +92,7 @@ void main() {
     });
 
     test('a meeting already in a call is not started twice', () async {
-      final call = MeetingCall(api: _StoreApi());
+      final call = MeetingCall(call: _StoreApi().embedCall);
       await call.start('did:ad:meeting');
       call.collapse();
       expect(call.expanded, isFalse);
@@ -104,7 +104,7 @@ void main() {
     });
 
     test('another meeting ends the first call', () async {
-      final call = MeetingCall(api: _StoreApi());
+      final call = MeetingCall(call: _StoreApi().embedCall);
       await call.start('did:ad:one');
       await call.start('did:ad:two');
 
@@ -115,7 +115,7 @@ void main() {
     });
 
     test('leaving drops the page and the call', () async {
-      final call = MeetingCall(api: _StoreApi());
+      final call = MeetingCall(call: _StoreApi().embedCall);
       await call.start('did:ad:meeting');
       var notified = 0;
       call.addListener(() => notified++);
@@ -132,7 +132,7 @@ void main() {
 
     test('leaving before the page is up releases it when it arrives', () async {
       hold = Completer<void>();
-      final call = MeetingCall(api: _StoreApi());
+      final call = MeetingCall(call: _StoreApi().embedCall);
       final started = call.start('did:ad:meeting');
       await pumpEventQueue();
       expect(call.active, isTrue);
@@ -148,7 +148,7 @@ void main() {
     });
 
     test('the page\'s Leave button ends the call', () async {
-      final call = MeetingCall(api: _StoreApi());
+      final call = MeetingCall(call: _StoreApi().embedCall);
       await call.start('did:ad:meeting');
       final page = pages.single;
 
@@ -162,7 +162,7 @@ void main() {
 
     test('the page reads and writes the store through the api', () async {
       final api = _StoreApi();
-      final call = MeetingCall(api: api);
+      final call = MeetingCall(call: api.embedCall);
       await call.start('did:ad:meeting');
       final page = pages.single;
 
@@ -186,7 +186,7 @@ void main() {
     });
 
     test('the small tile is moved, kept through collapse and expand', () async {
-      final call = MeetingCall(api: _StoreApi());
+      final call = MeetingCall(call: _StoreApi().embedCall);
       await call.start('did:ad:meeting');
 
       call.moveTile(const Offset(10, 20));
