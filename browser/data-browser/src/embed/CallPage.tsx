@@ -34,7 +34,7 @@ export function CallPage({ meeting }: { meeting: string }): React.JSX.Element {
   }, [store, meeting]);
 
   return (
-    <Page data-testid='call-page'>
+    <Page data-testid='call-page' $compact={compact}>
       {ready && (
         <Suspense fallback={null}>
           <ConferenceRoom
@@ -68,11 +68,20 @@ function useCompact(): boolean {
   return compact;
 }
 
-const Page = styled.div`
+const Page = styled.div<{ $compact: boolean }>`
   box-sizing: border-box;
   min-height: 100dvh;
   padding: ${p => p.theme.size(2)};
   background: ${p => p.theme.colors.bgBody};
+
+  /* In the tile the video fills it, edge to edge. */
+  ${p =>
+    p.$compact &&
+    `
+    height: 100dvh;
+    padding: 0;
+    background: #000;
+  `}
 
   /* The room fills the app's tile instead of the panel it was made for. */
   & > div {

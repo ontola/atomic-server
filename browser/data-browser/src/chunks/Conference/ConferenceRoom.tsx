@@ -173,7 +173,7 @@ export default function ConferenceRoom({
   const peerEntries = Object.entries(peers);
 
   return (
-    <CallSection>
+    <CallSection $compact={compact}>
       {error ? (
         <ErrorMessage>
           {error === 'denied'
@@ -182,7 +182,7 @@ export default function ConferenceRoom({
         </ErrorMessage>
       ) : (
         <TileGrid $compact={compact}>
-          <Tile $last={compact}>
+          <Tile $last={compact} $compact={compact}>
             <PeerVideo
               $mirrored
               muted
@@ -206,7 +206,7 @@ export default function ConferenceRoom({
             </TileBadge>
           </Tile>
           {peerEntries.map(([peerId, peer]) => (
-            <PeerTile key={peerId} peer={peer} />
+            <PeerTile key={peerId} peer={peer} compact={compact} />
           ))}
         </TileGrid>
       )}
@@ -250,12 +250,18 @@ export default function ConferenceRoom({
 
 /** One remote participant: their live video (which also carries their
  *  audio), with an avatar + name badge once they've introduced themselves. */
-function PeerTile({ peer }: { peer: PeerState }) {
+function PeerTile({
+  peer,
+  compact,
+}: {
+  peer: PeerState;
+  compact?: boolean;
+}) {
   const agentResource = useResource(peer.agent);
   const [name] = useTitle(agentResource);
 
   return (
-    <Tile>
+    <Tile $compact={compact}>
       {peer.stream ? (
         <PeerVideo
           autoPlay
@@ -277,11 +283,22 @@ function PeerTile({ peer }: { peer: PeerState }) {
   );
 }
 
-const CallSection = styled(Column)`
+const CallSection = styled(Column)<{ $compact?: boolean }>`
   gap: ${p => p.theme.size(2)};
   padding-bottom: ${p => p.theme.size(2)};
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
   margin-bottom: ${p => p.theme.size(2)};
+
+  /* A small tile of an app: the video is the whole tile. */
+  ${p =>
+    p.$compact &&
+    `
+    height: 100%;
+    gap: 0;
+    padding: 0;
+    border: none;
+    margin: 0;
+  `}
 `;
 
 const TileGrid = styled.div<{ $compact?: boolean }>`
@@ -295,18 +312,30 @@ const TileGrid = styled.div<{ $compact?: boolean }>`
     p.$compact &&
     `
     grid-template-columns: 1fr;
+    grid-auto-rows: 100%;
+    gap: 0;
+    height: 100%;
     max-height: none;
     overflow: hidden;
   `}
 `;
 
-const Tile = styled.div<{ $last?: boolean }>`
+const Tile = styled.div<{ $last?: boolean; $compact?: boolean }>`
   ${p => p.$last && 'order: 1;'}
   position: relative;
   aspect-ratio: 4 / 3;
   border-radius: ${p => p.theme.radius};
   overflow: hidden;
   background-color: ${p => p.theme.colors.bg1};
+
+  ${p =>
+    p.$compact &&
+    `
+    aspect-ratio: auto;
+    height: 100%;
+    border-radius: 0;
+    background-color: #000;
+  `}
 `;
 
 const PeerVideo = styled.video<{ $mirrored?: boolean }>`
