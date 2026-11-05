@@ -34,11 +34,9 @@ import {
   profileReviewedBefore,
   rememberProfileReviewed,
 } from './profileReviewed';
-import { paths } from '../../routes/paths';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { useInheritedRights } from '../../routes/Share/useInheritedRights';
-import { CLOUD_SERVER_PRICE } from '../../helpers/cloudServerPrice';
+import { openCloudServerSales } from '../../helpers/openCloudServerSales';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import {
   accountAddress,
@@ -626,7 +624,7 @@ function UpgradePitch({
   subject: string;
   onDone: () => void;
 }): JSX.Element {
-  const navigate = useNavigateWithTransition();
+  const [name] = useString(useResource(subject), core.properties.name);
 
   return (
     <>
@@ -639,12 +637,10 @@ function UpgradePitch({
       <UpgradeButton
         onClick={() => {
           onDone();
-          void navigate(
-            `${paths.sync}?${new URLSearchParams({ drive: subject })}`,
-          );
+          void openCloudServerSales(subject, name);
         }}
       >
-        Upgrade to Cloud Server from {CLOUD_SERVER_PRICE}
+        Read more
       </UpgradeButton>
     </>
   );

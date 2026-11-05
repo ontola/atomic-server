@@ -59,6 +59,7 @@ import {
   CARD_SUB_FONT,
 } from '../components/cardSurface';
 import { openExternal } from '../helpers/openExternal';
+import { useAccountAddress } from '../components/SideBar/useAccountAddress';
 import { formatBytes } from '../helpers/formatBytes';
 import { AICreditsService } from '../components/Vault/AICreditsService';
 import {
@@ -1370,6 +1371,8 @@ function SyncPage() {
    * its own embedded node, say — without inventing a URL for a node that has
    * never heard of a portal.
    */
+  // Never the opaque `acct_` id: the address, else a generic label.
+  const accountAddressLabel = useAccountAddress();
   const accountPortalUrl =
     safePortalUrl(
       getManagedPortalUrl(managedInfo) ?? getRememberedManagedPortalUrl(),
@@ -2030,7 +2033,9 @@ function SyncPage() {
             <SyncProviderAccount
               key={accountPortalUrl}
               portalUrl={accountPortalUrl}
-              email={managedAccount?.email ?? null}
+              email={
+                managedAccount ? (accountAddressLabel ?? 'Your account') : null
+              }
               emailRecoveryOn={recoveryBackup === 'stored'}
               onLinked={() => window.location.reload()}
             />
@@ -2059,16 +2064,16 @@ function SyncPage() {
                     {!managedAccount
                       ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account.`
                       : recoveryBackup === null
-                        ? `Signed in as ${managedAccount.email}.`
+                        ? `Signed in as ${accountAddressLabel ?? 'your account'}.`
                         : recoveryBackup === 'stored'
-                          ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
+                          ? `${accountAddressLabel ?? 'Your account'}. We hold your key sealed, so this email gets you back in on a new device.`
                           : recoveryBackup === 'sign-in-not-on'
-                            ? `${managedAccount.email}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
+                            ? `${accountAddressLabel ?? 'Your account'}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
                             : recoveryBackup === 'passkey-only'
-                              ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
+                              ? `${accountAddressLabel ?? 'Your account'}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
                               : recoveryBackup === 'device-only'
-                                ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                                : `${managedAccount.email}. No recovery backup stored, so losing every device loses this drive.`}
+                                ? `${accountAddressLabel ?? 'Your account'}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
+                                : `${accountAddressLabel ?? 'Your account'}. No recovery backup stored, so losing every device loses this drive.`}
                   </ConnSub>
                   {/* Signed out, use the account header's sign-in action.
                       Signed in with nothing stored, the flow is in settings,
