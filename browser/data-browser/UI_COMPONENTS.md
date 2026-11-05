@@ -8,6 +8,10 @@ This document might not be entirely up to date. If you need anything that is not
 
 **Important:** When you create a new reusable component, add it to this list. Do not add components that are tightly coupled to a specific feature or screen.
 
+## Table grid
+
+- `@tomic/table` (`browser/table`) owns the virtual grid, selection/context and primitive editors. Data Browser callers use the `chunks/TableEditor` compatibility entry so application control locks and loading UI are supplied by `AtomicTable`. Resource queries, formatting, permissions and saved views stay in the host.
+
 ## Layout
 
 - `src/components/Main.tsx` - Primary `<main>` landmark with app scroll behavior, print rules, and optional resource view-transition tagging.

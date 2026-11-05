@@ -1,0 +1,62 @@
+{
+  "name": "@tomic/table",
+  "version": "0.41.0-beta.8",
+  "description": "Atomic table grid and storage-independent typed editors",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ontola/atomic-server.git",
+    "directory": "browser/table"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "module": "./dist/index.js",
+  "source": "./src/index.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "peerDependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "styled-components": "^6.1.0"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "polished": "^4.3.1",
+    "react-icons": "^5.6.0",
+    "react-virtualized-auto-sizer": "^2.0.3",
+    "react-window": "^2.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/dom": "^10.4.2",
+    "jsdom": "^30.1.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
+    "esbuild": ">=0.28.1 <0.29.0"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "oxfmt -c ../.oxfmtrc.json ./src",
+    "format-check": "oxfmt -c ../.oxfmtrc.json --check ./src",
+    "prepack": "pnpm build",
+    "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check"
+  }
+}

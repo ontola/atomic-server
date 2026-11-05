@@ -1102,6 +1102,10 @@ export class AtomicServer {
         browser.file('react/package.json'),
       )
       .withFile(
+        '/repo/browser/table/package.json',
+        browser.file('table/package.json'),
+      )
+      .withFile(
         '/repo/browser/svelte/package.json',
         browser.file('svelte/package.json'),
       )
@@ -1358,6 +1362,7 @@ export class AtomicServer {
       )
       .withFile('/app/lib/package.json', browser.file('lib/package.json'))
       .withFile('/app/react/package.json', browser.file('react/package.json'))
+      .withFile('/app/table/package.json', browser.file('table/package.json'))
       .withFile('/app/svelte/package.json', browser.file('svelte/package.json'))
       .withFile('/app/cli/package.json', browser.file('cli/package.json'))
       .withFile(

@@ -55,6 +55,8 @@ fn main() -> std::io::Result<()> {
                 PathBuf::from("../browser/data-browser/src"),
                 PathBuf::from("../browser/lib/src"),
                 PathBuf::from("../browser/react/src"),
+                PathBuf::from("../browser/table/src"),
+                PathBuf::from("../browser/table/package.json"),
                 // The wasm crate (built via `pnpm run build` -> wasm-pack) and
                 // the atomic_lib crate it depends on. Without these, a
                 // Rust-only change under either is invisible to the mtime

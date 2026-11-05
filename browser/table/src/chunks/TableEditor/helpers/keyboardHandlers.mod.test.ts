@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { handlerMatchesModifier } from './keyboardHandlers';
+import { handlerMatchesModifier } from './keyboardHandlers.js';
 
 const noMod = { metaKey: false, ctrlKey: false };
 const ctrl = { metaKey: false, ctrlKey: true };

@@ -229,6 +229,7 @@ jobs:
           set -euo pipefail
           cd browser
           pnpm --filter "@tomic/lib" run build
+          pnpm --filter "@tomic/table" run build
           pnpm --filter "@tomic/react" \
                --filter "@tomic/cli" \
                --filter "@tomic/svelte" \

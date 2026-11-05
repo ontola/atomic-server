@@ -4,16 +4,16 @@ import { useMemo, useState, type JSX } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider, type DefaultTheme } from 'styled-components';
-import { FancyTable } from './TableEditor';
-import { Cell } from './Cell';
-import { CursorMode, useTableEditorContext } from './TableEditorContext';
-import { KeyboardInteraction } from './helpers/keyboardHandlers';
-import { useCellOptions } from './hooks/useCellOptions';
+import { FancyTable } from './TableEditor.js';
+import { Cell } from './Cell.js';
+import { CursorMode, useTableEditorContext } from './TableEditorContext.js';
+import { KeyboardInteraction } from './helpers/keyboardHandlers.js';
+import { useCellOptions } from './hooks/useCellOptions.js';
 
-vi.mock('./DndWrapper', () => ({
+vi.mock('./DndWrapper.js', () => ({
   DndWrapper: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock('./TableHeader', () => ({ TableHeader: () => <div role='row' /> }));
+vi.mock('./TableHeader.js', () => ({ TableHeader: () => <div role='row' /> }));
 // jsdom has no layout, so the grid's height probe would hand react-window a
 // zero-height viewport and no row would render.
 vi.mock('react-virtualized-auto-sizer', () => ({
