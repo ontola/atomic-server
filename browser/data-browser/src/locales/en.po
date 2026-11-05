@@ -6050,6 +6050,7 @@ msgstr "Could not prepare file. Select it again to retry."
 
 #: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore"
 msgstr "Restore"
 
@@ -13488,3 +13489,24 @@ msgstr "Open the {0} homepage"
 #: src/views/Drive/ExternalAppList.tsx
 msgid "Apps in this drive"
 msgstr "Apps in this drive"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Snapshot"
+msgstr "Snapshot"
+
+#. 0: when
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
+msgstr "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
+msgstr "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore a snapshot"
+msgstr "Restore a snapshot"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore this backup?"
+msgstr "Restore this backup?"

@@ -64,6 +64,7 @@ export function useDriveVault(driveSubject: string | null): UseVaultBackup {
   );
 
   const vault = useVaultBackup({
+    store,
     getDisplayMetadata,
     // Whichever local store this build actually keeps the drive in. A browser
     // has the ClientDb; the desktop and Android apps have the embedded node and
@@ -86,15 +87,20 @@ export function useDriveVault(driveSubject: string | null): UseVaultBackup {
   // not open" that had brought the user there. Done here, so an offer cannot
   // forget.
   const { restore: importFromVault } = vault;
-  const restore = useCallback(async () => {
-    const outcome = await importFromVault();
+  const restore = useCallback(
+    async (snapshotId?: string) => {
+      const outcome = await importFromVault(snapshotId);
 
-    if (outcome && driveSubject) {
-      await reopenRestoredDrive(store, driveSubject);
-    }
+      // A snapshot restore edits resources the store already holds. Only what
+      // it had to import from the vault needs the store to look again.
+      if (outcome && driveSubject && (!snapshotId || outcome.packsRead > 0)) {
+        await reopenRestoredDrive(store, driveSubject);
+      }
 
-    return outcome;
-  }, [importFromVault, driveSubject, store]);
+      return outcome;
+    },
+    [importFromVault, driveSubject, store],
+  );
 
   const { restoreFromFile: importFromFile } = vault;
   const restoreFromFile = useCallback(
