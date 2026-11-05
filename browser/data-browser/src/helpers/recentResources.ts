@@ -47,12 +47,25 @@ export function getRecentResources(
   return Array.isArray(list) ? list : [];
 }
 
+const listeners = new Set<() => void>();
+
+/** Calls `cb` whenever a recent list changes in this tab. */
+export function subscribeRecentResources(cb: () => void): () => void {
+  listeners.add(cb);
+
+  return () => {
+    listeners.delete(cb);
+  };
+}
+
 function write(agent: string, all: RecentResources): void {
   try {
     window.localStorage.setItem(recentResourcesKey(agent), JSON.stringify(all));
   } catch {
     // Storage full or blocked: recents are a convenience, not state.
   }
+
+  listeners.forEach(l => l());
 }
 
 export function addRecentResource(

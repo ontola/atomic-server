@@ -1,4 +1,5 @@
 // @wc-ignore-file
+import { useSyncExternalStore } from 'react';
 import {
   contacts,
   core,
@@ -8,7 +9,14 @@ import {
   useCurrentAgent,
   useResources,
 } from '@tomic/react';
-import { TEMPLATE_CATALOG } from '../chunks/Templates/catalog';
+import {
+  TEMPLATE_CATALOG,
+  WELCOME_DOC_NAME,
+} from '../chunks/Templates/catalog';
+import {
+  getRecentResources,
+  subscribeRecentResources,
+} from '../helpers/recentResources';
 import { useVisibleDriveChildren } from './useVisibleDriveChildren';
 import { canonicalizeScheme } from '@tomic/lib';
 import { useAISettings } from '@components/AI/AISettingsContext';
@@ -18,7 +26,13 @@ import { usePrivateDrive } from './usePrivateDrive';
 import { useSavedDrives } from './useSavedDrives';
 import { userSettingProps, useUserSetting } from './useUserSetting';
 
-export type OnboardingStepId = 'name' | 'create' | 'ai' | 'invite' | 'save';
+export type OnboardingStepId =
+  | 'start'
+  | 'name'
+  | 'create'
+  | 'ai'
+  | 'invite'
+  | 'save';
 
 /** What a step is waiting for before its button can do anything. */
 export type OnboardingNeed = 'ai-source';
@@ -48,6 +62,8 @@ export function isDefaultDriveName(name: string | undefined): boolean {
 }
 
 export interface OnboardingInput {
+  /** Set on the Welcome drive when it still has its Start here document. */
+  startHere?: { opened: boolean };
   driveName?: string;
   /** Visible children of the drive the panel is for, and how many its template gave. */
   childCount: number;
@@ -66,6 +82,9 @@ export function deriveOnboardingSteps(
   input: OnboardingInput,
 ): OnboardingStep[] {
   return [
+    ...(input.startHere
+      ? [{ id: 'start' as const, done: input.startHere.opened }]
+      : []),
     { id: 'name', done: !isDefaultDriveName(input.driveName) },
     { id: 'create', done: input.childCount > input.templateChildCount },
     {
@@ -141,7 +160,22 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     }),
     shared,
   );
+  const childResources = useResources(
+    same(drive, welcomeDrive) ? children : [],
+  );
+  // Found by the name the template wrote, which is never translated; a
+  // renamed or deleted document drops the step.
+  const startHereSubject = [...childResources.values()].find(
+    r => r.get(core.properties.name) === WELCOME_DOC_NAME,
+  )?.subject;
+  const startHereOpened = useSyncExternalStore(
+    subscribeRecentResources,
+    () =>
+      !!startHereSubject &&
+      getRecentResources(agent?.subject, drive).includes(startHereSubject),
+  );
   const input: OnboardingInput = {
+    startHere: startHereSubject ? { opened: startHereOpened } : undefined,
     driveName,
     childCount: children.length,
     templateChildCount,
@@ -155,6 +189,8 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
 
   return {
     steps,
+    /** The Start here document, for the step to point at. */
+    startHere: startHereSubject,
     doneCount: steps.filter(s => s.done).length,
   };
 }

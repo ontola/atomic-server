@@ -554,7 +554,7 @@ msgstr "Tidak merespons"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Baca selengkapnya "
 
 #: src/components/forms/Field.tsx
@@ -13411,17 +13411,9 @@ msgstr "Menyimpan pekerjaanmu ke akunmu…"
 msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
 msgstr "Pekerjaanmu tersimpan di perangkat ini. Tambahkan emailmu agar bisa dibuka di perangkat lain dan tidak hilang."
 
-#: src/components/SideBar/GuestSaveRow.tsx
-msgid "Add your email"
-msgstr "Tambahkan emailmu"
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email to keep it safe on every device"
 msgstr "Tambahkan emailmu agar aman di setiap perangkat"
-
-#: src/components/SideBar/GuestSaveRow.tsx
-msgid "Saved on this device"
-msgstr "Tersimpan di perangkat ini"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
@@ -13430,6 +13422,7 @@ msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GuestSaveRow.tsx
 msgid "Save & register"
 msgstr "Simpan dan daftar"
 
@@ -13481,3 +13474,19 @@ msgstr "Bagikan drive ini di sini"
 #: src/routes/SyncRoute.tsx
 msgid "Your account"
 msgstr "Akun Anda"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Read Start here"
+msgstr "Baca Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "A short tour of this drive, in its first document"
+msgstr "Tur singkat drive ini, di dokumen pertamanya"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open Start here"
+msgstr "Buka Start here"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Only saved on this device"
+msgstr "Hanya tersimpan di perangkat ini"

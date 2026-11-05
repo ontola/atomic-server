@@ -55,7 +55,10 @@ export function GettingStartedPanel(): JSX.Element | null {
 
 function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   const [name] = useString(drive, core.properties.name);
-  const { steps, doneCount } = useOnboardingProgress(drive.subject, name);
+  const { steps, doneCount, startHere } = useOnboardingProgress(
+    drive.subject,
+    name,
+  );
   const [panelOpen, setPanelOpen] = useUserSetting<boolean>(
     userSettingProps.onboardingPanelOpen,
     'gettingStartedPanelHeight.open',
@@ -86,6 +89,21 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       target: UiHintTarget;
     }
   > = {
+    start: {
+      title: 'Read Start here',
+      hint: 'A short tour of this drive, in its first document',
+      pointer: 'Open Start here',
+      target: 'start-here',
+      run: () => {
+        closeDrawer();
+        pointAt(
+          'start-here',
+          copy.start.pointer,
+          () => startHere && navigate(constructOpenURL(startHere)),
+          startHere,
+        );
+      },
+    },
     name: {
       title: 'Name your drive',
       hint: 'Give your drive a name: a team, company, class or household',
@@ -174,7 +192,12 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
         const hoverHint = () =>
           showUiHint(target, pointer, {
             hover: true,
-            scope: step.id === 'name' ? drive.subject : undefined,
+            scope:
+              step.id === 'name'
+                ? drive.subject
+                : step.id === 'start'
+                  ? startHere
+                  : undefined,
           });
 
         return (

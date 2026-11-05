@@ -3,6 +3,8 @@
 This changelog covers all five packages, as they are (for now) updated as a whole
 
 ## UNRELEASED
+- Sidebar save row: the "Saved on this device" box with its button is now one plain sidebar row above the account row: a cloud-off icon, "Save & register" (or "Connect a device" without an account portal) in the accent colour and a muted "Only saved on this device" under it. The whole row opens the Save dialog.
+- Getting started: a first step "Read Start here" on the Welcome drive points at the Start here row in the sidebar tree and is done once you have opened that document on this device. Hint callouts are larger (normal text size, even padding, bigger arrow) and their click animation is a clear scale pulse from the target, still none with reduced motion.
 - Drive page header is one row: the title on the left, then the drive switcher, Add icon, Add cover and Drive settings as icon-only buttons on the right (the labels are the tooltips and accessible names).
 - Getting started hints: hovering (or keyboard-focusing) a step shows its callout on the target right away instead of an accent ring, and moving off hides it; clicking keeps it and gives it a short nudge toward the target (none with reduced motion). The callout bubble has a 1px border, arrow included.
 - Share dialog (unhosted drive, hosted app): the upgrade button is now "Read more" and opens the portal's Cloud Server page for the drive, the same page as the Sync page's upgrade button, instead of navigating to /app/sync (which did nothing when signed in). The Sync page's account row and email recovery lines show the account's address, or "Your account", never an `acct_` id.

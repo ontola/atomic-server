@@ -46,6 +46,20 @@ describe('deriveOnboardingSteps', () => {
     expect(steps.some(s => s.done)).toBe(false);
   });
 
+  it('adds Read Start here first, only on a drive that has the document', () => {
+    expect(deriveOnboardingSteps(base).some(s => s.id === 'start')).toBe(false);
+
+    const withDoc = deriveOnboardingSteps({
+      ...base,
+      startHere: { opened: false },
+    });
+
+    expect(withDoc[0]).toEqual({ id: 'start', done: false });
+    expect(
+      deriveOnboardingSteps({ ...base, startHere: { opened: true } })[0].done,
+    ).toBe(true);
+  });
+
   it('counts a name as done once it is not a default one', () => {
     for (const name of ['Welcome to Atomic', 'My drive', "Ana's Drive", ''])
       expect(isDefaultDriveName(name)).toBe(true);

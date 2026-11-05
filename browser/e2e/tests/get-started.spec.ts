@@ -28,9 +28,10 @@ test('Get started opens a workspace of your own, without an account', async ({
   const panel = page.getByTestId('getting-started');
   await expect(panel).toBeVisible({ timeout: 30_000 });
   await expect(panel).toContainText('Getting started');
-  await expect(panel).toContainText('0 of 5');
+  await expect(panel).toContainText('0 of 6');
 
   for (const step of [
+    'Read Start here',
     'Name your drive',
     'Make something',
     'Talk to the AI',
@@ -100,7 +101,7 @@ test('The Getting started sidebar panel is open, folds away and opens again, als
   const fold = panel.getByRole('button', { name: /Collapse Getting started/ });
   await fold.click();
   await expect(panel.getByText('Name your drive')).toBeHidden();
-  await expect(panel).toContainText('0 of 5');
+  await expect(panel).toContainText('0 of 6');
 
   await page.reload();
   await expect(page.getByTestId('current-drive-title')).toHaveText(
@@ -158,9 +159,9 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
 
   // Not linked to an account: the sidebar says so, with the next step.
   const row = page.getByTestId('guest-save-row');
-  await expect(row).toContainText('Saved on this device');
+  await expect(row).toContainText('Only saved on this device');
   // Self-hosted, with no portal: nothing here asks for an email.
-  await expect(row.getByRole('button')).toHaveText('Connect a device');
+  await expect(row).toContainText('Connect a device');
 
   // The panel's Save your work row does not open anything: it points at the
   // row where it is done, until the X closes it.
@@ -180,7 +181,7 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
     .getByRole('button', { name: 'Save your work', exact: true })
     .click();
   await expect(hint).toBeVisible();
-  await row.getByRole('button').click();
+  await row.click();
   await expect(hint).toHaveCount(0);
   const dialog = page.getByRole('dialog');
   await expect(
@@ -321,4 +322,26 @@ test('Make something points at the New row, and the X or Escape closes it', asyn
   await expect(hint).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(hint).toHaveCount(0);
+});
+
+test('Read Start here points at the Start here row and ticks once it is opened', async ({
+  page,
+}) => {
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  const panel = page.getByTestId('getting-started');
+  await expect(panel).toBeVisible({ timeout: 60_000 });
+  await page.keyboard.press('Escape');
+
+  const step = panel.getByRole('button', { name: 'Read Start here' });
+  await expect(step).toHaveAttribute('data-done', 'false');
+
+  await step.click();
+  const hint = page.getByTestId('ui-hint-start-here');
+  await expect(hint).toHaveText('Open Start here');
+
+  // Using the row the hint points at opens the document and closes the hint.
+  await page.locator('[data-sidebar-id]').first().click();
+  await expect(hint).toHaveCount(0);
+  await expect(step).toHaveAttribute('data-done', 'true');
 });

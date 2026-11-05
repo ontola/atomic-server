@@ -554,7 +554,7 @@ msgstr "Ne répond pas"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "En savoir plus"
 
 #: src/components/forms/Field.tsx
@@ -13413,17 +13413,9 @@ msgstr "Enregistrement de votre travail dans votre compte…"
 msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
 msgstr "Votre travail est enregistré sur cet appareil. Ajoutez votre e-mail pour l’ouvrir sur d’autres appareils et ne pas le perdre."
 
-#: src/components/SideBar/GuestSaveRow.tsx
-msgid "Add your email"
-msgstr "Ajoutez votre e-mail"
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email to keep it safe on every device"
 msgstr "Ajoutez votre e-mail pour le garder en sécurité sur chaque appareil"
-
-#: src/components/SideBar/GuestSaveRow.tsx
-msgid "Saved on this device"
-msgstr "Enregistré sur cet appareil"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
@@ -13432,6 +13424,7 @@ msgstr "Connectez un appareil pour y ouvrir votre travail"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GuestSaveRow.tsx
 msgid "Save & register"
 msgstr "Enregistrer et s'inscrire"
 
@@ -13483,3 +13476,19 @@ msgstr "Partagez ce lecteur ici"
 #: src/routes/SyncRoute.tsx
 msgid "Your account"
 msgstr "Votre compte"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Read Start here"
+msgstr "Lire Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "A short tour of this drive, in its first document"
+msgstr "Une courte visite de ce lecteur, dans son premier document"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open Start here"
+msgstr "Ouvrez Start here"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Only saved on this device"
+msgstr "Enregistré uniquement sur cet appareil"

@@ -554,7 +554,7 @@ msgstr "Antwortet nicht"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Mehr erfahren "
 
 #: src/components/forms/Field.tsx
@@ -13416,17 +13416,9 @@ msgstr "Deine Arbeit wird in deinem Konto gespeichert…"
 msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
 msgstr "Deine Arbeit ist auf diesem Gerät gespeichert. Füge deine E-Mail-Adresse hinzu, damit du sie auf anderen Geräten öffnen kannst und nicht verlierst."
 
-#: src/components/SideBar/GuestSaveRow.tsx
-msgid "Add your email"
-msgstr "E-Mail hinzufügen"
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email to keep it safe on every device"
 msgstr "Füge deine E-Mail-Adresse hinzu, damit es auf jedem Gerät sicher ist"
-
-#: src/components/SideBar/GuestSaveRow.tsx
-msgid "Saved on this device"
-msgstr "Auf diesem Gerät gespeichert"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
@@ -13435,6 +13427,7 @@ msgstr "Verbinde ein Gerät, um deine Arbeit darauf zu öffnen"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GuestSaveRow.tsx
 msgid "Save & register"
 msgstr "Speichern und registrieren"
 
@@ -13486,3 +13479,19 @@ msgstr "Teile dieses Laufwerk hier"
 #: src/routes/SyncRoute.tsx
 msgid "Your account"
 msgstr "Dein Konto"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Read Start here"
+msgstr "Lies „Start here“"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "A short tour of this drive, in its first document"
+msgstr "Eine kurze Tour durch dieses Laufwerk, im ersten Dokument"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open Start here"
+msgstr "Öffne Start here"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Only saved on this device"
+msgstr "Nur auf diesem Gerät gespeichert"

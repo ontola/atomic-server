@@ -14,6 +14,7 @@ import {
   forms,
   notifications,
   useResource,
+  useString,
   useCanWrite,
   unknownSubject,
 } from '@tomic/react';
@@ -38,6 +39,8 @@ import { SIDEBAR_CHILD_LIMIT, SideBarMoreRow } from '../SideBarMoreRow';
 import { SideBarDragData, SideBarDropData } from '../useSidebarDnd';
 import { transparentize } from 'polished';
 import { transition } from '../../../helpers/transition';
+import { UiHint } from '../../UiHint';
+import { WELCOME_DOC_NAME } from '../../../chunks/Templates/catalog';
 
 interface ResourceSideBarProps {
   subject: string;
@@ -66,6 +69,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
 
     const resource = useResource(subject, { allowIncomplete: true });
     const canWrite = useCanWrite(resource);
+    const [name] = useString(resource, core.properties.name);
     const active = useIsCurrentSubject(subject);
     const ancestryWhenAncestor = useAncestryIfAncestor(subject);
     const [open, setOpen] = useState(active);
@@ -158,20 +162,27 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
 
     const TitleComp = useMemo(
       () => (
-        <SidebarItemTitle
-          subject={subject}
-          active={active}
-          onClick={onClick}
-          ref={setItemRef}
-          listeners={canWrite ? listeners : undefined}
-          attributes={canWrite ? attributes : undefined}
-          expandable={hasSubResources}
-          expanded={open}
-          onToggleExpand={hasSubResources ? toggleExpanded : undefined}
-        />
+        <UiHint
+          target='start-here'
+          scope={subject}
+          disabled={name !== WELCOME_DOC_NAME}
+        >
+          <SidebarItemTitle
+            subject={subject}
+            active={active}
+            onClick={onClick}
+            ref={setItemRef}
+            listeners={canWrite ? listeners : undefined}
+            attributes={canWrite ? attributes : undefined}
+            expandable={hasSubResources}
+            expanded={open}
+            onToggleExpand={hasSubResources ? toggleExpanded : undefined}
+          />
+        </UiHint>
       ),
       [
         subject,
+        name,
         active,
         onClick,
         listeners,

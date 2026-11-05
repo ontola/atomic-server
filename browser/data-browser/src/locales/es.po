@@ -554,7 +554,7 @@ msgstr "No responde"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Leer más"
 
 #: src/components/forms/Field.tsx
@@ -13413,17 +13413,9 @@ msgstr "Guardando tu trabajo en tu cuenta…"
 msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
 msgstr "Tu trabajo está guardado en este dispositivo. Añade tu correo para abrirlo en otros dispositivos y no perderlo."
 
-#: src/components/SideBar/GuestSaveRow.tsx
-msgid "Add your email"
-msgstr "Añade tu correo"
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Add your email to keep it safe on every device"
 msgstr "Añade tu correo para tenerlo a salvo en todos tus dispositivos"
-
-#: src/components/SideBar/GuestSaveRow.tsx
-msgid "Saved on this device"
-msgstr "Guardado en este dispositivo"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
@@ -13432,6 +13424,7 @@ msgstr "Conecta un dispositivo para abrir tu trabajo en él"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GuestSaveRow.tsx
 msgid "Save & register"
 msgstr "Guardar y registrarse"
 
@@ -13483,3 +13476,19 @@ msgstr "Comparte esta unidad aquí"
 #: src/routes/SyncRoute.tsx
 msgid "Your account"
 msgstr "Tu cuenta"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Read Start here"
+msgstr "Lee Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "A short tour of this drive, in its first document"
+msgstr "Un breve recorrido por esta unidad, en su primer documento"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open Start here"
+msgstr "Abre Start here"
+
+#: src/components/SideBar/GuestSaveRow.tsx
+msgid "Only saved on this device"
+msgstr "Solo guardado en este dispositivo"
