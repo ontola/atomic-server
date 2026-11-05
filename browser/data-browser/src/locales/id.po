@@ -13484,19 +13484,19 @@ msgstr "Aplikasi di drive ini"
 #. 0: url; 1: url.replace('https://', 'http://')
 #: src/helpers/connectInput.ts
 msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
-msgstr ""
+msgstr "Tidak dapat menjangkau {0}. Server di mesinmu sendiri biasanya memakai http biasa, jadi coba {1}."
 
 #. 0: url
 #: src/helpers/connectInput.ts
 msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
-msgstr ""
+msgstr "Tidak dapat menjangkau {0}. Pastikan server berjalan, dan situs ini diizinkan mengakses aplikasi dan layanan lain di perangkat ini (ikon gembok di bilah alamat, lalu setelan situs). Server juga harus mengizinkan origin situs ini."
 
 #. 0: url
 #: src/helpers/connectInput.ts
 msgid "Could not reach {0}. Check that the server is running on that port."
-msgstr ""
+msgstr "Tidak dapat menjangkau {0}. Pastikan server berjalan di port tersebut."
 
 #. 0: response.status; 1: apiHost()
 #: src/helpers/managed/recovery.ts
 msgid "HTTP {0} from {1}"
-msgstr ""
+msgstr "HTTP {0} dari {1}"
