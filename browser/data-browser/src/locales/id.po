@@ -13484,21 +13484,21 @@ msgstr "Aplikasi di drive ini"
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Snapshot"
-msgstr ""
+msgstr "Snapshot"
 
 #. 0: when
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
-msgstr ""
+msgstr "Drive kamu akan kembali seperti pada {0}. Perubahan setelah saat itu akan hilang bagi semua orang yang menggunakan drive ini."
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
-msgstr ""
+msgstr "Item yang ditambahkan sejak itu dipindahkan ke Sampah, dan pemulihan disimpan sebagai perubahan baru, sehingga Riwayat setiap item tetap menyimpan apa yang digantikan."
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore a snapshot"
-msgstr ""
+msgstr "Pulihkan snapshot"
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore this backup?"
-msgstr ""
+msgstr "Pulihkan cadangan ini?"

@@ -13492,21 +13492,21 @@ msgstr "Apps in deze schijf"
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Snapshot"
-msgstr ""
+msgstr "Snapshot"
 
 #. 0: when
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
-msgstr ""
+msgstr "Je drive gaat terug naar hoe hij was op {0}. Wijzigingen van na dat moment gaan verloren voor iedereen die deze drive gebruikt."
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
-msgstr ""
+msgstr "Items die sindsdien zijn toegevoegd gaan naar de Prullenbak, en het herstel wordt opgeslagen als nieuwe wijziging, dus de Geschiedenis van elk item bewaart wat het vervangt."
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore a snapshot"
-msgstr ""
+msgstr "Een snapshot herstellen"
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore this backup?"
-msgstr ""
+msgstr "Deze back-up herstellen?"

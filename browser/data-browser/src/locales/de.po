@@ -13489,21 +13489,21 @@ msgstr "Apps in diesem Laufwerk"
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Snapshot"
-msgstr ""
+msgstr "Snapshot"
 
 #. 0: when
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
-msgstr ""
+msgstr "Dein Drive wird auf den Stand vom {0} zurückgesetzt. Änderungen nach diesem Zeitpunkt gehen für alle verloren, die diesen Drive nutzen."
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
-msgstr ""
+msgstr "Seitdem hinzugefügte Elemente werden in den Papierkorb verschoben, und die Wiederherstellung wird als neue Änderung gespeichert, sodass der Verlauf jedes Elements behält, was ersetzt wurde."
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore a snapshot"
-msgstr ""
+msgstr "Einen Snapshot wiederherstellen"
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore this backup?"
-msgstr ""
+msgstr "Dieses Backup wiederherstellen?"

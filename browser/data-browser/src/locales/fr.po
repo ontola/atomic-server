@@ -13486,21 +13486,21 @@ msgstr "Applications dans ce lecteur"
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Snapshot"
-msgstr ""
+msgstr "Instantané"
 
 #. 0: when
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
-msgstr ""
+msgstr "Votre drive reviendra à son état du {0}. Les modifications faites après ce moment seront perdues pour tous ceux qui utilisent ce drive."
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
-msgstr ""
+msgstr "Les éléments ajoutés depuis sont déplacés dans la Corbeille, et la restauration est enregistrée comme une nouvelle modification : l’Historique de chaque élément garde ce qu’elle a remplacé."
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore a snapshot"
-msgstr ""
+msgstr "Restaurer un instantané"
 
 #: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore this backup?"
-msgstr ""
+msgstr "Restaurer cette sauvegarde ?"
