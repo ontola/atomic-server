@@ -12,7 +12,8 @@ import {
   ResourceCoverImage,
   TitleDecorationAffordances,
 } from '@components/ResourceDecorations';
-import { Column, Row } from '@components/Row';
+import { Column } from '@components/Row';
+import { IconButton } from '@components/IconButton/IconButton';
 import {
   DriveSwitcher,
   DriveSwitcherChevronTrigger,
@@ -80,7 +81,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
         <ContainerNarrow>
           <Column gap='2rem'>
             <Header>
-              <Row align='center' wrapItems gap='1rem'>
+              <TitleArea>
                 <EditableTitle
                   resource={resource}
                   pointedAt
@@ -95,28 +96,30 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                 />
                 {isPrivateDrive && <PrivateDriveBadge />}
                 {vectorIndexing && <VectorIndexingIndicator />}
-              </Row>
-              <Row align='center' wrapItems gap='0.5rem'>
+              </TitleArea>
+              <Actions>
                 <DriveSwitcher Trigger={DriveSwitcherChevronTrigger} />
                 <TitleDecorationAffordances
                   resource={resource}
                   onPickIcon={() => setIconPickerOpen(true)}
                   bare
                 />
-                <Button
-                  ghost
+                <IconButton
+                  title='Drive settings'
+                  aria-label='Drive settings'
+                  size='1.1em'
                   onClick={showSettings}
                   data-testid='drive-settings-button'
                 >
-                  <FaGear /> Drive settings
-                </Button>
+                  <FaGear />
+                </IconButton>
                 <DrivePeople />
                 {baseURL !== resource.subject && (
                   <Button subtle onClick={() => setBaseURL(resource.subject)}>
                     Set as current drive
                   </Button>
                 )}
-              </Row>
+              </Actions>
             </Header>
 
             {showStart && (
@@ -199,7 +202,30 @@ export default DrivePage;
 
 const Header = styled.div`
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+`;
+
+/** Takes the room the buttons leave; the title wraps inside it. */
+const TitleArea = styled.div`
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+
+  h1 {
+    margin: 0;
+  }
+`;
+
+const Actions = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-left: auto;
 `;

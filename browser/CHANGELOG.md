@@ -3,6 +3,7 @@
 This changelog covers all five packages, as they are (for now) updated as a whole
 
 ## UNRELEASED
+- Drive page header is one row: the title on the left, then the drive switcher, Add icon, Add cover and Drive settings as icon-only buttons on the right (the labels are the tooltips and accessible names).
 - Getting started hints: hovering (or keyboard-focusing) a step shows its callout on the target right away instead of an accent ring, and moving off hides it; clicking keeps it and gives it a short nudge toward the target (none with reduced motion). The callout bubble has a 1px border, arrow included.
 - Share dialog (unhosted drive, hosted app): the upgrade button is now "Read more" and opens the portal's Cloud Server page for the drive, the same page as the Sync page's upgrade button, instead of navigating to /app/sync (which did nothing when signed in). The Sync page's account row and email recovery lines show the account's address, or "Your account", never an `acct_` id.
 - Getting started: "Invite someone" is also done as soon as you have sent an email invite for one of your drives (derived from the invite Contacts in your private drive), not only once someone accepted. The panel's own drive counts even if it is not in your saved drives yet.

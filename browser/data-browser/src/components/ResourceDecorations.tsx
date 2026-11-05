@@ -24,6 +24,7 @@ import { FilePickerDialog } from './forms/FilePicker/FilePickerDialog';
 import { useUpload } from '../hooks/useUpload';
 import { atomicArgu } from '../ontologies/atomic-argu';
 import { Button } from './Button';
+import { IconButton } from './IconButton/IconButton';
 import { Column, Row } from './Row';
 import { ErrorBoundary } from '../views/ErrorPage';
 import { Dialog, DialogContent, DialogTitle, useDialog } from './Dialog';
@@ -308,7 +309,7 @@ export function TitleDecorationAffordances({
   bare,
 }: TitleIconProps & {
   /**
-   * Render only the buttons, always visible, so the caller can lay them out in
+   * Render only icon buttons, always visible, so the caller can lay them out in
    * its own row (the drive page header) instead of the hover-revealed row.
    */
   bare?: boolean;
@@ -325,7 +326,31 @@ export function TitleDecorationAffordances({
     return null;
   }
 
-  const buttons = (
+  // Bare: icon only, the label is the tooltip and accessible name.
+  const buttons = bare ? (
+    <>
+      {!hasIcon && (
+        <IconButton
+          title='Add icon'
+          aria-label='Add icon'
+          size='1.1em'
+          onClick={onPickIcon}
+        >
+          <FaFaceSmile aria-hidden />
+        </IconButton>
+      )}
+      {!cover && (
+        <IconButton
+          title='Add cover'
+          aria-label='Add cover'
+          size='1.1em'
+          onClick={() => setShowPicker(true)}
+        >
+          <FaImage aria-hidden />
+        </IconButton>
+      )}
+    </>
+  ) : (
     <>
       {!hasIcon && (
         <Button ghost onClick={onPickIcon}>
