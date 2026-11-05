@@ -552,6 +552,7 @@ msgstr "Memeriksa server…"
 msgid "Not responding"
 msgstr "Tidak merespons"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more "
 msgstr "Baca selengkapnya "
@@ -4491,10 +4492,14 @@ msgid "Change icon"
 msgstr "Ganti ikon"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add icon"
 msgstr "Tambahkan ikon"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add cover"
 msgstr "Tambahkan sampul"
 
@@ -5455,7 +5460,7 @@ msgid "Switch"
 msgstr "Beralih"
 
 #. 0: accountAddress(phase.account)
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'your account'
 #: src/routes/SendIdentityRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
@@ -5544,7 +5549,7 @@ msgstr "{0} gagal: {1}"
 msgid "Sign in →"
 msgstr "Masuk →"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, sehingga email ini memungkinkan Anda masuk kembali di perangkat baru."
@@ -5615,7 +5620,7 @@ msgstr "Menyimpan…"
 msgid "Store it with {0}"
 msgstr "Simpan dengan {0}"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Cadangan Anda tersegel hanya di browser ini, sehingga dapat dibuka di sini tetapi tidak dapat membantu Anda masuk kembali di perangkat baru."
@@ -5674,7 +5679,7 @@ msgstr "Pulihkan dari Cloud Vault"
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 msgstr "Hanya kunci sandi Anda yang dapat membuka akun ini. Jika tidak ada di perangkat ini, buka di perangkat tempat Anda menyiapkannya dan tambahkan kode pemulihan di Pengaturan — kode itu memungkinkan Anda masuk di mana saja."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, tetapi hanya kunci sandi Anda yang dapat membukanya. Browser yang belum menerima sinkronisasi kunci sandi tidak dapat membantu Anda masuk kembali — kode pemulihan dapat melakukannya."
@@ -11656,7 +11661,7 @@ msgstr "Konfirmasi dengan kunci sandi Anda"
 msgid "Confirm with your code"
 msgstr "Konfirmasi dengan kode Anda"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, tetapi masuk belum membukanya. Konfirmasi sekali dengan kunci sandi atau kode pemulihan untuk mengaktifkannya."
@@ -12486,13 +12491,11 @@ msgid "Show all"
 msgstr "Tampilkan semua"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "<0/> Drive settings"
-msgstr "<0/> Pengaturan drive"
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Belum ada apa pun di sini."
 
+#: src/views/Drive/DrivePage.tsx
+#: src/views/Drive/DrivePage.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Pengaturan drive"
@@ -12711,7 +12714,7 @@ msgstr "Paket drive ini mencakup Cloud Server. Persetujuan Anda ditunggu."
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Masuk ke akun {0} Anda untuk memeriksa pemulihan melalui email. Masuk ke drive ini dengan kunci sandi atau kunci rahasia tidak dengan sendirinya menghubungkan akun cloud Anda."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Cadangan pemulihan tidak tersimpan, sehingga kehilangan semua perangkat berarti kehilangan drive ini."
@@ -12759,11 +12762,6 @@ msgstr "Drive ini tidak berada di server. Orang yang Anda undang hanya dapat mem
 #: src/components/Share/ShareDialog.tsx
 msgid "A Cloud Server keeps this drive online for everyone, so nobody has to keep a browser open."
 msgstr "Cloud Server menjaga drive ini tetap online untuk semua orang, sehingga tidak ada yang harus membiarkan browser tetap terbuka."
-
-#. 0: CLOUD_SERVER_PRICE
-#: src/components/Share/ShareDialog.tsx
-msgid "Upgrade to Cloud Server from {0}"
-msgstr "Tingkatkan ke Cloud Server mulai dari {0}"
 
 #: src/components/SideBar/MessagesPanel.tsx
 #: src/components/SideBar/MessagesPanel.tsx
@@ -13474,3 +13472,12 @@ msgstr "Bagikan drive ini dengan rekan tim atau teman"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share this drive here"
 msgstr "Bagikan drive ini di sini"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Your account"
+msgstr "Akun Anda"

@@ -552,6 +552,7 @@ msgstr "Server wird geprüft …"
 msgid "Not responding"
 msgstr "Antwortet nicht"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more "
 msgstr "Mehr erfahren "
@@ -4490,10 +4491,14 @@ msgid "Change icon"
 msgstr "Symbol ändern"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add icon"
 msgstr "Symbol hinzufügen"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add cover"
 msgstr "Titelbild hinzufügen"
 
@@ -5454,7 +5459,7 @@ msgid "Switch"
 msgstr "Wechseln"
 
 #. 0: accountAddress(phase.account)
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'your account'
 #: src/routes/SendIdentityRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
@@ -5543,7 +5548,7 @@ msgstr "{0} fehlgeschlagen: {1}"
 msgid "Sign in →"
 msgstr "Anmelden →"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf. Mit dieser E-Mail erhältst du auf einem neuen Gerät wieder Zugriff."
@@ -5614,7 +5619,7 @@ msgstr "Wird gespeichert …"
 msgid "Store it with {0}"
 msgstr "Bei {0} speichern"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Deine Sicherung ist nur in diesem Browser verschlüsselt gespeichert. Sie lässt sich hier entsperren, aber ein neues Gerät könnte dir keinen Zugriff verschaffen."
@@ -5673,7 +5678,7 @@ msgstr "Aus Cloud Vault wiederherstellen"
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 msgstr "Nur dein Passkey öffnet dieses Konto. Ist er nicht auf diesem Gerät, entsperre das Konto auf dem Gerät, auf dem du ihn eingerichtet hast, und füge in den Einstellungen einen Wiederherstellungscode hinzu. Damit erhältst du überall Zugriff."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf, aber nur dein Passkey öffnet ihn. In einem Browser, mit dem dein Passkey nicht synchronisiert wurde, erhältst du keinen Zugriff. Ein Wiederherstellungscode würde das ermöglichen."
@@ -11656,7 +11661,7 @@ msgstr "Mit deinem Passkey bestätigen"
 msgid "Confirm with your code"
 msgstr "Mit deinem Code bestätigen"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf, aber eine Anmeldung öffnet ihn noch nicht. Bestätige einmal mit deinem Passkey oder Wiederherstellungscode, um dies zu aktivieren."
@@ -12486,13 +12491,11 @@ msgid "Show all"
 msgstr "Alle anzeigen"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "<0/> Drive settings"
-msgstr "<0/> Drive-Einstellungen"
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Noch nichts hier."
 
+#: src/views/Drive/DrivePage.tsx
+#: src/views/Drive/DrivePage.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Drive-Einstellungen"
@@ -12711,7 +12714,7 @@ msgstr "Der Tarif dieses Laufwerks enthält Cloud Server. Es wartet auf deine Zu
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Melde dich bei deinem {0}-Konto an, um die E-Mail-Wiederherstellung zu prüfen. Die Anmeldung bei diesem Laufwerk mit Passkey oder Geheimnis verbindet dein Cloud-Konto nicht automatisch."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Keine Wiederherstellungssicherung gespeichert. Wenn du alle Geräte verlierst, verlierst du dieses Laufwerk."
@@ -12759,11 +12762,6 @@ msgstr "Dieses Laufwerk liegt auf keinem Server. Eingeladene Personen können es
 #: src/components/Share/ShareDialog.tsx
 msgid "A Cloud Server keeps this drive online for everyone, so nobody has to keep a browser open."
 msgstr "Ein Cloud Server hält dieses Laufwerk für alle online, sodass niemand einen Browser geöffnet lassen muss."
-
-#. 0: CLOUD_SERVER_PRICE
-#: src/components/Share/ShareDialog.tsx
-msgid "Upgrade to Cloud Server from {0}"
-msgstr "Ab {0} auf Cloud Server upgraden"
 
 #: src/components/SideBar/MessagesPanel.tsx
 #: src/components/SideBar/MessagesPanel.tsx
@@ -13479,3 +13477,12 @@ msgstr "Teile dieses Laufwerk mit einem Teammitglied oder Freund"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share this drive here"
 msgstr "Teile dieses Laufwerk hier"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Your account"
+msgstr "Dein Konto"

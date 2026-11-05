@@ -552,6 +552,7 @@ msgstr "Vérification du serveur…"
 msgid "Not responding"
 msgstr "Ne répond pas"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more "
 msgstr "En savoir plus"
@@ -4487,10 +4488,14 @@ msgid "Change icon"
 msgstr "Changer l’icône"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add icon"
 msgstr "Ajouter une icône"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add cover"
 msgstr "Ajouter une couverture"
 
@@ -5451,7 +5456,7 @@ msgid "Switch"
 msgstr "Changer"
 
 #. 0: accountAddress(phase.account)
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'your account'
 #: src/routes/SendIdentityRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
@@ -5540,7 +5545,7 @@ msgstr "Échec de {0} : {1}"
 msgid "Sign in →"
 msgstr "Se connecter →"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. Nous conservons votre clé chiffrée ; cet e-mail vous permet donc de retrouver l’accès sur un nouvel appareil."
@@ -5611,7 +5616,7 @@ msgstr "Stockage…"
 msgid "Store it with {0}"
 msgstr "Stocker auprès de {0}"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Votre sauvegarde est chiffrée dans ce navigateur et nulle part ailleurs. Elle peut donc être déverrouillée ici, mais un nouvel appareil ne pourrait pas vous redonner accès."
@@ -5670,7 +5675,7 @@ msgstr "Restaurer depuis le coffre cloud"
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 msgstr "Seule votre clé d’accès ouvre ce compte. Si elle n’est pas sur cet appareil, déverrouillez le compte sur celui où vous l’avez configurée, puis ajoutez un code de récupération dans les paramètres pour pouvoir vous connecter partout."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. Nous conservons votre clé chiffrée, mais seule votre clé d’accès peut la déverrouiller. Un navigateur avec lequel votre clé d’accès n’est pas synchronisée ne peut pas vous redonner accès ; un code de récupération le pourrait."
@@ -11653,7 +11658,7 @@ msgstr "Confirmer avec votre clé d’accès"
 msgid "Confirm with your code"
 msgstr "Confirmer avec votre code"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. Nous conservons votre clé chiffrée, mais la connexion ne la déverrouille pas encore. Confirmez une fois avec votre clé d’accès ou code de récupération pour activer cette option."
@@ -12483,13 +12488,11 @@ msgid "Show all"
 msgstr "Tout afficher"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "<0/> Drive settings"
-msgstr "<0/> Paramètres du drive"
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Rien ici pour le moment."
 
+#: src/views/Drive/DrivePage.tsx
+#: src/views/Drive/DrivePage.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Paramètres du drive"
@@ -12708,7 +12711,7 @@ msgstr "L’offre de ce lecteur inclut le serveur cloud. Il attend votre consent
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Connectez-vous à votre compte {0} pour vérifier la récupération par e-mail. Vous connecter à ce lecteur avec une clé d’accès ou un secret ne connecte pas à lui seul votre compte cloud."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Aucune sauvegarde de récupération n’est stockée ; perdre tous vos appareils signifie donc perdre ce lecteur."
@@ -12756,11 +12759,6 @@ msgstr "Ce lecteur n’est pas sur un serveur. Les personnes invitées peuvent l
 #: src/components/Share/ShareDialog.tsx
 msgid "A Cloud Server keeps this drive online for everyone, so nobody has to keep a browser open."
 msgstr "Un serveur cloud garde ce lecteur en ligne pour tout le monde, sans que personne ait à garder un navigateur ouvert."
-
-#. 0: CLOUD_SERVER_PRICE
-#: src/components/Share/ShareDialog.tsx
-msgid "Upgrade to Cloud Server from {0}"
-msgstr "Passer au serveur cloud à partir de {0}"
 
 #: src/components/SideBar/MessagesPanel.tsx
 #: src/components/SideBar/MessagesPanel.tsx
@@ -13476,3 +13474,12 @@ msgstr "Partagez ce lecteur avec un coéquipier ou un ami"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share this drive here"
 msgstr "Partagez ce lecteur ici"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Your account"
+msgstr "Votre compte"

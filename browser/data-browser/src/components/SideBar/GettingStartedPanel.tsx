@@ -30,12 +30,7 @@ import {
 } from './SideBarMenuItem';
 import { userSettingProps, useUserSetting } from '@hooks/useUserSetting';
 import { SideBarPanel } from './SideBarPanel';
-import {
-  dismissUiHint,
-  previewUiHint,
-  showUiHint,
-  type UiHintTarget,
-} from '@hooks/uiHint';
+import { hideHoverUiHint, showUiHint, type UiHintTarget } from '@hooks/uiHint';
 
 /**
  * The first things worth trying, as a sidebar panel on a drive of your own.
@@ -85,6 +80,8 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     {
       title: string;
       hint: string;
+      /** The callout text on the target. */
+      pointer: string;
       run: () => void;
       target: UiHintTarget;
     }
@@ -92,34 +89,38 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     name: {
       title: 'Name your drive',
       hint: 'Give your drive a name: a team, company, class or household',
+      pointer: 'Click to name your drive',
       target: 'drive-title',
       run: () => {
         // The title on screen may belong to a document: go to the drive's own
         // page, where the hint points at that page's title.
         closeDrawer();
         navigate(constructOpenURL(drive.subject));
-        showUiHint('drive-title', 'Click to name your drive', {
+        showUiHint('drive-title', copy.name.pointer, {
           scope: drive.subject,
           force: true,
+          nudge: true,
         });
       },
     },
     create: {
       title: 'Make something',
       hint: 'Add a document or table to this drive',
+      pointer: 'Make a document or table here',
       target: 'new-row',
       run: () => {
         closeDrawer();
-        pointAt('new-row', 'Make a document or table here', navigateToNewRoute);
+        pointAt('new-row', copy.create.pointer, navigateToNewRoute);
       },
     },
     ai: {
       title: 'Talk to the AI',
       hint: 'Ask it to find, write or organize things in your drive',
+      pointer: 'Talk to the AI here',
       target: 'ai-button',
       run: () => {
         closeDrawer();
-        pointAt('ai-button', 'Talk to the AI here', () =>
+        pointAt('ai-button', copy.ai.pointer, () =>
           openChat(undefined, { withoutContext: true }),
         );
       },
@@ -127,11 +128,12 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     invite: {
       title: 'Invite someone',
       hint: 'Share this drive with a teammate or a friend',
+      pointer: 'Share this drive here',
       target: 'share-button',
       run: () => {
         closeDrawer();
         navigate(constructOpenURL(drive.subject));
-        pointAt('share-button', 'Share this drive here', () =>
+        pointAt('share-button', copy.invite.pointer, () =>
           openShareDialog(drive.subject),
         );
       },
@@ -141,13 +143,9 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       hint: portalUrl
         ? 'Add your email to keep it safe on every device'
         : 'Connect a device to open your work on it',
+      pointer: portalUrl ? 'Add your email here' : 'Connect a device here',
       target: 'save-row',
-      run: () =>
-        pointAt(
-          'save-row',
-          portalUrl ? 'Add your email here' : 'Connect a device here',
-          openSaveWorkDialog,
-        ),
+      run: () => pointAt('save-row', copy.save.pointer, openSaveWorkDialog),
     },
   };
 
@@ -166,13 +164,18 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       }
     >
       {steps.map(step => {
-        const { title, hint, run, target } = copy[step.id];
+        const { title, hint, pointer, run, target } = copy[step.id];
         const need =
           step.needs === 'ai-source'
             ? 'Needs an AI source: your own key or Ollama'
             : undefined;
         const inert = step.done;
         const tooltip = need ? `${hint}. ${need}` : hint;
+        const hoverHint = () =>
+          showUiHint(target, pointer, {
+            hover: true,
+            scope: step.id === 'name' ? drive.subject : undefined,
+          });
 
         return (
           <StepRow
@@ -184,19 +187,17 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
             title={tooltip}
             data-done={step.done}
             onClick={() => {
-              previewUiHint(undefined);
-              dismissUiHint();
               run();
             }}
             onPointerEnter={e => {
-              if (!inert && e.pointerType === 'mouse') previewUiHint(target);
+              if (!inert && e.pointerType === 'mouse') hoverHint();
             }}
-            onPointerLeave={() => previewUiHint(undefined)}
+            onPointerLeave={hideHoverUiHint}
             onFocus={e => {
               if (!inert && e.currentTarget.matches(':focus-visible'))
-                previewUiHint(target);
+                hoverHint();
             }}
-            onBlur={() => previewUiHint(undefined)}
+            onBlur={hideHoverUiHint}
           >
             <IconSlot aria-hidden>
               {step.done ? <FaCircleCheck /> : <FaRegCircle />}
@@ -223,7 +224,7 @@ function pointAt(
   const deadline = Date.now() + 3000;
 
   const attempt = () => {
-    if (showUiHint(target, text, { scope })) return;
+    if (showUiHint(target, text, { scope, nudge: true })) return;
     if (Date.now() < deadline) setTimeout(attempt, 100);
     else fallback();
   };

@@ -7,8 +7,7 @@ import {
   type RefObject,
 } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
-import { styled, useTheme } from 'styled-components';
-import { transparentize } from 'polished';
+import { styled } from 'styled-components';
 import { LuX } from 'react-icons/lu';
 import { Popover } from './Popover';
 import { IconButton } from './IconButton/IconButton';
@@ -38,8 +37,8 @@ export function UiHint({
   children,
 }: PropsWithChildren<UiHintProps>): JSX.Element {
   const wrapper = useRef<HTMLDivElement>(null);
-  const theme = useTheme();
-  const { text, preview } = useUiHint(target, scope);
+  const body = useRef<HTMLDivElement>(null);
+  const { text, nudge } = useUiHint(target, scope);
   const shown = text !== undefined && !disabled;
 
   // The element is the wrapper's child: the wrapper has no box to anchor on.
@@ -58,13 +57,29 @@ export function UiHint({
     return registerUiHintTarget(target, el);
   }, [target, disabled]);
 
+  // A short bounce toward the target, to say "this one". The content may
+  // still be mounting, so wait out its entrance.
   useEffect(() => {
-    const el = wrapper.current?.firstElementChild as HTMLElement | null;
+    if (!shown || !nudge) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    if (!el || !preview || disabled) return;
+    const t = setTimeout(() => {
+      const content = body.current?.parentElement;
 
-    return ringOn(el, transparentize(0.5, theme.colors.main));
-  }, [preview, disabled, theme.colors.main]);
+      if (!content) return;
+
+      // Toward the target: up for a callout below it, down when flipped.
+      const dir = content.dataset.side === 'top' ? 4 : -4;
+      const at = (n: number) => `0 ${n}px`;
+
+      content.animate(
+        { translate: ['0 0', at(dir), '0 0', at(dir / 2), '0 0'] },
+        { duration: 400, easing: 'ease-in-out' },
+      );
+    }, 150);
+
+    return () => clearTimeout(t);
+  }, [shown, nudge]);
 
   useEffect(() => {
     if (!shown) return;
@@ -82,6 +97,7 @@ export function UiHint({
     <HintPopover
       open={shown}
       noLock
+      noArrow
       side='bottom'
       // Not the popover's own dismissal: a new page's title takes focus on
       // arrival, which it would count as an outside interaction.
@@ -108,7 +124,7 @@ export function UiHint({
         </>
       }
     >
-      <HintBody>
+      <HintBody ref={body}>
         <HintText data-testid={`ui-hint-${target}`}>{text}</HintText>
         <IconButton
           title='Close'
@@ -120,6 +136,13 @@ export function UiHint({
           <LuX />
         </IconButton>
       </HintBody>
+      <RadixPopover.Arrow asChild width={14} height={7}>
+        <svg viewBox='0 0 30 10' preserveAspectRatio='none'>
+          {/* Covers the bubble's border under the arrow's base. */}
+          <rect x='2' y='-3' width='26' height='3.5' />
+          <path d='M0 0 L15 10 L30 0' vectorEffect='non-scaling-stroke' />
+        </svg>
+      </RadixPopover.Arrow>
     </HintPopover>
   );
 }
@@ -130,8 +153,18 @@ const HintPopover = styled(Popover)`
   font-size: 0.85rem;
   color: ${p => p.theme.colors.text};
 
-  & > svg {
+  background-color: ${p => p.theme.colors.bgBody};
+  border: 1px solid ${p => p.theme.colors.bg2};
+
+  & > span > svg {
+    overflow: visible;
     fill: ${p => p.theme.colors.bgBody};
+    stroke: none;
+
+    path {
+      stroke: ${p => p.theme.colors.bg2};
+      stroke-width: 1px;
+    }
   }
 `;
 
@@ -146,15 +179,3 @@ const HintText = styled.p`
   flex: 1;
   line-height: 1.4;
 `;
-
-/** A soft outline on the element; returns the function that takes it off. */
-function ringOn(el: HTMLElement, color: string): () => void {
-  const before = [el.style.outline, el.style.outlineOffset];
-
-  el.style.outline = `2px solid ${color}`;
-  el.style.outlineOffset = '2px';
-
-  return () => {
-    [el.style.outline, el.style.outlineOffset] = before;
-  };
-}

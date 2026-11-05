@@ -2,8 +2,8 @@ import { useSyncExternalStore } from 'react';
 
 /**
  * One in-memory "look here" mechanism for the whole app: a closable callout
- * on a piece of UI (`<UiHint target>` renders it), and a soft preview ring
- * on the same element. In memory on purpose: a hint belongs to the moment it
+ * on a piece of UI (`<UiHint target>` renders it). It is either sticky (until
+ * closed) or only shown while hovering what would show it. In memory on purpose: a hint belongs to the moment it
  * was asked for, not to the device, and must not return after a reload.
  */
 export type UiHintTarget =
@@ -18,11 +18,14 @@ interface Active {
   target: UiHintTarget;
   text: string;
   scope?: string;
+  /** Stays until closed; a hover one goes when the pointer leaves. */
+  sticky: boolean;
+  /** Bumped to ask the callout for attention (a small nudge). */
+  nudge: number;
 }
 
 interface State {
   active?: Active;
-  preview?: UiHintTarget;
 }
 
 let state: State = {};
@@ -48,7 +51,7 @@ export function registerUiHintTarget(
   };
 }
 
-/** Whether the target is rendered now (and laid out, so a ring can be seen). */
+/** Whether the target is rendered now (and laid out, so it can be seen). */
 export function isUiHintTargetShown(target: UiHintTarget): boolean {
   return [...(mounted.get(target) ?? [])].some(
     el => el.getClientRects().length > 0,
@@ -60,34 +63,51 @@ export function isUiHintTargetShown(target: UiHintTarget): boolean {
  * target is not on screen, so the caller can fall back to the plain action.
  * `force` skips that check, for a target that is about to render (the title
  * of the page just navigated to). `scope` picks one of several instances.
+ * `hover` shows it only until `hideHoverUiHint`, and never replaces a
+ * sticky one. `nudge` makes it bounce toward its target.
  */
 export function showUiHint(
   target: UiHintTarget,
   text: string,
-  options?: { scope?: string; force?: boolean },
+  options?: {
+    scope?: string;
+    force?: boolean;
+    hover?: boolean;
+    nudge?: boolean;
+  },
 ): boolean {
   if (!options?.force && !isUiHintTargetShown(target)) return false;
-  set({ active: { target, text, scope: options?.scope } });
+  if (options?.hover && state.active?.sticky) return true;
+
+  const prev = state.active;
+
+  set({
+    active: {
+      target,
+      text,
+      scope: options?.scope,
+      sticky: !options?.hover,
+      nudge: (prev?.nudge ?? 0) + (options?.nudge ? 1 : 0),
+    },
+  });
 
   return true;
 }
 
 export function dismissUiHint(): void {
   if (!state.active) return;
-  set({ ...state, active: undefined });
+  set({ active: undefined });
 }
 
-/** The soft ring while hovering the thing that would show the callout. */
-export function previewUiHint(target: UiHintTarget | undefined): void {
-  if (state.preview === target) return;
-  if (target && !isUiHintTargetShown(target)) return;
-  set({ ...state, preview: target });
+/** Takes away a hover callout (not a sticky one). */
+export function hideHoverUiHint(): void {
+  if (state.active && !state.active.sticky) dismissUiHint();
 }
 
 export function useUiHint(
   target: UiHintTarget,
   scope?: string,
-): { text?: string; preview: boolean } {
+): { text?: string; nudge: number } {
   const s = useSyncExternalStore(
     cb => {
       listeners.add(cb);
@@ -102,6 +122,6 @@ export function useUiHint(
 
   return {
     text: mine ? a.text : undefined,
-    preview: s.preview === target && !mine,
+    nudge: mine ? a.nudge : 0,
   };
 }

@@ -552,6 +552,7 @@ msgstr "Checking server…"
 msgid "Not responding"
 msgstr "Not responding"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more "
 msgstr "Read more "
@@ -4493,10 +4494,14 @@ msgid "Change icon"
 msgstr "Change icon"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add icon"
 msgstr "Add icon"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add cover"
 msgstr "Add cover"
 
@@ -5457,7 +5462,7 @@ msgid "Switch"
 msgstr "Switch"
 
 #. 0: accountAddress(phase.account)
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'your account'
 #: src/routes/SendIdentityRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
@@ -5546,7 +5551,7 @@ msgstr "{0} failed: {1}"
 msgid "Sign in →"
 msgstr "Sign in →"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. We hold your key sealed, so this email gets you back in on a new device."
@@ -5617,7 +5622,7 @@ msgstr "Storing…"
 msgid "Store it with {0}"
 msgstr "Store it with {0}"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
@@ -5676,7 +5681,7 @@ msgstr "Restore from Cloud Vault"
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 msgstr "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
@@ -11659,7 +11664,7 @@ msgstr "Confirm with your passkey"
 msgid "Confirm with your code"
 msgstr "Confirm with your code"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
@@ -12489,13 +12494,11 @@ msgid "Show all"
 msgstr "Show all"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "<0/> Drive settings"
-msgstr "<0/> Drive settings"
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Nothing here yet."
 
+#: src/views/Drive/DrivePage.tsx
+#: src/views/Drive/DrivePage.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Drive settings"
@@ -12714,7 +12717,7 @@ msgstr "This drive’s plan includes Cloud Server. It waits for your consent."
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/routes/SyncRoute.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. No recovery backup stored, so losing every device loses this drive."
@@ -12762,11 +12765,6 @@ msgstr "This drive is not on a server. People you invite can open it only while 
 #: src/components/Share/ShareDialog.tsx
 msgid "A Cloud Server keeps this drive online for everyone, so nobody has to keep a browser open."
 msgstr "A Cloud Server keeps this drive online for everyone, so nobody has to keep a browser open."
-
-#. 0: CLOUD_SERVER_PRICE
-#: src/components/Share/ShareDialog.tsx
-msgid "Upgrade to Cloud Server from {0}"
-msgstr "Upgrade to Cloud Server from {0}"
 
 #: src/components/SideBar/MessagesPanel.tsx
 #: src/components/SideBar/MessagesPanel.tsx
@@ -13482,3 +13480,12 @@ msgstr "Share this drive with a teammate or a friend"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Share this drive here"
 msgstr "Share this drive here"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Your account"
+msgstr "Your account"

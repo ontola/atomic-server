@@ -304,14 +304,15 @@ test('Make something points at the New row, and the X or Escape closes it', asyn
   const step = panel.getByRole('button', { name: 'Make something' });
   const hint = page.getByTestId('ui-hint-new-row');
 
-  // Hovering only rings the place; no text yet.
+  // Hovering shows the hint itself, and moving off hides it again.
   await step.hover();
+  await expect(hint).toHaveText('Make a document or table here');
+  await page.mouse.move(600, 400);
   await expect(hint).toHaveCount(0);
-  await expect(
-    page.getByTestId('sidebar').locator('[style*="outline"]'),
-  ).toHaveCount(1);
 
+  // A click keeps it, also once the pointer leaves.
   await step.click();
+  await page.mouse.move(600, 400);
   await expect(hint).toHaveText('Make a document or table here');
   await page.getByTestId('ui-hint-close').click();
   await expect(hint).toHaveCount(0);

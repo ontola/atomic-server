@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { expect, it } from 'vitest';
 import {
   dismissUiHint,
-  previewUiHint,
+  hideHoverUiHint,
   registerUiHintTarget,
   showUiHint,
   useUiHint,
@@ -33,8 +33,23 @@ it('refuses a target that is not on screen', () => {
   dismissUiHint();
 });
 
-it('previews only a target that is shown', () => {
-  const { result } = renderHook(() => useUiHint('save-row'));
-  act(() => previewUiHint('save-row'));
-  expect(result.current.preview).toBe(false);
+it('shows a hover hint until it leaves, but never over a sticky one', () => {
+  const { result } = renderHook(() => useUiHint('ai-button'));
+
+  act(() => {
+    showUiHint('ai-button', 'Hover', { force: true, hover: true });
+  });
+  expect(result.current.text).toBe('Hover');
+  act(() => hideHoverUiHint());
+  expect(result.current.text).toBeUndefined();
+
+  act(() => {
+    showUiHint('ai-button', 'Click', { force: true, nudge: true });
+    showUiHint('ai-button', 'Hover', { force: true, hover: true });
+  });
+  expect(result.current.text).toBe('Click');
+  expect(result.current.nudge).toBe(1);
+  act(() => hideHoverUiHint());
+  expect(result.current.text).toBe('Click');
+  act(() => dismissUiHint());
 });
