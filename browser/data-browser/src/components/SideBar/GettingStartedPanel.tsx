@@ -9,6 +9,7 @@ import {
 } from '@tomic/react';
 import type { JSX } from 'react';
 import { FaCircleCheck, FaRegCircle } from 'react-icons/fa6';
+import { LuCloudOff } from 'react-icons/lu';
 import { styled } from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
 import { useAISidebar } from '@components/AI/AISidebarContext';
@@ -31,6 +32,7 @@ import {
 import { userSettingProps, useUserSetting } from '@hooks/useUserSetting';
 import { SideBarPanel } from './SideBarPanel';
 import { hideHoverUiHint, showUiHint, type UiHintTarget } from '@hooks/uiHint';
+import { UiHint } from '../UiHint';
 
 /**
  * The first things worth trying, as a sidebar panel on a drive of your own.
@@ -163,7 +165,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
         : 'Connect a device to open your work on it',
       pointer: portalUrl ? 'Add your email here' : 'Connect a device here',
       target: 'save-row',
-      run: () => pointAt('save-row', copy.save.pointer, openSaveWorkDialog),
+      run: openSaveWorkDialog,
     },
   };
 
@@ -183,6 +185,31 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     >
       {steps.map(step => {
         const { title, hint, pointer, run, target } = copy[step.id];
+
+        // Not yet saved: the step is the guest's next move, a row with its own
+        // warning, and it opens the Save dialog in place.
+        if (step.id === 'save' && !step.done) {
+          return (
+            <UiHint key={step.id} target='save-row'>
+              <SaveRow
+                as='button'
+                type='button'
+                onClick={run}
+                data-testid='guest-save-row'
+                data-done={false}
+              >
+                <WarnIcon aria-hidden>
+                  <LuCloudOff />
+                </WarnIcon>
+                <SaveText>
+                  <SaveAction>{title}</SaveAction>
+                  <SaveNote>Only saved on this device</SaveNote>
+                </SaveText>
+              </SaveRow>
+            </UiHint>
+          );
+        }
+
         const need =
           step.needs === 'ai-source'
             ? 'Needs an AI source: your own key or Ollama'
@@ -270,6 +297,44 @@ const StepRow = styled(SideBarMenuRow)`
     opacity: 0.6;
     background-color: transparent;
   }
+`;
+
+const SaveRow = styled(StepRow)`
+  padding-inline-end: 0.5rem;
+  padding-block: 0.25rem;
+
+  &:focus-visible {
+    outline: 2px solid ${p => p.theme.colors.main};
+    outline-offset: -2px;
+  }
+`;
+
+const WarnIcon = styled(IconSlot)`
+  color: ${p => p.theme.colors.warning};
+
+  svg {
+    font-size: 0.95rem;
+  }
+`;
+
+const SaveText = styled.span`
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  text-align: start;
+  line-height: 1.25;
+`;
+
+const SaveAction = styled(SideBarMenuRowLabel)`
+  flex: none;
+  color: ${p => p.theme.colors.main};
+`;
+
+const SaveNote = styled(SideBarMenuRowLabel)`
+  flex: none;
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const Count = styled.small`

@@ -157,32 +157,15 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   await expect(panel).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('Escape');
 
-  // Not linked to an account: the sidebar says so, with the next step.
-  const row = page.getByTestId('guest-save-row');
+  // Not linked to an account: the panel's last row says so, with the next step.
+  const row = panel.getByTestId('guest-save-row');
   await expect(row).toContainText('Only saved on this device');
   // Self-hosted, with no portal: nothing here asks for an email.
-  await expect(row).toContainText('Connect a device');
+  await expect(row).toContainText('Save your work');
 
-  // The panel's Save your work row does not open anything: it points at the
-  // row where it is done, until the X closes it.
+  // Clicking it opens the dialog and leaves the page where it is.
   const drive = page.url();
-  await panel
-    .getByRole('button', { name: 'Save your work', exact: true })
-    .click();
-  const hint = page.getByTestId('ui-hint-save-row');
-  await expect(hint).toBeVisible();
-  await expect(hint).toHaveText('Connect a device here');
-  await page.getByTestId('ui-hint-close').click();
-  await expect(hint).toHaveCount(0);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-
-  // Using the thing the hint points at opens the dialog and leaves the page where it is.
-  await panel
-    .getByRole('button', { name: 'Save your work', exact: true })
-    .click();
-  await expect(hint).toBeVisible();
   await row.click();
-  await expect(hint).toHaveCount(0);
   const dialog = page.getByRole('dialog');
   await expect(
     dialog.getByRole('heading', { name: 'Save your work' }),

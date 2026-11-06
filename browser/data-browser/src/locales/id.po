@@ -4080,6 +4080,7 @@ msgstr "Memasangkan perangkat"
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
@@ -4295,7 +4296,6 @@ msgstr "Data Anda berada di perangkat yang terhubung dengan Anda."
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SideBar/GuestSaveRow.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -13422,7 +13422,6 @@ msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
-#: src/components/SideBar/GuestSaveRow.tsx
 msgid "Save & register"
 msgstr "Simpan dan daftar"
 
@@ -13487,6 +13486,10 @@ msgstr "Tur singkat drive ini, di dokumen pertamanya"
 msgid "Open Start here"
 msgstr "Buka Start here"
 
-#: src/components/SideBar/GuestSaveRow.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Only saved on this device"
 msgstr "Hanya tersimpan di perangkat ini"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
+msgstr ""

@@ -4082,6 +4082,7 @@ msgstr "Apparaat koppelen"
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
@@ -4297,7 +4298,6 @@ msgstr "Je gegevens staan op het apparaat waarmee je verbonden bent."
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SideBar/GuestSaveRow.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -13430,7 +13430,6 @@ msgstr "Verbind een apparaat om je werk daarop te openen"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
-#: src/components/SideBar/GuestSaveRow.tsx
 msgid "Save & register"
 msgstr "Opslaan en registreren"
 
@@ -13495,6 +13494,10 @@ msgstr "Een korte rondleiding door deze schijf, in het eerste document"
 msgid "Open Start here"
 msgstr "Open Start here"
 
-#: src/components/SideBar/GuestSaveRow.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Only saved on this device"
 msgstr "Alleen op dit apparaat opgeslagen"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
+msgstr ""
