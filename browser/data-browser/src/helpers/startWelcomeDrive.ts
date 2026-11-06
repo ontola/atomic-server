@@ -29,6 +29,10 @@ export async function startWelcomeDrive(
   });
 
   await store.notifyResourceManuallyCreated(drive);
+  // The notification also tells a mounting title to open its editor with the
+  // placeholder selected, which is right after "New drive" but too eager for
+  // someone just arriving. Other listeners (collections, backup) already ran.
+  store.consumeRecentlyCreated(drive.subject);
 
   // Remembered so the Getting started card can tell it from a project drive
   // after it is renamed: on the personal drive, so every device knows, and

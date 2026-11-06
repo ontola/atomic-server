@@ -3,6 +3,7 @@
 This changelog covers all five packages, as they are (for now) updated as a whole
 
 ## UNRELEASED
+- Get started: the Welcome drive's title is no longer put in edit mode with its text selected on arrival (the "just created" signal is only for New drive).
 - Getting started: the unsaved "Save & register" step is the panel's last row (cloud-off icon, accent label, "Only saved on this device") and opens the Save dialog directly; the separate sidebar row above the account row is gone. Once saved it is a ticked step like the others.
 - Save & register: a tab that waited for the email sign-in kept showing the sidebar's "Save & register" row and a Save dialog stuck on "Saving your work to your account…" while the Getting started step was ticked. The sign-in link opens in another tab, whose identity gate writes the account binding; localStorage only tells other tabs through a `storage` event, which nothing listened to. The binding and `useIsLinkedToAccount` now follow it. The Save dialog also stops waiting after 20 seconds and shows an error with a Try again button.
 - Sidebar save row: the "Saved on this device" box with its button is now one plain sidebar row above the account row: a cloud-off icon, "Save & register" (or "Connect a device" without an account portal) in the accent colour and a muted "Only saved on this device" under it. The whole row opens the Save dialog.

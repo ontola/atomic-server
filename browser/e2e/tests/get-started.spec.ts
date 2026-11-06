@@ -25,6 +25,10 @@ test('Get started opens a workspace of your own, without an account', async ({
   await expect(page.getByTestId('current-drive-title')).toHaveText(
     'Welcome to Atomic',
   );
+  // Arriving is not an invitation to rename: the title is not being edited.
+  await expect(
+    page.locator('[data-testid="editable-title"]:focus'),
+  ).toHaveCount(0);
   const panel = page.getByTestId('getting-started');
   await expect(panel).toBeVisible({ timeout: 30_000 });
   await expect(panel).toContainText('Getting started');
