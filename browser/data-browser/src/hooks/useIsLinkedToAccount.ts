@@ -15,7 +15,21 @@ const subscribe = (listener: () => void) => {
     onManagedSessionChanged(listener),
   ];
 
-  return () => offs.forEach(off => off());
+  // Another tab can link or adopt (the email link opens in one): localStorage
+  // tells this tab with a `storage` event, which the in-tab events never do.
+  const onStorage = () => listener();
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', onStorage);
+  }
+
+  return () => {
+    offs.forEach(off => off());
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('storage', onStorage);
+    }
+  };
 };
 
 /**

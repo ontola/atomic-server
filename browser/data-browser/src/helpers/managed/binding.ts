@@ -22,6 +22,16 @@ export function onManagedBindingChanged(listener: () => void): () => void {
 
 const notify = () => listeners.forEach(listener => listener());
 
+// The email link opens in another tab, and that tab's identity gate is the one
+// that writes the binding. localStorage tells the other tabs with a `storage`
+// event (never the writing tab), so follow it: without this a tab that waited
+// for the sign-in kept showing "Only saved on this device".
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', event => {
+    if (event.key === null || event.key === BINDING_KEY) notify();
+  });
+}
+
 export type ManagedAccountBinding = {
   owner_email: string;
   expected_agent_subject: string;

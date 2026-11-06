@@ -3,6 +3,7 @@
 This changelog covers all five packages, as they are (for now) updated as a whole
 
 ## UNRELEASED
+- Save & register: a tab that waited for the email sign-in kept showing the sidebar's "Save & register" row and a Save dialog stuck on "Saving your work to your account…" while the Getting started step was ticked. The sign-in link opens in another tab, whose identity gate writes the account binding; localStorage only tells other tabs through a `storage` event, which nothing listened to. The binding and `useIsLinkedToAccount` now follow it. The Save dialog also stops waiting after 20 seconds and shows an error with a Try again button.
 - Sidebar save row: the "Saved on this device" box with its button is now one plain sidebar row above the account row: a cloud-off icon, "Save & register" (or "Connect a device" without an account portal) in the accent colour and a muted "Only saved on this device" under it. The whole row opens the Save dialog.
 - Getting started: a first step "Read Start here" on the Welcome drive points at the Start here row in the sidebar tree and is done once you have opened that document on this device. Hint callouts are larger (normal text size, even padding, bigger arrow) and their click animation is a clear scale pulse from the target, still none with reduced motion.
 - Drive page header is one row: the title on the left, then the drive switcher, Add icon, Add cover and Drive settings as icon-only buttons on the right (the labels are the tooltips and accessible names).

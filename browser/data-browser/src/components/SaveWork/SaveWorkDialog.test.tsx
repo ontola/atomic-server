@@ -29,7 +29,7 @@ vi.mock('../../views/getting-started/AccountSignInPanel', () => ({
   ),
 }));
 
-import { SaveWorkContent } from './SaveWorkDialog';
+import { SAVE_ADOPT_TIMEOUT_MS, SaveWorkContent } from './SaveWorkDialog';
 import {
   clearManagedAccountBinding,
   writeManagedAccountBinding,
@@ -87,4 +87,52 @@ it('closes with a toast once the account has adopted this identity', () => {
   act(() => writeManagedAccountBinding('ann@example.com', 'did:ad:agent:abc'));
   expect(state.toast).toHaveBeenCalledWith('Saved as ann@example.com');
   expect(onDone).toHaveBeenCalled();
+});
+
+it('follows a binding another tab wrote (storage event, no in-tab notify)', () => {
+  const onDone = renderContent('https://portal.example');
+
+  act(() => screen.getByText('panel').click());
+  expect(onDone).not.toHaveBeenCalled();
+
+  act(() => {
+    localStorage.setItem(
+      'atomic-managed-account-binding',
+      JSON.stringify({
+        owner_email: 'ann@example.com',
+        expected_agent_subject: 'did:ad:agent:abc',
+      }),
+    );
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'atomic-managed-account-binding' }),
+    );
+  });
+  expect(onDone).toHaveBeenCalled();
+});
+
+it('stops waiting after the timeout and offers a retry', () => {
+  vi.useFakeTimers();
+
+  try {
+    const onDone = renderContent('https://portal.example');
+
+    act(() => screen.getByText('panel').click());
+    expect(screen.getByTestId('save-work-linking')).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(SAVE_ADOPT_TIMEOUT_MS + 1);
+    });
+    expect(screen.getByTestId('save-work-failed')).toBeTruthy();
+    expect(screen.queryByTestId('save-work-linking')).toBeNull();
+
+    act(() => screen.getByTestId('save-work-retry').click());
+    expect(screen.getByTestId('save-work-linking')).toBeTruthy();
+
+    act(() =>
+      writeManagedAccountBinding('ann@example.com', 'did:ad:agent:abc'),
+    );
+    expect(onDone).toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
 });

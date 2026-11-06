@@ -16,6 +16,7 @@ import {
 } from '../../views/getting-started/AccountSignInPanel';
 import { readManagedAccountBinding } from '../../helpers/managed/binding';
 import { canHoldProviderCookie } from '../../helpers/managed/deviceLink';
+import { noteManagedSessionChanged } from '../../helpers/managed/session';
 import { useIsLinkedToAccount } from '../../hooks/useIsLinkedToAccount';
 import { useKnownPortalUrl } from '../../hooks/useKnownPortalUrl';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
@@ -30,6 +31,9 @@ import { subscribeSaveWorkDialog } from './saveWorkDialogState';
  * - without one (self-hosted), nothing here depends on an account: the way to
  *   keep and reach the work elsewhere is another device.
  */
+/** How long to wait for the account to adopt this identity after sign-in. */
+export const SAVE_ADOPT_TIMEOUT_MS = 20_000;
+
 export function SaveWorkContent({
   portalUrl,
   onDone,
@@ -40,6 +44,9 @@ export function SaveWorkContent({
   const navigate = useNavigateWithTransition();
   const linked = useIsLinkedToAccount();
   const [signedIn, setSignedIn] = useState(false);
+  // Bumped by Try again; each value is one wait for the account to adopt us.
+  const [attempt, setAttempt] = useState(0);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     if (!signedIn || !linked) return;
@@ -49,6 +56,20 @@ export function SaveWorkContent({
     toast.success(`Saved as ${email}`);
     onDone();
   }, [signedIn, linked, onDone]);
+
+  // Never wait silently: adoption runs in the identity gate against the
+  // account server, so say so when it does not finish.
+  useEffect(() => {
+    if (!signedIn || linked) return;
+
+    setTimedOut(false);
+    const timer = window.setTimeout(
+      () => setTimedOut(true),
+      SAVE_ADOPT_TIMEOUT_MS,
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [signedIn, linked, attempt]);
 
   if (!portalUrl) {
     return (
@@ -76,7 +97,25 @@ export function SaveWorkContent({
         Your work is saved on this device. Add your email so you can open it on
         other devices and don&apos;t lose it.
       </p>
-      {signedIn ? (
+      {signedIn && timedOut ? (
+        <Column gap='0.75rem'>
+          <p role='alert' data-testid='save-work-failed'>
+            You are signed in, but saving your work to your account did not
+            finish. Check your connection and try again.
+          </p>
+          <Button
+            data-testid='save-work-retry'
+            onClick={() => {
+              setTimedOut(false);
+              setAttempt(n => n + 1);
+              // Runs the identity check again.
+              noteManagedSessionChanged();
+            }}
+          >
+            Try again
+          </Button>
+        </Column>
+      ) : signedIn ? (
         <p role='status' data-testid='save-work-linking'>
           Saving your work to your account…
         </p>
