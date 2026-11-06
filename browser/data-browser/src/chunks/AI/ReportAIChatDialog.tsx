@@ -108,7 +108,6 @@ export default function ReportAIChatDialog({
         `What went wrong:\n${details.trim() || '(No description)'}\n\n${transcript}`,
         email,
         'ai-chat',
-        store,
       );
       setSent(true);
     } catch {

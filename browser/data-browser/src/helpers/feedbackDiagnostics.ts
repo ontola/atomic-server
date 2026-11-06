@@ -1,5 +1,10 @@
 // @wc-ignore-file
-import type { Store } from '@tomic/react';
+import * as Sentry from '@sentry/react';
+import {
+  getLoroFailure,
+  STORAGE_BLOCKED_ERROR_NAME,
+  type Store,
+} from '@tomic/react';
 import { withoutIdentifiers } from './sentry';
 import { isRunningInTauri } from './tauri';
 
@@ -50,7 +55,7 @@ function originOf(url: string): string | undefined {
   }
 }
 
-/** Pure: the Sentry tags that go on every feedback event. */
+/** Pure: the Sentry tags that go on every event. */
 export function buildFeedbackDiagnostics(
   input: FeedbackDiagnosticsInput,
 ): Tags {
@@ -107,5 +112,87 @@ export function collectFeedbackDiagnostics(store: Store): Tags {
     storageError: status.clientDbError,
     browserOnline:
       typeof navigator === 'undefined' ? undefined : navigator.onLine,
+  });
+}
+
+/**
+ * Loro's panic hook logs the Rust message with `console.error` just before
+ * the wasm traps, and the SDK keeps that line as a breadcrumb. The trap itself
+ * arrives as a bare `RuntimeError: unreachable`.
+ */
+const PANIC = /^panicked at (.+):\n(.*)/;
+const PANIC_LOOKBACK = 30;
+
+/** Pure: the location and message of the wasm panic behind a trap, if logged. */
+export function wasmPanicTags(event: Sentry.Event): Tags {
+  if (!event.exception?.values?.some(v => v.type === 'RuntimeError')) return {};
+
+  const crumbs = event.breadcrumbs ?? [];
+
+  for (
+    let i = crumbs.length - 1;
+    i >= 0 && i >= crumbs.length - PANIC_LOOKBACK;
+    i--
+  ) {
+    const found =
+      crumbs[i].category === 'console'
+        ? PANIC.exec(crumbs[i].message ?? '')
+        : null;
+
+    // Quoted text may be a key or a value from the workspace.
+    if (found)
+      return {
+        wasmPanicAt: found[1].slice(0, MAX_VALUE),
+        wasmPanic: describeError(found[2].replace(/"[^"]*"/g, '"…"'))!,
+      };
+  }
+
+  return {};
+}
+
+/** Pure: what {@link getLoroFailure} knows, as tags. */
+function loroFailureTags(error: unknown): Tags {
+  const failure = getLoroFailure(error);
+
+  if (!failure) return {};
+
+  return {
+    loroOp: failure.op,
+    ...(failure.bytes !== undefined && { loroBytes: failure.bytes }),
+    ...(failure.ops !== undefined && { loroOps: failure.ops }),
+  };
+}
+
+/**
+ * Put the app's setup on every Sentry event, not just on feedback: a report is
+ * only as useful as what it says about the setup it came from. Read when the
+ * event is made, so nothing runs until something goes wrong. Tags the event
+ * already carries win. Never throws, so it can never keep an event from being
+ * sent.
+ */
+export function addDiagnosticsToSentryEvents(store: Store): void {
+  if (!Sentry.isEnabled()) return;
+
+  Sentry.addEventProcessor((event, hint) => {
+    try {
+      event.tags = {
+        ...collectFeedbackDiagnostics(store),
+        ...loroFailureTags(hint.originalException),
+        ...wasmPanicTags(event),
+        ...event.tags,
+      };
+
+      // A browser that refuses local storage is a state to know about, not a defect.
+      if (
+        event.exception?.values?.some(
+          v => v.type === STORAGE_BLOCKED_ERROR_NAME,
+        )
+      )
+        event.level = 'warning';
+    } catch {
+      // The tags are a courtesy.
+    }
+
+    return event;
   });
 }

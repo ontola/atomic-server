@@ -5971,10 +5971,6 @@ msgid "Thank you. Your feedback has been received."
 msgstr "Gracias. Hemos recibido tus comentarios."
 
 #: src/components/SideBar/FeedbackButton.tsx
-msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
-msgstr "Informa de un error o sugiere una mejora. Tu mensaje y tu correo opcional se envían al equipo de Atomic mediante Sentry. No incluyas contenido privado del espacio de trabajo."
-
-#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback <0/>"
 msgstr "Comentarios <0/>"
 
@@ -8411,10 +8407,6 @@ msgstr "No se ha podido copiar. Selecciona el texto de arriba para copiarlo manu
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "The report could not be sent. Your text is still here; try again."
 msgstr "No se ha podido enviar el informe. Tu texto sigue aquí; vuelve a intentarlo."
-
-#: src/chunks/AI/ReportAIChatDialog.tsx
-msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Remove private information before sending."
-msgstr "Al pulsar Enviar informe compartes con el equipo de Atomic, mediante Sentry, el texto del chat revisado, los mensajes de error y tu descripción y correo opcionales. Se excluyen los archivos adjuntos, los datos de las herramientas y el razonamiento. Elimina la información privada antes de enviarlo."
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "What went wrong? <0/>"
@@ -13524,3 +13516,11 @@ msgstr "No se pudo conectar con {0}. Comprueba que el servidor está en marcha e
 #: src/helpers/managed/recovery.ts
 msgid "HTTP {0} from {1}"
 msgstr "HTTP {0} de {1}"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Technical details about your setup (app version, server address and status) are attached. Remove private information before sending."
+msgstr ""
+
+#: src/components/SideBar/FeedbackButton.tsx
+msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
+msgstr ""

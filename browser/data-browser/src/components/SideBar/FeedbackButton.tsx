@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { FaComment } from 'react-icons/fa6';
 import * as Sentry from '@sentry/react';
-import { useStore } from '@tomic/react';
 import {
   Dialog,
   DialogTitle,
@@ -38,7 +37,6 @@ export function useFeedbackDialog({
   onClosed,
 }: UseFeedbackDialogOptions = {}) {
   const feedbackTitle = reportError ? 'Report this error' : 'Send feedback';
-  const store = useStore();
   const messageId = useId();
   const emailId = useId();
   const emailRef = useRef<HTMLInputElement>(null);
@@ -60,12 +58,7 @@ export function useFeedbackDialog({
     setFailed(false);
 
     try {
-      await submitFeedback(
-        message,
-        email,
-        reportError ? 'error' : 'sidebar',
-        store,
-      );
+      await submitFeedback(message, email, reportError ? 'error' : 'sidebar');
       setSent(true);
       setMessage('');
       setBusy(false);

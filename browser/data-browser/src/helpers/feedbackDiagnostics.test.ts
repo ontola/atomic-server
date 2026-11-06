@@ -1,5 +1,9 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
+import * as Sentry from '@sentry/react';
+import { loroCall, type Store } from '@tomic/react';
 import {
+  addDiagnosticsToSentryEvents,
   buildFeedbackDiagnostics,
   type FeedbackDiagnosticsInput,
 } from './feedbackDiagnostics';
@@ -83,5 +87,117 @@ describe('buildFeedbackDiagnostics', () => {
 
     expect(tags).not.toHaveProperty('connectionError');
     expect(tags).not.toHaveProperty('server');
+  });
+});
+
+describe('diagnostics on every Sentry event', () => {
+  const sent: Sentry.Event[] = [];
+  const statusOf = (serverConnected: boolean) => () => ({
+    serverUrl: 'http://localhost:11870/some/path?q=1',
+    serverConnected,
+    blockedCount: 0,
+  });
+  const store = (getSyncStatus: () => unknown) =>
+    ({
+      getSyncStatus,
+      outbox: { pending: () => [{ failures: 3 }] },
+      getDefaultWebSocket: () => ({ serverCapabilities: [] }),
+    }) as unknown as Store;
+
+  async function report(send: () => unknown): Promise<Sentry.Event> {
+    sent.length = 0;
+    send();
+    await Sentry.flush(1000);
+
+    return sent[0];
+  }
+
+  it('tags errors and feedback alike, and lets an explicit tag win', async () => {
+    Sentry.init({
+      dsn: 'https://public@example.com/1',
+      integrations: [],
+      transport: () => ({
+        send: async envelope => {
+          for (const [, item] of envelope[1])
+            sent.push(item as unknown as Sentry.Event);
+
+          return {};
+        },
+        flush: async () => true,
+      }),
+    });
+    addDiagnosticsToSentryEvents(store(statusOf(false)));
+
+    const error = await report(() =>
+      Sentry.captureException(new Error('boom'), { tags: { server: 'own' } }),
+    );
+
+    expect(error.tags).toMatchObject({
+      server: 'own',
+      connected: false,
+      outboxSize: 1,
+      failures: 3,
+    });
+
+    const feedback = await report(() =>
+      Sentry.captureFeedback({ message: 'Problem' }),
+    );
+
+    expect(feedback.tags).toMatchObject({ server: 'http://localhost:11870' });
+  });
+
+  it('adds what the Loro call was doing, and the panic Rust logged', async () => {
+    const trap = new WebAssembly.RuntimeError('unreachable');
+
+    try {
+      loroCall(
+        'import',
+        undefined,
+        () => {
+          throw trap;
+        },
+        4321,
+      );
+    } catch {
+      // expected
+    }
+
+    Sentry.addBreadcrumb({
+      category: 'console',
+      message:
+        'panicked at crates/loro-internal/src/x.rs:1:2:\nno key "https://example.com/secret" here\n\nStack:\nError',
+    });
+
+    const event = await report(() => Sentry.captureException(trap));
+
+    expect(event.tags).toMatchObject({
+      loroOp: 'import',
+      loroBytes: 4321,
+      wasmPanicAt: 'crates/loro-internal/src/x.rs:1:2',
+      wasmPanic: 'no key "…" here',
+    });
+    expect(JSON.stringify(event.tags)).not.toContain('secret');
+  });
+
+  it('reports a blocked local storage as a warning', async () => {
+    const blocked = Object.assign(new Error('blocked'), {
+      name: 'StorageBlockedError',
+    });
+
+    expect((await report(() => Sentry.captureException(blocked))).level).toBe(
+      'warning',
+    );
+  });
+
+  it('still sends the event when reading the store throws', async () => {
+    addDiagnosticsToSentryEvents(
+      store(() => {
+        throw new Error('store is gone');
+      }),
+    );
+
+    expect(
+      (await report(() => Sentry.captureException(new Error('boom')))).level,
+    ).toBe('error');
   });
 });

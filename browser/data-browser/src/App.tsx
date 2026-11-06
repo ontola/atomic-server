@@ -17,6 +17,7 @@ import {
 } from './helpers/originNode';
 
 import { useEffect, type JSX } from 'react';
+import { addDiagnosticsToSentryEvents } from './helpers/feedbackDiagnostics';
 import {
   identifyAgentInSentry,
   reportRepeatedCommitFailures,
@@ -268,6 +269,7 @@ window.store = store;
 attachStoreToProfiler(store);
 reportRepeatedCommitFailures(store);
 identifyAgentInSentry(store);
+addDiagnosticsToSentryEvents(store);
 registerRefusedDriveHealing(store);
 
 if (isDev()) {
