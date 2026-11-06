@@ -24,6 +24,7 @@
 //! - [`create`]: a new resource of a class in a drive (the "New" buttons).
 //! - [`move_resource`]: drag and drop in the drive tree: re-parent and reorder.
 //! - [`notifications`]: the Inbox of the private drive: list, mark read.
+//! - [`files`]: upload a file (a blob and its `File`) and read its bytes.
 //! - [`own_profile`]: this device's agent's profile: read, edit.
 //! - [`presence`]: who is where in a drive: announce this device, list the others.
 //! - [`peer_search`]: looking for this agent's other devices, with retries and
@@ -51,10 +52,12 @@ pub mod activity_status;
 pub mod app_write;
 pub mod chat_rooms;
 pub mod chats;
+pub mod comments;
 pub mod context;
 pub mod conversations;
 pub mod create;
 pub mod embed;
+pub mod files;
 pub mod lists;
 pub mod move_resource;
 pub mod notifications;

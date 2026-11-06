@@ -22,12 +22,17 @@ export interface CallContext {
   stream: MediaStream;
   setPeer: (id: string, patch: PeerState) => void;
   removePeer: (id: string) => void;
+  /** Which transport carries the call: only an SFU call can be recorded. */
+  onTransport?: (transport: 'livekit' | 'mesh') => void;
+  /** Whether the room is being recorded, by anyone (LiveKit tells everyone). */
+  onRecording?: (recording: boolean) => void;
 }
 
 /** A transport joins the call and resolves to its leave function. */
 type Transport = (ctx: CallContext) => Promise<() => void>;
 
-const roomId = (subject: string) => bytesToHex(sha256(utf8ToBytes(subject)));
+export const roomId = (subject: string) =>
+  bytesToHex(sha256(utf8ToBytes(subject)));
 
 /**
  * Peer-to-peer WebRTC mesh (Trystero): peers find each other over public Nostr
@@ -56,6 +61,7 @@ export const joinMesh: Transport = async ctx => {
 
   room.onPeerLeave = ctx.removePeer;
   room.onPeerStream = (stream, peerId) => ctx.setPeer(peerId, { stream });
+  ctx.onTransport?.('mesh');
 
   return () => room.leave();
 };
@@ -103,9 +109,14 @@ export const joinLivekit: Transport = async ctx => {
     .on(RoomEvent.ParticipantConnected, sync)
     .on(RoomEvent.TrackSubscribed, (_t, _pub, p) => sync(p))
     .on(RoomEvent.TrackUnsubscribed, (_t, _pub, p) => sync(p))
-    .on(RoomEvent.ParticipantDisconnected, p => ctx.removePeer(p.identity));
+    .on(RoomEvent.ParticipantDisconnected, p => ctx.removePeer(p.identity))
+    .on(RoomEvent.RecordingStatusChanged, recording =>
+      ctx.onRecording?.(recording),
+    );
 
   await room.connect(url, token);
+  ctx.onTransport?.('livekit');
+  ctx.onRecording?.(!!room.isRecording);
   room.remoteParticipants.forEach(sync);
 
   for (const track of ctx.stream.getTracks()) {

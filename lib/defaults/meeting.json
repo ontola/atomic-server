@@ -43,6 +43,14 @@
     "https://atomicdata.dev/properties/shortname": "meeting-leader"
   },
   {
+    "@id": "https://atomicdata.dev/properties/meetingRecordings",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Recordings of this Meeting's call, oldest first: [{mediaUrl, transcriptUrl?, startedAt, endedAt?}]. mediaUrl is an MP4; transcriptUrl is WebVTT subtitles, which appear some time after the recording ends. Both URLs are unguessable, so anyone who can read the Meeting can watch them.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "meeting-recordings"
+  },
+  {
     "@id": "https://atomicdata.dev/classes/Meeting",
     "https://atomicdata.dev/properties/description": "A prepared or live collaborative meeting with one rich-text agenda, notes, or minutes body and child chat messages.",
     "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Class"],
@@ -52,7 +60,8 @@
       "https://atomicdata.dev/properties/messages",
       "https://atomicdata.dev/properties/meetingStartedAt",
       "https://atomicdata.dev/properties/meetingEndedAt",
-      "https://atomicdata.dev/properties/meetingLeader"
+      "https://atomicdata.dev/properties/meetingLeader",
+      "https://atomicdata.dev/properties/meetingRecordings"
     ],
     "https://atomicdata.dev/properties/requires": ["https://atomicdata.dev/properties/name"],
     "https://atomicdata.dev/properties/shortname": "meeting"

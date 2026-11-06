@@ -161,9 +161,11 @@ pub(crate) async fn drive_resource_exists(store: &atomic_lib::Db) -> bool {
 pub(crate) const RESUME_WS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Connecting to a verified home server: the WS handshake, auth and the drive.
-pub(crate) const HOME_SERVER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+pub(crate) const HOME_SERVER_CONNECT_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(20);
 
-pub(crate) const PEER_SYNC_ATTEMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(22);
+pub(crate) const PEER_SYNC_ATTEMPT_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(22);
 
 pub(crate) const PKARR_RESOLVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12);
 
@@ -232,7 +234,9 @@ pub async fn sync_connectivity_now() -> Result<String, String> {
     serde_json::to_string(&report).map_err(|e| e.to_string())
 }
 
-pub(crate) async fn sync_connectivity_inner(store: &atomic_lib::Db) -> Result<SyncConnectivityReport, String> {
+pub(crate) async fn sync_connectivity_inner(
+    store: &atomic_lib::Db,
+) -> Result<SyncConnectivityReport, String> {
     ensure_sync_connectivity(store).await?;
     let drive = store.get_active_drive().ok_or("No active drive")?;
 
@@ -249,11 +253,15 @@ pub(crate) async fn sync_connectivity_inner(store: &atomic_lib::Db) -> Result<Sy
         .map(str::to_string)
         .collect();
     let drive_ref = drive.as_str();
-    let known = dial_all(&known_ids, PEER_SYNC_ATTEMPT_TIMEOUT, |node_id| async move {
-        atomic_lib::sync::peer::sync_drive_with_peer_if_needed(&node_id, drive_ref, store)
-            .await
-            .map_err(|e| e.to_string())
-    });
+    let known = dial_all(
+        &known_ids,
+        PEER_SYNC_ATTEMPT_TIMEOUT,
+        |node_id| async move {
+            atomic_lib::sync::peer::sync_drive_with_peer_if_needed(&node_id, drive_ref, store)
+                .await
+                .map_err(|e| e.to_string())
+        },
+    );
     let (known, announced) = tokio::join!(known, pkarr_peers(store, drive_ref));
 
     let mut imported: i32 = 0;
@@ -332,7 +340,12 @@ pub(crate) async fn sync_connectivity_inner(store: &atomic_lib::Db) -> Result<Sy
     };
     let failed = live == 0 && imported == 0 && !errors.is_empty();
     let kind = failed.then(|| {
-        if peers_failed { "no_peers_answered" } else { "lookup_failed" }.to_string()
+        if peers_failed {
+            "no_peers_answered"
+        } else {
+            "lookup_failed"
+        }
+        .to_string()
     });
 
     Ok(SyncConnectivityReport {
@@ -361,9 +374,7 @@ where
         async move {
             let result = tokio::time::timeout(per_attempt, attempt)
                 .await
-                .unwrap_or_else(|_| {
-                    Err(format!("timed out after {}s", per_attempt.as_secs()))
-                });
+                .unwrap_or_else(|_| Err(format!("timed out after {}s", per_attempt.as_secs())));
             (id.clone(), result)
         }
     });
@@ -410,7 +421,9 @@ pub(crate) async fn pkarr_peers(store: &atomic_lib::Db, drive: &str) -> PkarrOut
     let node_ids = match lookup {
         Ok(Ok(ids)) if ids.is_empty() => return PkarrOutcome::NoneAnnounced,
         Ok(Ok(ids)) => ids,
-        Ok(Err(e)) => return PkarrOutcome::LookupFailed(format!("Could not look for devices: {e}")),
+        Ok(Err(e)) => {
+            return PkarrOutcome::LookupFailed(format!("Could not look for devices: {e}"))
+        }
         Err(_) => {
             return PkarrOutcome::LookupFailed(
                 "Could not look for devices: the directory (pkarr) timed out".into(),
@@ -580,6 +593,198 @@ pub(crate) async fn follow_listed_drives(home: String) {
     OTHER_DRIVES_RUNNING.store(false, Ordering::SeqCst);
 }
 
+/// When the missing drives were last looked for in the background, and how
+/// many were missing then.
+static LAST_MISSING_CHECK: std::sync::Mutex<Option<(std::time::Instant, usize)>> =
+    std::sync::Mutex::new(None);
+
+/// Looked for again at most this often while the same number is missing: a
+/// listed drive that no device here holds is not dialled for every round.
+pub(crate) const MISSING_DRIVES_RETRY: std::time::Duration = std::time::Duration::from_secs(900);
+
+/// [`follow_listed_drives`] for a device whose personal drive arrived after
+/// sign-in, from a paired device: the sign-in path only follows the listed
+/// drives when the drive is already there, so a second device signed in with
+/// the same secret got the personal drive and none of the drives it lists.
+/// Runs when the personal drive lists a drive this device lacks, and again
+/// for the same set only after [`MISSING_DRIVES_RETRY`].
+///
+/// `store` is the store the peer serves: an app that opened its store as a
+/// handle (OpenMeeting) has no default store, and its missing drives can only
+/// come from the paired devices.
+pub(crate) async fn follow_listed_drives_if_missing(store: atomic_lib::Db) {
+    let is_default = db().is_ok_and(|d| std::sync::Arc::ptr_eq(&d.kv, &store.kv));
+    // The drive in use, else the private drive: it is the one that lists
+    // the others.
+    let home = store
+        .get_active_drive()
+        .filter(|d| store.has_resource_locally(d))
+        .or_else(|| {
+            store
+                .private_drive_subject()
+                .ok()
+                .filter(|d| store.has_resource_locally(d))
+        });
+    let Some(home) = home else {
+        log_check_once(format!(
+            "[home] check: no drive here yet (active {:?}, private {:?})",
+            store.get_active_drive(),
+            store.private_drive_subject().ok()
+        ));
+        return;
+    };
+    let drives = match store.list_drives().await {
+        Ok(drives) => drives,
+        Err(e) => {
+            log_check_once(format!("[home] cannot list drives: {e}"));
+            return;
+        }
+    };
+    let missing = drives
+        .iter()
+        .filter(|d| !same_drive(&d.subject, &home) && !store.has_resource_locally(&d.subject))
+        .count();
+    log_check_once(format!(
+        "[home] check: home {home}, {} drives listed, {missing} missing here: {:?}",
+        drives.len(),
+        drives
+            .iter()
+            .map(|d| format!(
+                "{}{}",
+                &d.subject[..d.subject.len().min(18)],
+                if store.has_resource_locally(&d.subject) {
+                    ""
+                } else {
+                    " (missing)"
+                }
+            ))
+            .collect::<Vec<_>>()
+    ));
+    if !should_look_for_missing(missing, std::time::Instant::now()) {
+        return;
+    }
+    tracing::info!("[home] {missing} listed drives missing here, fetching them");
+    if is_default {
+        follow_listed_drives(home).await;
+        return;
+    }
+    let wanted: Vec<String> = drives
+        .into_iter()
+        .map(|d| d.subject)
+        .filter(|d| !same_drive(d, &home) && !store.has_resource_locally(d))
+        .collect();
+    // Taken once: a redial drops the live link for a moment, and a device
+    // found by the peer search is not in the known list, so asking again per
+    // drive would find no one.
+    let peers = peer_ids_to_try(&Default::default());
+    let mut unreachable: Vec<String> = Vec::new();
+    let mut followed = 0;
+    for drive in &wanted {
+        for node_id in &peers {
+            if unreachable.contains(node_id) {
+                continue;
+            }
+            let attempt = fetch_drive_from_peer(node_id, drive, &store).await;
+            if !matches!(attempt, Ok(Ok(_))) {
+                tracing::info!(
+                    "[home] {drive} at {}: {attempt:?}",
+                    &node_id[..node_id.len().min(12)]
+                );
+            }
+            if attempt.is_err() {
+                // Timed out: not asked again this run, but soon.
+                unreachable.push(node_id.clone());
+            }
+            if store.has_resource_locally(drive) {
+                followed += 1;
+                break;
+            }
+        }
+    }
+    tracing::info!(
+        "[home] other drives: {followed} followed from paired devices, {} not available",
+        wanted.len() - followed
+    );
+    if !unreachable.is_empty() {
+        retry_missing_soon();
+    }
+}
+
+/// A device did not answer in time (asleep, or the link was being rebuilt):
+/// look again in a minute rather than after [`MISSING_DRIVES_RETRY`].
+fn retry_missing_soon() {
+    if let Ok(mut last) = LAST_MISSING_CHECK.lock() {
+        if let Some((at, count)) = *last {
+            let soon = MISSING_DRIVES_RETRY.saturating_sub(std::time::Duration::from_secs(60));
+            *last = Some((at.checked_sub(soon).unwrap_or(at), count));
+        }
+    }
+}
+
+/// Log what the background check found, once per different finding (it runs
+/// every 20 s).
+fn log_check_once(line: String) {
+    static LAST: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+    if let Ok(mut last) = LAST.lock() {
+        if *last != line {
+            tracing::info!("{line}");
+            *last = line;
+        }
+    }
+}
+
+/// Ask `node_id` for `drive`, a drive this device does not hold. A peer
+/// already connected live only streams the drives the link was opened for,
+/// and the plain dial skips a live peer, so for one the link is redialled for
+/// this drive (it goes live again afterwards).
+async fn fetch_drive_from_peer(
+    node_id: &str,
+    drive: &str,
+    store: &atomic_lib::Db,
+) -> Result<atomic_lib::errors::AtomicResult<usize>, tokio::time::error::Elapsed> {
+    let live = atomic_lib::sync::peer::live_peer_ids()
+        .contains(&atomic_lib::sync::peer::normalize_node_id(node_id));
+    tokio::time::timeout(PEER_SYNC_ATTEMPT_TIMEOUT, async {
+        match atomic_lib::sync::peer::endpoint() {
+            Some(endpoint) => {
+                atomic_lib::sync::peer::sync_drive_with_peer_using(
+                    endpoint, node_id, drive, store, live,
+                )
+                .await
+            }
+            None => Err("Iroh peer not started".into()),
+        }
+    })
+    .await
+}
+
+/// Look again on the next check, whatever was missing before: a peer just
+/// connected, so a drive no one had may be there now.
+pub(crate) fn look_for_missing_again() {
+    if let Ok(mut last) = LAST_MISSING_CHECK.lock() {
+        *last = None;
+    }
+}
+
+/// Whether `missing` drives are worth a run now.
+fn should_look_for_missing(missing: usize, now: std::time::Instant) -> bool {
+    let Ok(mut last) = LAST_MISSING_CHECK.lock() else {
+        return false;
+    };
+    if missing == 0 {
+        *last = None;
+        return false;
+    }
+    let due = match *last {
+        Some((at, count)) => count != missing || now.duration_since(at) >= MISSING_DRIVES_RETRY,
+        None => true,
+    };
+    if due {
+        *last = Some((now, missing));
+    }
+    due
+}
+
 /// Every drive the person lists, the one in use included: subscribed to, and
 /// asked (`SYNC`) for what this device lacks of it. A subscription only
 /// brings what happens from then on, and fetching a drive brings its root
@@ -610,7 +815,10 @@ pub(crate) async fn catch_up_listed_drives(home: &str) {
             caught_up += 1;
         }
     }
-    tracing::info!("[home] caught up on {caught_up} of {} drives", subjects.len());
+    tracing::info!(
+        "[home] caught up on {caught_up} of {} drives",
+        subjects.len()
+    );
 }
 
 pub(crate) fn same_drive(a: &str, b: &str) -> bool {
@@ -674,11 +882,7 @@ pub(crate) async fn fetch_other_drive(
         Err(_) => tracing::info!("[home] {drive}: pkarr timed out"),
     }
     for node_id in candidates.into_iter().take(6) {
-        let attempt = tokio::time::timeout(
-            PEER_SYNC_ATTEMPT_TIMEOUT,
-            atomic_lib::sync::peer::sync_drive_with_peer_if_needed(&node_id, &drive, store),
-        )
-        .await;
+        let attempt = fetch_drive_from_peer(&node_id, &drive, store).await;
         match attempt {
             Ok(Ok(_)) if store.has_resource_locally(&drive) => return true,
             Ok(Ok(_)) => {}
@@ -769,5 +973,34 @@ pub async fn wait_for_sync_event() -> String {
     match result {
         Ok(event) => serde_json::to_string(&event).unwrap_or_else(|_| "null".into()),
         Err(_) => "null".into(),
+    }
+}
+
+#[cfg(test)]
+mod missing_drives_tests {
+    use super::*;
+
+    #[test]
+    fn looks_again_only_when_something_changed_or_after_the_retry() {
+        let t0 = std::time::Instant::now();
+        assert!(!should_look_for_missing(0, t0), "nothing missing: no run");
+        assert!(should_look_for_missing(2, t0), "first time two are missing");
+        assert!(!should_look_for_missing(
+            2,
+            t0 + std::time::Duration::from_secs(20)
+        ));
+        assert!(
+            should_look_for_missing(1, t0 + std::time::Duration::from_secs(40)),
+            "one arrived"
+        );
+        assert!(should_look_for_missing(
+            1,
+            t0 + std::time::Duration::from_secs(40) + MISSING_DRIVES_RETRY
+        ));
+        assert!(!should_look_for_missing(0, t0), "all here");
+        assert!(
+            should_look_for_missing(1, t0),
+            "a new one listed after all were here"
+        );
     }
 }

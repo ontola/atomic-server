@@ -13530,3 +13530,33 @@ msgstr "Kon {0} niet bereiken. Controleer of de server op die poort draait."
 #: src/helpers/managed/recovery.ts
 msgid "HTTP {0} from {1}"
 msgstr "HTTP {0} van {1}"
+
+#. 0: author; 1: on
+#. 0: who; 1: on
+#. 0: who; 1: target
+#: src/components/Notifications/MessageNotifier.tsx
+#: src/components/Notifications/NotificationList.tsx
+#: src/views/NotificationPage.tsx
+msgid "{0} mentioned you in {1}"
+msgstr ""
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} mentions of you in {2}"
+msgstr ""
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "<0/> Recording"
+msgstr "<0/> Opname"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "The recording could not be started or stopped."
+msgstr "De opname kon niet starten of stoppen."
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Stop recording"
+msgstr "Opname stoppen"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Record this call"
+msgstr "Dit gesprek opnemen"

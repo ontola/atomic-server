@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'assistant_api.dart';
 import 'resource_view.dart';
-import 'warm_resource_web_view.dart';
+import 'package:atomic_embed/atomic_embed.dart';
 
 /// The "Welcome to Atomic" drive built at the first run, and the document to
 /// open in it.

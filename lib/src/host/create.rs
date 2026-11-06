@@ -52,6 +52,51 @@ pub async fn create_resource_of_class(
     Ok(subject)
 }
 
+/// A `DocumentV2` named `name` under `parent`, its body written from the
+/// Markdown `text` (a template: headings, paragraphs, lists; see
+/// [`crate::document_markdown`]). The editor opens it like a document typed
+/// in the app. Two commits, both signed by the device's agent: the resource,
+/// then its body. Empty `text` leaves the body to the editor.
+pub async fn create_document(
+    node: &AtomicNode,
+    pusher: &dyn LocalWritePusher,
+    parent: &str,
+    name: &str,
+    text: &str,
+) -> AtomicResult<String> {
+    let subject = create_resource_of_class(node, pusher, parent, urls::DOCUMENT_V2, name).await?;
+    if text.trim().is_empty() {
+        return Ok(subject);
+    }
+    let mut doc = node.db().get_resource(&subject.as_str().into()).await?;
+    crate::document_markdown::write_document_text(doc.live_doc()?.doc(), text)?;
+    doc.live_doc()?.commit();
+    let response = node.save_locally(&mut doc).await?;
+    pusher.push(&response).await;
+    Ok(subject)
+}
+
+/// A `DocumentV2` named `name` under `parent` whose body is a copy of the
+/// body of the document `source` (a template the clerk keeps): headings,
+/// lists and text with its marks. Two commits, as [`create_document`].
+pub async fn create_document_from(
+    node: &AtomicNode,
+    pusher: &dyn LocalWritePusher,
+    parent: &str,
+    name: &str,
+    source: &str,
+) -> AtomicResult<String> {
+    let template = node.db().get_resource(&source.into()).await?;
+    let body = template.build_state_doc()?;
+    let subject = create_resource_of_class(node, pusher, parent, urls::DOCUMENT_V2, name).await?;
+    let mut doc = node.db().get_resource(&subject.as_str().into()).await?;
+    crate::document_markdown::copy_document_body(body.doc(), doc.live_doc()?.doc())?;
+    doc.live_doc()?.commit();
+    let response = node.save_locally(&mut doc).await?;
+    pusher.push(&response).await;
+    Ok(subject)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,5 +200,52 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn a_document_from_a_template_has_its_text() {
+        let d = Device::new().await;
+        let text = "# Motie\n\nDe raad, in vergadering bijeen,\n\n## Constaterende dat\n\n- er te weinig bankjes zijn";
+        let subject = create_document(&d.node, &NoPush, &d.drive, "Motie bankjes", text)
+            .await
+            .unwrap();
+        let r = d
+            .store
+            .get_resource(&subject.as_str().into())
+            .await
+            .unwrap();
+        assert_eq!(r.get(urls::NAME).unwrap().to_string(), "Motie bankjes");
+        let body = r.build_state_doc().unwrap().extract_document_plain_text();
+        assert!(body.contains("Constaterende dat"), "{body}");
+        assert!(body.contains("er te weinig bankjes zijn"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn a_document_made_from_another_has_its_body() {
+        let d = Device::new().await;
+        let template = create_document(
+            &d.node,
+            &NoPush,
+            &d.drive,
+            "Sjabloon motie",
+            "# Motie\n\n## Overwegende dat\n\n- **iets** belangrijks",
+        )
+        .await
+        .unwrap();
+        let made = create_document_from(&d.node, &NoPush, &d.drive, "Mijn motie", &template)
+            .await
+            .unwrap();
+        let read = |s: String| {
+            let store = d.store.clone();
+            async move { store.get_resource(&s.as_str().into()).await.unwrap() }
+        };
+        let r = read(made.clone()).await;
+        assert_eq!(r.get(urls::NAME).unwrap().to_string(), "Mijn motie");
+        let body = r.build_state_doc().unwrap().extract_document_plain_text();
+        assert!(body.contains("Overwegende dat"), "{body}");
+        assert!(body.contains("belangrijks"), "{body}");
+        // The template is left as it was.
+        let t = read(template).await;
+        assert_eq!(t.get(urls::NAME).unwrap().to_string(), "Sjabloon motie");
     }
 }

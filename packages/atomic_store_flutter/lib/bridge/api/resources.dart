@@ -9,8 +9,8 @@ import 'error.dart';
 import 'node.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `atomic_to_sub_resource`, `atomic_to_value`, `build`, `global`, `list_to_propvals`, `new_default`, `node`, `parse`, `pin_drive`, `propvals_to_list`, `push`, `pusher`, `scalar`, `sub_resource_to_value`, `value_to_atomic`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `atomic_to_sub_resource`, `atomic_to_value`, `build`, `edit`, `global`, `list_to_propvals`, `new_default`, `node`, `parse`, `pin_drive`, `propvals_to_list`, `push`, `pusher`, `scalar`, `sub_resource_to_value`, `value_to_atomic`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// [`AtomicStore::get_resource_data`] on the default store.
 Future<ResourceData> getResourceData({required String subject}) =>
@@ -97,6 +97,17 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// app's AI sidebar does. Returns the chat's subject.
   Future<String> createAiChat({required String name});
 
+  /// A document named `name` under `parent`, its body written from the
+  /// Markdown `text` (a template). Returns its subject. Pushed like every
+  /// local write.
+  Future<String> createDocument(
+      {required String parent, required String name, required String text});
+
+  /// A document named `name` under `parent` whose body is a copy of the
+  /// document `source` (a template). Returns its subject.
+  Future<String> createDocumentFrom(
+      {required String parent, required String name, required String source});
+
   /// A signed invite for `target` (a drive or any resource): whoever opens
   /// the link `<server>/app/invite?token=<token>` and accepts gets read, or
   /// with `write` read and write, access. Stateless, like `generateInviteToken`
@@ -122,6 +133,9 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// Returns its subject. `values` should include `isA` and `parent`.
   Future<String> createResourceWithValues({required List<PropValue> values});
 
+  /// Remove this agent's own comment `id`.
+  Future<void> deleteComment({required String id});
+
   /// Destroy `subject` and, recursively, its children: a signed destroy
   /// commit by this handle's agent, queued for the server like any write.
   /// [`AtomicError::NotFound`] when this device does not have it.
@@ -133,6 +147,26 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// The drive this handle works in: the one set on it, else the store's
   /// active drive.
   String? drive();
+
+  /// Replace the text of this agent's own comment `id`.
+  Future<void> editComment({required String id, required String text});
+
+  /// Edit the JSON array `property` of `subject` as one signed commit and
+  /// one undo step: `replace` items in place, then `delete` items (by their
+  /// index before the deletes), then `push` items (JSON) at the end. List
+  /// operations, not a replaced array, so edits from other devices merge.
+  /// [`AtomicStore::undo`] takes the edit back.
+  Future<void> editList(
+      {required String subject,
+      required String property,
+      required List<ListReplace> replace,
+      required List<int> delete,
+      required List<String> push});
+
+  /// [`embed_call`] answered from this handle's store, signing as its agent
+  /// and pushing its writes through its own session: for an app that opened
+  /// its store with `AtomicStore.open` instead of `open_db`.
+  Future<String> embedCall({required String method, required String argsJson});
 
   /// Get a conversation onto this device and follow it: fetched from the
   /// connected server when missing, and its new messages arrive over the open
@@ -267,6 +301,21 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// Writes through this handle go out over it from now on.
   Future<void> openWsSync({required String serverOrigin});
 
+  /// Comment `text` (markdown; mentions as `[@id="<subject>" label="<name>"]`)
+  /// on `about` as this device's agent, as the web app's comment panel does.
+  /// It lands in the `Comments` folder of `drive` (the drive of `about` when
+  /// `None`), so that drive's readers read it. `reply_to` is the `id` of the
+  /// comment answered. `anchor` places it at a spot in `about` (a W3C Web
+  /// Annotation `FragmentSelector` value; for a PDF an RFC 3778 fragment
+  /// such as `page=3&viewrect=120,300,0,0`); `readComments` gives it back.
+  /// Returns the comment's id (`<page>#<key>`).
+  Future<String> postComment(
+      {required String about,
+      String? drive,
+      required String text,
+      String? replyTo,
+      String? anchor});
+
   /// The profile of the signing agent: what the store holds, else what the
   /// connected server has.
   Future<ProfileInfo> profile();
@@ -309,6 +358,13 @@ abstract class AtomicStore implements RustOpaqueInterface {
   Future<String> readChatRoomPage(
       {required String subject, String? before, required int limit});
 
+  /// The comments about `about` (every comment, when `None`), in `drive` or in
+  /// every drive this store holds, oldest first, as JSON `[{id, page, drive,
+  /// about, author, mine, text, c, reply_to?, edited?, mentions}]`. `drive` of
+  /// a comment is the drive its page lives in: who can read it. Read from the
+  /// local store, never waiting on the network.
+  Future<String> readComments({String? about, String? drive});
+
   /// The messages of a conversation, oldest first, as JSON `[{id, author,
   /// author_name, mine, text, c, reply_to?}]`: `id` the message's subject,
   /// `author` who signed it (an agent subject), `author_name` their name (the
@@ -327,6 +383,14 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// as [`read_conversation`] gives them; only the window is decrypted.
   Future<String> readConversationPage(
       {required String subject, String? before, required int limit});
+
+  /// The bytes of the File `file`, when this store holds them (uploaded
+  /// here, or synced in from a device or the server); `None` while they
+  /// have not arrived.
+  Future<Uint8List?> readFile({required String file});
+
+  /// Do again what [`AtomicStore::undo`] took back on `subject`.
+  Future<bool> redo({required String subject});
 
   /// Forget a paired device.
   void removeKnownPeer({required String nodeId});
@@ -428,6 +492,22 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// Sync this handle's drive with every paired and every connected device,
   /// at once, each bounded in time. Starts the peer when needed.
   Future<PeersSyncOutcome> syncWithPeers();
+
+  /// Take back this handle's last [`AtomicStore::edit_list`] on `subject`
+  /// (not another device's), as a signed commit like any edit. False when
+  /// there is nothing to undo, also after the app restarted.
+  Future<bool> undo({required String subject});
+
+  /// Keep `bytes` as a blob (named by its BLAKE3 hash) and create a `File`
+  /// for them under `parent`, as the web app does: the data browser shows
+  /// and opens it, and the server takes the blob on the next sync
+  /// (downloadable at `<server>/download/files/<hash>`). At most 64 MB.
+  /// Returns the File's subject.
+  Future<String> uploadFile(
+      {required String parent,
+      required String filename,
+      required String mimetype,
+      required List<int> bytes});
 
   /// Wait until `subject` changes or is destroyed, or `timeout_ms` passes.
   /// Call it in a loop (re-reading the resource on `Changed`) to watch a
@@ -531,6 +611,31 @@ enum Datatype {
   /// document, an unknown datatype); `unsupported_datatype` names it.
   unsupported,
   ;
+}
+
+/// One item of a JSON array property put in place of the item at `index`
+/// ([`AtomicStore::edit_list`]).
+class ListReplace {
+  final int index;
+
+  /// The new item, as JSON.
+  final String item;
+
+  const ListReplace({
+    required this.index,
+    required this.item,
+  });
+
+  @override
+  int get hashCode => index.hashCode ^ item.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ListReplace &&
+          runtimeType == other.runtimeType &&
+          index == other.index &&
+          item == other.item;
 }
 
 /// One property of a resource.

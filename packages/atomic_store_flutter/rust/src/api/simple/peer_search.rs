@@ -1,9 +1,9 @@
 //! The bridge's binding of `atomic_lib::host::peer_search`: pkarr is the
 //! directory, Iroh the dialer, the global store the drives.
 
-use atomic_lib::host::peer_search::{PeerDialer, PeerDirectory, PeerSearch, PeerSearchSchedule};
 use super::directory;
 use async_trait::async_trait;
+use atomic_lib::host::peer_search::{PeerDialer, PeerDirectory, PeerSearch, PeerSearchSchedule};
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
@@ -14,6 +14,10 @@ pub(crate) static PEER_SEARCH: LazyLock<Arc<PeerSearch>> =
 /// A record entry has a 300 s TTL and every device rewrites the record: ten
 /// minutes keeps this device in it without writing on every round.
 const ANNOUNCE_EVERY: Duration = Duration::from_secs(600);
+
+/// How often the background check for listed drives that are missing here
+/// runs; cheap (local reads) unless something is missing.
+const MISSING_DRIVES_EVERY: Duration = Duration::from_secs(20);
 
 struct PkarrDirectory;
 
@@ -62,8 +66,13 @@ impl PeerDialer for IrohDialer {
                 super::PEER_SYNC_ATTEMPT_TIMEOUT.as_secs()
             )
         })?
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+        // What the peer brought may be the personal drive, listing drives
+        // this device does not hold yet.
+        tokio::spawn(super::sync::follow_listed_drives_if_missing(
+            self.store.clone(),
+        ));
+        Ok(())
     }
 
     fn live(&self) -> Vec<String> {
@@ -113,6 +122,8 @@ pub(crate) fn spawn(store: atomic_lib::Db, me: String) {
         return;
     }
     let drives_store = store.clone();
+    let check_store = store.clone();
+    let joined_store = store.clone();
     tokio::spawn(PEER_SEARCH.clone().run(
         me,
         move || search_drives(&drives_store),
@@ -120,10 +131,27 @@ pub(crate) fn spawn(store: atomic_lib::Db, me: String) {
         Arc::new(IrohDialer { store }),
         ANNOUNCE_EVERY,
     ));
-    tokio::spawn(async {
+    // The personal drive can also arrive on a live peer stream, without a
+    // dial: look every so often whether it lists drives still missing here.
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(MISSING_DRIVES_EVERY).await;
+            if !PEER_SEARCH.is_paused() {
+                super::sync::follow_listed_drives_if_missing(check_store.clone()).await;
+            }
+        }
+    });
+    tokio::spawn(async move {
         let mut count = atomic_lib::sync::peer::live_peer_count();
         loop {
             let now = atomic_lib::sync::peer::wait_for_peer_count_change(count).await;
+            if now > count {
+                // A device came online: it may hold the drives missing here.
+                super::sync::look_for_missing_again();
+                tokio::spawn(super::sync::follow_listed_drives_if_missing(
+                    joined_store.clone(),
+                ));
+            }
             if now < count {
                 tracing::info!("[peer_search] live peers {count} → {now}, searching again");
                 search_again_now();

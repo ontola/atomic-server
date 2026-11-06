@@ -26,8 +26,8 @@ import 'search_screen.dart';
 import 'new_document_sheet.dart' show warmDriveVisits;
 import 'native_views.dart';
 import 'warm_resource_web_view.dart';
-import 'meeting_call.dart';
-import 'meeting_call_overlay.dart';
+import 'package:atomic_embed/atomic_embed.dart'
+    show MeetingCall, MeetingCallOverlay;
 import 'slide_back_route.dart';
 import 'home_sections.dart' show HomeSection, HomeSectionEntry;
 import 'list_and_field.dart' show readableHorizontalPadding;
@@ -704,7 +704,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final ShellController _shell =
       ShellController(drive: widget.drive, profile: widget.profile);
   late final _TopObserver _observer = _TopObserver(_shell);
-  late final MeetingCall _call = MeetingCall(api: widget.api);
+  late final MeetingCall _call = MeetingCall(call: widget.api.embedCall);
 
   /// The home keeps its state wherever it is shown: as the first page, or in
   /// the list pane next to the pages.

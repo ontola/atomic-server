@@ -13530,3 +13530,33 @@ msgstr "Could not reach {0}. Check that the server is running on that port."
 #: src/helpers/managed/recovery.ts
 msgid "HTTP {0} from {1}"
 msgstr "HTTP {0} from {1}"
+
+#. 0: author; 1: on
+#. 0: who; 1: on
+#. 0: who; 1: target
+#: src/components/Notifications/MessageNotifier.tsx
+#: src/components/Notifications/NotificationList.tsx
+#: src/views/NotificationPage.tsx
+msgid "{0} mentioned you in {1}"
+msgstr "{0} mentioned you in {1}"
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} mentions of you in {2}"
+msgstr "{0}: {1} mentions of you in {2}"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "<0/> Recording"
+msgstr "<0/> Recording"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "The recording could not be started or stopped."
+msgstr "The recording could not be started or stopped."
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Stop recording"
+msgstr "Stop recording"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Record this call"
+msgstr "Record this call"

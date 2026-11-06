@@ -4,10 +4,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import 'assistant_api.dart';
 import 'call_permissions.dart';
-import 'resource_view.dart';
-import 'warm_resource_web_view.dart';
+import 'document_view.dart' show EmbedStoreCall;
+import 'embed_page.dart';
+import 'embed_server.dart';
 
 /// The audio/video call of a meeting, in a web view of its own.
 ///
@@ -20,11 +20,12 @@ import 'warm_resource_web_view.dart';
 /// [MeetingCallOverlay] shows the call as a floating tile over every screen.
 class MeetingCall extends ChangeNotifier {
   MeetingCall({
-    required this.api,
+    required this.call,
     this.permissions = const SystemCallPermissions(),
   });
 
-  final AssistantApi api;
+  /// Answers the page's store calls, for example `AtomicStore.embedCall`.
+  final EmbedStoreCall call;
 
   /// The device's microphone and camera, asked for when the page wants them.
   final CallPermissions permissions;
@@ -84,7 +85,7 @@ class MeetingCall extends ChangeNotifier {
       void onMessage(String m) => _onMessage(generation, booting, m);
       final WarmPage page;
       if (factory == null) {
-        final server = await ResourceView.serverFactory();
+        final server = await EmbedServer.instance();
         if (generation != _generation) return;
         page = await WebViewEmbedPage.create(
           server.page.replace(queryParameters: params),
@@ -168,7 +169,7 @@ class MeetingCall extends ChangeNotifier {
     'joinCall',
   };
 
-  /// A call of the page: the store's reads and writes go through [api]; its
+  /// A call of the page: the store's reads and writes go through [call]; its
   /// Leave button ends the call.
   Future<void> _onMessage(
       int generation, WarmPage? page, String message) async {
@@ -190,8 +191,7 @@ class MeetingCall extends ChangeNotifier {
       try {
         final answer = _acknowledged.contains(method)
             ? 'false'
-            : await api.embedCall(
-                method, jsonEncode(request['args'] ?? const []));
+            : await call(method, jsonEncode(request['args'] ?? const []));
         reply = 'true,${jsonEncode(answer)}';
       } catch (e) {
         reply = 'false,${jsonEncode('$e')}';

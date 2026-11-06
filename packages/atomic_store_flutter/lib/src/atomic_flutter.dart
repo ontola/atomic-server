@@ -218,6 +218,37 @@ class AtomicNode implements AtomicParts {
   @override
   final Store store;
 
+  /// A document (`DocumentV2`) called [name] under [parent], its body written
+  /// from the Markdown [text], such as a template. Returns its subject.
+  Future<String> createDocument(
+      {required String parent, required String name, String text = ''}) async {
+    try {
+      return await handle.createDocument(parent: parent, name: name, text: text);
+    } on bridge.AtomicError catch (e) {
+      throw storeExceptionFromBridge(e);
+    }
+  }
+
+  /// A document called [name] under [parent] whose body is a copy of the
+  /// document [source], such as a template. Returns its subject.
+  Future<String> createDocumentFrom(
+      {required String parent,
+      required String name,
+      required String source}) async {
+    try {
+      return await handle.createDocumentFrom(
+          parent: parent, name: name, source: source);
+    } on bridge.AtomicError catch (e) {
+      throw storeExceptionFromBridge(e);
+    }
+  }
+
+  /// One call of the embedded web renderer's page (`AtomicDocumentView` of
+  /// `atomic_embed`), answered from this node's store and signed by its
+  /// agent: pass it as the view's `call`.
+  Future<String> embedCall(String method, String argsJson) =>
+      handle.embedCall(method: method, argsJson: argsJson);
+
   final AgentSecretStore _secrets;
   final String _secretKey;
   final bool _autoPeers;

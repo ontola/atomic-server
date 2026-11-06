@@ -437,6 +437,72 @@ impl AtomicStore {
         .map_err(AtomicError::from)
     }
 
+    // ── Comments on any resource ─────────────────────────────────────────────
+
+    /// The comments about `about` (every comment, when `None`), in `drive` or in
+    /// every drive this store holds, oldest first, as JSON `[{id, page, drive,
+    /// about, author, mine, text, c, reply_to?, edited?, mentions}]`. `drive` of
+    /// a comment is the drive its page lives in: who can read it. Read from the
+    /// local store, never waiting on the network.
+    pub async fn read_comments(
+        &self,
+        about: Option<String>,
+        drive: Option<String>,
+    ) -> Result<String, AtomicError> {
+        json(
+            &atomic_lib::host::comments::read_comments(
+                &self.db,
+                about.as_deref(),
+                drive.as_deref(),
+            )
+            .await
+            .map_err(AtomicError::from)?,
+        )
+    }
+
+    /// Comment `text` (markdown; mentions as `[@id="<subject>" label="<name>"]`)
+    /// on `about` as this device's agent, as the web app's comment panel does.
+    /// It lands in the `Comments` folder of `drive` (the drive of `about` when
+    /// `None`), so that drive's readers read it. `reply_to` is the `id` of the
+    /// comment answered. `anchor` places it at a spot in `about` (a W3C Web
+    /// Annotation `FragmentSelector` value; for a PDF an RFC 3778 fragment
+    /// such as `page=3&viewrect=120,300,0,0`); `readComments` gives it back.
+    /// Returns the comment's id (`<page>#<key>`).
+    pub async fn post_comment(
+        &self,
+        about: String,
+        drive: Option<String>,
+        text: String,
+        reply_to: Option<String>,
+        anchor: Option<String>,
+    ) -> Result<String, AtomicError> {
+        atomic_lib::host::comments::post_comment(
+            &self.node(),
+            self.pusher().as_ref(),
+            &about,
+            drive.as_deref(),
+            &text,
+            reply_to.as_deref(),
+            anchor.as_deref(),
+        )
+        .await
+        .map_err(AtomicError::from)
+    }
+
+    /// Replace the text of this agent's own comment `id`.
+    pub async fn edit_comment(&self, id: String, text: String) -> Result<(), AtomicError> {
+        atomic_lib::host::comments::edit_comment(&self.node(), self.pusher().as_ref(), &id, &text)
+            .await
+            .map_err(AtomicError::from)
+    }
+
+    /// Remove this agent's own comment `id`.
+    pub async fn delete_comment(&self, id: String) -> Result<(), AtomicError> {
+        atomic_lib::host::comments::delete_comment(&self.node(), self.pusher().as_ref(), &id)
+            .await
+            .map_err(AtomicError::from)
+    }
+
     /// Full-text search (type-ahead on the last word) across every drive of this
     /// store, or only in `drive` when given. JSON
     /// `[{subject, title, class_name, drive, score}]`, best first; `drive` is the
@@ -522,6 +588,45 @@ impl AtomicStore {
             &drive,
             &class_url,
             &name,
+        )
+        .await
+        .map_err(AtomicError::from)
+    }
+
+    /// A document named `name` under `parent`, its body written from the
+    /// Markdown `text` (a template). Returns its subject. Pushed like every
+    /// local write.
+    pub async fn create_document(
+        &self,
+        parent: String,
+        name: String,
+        text: String,
+    ) -> Result<String, AtomicError> {
+        atomic_lib::host::create::create_document(
+            &self.node(),
+            self.pusher().as_ref(),
+            &parent,
+            &name,
+            &text,
+        )
+        .await
+        .map_err(AtomicError::from)
+    }
+
+    /// A document named `name` under `parent` whose body is a copy of the
+    /// document `source` (a template). Returns its subject.
+    pub async fn create_document_from(
+        &self,
+        parent: String,
+        name: String,
+        source: String,
+    ) -> Result<String, AtomicError> {
+        atomic_lib::host::create::create_document_from(
+            &self.node(),
+            self.pusher().as_ref(),
+            &parent,
+            &name,
+            &source,
         )
         .await
         .map_err(AtomicError::from)

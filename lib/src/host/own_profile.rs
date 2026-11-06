@@ -8,11 +8,8 @@
 //! host's [`LocalWritePusher`], like every other local edit. It builds on the
 //! stored state, so the Loro history the resource has here is kept.
 
-use super::{own_commit_opts, profiles::AgentProfiles, LocalWritePusher};
-use crate::{
-    commit::CommitBuilder, errors::AtomicResult, runtime::AtomicNode, urls, Commit, Db, Resource,
-    Storelike, Value,
-};
+use super::{profiles::AgentProfiles, LocalWritePusher};
+use crate::{errors::AtomicResult, runtime::AtomicNode, urls, Db, Resource, Storelike, Value};
 use serde_json::{json, Map, Value as Json};
 
 /// The agent's picture: a File resource (what the web app's profile editor
@@ -299,40 +296,7 @@ pub async fn upload_own_picture(
         "" => "profile-picture",
         f => f,
     };
-    let store = node.db();
-    let agent = store.get_default_agent()?;
-    let hash = blake3::hash(bytes);
-    let hex = hash.to_hex().to_string();
-    store.put_blob(hash.as_bytes(), bytes).await?;
-
-    let mut builder = CommitBuilder::new("placeholder".into());
-    builder.set(
-        urls::IS_A.into(),
-        Value::ResourceArray(vec![urls::FILE.into()]),
-    );
-    builder.set(urls::PARENT.into(), Value::AtomicUrl(drive.into()));
-    builder.set(urls::FILENAME.into(), Value::String(filename.into()));
-    builder.set(urls::FILESIZE.into(), Value::Integer(bytes.len() as i64));
-    builder.set(urls::MIMETYPE.into(), Value::String(mimetype));
-    builder.set(urls::INTERNAL_ID.into(), Value::String(hex.clone()));
-    builder.set(
-        urls::BLOB.into(),
-        Value::AtomicUrl(crate::identifiers::blob_subject(&hex).into()),
-    );
-    if let Some(origin) = origin.filter(|o| o.starts_with("http")) {
-        builder.set(
-            urls::DOWNLOAD_URL.into(),
-            Value::String(format!(
-                "{}/download/files/{hex}",
-                origin.trim_end_matches('/')
-            )),
-        );
-    }
-    let commit = Commit::create_did(builder, &agent, store).await?;
-    let subject = commit.subject.to_string();
-    let response = node.apply_local_commit(commit, &own_commit_opts()).await?;
-    pusher.push(&response).await;
-    Ok(subject)
+    super::files::upload_file(node, pusher, drive, origin, filename, &mimetype, bytes).await
 }
 
 /// Save the agent's own profile: `name` (required), `description` (empty

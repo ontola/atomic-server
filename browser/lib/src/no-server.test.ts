@@ -11,6 +11,7 @@ import { createApp } from './plugin-app.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import { Store } from './store.js';
+import { LoroLoader } from './loro-loader.js';
 
 const AGENT = 'atomic:agent:pZyZYvKoOcwczHXJoYvYctgrHXn2pZ7qfeWMyoUfQ_8';
 const DRIVE =
@@ -190,5 +191,95 @@ describe('a store with no server (the embedded renderer)', () => {
     });
 
     expect(created.app).toBeTruthy();
+  });
+});
+
+describe('a document read before Loro has loaded', () => {
+  it('keeps its body, which is in no JSON property', async () => {
+    await LoroLoader.initializeLoro();
+    const { LoroDoc, LoroList, LoroMap } = LoroLoader.Loro;
+    const subject = 'atomic:a-document-with-a-body';
+
+    // What the host stores: the properties, and the body in the same doc.
+    const source = new LoroDoc();
+    source.getMap('properties').set(core.properties.name, 'Motie');
+    const body = source.getMap('doc');
+    body.set('nodeName', 'doc');
+    const paragraph = body
+      .setContainer('children', new LoroList())
+      .insertContainer(0, new LoroMap());
+    paragraph.set('nodeName', 'paragraph');
+    source.commit();
+    const snapshot = Buffer.from(source.export({ mode: 'snapshot' })).toString(
+      'base64',
+    );
+    const jsonAd = JSON.stringify({
+      '@id': subject,
+      [core.properties.name]: 'Motie',
+    });
+
+    const channel: NativeChannel = {
+      async call(method, args) {
+        switch (method) {
+          case 'init':
+            return true;
+          case 'getResourcesWithSnapshots':
+            return (args[0] as string[]).map(s =>
+              s === subject
+                ? { jsonAd, snapshot }
+                : { jsonAd: null, snapshot: null },
+            );
+          case 'outboxEntries':
+            return [];
+          default:
+            return null;
+        }
+      },
+    };
+    const db = new NativeClientDb(channel);
+    const store = new Store({
+      serverUrl: 'https://embed.invalid',
+      connect: false,
+      noServer: true,
+      agent: new Agent(new NativeCryptoProvider(channel), AGENT),
+      commitTransport: db.commitTransport,
+    });
+    store.setClientDb(db as unknown as ClientDbWorker);
+    await db.waitForInit();
+
+    // The page's lazy `loro-crdt` import has not landed yet.
+    const loader = LoroLoader as unknown as {
+      _Loro: unknown;
+      _readyListeners: Set<() => void>;
+    };
+    const loaded = loader._Loro;
+    loader._Loro = undefined;
+
+    // What `initializeLoro` does when the import lands.
+    const land = () => {
+      loader._Loro = loaded;
+
+      const ready = [...loader._readyListeners];
+      loader._readyListeners.clear();
+      ready.forEach(cb => cb());
+    };
+
+    try {
+      store.getResourceLoading(subject);
+      const resource = await store.getResource(subject);
+      land();
+
+      // The editor would find an empty doc here, and save that.
+      expect(resource.getLoroDoc()!.getMap('doc').get('nodeName')).toBe('doc');
+      expect(
+        (
+          resource.getLoroDoc()!.getMap('doc').toJSON() as {
+            children: unknown[];
+          }
+        ).children,
+      ).toHaveLength(1);
+    } finally {
+      loader._Loro ??= loaded;
+    }
   });
 });

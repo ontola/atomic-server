@@ -1,4 +1,3 @@
-import 'package:atomic_flutter/atomic_flutter.dart' show AppColorsExt;
 import 'package:flutter/material.dart';
 
 import 'meeting_call.dart';
@@ -37,7 +36,7 @@ class _CallView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.appColors;
+    final c = Theme.of(context).colorScheme;
     final room = MediaQuery.sizeOf(context);
     final pad = MediaQuery.paddingOf(context);
     final Rect rect;
@@ -65,8 +64,8 @@ class _CallView extends StatelessWidget {
       child: Material(
         key: const ValueKey('meeting-call'),
         elevation: full ? 0 : 8,
-        color: c.bgBody,
-        shadowColor: c.panelShadow,
+        color: c.surface,
+        shadowColor: c.shadow,
         borderRadius: BorderRadius.circular(full ? 0 : 12),
         clipBehavior: Clip.antiAlias,
         child: Stack(fit: StackFit.expand, children: [
@@ -104,7 +103,7 @@ class _CallView extends StatelessWidget {
                 key: const ValueKey('meeting-call-leave'),
                 tooltip: 'Leave call',
                 icon: Icons.call_end,
-                color: c.alert,
+                color: c.error,
                 onPressed: call.leave,
               ),
             ]),

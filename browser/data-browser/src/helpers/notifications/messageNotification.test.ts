@@ -5,6 +5,7 @@ import {
   classifyMessage,
   entryFacts,
   isCandidate,
+  mentionedIn,
   type MessageContext,
   type MessageFacts,
 } from './messageNotification';
@@ -42,6 +43,31 @@ describe('message notifications', () => {
   it('gives a burst of messages in one place the same bubble', () => {
     expect(bubbleId(ROOM)).toBe(bubbleId(ROOM));
     expect(bubbleId(ROOM)).not.toBe(bubbleId(DOC));
+  });
+
+  it('announces a mention of me before anything else', () => {
+    const text = `Zie [@id="${ME}" label="Ik"] en [@ id="${THEM}" label="Zij"]`;
+
+    expect(mentionedIn(text)).toEqual([ME, THEM]);
+    expect(
+      classifyMessage(msg({ about: DOC, replyTo: MY_MSG, text }), ctx),
+    ).toMatchObject({ kind: 'mention', target: DOC, openComments: true });
+    expect(
+      classifyMessage(
+        msg({ parent: ROOM, text: 'geen [@id="x" label="X"]' }),
+        ctx,
+      ),
+    ).toMatchObject({ kind: 'chat' });
+  });
+
+  it('reads the text of a log entry', () => {
+    const facts = entryFacts('p', { about: DOC }, 'k', {
+      a: THEM,
+      c: START + 1,
+      t: `[@id="${ME}" label="Ik"]`,
+    });
+
+    expect(classifyMessage(facts, ctx)?.kind).toBe('mention');
   });
 
   it('announces a new message in a chat room', () => {

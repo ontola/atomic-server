@@ -108,6 +108,36 @@ pub struct CommitApplied {
     pub entry_changes: Vec<crate::chat_log::EntryChange>,
 }
 
+/// Sets `drive` from the parent's drive at genesis and whenever `parent`
+/// changed: `drive` is a rights shortcut and the scope of the query index and
+/// of sync, so it must follow the resource when it moves to another drive.
+/// Leaves it as it is when the parent is not on this node.
+async fn derive_drive(
+    store: &impl Storelike,
+    applied: &mut CommitApplied,
+    is_new: bool,
+) -> AtomicResult<()> {
+    let parent_changed = applied.changed_props.iter().any(|p| p == urls::PARENT);
+    if !(is_new || parent_changed) {
+        return Ok(());
+    }
+    let Ok(parent_val) = applied.resource_new.get(urls::PARENT) else {
+        return Ok(());
+    };
+    let parent_subject = crate::Subject::from(parent_val.to_string());
+    if let Ok(parent_res) = store.get_resource(&parent_subject).await {
+        let drive = match parent_res.get(urls::DRIVE_PROP) {
+            Ok(d) => d.to_string(),
+            Err(_) => parent_subject.to_string(),
+        };
+        applied.resource_new.set_unsafe(
+            urls::DRIVE_PROP.into(),
+            crate::values::Value::AtomicUrl(drive.into()),
+        )?;
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 /// Describes options for applying a Commit.
 /// Skip the checks you don't need to get better performance, or if you want to break the rules a little.
@@ -1258,26 +1288,7 @@ impl Commit {
             // guest replying in a drive shared with them — which the commit fan-out
             // needs in order to route to the owning drive's subscribers. See
             // planning/commit-fanout-drive-isolation.md.
-            let parent_changed = applied.changed_props.iter().any(|p| p == urls::PARENT);
-
-            if is_new || parent_changed {
-                if let Ok(parent_val) = applied.resource_new.get(urls::PARENT) {
-                    let parent_subject = crate::Subject::from(parent_val.to_string());
-
-                    // If the parent isn't materialized here we cannot derive the
-                    // drive. Leave whatever was stamped rather than clearing it.
-                    if let Ok(parent_res) = store.get_resource(&parent_subject).await {
-                        let drive = match parent_res.get(urls::DRIVE_PROP) {
-                            Ok(d) => d.to_string(),
-                            Err(_) => parent_subject.to_string(),
-                        };
-                        applied.resource_new.set_unsafe(
-                            urls::DRIVE_PROP.into(),
-                            crate::values::Value::AtomicUrl(drive.into()),
-                        )?;
-                    }
-                }
-            }
+            derive_drive(store, &mut applied, is_new).await?;
 
             // Managed admission gate. No-op under the default OpenPolicy, so
             // self-hosted / FOSS is unaffected. On a managed node, the drive this
@@ -1344,6 +1355,12 @@ impl Commit {
                     }
                 }
             }
+        } else {
+            // Applied without rights checks (this device's own writes, peer
+            // commits): `drive` still has to follow `parent`, or a resource
+            // moved to another drive stays indexed, listed and synced under the
+            // old one.
+            derive_drive(store, &mut applied, is_new).await?;
         };
         // Check if all required props are there
         if opts.validate_schema {

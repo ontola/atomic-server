@@ -19,6 +19,25 @@ fn store_key(store: &atomic_lib::Db) -> usize {
     std::sync::Arc::as_ptr(&store.kv) as *const () as usize
 }
 
+/// Whether `store` is the one the process's peer serves (its live links,
+/// paired devices and reconcile). Before a peer started, the default store
+/// is, as `start_peer` starts it for that one.
+pub(crate) fn serves_peers(store: &atomic_lib::Db) -> bool {
+    let default = state::db()
+        .map(|d| std::sync::Arc::ptr_eq(&d.kv, &store.kv))
+        .unwrap_or(false);
+    is_peer_store(PEER_STORE.get().copied(), store_key(store), default)
+}
+
+/// [`serves_peers`] by store key: the bound store when a peer runs, else
+/// the default store.
+pub(crate) fn is_peer_store(bound: Option<usize>, store: usize, default: bool) -> bool {
+    match bound {
+        Some(peer) => peer == store,
+        None => default,
+    }
+}
+
 /// Whether a store with the key `store` may use the peer that serves `bound`.
 pub(crate) fn peer_serves(bound: Option<usize>, store: usize) -> Result<(), String> {
     match bound {

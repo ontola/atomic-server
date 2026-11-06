@@ -9,6 +9,8 @@ environment:
 dependencies:
   atomic_flutter:
     path: ../atomic_flutter
+  atomic_embed:
+    path: ../atomic_embed
   flutter:
     sdk: flutter
   flutter_svg: ^2.2.0

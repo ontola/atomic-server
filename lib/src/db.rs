@@ -1908,12 +1908,16 @@ impl Db {
     /// Falls back to the active drive if the agent resource has no `drives` property.
     pub async fn list_drives(&self) -> AtomicResult<Vec<DriveInfo>> {
         let agent = self.get_default_agent()?;
-        let agent_resource = self.get_resource(&agent.subject).await?;
+        // A device signed in with the secret of another one may not hold the
+        // agent yet; the private home below still lists the drives then.
+        let agent_resource = self.get_resource(&agent.subject).await.ok();
 
         // Keep legacy Agent.drives entries, then include the private home where
         // create_drive records new drives. Read both during the migration.
-        let mut subjects = match agent_resource.get(urls::DRIVES) {
-            Ok(Value::ResourceArray(arr)) => arr.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+        let mut subjects = match agent_resource.as_ref().map(|a| a.get(urls::DRIVES)) {
+            Some(Ok(Value::ResourceArray(arr))) => {
+                arr.iter().map(|s| s.to_string()).collect::<Vec<_>>()
+            }
             _ => vec![],
         };
         if let Ok(personal) = self.private_drive_subject() {

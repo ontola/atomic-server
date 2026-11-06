@@ -91,6 +91,8 @@ function headline(
   on: string,
 ) {
   switch (kind) {
+    case 'mention':
+      return `${author} mentioned you in ${on}`;
     case 'reply':
       return `${author} replied to you`;
     case 'comment':
