@@ -27,8 +27,8 @@ describe('buildFeedbackDiagnostics', () => {
       server: 'http://localhost:9883',
       connected: true,
       outboxSize: 0,
-      blocked: 0,
-      failures: 0,
+      outboxBlocked: 0,
+      outboxMaxFailures: 0,
       capabilityCount: 2,
       canonicalScheme: true,
       capabilities: 'canonical-scheme,get-many',
@@ -61,7 +61,7 @@ describe('buildFeedbackDiagnostics', () => {
       canonicalScheme: false,
       capabilityCount: 0,
       outboxSize: 4,
-      failures: 7,
+      outboxMaxFailures: 7,
     });
   });
 
@@ -136,7 +136,7 @@ describe('diagnostics on every Sentry event', () => {
       server: 'own',
       connected: false,
       outboxSize: 1,
-      failures: 3,
+      outboxMaxFailures: 3,
     });
 
     const feedback = await report(() =>

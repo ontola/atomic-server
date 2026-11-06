@@ -13517,8 +13517,8 @@ msgstr "HTTP {0} dari {1}"
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Technical details about your setup (app version, server address and status) are attached. Remove private information before sending."
-msgstr ""
+msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan kesalahan, serta deskripsi dan email opsional Anda kepada tim Atomic melalui Sentry. Lampiran, payload alat, dan penalaran tidak disertakan. Detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server) disertakan. Hapus informasi pribadi sebelum mengirim."
 
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
-msgstr ""
+msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."

@@ -13519,8 +13519,8 @@ msgstr "HTTP {0} de {1}"
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Technical details about your setup (app version, server address and status) are attached. Remove private information before sending."
-msgstr ""
+msgstr "Al pulsar Enviar informe compartes con el equipo de Atomic, mediante Sentry, el texto del chat revisado, los mensajes de error y tu descripción y correo opcionales. Se excluyen los archivos adjuntos, los datos de las herramientas y el razonamiento. Se adjuntan detalles técnicos de tu configuración (versión de la app, dirección y estado del servidor). Elimina la información privada antes de enviarlo."
 
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
-msgstr ""
+msgstr "Informa de un error o sugiere una mejora. Tu mensaje y tu correo opcional se envían al equipo de Atomic mediante Sentry, junto con detalles técnicos de tu configuración (versión de la app, dirección y estado del servidor). No incluyas contenido privado del espacio de trabajo."

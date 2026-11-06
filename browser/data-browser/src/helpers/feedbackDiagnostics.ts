@@ -65,8 +65,8 @@ export function buildFeedbackDiagnostics(
     // Same keys as a repeated commit failure report.
     connected: input.connected,
     outboxSize: input.outboxSize,
-    blocked: input.outboxBlocked,
-    failures: input.outboxFailures,
+    outboxBlocked: input.outboxBlocked,
+    outboxMaxFailures: input.outboxFailures,
     capabilityCount: input.capabilities.length,
     canonicalScheme: input.capabilities.includes('canonical-scheme'),
     capabilities: input.capabilities
