@@ -10,7 +10,7 @@ This document might not be entirely up to date. If you need anything that is not
 
 ## Table grid
 
-- `@tomic/table` (`browser/table`) owns the virtual grid, selection/context and primitive editors. Data Browser callers use the `chunks/TableEditor` compatibility entry so application control locks and loading UI are supplied by `AtomicTable`. Resource queries, formatting, permissions and saved views stay in the host.
+- `@tomic/table` (`browser/table`) owns the virtual grid, selection/context and primitive editors. Data Browser callers use the `chunks/TableEditor` compatibility entry so application control locks and loading UI are supplied by `AtomicTable`. Its `ViewTab`, `ViewTabsBar`, `ViewTabList` and `ViewTabActions` also own saved-view tab presentation and inline rename. Resource queries, formatting, permissions, menus and view persistence stay in the host.
 
 ## Layout
 

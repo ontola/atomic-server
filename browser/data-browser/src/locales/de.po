@@ -3207,10 +3207,6 @@ msgstr ""
 msgid "Row is incomplete or has invalid data"
 msgstr ""
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Open resource"
-msgstr ""
-
 #: src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
 msgstr ""
@@ -3797,11 +3793,6 @@ msgstr ""
 #. 0: formatter.format(selectedModel?.pricing.prompt * 1000000)
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0}/M input tokens"
-msgstr ""
-
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
 msgstr ""
 
 #. 0: subject
@@ -6536,10 +6527,6 @@ msgstr ""
 
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
-msgstr ""
-
-#: src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
 msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -12881,10 +12868,6 @@ msgstr ""
 msgid "Open the comments for this resource"
 msgstr ""
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Row menu"
-msgstr ""
-
 #: src/views/Drive/DriveHome.tsx
 msgid "Commented"
 msgstr "Kommentiert"
@@ -13379,4 +13362,8 @@ msgstr ""
 
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Give it a name, then fill it with a starter"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Rename view"
 msgstr ""
