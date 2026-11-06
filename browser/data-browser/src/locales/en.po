@@ -13544,3 +13544,19 @@ msgstr "{0} mentioned you in {1}"
 #: src/components/Notifications/NotificationList.tsx
 msgid "{0}: {1} mentions of you in {2}"
 msgstr "{0}: {1} mentions of you in {2}"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "<0/> Recording"
+msgstr "<0/> Recording"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "The recording could not be started or stopped."
+msgstr "The recording could not be started or stopped."
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Stop recording"
+msgstr "Stop recording"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Record this call"
+msgstr "Record this call"

@@ -3,7 +3,12 @@
  * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
  * -------------------------------- */
 
-import type { OntologyBaseObject, BaseProps, JSONObject } from '../index.js';
+import type {
+  OntologyBaseObject,
+  BaseProps,
+  JSONObject,
+  JSONValue,
+} from '../index.js';
 
 export const dataBrowser = {
   classes: {
@@ -52,6 +57,7 @@ export const dataBrowser = {
     meetingStartedAt: 'https://atomicdata.dev/properties/meetingStartedAt',
     meetingEndedAt: 'https://atomicdata.dev/properties/meetingEndedAt',
     meetingLeader: 'https://atomicdata.dev/properties/meetingLeader',
+    meetingRecordings: 'https://atomicdata.dev/properties/meetingRecordings',
     currency: 'https://atomicdata.dev/ontology/data-browser/property/currency',
     customNodePositioning:
       'https://atomicdata.dev/properties/custom-node-positioning',
@@ -377,7 +383,8 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.messages
         | typeof dataBrowser.properties.meetingStartedAt
         | typeof dataBrowser.properties.meetingEndedAt
-        | typeof dataBrowser.properties.meetingLeader;
+        | typeof dataBrowser.properties.meetingLeader
+        | typeof dataBrowser.properties.meetingRecordings;
     };
     [dataBrowser.classes.numberFormat]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/shortname';
@@ -496,6 +503,7 @@ declare module '../index.js' {
     [dataBrowser.properties.meetingStartedAt]: number;
     [dataBrowser.properties.meetingEndedAt]: number;
     [dataBrowser.properties.meetingLeader]: string;
+    [dataBrowser.properties.meetingRecordings]: JSONValue;
     [dataBrowser.properties.currency]: string;
     [dataBrowser.properties.customNodePositioning]: Record<
       string,
@@ -621,6 +629,7 @@ declare module '../index.js' {
     [dataBrowser.properties.meetingStartedAt]: 'meetingStartedAt';
     [dataBrowser.properties.meetingEndedAt]: 'meetingEndedAt';
     [dataBrowser.properties.meetingLeader]: 'meetingLeader';
+    [dataBrowser.properties.meetingRecordings]: 'meetingRecordings';
     [dataBrowser.properties.currency]: 'currency';
     [dataBrowser.properties.customNodePositioning]: 'customNodePositioning';
     [dataBrowser.properties.dateFormat]: 'dateFormat';

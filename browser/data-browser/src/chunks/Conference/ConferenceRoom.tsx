@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
+import { dataBrowser } from '@tomic/lib';
 import { useCurrentAgent, useResource, useTitle } from '@tomic/react';
 import {
+  FaCircle,
   FaMicrophone,
   FaMicrophoneSlash,
   FaPhone,
+  FaStop,
   FaVideo,
   FaVideoSlash,
 } from 'react-icons/fa6';
@@ -15,6 +18,12 @@ import {
 } from '../../components/IconButton/IconButton';
 import { AgentAvatar } from '../../components/Presence/AgentAvatar';
 import { joinCall, type PeerState } from './callTransport';
+import {
+  startRecording,
+  stopRecording,
+  withRecording,
+  type RunningRecording,
+} from './callRecording';
 
 type MediaError = 'denied' | 'unavailable';
 
@@ -47,6 +56,14 @@ export default function ConferenceRoom({
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [hasCamera, setHasCamera] = useState(true);
+  const [transport, setTransport] = useState<'livekit' | 'mesh'>();
+  /** The room is being recorded, by anyone. */
+  const [recorded, setRecorded] = useState(false);
+  /** The recording this person started, to stop it. */
+  const [running, setRunning] = useState<RunningRecording>();
+  const [recordBusy, setRecordBusy] = useState(false);
+  const [recordError, setRecordError] = useState(false);
+  const meeting = useResource(subject);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +115,8 @@ export default function ConferenceRoom({
 
             return next;
           }),
+        onTransport: setTransport,
+        onRecording: setRecorded,
       });
 
       if (cancelled) {
@@ -116,6 +135,8 @@ export default function ConferenceRoom({
       setLocalStream(undefined);
       setPeers({});
       setError(undefined);
+      setTransport(undefined);
+      setRecorded(false);
     };
   }, [subject, agentSubject]);
 
@@ -133,10 +154,50 @@ export default function ConferenceRoom({
     setCamOn(!camOn);
   };
 
+  /** Keeps [recording] on the Meeting, so everyone who reads it can watch. */
+  const keep = async (recording: RunningRecording['recording']) => {
+    await meeting.set(
+      dataBrowser.properties.meetingRecordings,
+      withRecording(
+        meeting.get(dataBrowser.properties.meetingRecordings),
+        recording,
+      ),
+    );
+    await meeting.save();
+  };
+
+  const toggleRecording = async () => {
+    setRecordBusy(true);
+    setRecordError(false);
+
+    try {
+      if (running) {
+        await stopRecording(running.egressId);
+        await keep({ ...running.recording, endedAt: Date.now() });
+        setRunning(undefined);
+      } else {
+        const started = await startRecording(subject);
+        setRunning(started);
+        // Kept right away: the file exists even if this tab closes.
+        await keep(started.recording);
+      }
+    } catch (err) {
+      console.warn('Recording failed:', err);
+      setRecordError(true);
+    } finally {
+      setRecordBusy(false);
+    }
+  };
+
   const peerEntries = Object.entries(peers);
 
   return (
     <CallSection $compact={compact}>
+      {recorded && (
+        <RecordingBadge $compact={compact} role='status'>
+          <FaCircle /> Recording
+        </RecordingBadge>
+      )}
       {error ? (
         <ErrorMessage>
           {error === 'denied'
@@ -173,6 +234,11 @@ export default function ConferenceRoom({
           ))}
         </TileGrid>
       )}
+      {recordError && !compact && (
+        <ErrorMessage>
+          The recording could not be started or stopped.
+        </ErrorMessage>
+      )}
       {!error && peerEntries.length === 0 && !compact && (
         <WaitingNote>Waiting for others to join…</WaitingNote>
       )}
@@ -196,6 +262,17 @@ export default function ConferenceRoom({
           >
             {camOn && hasCamera ? <FaVideo /> : <FaVideoSlash />}
           </IconButton>
+          {transport === 'livekit' && (!recorded || running) && (
+            <IconButton
+              variant={IconButtonVariant.Square}
+              title={running ? 'Stop recording' : 'Record this call'}
+              size='1.1rem'
+              disabled={recordBusy}
+              onClick={toggleRecording}
+            >
+              {running ? <FaStop /> : <FaCircle />}
+            </IconButton>
+          )}
           <IconButton
             variant={IconButtonVariant.Colored}
             color='alert'
@@ -240,6 +317,32 @@ function PeerTile({ peer, compact }: { peer: PeerState; compact?: boolean }) {
   );
 }
 
+const RecordingBadge = styled.div<{ $compact?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.4em;
+  padding: 0.2em 0.6em;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.alert};
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+
+  svg {
+    font-size: 0.6em;
+  }
+
+  ${p =>
+    p.$compact &&
+    `
+    position: absolute;
+    top: 0.4rem;
+    left: 0.4rem;
+    z-index: 1;
+  `}
+`;
+
 const CallSection = styled(Column)<{ $compact?: boolean }>`
   gap: ${p => p.theme.size(2)};
   padding-bottom: ${p => p.theme.size(2)};
@@ -250,6 +353,7 @@ const CallSection = styled(Column)<{ $compact?: boolean }>`
   ${p =>
     p.$compact &&
     `
+    position: relative;
     height: 100%;
     gap: 0;
     padding: 0;

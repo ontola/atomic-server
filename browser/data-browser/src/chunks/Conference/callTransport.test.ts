@@ -61,8 +61,11 @@ describe('joinCall transport selection', () => {
         JSON.stringify({ url: 'wss://lk', token: 't', identity: 'i' }),
       ),
     );
-    const leave = await run();
+    const c = { ...ctx(), onTransport: vi.fn(), onRecording: vi.fn() };
+    const leave = await run(c);
 
+    expect(c.onTransport).toHaveBeenCalledWith('livekit');
+    expect(c.onRecording).toHaveBeenCalledWith(false);
     expect(mocks.connect).toHaveBeenCalledWith('wss://lk', 't');
     expect(mocks.publishTrack).toHaveBeenCalledTimes(2);
     const body = JSON.parse(mocks.managedFetch.mock.calls[0][1].body);
@@ -76,7 +79,10 @@ describe('joinCall transport selection', () => {
 
   it('falls back to the mesh on 503', async () => {
     mocks.managedFetch.mockResolvedValue(new Response('', { status: 503 }));
-    const leave = await run();
+    const c = { ...ctx(), onTransport: vi.fn() };
+    const leave = await run(c);
+
+    expect(c.onTransport).toHaveBeenCalledWith('mesh');
 
     expect(mocks.connect).not.toHaveBeenCalled();
     leave();
