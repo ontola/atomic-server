@@ -1,11 +1,12 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
-import { useCurrentAgent, useDrivePresence, useResource } from '@tomic/react';
+import { lazy, Suspense, useState } from 'react';
+import { useResource } from '@tomic/react';
 import { styled } from 'styled-components';
 import { FaNoteSticky, FaVideo } from 'react-icons/fa6';
 import { RightPanel } from '../RightPanel/RightPanel';
 import { useContextualPanel } from '../RightPanel/useContextualPanel';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useFollow } from './FollowContext';
+import { useMeetingParticipants } from './useMeetingParticipants';
 import { PresenceAvatarMenu } from './PresenceAvatarMenu';
 import { ChatRoomView } from '../../views/ChatRoom/ChatRoomView';
 import { EditableTitle } from '../EditableTitle';
@@ -15,6 +16,8 @@ import { IconButton } from '../IconButton/IconButton';
 import { transition } from '../../helpers/transition';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { hasActionsHost } from '../../embed/hostActions';
+import { startHostCall } from '../../embed/joinCall';
 
 const ConferenceRoom = lazy(
   () => import('../../chunks/Conference/ConferenceRoom'),
@@ -40,46 +43,36 @@ export const FollowSessionPanelContainer: React.FC = () => {
   );
 };
 
-function FollowSessionChat({ subject }: { subject: string }) {
+/**
+ * The meeting panel's content: title, who is here, chat, and End / Leave.
+ * `embedded` is for the Flutter app's web view: it is already on the meeting
+ * page, so Notes is left out, and the call is not placed here but by the app
+ * (a call page of its own that outlives this one, `joinCall` in
+ * `embed/hostActions.ts`); the video button is shown only when the app takes
+ * it. `trailing` adds an action (a close button) after the others.
+ */
+export function FollowSessionChat({
+  subject,
+  embedded = false,
+  trailing,
+}: {
+  subject: string;
+  embedded?: boolean;
+  trailing?: React.ReactNode;
+}) {
   const chatroom = useResource(subject);
-  const { followedAgent, unfollow, activeMeeting, endMeeting } = useFollow();
+  const { followedAgent, follow, unfollow, endMeeting } = useFollow();
   const { setPanelOpen } = useRightPanel();
-  const presence = useDrivePresence();
-  const [agent] = useCurrentAgent();
+  const { participants, leaderAgent, leading } =
+    useMeetingParticipants(subject);
   const [ending, setEnding] = useState(false);
   const [inCall, setInCall] = useState(false);
+  // The app answered false to a call: the button is no use here.
+  const [hostCallRefused, setHostCallRefused] = useState(false);
 
   // The panel header's action: the leader ends the meeting; a joined
   // attendee leaves it.
-  const leading = activeMeeting === subject;
   const label = leading ? 'End' : 'Leave';
-
-  // Who else is in the meeting: the leader (whoever announces this
-  // meeting as their `session`) plus everyone following that leader,
-  // plus me when I'm taking part.
-  const leaderAgent = leading
-    ? agent?.subject
-    : presence.find(item => item.session === subject)?.agent;
-
-  const participants = useMemo(() => {
-    const set = new Set<string>();
-
-    if (leaderAgent) set.add(leaderAgent);
-
-    for (const item of presence) {
-      if (item.session === subject) set.add(item.agent);
-      if (leaderAgent && item.following === leaderAgent) set.add(item.agent);
-    }
-
-    if (
-      agent?.subject &&
-      (leading || (!!leaderAgent && followedAgent === leaderAgent))
-    ) {
-      set.add(agent.subject);
-    }
-
-    return [...set];
-  }, [presence, subject, leaderAgent, agent, leading, followedAgent]);
 
   async function handleAction() {
     if (leading) {
@@ -92,6 +85,19 @@ function FollowSessionChat({ subject }: { subject: string }) {
 
     unfollow();
     setPanelOpen('followSession', false);
+  }
+
+  // Placing the call is the app's: it also joins the meeting, as Join does.
+  async function handleHostCall() {
+    const started = await startHostCall({
+      meeting: subject,
+      leader: leaderAgent,
+      leading,
+      followed: followedAgent,
+      follow,
+    });
+
+    if (!started) setHostCallRefused(true);
   }
 
   // Only leader / joined attendee gets the End / Leave action.
@@ -126,28 +132,42 @@ function FollowSessionChat({ subject }: { subject: string }) {
             with space between them made the header the loudest part of the
             panel. */}
         <ButtonRow center gap='0'>
-          <IconButton
-            color={inCall ? 'main' : 'textLight'}
-            onClick={() => setInCall(current => !current)}
-            title={inCall ? 'Leave video call' : 'Start video call'}
-          >
-            <FaVideo />
-          </IconButton>
-          <IconButton
-            color='textLight'
-            title='Notes'
-            onClick={() => navigate(constructOpenURL(subject))}
-          >
-            <FaNoteSticky />
-          </IconButton>
+          {!embedded && (
+            <IconButton
+              color={inCall ? 'main' : 'textLight'}
+              onClick={() => setInCall(current => !current)}
+              title={inCall ? 'Leave video call' : 'Start video call'}
+            >
+              <FaVideo />
+            </IconButton>
+          )}
+          {embedded && hasActionsHost() && !hostCallRefused && (
+            <IconButton
+              color='textLight'
+              onClick={() => void handleHostCall()}
+              title='Start video call'
+            >
+              <FaVideo />
+            </IconButton>
+          )}
+          {!embedded && (
+            <IconButton
+              color='textLight'
+              title='Notes'
+              onClick={() => navigate(constructOpenURL(subject))}
+            >
+              <FaNoteSticky />
+            </IconButton>
+          )}
           {showAction && (
             <TextAction type='button' onClick={handleAction} disabled={ending}>
               {ending ? 'Ending…' : label}
             </TextAction>
           )}
+          {trailing}
         </ButtonRow>
       </PanelHeader>
-      {inCall && (
+      {inCall && !embedded && (
         <Suspense fallback={<CallFallback>Connecting to call…</CallFallback>}>
           <ConferenceRoom subject={subject} onLeave={() => setInCall(false)} />
         </Suspense>

@@ -12,7 +12,7 @@
 use actix_web::{web, HttpResponse};
 use atomic_lib::{
     agents::{Agent, ForAgent},
-    db::app_agent::{AppAgent, AppAgentKey},
+    db::app_agent::{AppAgent, AppAgentKey, AppAgentState},
     hierarchy::check_write,
     Storelike,
 };
@@ -29,6 +29,9 @@ pub struct SetAppAgentBody {
     pub app: String,
     /// The agent secret, as `Agent::buildSecret` produces it.
     pub secret: String,
+    /// Durable browser handovers may initialize, never replace or revive keys.
+    #[serde(default)]
+    pub initialize_only: bool,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -36,6 +39,8 @@ pub struct SetAppAgentBody {
 pub struct AppAgentQuery {
     pub drive: String,
     pub app: String,
+    #[serde(default)]
+    pub handover: bool,
 }
 
 /// Deliberately not `Debug`: the body holds a private key, and a handler that
@@ -66,6 +71,21 @@ pub async fn handle_set_app_agent(
         .map_err(|e| AtomicServerError::bad_request(format!("That is not an agent secret: {e}")))?;
 
     let key = AppAgentKey::new(&body.drive, &body.app);
+    let _guard = appstate.store.lock_plugin(&handover_lock(&key)).await;
+    if body.initialize_only {
+        match appstate.store.get_app_agent_state(&key)? {
+            AppAgentState::Legacy => (),
+            AppAgentState::Active(info) if info.agent == parsed.subject => {
+                appstate.store.flush()?;
+                return Ok(HttpResponse::Ok().json(Some(info)));
+            }
+            _ => {
+                return Ok(HttpResponse::Conflict().body(
+                    "This app identity was replaced or revoked; its pending handover was cancelled",
+                ));
+            }
+        }
+    }
     appstate.store.set_app_agent(
         &key,
         &AppAgent::new(
@@ -74,6 +94,7 @@ pub async fn handle_set_app_agent(
             atomic_lib::utils::now(),
         ),
     )?;
+    appstate.store.flush()?;
 
     Ok(HttpResponse::Ok().json(appstate.store.get_app_agent_info(&key)?))
 }
@@ -87,6 +108,20 @@ pub async fn handle_get_app_agent(
     context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
     authorize(&appstate, &req, &[], &context, &query.app).await?;
+
+    if query.handover {
+        let state = appstate
+            .store
+            .get_app_agent_state(&AppAgentKey::new(&query.drive, &query.app))?;
+        let (state, agent) = match state {
+            AppAgentState::Legacy => ("missing", None),
+            AppAgentState::Active(info) => ("active", Some(info.agent)),
+            AppAgentState::Revoked => ("revoked", None),
+        };
+        return Ok(HttpResponse::Ok().json(serde_json::json!({
+            "handover": "initialize-only-v1", "state": state, "agent": agent
+        })));
+    }
 
     Ok(HttpResponse::Ok().json(
         appstate
@@ -106,11 +141,22 @@ pub async fn handle_delete_app_agent(
 ) -> AtomicServerResult<HttpResponse> {
     authorize(&appstate, &req, &[], &context, &query.app).await?;
 
-    appstate
-        .store
-        .delete_app_agent(&AppAgentKey::new(&query.drive, &query.app))?;
+    let key = AppAgentKey::new(&query.drive, &query.app);
+    let _guard = appstate.store.lock_plugin(&handover_lock(&key)).await;
+
+    appstate.store.delete_app_agent(&key)?;
 
     Ok(HttpResponse::Ok().finish())
+}
+
+fn handover_lock(key: &AppAgentKey) -> String {
+    // Same namespace for initialization, replacement and revocation, including
+    // legacy/canonical spellings of either identifier.
+    format!(
+        "app-agent:{:?}:{:?}",
+        atomic_lib::Subject::from(key.drive.as_str()).pure_id(),
+        atomic_lib::Subject::from(key.app.as_str()).pure_id()
+    )
 }
 
 async fn authorize(

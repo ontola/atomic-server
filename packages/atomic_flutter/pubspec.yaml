@@ -1,5 +1,5 @@
 name: atomic_flutter
-description: Shared Atomic account, device sync, and drive settings UI from Atomic Canvas.
+description: Shared Atomic account, device sync, and drive settings UI from the Atomic app.
 version: 0.1.0
 publish_to: none
 
@@ -9,6 +9,7 @@ environment:
 dependencies:
   http: ^1.6.0
   cryptography: ^2.9.0
+  qr_flutter: ^4.1.0
   flutter:
     sdk: flutter
 dev_dependencies:

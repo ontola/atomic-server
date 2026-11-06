@@ -211,6 +211,11 @@ export type RestoreOutcome = {
 
 /** What a `VaultCheckpointRecord` looks like on the wire. */
 export type VaultCheckpoint = {
+  /**
+   * The id a snapshot is listed under in `usage.snapshots`. Optional only
+   * because older control planes may not send it.
+   */
+  id?: string;
   checkpoint_n: number;
   /** Device pubkey → last inclusive segment this checkpoint provably holds. */
   coverage: Record<string, number>;
@@ -375,6 +380,30 @@ export async function listVaultDrives(): Promise<VaultEnrollment[]> {
   return api<VaultEnrollment[]>('/cloud-vault/drives');
 }
 
+/**
+ * What any signed-in account may learn about a drive's backup, including one
+ * that another account pays for. The members' view of a vault they do not own:
+ * that it exists and who made it, never how to manage it.
+ */
+export type VaultDriveSummary =
+  | { enabled: false }
+  | {
+      enabled: true;
+      is_yours: boolean;
+      suspended: boolean;
+      last_backup_at: number | null;
+      /** The payer's chosen display name; null when they set none. */
+      backed_up_by: string | null;
+    };
+
+export async function getVaultDriveSummary(
+  driveSubject: string,
+): Promise<VaultDriveSummary> {
+  return api<VaultDriveSummary>(
+    `/cloud-vault/drive-status?${new URLSearchParams({ drive: driveSubject })}`,
+  );
+}
+
 export async function disableVault(drivePseudonym: string): Promise<void> {
   await api(`/cloud-vault/${drivePseudonym}/disable`, {
     method: 'POST',
@@ -429,6 +458,10 @@ export async function getVaultKeyEnvelopeRecord(
   });
 
   if (response.status === 204) return null;
+
+  // Same as `api`: a session that ended mid-pass (sign-out in another tab) is
+  // not a failed backup, and callers skip quietly on this error.
+  if (response.status === 401) throw new VaultSessionEndedError();
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
@@ -1095,6 +1128,100 @@ export async function restoreDrive({
   );
 }
 
+/** The part of a wasm `ClientDb` needed to read one snapshot. */
+export type ScratchVaultDb = {
+  vaultImport: VaultCapableDb['vaultImport'];
+  allSubjects(): string[] | Promise<string[]>;
+  getLoroSnapshot(
+    subject: string,
+  ): Uint8Array | null | Promise<Uint8Array | null>;
+  free?(): void;
+};
+
+/**
+ * Every resource of one snapshot as it was then: subject → Loro snapshot bytes.
+ *
+ * A snapshot id is the id of a checkpoint record, listed by the usage route and
+ * also carried by `state.checkpoints[].id`. That record names the checkpoint
+ * object (`checkpoint_object_id`, key `.../checkpoints/ckpt-N.loro`). A
+ * checkpoint holds every resource's whole oplog at that moment, so the object
+ * alone is the exact state; the change packs around it are newer or older
+ * history and are deliberately not read. It is opened in a scratch store, never
+ * in the live one, because importing only merges and the newer edits would stay.
+ */
+export async function readVaultSnapshot({
+  drivePseudonym,
+  snapshotId,
+  driveKey,
+  keyEpoch,
+  devicePubkey,
+  openScratchDb,
+  onProgress,
+}: {
+  drivePseudonym: string;
+  snapshotId: string;
+  driveKey: Uint8Array;
+  keyEpoch: number;
+  devicePubkey: string;
+  openScratchDb: () => Promise<ScratchVaultDb>;
+  onProgress?: (done: number, total: number) => void;
+}): Promise<{ state: Map<string, Uint8Array>; sealed: SealedObject }> {
+  const vaultState = await getVaultState(drivePseudonym);
+  const checkpoint = vaultState.checkpoints.find(c => c.id === snapshotId);
+
+  if (!checkpoint) {
+    throw new Error('This snapshot is no longer stored. Choose another one.');
+  }
+
+  const object = (await listVaultObjects(drivePseudonym)).find(
+    o => o.object_id === checkpoint.checkpoint_object_id,
+  );
+
+  if (!object) {
+    throw new Error('This snapshot is no longer stored. Choose another one.');
+  }
+
+  const [body] = await downloadVaultObjects(
+    drivePseudonym,
+    [object],
+    async response => new Uint8Array(await response.arrayBuffer()),
+    onProgress,
+  );
+  const sealed = { objectKey: object.object_key, sealed: body };
+  const scratch = await openScratchDb();
+
+  try {
+    // A fresh store already holds the built-in vocabulary; only what the
+    // checkpoint adds is the drive.
+    const builtIn = new Set(await scratch.allSubjects());
+    const summary = await scratch.vaultImport(
+      driveKey,
+      keyEpoch,
+      drivePseudonym,
+      devicePubkey,
+      [sealed],
+    );
+
+    if (summary.packsRead !== 1 || summary.objectsUnreadable > 0) {
+      throw new Error('This snapshot could not be opened.');
+    }
+
+    const state = new Map<string, Uint8Array>();
+
+    for (const subject of await scratch.allSubjects()) {
+      if (builtIn.has(subject)) continue;
+
+      const bytes = await scratch.getLoroSnapshot(subject);
+
+      if (bytes) state.set(subject, bytes);
+    }
+
+    return { state, sealed };
+  } finally {
+    scratch.free?.();
+  }
+}
+
 /**
  * The key-management half of the client.
  *
@@ -1104,6 +1231,11 @@ export async function restoreDrive({
  * then on any device that can sign in as this account can get it back.
  */
 export type VaultKeyOps = {
+  /**
+   * A throw-away in-memory store, to read a snapshot without touching the
+   * drive on this device. Absent where the wasm bundle is not loaded.
+   */
+  openScratchDb?: () => Promise<ScratchVaultDb>;
   vaultGenerateKey(): Uint8Array;
   vaultWrapKey(driveKey: Uint8Array, agentSecret: Uint8Array): string;
   vaultUnwrapKey(envelope: string, agentSecret: Uint8Array): Uint8Array;

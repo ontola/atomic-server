@@ -10,7 +10,7 @@ import type { Resource } from './resource.js';
 import type { Store } from './store.js';
 import { canonicalizeScheme } from './subject.js';
 import { core } from './ontologies/core.js';
-import type { JSONObject, JSONValue } from './value.js';
+import { isPlainObject, type JSONObject, type JSONValue } from './value.js';
 
 /**
  * Read and write helpers for the `constraints` map on a Class. The map is the
@@ -213,9 +213,6 @@ type NestedKeyword =
   | 'items'
   | 'anyOf';
 
-const isObject = (v: unknown): v is JSONObject =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
 /**
  * Edits one property's entry in the class's `constraints` map. Keywords in
  * `patch` are merged into the entry, a keyword set to `undefined` is removed, an
@@ -236,7 +233,7 @@ export async function setClassConstraint(
   if (raw !== undefined) {
     const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
 
-    if (isObject(parsed)) map = { ...(parsed as JSONObject) };
+    if (isPlainObject(parsed)) map = { ...(parsed as JSONObject) };
   }
 
   // Entries may be keyed by the legacy `did:ad:` spelling; fold them into one.
@@ -246,7 +243,7 @@ export async function setClassConstraint(
     if (canonicalizeScheme(existingKey) === key) {
       const value = map[existingKey];
 
-      if (isObject(value)) entry = { ...entry, ...(value as JSONObject) };
+      if (isPlainObject(value)) entry = { ...entry, ...(value as JSONObject) };
 
       delete map[existingKey];
     }

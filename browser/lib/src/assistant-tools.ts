@@ -279,10 +279,21 @@ export async function createResourceFromCompact(
   store: Store,
   drive: string,
   data: Record<string, JSONValue>,
-): Promise<{ subject: string; resolved: Record<string, string> }> {
-  const { isA, parent, propVals, resolved } = await fromCompact(store, data, {
+): Promise<{
+  subject: string;
+  resolved: Record<string, string>;
+  /** Titles of the classes the new resource got. */
+  classes: string[];
+}> {
+  const compact = await fromCompact(store, data, {
     resolveClass: name => resolveClass(store, drive, name),
   });
+  const { parent, propVals, resolved } = compact;
+  // The legacy Document class has no editable body; `document` means
+  // DocumentV2 everywhere else (see `standardClassAlias`).
+  const isA = compact.isA.map(cls =>
+    cls === dataBrowser.classes.document ? dataBrowser.classes.documentV2 : cls,
+  );
 
   const parentResource = await store.getResource(parent);
   const isTableRow = parentResource.hasClasses(dataBrowser.classes.table);
@@ -299,5 +310,11 @@ export async function createResourceFromCompact(
     await store.notifyResourceManuallyCreated(resource);
   }
 
-  return { subject: resource.subject, resolved };
+  return {
+    subject: resource.subject,
+    resolved,
+    classes: await Promise.all(
+      isA.map(async cls => (await store.getResource(cls)).title),
+    ),
+  };
 }

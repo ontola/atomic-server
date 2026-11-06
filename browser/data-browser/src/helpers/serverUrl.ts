@@ -16,7 +16,10 @@
  * public certificate exists for it.
  */
 export function isLocalAddress(authority: string): boolean {
-  const host = authority.split(':')[0].toLowerCase();
+  // `[::1]:9883` has colons of its own; take the bracketed host whole.
+  const host = authority.startsWith('[')
+    ? authority.slice(1).split(']')[0].toLowerCase()
+    : authority.split(':')[0].toLowerCase();
 
   if (host === 'localhost' || host === '::1' || host.endsWith('.local')) {
     return true;

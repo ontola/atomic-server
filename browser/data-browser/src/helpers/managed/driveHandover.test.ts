@@ -112,7 +112,26 @@ describe('handing drives to the account identity', () => {
 
   // The guest's home holds only its switcher list. Handed over, it showed up
   // in the account's switcher as a second "My drive".
-  it("reads the guest's home for its drives but never hands the home over", async () => {
+  it('hands the home over too when it holds documents of its own', async () => {
+    const home = owned({ [server.properties.drives]: ['did:ad:home'] });
+    home.getChildrenCollection = async () => ({ totalMembers: 1 });
+    const resources = {
+      [guest]: fake({ [core.properties.personalDrive]: 'did:ad:home' }),
+      'did:ad:home': home,
+    };
+
+    const pending = await handOverDrives(fixture(resources), {
+      from: guest,
+      to: account,
+      skip: [],
+      archiveIdentity: vi.fn(async () => {}),
+    });
+
+    expect(home.get(core.properties.write)).toEqual([guest, account]);
+    expect(pending.drives).toEqual(['did:ad:home']);
+  });
+
+  it("reads the guest's home for its drives but never hands an empty home over", async () => {
     const resources = {
       [guest]: fake({ [core.properties.personalDrive]: 'did:ad:home' }),
       'did:ad:home': owned({
@@ -381,6 +400,22 @@ describe('listing handed-over drives after the switch', () => {
     // Nothing left to do the second time.
     expect(await applyPendingDriveHandover(store, account)).toBe(false);
     expect(home.save).toHaveBeenCalledOnce();
+  });
+
+  it('lists them in a known home when the agent itself cannot be read yet', async () => {
+    pending(['did:ad:kept']);
+    const home = fake({});
+    const store = fixture({ 'did:ad:accounthome': home });
+
+    expect(
+      await applyPendingDriveHandover(
+        store,
+        account,
+        async () => [],
+        'did:ad:accounthome',
+      ),
+    ).toBe(true);
+    expect(home.get(server.properties.drives)).toEqual(['did:ad:kept']);
   });
 
   it('lists them for the account signed in under the other spelling', async () => {

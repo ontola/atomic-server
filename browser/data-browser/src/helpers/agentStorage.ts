@@ -183,8 +183,8 @@ export interface SaveAgentOptions {
   /**
    * Also make this device's embedded node act as this agent (see
    * `helpers/adoptAgent.ts`). Default true — signing in *is* the moment the
-   * device takes on an identity. Pass false for throwaway agents (the demo
-   * guest) that must not become the node's identity.
+   * device takes on an identity. Pass false for agents that must not become the node's identity yet
+   * (an invite page that only stores the key).
    */
   adoptOnDevice?: boolean;
 }

@@ -1,7 +1,10 @@
 # One template model, multiple entry points
 
-Status: initial built-in implementation, 2026-09-11. The create-drive gallery,
-workspace composition, table adapter and isolated previews are implemented locally.
+Status: initial built-in implementation, 2026-09-11; simplified 2026-10-29. New
+drive asks only a name; an empty drive offers the workspace starters (Student, Team,
+Personal) and the template chat, which fill that drive in place. The gallery,
+isolated previews, example-content switch and keep-edits adoption are removed.
+Workspace composition and the table adapter are unchanged.
 The broader portable resource-graph format below remains a migration plan; website
 imports, durable install journals, shared schema IDs and recorded tours are not
 implemented by this change.
@@ -11,7 +14,7 @@ implemented by this change.
 - `table-templates-and-mini-apps.md`: templates are data and view configuration;
   new domain workflows do not get bespoke renderers. Existing table builders
   and assistant tools must remain the shared creation path.
-- `demo-experience.md`: previews use real editable resources on a fresh local-only
+- `demo-experience.md` (removed with the scripted demo): previews use real editable resources on a fresh local-only
   drive, with existing cleanup and exit machinery. The shipped director is tied
   to one team scenario; it is not a general template runtime.
 - `tours.md`: tours are recorded meeting resources, replayed as navigation and

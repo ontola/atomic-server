@@ -1,12 +1,14 @@
-import { ai, dataBrowser, isAgentSubject } from '@tomic/lib';
+import { ai, dataBrowser, isAgentSubject, server } from '@tomic/lib';
 
 /**
- * Classes kept out of child lists (the AI sidebar and meeting UI reach them),
- * with the plural label Space usage bundles them under.
+ * Classes kept out of child lists (the AI sidebar reaches them), with the
+ * plural label Space usage bundles them under. Meetings are listed: a past
+ * meeting has no other place to be found.
  */
 export const HIDDEN_CLASS_LABELS: Record<string, string> = {
   [ai.classes.aiChat]: 'AI chats',
-  [dataBrowser.classes.meeting]: 'Meetings',
+  // Records of apps that use the drive; listed in Drive settings instead.
+  [server.classes.externalApp]: 'App records',
 };
 
 /**

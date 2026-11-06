@@ -4,6 +4,7 @@ import {
   isNotFound,
   pageRequestSignal,
   type Store,
+  isLoopbackHost,
 } from '@tomic/lib';
 import {
   VaultSessionEndedError,
@@ -33,6 +34,7 @@ import { evaluateIdentityReconciliation } from './reconcile';
 import { nodeVault } from './nodeVault';
 import { isRunningInTauri } from '../tauri';
 import { reopenRestoredDrive } from '../driveData';
+import { asError } from '@tomic/react';
 
 /**
  * Cloud Vault without a button.
@@ -426,6 +428,7 @@ async function ensureVaultBackupOnce(
     });
     signal.throwIfAborted();
     notifyVaultChanged(driveSubject);
+    clearVaultFull(store, driveSubject);
 
     return outcome;
   } catch (error) {
@@ -446,9 +449,15 @@ async function ensureVaultBackupOnce(
 
     console.warn('[cloud-vault] backup failed', error);
 
+    // A full vault is not something a retry fixes; say so once per drive
+    // until a backup succeeds again, instead of failing quietly every minute.
+    if (/quota exceeded/i.test(String((error as Error)?.message))) {
+      announceVaultFull(store, driveSubject);
+    }
+
     return {
       status: 'failed',
-      error: error instanceof Error ? error : new Error(String(error)),
+      error: asError(error),
     };
   } finally {
     offAgent();
@@ -456,6 +465,47 @@ async function ensureVaultBackupOnce(
     if (typeof window !== 'undefined')
       window.removeEventListener('pagehide', stop);
   }
+}
+
+type VaultFullListener = (driveSubject: string) => void;
+
+const vaultFullListeners = new Set<VaultFullListener>();
+const vaultFullAnnounced = new WeakMap<Store, Set<string>>();
+
+/**
+ * Hear about drives whose Cloud Vault is full. A full vault is not a bug, so it
+ * does not go through the error handler; the listener (CloudVaultWatcher) shows
+ * an upgrade notice instead. Returns the unsubscribe function.
+ */
+export function onVaultFull(listener: VaultFullListener): () => void {
+  vaultFullListeners.add(listener);
+
+  return () => {
+    vaultFullListeners.delete(listener);
+  };
+}
+
+/** Says so once per drive until a backup succeeds again. */
+export function announceVaultFull(store: Store, driveSubject: string): void {
+  // Nobody is listening yet (app still booting): stay unannounced so the next
+  // retry can still deliver it.
+  if (vaultFullListeners.size === 0) return;
+
+  let drives = vaultFullAnnounced.get(store);
+
+  if (!drives) {
+    drives = new Set();
+    vaultFullAnnounced.set(store, drives);
+  }
+
+  if (drives.has(driveSubject)) return;
+
+  drives.add(driveSubject);
+  for (const listener of [...vaultFullListeners]) listener(driveSubject);
+}
+
+function clearVaultFull(store: Store, driveSubject: string): void {
+  vaultFullAnnounced.get(store)?.delete(driveSubject);
 }
 
 /** Incremental packs make short idle backups cheap; unchanged drives upload nothing. */
@@ -594,7 +644,7 @@ export async function restoreFromVault(
 
     return {
       status: 'failed',
-      error: error instanceof Error ? error : new Error(String(error)),
+      error: asError(error),
     };
   }
 }
@@ -603,9 +653,7 @@ export async function restoreFromVault(
 export function isEmbeddedVaultDrive(store: Store): boolean {
   if (!isRunningInTauri()) return false;
 
-  return ['localhost', '127.0.0.1', '[::1]'].includes(
-    new URL(store.getServerUrl()).hostname,
-  );
+  return isLoopbackHost(new URL(store.getServerUrl()).hostname);
 }
 
 /**

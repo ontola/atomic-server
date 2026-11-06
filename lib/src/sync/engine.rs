@@ -404,19 +404,8 @@ pub async fn handle_frame_full_for_caps(
             match protocol::decode_commit(payload) {
                 Some(decoded) => {
                     let request_id = decoded.request_id;
-                    match apply_peer_commit(store, decoded.commit_json).await {
-                        Ok(commit_json) => {
-                            vec![protocol::encode_commit_ok(request_id, &commit_json)]
-                        }
-                        Err(e) => {
-                            let msg = e.to_string();
-                            vec![protocol::encode_error(
-                                request_id,
-                                protocol::classify_commit_error(&msg),
-                                &msg,
-                            )]
-                        }
-                    }
+                    let result = apply_peer_commit(store, decoded.commit_json).await;
+                    vec![CommitAck::FULL.frame(request_id, &result, 0)]
                 }
                 None => vec![protocol::encode_error(
                     0,
@@ -799,6 +788,70 @@ impl CommitIngestOpts {
     }
 }
 
+/// Which `COMMIT_OK` shape a session was negotiated to receive. Every
+/// transport answers a `COMMIT` through [`CommitAck::frame`], so the
+/// encodings live in one place: the full commit resource (legacy, and what
+/// peers get), the slim commit id (`commit-ok-slim`), or the slim id plus the
+/// node's write-load hint (`commit-ok-slim` and `commit-pace`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CommitAck {
+    pub slim: bool,
+    pub paced: bool,
+}
+
+impl CommitAck {
+    /// The legacy full-commit ack; every format a client did not ask for.
+    pub const FULL: Self = Self {
+        slim: false,
+        paced: false,
+    };
+
+    /// Pick the ack from a client's `HELLO` capabilities. The load hint only
+    /// rides on the slim form.
+    pub fn negotiated(caps: &[String]) -> Self {
+        let has = |cap: &str| caps.iter().any(|c| c == cap);
+        let slim = has(protocol::CAP_COMMIT_OK_SLIM);
+        Self {
+            slim,
+            paced: slim && has(protocol::CAP_COMMIT_PACE),
+        }
+    }
+
+    /// The `COMMIT_OK` or `ERROR` frame answering request `request_id`.
+    /// `pace_ms` is only sent in the paced form.
+    pub fn frame<E: ToString>(
+        self,
+        request_id: u16,
+        result: &Result<String, E>,
+        pace_ms: u32,
+    ) -> Vec<u8> {
+        match result {
+            Ok(commit_json) => {
+                // A slim client only wants the id it must chain the next
+                // commit on; it already holds the commit it just signed.
+                let slim_id = self.slim.then(|| {
+                    serde_json::from_str::<serde_json::Value>(commit_json)
+                        .ok()
+                        .and_then(|v| v.get("@id")?.as_str().map(str::to_owned))
+                });
+                match slim_id.flatten() {
+                    Some(id) if self.paced => {
+                        protocol::encode_commit_ok_paced(request_id, &id, pace_ms)
+                    }
+                    Some(id) => protocol::encode_commit_ok_slim(request_id, &id),
+                    None => protocol::encode_commit_ok(request_id, commit_json),
+                }
+            }
+            Err(e) => {
+                // Classify so the outbox can switch on a structured code
+                // instead of pattern-matching the message text.
+                let msg = e.to_string();
+                protocol::encode_error(request_id, protocol::classify_commit_error(&msg), &msg)
+            }
+        }
+    }
+}
+
 /// Parse a JSON-AD commit and verify its signature, returning the signer it
 /// proves. This is the identity check alone: no schema, timestamp, rights,
 /// ownership or Loro checks run, and nothing is stored.
@@ -813,8 +866,7 @@ pub async fn verify_commit_signer(
     store: &impl crate::Storelike,
     commit_json: &str,
 ) -> crate::errors::AtomicResult<crate::Subject> {
-    let resource = crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
-    let commit = crate::commit::Commit::from_resource(resource)?;
+    let commit = crate::commit::Commit::from_json_ad(commit_json)?;
     commit.validate_signature(store).await?;
     Ok(commit.signer)
 }
@@ -851,16 +903,16 @@ pub async fn ingest_commit(
     commit_json: &str,
     opts: &CommitIngestOpts,
 ) -> crate::errors::AtomicResult<crate::commit::CommitResponse> {
-    let incoming_commit_resource =
-        crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
+    let incoming: serde_json::Map<String, serde_json::Value> = serde_json::from_str(commit_json)
+        .map_err(|e| crate::AtomicError::parse_error(&format!("Invalid JSON: {e}"), None, None))?;
 
     // Reject commits with deprecated set/push/remove fields — use loroUpdate instead.
-    // Checked on the parsed commit's properties, not by substring-matching
+    // Checked on the parsed commit's keys, not by substring-matching
     // the raw body: a commit whose subject *is* one of these Property
     // resources, or whose values merely mention them, must not be refused.
     if [crate::urls::SET, crate::urls::PUSH, crate::urls::REMOVE]
         .iter()
-        .any(|legacy| incoming_commit_resource.get(legacy).is_ok())
+        .any(|legacy| incoming.contains_key(*legacy))
     {
         return Err(
             "Commits with `set`, `push`, or `remove` fields are no longer accepted. Use `loroUpdate` instead."
@@ -868,7 +920,7 @@ pub async fn ingest_commit(
         );
     }
 
-    let incoming_commit = crate::commit::Commit::from_resource(incoming_commit_resource)?;
+    let incoming_commit = crate::commit::Commit::from_json_map(&incoming)?;
 
     // Log incoming commit details for debugging
     if let Some(loro_bytes) = &incoming_commit.loro_update {
@@ -2232,19 +2284,6 @@ pub async fn import_sync_push(
     Ok((count, blob_requests))
 }
 
-/// Whether the owner deliberately dialled this node. Peer-to-peer sync only
-/// exists with the `iroh` feature — the WASM build of this crate has no peer
-/// module — so without it nothing is ever treated as paired.
-#[cfg(feature = "iroh")]
-fn peer_is_paired(store: &Db, node_id: &str) -> bool {
-    crate::sync::peer::is_paired_peer(store, node_id)
-}
-
-#[cfg(not(feature = "iroh"))]
-fn peer_is_paired(_store: &Db, _node_id: &str) -> bool {
-    false
-}
-
 /// Serve a remote-supplied `pull` list from local Loro snapshots — gated per
 /// subject on `check_read` for the identity the remote proved.
 /// This is the initiator-side mirror of the acceptor's `handle_sync_vv`,
@@ -2255,33 +2294,15 @@ fn peer_is_paired(_store: &Db, _node_id: &str) -> bool {
 /// established that peer's rights. Fail closed: a subject that doesn't
 /// materialize into a resource can't be rights-checked, so it isn't served.
 ///
-/// `paired_peer` is the node id of a peer this node's user deliberately dialled
-/// (see `peer::is_paired_peer`). Such a peer may replicate anything WE can
-/// read, even though its own agent holds no rights: pairing is an authenticated
-/// choice by the owner, and it is the authority a replica should run on. The
-/// alternative — the owner hand-writing an ACL entry naming each device's agent
-/// on each drive — is what made two of the same person's nodes sync nothing at
-/// all while the UI reported "In sync".
 ///
-/// Note this deliberately does NOT widen what gets served: a paired replica is
-/// served exactly the subjects this node can read, never more.
+/// A node the owner paired with gets no extra reach: it is served what the
+/// agent it authenticated as may read. Authenticating as the owner's own
+/// agent passes `check_read` directly, so pairing adds nothing to widen.
 pub async fn collect_readable_snapshots(
     store: &Db,
     agent: &crate::agents::ForAgent,
     subjects: &[String],
-    paired_peer: Option<&str>,
 ) -> Vec<(String, Vec<u8>)> {
-    // Resolved once: a paired peer's entitlement is "whatever we ourselves may
-    // read", so it is our own identity that answers, not the peer's.
-    let own_agent = if paired_peer.is_some_and(|node| peer_is_paired(store, node)) {
-        store
-            .get_default_agent()
-            .ok()
-            .map(crate::agents::ForAgent::from)
-    } else {
-        None
-    };
-
     // Subjects with a pending outbox entry are NOT skipped here, unlike the
     // browser's handleSyncDiff. This collector also serves a same-agent
     // replica that may hold none of the drive yet (a second device's first
@@ -2290,28 +2311,20 @@ pub async fn collect_readable_snapshots(
     // device waiting on a live-link drain that may never come. The signed
     // delta follows from the outbox and applies on top idempotently.
     let mut entries = Vec::new();
+    // This node's own agent resource travels on every connect, whoever
+    // connects. It is the one subject served regardless of rights.
+    let own_agent = store
+        .get_default_agent()
+        .ok()
+        .map(|a| a.subject.to_string());
     for subject in subjects {
         let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
         match store.get_resource(&subj).await {
             Ok(resource) => {
-                let mut readable = crate::hierarchy::check_read(store, &resource, agent)
-                    .await
-                    .is_ok();
-
-                if !readable {
-                    if let Some(own) = own_agent.as_ref() {
-                        readable = crate::hierarchy::check_read(store, &resource, own)
-                            .await
-                            .is_ok();
-
-                        if readable {
-                            tracing::debug!(
-                                "[sync] serving {} to a paired replica",
-                                &subject[..subject.len().min(30)]
-                            );
-                        }
-                    }
-                }
+                let readable = own_agent.as_deref() == Some(subj.pure_id().as_str())
+                    || crate::hierarchy::check_read(store, &resource, agent)
+                        .await
+                        .is_ok();
 
                 if !readable {
                     tracing::warn!(
@@ -2726,7 +2739,7 @@ mod bootstrap_and_sub_tests {
         );
         let agent = ForAgent::from(alice);
         let snapshots =
-            collect_readable_snapshots(&db, &agent, std::slice::from_ref(&legacy), None).await;
+            collect_readable_snapshots(&db, &agent, std::slice::from_ref(&legacy)).await;
         assert_eq!(
             snapshots.len(),
             1,

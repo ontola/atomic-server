@@ -111,9 +111,7 @@ export function WebsiteHosting({
       try {
         await action();
       } catch (error) {
-        store.notifyError(
-          error instanceof Error ? error : new Error(String(error)),
-        );
+        store.notifyError(error);
       }
 
       setBusy(false);

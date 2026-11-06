@@ -23,6 +23,18 @@ import { constructOpenURL } from '../../helpers/navigation';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { sendChatMessage } from '../../views/ChatRoom/ChatRoomView';
+import { isEmbedded } from '../../helpers/embedMode';
+import {
+  hostFollow,
+  hostMeetingEnded,
+  hostMeetingStarted,
+  hostUnfollow,
+} from '../../embed/hostActions';
+import {
+  setHostMeeting,
+  useHostFollow,
+  useHostMeeting,
+} from '../../embed/presenceBridge';
 
 interface FollowContextValue {
   /** Agent subject currently being followed, if any. */
@@ -141,7 +153,12 @@ export function FollowProvider({
   const [drive] = useDrive();
   const [agent] = useCurrentAgent();
   const agentSubject = agent?.subject;
-  const [followedAgent, setFollowedAgent] = useState<string>();
+  // In the Flutter app's embed the app owns following: it navigates and keeps
+  // who is followed, the page mirrors it and asks (`hostFollow`).
+  const embedded = isEmbedded();
+  const hostFollowed = useHostFollow();
+  const [ownFollowed, setFollowedAgent] = useState<string>();
+  const followedAgent = embedded ? hostFollowed : ownFollowed;
   const [allowFollow, setAllowFollowStored] = useLocalStorage(
     'presenceAllowFollow',
     true,
@@ -149,9 +166,14 @@ export function FollowProvider({
   const presence = useDrivePresence();
   const navigate = useNavigateWithTransition();
   const [currentSubject] = useCurrentSubject();
-  /** The Meeting this agent is currently leading (state is local: a
-   *  reload ends leadership; the banner hides once presence expires). */
-  const [activeMeeting, setActiveMeeting] = useState<string>();
+  /** The Meeting this agent is currently leading. On the web the state is
+   *  local to the tab (a reload resumes it from sessionStorage). In the
+   *  Flutter embed the app owns it (a page is recycled, which would lose it):
+   *  the page tells the app (`hostMeetingStarted` / `hostMeetingEnded`) and
+   *  reads it back through `atomicEmbed.setMeeting`. */
+  const [ownMeeting, setActiveMeeting] = useState<string>();
+  const hostMeeting = useHostMeeting();
+  const activeMeeting = embedded ? hostMeeting : ownMeeting;
 
   // Not the drive's channel when this agent can't read the drive.
   const manager = useDrivePresenceManager();
@@ -201,6 +223,10 @@ export function FollowProvider({
   const lastNavigatedRef = useRef<string>(undefined);
 
   useEffect(() => {
+    // The app navigates to the leader when embedded; doing it here too would
+    // be a second implementation fighting the first.
+    if (embedded) return;
+
     if (followedResource && followedResource !== lastNavigatedRef.current) {
       lastNavigatedRef.current = followedResource;
       navigate(constructOpenURL(followedResource));
@@ -209,19 +235,30 @@ export function FollowProvider({
     if (!followedAgent) {
       lastNavigatedRef.current = undefined;
     }
-  }, [followedResource, followedAgent, navigate]);
+  }, [embedded, followedResource, followedAgent, navigate]);
 
   // Stop silently when the followed agent goes offline (presence expired)
   // or announces that they don't want to be followed.
   useEffect(() => {
+    if (!followedAgent) {
+      return;
+    }
+
+    if (embedded) {
+      // The app stops on its own when the leader leaves the drive; the opt-out
+      // is only known here.
+      if (isFollowDisabledFor(followedAgent)) hostUnfollow();
+
+      return;
+    }
+
     if (
-      followedAgent &&
-      (!presence.some(item => item.agent === followedAgent) ||
-        isFollowDisabledFor(followedAgent))
+      !presence.some(item => item.agent === followedAgent) ||
+      isFollowDisabledFor(followedAgent)
     ) {
       setFollowedAgent(undefined);
     }
-  }, [presence, followedAgent, isFollowDisabledFor]);
+  }, [embedded, presence, followedAgent, isFollowDisabledFor]);
 
   const followers = useMemo(
     () =>
@@ -243,6 +280,9 @@ export function FollowProvider({
   // but clears when the tab closes. Switching drives swaps to that drive's own
   // meeting, or none.
   useEffect(() => {
+    // The app keeps it when embedded.
+    if (embedded) return;
+
     if (!drive) {
       setActiveMeeting(undefined);
 
@@ -252,13 +292,14 @@ export function FollowProvider({
     setActiveMeeting(
       sessionStorage.getItem(meetingStorageKey(drive)) ?? undefined,
     );
-  }, [drive]);
+  }, [drive, embedded]);
 
   // While leading a meeting, log each NEW resource visited into it — the
   // meeting is the shared trail, and late joiners read it back. Each resource
   // is logged at most once per meeting.
   useEffect(() => {
-    if (!activeMeeting || !currentSubject) {
+    // The app does not post it twice: nothing here when embedded.
+    if (!activeMeeting || !currentSubject || embedded) {
       return;
     }
 
@@ -275,7 +316,7 @@ export function FollowProvider({
     postTrailMessage(store, activeMeeting, currentSubject).catch(
       () => undefined,
     );
-  }, [activeMeeting, currentSubject, store]);
+  }, [activeMeeting, currentSubject, embedded, store]);
 
   // The meeting of the agent WE follow, from their presence entry.
   const followedSession = useMemo(() => {
@@ -315,13 +356,24 @@ export function FollowProvider({
     }
   }, [activeMeeting, followedSession, agentSubject, store]);
 
-  const follow = useCallback((subject: string) => {
-    setFollowedAgent(subject);
-  }, []);
+  const follow = useCallback(
+    (subject: string) => {
+      if (embedded) {
+        hostFollow(subject);
+      } else {
+        setFollowedAgent(subject);
+      }
+    },
+    [embedded],
+  );
 
   const unfollow = useCallback(() => {
-    setFollowedAgent(undefined);
-  }, []);
+    if (embedded) {
+      hostUnfollow();
+    } else {
+      setFollowedAgent(undefined);
+    }
+  }, [embedded]);
 
   const jumpToFollowed = useCallback(() => {
     if (followedResource) {
@@ -406,8 +458,16 @@ export function FollowProvider({
 
       trailMeetingRef.current = subject;
       trailedRef.current = new Set([subject]);
-      setActiveMeeting(subject);
-      sessionStorage.setItem(meetingStorageKey(drive), subject);
+
+      if (embedded) {
+        // Shown at once; the app keeps it from here (and posts the trail).
+        setHostMeeting(subject);
+        hostMeetingStarted(subject);
+      } else {
+        setActiveMeeting(subject);
+        sessionStorage.setItem(meetingStorageKey(drive), subject);
+      }
+
       navigate(constructOpenURL(subject));
 
       // Chat narration is useful history, but it must not block the visible
@@ -419,14 +479,17 @@ export function FollowProvider({
           extraClasses: [dataBrowser.classes.followEvent],
         }).catch(() => undefined);
         meetingNarrationRef.current = startMessage;
-        void startMessage
-          .then(() => postTrailMessage(store, subject, subject))
-          .catch(() => undefined);
+
+        if (!embedded) {
+          void startMessage
+            .then(() => postTrailMessage(store, subject, subject))
+            .catch(() => undefined);
+        }
       }
 
       return subject;
     },
-    [agentSubject, createMeeting, drive, navigate, store],
+    [agentSubject, createMeeting, drive, embedded, navigate, store],
   );
 
   const endMeeting = useCallback(async (): Promise<void> => {
@@ -466,6 +529,13 @@ export function FollowProvider({
       }
     }
 
+    if (embedded) {
+      hostMeetingEnded(endingMeeting);
+      setHostMeeting(undefined);
+
+      return;
+    }
+
     // Do not let a slow End completion clear a newer meeting that was started
     // from the top bar in the meantime.
     setActiveMeeting(current =>
@@ -479,7 +549,7 @@ export function FollowProvider({
         sessionStorage.removeItem(storageKey);
       }
     }
-  }, [activeMeeting, drive, store]);
+  }, [activeMeeting, drive, embedded, store]);
 
   const value = useMemo(
     () => ({

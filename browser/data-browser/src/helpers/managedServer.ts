@@ -1,4 +1,4 @@
-import { signRequest, type Agent } from '@tomic/react';
+import { isLoopbackHost, signRequest, type Agent } from '@tomic/react';
 import { serverProps, peerProps } from './serverOntology';
 import { rememberManagedPortalUrl, safePortalUrl } from './managed/api';
 import { isRunningInTauri } from './tauri';
@@ -98,8 +98,7 @@ export async function fetchManagedInfo(
     const onLocalhost =
       !isRunningInTauri() &&
       typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1');
+      isLoopbackHost(window.location.hostname);
 
     const rawPeers = data?.[serverProps.peers];
     const peers: ServerPeer[] = Array.isArray(rawPeers)

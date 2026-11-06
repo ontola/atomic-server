@@ -31,6 +31,7 @@ import { setAccountReturnHandler } from '../../helpers/deepLinkQueue';
 import { openExternal } from '../../helpers/openExternal';
 import { isRunningInTauri } from '../../helpers/tauri';
 import { CardError } from './chrome';
+import { asError } from '@tomic/react';
 
 const EMAIL_POLL_MS = 2000;
 
@@ -124,7 +125,7 @@ export function AccountSignInPanel({
     setError(null);
 
     const outcome = await signInWithAccountPasskey(email).catch(
-      (err: unknown) => (err instanceof Error ? err : new Error(String(err))),
+      (err: unknown) => asError(err),
     );
     setBusy(false);
 
@@ -138,7 +139,7 @@ export function AccountSignInPanel({
     setError(null);
 
     const outcome = await sendAccountEmailLink(email).catch((err: unknown) =>
-      err instanceof Error ? err : new Error(String(err)),
+      asError(err),
     );
     setSending(false);
 
@@ -322,9 +323,7 @@ export function AccountSignInViaBrowser({
         portalUrl,
         undefined,
         returnVerifier?.challenge,
-      ).catch((err: unknown) =>
-        err instanceof Error ? err : new Error(String(err)),
-      ));
+      ).catch((err: unknown) => asError(err)));
     setBusy(false);
 
     if (issued instanceof Error) {

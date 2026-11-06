@@ -1,6 +1,7 @@
 import type {
   ImportStatus,
   LoroDoc,
+  LoroEventBatch,
   LoroList,
   UndoManager as LoroUndoManager,
   VersionVector,
@@ -236,6 +237,16 @@ export class SaveQueuedError extends Error {
   }
 }
 
+/** Stamp editor commits without closing over a Resource or its document. */
+const restampLoroCommit: Parameters<LoroDoc['subscribePreCommit']>[0] = ({
+  changeMeta,
+  modifier,
+}) => {
+  if (changeMeta.timestamp < 1_000_000_000_000) {
+    modifier.setTimestamp(Math.floor(Date.now() / 1000));
+  }
+};
+
 /**
  * Describes an Atomic Resource, which has a Subject URL and a bunch of Property
  * / Value combinations.
@@ -285,6 +296,8 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Loro CRDT document backing this resource. Lazily initialized. */
   private _loroDoc?: LoroDoc;
+  /** Observers belong to this particular document, not its replacement. */
+  private _loroSubscriptions: (() => void)[] = [];
   /** The "properties" map inside the LoroDoc. Typed as any because the LoroMap generic causes issues with set(). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _loroMap?: any;
@@ -546,11 +559,9 @@ export class Resource<C extends OptionalClass = any> {
       // readers (the drive Activity feed) saw typing as minutes old. Re-stamp
       // auto-stamped (second-resolution) commits with the real time; commits
       // with an explicit millisecond timestamp (`signAt`) are left alone.
-      this._loroDoc.subscribePreCommit(({ changeMeta, modifier }) => {
-        if (changeMeta.timestamp < 1_000_000_000_000) {
-          modifier.setTimestamp(Math.floor(Date.now() / 1000));
-        }
-      });
+      this._loroSubscriptions.push(
+        this._loroDoc.subscribePreCommit(restampLoroCommit),
+      );
       this._loroMap = this._loroDoc.getMap('properties');
 
       // If the resource has a persisted Loro snapshot, import it.
@@ -684,54 +695,74 @@ export class Resource<C extends OptionalClass = any> {
       // - External HTTP subjects (atomicdata.dev/* etc.) belong to
       //   another domain. POSTing them returns "Subject of commit
       //   should be sent to other domain."
-      this._loroDoc.subscribe(batch => {
-        // Only genuine local edits enqueue. `import` (a peer's ops) and
-        // `checkout` (history scrub) are not writes of ours, and anything
-        // tagged with the system origin is runtime housekeeping —
-        // hydration, heal, datatype tags, post-ack bookkeeping — which
-        // replays state the server already has.
-        if (batch.by !== 'local') return;
-        if (batch.origin?.startsWith(SYSTEM_COMMIT_ORIGIN)) return;
-        if (!this._store) return;
-        if (isCommitSubject(this.subject)) return;
-        // A resource still under construction (created, not yet `save()`d):
-        // its property writes belong to the genesis commit, which is signed and
-        // stashed at creation and drained by `save()`. Marking it dirty here
-        // would enqueue a phantom incremental commit alongside the genesis.
-        // Keyed on `new` (cleared once the genesis is signed), NOT on a subject
-        // scheme — the resource carries its real `did:ad:` from birth.
-        if (this.new) return;
-        // `_new:` placeholders (created by older builds, before every caller
-        // moved to `store.newResource()`, which mints the real DID up front)
-        // can only be synced by first deriving their real subject via
-        // `signChanges` — that's what `_saveInner`'s explicit-save path does. `this.new` is supposed to
-        // gate that window, but it can be reset by unrelated reconciliation
-        // (e.g. `applyToStore` merging in a fetch response) before the
-        // resource is actually complete. Without this, a `_new:` subject
-        // reaches the plain incremental-commit path, the server rejects it
-        // (it was never genesis'd — often missing required properties too),
-        // the terminal-drop handler refetches it, that refetch can reset
-        // `new` again, and the next local edit repeats the cycle.
-        if (this.subject.startsWith('_new:')) return;
-        if (!this._store.isOwnedSubject(this.subject)) return;
-        // Local-only drives never drain — their saves persist to
-        // clientDb directly (see `saveLocalOnly`). Marking dirty here
-        // would strand an entry the drain can only fail on.
-        if (this._store.isLocalOnlySubject(this.subject)) return;
-        // Skip when offline: `pendingDirtyCount > 0` is the canonical
-        // "edit is durable" signal. Marking dirty here while offline
-        // would race the async `saveOffline` clientDb write — a
-        // page reload between this synchronous `markDirty` and the
-        // OPFS persist landing would lose the edit. `_saveInner`'s
-        // offline branch awaits `saveOffline` and only then calls
-        // `markDirty`, so the count rising correctly implies the
-        // edit is in clientDb.
-        if (!this._store.serverConnected) return;
-        this._store.outbox.markDirty(this.subject);
-      });
+      this._loroSubscriptions.push(
+        this._loroDoc.subscribe(
+          Resource.localChangeObserver(new WeakRef(this)),
+        ),
+      );
     }
 
     return this._loroDoc;
+  }
+
+  /**
+   * Rust retains its JS observers. A callback that closes over this Resource
+   * would root the Resource, its document and any Store it belongs to forever,
+   * including temporary Resources discarded after an incoming-state merge.
+   * Keep this factory static and accept only the weak owner so its closure
+   * cannot accidentally retain a strong owner through the surrounding scope.
+   */
+  private static localChangeObserver(
+    owner: WeakRef<Resource>,
+  ): (batch: LoroEventBatch) => void {
+    return batch => owner.deref()?.onLoroLocalChange(batch);
+  }
+
+  private onLoroLocalChange(batch: LoroEventBatch): void {
+    // Only genuine local edits enqueue. `import` (a peer's ops) and
+    // `checkout` (history scrub) are not writes of ours, and anything
+    // tagged with the system origin is runtime housekeeping —
+    // hydration, heal, datatype tags, post-ack bookkeeping — which
+    // replays state the server already has.
+    if (batch.by !== 'local') return;
+    if (batch.origin?.startsWith(SYSTEM_COMMIT_ORIGIN)) return;
+    if (!this._store) return;
+    if (isCommitSubject(this.subject)) return;
+    // A resource still under construction (created, not yet `save()`d):
+    // its property writes belong to the genesis commit, which is signed and
+    // stashed at creation and drained by `save()`. Marking it dirty here
+    // would enqueue a phantom incremental commit alongside the genesis.
+    // Keyed on `new` (cleared once the genesis is signed), NOT on a subject
+    // scheme — the resource carries its real `did:ad:` from birth.
+    if (this.new) return;
+    // `_new:` placeholders (created by older builds, before every caller
+    // moved to `store.newResource()`, which mints the real DID up front)
+    // can only be synced by first deriving their real subject via
+    // `signChanges` — that's what `_saveInner`'s explicit-save path does. `this.new` is supposed to
+    // gate that window, but it can be reset by unrelated reconciliation
+    // (e.g. `applyToStore` merging in a fetch response) before the
+    // resource is actually complete. Without this, a `_new:` subject
+    // reaches the plain incremental-commit path, the server rejects it
+    // (it was never genesis'd — often missing required properties too),
+    // the terminal-drop handler refetches it, that refetch can reset
+    // `new` again, and the next local edit repeats the cycle.
+    if (this.subject.startsWith('_new:')) return;
+    if (!this._store.isOwnedSubject(this.subject)) return;
+    // Local-only drives never drain — their saves persist to
+    // clientDb directly (see `saveLocalOnly`). Marking dirty here
+    // would strand an entry the drain can only fail on.
+    if (this._store.isLocalOnlySubject(this.subject)) return;
+    // Skip when offline: `pendingDirtyCount > 0` is the canonical
+    // "edit is durable" signal. Marking dirty here while offline
+    // would race the async `saveOffline` clientDb write — a
+    // page reload between this synchronous `markDirty` and the
+    // OPFS persist landing would lose the edit. `_saveInner`'s
+    // offline branch awaits `saveOffline` and only then calls
+    // `markDirty`, so the count rising correctly implies the
+    // edit is in clientDb. (A store with a commit transport is not
+    // offline: its commits go to the transport, like to a server.)
+    if (!this._store.canCommit) return;
+    this._store.outbox.markDirty(this.subject);
   }
 
   /** Returns the Loro properties map, or undefined if Loro isn't loaded */
@@ -1040,6 +1071,10 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   private resetLoroState(): void {
+    for (const unsubscribe of this._loroSubscriptions) unsubscribe();
+    this._loroSubscriptions = [];
+    // getLoroDoc() is public: an editor may still hold the previous document.
+    // Detach our observers, but leave that document usable until normal GC.
     this._loroDoc = undefined;
     this._loroMap = undefined;
     this._loroUndoManager = undefined;
@@ -2927,7 +2962,7 @@ export class Resource<C extends OptionalClass = any> {
     this.store.outbox.setDestroyCommit(this.subject, commit);
     this.store.removeResource(this.subject);
 
-    if (!this.store.serverConnected) {
+    if (!this.store.canCommit) {
       // Queued; the reconnect drain POSTs it. Resolve once the queued
       // envelope is on disk, like an offline save.
       await this.store.outbox.flush();
@@ -3776,7 +3811,7 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('No agent has been set, you cannot save.');
     }
 
-    if (this.store.requireOnlineWrites && !this.store.serverConnected) {
+    if (this.store.requireOnlineWrites && !this.store.canCommit) {
       throw new Error(
         'The local node is not connected; this change was not saved.',
       );
@@ -3856,7 +3891,7 @@ export class Resource<C extends OptionalClass = any> {
         }
       }
 
-      if (!this.store.serverConnected) {
+      if (!this.store.canCommit) {
         // Offline: the snapshot and the outbox entry are written together.
         await this.saveOffline(hasChanges);
 

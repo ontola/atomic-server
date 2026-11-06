@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use atomic_lib::{
-    agents::ForAgent, datatype::DataType, db::app_agent::AppAgentKey, hierarchy::check_write, urls,
-    Db, Resource, Storelike, Subject, Value,
+    agents::ForAgent, db::app_agent::AppAgentKey, hierarchy::check_write, urls, Db, Resource,
+    Storelike, Subject, Value,
 };
 use serde_json::Value as Json;
 
@@ -357,45 +357,9 @@ impl ApplyHost for StoreApplyHost {
     }
 }
 
-/// A JSON value from a verdict, as the datatype its property declares.
-///
-/// The planner already refused anything that does not fit, so a failure here
-/// means the two disagree — which is exactly the drift the shared fixture
-/// corpus exists to catch, and worth an error rather than a coercion.
-pub(crate) fn json_to_value(value: Json, datatype: &DataType) -> Result<Value, String> {
-    match (datatype, value) {
-        (DataType::Json | DataType::LocalizedText, value) => Ok(Value::Json(value)),
-        (DataType::Integer, Json::Number(n)) => n
-            .as_i64()
-            .map(Value::Integer)
-            .ok_or_else(|| format!("{n} is not a whole number")),
-        (DataType::Timestamp, Json::Number(n)) => n
-            .as_i64()
-            .map(Value::Timestamp)
-            .ok_or_else(|| format!("{n} is not a timestamp")),
-        (DataType::Float, Json::Number(n)) => n
-            .as_f64()
-            .map(Value::Float)
-            .ok_or_else(|| format!("{n} is not a number")),
-        (DataType::Boolean, Json::Bool(b)) => Ok(Value::Boolean(b)),
-        (DataType::ResourceArray, Json::Array(items)) => Ok(Value::ResourceArray(
-            items
-                .iter()
-                .map(|item| {
-                    item.as_str()
-                        .map(|subject| {
-                            atomic_lib::values::SubResource::Subject(Subject::from_raw(
-                                subject, None,
-                            ))
-                        })
-                        .ok_or_else(|| format!("{item} is not a subject"))
-                })
-                .collect::<Result<Vec<_>, String>>()?,
-        )),
-        (datatype, Json::String(text)) => Value::new(&text, datatype).map_err(|e| e.to_string()),
-        (datatype, value) => Err(format!("{value} is not a {datatype}")),
-    }
-}
+/// A JSON value from a verdict, as the datatype its property declares. Lives
+/// in `atomic_lib` so the phone's app writes convert values the same way.
+pub(crate) use atomic_lib::values::json_to_value;
 
 /// Whether resources under this parent are identified by genesis certificate
 /// rather than by path.

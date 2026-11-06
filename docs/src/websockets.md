@@ -57,6 +57,20 @@ There is no version number on the wire. A responder advertises named
 capabilities and a client adapts to them. Anything not advertised is assumed
 absent, which is the pre-2026-09 baseline.
 
+Capabilities that every build since the 2026-09 baseline speaks (`auth-max-age`,
+`pull-from`, `signed-destroy`, `unsub`, `auth-nonce`, `client-hello`,
+`rebind-on-auth`, `ephemeral`) are no longer advertised, and `rbsr` was retired
+earlier. Their names are never reused.
+
+**Deprecated clients.** The baseline for a current client is the client
+capability `canonical-scheme`, which every client since AtomicServer
+v0.41.0-beta.8 lists in its `HELLO`. A connection whose `HELLO` lacks it gets
+one `ERROR{request_id 0, DEPRECATED_CLIENT (14)}` notice and a warning in the
+server log; one that authenticates and never sends a `HELLO` is only logged. It
+is a notice only: the connection keeps working and no request is affected. A
+client that receives it should log it and carry on. Support for such clients
+will be removed in a coming release.
+
 `AUTH_OK (0x02)`'s payload is a JSON array of capability names, UTF-8, with
 no length prefix. A responder with nothing to advertise sends a bare
 `[0x02]`, which is what every pre-2026-09 build sends; decoders match on the
@@ -68,18 +82,9 @@ The current list (`protocol::CAPABILITIES`):
 
 | Name | Meaning |
 | --- | --- |
-| `auth-max-age` | `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused, and a failed `AUTH` answers with `AUTH_FAILED (8)`. |
 | `keepalive` | Understands `KEEPALIVE (0x41)`, and echoes it over WebSocket. |
-| `rbsr` | *Retired 2026-09, no longer advertised; never reuse.* Answered the `RBSR_FP` range-fingerprint frames. |
-| `pull-from` | `SYNC_DIFF` carries a `pullFrom` map of per-subject version vectors. |
-| `signed-destroy` | On a peer stream, destroys travel as signed `COMMIT` frames; a naked `DESTROY` from a peer is ignored. |
-| `unsub` | `UNSUB (0x21)` actually cancels a drive subscription. |
-| `auth-nonce` | Sends `CHALLENGE (0x42)` as its first frame on a WebSocket and verifies an `AUTH.requestedSubject` of the form `{origin}#{nonce}` against it. |
 | `commit-ok-slim` | Answers `COMMIT` with the slim `COMMIT_OK` (`[request_id] [commit_id]`) for a client whose `HELLO` lists `commit-ok-slim`. |
-| `client-hello` | Reads a `HELLO (0x37)` from a WebSocket client and records the capabilities it lists. |
-| `rebind-on-auth` | Re-evaluates the connection's subscriptions against the new identity when an `AUTH` lands, dropping the ones it may no longer read. |
 | `sync-probe` | Reads the `probe` and `subjects` keys of a `SYNC (0x30)` JSON tail and answers a stale probe with `SYNC_RESEND (0x38)`. |
-| `ephemeral` | Reads and writes `EPHEMERAL (0x40)` over WebSocket for edits in progress, cursors and drive presence, in place of the `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE` text frames. |
 | `commit-pace` | Appends the node's write-load hint (`pace_ms`) to the slim `COMMIT_OK` of a client whose `HELLO` lists `commit-pace`, and may refuse a `COMMIT` with `BUSY (12)` when overloaded. See [Write load and pacing](#write-load-and-pacing). |
 | `get-many` | Answers `GET_MANY (0x15)`, a list of subjects, with one `GET_MANY_RESULT (0x16)` holding an `UPDATE` or `ERROR` entry per subject, so a client fetches a whole list in one round trip. |
 
@@ -93,7 +98,7 @@ too: the browser and `WsClient` send a `HELLO` on open, listing what they
 speak (`protocol::CLIENT_CAPABILITIES`, `CLIENT_CAPABILITIES` in `ws-v2.ts`).
 The server answers nothing (its own list rides on `AUTH_OK`); the list steers
 what that connection is sent from then on. The one name a responder acts on
-today are `commit-ok-slim` and `commit-pace`. A server that predates `client-hello` drops the
+today are `commit-ok-slim` and `commit-pace`. A server that predates client `HELLO`s drops the
 frame unread, and the client gets the pre-2026-09 behaviour.
 
 
@@ -123,7 +128,7 @@ logged and dropped, not answered.
 | `0x33` | `SYNC_PUSH` | either | engine (both transports) |
 | `0x34` | `BLOB_REQUEST` | either | engine (both transports); the browser also answers from its local blob store |
 | `0x35` | `BLOB_RESPONSE` | either | engine (both transports) |
-| `0x36` | *reserved* | nobody | nobody. Previously `QUERY_UPDATE`; retired, never reuse. |
+| `0x36` | *reserved* | nobody | nobody. Previously `QUERY_UPDATE`; retired, never reuse. It has no constant in the code, only this note. |
 | `0x37` | `HELLO` | both peers on an Iroh stream; a WebSocket client on open | Iroh handshake and live loop; the WS handler records the client's capabilities. The WS server never sends one (its capabilities ride on `AUTH_OK`). |
 | `0x38` | `SYNC_RESEND` | responder, answering a `SYNC` probe whose hash is stale | client only (browser, Iroh initiator). Tells the client to send its full version-vector `SYNC`. |
 | `0x40` | `EPHEMERAL` | Iroh peers; WS client and server, both ways | Iroh live loop; WS handler (`require_auth`, then the broadcaster). The server relays between the two transports. |
@@ -131,6 +136,8 @@ logged and dropped, not answered.
 | `0x42` | `CHALLENGE` | WS server, as its first frame | client only. Never sent on an Iroh stream. |
 | `0x50` | `CALL` | Iroh dialer, after `AUTH` | `atomic_lib::sync::call`, answered by the server's host ABI. Iroh only; the WS server answers it with an `ERROR`. |
 | `0x51` | `CALL_RESULT` | Iroh responder | the dialer of the `CALL`. |
+| `0x52` | `INVITE` | Iroh dialer, after `AUTH` | `atomic_lib::sync::invite`. Iroh only; the WS server answers it with an `ERROR`. |
+| `0x53` | `INVITE_OK` | Iroh responder | the dialer of the `INVITE`. A refusal is an `ERROR` with code 13 (`INVITE_REFUSED`). |
 
 ## Frame layouts
 
@@ -318,6 +325,40 @@ checks), and in addition needs the node's agent to be able to read the drive,
 and to write it wherever a hop writes. A `caller` of `sudo` or the public agent
 is refused.
 
+### INVITE (0x52) and INVITE_OK (0x53)
+
+```
+[0x52] [json {"token": "<base64 invite token>"}]              // INVITE
+[0x53] [json {"drive": "did:ad:…", "write": false}]           // INVITE_OK
+```
+
+Redeem an invite token (`generateInviteToken` of `@tomic/lib`, signed by the
+inviter) at a device of the inviter, without a server. Iroh only. The dialer
+finds the device the way it finds any device of a drive: the pkarr record of
+the token's target lists the Iroh node ids (`_atomic_nodes`). It sends `AUTH`
+for the token's target (`drive#nodeId`, as for a sync), which proves who the
+invitee is, and then `INVITE`. The frame is accepted from any authenticated
+agent, paired or not: the token is the authority, and `INVITE` for a drive other
+than the `AUTH`'s is refused like a `SYNC` for the wrong drive.
+
+The responder grants only when all of these hold, and otherwise answers
+`ERROR` with code 13 and a plain sentence as message (nothing is granted):
+
+- the token has not expired ("This invite has expired. Ask for a new one.");
+- the token's signer is the responder's **own** agent and the signature
+  verifies, because only then can this node sign the change as the inviter
+  ("This device did not make this invite, so it cannot accept it.");
+- that agent may still write the target in the responder's store.
+
+It then adds the invitee to the target's `read` list (and `write` for a write
+invite) in a commit signed by its agent, queues that commit for the inviter's
+servers and lets live peers carry it to the inviter's other devices, and
+answers `INVITE_OK`. The invitee then syncs the drive from the same device with
+an ordinary `SYNC`, which the sync policy admits because the invitee can now
+read. `max_usages` of the token is not counted: that needs state shared by all
+the inviter's devices. In the link form of the Flutter package this is
+`atomic:invite?token=<token>`; the web app does not parse that form yet.
+
 ### EPHEMERAL (0x40)
 
 ```
@@ -485,6 +526,7 @@ Everything else is open to an anonymous socket and gated per subject by
 | `10` | `IMMUTABLE_COMMIT` | The commit's subject is itself a Commit, which can never be edited. Terminal: drop the entry; nothing is lost. |
 | `11` | `CAUSALITY_CONFLICT` | A new Loro write lost against stored state. Keep the local edit; stop sending the same stale update until it is rebased. |
 | `12` | `BUSY` | The node is overloaded with writes, or the agent spent its write rate budget. Refused **before** any work; nothing landed. The message carries `retry_after_ms=<n>`. Not a failure: keep the edit, wait, send one merged delta, and do not retry over another transport. See [Write load and pacing](#write-load-and-pacing). |
+| `14` | `DEPRECATED_CLIENT` | A notice, not a refusal, sent with `request_id` 0 in answer to the `HELLO` to a client that predates `canonical-scheme` (see [Versioning and capabilities](#versioning-and-capabilities)). The connection stays usable; log it and carry on. A client that predates the code sees an unknown code with request id 0. |
 
 Codes `1` to `4` and `9` to `12` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
@@ -653,11 +695,7 @@ depends on the subject:
   a commit subject;
 - **any other resource**: a per-resource subscription on that one subject.
 
-No `AUTH` needed; gated on `check_read` of the subject. Until 2026-09-04 the
-per-resource case was a separate text frame (`SUBSCRIBE <subject>`, `AUTH`
-required, no unsubscribe), and a filter subscription (`SUBSCRIBE_QUERY`)
-existed that no client outside the Rust integration tests ever sent; both
-are gone.
+No `AUTH` needed; gated on `check_read` of the subject.
 
 **`UNSUB (0x21) <subject>`** cancels it, under the same raw string `SUB`
 registered with, so the fan-out entry is actually found. It removes the
@@ -1090,7 +1128,7 @@ step when you touch any of them.
 | `server/src/serve.rs` | Relays Iroh `EPHEMERAL` into the commit monitor so local WebSocket subscribers see peer presence. |
 | `browser/lib/src/ws-v2.ts` | Frame encode and decode. |
 | `browser/lib/src/websockets.ts` | The browser client: auth, pending requests, subscriptions, commit over WS, liveness, drive reconcile. |
-| `flutter/rust/src/api/simple/ws_sync.rs` | The Flutter FRB bridge over `WsClient`. |
+| `packages/atomic_store_flutter/rust/src/api/simple/ws_sync.rs` | The Flutter FRB bridge over `WsClient`. |
 
 ## Known gaps
 

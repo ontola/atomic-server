@@ -628,8 +628,7 @@ pub fn for_subjects<'a>(
 /// survives, which may be one already here. Idempotent for a row already
 /// stored.
 pub async fn import_envelope(store: &Db, expected_subject: &str, json: &str) -> AtomicResult<()> {
-    let resource = crate::parse::parse_json_ad_commit_resource(json, store).await?;
-    let commit = crate::commit::Commit::from_resource(resource)?;
+    let commit = crate::commit::Commit::from_json_ad(json)?;
     let expected = crate::Subject::from_raw(expected_subject, None).pure_id();
     let actual = commit.subject.pure_id();
     if actual != expected {
@@ -781,8 +780,7 @@ pub async fn attribute_history(store: &Db, subject: &str) -> AtomicResult<Histor
         ..
     } = envelopes_checked(store, subject);
     for envelope in retained {
-        let resource = crate::parse::parse_json_ad_commit_resource(&envelope.json, store).await?;
-        let commit = crate::commit::Commit::from_resource(resource)?;
+        let commit = crate::commit::Commit::from_json_ad(&envelope.json)?;
         let verified = commit.validate_signature(store).await.is_ok();
 
         // Tokens this envelope introduced. A genesis carries a snapshot and
@@ -1838,10 +1836,7 @@ mod tests {
 
         // The rebuilt JSON verifies on its own, through the same path a
         // receiving peer uses.
-        let resource = crate::parse::parse_json_ad_commit_resource(&last.json, &db)
-            .await
-            .unwrap();
-        let commit = crate::commit::Commit::from_resource(resource).unwrap();
+        let commit = crate::commit::Commit::from_json_ad(&last.json).unwrap();
         commit
             .validate_signature(&db)
             .await

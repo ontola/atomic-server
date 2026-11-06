@@ -5,7 +5,12 @@ import { getManagedAccount } from './session';
 import { isRunningInTauri } from '../tauri';
 import { atomicWasmSource, wasmJsUrl } from '../wasmUrls';
 import { PRODUCT_NAME } from './product';
-import { getManagedApiBase, managedFetch } from './api';
+import {
+  getManagedApiBase,
+  getManagedDeviceToken,
+  managedFetch,
+  setManagedDeviceToken,
+} from './api';
 import { writeManagedAccountBinding } from './binding';
 import { getAccountProviders } from './accountProviders';
 
@@ -1700,12 +1705,36 @@ export async function upgradeToEnvelopeV2({
 
 // --- Portal API ---
 
+/** The control plane's host for an error message, or the page's own for a relative base. */
+function apiHost(): string {
+  try {
+    return new URL(
+      getManagedApiBase(),
+      typeof window === 'undefined' ? undefined : window.location.href,
+    ).host;
+  } catch {
+    return 'the account server';
+  }
+}
+
 export async function saveRecoverySecret(input: RecoverySecretInput) {
-  const response = await managedFetch(`/recovery-secret`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
+  const put = () =>
+    managedFetch(`/recovery-secret`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  let response = await put();
+
+  // A device token left in localStorage by an earlier link (a former domain, a
+  // revoked session) is sent as a bearer and outranks the cookie of a session
+  // that is in fact valid, so the save is refused for a reason the person
+  // cannot see. A rejected token is worth nothing: drop it and try once more
+  // without it.
+  if (response.status === 401 && getManagedDeviceToken()) {
+    setManagedDeviceToken(null);
+    response = await put();
+  }
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -1724,10 +1753,15 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
       .then((body: { error?: string }) => body?.error)
       .catch(() => undefined);
 
+    // No reason given: say where it failed instead. A portal remembered from
+    // an earlier domain answers with a bare 404 or 502, and the host is what
+    // gives that away.
+    const where = `HTTP ${response.status} from ${apiHost()}`;
+
     throw new Error(
       reason
         ? `Could not save encrypted recovery backup: ${reason}.`
-        : 'Could not save encrypted recovery backup.',
+        : `Could not save encrypted recovery backup (${where}).`,
     );
   }
 
@@ -1737,6 +1771,9 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
 
   return saved;
 }
+
+const RATE_LIMITED =
+  'Too many requests for the encrypted recovery backup. Wait a minute and try again.';
 
 const pendingRecoveryReads = new Map<string, Promise<RecoverySecret | null>>();
 const recoveryReadCooldowns = new Map<string, number>();
@@ -1753,9 +1790,7 @@ export async function getRecoverySecret(): Promise<RecoverySecret | null> {
     if (until <= now) recoveryReadCooldowns.delete(readKey);
   }
 
-  if (recoveryReadCooldowns.has(key)) {
-    throw new Error('Could not load encrypted recovery backup.');
-  }
+  if (recoveryReadCooldowns.has(key)) throw new Error(RATE_LIMITED);
 
   const pending = pendingRecoveryReads.get(key);
   if (pending) return pending;
@@ -1801,6 +1836,8 @@ async function fetchRecoverySecret(
   ) {
     return null;
   }
+
+  if (response.status === 429) throw new Error(RATE_LIMITED);
 
   if (!response.ok) {
     throw new Error('Could not load encrypted recovery backup.');

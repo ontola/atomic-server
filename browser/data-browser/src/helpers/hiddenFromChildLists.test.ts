@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { ai, dataBrowser } from '@tomic/lib';
+import { ai, dataBrowser, server } from '@tomic/lib';
 import { isHiddenFromChildLists } from './hiddenFromChildLists';
 
 const agent = 'did:ad:agent:abc';
 
 describe('isHiddenFromChildLists', () => {
-  it('hides AI chats and meetings', () => {
+  it('hides AI chats, not meetings', () => {
     expect(isHiddenFromChildLists([ai.classes.aiChat])).toBe(true);
-    expect(isHiddenFromChildLists([dataBrowser.classes.meeting])).toBe(true);
+    expect(isHiddenFromChildLists([dataBrowser.classes.meeting])).toBe(false);
+  });
+
+  it('hides app records (ExternalApp)', () => {
+    expect(isHiddenFromChildLists([server.classes.externalApp])).toBe(true);
   });
 
   it('hides a private note on an agent', () => {

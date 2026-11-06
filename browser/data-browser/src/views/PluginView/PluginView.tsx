@@ -11,6 +11,7 @@ import { ErrorBlock } from '@components/ErrorLook';
 import resetCss from '../../reset.css?raw';
 import { useCreateThemeVars, useFrameColorScheme } from './useCreateThemeVars';
 import { useCustomViews } from '@components/CustomViewProvider';
+import { asError } from '@tomic/react';
 
 export enum ViewType {
   Page = 'page',
@@ -117,10 +118,7 @@ const PluginViewSession: React.FC<PluginViewProps> = ({ plugin }) => {
             );
         })
         .catch(error => {
-          if (!cancelled)
-            setLoadError(
-              error instanceof Error ? error : new Error(String(error)),
-            );
+          if (!cancelled) setLoadError(asError(error));
         });
     };
 

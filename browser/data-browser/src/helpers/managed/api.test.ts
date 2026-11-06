@@ -253,7 +253,7 @@ describe('a linked device', () => {
 describe('browser control-plane routing', () => {
   beforeEach(() => {
     inTauri.value = false;
-    vi.stubGlobal('window', { location: { hostname: 'localhost' } });
+    vi.stubGlobal('window', { location: new URL('http://localhost:6747/app') });
     vi.stubEnv('VITE_MANAGED_API_BASE', '');
     vi.stubEnv('VITE_MANAGED_PORTAL_URL', '');
   });
@@ -275,8 +275,11 @@ describe('browser control-plane routing', () => {
     expect(api.getManagedApiBase()).toBe('http://localhost:3030/api');
   });
 
-  it('keeps cookie credentials for an unlinked browser session', async () => {
-    vi.stubEnv('VITE_MANAGED_API_BASE', 'http://localhost:3030/api');
+  it('keeps cookie credentials for an unlinked hosted browser session', async () => {
+    vi.stubGlobal('window', {
+      location: new URL('https://app.atomic.place/app/sync'),
+    });
+    vi.stubEnv('VITE_MANAGED_API_BASE', 'https://atomic.place/api');
     const api = await freshApi();
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
@@ -301,6 +304,117 @@ describe('browser control-plane routing', () => {
     expect(api.getManagedApiBase()).toBe(`${PORTAL}/api`);
   });
 }, 60000);
+
+describe('managed request credentials', () => {
+  beforeEach(() => {
+    inTauri.value = false;
+    vi.stubEnv('VITE_MANAGED_API_BASE', '');
+    vi.stubEnv('VITE_MANAGED_PORTAL_URL', '');
+  });
+
+  function at(href: string) {
+    vi.stubGlobal('window', { location: new URL(href) });
+  }
+
+  it.each([
+    ['http://localhost:11870/app/sync', 'https://atomic.place/api'],
+    ['https://notatomic.place/app', 'https://atomic.place/api'],
+    [
+      'https://app.atomic.place.attacker.example/app',
+      'https://atomic.place/api',
+    ],
+    ['http://app.atomic.place/app', 'https://atomic.place/api'],
+    ['https://app.atomic.place/app', 'http://atomic.place/api'],
+  ])('omits cookies from unlinked %s to %s', async (here, apiBase) => {
+    at(here);
+    vi.stubEnv('VITE_MANAGED_API_BASE', apiBase);
+    const api = await freshApi();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(Response.json({}));
+
+    await api.managedFetch('/me', { credentials: 'include' });
+
+    expect(fetch.mock.calls[0][1]?.credentials).toBe('omit');
+    expect(
+      (fetch.mock.calls[0][1]!.headers as Headers).has('Authorization'),
+    ).toBe(false);
+  });
+
+  it.each([
+    ['https://app.atomic.place/app/sync', 'https://atomic.place/api'],
+    ['http://localhost:11870/app/sync', 'http://localhost:3030/api'],
+    ['http://127.0.0.1:11870/app/sync', 'http://127.0.0.1:3030/api'],
+    ['https://app.atomic.place/app/sync', '/api'],
+  ])('keeps hosted cookies from %s to %s', async (here, apiBase) => {
+    at(here);
+    vi.stubEnv('VITE_MANAGED_API_BASE', apiBase);
+    const api = await freshApi();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(Response.json({}));
+
+    await api.managedFetch('/me');
+
+    expect(String(fetch.mock.calls[0][0])).toBe(`${apiBase}/me`);
+    expect(fetch.mock.calls[0][1]?.credentials).toBe('include');
+  });
+
+  it('omits cookies in a native WebView even at a matching HTTP development address', async () => {
+    at('http://localhost:11870/app/sync');
+    inTauri.value = true;
+    vi.stubEnv('VITE_MANAGED_API_BASE', 'http://localhost:3030/api');
+    const api = await freshApi();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(Response.json({}));
+
+    await api.managedFetch('/me', { credentials: 'include' });
+
+    expect(fetch.mock.calls[0][1]?.credentials).toBe('omit');
+  });
+
+  it('omits cookies for an explicit bearer on a hosted page without a stored device token', async () => {
+    at('https://app.atomic.place/app/sync');
+    vi.stubEnv('VITE_MANAGED_API_BASE', 'https://atomic.place/api');
+    const api = await freshApi();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(Response.json({}));
+
+    await api.managedFetch('/me', {
+      credentials: 'include',
+      headers: { Authorization: 'Bearer caller-session' },
+    });
+
+    expect(fetch.mock.calls[0][1]?.credentials).toBe('omit');
+    expect(
+      (fetch.mock.calls[0][1]!.headers as Headers).get('Authorization'),
+    ).toBe('Bearer caller-session');
+    expect(api.getManagedDeviceToken()).toBeNull();
+  });
+
+  it('uses only the bearer and pinned issuer even when a hosted page could hold cookies', async () => {
+    at('https://app.portal.example/app/sync');
+    const api = await freshApi();
+    api.setManagedDeviceToken('linked-session', PORTAL);
+    vi.stubGlobal('window', {
+      location: new URL('https://app.portal.example/app/sync'),
+      __ATOMIC_MANAGED__: { portalUrl: OTHER },
+    });
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(Response.json({}));
+
+    await api.managedFetch('/me', { credentials: 'include' });
+
+    expect(String(fetch.mock.calls[0][0])).toBe(`${PORTAL}/api/me`);
+    expect(fetch.mock.calls[0][1]?.credentials).toBe('omit');
+    expect(
+      (fetch.mock.calls[0][1]!.headers as Headers).get('Authorization'),
+    ).toBe('Bearer linked-session');
+  });
+});
 
 it('refreshes shared metadata when returning from the portal or unlinking', async () => {
   const events = new EventTarget();

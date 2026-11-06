@@ -1,49 +1,23 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:atomic_chat/atomic_chat.dart' show AppTopBar;
+import 'package:atomic_flutter/atomic_flutter.dart'
+    show
+        SyncActionButton,
+        SyncButtonKind,
+        SyncGap,
+        SyncText,
+        SyncTone,
+        SyncToneColors,
+        syncColors;
 import 'package:flutter/services.dart';
+import 'package:atomic_store_flutter/atomic_store_flutter.dart' show PairingCode;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../atomic/atomic_client.dart';
 import '../atomic/session.dart';
-
-/// Node identifier prefixes (canonical + legacy).
-const _atomicPrefix = 'atomic:';
-const _didAdPrefix = 'did:ad:';
-const _nodePrefix = 'atomic:node:';
-const _nodeDidPrefix = 'did:ad:node:';
-
-/// Legacy `atomic://pair` URI. New codes are `atomic:node:{id}?v=1&drives=*`.
-const _pairingUriPrefix = 'atomic://pair?';
-
-bool _isLegacyAtomicLink(String raw) => raw.startsWith('atomic://');
-
-String _toOpaqueAtomic(String raw) => _isLegacyAtomicLink(raw)
-    ? '$_atomicPrefix${raw.substring('atomic://'.length)}'
-    : raw;
-
-String? _opaqueAtomicBody(String raw) {
-  final opaque = _toOpaqueAtomic(raw);
-  if (!opaque.startsWith(_atomicPrefix) || _isLegacyAtomicLink(opaque)) {
-    return null;
-  }
-  return opaque.substring(_atomicPrefix.length).split(RegExp(r'[?#]')).first;
-}
-
-bool _isLegacyPairingUri(String raw) => _opaqueAtomicBody(raw) == 'pair';
-
-bool _isNodeIdentifier(String raw) {
-  final body = raw.startsWith(_atomicPrefix) && !_isLegacyAtomicLink(raw)
-      ? raw.substring(_atomicPrefix.length)
-      : raw.startsWith(_didAdPrefix)
-          ? raw.substring(_didAdPrefix.length)
-          : null;
-  if (body == null) {
-    return false;
-  }
-  final ident = body.split(RegExp(r'[?#]')).first;
-  return ident.startsWith('node:') && ident.length > 'node:'.length;
-}
+import 'scanner_frame.dart';
 
 enum _Step { loading, showQr, syncing, done, error }
 
@@ -73,133 +47,33 @@ class PairScreen extends StatefulWidget {
   const PairScreen({super.key, this.initialNodeId});
 
   static Future<int?> show(BuildContext context, {String? nodeId}) {
-    return showDialog<int>(
-      context: context,
+    // A page, not a dialog: nothing of the screen it was opened from stays
+    // visible behind the result.
+    return Navigator.of(context).push<int>(MaterialPageRoute<int>(
+      fullscreenDialog: true,
       builder: (_) => PairScreen(initialNodeId: nodeId),
-    );
+    ));
   }
 
   /// Parse a QR code value into a PeerInfo. Null when it is not a pairing code
-  /// this app understands.
-  ///
-  /// Formats:
-  ///  - `atomic://pair?v=1&node=did:ad:node:<hex>&url=<server>&drives=<a>&drives=<b>`
-  ///    — what the data-browser and Tauri apps show, including the code a
-  ///    browser shows for the server its drives live on.
-  ///  - `did:ad:node:<hex>:<name>` / `did:ad:node:<hex>` / raw hex / `iroh:<hex>`
-  ///    — this app's own code, and anything pasted by hand.
+  /// this app understands. The formats are `PairingCode.parse`'s (the package
+  /// owns them): `atomic://pair?…` from the web and desktop apps,
+  /// `atomic:node:<id>`, `did:ad:node:<id>[:<name>]`, raw hex and `iroh:<id>`.
   static PeerInfo? parsePeerInfo(String input) {
-    final trimmed = input.trim();
-
-    if (_isLegacyPairingUri(trimmed)) {
-      final opaque = _toOpaqueAtomic(trimmed);
-      final qIndex = opaque.indexOf('?');
-      final query = qIndex == -1 ? '' : opaque.substring(qIndex + 1);
-      return _parsePairingUri('$_pairingUriPrefix$query');
-    }
-
-    final opaque = _toOpaqueAtomic(trimmed);
-
-    if (_isNodeIdentifier(opaque.split(RegExp(r'[?#]')).first)) {
-      final ident = opaque.split(RegExp(r'[?#]')).first;
-      final prefix =
-          ident.startsWith(_nodePrefix) ? _nodePrefix : _nodeDidPrefix;
-      var value = ident.substring(prefix.length);
-      if (RegExp(r'^[a-f0-9]{64}$', caseSensitive: false).hasMatch(value)) {
-        final qIndex = opaque.indexOf('?');
-        if (qIndex == -1) {
-          return PeerInfo(value.toLowerCase());
-        }
-        return _parseNodeQuery(value.toLowerCase(), opaque.substring(qIndex + 1));
-      }
-    }
-
-    var value = trimmed;
-    String name = '';
-
-    if (value.startsWith(_nodePrefix) || value.startsWith(_nodeDidPrefix)) {
-      value = value.startsWith(_nodePrefix)
-          ? value.substring(_nodePrefix.length)
-          : value.substring(_nodeDidPrefix.length);
-      // Check for :<name> suffix after the 64-char hex
-      if (value.length > 64 && value[64] == ':') {
-        name = Uri.decodeComponent(value.substring(65));
-        value = value.substring(0, 64);
-      }
-    }
-    if (value.startsWith('iroh:')) value = value.substring(5);
-    if (RegExp(r'^[a-f0-9]{64}$').hasMatch(value)) {
-      return PeerInfo(value, name);
-    }
-    return null;
-  }
-
-  /// Reads an `atomic://pair?…` envelope.
-  ///
-  /// An unknown version is refused rather than read as far as it parses: a
-  /// newer code may mean something this app would get wrong, and dialing the
-  /// wrong node on a half-understood code is worse than saying no.
-  static PeerInfo? _parsePairingUri(String uri) {
-    final params =
-        Uri.splitQueryString(uri.substring(_pairingUriPrefix.length));
-
-    final version = params['v'];
-
-    if (version != null && version != '1') return null;
-
-    final node = params['node'];
-
-    if (node == null) return null;
-    final nodeId = node.startsWith(_nodePrefix)
-        ? node.substring(_nodePrefix.length)
-        : node.startsWith(_nodeDidPrefix)
-            ? node.substring(_nodeDidPrefix.length)
-            : null;
-    if (nodeId == null) return null;
-
-    if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(nodeId)) return null;
-
-    // `drives` repeats for multiple drives, which splitQueryString collapses to
-    // the last one — so read them off the raw query instead. `*` means all.
-    final drives = Uri.parse(uri)
-        .queryParametersAll['drives']
-        ?.where((d) => d != '*')
-        .toList();
-
-    return PeerInfo(
-      nodeId,
-      '',
-      params['url'],
-      drives == null || drives.isEmpty ? null : drives,
-    );
+    final code = PairingCode.parse(input);
+    return code == null
+        ? null
+        : PeerInfo(code.nodeId, code.name, code.serverUrl, code.drives);
   }
 
   /// Format a QR code value with optional device name.
-  static String formatQrValue(String nodeId, String deviceName) {
-    if (deviceName.isEmpty) return '$_nodePrefix$nodeId';
-    return '$_nodePrefix$nodeId:${Uri.encodeComponent(deviceName)}';
-  }
-
-  static PeerInfo? _parseNodeQuery(String nodeId, String query) {
-    final uri = Uri.parse('atomic:node:$nodeId?$query');
-    final version = uri.queryParameters['v'];
-    if (version != null && version != '1') return null;
-    if (uri.queryParameters.containsKey('secret')) return null;
-    final drives = uri.queryParametersAll['drives']
-        ?.where((d) => d != '*')
-        .toList();
-    return PeerInfo(
-      nodeId,
-      '',
-      uri.queryParameters['url'],
-      drives == null || drives.isEmpty ? null : drives,
-    );
-  }
+  static String formatQrValue(String nodeId, String deviceName) =>
+      PairingCode.format(nodeId, deviceName);
 
   /// Get the local device name from the OS.
   static Future<String> getDeviceName() async {
     try {
-      const channel = MethodChannel('app.atomicdata.canvas/deeplink');
+      const channel = MethodChannel('app.atomicdata.app/deeplink');
       final name = await channel.invokeMethod<String>('getDeviceName');
       return name ?? Platform.localHostname;
     } catch (_) {
@@ -353,22 +227,34 @@ class _PairScreenState extends State<PairScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isPhone = screenWidth < 600;
-
-    return AlertDialog(
-      insetPadding: EdgeInsets.symmetric(
-        horizontal: isPhone ? 16 : 40,
-        vertical: 24,
-      ),
-      content: SizedBox(
-        width: isPhone ? screenWidth * 0.85 : 360.0,
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: _buildStep(theme),
+    final actions = _buildActions(theme);
+    return Scaffold(
+      appBar: const AppTopBar(title: 'Pair a device'),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: _buildStep(theme),
+              ),
+            ),
+          ),
         ),
       ),
-      actions: _buildActions(theme),
+      bottomNavigationBar: actions.isEmpty
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: actions,
+                ),
+              ),
+            ),
     );
   }
 
@@ -379,26 +265,29 @@ class _PairScreenState extends State<PairScreen> {
         return [];
       case _Step.showQr:
         return [
-          TextButton(
+          SyncActionButton(
+            label: 'Cancel',
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
         ];
       case _Step.done:
         return [
-          FilledButton(
+          SyncActionButton(
+            label: 'Done',
+            kind: SyncButtonKind.primary,
             onPressed: () => Navigator.pop(context, _syncResult?.imported ?? 0),
-            child: const Text('Done'),
           ),
         ];
       case _Step.error:
         return [
-          TextButton(
+          SyncActionButton(
+            label: 'Cancel',
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
-          const SizedBox(width: 16),
-          TextButton(
+          const SizedBox(width: SyncGap.m),
+          SyncActionButton(
+            label: 'Retry',
+            kind: SyncButtonKind.primary,
             onPressed: () {
               if (_scannedNodeId != null) {
                 _doSync(_scannedNodeId!, _scannedName ?? '');
@@ -406,13 +295,13 @@ class _PairScreenState extends State<PairScreen> {
                 setState(() => _step = _Step.showQr);
               }
             },
-            child: const Text('Retry'),
           ),
         ];
     }
   }
 
   Widget _buildStep(ThemeData theme) {
+    final c = syncColors(context);
     switch (_step) {
       case _Step.loading:
         return const SizedBox(
@@ -427,12 +316,11 @@ class _PairScreenState extends State<PairScreen> {
           key: const ValueKey('qr'),
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Pair Device', style: theme.textTheme.titleMedium),
+            Text('Pair Device', style: SyncText.header(c)),
             const SizedBox(height: 8),
             Text(
               'Show your QR or scan theirs',
-              style: TextStyle(
-                  fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+              style: SyncText.caption(c),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
@@ -452,24 +340,26 @@ class _PairScreenState extends State<PairScreen> {
             ),
             const SizedBox(height: 6),
             if (_deviceName.isNotEmpty)
-              Text(_deviceName,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface)),
+              Text(_deviceName, style: SyncText.bodyStrong(c)),
             const SizedBox(height: 8),
-            // Camera scanner (compact)
-            if (_scanController != null)
-              SizedBox(
-                height: 100,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+            // Camera scanner, at the camera's own shape.
+            if (_scanController != null) ...[
+              const SizedBox(height: SyncGap.m),
+              ValueListenableBuilder<MobileScannerState>(
+                valueListenable: _scanController!,
+                builder: (context, state, _) => ScannerFrame(
+                  cameraSize: state.size,
+                  onTorch: () =>
+                      _scanController?.toggleTorch().catchError((_) {}),
+                  onFlip: () =>
+                      _scanController?.switchCamera().catchError((_) {}),
                   child: MobileScanner(
                     controller: _scanController!,
                     onDetect: _onDetect,
                   ),
                 ),
               ),
+            ],
           ],
         );
 
@@ -487,32 +377,37 @@ class _PairScreenState extends State<PairScreen> {
               const SizedBox(height: 16),
               Text(
                 'Connecting to $label',
-                style: TextStyle(
-                    fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+                style: SyncText.caption(c),
               ),
             ],
           ),
         );
 
       case _Step.done:
+        // The name the code carried, else the one the device introduced
+        // itself by when it answered.
+        final helloName = _syncResult?.peerName ?? '';
         final label = (_scannedName != null && _scannedName!.isNotEmpty)
             ? _scannedName!
-            : 'device';
+            : helloName.isNotEmpty
+                ? helloName
+                : 'device';
         return Column(
           key: const ValueKey('done'),
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 48),
+            Icon(Icons.check_circle,
+                color: SyncTone.success.color(c), size: 48),
             const SizedBox(height: 12),
-            Text('Paired with $label', style: theme.textTheme.titleMedium),
+            Text('Paired with $label', style: SyncText.header(c)),
             const SizedBox(height: 8),
             // What happened, both directions. "Synced 0 resources" was true of
             // a workspace sent somewhere that had none, and of two devices
             // already holding the same thing — and read as failure for both.
             Text(
-              _syncResult?.describe() ?? 'Nothing to sync',
-              style: TextStyle(
-                  fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+              _syncResult?.counts() ?? 'Nothing to sync',
+              key: const ValueKey('pair-result-counts'),
+              style: SyncText.caption(c),
             ),
           ],
         );
@@ -522,19 +417,20 @@ class _PairScreenState extends State<PairScreen> {
           key: const ValueKey('error'),
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            Icon(Icons.error_outline, color: SyncTone.error.color(c), size: 48),
             const SizedBox(height: 12),
-            Text('Connection Failed', style: theme.textTheme.titleMedium),
+            Text('Connection Failed', style: SyncText.header(c)),
             const SizedBox(height: 8),
             SelectableText(
               _error ?? 'Unknown error',
-              style: const TextStyle(fontSize: 12, color: Colors.red),
+              style:
+                  SyncText.caption(c).copyWith(color: SyncTone.error.color(c)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
-            TextButton.icon(
-              icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy error'),
+            SyncActionButton(
+              icon: Icons.copy,
+              label: 'Copy error',
               onPressed: () {
                 Clipboard.setData(
                     ClipboardData(text: _error ?? 'Unknown error'));

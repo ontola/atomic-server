@@ -27,7 +27,7 @@ function frame() {
 function driveAppStore(f: ReturnType<typeof frame>) {
   const source = readFileSync(
     new URL(
-      '../../../server/src/plugins/assets/view-client.js',
+      '../../data-browser/src/chunks/AppPage/viewClient.js',
       import.meta.url,
     ),
     'utf8',

@@ -5,9 +5,7 @@ import { expect, type Page } from '@playwright/test';
  * a user-testing session: ordinary users are not offered it.
  */
 export async function unlockPluginPreview(page: Page) {
-  await page.goto(
-    new URL('/app/integrations?preview=plugins', page.url()).href,
-  );
+  await page.goto(new URL('/app/apps?preview=plugins', page.url()).href);
   await expect
     .poll(() =>
       page.evaluate(() =>

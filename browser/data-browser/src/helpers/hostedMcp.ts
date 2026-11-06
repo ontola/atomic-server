@@ -2,6 +2,7 @@ import {
   errorMessageFromResponse,
   signRequest,
   type Store,
+  isLoopbackHost,
 } from '@tomic/react';
 
 /**
@@ -61,10 +62,7 @@ export function safeRedirect(redirectUrl: string, redirectUri: string): string {
     throw new Error('The node sent back a redirect that is not a URL.');
   }
 
-  const isLoopback =
-    expected.hostname === 'localhost' ||
-    expected.hostname === '127.0.0.1' ||
-    expected.hostname === '[::1]';
+  const isLoopback = isLoopbackHost(expected.hostname);
   const blocked = ['javascript:', 'data:', 'vbscript:', 'file:', 'blob:'];
   // https, http only on this machine, or a native app's own scheme.
   const schemeOk =

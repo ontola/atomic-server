@@ -7,7 +7,7 @@ import {
   LOCAL_ONLY_NOT_FOUND_MESSAGE,
 } from './error.js';
 import { testStore } from './test-store.js';
-import type { Store } from './store.js';
+import { StoreEvents, type Store } from './store.js';
 
 /**
  * One read policy for every caller: memory, then the embedded database, then
@@ -154,6 +154,35 @@ describe('store read policy', () => {
 
     expect((resource.error as AtomicError).type).toBe(ErrorType.Transport);
     expect(socket.fetch).not.toHaveBeenCalled();
+  });
+
+  it('never requests a mangled legacy subject', async ({ expect }) => {
+    await enableLoro();
+    const { store } = await testStore();
+    const socket = fakeSocket(store);
+    const mangled = 'https://staging.atomicdata.dev/staging:/drive/zeg5rq7lz4d';
+
+    const resource = store.getResourceLoading(mangled);
+
+    expect(resource.loading).toBe(false);
+    expect(resource.error).toBeDefined();
+    expect(socket.fetch).not.toHaveBeenCalled();
+  });
+
+  it('notifyErrorOnce reports a key once until it is cleared', async ({
+    expect,
+  }) => {
+    await enableLoro();
+    const { store } = await testStore();
+    const seen = vi.fn();
+    store.on(StoreEvents.Error, seen);
+
+    store.notifyErrorOnce('k', 'boom');
+    store.notifyErrorOnce('k', 'boom');
+    store.clearNotifiedError('k');
+    store.notifyErrorOnce('k', 'boom');
+
+    expect(seen).toHaveBeenCalledTimes(2);
   });
 
   it("hands back the store's own copy of a local-only subject it read from the database", async ({

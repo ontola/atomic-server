@@ -144,7 +144,7 @@ export function WorkspaceControls({
                 </Row>
               ))}
               <AtomicLink
-                path={`${paths.integrations}?workspace=${encodeURIComponent(workspace)}`}
+                path={`${paths.apps}?workspace=${encodeURIComponent(workspace)}`}
               >
                 Connect a service
               </AtomicLink>

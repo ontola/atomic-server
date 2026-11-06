@@ -108,11 +108,15 @@ test('creation prompt opens the assistant and keeps the request while setting up
   page,
 }) => {
   const parent = await page.evaluate(() => window.store!.getDrive()!);
+  // A phone opens with the sidebar closed. Shrinking a desktop page that has
+  // it open turns it into a drawer whose backdrop covers the page and
+  // intercepts the click below, so start narrow with the sidebar closed.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => localStorage.setItem('sideBarOpen', 'false'));
   await page.goto(
     new URL(`/app/new?parentSubject=${encodeURIComponent(parent)}`, page.url())
       .href,
   );
-  await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole('button', { name: 'Create with assistant' }),
   ).toBeDisabled();

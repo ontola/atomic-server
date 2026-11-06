@@ -221,12 +221,10 @@ import { isClientDbEnabled } from './helpers/clientDbMode';
 
 if (isClientDbEnabled()) {
   initClientDb(store, {
-    // The demo makes a guest identity straight away, and that identity gets
-    // its own database: opening the anonymous one first only to close it
-    // again cost a second worker and WebAssembly start on every first visit.
-    deferAnonymous:
-      window.location.pathname === '/app/dev-drive' ||
-      window.location.pathname === '/app/demo',
+    // Dev drive makes an identity straight away, and that identity gets its
+    // own database: opening the anonymous one first only to close it again
+    // cost a second worker and WebAssembly start.
+    deferAnonymous: window.location.pathname === '/app/dev-drive',
   });
 }
 
@@ -254,6 +252,12 @@ registerCustomCreateActions();
 registerCustomDeleteDialogs();
 // Register global event handlers.
 registerHandlers(store);
+
+// App resources sync through the normal outbox; signing keys deliberately do
+// not. Resume their encrypted local handovers after that outbox has drained.
+import { startAppKeyRecovery } from './chunks/AppPage/appKeyHandover';
+const stopAppKeyRecovery = startAppKeyRecovery(store);
+if (import.meta.hot) import.meta.hot.dispose(stopAppKeyRecovery);
 
 // Make the Store available globally for debugging
 window.store = store;

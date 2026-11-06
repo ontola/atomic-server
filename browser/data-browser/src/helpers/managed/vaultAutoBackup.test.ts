@@ -12,6 +12,7 @@ import {
 import {
   isEmbeddedVaultDrive,
   ensureVaultBackup,
+  onVaultFull,
   forgetEnrolledVaults,
   onVaultChanged,
   restoreFromVault,
@@ -236,6 +237,53 @@ describe('ensureVaultBackup', () => {
       '[cloud-vault] backup failed',
       expect.any(Error),
     );
+    warn.mockRestore();
+  });
+
+  it('shows a quota-exceeded failure once, not on every retry', async () => {
+    const store = await signedInStore();
+    const notify = vi.spyOn(store, 'notifyError').mockImplementation(() => {});
+    const full = vi.fn();
+    const off = onVaultFull(full);
+    const deps = fakeDeps({
+      identityMatches: vi.fn(async () => true),
+      runVaultBackup: vi.fn(async () => {
+        throw new Error('Cloud Vault quota exceeded');
+      }),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await ensureVaultBackup(store, DRIVE, deps);
+    await ensureVaultBackup(store, DRIVE, deps);
+    expect(full).toHaveBeenCalledTimes(1);
+    expect(full).toHaveBeenCalledWith(DRIVE);
+    // A full vault is not an error report.
+    expect(notify).not.toHaveBeenCalled();
+    off();
+    warn.mockRestore();
+  });
+
+  it('announces a full vault again after a backup succeeds', async () => {
+    const store = await signedInStore();
+    const full = vi.fn();
+    const off = onVaultFull(full);
+    const runVaultBackup = vi.fn(async () => {
+      throw new Error('Cloud Vault quota exceeded');
+    });
+    const deps = fakeDeps({
+      identityMatches: vi.fn(async () => true),
+      runVaultBackup,
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await ensureVaultBackup(store, DRIVE, deps);
+    runVaultBackup.mockResolvedValueOnce(
+      (await fakeDeps().runVaultBackup({} as never)) as never,
+    );
+    await ensureVaultBackup(store, DRIVE, deps);
+    await ensureVaultBackup(store, DRIVE, deps);
+    expect(full).toHaveBeenCalledTimes(2);
+    off();
     warn.mockRestore();
   });
 

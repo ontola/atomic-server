@@ -1,5 +1,4 @@
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
-import { isLoopbackHost } from './runtimeSetting';
+import { isLoopbackHost } from '@tomic/lib';
 import { fetchManagedInfo } from './managedServer';
 import {
   BrowserPeerSync,
@@ -325,7 +324,6 @@ export async function discoverPeerDrives(store: Store): Promise<void> {
       if (!current()) return;
 
       if (
-        readTemplateDemo()?.drive === drive ||
         !isAtomicIdentifier(drive) ||
         !resource.isReady() ||
         resource.error ||

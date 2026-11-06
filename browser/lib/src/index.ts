@@ -119,6 +119,14 @@ export * from './assistant-tools.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker, STORAGE_BLOCKED_ERROR_NAME } from './client-db.js';
 export {
+  NativeClientDb,
+  NativeCryptoProvider,
+  nativeHostOf,
+  type NativeAppAgent,
+  type NativeAppWrite,
+  type NativeChannel,
+} from './client-db.native.js';
+export {
   getIndexMigration,
   subscribeIndexMigration,
   type IndexMigrationProgress,
@@ -244,6 +252,9 @@ export {
 export * from './agent-grants.js';
 export * from './issue-access-agent.js';
 export {
+  appSourceOf,
+  readSchema,
+  schemaValue,
   createApp,
   describeApp,
   updateApp,

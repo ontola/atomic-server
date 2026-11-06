@@ -1,46 +1,51 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+
+import '../click_cursor.dart';
+import '../copyable_error.dart';
 import 'client.dart';
 
-/// Shared browser approval UI. The host owns launching and credential storage.
-/// Closing cancels polling; late replies never install a recovered identity.
+/// Connect this app to a hosted account, as the web app does: a short code is
+/// shown, approved at the account's `/link` page on a device where the person
+/// is signed in, and the token that comes back is saved. Nothing else changes:
+/// the identity stays the one this device holds.
+///
+/// Pops with true when linked. [save] receives the session to keep.
 class AtomicAccountLinkDialog extends StatefulWidget {
-  const AtomicAccountLinkDialog(
-      {super.key,
-      required this.client,
-      required this.deviceName,
-      required this.openUrl,
-      required this.install});
   final AtomicAccountClient client;
   final String deviceName;
-  final Future<void> Function(Uri) openUrl;
-  final Future<void> Function(AtomicRecoveredIdentity, String session) install;
-  static Future<bool> show(
-    BuildContext context, {
-    required AtomicAccountClient client,
-    required String deviceName,
-    required Future<void> Function(Uri) openUrl,
-    required Future<void> Function(AtomicRecoveredIdentity, String) install,
-  }) async =>
-      await showDialog<bool>(
-          context: context,
-          builder: (_) => AtomicAccountLinkDialog(
-              client: client,
-              deviceName: deviceName,
-              openUrl: openUrl,
-              install: install)) ??
-      false;
+  final Future<void> Function(String session) save;
+
+  /// Opens the approval page in the system browser, where the sign-in (an
+  /// emailed link, a passkey) can finish; an in-app page cannot receive it.
+  final Future<void> Function(Uri url)? openInBrowser;
+
+  /// Ask the browser to send the account's identity to this app instead of
+  /// only approving the device: the page is the web app's `send-identity`.
+  final bool handback;
+
+  const AtomicAccountLinkDialog({
+    super.key,
+    required this.client,
+    required this.deviceName,
+    required this.save,
+    this.openInBrowser,
+    this.handback = false,
+  });
+
   @override
   State<AtomicAccountLinkDialog> createState() => _LinkState();
 }
 
 class _LinkState extends State<AtomicAccountLinkDialog> {
   AtomicDeviceLink? _request;
-  AtomicRecoveredIdentity? _identity;
   String? _error;
   Timer? _timer;
-  bool _busy = false;
   int _generation = 0;
+
   @override
   void initState() {
     super.initState();
@@ -58,139 +63,159 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
     _timer?.cancel();
     final generation = ++_generation;
     setState(() {
-      _error = null;
       _request = null;
-      _identity = null;
-      _busy = true;
-    });
-    try {
-      final request = await widget.client.requestLink(widget.deviceName);
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _request = request;
-        _busy = false;
-      });
-      _timer = Timer(request.interval, () => _poll(generation));
-    } catch (e) {
-      if (mounted && generation == _generation) {
-        setState(() {
-          _error = '$e';
-          _busy = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _poll(int generation) async {
-    try {
-      final result = await widget.client.pollLink(_request!);
-      if (!mounted || generation != _generation) return;
-      switch (result) {
-        case AtomicLinkProgress.pending:
-          _timer = Timer(_request!.interval, () => _poll(generation));
-        case AtomicLinkProgress.expired:
-          setState(() =>
-              _error = 'This code expired. Start again to get a new one.');
-        case AtomicLinkProgress.approved:
-          setState(() => _busy = true);
-          final identity = await widget.client.recoverIdentity();
-          if (!mounted || generation != _generation) return;
-          setState(() {
-            _identity = identity;
-            _busy = false;
-          });
-      }
-    } catch (e) {
-      if (mounted && generation == _generation) {
-        setState(() {
-          _error = '$e';
-          _busy = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _install() async {
-    setState(() {
-      _busy = true;
       _error = null;
     });
     try {
-      await widget.install(_identity!, widget.client.exportSession());
-      if (mounted) Navigator.pop(context, true);
+      final request = await widget.client
+          .requestLink(widget.deviceName, handback: widget.handback);
+      if (!mounted || generation != _generation) return;
+      setState(() => _request = request);
+      _timer = Timer(request.interval, () => _poll(request, generation));
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = '$e';
-          _busy = false;
-        });
+      if (mounted && generation == _generation) {
+        setState(() => _error = _friendly(e));
       }
     }
   }
+
+  Future<void> _poll(AtomicDeviceLink request, int generation) async {
+    try {
+      final progress = await widget.client.pollLink(request);
+      if (!mounted || generation != _generation) return;
+      switch (progress) {
+        case AtomicLinkProgress.pending:
+          _timer = Timer(_every(request), () => _poll(request, generation));
+        case AtomicLinkProgress.expired:
+          setState(() => _error = 'That code expired. Start again.');
+        case AtomicLinkProgress.approved:
+          await widget.save(widget.client.exportSession());
+          if (mounted) Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (!mounted || generation != _generation) return;
+      // The portal limits how often it is asked: wait and ask again, the
+      // code stays good.
+      if (_isRateLimit(e)) {
+        _timer = Timer(_every(request) * 3, () => _poll(request, generation));
+      } else {
+        setState(() => _error = _friendly(e));
+      }
+    }
+  }
+
+  Uri _url(AtomicDeviceLink request) => request.wantsIdentity
+      ? request
+          .sendIdentityUrl(AtomicAccountClient.appOrigin(widget.client.origin))
+      : request.approvalUrl;
+
+  /// Not faster than every three seconds: the code does not get approved
+  /// sooner for being asked more often.
+  Duration _every(AtomicDeviceLink request) =>
+      request.interval < const Duration(seconds: 3)
+          ? const Duration(seconds: 3)
+          : request.interval;
+
+  static bool _isRateLimit(Object e) =>
+      '$e'.toLowerCase().contains('too many attempts');
+
+  static String _friendly(Object e) => _isRateLimit(e)
+      ? 'Too many attempts. Wait a minute, then try again.'
+      : '$e'.replaceFirst('Bad state: ', '');
 
   @override
-  Widget build(BuildContext context) => PopScope(
-      canPop: !_busy || _identity == null,
-      child: AlertDialog(
-        title: const Text('Connect your account'),
-        content: SizedBox(
-            width: 380,
-            child: SingleChildScrollView(
-                child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.client.origin.host),
+  Widget build(BuildContext context) {
+    final request = _request;
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: Text('Connect to ${widget.client.origin.host}'),
+      content: SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (request == null && _error == null)
+                const LinearProgressIndicator()
+              else if (request != null) ...[
+                const Text('On any device, go to'),
+                const SizedBox(height: 4),
+                SelectableText('${widget.client.origin.host}/link',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                const Text('and enter this code:'),
                 const SizedBox(height: 16),
-                if (_busy) const LinearProgressIndicator(),
-                if (_identity case final identity?) ...[
-                  Text(identity.address,
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 12),
-                  const Text(
-                      'Open this account in the app. Your local projects will be kept separately.'),
-                ] else if (_request case final request?) ...[
-                  const Text(
-                      'Sign in or create your account in the browser, then approve this device.'),
-                  const SizedBox(height: 16),
-                  SelectableText(request.userCode,
-                      style: Theme.of(context).textTheme.headlineMedium),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                      onPressed: () async {
-                        try {
-                          await widget.openUrl(request.approvalUrl);
-                        } catch (_) {
-                          if (mounted) {
-                            setState(
-                                () => _error = 'Could not open the browser');
-                          }
-                        }
+                Center(
+                  child: ClickCursor(
+                    enabled: true,
+                    child: GestureDetector(
+                      onTap: () {
+                        Clipboard.setData(
+                            ClipboardData(text: request.userCode));
                       },
-                      icon: const Icon(Icons.open_in_browser),
-                      label: const Text('Open browser')),
-                  const SizedBox(height: 8),
-                  const Text('Waiting for browser approval…'),
-                ],
-                if (_error != null) ...[
+                      child: SelectableText(request.userCode,
+                          style: theme.textTheme.headlineMedium
+                              ?.copyWith(letterSpacing: 4)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // The same page as a QR code, for the camera of a phone that is
+                // signed in already.
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: QrImageView(
+                      data: request.approvalUrl.toString(),
+                      size: 160,
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: Text('Or scan it with a phone that is signed in.',
+                      style: theme.textTheme.bodySmall),
+                ),
+                const SizedBox(height: 12),
+                Row(children: [
+                  const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 8),
+                  Text('Waiting for approval…',
+                      style: theme.textTheme.bodySmall),
+                ]),
+                if (_error == null && widget.openInBrowser != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!,
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error)),
-                  TextButton(onPressed: _start, child: const Text('Try again')),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.open_in_browser, size: 18),
+                    label: const Text('Open in your browser'),
+                    onPressed: () => widget.openInBrowser!(_url(request)),
+                  ),
                 ],
               ],
-            ))),
-        actions: [
-          TextButton(
-              onPressed: _busy && _identity != null
-                  ? null
-                  : () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          if (_identity != null)
-            FilledButton(
-                onPressed: _busy ? null : _install,
-                child: const Text('Use this account')),
-        ],
-      ));
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                ErrorText(_error!),
+                TextButton(onPressed: _start, child: const Text('Try again')),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel')),
+      ],
+    );
+  }
 }

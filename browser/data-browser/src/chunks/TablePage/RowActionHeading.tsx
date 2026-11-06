@@ -8,7 +8,10 @@ import { RowActionDialog } from './RowActionDialog';
 import { ROW_ACTION_GENERATORS, type RowActionSpec } from './rowActions';
 import { ColumnSpecHeading } from './ColumnSpecHeading';
 
-const Trigger = buildDefaultTrigger(<FaEllipsisVertical />, 'Edit action');
+const Trigger = buildDefaultTrigger(
+  <FaEllipsisVertical />,
+  () => 'Edit action',
+);
 
 /**
  * Heading of an action column: its label plus the menu that edits or removes it.
