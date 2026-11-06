@@ -351,6 +351,76 @@ jobs:
 
           gh release upload "${GITHUB_REF_NAME}" ./release-assets/* --clobber
 
+  # The multi-arch release images: `vX.Y.Z` on every tag, `latest` only on a
+  # stable one.
+  #
+  # Nothing published these. `:develop` is built by main-ci.yml as one manifest
+  # for amd64, arm64 and arm/v7, but no release job ever pushed an image, so
+  # `latest` and the `v*` tags were whatever someone last pushed by hand: in
+  # November 2026 `latest` was an arm64-only Raspberry Pi build from June and
+  # `v0.38.0` had no arm64 (#2454). This calls the same Dagger function
+  # main-ci.yml uses, so a release image is built exactly like `:develop`.
+  #
+  # Hosted runner for the same reason as the other release jobs.
+  docker-images:
+    if: github.event_name == 'push'
+    name: Publish multi-arch docker images
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Choose the image tags
+        id: tags
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # A pre-release must not become `latest`, the same rule as npm.
+          channel=$(node scripts/npm-dist-tag.mjs "${RELEASE_TAG#v}")
+          refs=()
+          for image in joepmeneer/atomic-server ghcr.io/ontola/atomic-server; do
+            refs+=("${image}:${RELEASE_TAG}")
+            if [ "$channel" = latest ]; then
+              refs+=("${image}:latest")
+            fi
+          done
+          tags=$(IFS=','; echo "${refs[*]}")
+          echo "Publishing: ${tags}"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+
+      - name: Isolate Docker credentials for this job
+        shell: bash
+        run: |
+          docker_config=$(mktemp -d "$RUNNER_TEMP/docker-config.XXXXXX")
+          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: joepmeneer
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Dagger docker images (build images & publish)
+        uses: dagger/dagger-for-github@8.0.0
+        with:
+          version: "latest"
+          engine-stop: "false"
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          verb: call
+          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} create-docker-images --tags ${{ steps.tags.outputs.tags }}
+
   upload-assets:
     if: github.event_name == 'push'
     strategy:
