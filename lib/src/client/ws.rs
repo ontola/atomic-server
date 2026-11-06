@@ -640,6 +640,12 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
         tag::AUTH_OK => Some(WsMessage::Authenticated),
         tag::KEEPALIVE => Some(WsMessage::Keepalive),
         tag::ERROR => Some(match protocol::decode_error(&bin[1..]) {
+            // A notice, not a failure: it is not tied to any request, and
+            // reporting it as `Error` would fail whatever is waiting.
+            Some(e) if e.code == protocol::error_code::DEPRECATED_CLIENT => {
+                tracing::warn!("server notice: {}", e.message);
+                return None;
+            }
             Some(e) => WsMessage::Error {
                 request_id: e.request_id,
                 code: e.code,

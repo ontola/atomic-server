@@ -10,7 +10,7 @@ import { ColumnSpecHeading } from './ColumnSpecHeading';
 
 const Trigger = buildDefaultTrigger(
   <FaEllipsisVertical />,
-  'Edit computed column',
+  () => 'Edit computed column',
 );
 
 /**

@@ -30,6 +30,7 @@ import {
   signRequest,
 } from './authentication.js';
 import { Client, isOwnServerUrl, type FileOrFileLike } from './client.js';
+import { isOriginBackoffError, noteOriginReachable } from './origin-backoff.js';
 import {
   CommitBuilder,
   commitIdOf,
@@ -597,6 +598,10 @@ const embeddedVocabulary = new Set<string>([
   server.classes.release,
   server.classes.installation,
   server.classes.listing,
+  server.classes.externalApp,
+  server.properties.homepage,
+  server.properties.openUrlTemplate,
+  server.properties.handlesClasses,
   core.properties.importBaseline,
   core.properties.importResolution,
   core.properties.importReferenceReview,
@@ -4984,7 +4989,10 @@ export class Store {
       if (
         foreignOrigin !== undefined &&
         !result.cancelled &&
-        isProxyWorthyError(result.resource.error)
+        isProxyWorthyError(result.resource.error) &&
+        // The origin failed moments ago, and so did the proxy then: had it
+        // answered, the origin would be in `_proxiedOrigins` (`proxyFirst`).
+        (proxyFirst || !isOriginBackoffError(result.resource.error))
       ) {
         const retried = await fetchVia(!proxyFirst);
 
@@ -5961,6 +5969,9 @@ export class Store {
    * Called from `WSClient.handleOpen` AFTER the outbox drain completes.
    */
   public refetchOfflineErroredResources(): void {
+    // The server is back, so its HTTP fetches may go out again.
+    if (this.serverUrl) noteOriginReachable(this.serverUrl);
+
     for (const [subject, resource] of this.resources.entries()) {
       if (resource.hasPendingCommits) continue;
       const erroredOffline = isTransportError(resource.error);

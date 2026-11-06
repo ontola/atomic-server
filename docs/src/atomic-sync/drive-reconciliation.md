@@ -57,3 +57,6 @@ initiator                         responder
 
 For the exact byte layouts, flags, chunk limits and error codes, see [Drive synchronization over WebSocket](../websockets.md#drive-synchronization-over-websocket), [over Iroh](../websockets.md#drive-synchronization-over-iroh) and [SYNC_PUSH chunking](../websockets.md#sync_push-chunking-and-acknowledgement).
 The engine lives in `lib/src/sync/engine.rs` and the browser side in `browser/lib/src/ws-v2.ts`.
+
+For measured costs, implemented batching and proposals that require a protocol
+extension, see [Sync performance](performance.md).

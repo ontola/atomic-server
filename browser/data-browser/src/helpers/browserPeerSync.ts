@@ -1,4 +1,4 @@
-import { isLoopbackHost } from './runtimeSetting';
+import { isLoopbackHost } from '@tomic/lib';
 import { fetchManagedInfo } from './managedServer';
 import {
   BrowserPeerSync,

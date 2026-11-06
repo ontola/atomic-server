@@ -1,7 +1,7 @@
 // [RECOVERY-RECONSTRUCTED] `helpers/managed/session.ts` was never captured in any
 // transcript. Reconstructed from its call sites (reconcile.ts / enrollment.ts
 // use `getManagedAccount()` and read `.email`) and the control-plane `GET /api/me`
-// route. Mirrors the captured `getManagedUser()` in helpers/managedUsage.ts.
+// route.
 
 import { PRODUCT_NAME } from './product';
 import {

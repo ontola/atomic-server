@@ -33,6 +33,15 @@ abstract final class Props {
   static const mimetype = 'https://atomicdata.dev/properties/mimetype';
   static const filesize = 'https://atomicdata.dev/properties/filesize';
   static const downloadUrl = 'https://atomicdata.dev/properties/downloadURL';
+
+  /// A [Classes.externalApp]: its icon, homepage, the URL that opens a
+  /// resource in it (with `{subject}`) and the classes it handles.
+  static const emoji = 'https://atomicdata.dev/properties/emoji';
+  static const homepage = 'https://atomicdata.dev/properties/homepage';
+  static const openUrlTemplate =
+      'https://atomicdata.dev/properties/openUrlTemplate';
+  static const handlesClasses =
+      'https://atomicdata.dev/properties/handlesClasses';
 }
 
 /// Class URLs of the resources apps create most.
@@ -45,4 +54,7 @@ abstract final class Classes {
   static const message = 'https://atomicdata.dev/classes/Message';
   static const table = 'https://atomicdata.dev/classes/Table';
   static const tag = 'https://atomicdata.dev/classes/Tag';
+
+  /// An app that uses a drive; see [Store.registerApp].
+  static const externalApp = 'https://atomicdata.dev/classes/ExternalApp';
 }

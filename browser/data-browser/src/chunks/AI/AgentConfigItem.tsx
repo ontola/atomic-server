@@ -31,7 +31,7 @@ interface AgentConfigItemProps {
 
 const ContextTrigger = buildDefaultTrigger(
   <FaEllipsisVertical />,
-  'Open context menu',
+  () => 'Open context menu',
 );
 
 export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({

@@ -303,6 +303,19 @@ caught it, and if the answer is "none", that is the row to add.
 
 ## WASM database opening
 
+`browser/lib/src/resource-loro-lifecycle.test.ts` uses V8's full-GC object query
+to verify that abandoned hydrated Resources can be collected. It also retains
+the old public Loro document across `clearUnsafe()` and an authoritative snapshot
+replacement: that document stays usable, its edits cannot dirty the current
+resource, and edits to the replacement still enqueue normally. These are
+in-memory observer lifecycle checks; they do not reset OPFS or replace stored
+resource history.
+`resource-loro-lifecycle.spec.ts` repeats the collection check against the real
+production browser web/WASM runtime: Chromium collects 40 temporary resources
+hydrated from snapshots while a deliberately retained resource and public
+document remain usable. Local browser validation also passed the existing
+ClientDb edit-persistence test.
+
 `browser/lib/src/client-db-open.test.ts` covers `ClientDb.open()` success,
 wrong-key cache recovery, and propagation of blocked/corrupt-storage errors.
 The save-state and crash-durability browser tests exercise the generated WASM
@@ -474,6 +487,38 @@ Still uncovered: two physical devices, forced TURN, full Firefox drive sync,
 public deployment, and interactive rich-text editor/cursor acceptance.
 
 ## How to read this
+
+### Interface translations
+
+`browser/data-browser/scripts/check-translations.test.ts` audits all supported
+UI catalogs against the English source catalog. It checks missing/empty and
+fuzzy entries, duplicate/context keys, every plural form, locale headers and
+interpolation/markup/count placeholders. Fixture regressions cover multiline
+and obsolete PO records, valid unchanged product names, and damaged markup.
+The read-only `pnpm check:translations --json` command lists all gaps with
+source references. `wuchale check --full` separately checks extraction parity.
+These structural checks do not certify linguistic quality or detect every
+unextracted literal; runtime locale switching and production UI verification
+remain necessary. Resource content and plugin-supplied text are separate.
+Known source gaps: `AuthorizeMcpRoute` and `ConnectAgentRoute` interpolate
+unextracted English permission verbs, and `DerivedColumnDialog` interpolates
+an English column-name suggestion. These require complete localized sentences
+in a follow-up; catalog completeness does not cover them.
+
+`browser/e2e/tests/interface-language.spec.ts` switches from English to Spanish,
+French, German, Dutch and Indonesian through Settings, checks translated account
+headings and drive menus, reloads to verify persistence, and switches back. A custom drive
+title remains unchanged. The tests attach account screenshots for each locale.
+Dutch and Indonesian also start from regional browser preferences and verify
+that a saved selection overrides those preferences. `preloadLocale.test.ts`
+covers regional variants, preference order, fallback and configured-locale parity.
+`scripts/wuchale-plurals.test.ts` builds isolated catalogs through the actual
+Wuchale library, checking target-language form counts and interpolation damage.
+It verifies that Indonesian compiles a plural array and rule which render zero,
+one and multiple changes correctly; audit fixtures reject a fixed singular
+count in a single-form target.
+`DefaultTrigger.test.tsx` checks render-time tooltip translation without
+replacing the dropdown button, plus the existing default and string-title API.
 
 Plugin catalog: the e2e suite runs against a static mock of the atomic-plugins
 catalog (`testdata/atomic-plugins-mock`: `catalog.json` plus the test plugins'
@@ -904,6 +949,19 @@ Not covered: Flutter `create_drive` still mints a random DID (the Rust
 machine with the old machine offline.
 
 Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enrollment and refresh after edits; SaaS `enrollment_display_metadata_refreshes_and_survives_legacy_clients` verifies persistence and account ownership.
+
+## Sync account sign-in
+
+`components/Cloud/SyncProviderAccount.test.tsx` covers the account card's
+single sign-in entry: off-site clients open the device-link form locally,
+hosted clients retain portal sign-in, and signed-in accounts retain the
+provider dashboard link. Existing `LinkProviderPanel` and `AccountSignInPanel`
+component tests cover device-link polling and the browser sign-in flow.
+`helpers/managed/api.test.ts` and `deviceLink.test.ts` verify that off-site clients
+omit cookies before and after linking, including caller attempts to enable them;
+hosted sessions retain cookie access. The Sync browser regression uses a provider
+that offers no credentialed CORS and requires the issued bearer after approval.
+Live provider deployment and physical passkey acceptance remain separate checks.
 
 ## Cloud Server setup
 
@@ -2493,6 +2551,15 @@ to the class map, `useTableColumns` re-reading columns when the class map
 changes, `TagPropertyCard`'s class usage rows, and forms bound to a table column
 whose options now live only in the class map (see the forms entry below).
 
+Ontology graph position changes (2026-10-30):
+`browser/data-browser/src/chunks/GraphViewer/useGraph.test.ts` reproduces the
+`positionAbsolute` crash on a position notification before any drag. It covers
+layout-only events, keyboard moves, coordinate-less drag stops, batched nodes
+and callbacks before a render, final-position precedence, existing positions,
+non-finite coordinates and empty batches. `browser/e2e/tests/ontology-graph.spec.ts`
+opens an invented checklist ontology, moves a node first with the keyboard and
+then by pointer, and checks that its saved position survives reload without errors.
+
 Class constraints in forms (`planning/class-constraints-and-forms.md`, step 3):
 `formFieldSettings.test.ts` and `formConstraints.test.ts` pin the limit
 keywords, that old names read and are rewritten on edit, that a question can only
@@ -2810,3 +2877,20 @@ localId durability contract still uses one flush.
 Manual acceptance measurements and their limits are recorded in PR #2361.
 The private-dataset harness is kept outside the repository; it is not a CI
 speed assertion. Crash durability is covered by the abort test above.
+
+App identity handover recovery (2026-10-30):
+`browser/data-browser/src/chunks/AppPage/appKeyHandover.test.ts` reproduces a
+failed key handover losing its only copy, then covers an encrypted browser-local
+queue, retry after reload and resource sync, account/node/lock isolation,
+authenticated metadata, older-node compatibility, cancellation after revocation
+or replacement, failed requests, and the successful recovery notification.
+`server/src/handlers/app_endpoints_test.rs` checks the initialization-only protocol
+against a real store: first handover, an idempotent retry after a lost response,
+replacement refusal and a revoked key staying revoked. The existing
+`localDbKey.test.ts` checks the local cache key's wrapping primitive.
+`browser/e2e/tests/apps.spec.ts` blocks the handover POST, reloads the page,
+then unblocks it and verifies automatic frame recovery and a persisted app write.
+Existing installs whose secret was already discarded require reinstalling;
+this does not rotate an app identity or repair provider delegations. New online
+installations still work with older nodes; automatic replay requires a node
+that advertises the initialization-only protocol.

@@ -248,7 +248,7 @@ const HeaderAdd = styled(HeaderButton)`
 
 const LaneMenuTrigger = buildDefaultTrigger(
   <FaEllipsis />,
-  'Lane options',
+  () => 'Lane options',
   HeaderButton,
 );
 

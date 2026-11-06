@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { plural } from '@helpers/plural';
 import { styled } from 'styled-components';
 import { Row, Column } from '@components/Row';
 import { FaPlus, FaPen, FaTrash } from 'react-icons/fa6';
@@ -122,8 +123,10 @@ export const MCPConfigTab = () => {
                 {isDefaultServer && <SubtleText>Default server</SubtleText>}
                 {headerCount > 0 && (
                   <SubtleText>
-                    {headerCount} custom header
-                    {headerCount === 1 ? '' : 's'}
+                    {plural(headerCount, [
+                      '# custom header',
+                      '# custom headers',
+                    ])}
                   </SubtleText>
                 )}
               </Column>

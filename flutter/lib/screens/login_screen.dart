@@ -13,7 +13,6 @@ import '../atomic/get_started.dart';
 import '../atomic/session.dart';
 import '../atomic/switch_account.dart';
 import '../theme.dart';
-import 'account_link_dialog.dart';
 import 'needs_sync_view.dart';
 import 'pair_screen.dart';
 import '../atomic/sync_failure.dart';
@@ -371,42 +370,18 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<shared.AtomicRecoveredIdentity?> _defaultAccountSignIn(
-      BuildContext context) async {
-    final client = widget.accountClient?.call() ??
-        shared.AtomicAccountClient(AccountStore.defaultPortal);
-    try {
-      final linked = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => AccountLinkDialog(
-          client: client,
-          deviceName: 'atomic.place',
-          save: AccountStore.save,
-          // The browser unlocks the backup, which it can for passkey and
-          // recovery-code backups too, and sends the secret back sealed.
-          handback: true,
-          openInBrowser: widget.openBrowser ??
-              (url) async {
-                await launchUrl(url, mode: LaunchMode.externalApplication);
-              },
-        ),
+          BuildContext context) =>
+      shared.signInWithAccountProvider(
+        context,
+        provider: Uri.parse(AccountStore.defaultPortal),
+        store: AccountStore.sessionStore,
+        deviceName: 'atomic.place',
+        client: widget.accountClient?.call(),
+        openUrl: widget.openBrowser ??
+            (url) async {
+              await launchUrl(url, mode: LaunchMode.externalApplication);
+            },
       );
-      if (linked != true) return null;
-      try {
-        // An older portal approves without a sealed identity: fall back to
-        // the server-assisted backup.
-        return client.takeHandedBackIdentity() ??
-            await client.recoverIdentity();
-      } catch (_) {
-        // Without the identity the account session is of no use here, and
-        // keeping it made a failed sign-in look half done.
-        await AccountStore.clear();
-        rethrow;
-      }
-    } finally {
-      client.close();
-    }
-  }
 
   /// Starts the session of [secret]; whether its drive is on this device.
   Future<bool> _activate(String serverUrl, String secret, String? drive) async {

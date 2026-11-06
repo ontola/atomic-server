@@ -7,6 +7,7 @@ library;
 
 export 'src/backend.dart';
 export 'src/comments.dart';
+export 'src/external_app.dart';
 export 'src/exceptions.dart';
 export 'src/files.dart';
 export 'src/lists.dart';
