@@ -554,7 +554,7 @@ msgstr "Ne répond pas"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "En savoir plus"
 
 #: src/components/forms/Field.tsx
@@ -4292,6 +4292,8 @@ msgstr "Vos données se trouvent sur l’appareil auquel vous êtes connecté."
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -13007,11 +13009,6 @@ msgstr "Demandez-lui de rechercher, rédiger ou organiser du contenu dans votre 
 msgid "Invite someone"
 msgstr "Inviter quelqu’un"
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work"
-msgstr "Sauvegarder votre travail"
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Premiers pas"
@@ -13414,18 +13411,8 @@ msgid "Your work is saved on this device. Add your email so you can open it on o
 msgstr "Votre travail est enregistré sur cet appareil. Ajoutez votre e-mail pour l’ouvrir sur d’autres appareils et ne pas le perdre."
 
 #: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Add your email to keep it safe on every device"
-msgstr "Ajoutez votre e-mail pour le garder en sécurité sur chaque appareil"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Connectez un appareil pour y ouvrir votre travail"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/Share/ShareDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save & register"
-msgstr "Enregistrer et s'inscrire"
 
 #: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
@@ -13495,3 +13482,13 @@ msgstr "Enregistré uniquement sur cet appareil"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr ""
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register with email"
+msgstr "S'inscrire avec un e-mail"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email to keep it safe on every device"
+msgstr "Inscris ton e-mail pour garder tout en sécurité sur chaque appareil"

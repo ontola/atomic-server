@@ -383,7 +383,7 @@ function ShareOverview({
                 openSaveWorkDialog();
               }}
             >
-              Save & register
+              Register with email
             </Button>
           )}
         </Stack>

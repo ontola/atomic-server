@@ -554,7 +554,7 @@ msgstr "No responde"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Leer más"
 
 #: src/components/forms/Field.tsx
@@ -4292,6 +4292,8 @@ msgstr "Tus datos están en el dispositivo al que tienes conexión."
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -13007,11 +13009,6 @@ msgstr "Pídele que busque, escriba u organice cosas en tu unidad"
 msgid "Invite someone"
 msgstr "Invitar a alguien"
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work"
-msgstr "Guarda tu trabajo"
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Primeros pasos"
@@ -13414,18 +13411,8 @@ msgid "Your work is saved on this device. Add your email so you can open it on o
 msgstr "Tu trabajo está guardado en este dispositivo. Añade tu correo para abrirlo en otros dispositivos y no perderlo."
 
 #: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Add your email to keep it safe on every device"
-msgstr "Añade tu correo para tenerlo a salvo en todos tus dispositivos"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Conecta un dispositivo para abrir tu trabajo en él"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/Share/ShareDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save & register"
-msgstr "Guardar y registrarse"
 
 #: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
@@ -13495,3 +13482,13 @@ msgstr "Solo guardado en este dispositivo"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr ""
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register with email"
+msgstr "Registrarse con correo"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email to keep it safe on every device"
+msgstr "Registra tu correo para mantenerlo seguro en todos tus dispositivos"

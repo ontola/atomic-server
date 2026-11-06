@@ -554,7 +554,7 @@ msgstr "Tidak merespons"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Baca selengkapnya "
 
 #: src/components/forms/Field.tsx
@@ -4296,6 +4296,8 @@ msgstr "Data Anda berada di perangkat yang terhubung dengan Anda."
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -13010,11 +13012,6 @@ msgstr "Minta AI mencari, menulis, atau mengatur hal-hal dalam drive Anda"
 msgid "Invite someone"
 msgstr "Undang seseorang"
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work"
-msgstr "Simpan pekerjaan Anda"
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Memulai"
@@ -13412,18 +13409,8 @@ msgid "Your work is saved on this device. Add your email so you can open it on o
 msgstr "Pekerjaanmu tersimpan di perangkat ini. Tambahkan emailmu agar bisa dibuka di perangkat lain dan tidak hilang."
 
 #: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Add your email to keep it safe on every device"
-msgstr "Tambahkan emailmu agar aman di setiap perangkat"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/Share/ShareDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save & register"
-msgstr "Simpan dan daftar"
 
 #: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
@@ -13493,3 +13480,13 @@ msgstr "Hanya tersimpan di perangkat ini"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr ""
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register with email"
+msgstr "Daftar dengan email"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email to keep it safe on every device"
+msgstr "Daftarkan emailmu agar tetap aman di setiap perangkat"

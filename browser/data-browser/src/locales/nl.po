@@ -554,7 +554,7 @@ msgstr "Reageert niet"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Meer lezen "
 
 #: src/components/forms/Field.tsx
@@ -4298,6 +4298,8 @@ msgstr "Je gegevens staan op het apparaat waarmee je verbonden bent."
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
@@ -13013,11 +13015,6 @@ msgstr "Vraag om dingen op je schijf te vinden, schrijven of ordenen"
 msgid "Invite someone"
 msgstr "Iemand uitnodigen"
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work"
-msgstr "Sla je werk op"
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Aan de slag"
@@ -13420,18 +13417,8 @@ msgid "Your work is saved on this device. Add your email so you can open it on o
 msgstr "Je werk staat op dit apparaat. Voeg je e-mailadres toe, dan kun je het op andere apparaten openen en raak je het niet kwijt."
 
 #: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Add your email to keep it safe on every device"
-msgstr "Voeg je e-mail toe om het veilig te houden op elk apparaat"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Verbind een apparaat om je werk daarop te openen"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/Share/ShareDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save & register"
-msgstr "Opslaan en registreren"
 
 #: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
@@ -13501,3 +13488,13 @@ msgstr "Alleen op dit apparaat opgeslagen"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr ""
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register with email"
+msgstr "Registreren met e-mail"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email to keep it safe on every device"
+msgstr "Registreer je e-mail om het veilig te houden op elk apparaat"

@@ -57,6 +57,9 @@ vi.mock('@components/Share/shareDialogState', () => ({
 vi.mock('@helpers/AppSettings', () => ({
   useSettings: () => ({ drive: 'did:ad:drive' }),
 }));
+vi.mock('../UiHint', () => ({
+  UiHint: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 vi.mock('./SideBarPanel', () => ({
   SideBarPanel: ({
     children,
@@ -109,7 +112,7 @@ describe('GettingStartedPanel', () => {
       'Make something',
       'Talk to the AI',
       'Invite someone',
-      'Save &amp; register',
+      'Register with email',
     ])
       expect(html).toContain(title);
   });

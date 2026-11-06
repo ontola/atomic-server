@@ -161,7 +161,7 @@ export function SaveWorkDialogHost(): JSX.Element {
   return (
     <Dialog {...dialogProps}>
       <DialogTitle>
-        <h1>{portalUrl ? 'Save & register' : 'Save your work'}</h1>
+        <h1>{portalUrl ? 'Register with email' : 'Connect a device'}</h1>
       </DialogTitle>
       <DialogContent>
         <SaveWorkContent portalUrl={portalUrl} onDone={() => close(true)} />

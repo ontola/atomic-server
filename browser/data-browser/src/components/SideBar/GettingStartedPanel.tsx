@@ -9,7 +9,6 @@ import {
 } from '@tomic/react';
 import type { JSX } from 'react';
 import { FaCircleCheck, FaRegCircle } from 'react-icons/fa6';
-import { LuCloudOff } from 'react-icons/lu';
 import { styled } from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
 import { useAISidebar } from '@components/AI/AISidebarContext';
@@ -159,9 +158,9 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       },
     },
     save: {
-      title: portalUrl ? 'Save & register' : 'Save your work',
+      title: portalUrl ? 'Register with email' : 'Connect a device',
       hint: portalUrl
-        ? 'Add your email to keep it safe on every device'
+        ? 'Register your email to keep it safe on every device'
         : 'Connect a device to open your work on it',
       pointer: portalUrl ? 'Add your email here' : 'Connect a device here',
       target: 'save-row',
@@ -198,9 +197,9 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
                 data-testid='guest-save-row'
                 data-done={false}
               >
-                <WarnIcon aria-hidden>
-                  <LuCloudOff />
-                </WarnIcon>
+                <IconSlot aria-hidden>
+                  <FaRegCircle />
+                </IconSlot>
                 <SaveText>
                   <SaveAction>{title}</SaveAction>
                   <SaveNote>Only saved on this device</SaveNote>
@@ -306,14 +305,6 @@ const SaveRow = styled(StepRow)`
   &:focus-visible {
     outline: 2px solid ${p => p.theme.colors.main};
     outline-offset: -2px;
-  }
-`;
-
-const WarnIcon = styled(IconSlot)`
-  color: ${p => p.theme.colors.warning};
-
-  svg {
-    font-size: 0.95rem;
   }
 `;
 
