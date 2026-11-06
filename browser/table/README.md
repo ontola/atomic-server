@@ -2,8 +2,9 @@
 
 AtomicServer's virtual table grid and storage-independent text, integer, boolean
 and date editors. This is the first package boundary for the full table
-experience; TablePage, saved views, schema dialogs and alternate renderers still
-live in the Data Browser.
+experience. It also exports the saved-view tab presentation and inline rename
+interaction. TablePage, saved-view persistence/menus, schema dialogs and alternate
+renderers still live in the Data Browser.
 
 AtomicServer consumes `workspace:*` and resolves `@tomic/table` to `src/index.ts`
 in Vite and TypeScript. External applications install the built package using
@@ -29,6 +30,13 @@ Integer/date editors have optional `textDraft` callbacks so hosts can retain raw
 invalid input when virtual rows unmount. Atomic-specific number/date formatting
 stays in Data Browser display adapters. React, React DOM and Styled Components
 are peers; React 19.2 supplies `useEffectEvent`.
+
+`ViewTab`, `ViewTabsBar`, `ViewTabList` and `ViewTabActions` share TablePage's
+saved-view tab layout and inline renaming. Pass resolved names/icons, active and
+editing flags, and callbacks; no Atomic Resource or Store is needed. Enter or
+blur commits a trimmed, nonempty changed name once; Escape cancels it. Hosts own
+permissions, menus, drag ordering, navigation and whether rename callbacks save
+immediately or become a draft. `renameLabel` lets the host localize the input.
 
 ## Package CI
 
