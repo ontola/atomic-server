@@ -1925,26 +1925,50 @@ pub(crate) fn admit_unknown_drive(
     }
 }
 
+/// A resource accepted earlier in this frame, else the stored one.
+async fn staged_or_stored(
+    store: &Db,
+    subject: &crate::Subject,
+    staged: &[(crate::Resource, Option<Vec<u8>>)],
+    by_subject: &std::collections::HashMap<String, usize>,
+) -> Option<crate::Resource> {
+    if let Some(index) = by_subject.get(&subject.pure_id()) {
+        return Some(staged[*index].0.clone());
+    }
+    store.get_resource(subject).await.ok()
+}
+
 /// Resolve a parent's drive from accepted state in this frame before storage.
+/// A `drive` stamp wins. With none, the parent's own parent is asked the same
+/// way, so an unstamped child of an unstamped child still resolves to the
+/// drive root, and a resource with neither contributes its own subject. The
+/// walk stops at the last resource we have. `None` when `parent` itself is
+/// neither staged nor stored.
 async fn staged_parent_drive(
     store: &Db,
     parent: &crate::Subject,
     staged: &[(crate::Resource, Option<Vec<u8>>)],
     by_subject: &std::collections::HashMap<String, usize>,
 ) -> Option<String> {
-    let stored;
-    let resource = if let Some(index) = by_subject.get(&parent.pure_id()) {
-        &staged[*index].0
-    } else {
-        stored = store.get_resource(parent).await.ok()?;
-        &stored
-    };
-    Some(
-        resource
-            .get(crate::urls::DRIVE_PROP)
-            .map(|value| value.to_string())
-            .unwrap_or_else(|_| parent.to_string()),
-    )
+    let mut current = staged_or_stored(store, parent, staged, by_subject).await?;
+    let mut seen = std::collections::HashSet::new();
+    loop {
+        let subject = current.get_subject().to_string();
+        if !seen.insert(crate::Subject::from(subject.clone()).pure_id()) {
+            return Some(subject);
+        }
+        if let Ok(drive) = current.get(crate::urls::DRIVE_PROP) {
+            return Some(drive.to_string());
+        }
+        let Ok(parent_val) = current.get(crate::urls::PARENT) else {
+            return Some(subject);
+        };
+        let next = crate::Subject::from(parent_val.to_string());
+        match staged_or_stored(store, &next, staged, by_subject).await {
+            Some(resource) => current = resource,
+            None => return Some(subject),
+        }
+    }
 }
 
 /// Import resources from a SYNC_PUSH message into the local store.
@@ -2049,186 +2073,226 @@ pub async fn import_sync_push(
     let mut staged_by_subject: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
-    for entry in &push.entries {
-        if super::tombstones::is_tombstoned(store, &entry.subject) {
-            tracing::debug!(
-                "import_sync_push: skip {:?} (tombstoned locally)",
-                &entry.subject[..entry.subject.len().min(24)]
-            );
-            continue;
-        }
+    // One arrival-order pass would skip a new unstamped child whose parent
+    // comes later in the same frame. Hold those back, without staging, and
+    // retry once later entries are staged. A pass that stages nothing, or
+    // `entries.len()` passes, ends it: whatever is left is decided for good,
+    // so a missing, rejected, or cyclic parent is skipped.
+    let mut pending: Vec<usize> = (0..push.entries.len()).collect();
+    let mut settled = vec![false; push.entries.len()];
+    let mut strict = false;
+    let mut passes = 0usize;
 
-        let snapshot_key =
-            crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref()).pure_id();
+    while !pending.is_empty() {
+        let batch = std::mem::take(&mut pending);
+        let mut staged_this_pass = 0usize;
+        for idx in batch {
+            let entry = &push.entries[idx];
+            settled[idx] = true;
+            if super::tombstones::is_tombstoned(store, &entry.subject) {
+                tracing::debug!(
+                    "import_sync_push: skip {:?} (tombstoned locally)",
+                    &entry.subject[..entry.subject.len().min(24)]
+                );
+                continue;
+            }
 
-        // Admission above was for `push.drive` as a whole. Each entry names
-        // its own subject, so an existing resource must actually live in
-        // that drive, or a peer admitted for one drive could overwrite any
-        // resource on this node (its ACLs included) by listing it here. Its
-        // stored `drive` stamp is authoritative and is read BEFORE the
-        // incoming delta is merged (mirrors `ws_apply::persist_update`).
-        if !existing_resources.contains_key(&snapshot_key) {
-            let existing = store
-                .get_resource(&crate::Subject::from_raw(
-                    &snapshot_key,
-                    base_domain.as_deref(),
-                ))
-                .await
-                .ok();
-            existing_resources.insert(snapshot_key.clone(), existing);
-        }
-        let cached_resource = existing_resources
-            .get(&snapshot_key)
-            .expect("existing resource was cached");
-        // A repeated entry is a continuation of the accepted state staged by
-        // this frame. Its own drive/parent checks must use that state before
-        // falling back to the pre-import DB row.
-        let staged_resource = staged_by_subject
-            .get(&snapshot_key)
-            .map(|index| &staged[*index].0);
-        let existing_resource = staged_resource.or(cached_resource.as_ref());
-        if let Some(existing) = existing_resource {
-            let stored_drive = if let Ok(drive) = existing.get(crate::urls::DRIVE_PROP) {
-                drive.to_string()
-            } else if let Ok(parent) = existing.get(crate::urls::PARENT) {
-                let parent_subject = crate::Subject::from(parent.to_string());
-                staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject)
+            let snapshot_key =
+                crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref())
+                    .pure_id();
+
+            // Admission above was for `push.drive` as a whole. Each entry names
+            // its own subject, so an existing resource must actually live in
+            // that drive, or a peer admitted for one drive could overwrite any
+            // resource on this node (its ACLs included) by listing it here. Its
+            // stored `drive` stamp is authoritative and is read BEFORE the
+            // incoming delta is merged (mirrors `ws_apply::persist_update`).
+            if !existing_resources.contains_key(&snapshot_key) {
+                let existing = store
+                    .get_resource(&crate::Subject::from_raw(
+                        &snapshot_key,
+                        base_domain.as_deref(),
+                    ))
                     .await
-                    .unwrap_or_else(|| existing.get_subject().to_string())
-            } else {
-                existing.get_subject().to_string()
-            };
-            if normalize(&stored_drive) != admitted_drive {
-                tracing::warn!(
+                    .ok();
+                existing_resources.insert(snapshot_key.clone(), existing);
+            }
+            let cached_resource = existing_resources
+                .get(&snapshot_key)
+                .expect("existing resource was cached");
+            // A repeated entry is a continuation of the accepted state staged by
+            // this frame. Its own drive/parent checks must use that state before
+            // falling back to the pre-import DB row.
+            let staged_resource = staged_by_subject
+                .get(&snapshot_key)
+                .map(|index| &staged[*index].0);
+            let existing_resource = staged_resource.or(cached_resource.as_ref());
+            if let Some(existing) = existing_resource {
+                let stored_drive = if let Ok(drive) = existing.get(crate::urls::DRIVE_PROP) {
+                    drive.to_string()
+                } else if let Ok(parent) = existing.get(crate::urls::PARENT) {
+                    let parent_subject = crate::Subject::from(parent.to_string());
+                    staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject)
+                        .await
+                        .unwrap_or_else(|| existing.get_subject().to_string())
+                } else {
+                    existing.get_subject().to_string()
+                };
+                if normalize(&stored_drive) != admitted_drive {
+                    tracing::warn!(
                     "import_sync_push: {} belongs to drive {}, not to {} this push was admitted for; skipped",
                     entry.subject,
                     stored_drive,
                     push.drive
                 );
-                continue;
+                    continue;
+                }
             }
-        }
 
-        // Load existing doc or create new
-        let doc = if let Some(index) = staged_by_subject.get(&snapshot_key) {
-            let snapshot = staged[*index]
-                .1
-                .as_ref()
-                .expect("sync snapshots are explicit");
-            match AtomicLoroDoc::from_snapshot(snapshot) {
-                Ok(d) if d.import_update(&entry.loro_bytes).is_ok() => d,
-                _ => continue,
-            }
-        } else if let Ok(Some(existing)) =
-            store.kv.get(Tree::LoroSnapshots, snapshot_key.as_bytes())
-        {
-            match AtomicLoroDoc::from_snapshot(&existing) {
-                Ok(d) => {
-                    // A SYNC_PUSH may carry either an incremental update or a
-                    // complete snapshot; Loro accepts both and merges them.
-                    if d.import_update(&entry.loro_bytes).is_err() {
-                        tracing::warn!(
-                            "import_sync_push: delta import failed for {}",
-                            entry.subject
-                        );
-                        continue;
-                    }
-                    d
+            // Load existing doc or create new
+            let doc = if let Some(index) = staged_by_subject.get(&snapshot_key) {
+                let snapshot = staged[*index]
+                    .1
+                    .as_ref()
+                    .expect("sync snapshots are explicit");
+                match AtomicLoroDoc::from_snapshot(snapshot) {
+                    Ok(d) if d.import_update(&entry.loro_bytes).is_ok() => d,
+                    _ => continue,
                 }
-                Err(_) => {
-                    // Existing snapshot corrupt, treat incoming as fresh
-                    match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
-                        Ok(d) => d,
-                        Err(_) => continue,
+            } else if let Ok(Some(existing)) =
+                store.kv.get(Tree::LoroSnapshots, snapshot_key.as_bytes())
+            {
+                match AtomicLoroDoc::from_snapshot(&existing) {
+                    Ok(d) => {
+                        // A SYNC_PUSH may carry either an incremental update or a
+                        // complete snapshot; Loro accepts both and merges them.
+                        if d.import_update(&entry.loro_bytes).is_err() {
+                            tracing::warn!(
+                                "import_sync_push: delta import failed for {}",
+                                entry.subject
+                            );
+                            continue;
+                        }
+                        d
                     }
-                }
-            }
-        } else {
-            // New resource — import as snapshot
-            let doc = AtomicLoroDoc::new();
-            if doc.import_update(&entry.loro_bytes).is_err() {
-                // Try as snapshot
-                match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
-                    Ok(d) => d,
                     Err(_) => {
-                        tracing::warn!("import_sync_push: import failed for {}", entry.subject);
-                        continue;
+                        // Existing snapshot corrupt, treat incoming as fresh
+                        match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
+                            Ok(d) => d,
+                            Err(_) => continue,
+                        }
                     }
                 }
             } else {
-                doc
-            }
-        };
-
-        // No `get_resource` — `apply_state_doc` rebuilds propvals from the
-        // merged doc, so the read would be discarded. Sync builds directly.
-        let snapshot = doc.export_snapshot();
-        let subject = crate::Subject::from_raw(&snapshot_key, store.get_base_domain().as_deref());
-        let mut resource = crate::Resource::new(subject.to_string());
-
-        if resource
-            .apply_state_doc_with_snapshot(doc, snapshot.clone())
-            .is_err()
-        {
-            continue;
-        }
-
-        // A new subject: it may only enter the drive this push was admitted
-        // for. Its parent's stored drive decides when the parent is known
-        // here; otherwise the resource must stamp itself into that drive or
-        // be the drive root itself. (A peer gains nothing by stamping a NEW
-        // resource into a drive it already has write on.)
-        if existing_resource.is_none() {
-            let mut claimed = resource
-                .get(crate::urls::DRIVE_PROP)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|_| resource.get_subject().to_string());
-            if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
-                let parent_subject = crate::Subject::from(parent_val.to_string());
-                if let Some(drive) =
-                    staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject).await
-                {
-                    claimed = drive;
+                // New resource — import as snapshot
+                let doc = AtomicLoroDoc::new();
+                if doc.import_update(&entry.loro_bytes).is_err() {
+                    // Try as snapshot
+                    match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
+                        Ok(d) => d,
+                        Err(_) => {
+                            tracing::warn!("import_sync_push: import failed for {}", entry.subject);
+                            continue;
+                        }
+                    }
+                } else {
+                    doc
                 }
+            };
+
+            // No `get_resource` — `apply_state_doc` rebuilds propvals from the
+            // merged doc, so the read would be discarded. Sync builds directly.
+            let snapshot = doc.export_snapshot();
+            let subject =
+                crate::Subject::from_raw(&snapshot_key, store.get_base_domain().as_deref());
+            let mut resource = crate::Resource::new(subject.to_string());
+
+            if resource
+                .apply_state_doc_with_snapshot(doc, snapshot.clone())
+                .is_err()
+            {
+                continue;
             }
-            if normalize(&claimed) != admitted_drive {
-                tracing::warn!(
+
+            // A new subject: it may only enter the drive this push was admitted
+            // for. Its parent's stored drive decides when the parent is known
+            // here; otherwise the resource must stamp itself into that drive or
+            // be the drive root itself. (A peer gains nothing by stamping a NEW
+            // resource into a drive it already has write on.)
+            if existing_resource.is_none() {
+                let mut claimed = resource
+                    .get(crate::urls::DRIVE_PROP)
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|_| resource.get_subject().to_string());
+                if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
+                    let parent_subject = crate::Subject::from(parent_val.to_string());
+                    if let Some(drive) =
+                        staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject)
+                            .await
+                    {
+                        claimed = drive;
+                    } else if !strict {
+                        // The parent is not here yet, but this frame still has an
+                        // entry for it that is neither staged nor finally skipped.
+                        let parent_key = normalize(&parent_subject.to_string());
+                        if push.entries.iter().enumerate().any(|(i, other)| {
+                            i != idx && !settled[i] && normalize(&other.subject) == parent_key
+                        }) {
+                            settled[idx] = false;
+                            pending.push(idx);
+                            continue;
+                        }
+                    }
+                }
+                if normalize(&claimed) != admitted_drive {
+                    tracing::warn!(
                     "import_sync_push: new resource {} resolves to drive {}, not to {} this push was admitted for; skipped",
                     entry.subject,
                     claimed,
                     push.drive
                 );
-                continue;
+                    continue;
+                }
+            }
+
+            // Only persist after every scope check succeeds. In particular, a
+            // rejected new subject must not leave a snapshot that a later valid
+            // import would merge. add_resource_opts stores the validated state.
+            // Log what properties arrived
+            let has_strokes = resource
+                .get("https://atomicdata.dev/ontology/canvas/strokeData")
+                .is_ok();
+            tracing::info!(
+                "  sync imported {}: {} props, has_strokes={}",
+                &entry.subject[..entry.subject.len().min(30)],
+                resource.get_propvals().len(),
+                has_strokes,
+            );
+
+            if let Some(index) = staged_by_subject.get(&snapshot_key).copied() {
+                staged[index] = (resource.clone(), Some(snapshot));
+            } else {
+                staged_by_subject.insert(snapshot_key.clone(), staged.len());
+                staged.push((resource.clone(), Some(snapshot)));
+            }
+            count += 1;
+            staged_this_pass += 1;
+            imported.insert(snapshot_key.clone());
+
+            // Check for missing blobs
+            // The drive is the (already-admitted, see the top of this fn) one.
+            if let Some(request) = missing_blob_request(store, &resource, push.drive.clone()).await
+            {
+                blob_requests.push(request);
             }
         }
 
-        // Only persist after every scope check succeeds. In particular, a
-        // rejected new subject must not leave a snapshot that a later valid
-        // import would merge. add_resource_opts stores the validated state.
-        // Log what properties arrived
-        let has_strokes = resource
-            .get("https://atomicdata.dev/ontology/canvas/strokeData")
-            .is_ok();
-        tracing::info!(
-            "  sync imported {}: {} props, has_strokes={}",
-            &entry.subject[..entry.subject.len().min(30)],
-            resource.get_propvals().len(),
-            has_strokes,
-        );
-
-        if let Some(index) = staged_by_subject.get(&snapshot_key).copied() {
-            staged[index] = (resource.clone(), Some(snapshot));
-        } else {
-            staged_by_subject.insert(snapshot_key.clone(), staged.len());
-            staged.push((resource.clone(), Some(snapshot)));
+        if pending.is_empty() || strict {
+            break;
         }
-        count += 1;
-        imported.insert(snapshot_key.clone());
-
-        // Check for missing blobs
-        // The drive is the (already-admitted, see the top of this fn) one.
-        if let Some(request) = missing_blob_request(store, &resource, push.drive.clone()).await {
-            blob_requests.push(request);
+        passes += 1;
+        if staged_this_pass == 0 || passes >= push.entries.len() {
+            strict = true;
         }
     }
 
@@ -2588,6 +2652,295 @@ mod bootstrap_and_sub_tests {
                 .unwrap()
                 .to_string(),
             "Original"
+        );
+    }
+
+    /// Drive and unstamped child (`parent` set, no `drive`) built the way
+    /// `save_as_genesis` leaves them. Asserts the child snapshot has no
+    /// `drive` property before anything is imported.
+    async fn genesis_drive_and_child(
+        id: &str,
+    ) -> (Db, crate::agents::Agent, String, String, Vec<u8>, Vec<u8>) {
+        let source = Db::init_temp(id).await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Ordering")).unwrap();
+        source.set_default_agent(alice.clone());
+        let mut root = crate::Resource::new("did:ad:placeholder".into());
+        root.set_class(crate::urls::DRIVE).unwrap();
+        for property in [crate::urls::READ, crate::urls::WRITE] {
+            root.set_unsafe(
+                property.into(),
+                crate::Value::ResourceArray(vec![alice.subject.to_string().into()]),
+            )
+            .unwrap();
+        }
+        root.save_as_genesis(&source).await.unwrap();
+        let drive = root.get_subject().to_string();
+
+        let mut child = crate::Resource::new("did:ad:placeholder".into());
+        child
+            .set_unsafe(
+                crate::urls::PARENT.into(),
+                crate::Value::AtomicUrl(drive.clone().into()),
+            )
+            .unwrap();
+        child.set_name("Child without a drive stamp").unwrap();
+        child.save_as_genesis(&source).await.unwrap();
+        let note = child.get_subject().to_string();
+
+        let root_bytes = source.get_loro_snapshot(root.get_subject()).unwrap();
+        let child_bytes = source.get_loro_snapshot(child.get_subject()).unwrap();
+        let mut decoded = crate::Resource::new(note.clone());
+        decoded
+            .apply_state_doc(AtomicLoroDoc::from_snapshot(&child_bytes).unwrap())
+            .unwrap();
+        assert!(
+            decoded.get(crate::urls::DRIVE_PROP).is_err(),
+            "the child snapshot has a parent and no drive stamp"
+        );
+        (source, alice, drive, note, root_bytes, child_bytes)
+    }
+
+    fn assert_no_snapshot(store: &Db, subject: &str) {
+        let key = crate::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id();
+        assert!(
+            store
+                .kv
+                .get(Tree::LoroSnapshots, key.as_bytes())
+                .unwrap()
+                .is_none(),
+            "no snapshot for {subject}"
+        );
+    }
+
+    #[tokio::test]
+    async fn unstamped_child_imports_in_either_entry_order() {
+        let (_source, alice, drive, note, root_bytes, child_bytes) =
+            genesis_drive_and_child("unstamped_order_source").await;
+        let parent_first: [(&str, &[u8]); 2] = [(&drive, &root_bytes), (&note, &child_bytes)];
+        let child_first: [(&str, &[u8]); 2] = [(&note, &child_bytes), (&drive, &root_bytes)];
+        for (i, entries) in [&parent_first[..], &child_first[..]]
+            .into_iter()
+            .enumerate()
+        {
+            let sink = Db::init_temp(&format!("unstamped_order_sink_{i}"))
+                .await
+                .unwrap();
+            let frame = protocol::encode_sync_push(&drive, entries, true);
+            let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+            let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(&alice), false)
+                .await
+                .unwrap();
+            assert_eq!(count, 2, "order {i}");
+            assert!(sink.get_resource(&drive.as_str().into()).await.is_ok());
+            let stored = sink.get_resource(&note.as_str().into()).await.unwrap();
+            assert!(
+                stored.get(crate::urls::DRIVE_PROP).is_err(),
+                "import must not stamp a drive onto the child"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unstamped_grandchild_imports_grandchild_first() {
+        let (source, alice, drive, note, root_bytes, child_bytes) =
+            genesis_drive_and_child("unstamped_chain_source").await;
+        let mut grandchild = crate::Resource::new("did:ad:placeholder".into());
+        grandchild
+            .set_unsafe(
+                crate::urls::PARENT.into(),
+                crate::Value::AtomicUrl(note.clone().into()),
+            )
+            .unwrap();
+        grandchild.set_name("Grandchild").unwrap();
+        grandchild.save_as_genesis(&source).await.unwrap();
+        let grand = grandchild.get_subject().to_string();
+        let grand_bytes = source.get_loro_snapshot(grandchild.get_subject()).unwrap();
+        let mut decoded = crate::Resource::new(grand.clone());
+        decoded
+            .apply_state_doc(AtomicLoroDoc::from_snapshot(&grand_bytes).unwrap())
+            .unwrap();
+        assert!(decoded.get(crate::urls::DRIVE_PROP).is_err());
+
+        let sink = Db::init_temp("unstamped_chain_sink").await.unwrap();
+        let entries: [(&str, &[u8]); 3] = [
+            (&grand, &grand_bytes),
+            (&note, &child_bytes),
+            (&drive, &root_bytes),
+        ];
+        let frame = protocol::encode_sync_push(&drive, &entries, true);
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+        let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(&alice), false)
+            .await
+            .unwrap();
+        assert_eq!(count, 3);
+        assert!(sink.get_resource(&drive.as_str().into()).await.is_ok());
+        assert!(sink.get_resource(&note.as_str().into()).await.is_ok());
+        assert!(sink.get_resource(&grand.as_str().into()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn unstamped_child_with_absent_parent_is_not_stored() {
+        let (_source, alice, drive, note, _root_bytes, child_bytes) =
+            genesis_drive_and_child("unstamped_absent_source").await;
+        let sink = Db::init_temp("unstamped_absent_sink").await.unwrap();
+        // The frame names `drive`, and the child's parent URL is that drive,
+        // but the drive resource is neither stored nor in the frame.
+        let frame = protocol::encode_sync_push(&drive, &[(&note, child_bytes.as_slice())], true);
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+        let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(&alice), false)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        assert!(sink.get_resource(&note.as_str().into()).await.is_err());
+        assert_no_snapshot(&sink, &note);
+    }
+
+    #[tokio::test]
+    async fn unstamped_child_skipped_when_parent_resolves_to_another_drive() {
+        let parent = "https://localhost/foreign-parent";
+        let child = "https://localhost/foreign-child";
+        let other = "https://localhost/other-drive";
+
+        // Parent already stored, and its drive is not the one this push names.
+        let parent_doc = AtomicLoroDoc::new();
+        parent_doc
+            .set_property(
+                crate::urls::DRIVE_PROP,
+                &crate::Value::AtomicUrl(other.into()),
+            )
+            .unwrap();
+        let parent_bytes = parent_doc.export_snapshot();
+        let child_doc = AtomicLoroDoc::new();
+        child_doc
+            .set_property(crate::urls::PARENT, &crate::Value::AtomicUrl(parent.into()))
+            .unwrap();
+        child_doc
+            .set_property(
+                crate::urls::NAME,
+                &crate::Value::String("Must not land".into()),
+            )
+            .unwrap();
+        let child_bytes = child_doc.export_snapshot();
+        let stored_orders: [[(&str, &[u8]); 2]; 2] = [
+            [(parent, &parent_bytes), (child, &child_bytes)],
+            [(child, &child_bytes), (parent, &parent_bytes)],
+        ];
+        for (i, entries) in stored_orders.iter().enumerate() {
+            let sink = Db::init_temp(&format!("unstamped_other_stored_{i}"))
+                .await
+                .unwrap();
+            let (alice, drive) = sink.setup("Alice").await.unwrap();
+            let mut stored_parent = crate::Resource::new(parent.into());
+            stored_parent
+                .set_unsafe(
+                    crate::urls::DRIVE_PROP.into(),
+                    crate::Value::AtomicUrl(other.into()),
+                )
+                .unwrap();
+            sink.add_resource_opts(&stored_parent, false, true, true)
+                .await
+                .unwrap();
+            let frame = protocol::encode_sync_push(&drive, entries, true);
+            let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+            let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(alice), false)
+                .await
+                .unwrap();
+            assert_eq!(count, 0, "stored parent, order {i}");
+            assert!(sink.get_resource(&child.into()).await.is_err());
+            assert_no_snapshot(&sink, child);
+        }
+
+        // Parent is in the frame and is itself rejected. Child-first defers,
+        // then the strict pass skips it; nothing is persisted either way.
+        let rejected_parent = AtomicLoroDoc::new();
+        rejected_parent
+            .set_property(
+                crate::urls::DRIVE_PROP,
+                &crate::Value::AtomicUrl(other.into()),
+            )
+            .unwrap();
+        let rejected_bytes = rejected_parent.export_snapshot();
+        let rejected_orders: [[(&str, &[u8]); 2]; 2] = [
+            [(parent, &rejected_bytes), (child, &child_bytes)],
+            [(child, &child_bytes), (parent, &rejected_bytes)],
+        ];
+        for (i, entries) in rejected_orders.iter().enumerate() {
+            let sink = Db::init_temp(&format!("unstamped_other_rejected_{i}"))
+                .await
+                .unwrap();
+            let (alice, drive) = sink.setup("Alice").await.unwrap();
+            let frame = protocol::encode_sync_push(&drive, entries, true);
+            let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+            let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(alice), false)
+                .await
+                .unwrap();
+            assert_eq!(count, 0, "rejected parent, order {i}");
+            assert!(sink.get_resource(&child.into()).await.is_err());
+            assert!(sink.get_resource(&parent.into()).await.is_err());
+            assert_no_snapshot(&sink, child);
+            assert_no_snapshot(&sink, parent);
+        }
+    }
+
+    #[tokio::test]
+    async fn deferred_child_import_does_not_resurrect_a_rejected_snapshot() {
+        let (_source, alice, drive, note, root_bytes, child_bytes) =
+            genesis_drive_and_child("unstamped_defer_source").await;
+        let sink = Db::init_temp("unstamped_defer_sink").await.unwrap();
+
+        let poison = AtomicLoroDoc::new();
+        poison
+            .set_property(
+                crate::urls::DRIVE_PROP,
+                &crate::Value::AtomicUrl("https://localhost/other-drive".into()),
+            )
+            .unwrap();
+        poison
+            .set_property(
+                crate::urls::DESCRIPTION,
+                &crate::Value::String("Rejected data".into()),
+            )
+            .unwrap();
+        let frame = protocol::encode_sync_push(&drive, &[(&note, &poison.export_snapshot())], true);
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+        let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(&alice), false)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        assert_no_snapshot(&sink, &note);
+
+        // Child first: the first pass defers it, the retry imports it once the
+        // drive in this same frame is stored.
+        let entries: [(&str, &[u8]); 2] = [(&note, &child_bytes), (&drive, &root_bytes)];
+        let frame = protocol::encode_sync_push(&drive, &entries, true);
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+        let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(&alice), false)
+            .await
+            .unwrap();
+        assert_eq!(count, 2);
+        let stored = sink.get_resource(&note.as_str().into()).await.unwrap();
+        assert!(
+            stored.get(crate::urls::DESCRIPTION).is_err(),
+            "the rejected snapshot must not have been merged"
+        );
+
+        let valid = AtomicLoroDoc::new();
+        valid
+            .set_property(
+                crate::urls::DRIVE_PROP,
+                &crate::Value::AtomicUrl(drive.clone().into()),
+            )
+            .unwrap();
+        let frame = protocol::encode_sync_push(&drive, &[(&note, &valid.export_snapshot())], true);
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+        let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(&alice), false)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+        let stored = sink.get_resource(&note.as_str().into()).await.unwrap();
+        assert!(
+            stored.get(crate::urls::DESCRIPTION).is_err(),
+            "a later valid import must not resurrect the rejected property"
         );
     }
 
