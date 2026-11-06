@@ -26,6 +26,7 @@ import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useGettingStartedAgent } from './GettingStartedCard';
 import { PluginList } from './PluginList';
+import { ExternalAppList } from './ExternalAppList';
 
 const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 
@@ -99,6 +100,7 @@ function DriveSettingsBody({
           />
         </Column>
       </SettingsSection>
+      <ExternalAppList drive={drive.subject} />
       <SettingsSection label='Plugins' initialState>
         <Column gap='1rem'>
           <PluginList drive={drive} />

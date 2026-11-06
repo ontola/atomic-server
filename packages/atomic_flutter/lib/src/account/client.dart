@@ -643,7 +643,7 @@ class AtomicNoAssistedRecovery implements Exception {
 
   @override
   String toString() => '$reason Paste your Atomic secret, or open your '
-      'identity once in the atomic.place web app and try again.';
+      'identity once in the web app of your account and try again.';
 }
 
 class AtomicDeviceLink {

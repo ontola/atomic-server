@@ -10,7 +10,12 @@ import { Button } from '../Button';
 import { ServiceRow, type ServiceStanding } from '../Cloud/ServiceRow';
 import { UsageMeter } from '../Cloud/UsageMeter';
 import { VaultStorage } from './VaultStorage';
+import { VaultRestoreDialog } from './VaultRestoreDialog';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
+import {
+  getVaultUsage,
+  type VaultSnapshotUsage,
+} from '../../helpers/managed/vault';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
 import { plural } from '@helpers/plural';
 
@@ -40,6 +45,7 @@ export function VaultPanel({
   const { status, busy, error, restoreProgress } = vault;
   const [storageOpen, setStorageOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [snapshots, setSnapshots] = useState<VaultSnapshotUsage[] | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   // What Cloud Vault is: the same sentence in every state. Declared in here,
   // not at module level, so the translation extractor sees it.
@@ -51,10 +57,24 @@ export function VaultPanel({
       : 'current'
     : null;
 
-  async function handleRestore() {
-    const outcome = await vault.restore();
+  async function handleRestore(snapshotId?: string) {
+    const outcome = await vault.restore(snapshotId);
 
     if (outcome) onRestored?.();
+  }
+
+  // Which snapshots exist decides what Restore asks. A control plane that does
+  // not list any (older, or unreachable just now) keeps the plain restore.
+  async function handleRestoreClick() {
+    if (status.state !== 'on') return;
+
+    const listed = await getVaultUsage(status.enrollment.drive_pseudonym)
+      .then(usage => usage.snapshots ?? [])
+      .catch(() => []);
+
+    if (listed.length === 0) return handleRestore();
+
+    setSnapshots(listed);
   }
 
   async function handleDownload() {
@@ -96,6 +116,30 @@ export function VaultPanel({
                 {status.reason}
               </span>
             ),
+        }}
+      />
+    );
+  }
+
+  // Someone else's vault: say it is there and whose it is, offer nothing.
+  if (status.state === 'other') {
+    return (
+      <ServiceRow
+        data-testid='vault-panel'
+        data-vault-state='other'
+        kind='vault'
+        title='Cloud Vault'
+        standing='included'
+        tagline={tagline}
+        status={{
+          tone: status.suspended ? 'waiting' : 'ok',
+          text: (
+            <span data-testid='vault-managed-elsewhere'>
+              {status.backedUpBy
+                ? `This drive is backed up by ${status.backedUpBy}. Only that account can change it.`
+                : 'This drive is backed up by another account. Only that account can change it.'}
+            </span>
+          ),
         }}
       />
     );
@@ -214,6 +258,13 @@ export function VaultPanel({
             {notice && (
               <IncludedNote data-testid='vault-notice'>{notice}</IncludedNote>
             )}
+            {snapshots && (
+              <VaultRestoreDialog
+                snapshots={snapshots}
+                onRestore={id => void handleRestore(id)}
+                onClose={() => setSnapshots(null)}
+              />
+            )}
             {storageOpen && (
               <VaultStorage
                 drivePseudonym={enrollment.drive_pseudonym}
@@ -239,7 +290,7 @@ export function VaultPanel({
             <Button
               data-testid='vault-restore'
               subtle
-              onClick={handleRestore}
+              onClick={() => void handleRestoreClick()}
               disabled={busy}
             >
               <FaRotateLeft /> <span>Restore</span>

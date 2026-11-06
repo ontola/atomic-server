@@ -5435,6 +5435,7 @@ msgstr "Account beheren →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Cloud Vault"
 
@@ -6049,6 +6050,7 @@ msgstr "Kan bestand niet voorbereiden. Selecteer het opnieuw om het nogmaals te 
 
 #: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore"
 msgstr "Herstellen"
 
@@ -8367,6 +8369,7 @@ msgstr "Lokale kopie niet beschikbaar"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Deze fout melden"
 
@@ -12424,7 +12427,7 @@ msgstr "De lijst met objecten en hun inhoud komen niet overeen."
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr "Oudere back-upkopieën worden verwijderd, evenals de bewerkingsgeschiedenis van de back-up: alleen de huidige staat van elk item blijft behouden. Herstellen hieruit brengt je werkruimte terug zoals deze nu is, zonder versiegeschiedenis. Onlangs verwijderde items kunnen niet meer uit de back-up worden hersteld. Je apparaten behouden hun eigen bewerkingsgeschiedenis en je werkruimte wordt niet gewijzigd."
 
-#: src/components/ConnectDevice.tsx
+#: src/helpers/connectInput.ts
 msgid "Could not reach that address."
 msgstr "Kan dat adres niet bereiken."
 
@@ -13462,4 +13465,68 @@ msgstr "<0/> Toevoegen aan Mijn schijven"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
-msgstr"Cloud Vault is vol, dus er wordt geen back-up van deze schijf gemaakt."
+msgstr "Cloud Vault is vol, dus er wordt geen back-up van deze schijf gemaakt."
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Van deze schijf maakt {0} een back-up. Alleen dat account kan dit wijzigen."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Van deze schijf maakt een ander account een back-up. Alleen dat account kan dit wijzigen."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "Openen in {0}"
+
+#. 0: app.name
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Open de homepage van {0}"
+
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Apps in this drive"
+msgstr "Apps in deze schijf"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Snapshot"
+msgstr "Snapshot"
+
+#. 0: when
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
+msgstr "Je drive gaat terug naar hoe hij was op {0}. Wijzigingen van na dat moment gaan verloren voor iedereen die deze drive gebruikt."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
+msgstr "Items die sindsdien zijn toegevoegd gaan naar de Prullenbak, en het herstel wordt opgeslagen als nieuwe wijziging, dus de Geschiedenis van elk item bewaart wat het vervangt."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore a snapshot"
+msgstr "Een snapshot herstellen"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore this backup?"
+msgstr "Deze back-up herstellen?"
+
+#. 0: url; 1: url.replace('https://', 'http://')
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+msgstr "Kon {0} niet bereiken. Een server op je eigen computer spreekt meestal gewoon http, probeer dus {1}."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+msgstr "Kon {0} niet bereiken. Controleer of de server draait en of deze site andere apps en diensten op dit apparaat mag benaderen (het slotje in de adresbalk, dan site-instellingen). De server moet ook de origin van deze site toestaan."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running on that port."
+msgstr "Kon {0} niet bereiken. Controleer of de server op die poort draait."
+
+#. 0: response.status; 1: apiHost()
+#: src/helpers/managed/recovery.ts
+msgid "HTTP {0} from {1}"
+msgstr "HTTP {0} van {1}"

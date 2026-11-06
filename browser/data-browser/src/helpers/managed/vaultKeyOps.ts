@@ -1,5 +1,5 @@
 import { atomicWasmSource, wasmJsUrl } from '../wasmUrls';
-import type { VaultKeyOps } from './vault';
+import type { ScratchVaultDb, VaultKeyOps } from './vault';
 
 /**
  * The vault's key operations, loaded from the wasm bundle on the main thread.
@@ -16,6 +16,7 @@ type VaultWasmModule = {
   default: (init?: {
     module_or_path: string | WebAssembly.Module;
   }) => Promise<unknown>;
+  ClientDb: { newInMemory(baseUrl: string | null): Promise<ScratchVaultDb> };
   vaultGenerateKey: () => Uint8Array;
   vaultProofMessage: () => Uint8Array;
   vaultWrapKey: (driveKey: Uint8Array, agentSecret: Uint8Array) => string;
@@ -61,6 +62,7 @@ export async function loadVaultKeyOps(): Promise<
 
   return {
     proofMessage: wasm.vaultProofMessage(),
+    openScratchDb: () => wasm.ClientDb.newInMemory(null),
     vaultGenerateKey: () => wasm.vaultGenerateKey(),
     vaultWrapKey: (driveKey, agentSecret) =>
       wasm.vaultWrapKey(driveKey, agentSecret),

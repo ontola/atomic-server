@@ -6,6 +6,7 @@
 library;
 
 export 'src/backend.dart';
+export 'src/external_app.dart';
 export 'src/exceptions.dart';
 export 'src/resource.dart';
 export 'src/store.dart';

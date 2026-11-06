@@ -5432,6 +5432,7 @@ msgstr "Konto verwalten →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Cloud Vault"
 
@@ -6046,6 +6047,7 @@ msgstr "Datei konnte nicht vorbereitet werden. Wähle sie erneut aus."
 
 #: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore"
 msgstr "Wiederherstellen"
 
@@ -8364,6 +8366,7 @@ msgstr "Lokale Kopie nicht verfügbar"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Diesen Fehler melden"
 
@@ -12421,7 +12424,7 @@ msgstr "Die Objektliste und ihre Inhalte stimmen nicht überein."
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr "Ältere Sicherungskopien und der Bearbeitungsverlauf der Sicherung werden entfernt. Nur der aktuelle Zustand jedes Elements bleibt erhalten. Eine Wiederherstellung stellt deinen Arbeitsbereich im jetzigen Zustand ohne Versionsverlauf wieder her. Kürzlich gelöschte Elemente können nicht mehr aus der Sicherung wiederhergestellt werden. Deine Geräte behalten ihren eigenen Bearbeitungsverlauf und dein Arbeitsbereich bleibt unverändert."
 
-#: src/components/ConnectDevice.tsx
+#: src/helpers/connectInput.ts
 msgid "Could not reach that address."
 msgstr "Diese Adresse ist nicht erreichbar."
 
@@ -13459,4 +13462,68 @@ msgstr "<0/> Zu Meine Laufwerke hinzufügen"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
-msgstr"Cloud Vault ist voll, daher wird dieses Laufwerk nicht gesichert."
+msgstr "Cloud Vault ist voll, daher wird dieses Laufwerk nicht gesichert."
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Dieses Laufwerk wird von {0} gesichert. Nur dieses Konto kann das ändern."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Dieses Laufwerk wird von einem anderen Konto gesichert. Nur dieses Konto kann das ändern."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "In {0} öffnen"
+
+#. 0: app.name
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Startseite von {0} öffnen"
+
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Apps in this drive"
+msgstr "Apps in diesem Laufwerk"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Snapshot"
+msgstr "Snapshot"
+
+#. 0: when
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
+msgstr "Dein Drive wird auf den Stand vom {0} zurückgesetzt. Änderungen nach diesem Zeitpunkt gehen für alle verloren, die diesen Drive nutzen."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
+msgstr "Seitdem hinzugefügte Elemente werden in den Papierkorb verschoben, und die Wiederherstellung wird als neue Änderung gespeichert, sodass der Verlauf jedes Elements behält, was ersetzt wurde."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore a snapshot"
+msgstr "Einen Snapshot wiederherstellen"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore this backup?"
+msgstr "Dieses Backup wiederherstellen?"
+
+#. 0: url; 1: url.replace('https://', 'http://')
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+msgstr "{0} ist nicht erreichbar. Ein Server auf deinem eigenen Rechner spricht meist einfaches http, versuche also {1}."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+msgstr "{0} ist nicht erreichbar. Prüfe, ob der Server läuft und ob diese Seite auf andere Apps und Dienste auf diesem Gerät zugreifen darf (das Schloss-Symbol in der Adressleiste, dann Website-Einstellungen). Der Server muss auch den Origin dieser Seite erlauben."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running on that port."
+msgstr "{0} ist nicht erreichbar. Prüfe, ob der Server auf diesem Port läuft."
+
+#. 0: response.status; 1: apiHost()
+#: src/helpers/managed/recovery.ts
+msgid "HTTP {0} from {1}"
+msgstr "HTTP {0} von {1}"

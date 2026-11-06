@@ -5429,6 +5429,7 @@ msgstr "Gérer le compte →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Coffre cloud"
 
@@ -6043,6 +6044,7 @@ msgstr "Impossible de préparer le fichier. Sélectionnez-le à nouveau pour ré
 
 #: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore"
 msgstr "Restaurer"
 
@@ -8361,6 +8363,7 @@ msgstr "Copie locale indisponible"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Signaler cette erreur"
 
@@ -12418,7 +12421,7 @@ msgstr "La liste des objets ne correspond pas à leur contenu."
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr "Les anciennes copies de sauvegarde sont supprimées, ainsi que l’historique des modifications de la sauvegarde : seul l’état actuel de chaque élément est conservé. Une restauration récupère votre espace de travail tel qu’il est maintenant, sans son historique des versions. Les éléments récemment supprimés ne pourront plus être récupérés depuis la sauvegarde. Vos appareils conservent leur propre historique et votre espace de travail n’est pas modifié."
 
-#: src/components/ConnectDevice.tsx
+#: src/helpers/connectInput.ts
 msgid "Could not reach that address."
 msgstr "Impossible de joindre cette adresse."
 
@@ -13456,4 +13459,68 @@ msgstr "<0/> Ajouter à Mes lecteurs"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
-msgstr"Le coffre cloud est plein ; ce lecteur n’est donc plus sauvegardé."
+msgstr "Le coffre cloud est plein ; ce lecteur n’est donc plus sauvegardé."
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Ce lecteur est sauvegardé par {0}. Seul ce compte peut le modifier."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Ce lecteur est sauvegardé par un autre compte. Seul ce compte peut le modifier."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "Ouvrir dans {0}"
+
+#. 0: app.name
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Ouvrir la page d'accueil de {0}"
+
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Apps in this drive"
+msgstr "Applications dans ce lecteur"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Snapshot"
+msgstr "Instantané"
+
+#. 0: when
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
+msgstr "Votre drive reviendra à son état du {0}. Les modifications faites après ce moment seront perdues pour tous ceux qui utilisent ce drive."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
+msgstr "Les éléments ajoutés depuis sont déplacés dans la Corbeille, et la restauration est enregistrée comme une nouvelle modification : l’Historique de chaque élément garde ce qu’elle a remplacé."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore a snapshot"
+msgstr "Restaurer un instantané"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore this backup?"
+msgstr "Restaurer cette sauvegarde ?"
+
+#. 0: url; 1: url.replace('https://', 'http://')
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+msgstr "Impossible de joindre {0}. Un serveur sur votre propre machine utilise généralement le http simple, essayez donc {1}."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+msgstr "Impossible de joindre {0}. Vérifiez que le serveur est lancé et que ce site est autorisé à accéder aux autres applications et services de cet appareil (l’icône de cadenas dans la barre d’adresse, puis paramètres du site). Le serveur doit aussi autoriser l’origine de ce site."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running on that port."
+msgstr "Impossible de joindre {0}. Vérifiez que le serveur tourne sur ce port."
+
+#. 0: response.status; 1: apiHost()
+#: src/helpers/managed/recovery.ts
+msgid "HTTP {0} from {1}"
+msgstr "HTTP {0} depuis {1}"

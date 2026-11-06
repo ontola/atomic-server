@@ -34,6 +34,7 @@ export class NoEncryptionKeyError extends Error {
     super(
       'This person has no encryption key yet. They need to open Atomic once before you can message them.',
     );
+    this.name = /* @wc-ignore */ 'NoEncryptionKeyError';
   }
 }
 

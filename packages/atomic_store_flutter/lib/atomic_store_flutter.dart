@@ -5,6 +5,7 @@
 library;
 
 export 'src/settings_backend.dart' show AtomicAccountButton, AtomicNodeSettings;
+export 'src/account_session.dart' show SecureAccountSessionStore;
 export 'src/agent_secrets.dart'
     show AgentSecretStore, SecureAgentSecrets, MemoryAgentSecrets;
 export 'src/atomic_flutter.dart' show AtomicFlutter, AtomicNode, AtomicParts;
