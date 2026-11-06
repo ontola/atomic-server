@@ -13,6 +13,7 @@ import {
   nextSegmentFor,
   runVaultBackup,
   compactVaultBackup,
+  VaultSessionEndedError,
   type VaultCapableDb,
   type VaultKeyOps,
   type VaultDriveState,
@@ -933,6 +934,38 @@ describe('key management', () => {
       }),
     ).rejects.toThrow();
     expect(calls.map(call => call.url)).toHaveLength(1);
+  });
+
+  /**
+   * Signing out in another tab ends the shared session mid-pass. The key
+   * read must report that as a session end, which the automatic backup skips
+   * quietly, not as a failed backup carrying the server's "No session".
+   */
+  it('reports a 401 on the key read as a session end', async () => {
+    mockFetch(url => {
+      if (url.endsWith('/enroll')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ enrollment: { drive_pseudonym: PSEUDONYM } }),
+        };
+      }
+
+      return {
+        ok: false,
+        status: 401,
+        json: async () => ({ error: 'No session' }),
+      };
+    });
+
+    await expect(
+      setUpVaultForDrive({
+        keys: fakeKeys(),
+        driveSubject: 'did:ad:drive',
+        agentSubject: 'did:ad:agent:x',
+        agentSecret: AGENT_SECRET,
+      }),
+    ).rejects.toBeInstanceOf(VaultSessionEndedError);
   });
 
   it('reuses an existing key rather than minting a second one', async () => {

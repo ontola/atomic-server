@@ -459,6 +459,10 @@ export async function getVaultKeyEnvelopeRecord(
 
   if (response.status === 204) return null;
 
+  // Same as `api`: a session that ended mid-pass (sign-out in another tab) is
+  // not a failed backup, and callers skip quietly on this error.
+  if (response.status === 401) throw new VaultSessionEndedError();
+
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(
