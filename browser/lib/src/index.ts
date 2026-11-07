@@ -109,6 +109,7 @@ export * from './ontology.js';
 export * from './invites.js';
 export * from './pairing.js';
 export * from './loro-loader.js';
+export { getLoroFailure, loroCall, type LoroFailure } from './loro-context.js';
 export * from './page-request-signal.js';
 export * from './presence.js';
 export * from './json-ad-compact.js';

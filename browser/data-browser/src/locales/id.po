@@ -5975,10 +5975,6 @@ msgid "Thank you. Your feedback has been received."
 msgstr "Terima kasih. Masukan Anda telah diterima."
 
 #: src/components/SideBar/FeedbackButton.tsx
-msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
-msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry. Jangan sertakan konten ruang kerja pribadi."
-
-#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback <0/>"
 msgstr "Masukan <0/>"
 
@@ -8415,10 +8411,6 @@ msgstr "Tidak dapat menyalin. Pilih teks di atas untuk menyalinnya secara manual
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "The report could not be sent. Your text is still here; try again."
 msgstr "Laporan tidak dapat dikirim. Teks Anda masih di sini; coba lagi."
-
-#: src/chunks/AI/ReportAIChatDialog.tsx
-msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Remove private information before sending."
-msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan kesalahan, serta deskripsi dan email opsional Anda kepada tim Atomic melalui Sentry. Lampiran, payload alat, dan penalaran tidak disertakan. Hapus informasi pribadi sebelum mengirim."
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "What went wrong? <0/>"
@@ -13522,3 +13514,11 @@ msgstr "Tidak dapat menjangkau {0}. Pastikan server berjalan di port tersebut."
 #: src/helpers/managed/recovery.ts
 msgid "HTTP {0} from {1}"
 msgstr "HTTP {0} dari {1}"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Technical details about your setup (app version, server address and status) are attached. Remove private information before sending."
+msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan kesalahan, serta deskripsi dan email opsional Anda kepada tim Atomic melalui Sentry. Lampiran, payload alat, dan penalaran tidak disertakan. Detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server) disertakan. Hapus informasi pribadi sebelum mengirim."
+
+#: src/components/SideBar/FeedbackButton.tsx
+msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
+msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."

@@ -49,7 +49,8 @@ SENTRY_ENVIRONMENT=production
 Only errors are sent. Performance tracing stays off (use `ATOMIC_TRACING=opentelemetry`
 for that), no personal data is attached, and the served front-end bundle is
 identical whether or not a DSN is set: it only contacts Sentry when the server
-injects one.
+injects one. Browser errors carry a few tags about the setup (app version,
+server host and port, connection and sync state), never workspace content.
 
 ## 1. Run using docker
 

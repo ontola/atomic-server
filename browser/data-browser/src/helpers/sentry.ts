@@ -174,7 +174,7 @@ export function identifyAgentInSentry(store: Store): () => void {
 }
 
 /** Identifiers differ per resource; the failure itself is what groups. */
-function withoutIdentifiers(message: string): string {
+export function withoutIdentifiers(message: string): string {
   return message.replace(/(?:atomic|did:ad):[\w-]+/g, '<id>');
 }
 

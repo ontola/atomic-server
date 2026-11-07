@@ -77,6 +77,7 @@ import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { LoroLoader } from './loro-loader.js';
+import { loroCall } from './loro-context.js';
 import { withDeadline } from './withDeadline.js';
 
 /** How long a connected store waits on its local database before asking the server. */
@@ -3259,7 +3260,9 @@ export class Store {
       // A snapshot export commits pending ops, untagged; keep a mid-edit
       // persist from stripping the edit's history token.
       resource.sealPendingEdits();
-      const snapshot = doc?.export({ mode: 'snapshot' });
+      const snapshot = doc
+        ? loroCall('export', doc, () => doc.export({ mode: 'snapshot' }))
+        : undefined;
 
       // Skipped when this exact state is already written there: a table
       // built from a template used to do 64 writes for 15 resources.
