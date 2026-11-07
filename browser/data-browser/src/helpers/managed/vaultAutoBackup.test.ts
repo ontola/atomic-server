@@ -222,6 +222,32 @@ describe('ensureVaultBackup', () => {
     warn.mockRestore();
   });
 
+  /**
+   * The other tab's account is still onboarding: no recovery secret and no
+   * enrollment yet, so the identity check finds nothing to disagree with.
+   * The session's account is what changed.
+   */
+  it('stays quiet when the other account is too new for the identity check', async () => {
+    const store = await signedInStore();
+    const accountEmail = vi.fn(async () => 'first@example.com');
+    const deps = fakeDeps({
+      identityMatches: vi.fn(async () => true),
+      accountEmail,
+      runVaultBackup: vi.fn(async () => {
+        accountEmail.mockResolvedValue('second@example.com');
+        throw new Error('Cloud Vault enrollment not found');
+      }),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(await ensureVaultBackup(store, DRIVE, deps)).toEqual({
+      status: 'skipped',
+      reason: 'backup cancelled by account change',
+    });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('still reports a failure while the account is unchanged', async () => {
     const store = await signedInStore();
     const deps = fakeDeps({
