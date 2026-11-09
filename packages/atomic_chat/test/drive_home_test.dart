@@ -237,7 +237,7 @@ void main() {
       expect(find.byKey(const Key('drive-switcher-empty')), findsOneWidget);
     });
 
-    testWidgets('tapping a drive switches to it and opens it',
+    testWidgets('on a phone, tapping a drive switches the sidebar to it',
         (tester) async {
       _size(tester, const Size(393, 851));
       final api = _api();
@@ -248,12 +248,11 @@ void main() {
       expect(find.text('Switch'), findsNothing);
       await tester.tap(find.text('Beta'));
       await tester.pumpAndSettle();
-      // Closed, set in the store, its page open, and the home underneath
-      // (header and tree) is the other drive's.
+      // Closed, set in the store, no page over it (the phone shows only
+      // the sidebar), and the home (header and tree) is the other drive's.
       expect(find.byKey(const Key('drive-switcher')), findsNothing);
       expect(api.activeSet, ['did:ad:b']);
-      final page = tester.widget<ResourceView>(find.byType(ResourceView));
-      expect(page.path ?? page.subject, anyOf(isNull, contains('did:ad:b')));
+      expect(find.byType(ResourceView), findsNothing);
       expect(
           tester
               .widget<Text>(find.byKey(const Key('current-drive-name'),
