@@ -922,7 +922,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
           fold: fold,
           future: _notifications,
           empty: 'No notifications',
-          hideEmpty: true,
           badge: (list) => list.where((n) => !n.read).length,
           rows: (list) => [for (final n in list) _notificationRow(n)],
           onShowAll: (list) =>
@@ -998,10 +997,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }
   }
 
-  /// Whether the panel is on screen: these three are left out while empty.
+  /// Whether the panel is on screen: these two are left out while empty.
   bool _takesRoom(HomeSection id) =>
       !const {
-        HomeSection.notifications,
         HomeSection.favorites,
         HomeSection.messages
       }.contains(id) ||
@@ -1010,9 +1008,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   /// The sections the home lists, a hairline above each but the first.
   List<HomeSection> _panelIds(bool split) => [
         for (final id in _layout.visible)
-          if (id != HomeSection.drives &&
-              !(split && id == HomeSection.activity))
-            id
+          if (!(split && id == HomeSection.activity)) id
       ];
 
   List<Widget> _shownSections(bool split) {
@@ -1021,6 +1017,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
     return [
       for (var i = 0; i < ids.length; i++)
         _sectionFor(ids[i], c, divider: i > 0),
+      // Nothing to hold when every panel is off (or empty): this row opens
+      // the sections menu instead.
+      if (!ids.any(_takesRoom))
+        SidebarRow(
+          key: const Key('home-sections-row'),
+          title: 'Home sections',
+          icon: const Icon(Icons.tune),
+          onTap: _customize,
+        ),
     ];
   }
 

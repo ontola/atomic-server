@@ -531,7 +531,7 @@ void main() {
       expect(find.text('Starred doc'), findsNothing);
     });
 
-    testWidgets('an open panel shows its four rows without scrolling',
+    testWidgets('an open panel shows its three rows without scrolling',
         (tester) async {
       _size(tester, const Size(393, 851), bottom: 20);
       await _home(tester, _manyFavorites());
@@ -541,7 +541,7 @@ void main() {
       expect(tester.getRect(_panel('chats')).bottom, 851 - 20);
       final body = find.byKey(const ValueKey('home-panel-body-favorites'));
       final bodyRect = tester.getRect(body);
-      for (var i = 0; i < 4; i++) {
+      for (var i = 0; i < 3; i++) {
         final r = tester.getRect(find.text('Fav $i'));
         expect(r.top, greaterThanOrEqualTo(bodyRect.top));
         expect(r.bottom, lessThanOrEqualTo(bodyRect.bottom));

@@ -416,7 +416,10 @@ void main() {
 
     testWidgets(
         'notifications sit below the drive tree, unread marked and counted; a tap opens '
-        'the subject and reads it; hidden when empty', (tester) async {
+        'the subject and reads it', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        homeHiddenKey: ['drives']
+      });
       final now = DateTime.now().millisecondsSinceEpoch;
       final api = FakeApi(
         chatList: [
@@ -470,8 +473,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     });
 
-    testWidgets('a section hidden when empty stays hidden while it loads',
+    testWidgets('Notifications is off by default, empty or not',
         (tester) async {
+      SharedPreferences.setMockInitialValues({});
       final pending = Completer<List<NotificationItem>>();
       await tester.pumpWidget(app(ChatsScreen(
           drive: 'did:ad:drive', api: _SlowNotifications(pending.future))));
@@ -495,12 +499,47 @@ void main() {
       expect(tester.getTopLeft(find.text('AI chats')).dx, greaterThan(60));
     });
 
-    testWidgets('no notifications, no Notifications section', (tester) async {
+    testWidgets('turned on, an empty Notifications panel still shows',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({
+        homeHiddenKey: ['drives']
+      });
       await tester
           .pumpWidget(app(ChatsScreen(drive: 'did:ad:drive', api: FakeApi())));
       await tester.pumpAndSettle();
-      expect(find.text('Notifications'), findsNothing);
-      expect(find.text('No notifications'), findsNothing);
+      expect(find.text('Notifications'), findsOneWidget);
+      expect(find.text('No notifications'), findsOneWidget);
+    });
+
+    testWidgets('turned on, Drives is a panel of the home', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        homeHiddenKey: ['notifications']
+      });
+      await tester.pumpWidget(app(ChatsScreen(
+          drive: 'did:ad:home',
+          api: FakeApi(driveList: const [
+            (subject: 'did:ad:home', name: 'Home', emoji: null, picture: null),
+            (subject: 'did:ad:work', name: 'Work', emoji: null, picture: null),
+          ]))));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('home-panel-drives')), findsOneWidget);
+      expect(find.text('Work'), findsOneWidget);
+    });
+
+    testWidgets(
+        'with every panel off a row opens the Home sections dialog',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({
+        homeHiddenKey: [for (final s in HomeSection.values) s.name]
+      });
+      await tester
+          .pumpWidget(app(ChatsScreen(drive: 'did:ad:drive', api: FakeApi())));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('home-sections-row')));
+      await tester.pumpAndSettle();
+      expect(find.text('Home sections'), findsWidgets);
+      await tester.tap(find.byType(Checkbox).first);
+      await tester.pumpAndSettle();
     });
 
     testWidgets('pulling or flicking down at the top stretches, never moves',
@@ -960,7 +999,7 @@ void main() {
       expect(find.text('Fav 5'), findsOneWidget);
     });
 
-    testWidgets('a section shows at most 4, Show all lists the rest',
+    testWidgets('a section shows at most 3, Show all lists the rest',
         (tester) async {
       final now = DateTime.now().millisecondsSinceEpoch;
       final api = FakeApi(chatList: [
@@ -970,8 +1009,8 @@ void main() {
       await tester
           .pumpWidget(app(ChatsScreen(drive: 'did:ad:drive', api: api)));
       await tester.pumpAndSettle();
-      expect(find.text('Chat 3'), findsOneWidget);
-      expect(find.text('Chat 4'), findsNothing);
+      expect(find.text('Chat 2'), findsOneWidget);
+      expect(find.text('Chat 3'), findsNothing);
       expect(find.text('Show all (6)'), findsOneWidget);
 
       await tapShowAll(tester, 'chats');
@@ -1016,7 +1055,7 @@ void main() {
       expect(find.text('No activity from others yet'), findsOneWidget);
     });
 
-    testWidgets('activity shows 4, Show all appears with more than 4',
+    testWidgets('activity shows 3, Show all appears with more than 3',
         (tester) async {
       Future<void> pump(int n) async {
         await tester.pumpWidget(Container());
@@ -1031,13 +1070,13 @@ void main() {
       await pump(0);
       expect(find.textContaining('Show all'), findsNothing);
 
-      await pump(4);
-      expect(find.text('Item 3'), findsOneWidget);
+      await pump(3);
+      expect(find.text('Item 2'), findsOneWidget);
       expect(find.textContaining('Show all'), findsNothing);
 
       await pump(6);
-      expect(find.text('Item 3'), findsOneWidget);
-      expect(find.text('Item 4'), findsNothing);
+      expect(find.text('Item 2'), findsOneWidget);
+      expect(find.text('Item 3'), findsNothing);
       await tapShowAll(tester, 'activity');
       await tester.pumpAndSettle();
       expect(find.text('Item 5'), findsOneWidget);

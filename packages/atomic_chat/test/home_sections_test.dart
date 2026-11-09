@@ -44,6 +44,17 @@ void main() {
     expect(layout.hidden, {HomeSection.drives});
   });
 
+  test('Drives and Notifications start off, also next to an older layout',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    expect((await HomeLayout.load()).hidden, HomeLayout.offByDefault);
+    SharedPreferences.setMockInitialValues({
+      homeLegacyHiddenKey: ['messages'],
+    });
+    expect((await HomeLayout.load()).hidden,
+        {...HomeLayout.offByDefault, HomeSection.messages});
+  });
+
   test('persists per device', () async {
     SharedPreferences.setMockInitialValues({});
     await const HomeLayout()

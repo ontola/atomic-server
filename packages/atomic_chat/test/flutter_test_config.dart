@@ -12,8 +12,8 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   setUp(() {
     // The panels start closed in the app; most tests are about their rows,
     // so they start open and without the compact accordion. The panel tests
-    // say otherwise.
-    HomeLayout.fresh = const HomeLayout();
+    // say otherwise. Drives and Notifications start off, as in the app.
+    HomeLayout.fresh = const HomeLayout(hidden: HomeLayout.offByDefault);
     HomeLayout.accordionOverride = false;
     final view = TestWidgetsFlutterBinding.ensureInitialized()
         .platformDispatcher

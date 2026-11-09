@@ -54,7 +54,8 @@ void main() {
     final gesture = await _holdHome(tester);
     final entries = _controller(tester).homeSections.value;
     expect([for (final e in entries) e.section], HomeSection.values);
-    expect([for (final e in entries) e.hidden], everyElement(isFalse));
+    expect({for (final e in entries) if (e.hidden) e.section},
+        HomeLayout.offByDefault);
     expect(entries.firstWhere((e) => e.section == HomeSection.drives).count, 2);
     expect(
         entries.firstWhere((e) => e.section == HomeSection.favorites).count, 1);
