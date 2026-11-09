@@ -448,6 +448,12 @@ pub async fn fetch_bytes(
                 error_type: AtomicErrorType::NotFoundError,
                 subject: Some(url.to_string()),
             }
+        } else if status == 401 || status == 403 {
+            AtomicError {
+                message,
+                error_type: AtomicErrorType::UnauthorizedError,
+                subject: Some(url.to_string()),
+            }
         } else {
             message.into()
         });
@@ -648,6 +654,12 @@ async fn fetch_body_with_client(
             AtomicError {
                 message,
                 error_type: AtomicErrorType::NotFoundError,
+                subject: Some(url.to_string()),
+            }
+        } else if status == 401 || status == 403 {
+            AtomicError {
+                message,
+                error_type: AtomicErrorType::UnauthorizedError,
                 subject: Some(url.to_string()),
             }
         } else {

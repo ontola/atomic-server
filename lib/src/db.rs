@@ -537,6 +537,11 @@ pub struct Db {
     /// subject to when the entry expires, so a resource published later is
     /// found again after `REMOTE_NOT_FOUND_TTL`.
     remote_not_found: Arc<Mutex<HashMap<String, web_time::Instant>>>,
+    /// Origins that did not answer at all (connection refused, DNS, CORS in
+    /// a browser) this session, until when. A store holding many subjects of
+    /// a server that is gone (an old drive on a retired host) otherwise
+    /// asked for each of them, on every render.
+    unreachable_origins: Arc<Mutex<HashMap<String, web_time::Instant>>>,
 }
 
 #[derive(Default)]
@@ -576,6 +581,38 @@ impl Db {
                 false
             }
             None => false,
+        }
+    }
+
+    /// The scheme, host and port of [url], the key of `unreachable_origins`.
+    fn origin_of(url: &str) -> Option<String> {
+        let parsed = url::Url::parse(url).ok()?;
+        Some(parsed.origin().ascii_serialization())
+    }
+
+    fn is_unreachable_origin(&self, url: &str) -> bool {
+        let Some(origin) = Self::origin_of(url) else {
+            return false;
+        };
+        let Ok(mut map) = self.unreachable_origins.lock() else {
+            return false;
+        };
+        match map.get(&origin) {
+            Some(until) if web_time::Instant::now() < *until => true,
+            Some(_) => {
+                map.remove(&origin);
+                false
+            }
+            None => false,
+        }
+    }
+
+    fn remember_unreachable_origin(&self, url: &str) {
+        let Some(origin) = Self::origin_of(url) else {
+            return;
+        };
+        if let Ok(mut map) = self.unreachable_origins.lock() {
+            map.insert(origin, web_time::Instant::now() + REMOTE_NOT_FOUND_TTL);
         }
     }
 
@@ -627,6 +664,7 @@ impl Db {
             lenses: Default::default(),
             pending_lenses: Default::default(),
             remote_not_found: Default::default(),
+            unreachable_origins: Default::default(),
         }
     }
 
@@ -5644,6 +5682,12 @@ impl Storelike for Db {
                     resolved_url
                 )));
             }
+            if self.is_unreachable_origin(&resolved_url) {
+                return Err(AtomicError::upstream_unreachable(format!(
+                    "{} is on a server that did not answer earlier this session",
+                    resolved_url
+                )));
+            }
 
             match self
                 .fetch_resource(&resolved_url, self.get_default_agent().ok().as_ref())
@@ -5663,8 +5707,17 @@ impl Storelike for Db {
                 Err(e) => {
                     // The failed fetch is the answer. The default
                     // `handle_not_found` would fetch the same URL a second time.
-                    if e.error_type == AtomicErrorType::NotFoundError {
-                        self.remember_remote_not_found(&resolved_url);
+                    // A 404/410 or a refusal (401/403) is the server's
+                    // answer for this subject; no answer at all is the
+                    // whole origin's.
+                    match e.error_type {
+                        AtomicErrorType::NotFoundError | AtomicErrorType::UnauthorizedError => {
+                            self.remember_remote_not_found(&resolved_url)
+                        }
+                        AtomicErrorType::UpstreamUnreachable => {
+                            self.remember_unreachable_origin(&resolved_url)
+                        }
+                        _ => {}
                     }
                     Err(e)
                 }
@@ -6449,6 +6502,37 @@ mod remote_not_found_tests {
 
         assert!(db.get_property(&property).await.is_err());
         assert_eq!(hits.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn a_refusal_is_asked_once() {
+        let db = Db::init_temp("remote_not_found_401").await.unwrap();
+        let (server, hits) = serve("401 Unauthorized");
+        let property = format!("{server}/properties/demo/speaker");
+
+        for _ in 0..3 {
+            assert!(db.get_property(&property).await.is_err());
+        }
+
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_server_that_does_not_answer_is_asked_once_for_all_its_subjects() {
+        let db = Db::init_temp("unreachable_origin").await.unwrap();
+        // Bound and closed again: nothing listens there.
+        let port = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.local_addr().unwrap().port()
+        };
+        let first = format!("http://127.0.0.1:{port}/drive/one");
+        let err = db.get_resource(&first.as_str().into()).await.unwrap_err();
+        assert_eq!(err.error_type, AtomicErrorType::UpstreamUnreachable);
+        assert!(db.is_unreachable_origin(&first));
+
+        let second = format!("http://127.0.0.1:{port}/drive/two");
+        let err = db.get_resource(&second.as_str().into()).await.unwrap_err();
+        assert!(err.message.contains("did not answer earlier this session"));
     }
 
     #[tokio::test]
