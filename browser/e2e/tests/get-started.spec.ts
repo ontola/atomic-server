@@ -403,3 +403,37 @@ test('Copying an invite link ticks the Invite step, with no account portal', asy
     page.getByRole('dialog').locator('[data-test="share-invited"]'),
   ).toContainText('Invite link', { timeout: 30_000 });
 });
+
+test('A denied clipboard still records the invite link and ticks the step', async ({
+  page,
+}) => {
+  // Safari and embedded browsers reject writeText.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: () => Promise.reject(new Error('NotAllowedError')),
+      },
+      configurable: true,
+    });
+  });
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  const panel = page.getByTestId('getting-started');
+  await expect(panel).toBeVisible({ timeout: 60_000 });
+  await page.keyboard.press('Escape');
+  await expect(panel).toContainText('0 of 6');
+
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Full name').fill('Test Person');
+  await dialog.getByLabel('Full name').press('Enter');
+  await dialog.getByRole('button', { name: 'Copy invite link' }).click();
+  await expect(
+    page.getByText('Could not copy the link. Select it and copy it by hand.'),
+  ).toBeVisible({ timeout: 30_000 });
+
+  const row = dialog.locator('[data-test="share-invited"]');
+  await expect(row).toContainText('Invite link', { timeout: 30_000 });
+  await page.keyboard.press('Escape');
+  await expect(panel).toContainText('1 of 6', { timeout: 30_000 });
+});

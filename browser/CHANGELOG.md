@@ -3,6 +3,7 @@
 This changelog covers all five packages, as they are (for now) updated as a whole
 
 ## UNRELEASED
+- Share dialog: copying an invite link is saved as an invite even when the browser refuses the clipboard write (Safari, embedded browsers), so the Invite step ticks; the "Could not copy the link" message stays. On a phone, a pending invite's role and Remove move to a line under its label so the label and date chip are no longer cut off or overlapped.
 - Getting started: copying an invite link in the Share dialog now counts as an invite, so "Invite someone" ticks without waiting for someone to accept (also on a server with no account portal); the step looks at the drive its panel is for. The copy is saved like an email invite, as a pending-invite Contact with an empty address in your private drive, so it is derived and follows you across devices. The Share dialog lists it as "Invite link" with the date it was copied, once per role.
 - Getting started: the step list is also a section on the drive page, above Activity, so it can be found on a phone where the sidebar is closed. It has the same rows, hover and click hints and count as the sidebar panel; a step that points into the sidebar opens it first on a narrow screen.
 - Getting started: the unsaved save step now shows the same open-circle checkbox as the other steps (still the accent label and "Only saved on this device" under it) and is called "Register with email" ("Connect a device" without an account portal); the Save dialog title and the share dialog's account button use the same wording.

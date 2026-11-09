@@ -74,7 +74,7 @@ export function PeopleWithAccess({
           />
         )}
         {invites.map(invite => (
-          <Row key={invite.subject} data-test='share-invited'>
+          <InviteRow key={invite.subject} data-test='share-invited'>
             <CountCircle aria-hidden>
               {invite.link ? <FaLink /> : <FaEnvelope />}
             </CountCircle>
@@ -90,25 +90,27 @@ export function PeopleWithAccess({
                 </InvitedBadge>
               </BadgeLine>
             </Who>
-            <StaticRole>{roleLabel(invite.role)}</StaticRole>
-            {onRemoveInvite && (
-              <ShowButton
-                type='button'
-                onClick={() =>
-                  onRemoveInvite(invite.subject).catch(e =>
-                    toast.error((e as Error).message),
-                  )
-                }
-                aria-label={
-                  invite.link
-                    ? 'Remove invite link'
-                    : `Remove invite for ${invite.email}`
-                }
-              >
-                Remove
-              </ShowButton>
-            )}
-          </Row>
+            <InviteControls>
+              <StaticRole>{roleLabel(invite.role)}</StaticRole>
+              {onRemoveInvite && (
+                <ShowButton
+                  type='button'
+                  onClick={() =>
+                    onRemoveInvite(invite.subject).catch(e =>
+                      toast.error((e as Error).message),
+                    )
+                  }
+                  aria-label={
+                    invite.link
+                      ? 'Remove invite link'
+                      : `Remove invite for ${invite.email}`
+                  }
+                >
+                  Remove
+                </ShowButton>
+              )}
+            </InviteControls>
+          </InviteRow>
         ))}
         {Array.from(inheritedByParent.entries()).map(([setIn, agents]) => (
           <InheritedGroup key={setIn} setIn={setIn} agents={agents} />
@@ -295,6 +297,38 @@ const Row = styled.div`
   gap: 0.9rem;
   min-height: 3.6rem;
   padding-block: 0.3rem;
+`;
+
+/**
+ * A pending invite on a phone: the icon and label on top, role and Remove on
+ * a line below, so neither the label nor the date chip gets squeezed.
+ */
+const InviteRow = styled(Row)`
+  @media (max-width: 30rem) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.9rem;
+    row-gap: 0;
+    align-items: center;
+    padding-block: 0.5rem;
+  }
+`;
+
+/** Transparent on desktop, so role and Remove stay in the row. */
+const InviteControls = styled.div`
+  display: contents;
+
+  @media (max-width: 30rem) {
+    grid-column: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+
+    > span {
+      padding-inline: 0;
+    }
+  }
 `;
 
 const Who = styled.div`

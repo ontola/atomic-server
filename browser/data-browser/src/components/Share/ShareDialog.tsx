@@ -55,6 +55,7 @@ import { useShareRights } from './useShareRights';
 import { usePendingInvites } from './usePendingInvites';
 import { useClassLabel } from './useClassLabel';
 import { inviteLinkPrefix, useCreateInviteLink } from './useCreateInviteLink';
+import { copyInviteLink, type CreateInviteLink } from './copyInviteLink';
 import {
   UNLIMITED,
   UsageLimitField,
@@ -420,29 +421,6 @@ function ShareOverview({
       </Actions>
     </>
   );
-}
-
-type CreateInviteLink = ReturnType<typeof useCreateInviteLink>;
-
-async function copyInviteLink(
-  createInviteLink: CreateInviteLink,
-  role: ShareRole,
-  maxUsages?: number,
-  onCopied?: (role: ShareRole) => Promise<void>,
-): Promise<string> {
-  const link = await createInviteLink({ write: role === 'write', maxUsages });
-
-  try {
-    await navigator.clipboard.writeText(link);
-    toast.success('Invite link copied');
-    // Leaves a record, so "someone was invited" can be derived later. The
-    // link works either way; failing to note it must not read as a failed copy.
-    await onCopied?.(role).catch(() => undefined);
-  } catch {
-    toast.error('Could not copy the link. Select it and copy it by hand.');
-  }
-
-  return link;
 }
 
 /** Hosted: a secondary way to invite, next to email. */
