@@ -219,6 +219,12 @@ const AISidebar: React.FC = () => {
     [store],
   );
 
+  const addSyncedMessages = (added: Map<AtomicUIMessage, AiMessageRef>) => {
+    const next = new Map([...messageToResourceMapRef.current, ...added]);
+    messageToResourceMapRef.current = next;
+    setMessageToResourceMap(next);
+  };
+
   const handleCompacted = (
     priorMessages: AtomicUIMessage[],
     summaryMessage: AtomicUIMessage,
@@ -547,6 +553,7 @@ const AISidebar: React.FC = () => {
         chatSubject={isChatSaved ? chatResource?.subject : undefined}
         onDeleteMessage={handleMessageDelete}
         onRegenerateMessage={onRegenerateMessage}
+        onSyncedMessages={addSyncedMessages}
       >
         <Row center justify='space-between' fullWidth>
           <Row

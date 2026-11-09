@@ -67,7 +67,8 @@ interface ChatState {
   refs: Map<string, AiMessageRef>;
   /** The newest `c` this client knows of: a new entry goes after it. */
   lastC: number;
-  /** Pages were asked from the server once. */
+  /** The server listed pages for this chat. An empty answer may only mean
+   * the pages had not synced yet, so it does not count and is asked again. */
   queried: boolean;
 }
 
@@ -87,13 +88,17 @@ const stateOf = (chat: Resource): ChatState => {
 };
 
 /** The pages of a chat, oldest first: the ones the server lists and the ones made here. */
-async function pagesOf(chat: Resource, store: Store): Promise<string[]> {
+export async function pagesOf(
+  chat: Resource,
+  store: Store,
+  { refresh = false }: { refresh?: boolean } = {},
+): Promise<string[]> {
   const state = stateOf(chat);
   const scope = scopeOf(chat);
 
   // A draft chat has no server side yet, so nothing to ask.
-  if (!state.queried && !chat.new) {
-    state.queried = true;
+  if ((!state.queried || refresh) && !chat.new) {
+    state.queried = false;
 
     try {
       const drive = chat.get('https://atomicdata.dev/properties/drive');
@@ -104,10 +109,10 @@ async function pagesOf(chat: Resource, store: Store): Promise<string[]> {
         typeof drive === 'string' ? drive : undefined,
       );
       queried.forEach(page => rememberPage(store, scope, page));
+      state.queried = queried.length > 0;
     } catch (error) {
       // Offline: the pages this client knows are the best there is.
       console.warn('Could not list the pages of the chat', error);
-      state.queried = false;
     }
   }
 
@@ -125,7 +130,10 @@ async function pageForNewEntry(
   for (const subject of (await pagesOf(chat, store)).slice(-3)) {
     const page = await store.getResource(subject);
 
-    if (page.error) continue;
+    if (page.error) {
+      console.warn(`Could not load chat page ${subject}`, page.error);
+      continue;
+    }
 
     infos.push({
       subject,
@@ -370,6 +378,59 @@ export const removeFollowingMessagesFromChatResource = async (
   return messages.slice(0, messageIndex + 1);
 };
 
+/**
+ * The id a message of this session has in the log: an entry id once it was
+ * written (a local id is only the id it had in the UI), else its own id.
+ */
+export const savedMessageId = (
+  chatResource: Resource,
+  message: AtomicUIMessage,
+): string => {
+  const ref = stateOf(chatResource).refs.get(message.id);
+
+  return ref?.kind === 'entry' ? toEntryId(ref.page, ref.key) : message.id;
+};
+
+/**
+ * Folds what the log holds now into the messages on screen: new ones are
+ * added, ones that came from the log and changed elsewhere are replaced, and
+ * everything else (an in-flight reply, a message not saved yet) stays as it
+ * is. `canonicalId` maps a message on screen to its id in the log.
+ */
+export function mergeLiveMessages(
+  current: AtomicUIMessage[],
+  loaded: AtomicUIMessage[],
+  canonicalId: (message: AtomicUIMessage) => string = m => m.id,
+): { messages: AtomicUIMessage[]; changed: boolean } {
+  const byId = new Map(current.map(m => [canonicalId(m), m]));
+  const loadedIds = new Set(loaded.map(m => m.id));
+  let changed = false;
+
+  const merged = loaded.map(message => {
+    const shown = byId.get(message.id);
+
+    // A message written here keeps the object (and ref) it has; one that was
+    // read from the log has the entry id itself and may have been edited.
+    if (
+      shown &&
+      (shown.id !== message.id ||
+        JSON.stringify(shown) === JSON.stringify(message))
+    ) {
+      return shown;
+    }
+
+    changed = true;
+
+    return message;
+  });
+
+  if (!changed) return { messages: current, changed };
+
+  const local = current.filter(m => !loadedIds.has(canonicalId(m)));
+
+  return { messages: [...merged, ...local], changed };
+}
+
 const compareKeys = (a: AiMessageRef, b: AiMessageRef) =>
   a.kind === 'entry' && b.kind === 'entry' && a.key !== b.key
     ? a.key < b.key
@@ -415,17 +476,21 @@ export function mergeByTime<T extends { at: number }>(
 export const loadChatMessages = async (
   chatResource: Resource<Ai.AiChat>,
   store: Store,
+  { refresh = false }: { refresh?: boolean } = {},
 ): Promise<Map<AtomicUIMessage, AiMessageRef>> => {
   const timing = userTiming('chat:load');
   const state = stateOf(chatResource);
-  const pages = await pagesOf(chatResource, store);
+  const pages = await pagesOf(chatResource, store, { refresh });
   const seen = new Set<string>();
   const logged: Placed[] = [];
 
   for (const subject of pages) {
     const page = await store.getResource(subject);
 
-    if (page.error) continue;
+    if (page.error) {
+      console.warn(`Could not load chat page ${subject}`, page.error);
+      continue;
+    }
 
     for (const { key, entry } of page.listChatLogEntries()) {
       // One key on two pages (two peers migrated the same message) is one message.
