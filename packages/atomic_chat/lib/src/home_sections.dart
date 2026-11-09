@@ -37,10 +37,10 @@ typedef HomeSectionEntry = ({HomeSection section, bool hidden, int? count});
 
 /// SharedPreferences keys of the Home layout (per device).
 const homeOrderKey = 'home_sections_order';
-const homeHiddenKey = 'home_sections_hidden_v2';
+const homeHiddenKey = 'home_sections_hidden_v3';
 
-/// Where the hidden sections were kept before Drives and Notifications
-/// started out hidden: read once, with those two added.
+/// Where the hidden sections were kept before Drives and Activity started
+/// out hidden: read once, with those two added.
 const homeLegacyHiddenKey = 'home_sections_hidden';
 const homeCollapsedKey = 'home_sections_collapsed';
 
@@ -107,8 +107,8 @@ class HomeLayout {
       );
 
   /// Off until the person turns them on: the header already switches
-  /// drives, and notifications are rare.
-  static const offByDefault = {HomeSection.drives, HomeSection.notifications};
+  /// drives, and the activity is busy.
+  static const offByDefault = {HomeSection.drives, HomeSection.activity};
 
   /// The layout of a fresh install: every panel closed, [offByDefault] off.
   static const closed = HomeLayout(hidden: offByDefault, collapsed: {

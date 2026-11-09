@@ -473,7 +473,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     });
 
-    testWidgets('Notifications is off by default, empty or not',
+    testWidgets('Notifications off: no panel, empty or not',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
       final pending = Completer<List<NotificationItem>>();

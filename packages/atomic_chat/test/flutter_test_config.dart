@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:atomic_chat/atomic_chat.dart' show HomeLayout;
+import 'package:atomic_chat/atomic_chat.dart' show HomeLayout, HomeSection;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,8 +13,10 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   setUp(() {
     // The panels start closed in the app; most tests are about their rows,
     // so they start open and without the compact accordion. The panel tests
-    // say otherwise. Drives and Notifications start off, as in the app.
-    HomeLayout.fresh = const HomeLayout(hidden: HomeLayout.offByDefault);
+    // say otherwise. Drives and Notifications start off; the app's own
+    // defaults have their test in home_sections_test.
+    HomeLayout.fresh = const HomeLayout(
+        hidden: {HomeSection.drives, HomeSection.notifications});
     HomeLayout.accordionOverride = false;
     // A layout one test saved does not carry into the next.
     SharedPreferences.setMockInitialValues({});

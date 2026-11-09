@@ -55,7 +55,7 @@ void main() {
     final entries = _controller(tester).homeSections.value;
     expect([for (final e in entries) e.section], HomeSection.values);
     expect({for (final e in entries) if (e.hidden) e.section},
-        HomeLayout.offByDefault);
+        {HomeSection.drives, HomeSection.notifications});
     expect(entries.firstWhere((e) => e.section == HomeSection.drives).count, 2);
     expect(
         entries.firstWhere((e) => e.section == HomeSection.favorites).count, 1);
