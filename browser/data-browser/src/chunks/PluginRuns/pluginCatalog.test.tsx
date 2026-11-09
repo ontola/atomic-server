@@ -207,7 +207,7 @@ describe('useIntegrationCatalog with several marketplaces', () => {
     );
     vi.stubGlobal('localStorage', {
       getItem: (key: string) =>
-        key === 'plugin-marketplaces'
+        key === 'marketplaces'
           ? JSON.stringify([
               'https://main.test/catalog.json',
               'https://extra.test/catalog.json',

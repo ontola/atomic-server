@@ -22,8 +22,19 @@ describe('marketplaces', () => {
   it('falls back to a legacy single-catalog value without writing it', () => {
     localStorage.setItem('plugin-catalog-url', A);
     expect(getMarketplaceUrls()).toEqual([A]);
-    expect(localStorage.getItem('plugin-marketplaces')).toBeNull();
+    expect(localStorage.getItem('marketplaces')).toBeNull();
     localStorage.setItem('plugin-catalog-url', 'http://evil.test/x');
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl]);
+  });
+
+  it('keeps the extras of earlier versions after the primary catalog', () => {
+    localStorage.setItem('plugin-marketplaces', JSON.stringify([A, B]));
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl, A, B]);
+    localStorage.setItem('plugin-catalog-url', B);
+    expect(getMarketplaceUrls()).toEqual([B, A]);
+    addMarketplace('https://c.test/catalog.json');
+    expect(getMarketplaceUrls()).toEqual([B, A, 'https://c.test/catalog.json']);
+    resetMarketplaces();
     expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl]);
   });
 
@@ -59,11 +70,11 @@ describe('marketplaces', () => {
 
   it('drops stored values that no longer validate', () => {
     localStorage.setItem(
-      'plugin-marketplaces',
+      'marketplaces',
       JSON.stringify(['http://example.com/x', 'https://ok.test/c.json', 5]),
     );
     expect(getMarketplaceUrls()).toEqual(['https://ok.test/c.json']);
-    localStorage.setItem('plugin-marketplaces', '{broken');
+    localStorage.setItem('marketplaces', '{broken');
     expect(getMarketplaceUrls()).toEqual([]);
   });
 });

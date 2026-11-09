@@ -37,7 +37,7 @@ Object.assign(globalThis, {
   window: new EventTarget(),
 });
 
-const CATALOG_KEY = 'plugin-marketplaces';
+const CATALOG_KEY = 'marketplaces';
 const seed = (...urls: string[]) =>
   localStorage.setItem(CATALOG_KEY, JSON.stringify(urls));
 const PROXY_KEY = 'integration-proxy-url';

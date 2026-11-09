@@ -72,7 +72,7 @@ it('adds and removes marketplaces, and resets the list to the default', () => {
   expect(resetButtons()).toHaveLength(1);
 
   fireEvent.click(resetButtons()[0]);
-  expect(localStorage.getItem('plugin-marketplaces')).toBeNull();
+  expect(localStorage.getItem('marketplaces')).toBeNull();
   expect(listed()).toEqual([`${defaultPluginCatalogUrl}Remove`]);
   expect(resetButtons()).toHaveLength(0);
 });

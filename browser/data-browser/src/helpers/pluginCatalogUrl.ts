@@ -32,9 +32,11 @@ export const defaultPluginCatalogUrl: string = validDefault(
 // localStorage for the origin (the settings screen, or playwright's
 // `storageState`), so one binary serves e2e lanes whose catalog sits on another
 // port. With no stored list it is just the default.
-const MARKETPLACES_KEY = 'plugin-marketplaces';
-// Single-catalog setting of earlier versions; read, never written.
+const MARKETPLACES_KEY = 'marketplaces';
+// Earlier versions kept a primary catalog and a list of extras apart. Read as
+// `[primary ?? default, ...extras]` until the first write, never written.
 const LEGACY_KEY = 'plugin-catalog-url';
+const LEGACY_EXTRAS_KEY = 'plugin-marketplaces';
 const event = 'plugin-marketplaces-change';
 
 /** The list as a JSON string, so it can be a stable store snapshot. */
@@ -45,10 +47,12 @@ function readRaw(): string {
     if (stored !== null) return stored;
 
     const legacy = localStorage.getItem(LEGACY_KEY);
+    const extras = parse(localStorage.getItem(LEGACY_EXTRAS_KEY) ?? '[]');
+    const primary = legacy
+      ? validateCatalogUrl(legacy)
+      : defaultPluginCatalogUrl;
 
-    return JSON.stringify([
-      legacy ? validateCatalogUrl(legacy) : defaultPluginCatalogUrl,
-    ]);
+    return JSON.stringify([primary, ...extras.filter(u => u !== primary)]);
   } catch {
     return JSON.stringify([defaultPluginCatalogUrl]);
   }
@@ -97,7 +101,10 @@ export function removeMarketplace(url: string) {
 
 /** Back to just the default marketplace. */
 export function resetMarketplaces() {
-  localStorage.removeItem(MARKETPLACES_KEY);
+  for (const key of [MARKETPLACES_KEY, LEGACY_KEY, LEGACY_EXTRAS_KEY]) {
+    localStorage.removeItem(key);
+  }
+
   window.dispatchEvent(new Event(event));
 }
 
