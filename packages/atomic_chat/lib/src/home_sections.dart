@@ -151,8 +151,9 @@ class HomeLayout {
     return _with(order: list);
   }
 
-  /// Default order, every section on; folds are kept.
-  HomeLayout reset() => HomeLayout(collapsed: collapsed);
+  /// Default order, the default sections on; folds are kept.
+  HomeLayout reset() =>
+      HomeLayout(hidden: offByDefault, collapsed: collapsed);
 
   bool canMove(HomeSection s, int delta) => _neighbour(s, delta) != null;
 

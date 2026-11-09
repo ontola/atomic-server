@@ -833,6 +833,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         height: 14,
                         child: RowLeading(
                             size: 14,
+                            iconSize: 12,
                             fallbackIcon: driveIcon,
                             fallbackLabel: driveName,
                             image: ImageSource.of(a.drivePicture))),
@@ -1235,8 +1236,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         final natural = rowH * _homeItems + showAllH;
                         final headers =
                             headerH * shown.where(_takesRoom).length;
-                        // The panels come first; the tree keeps at least three rows.
-                        final minTree = (m.compact ? m.rowHeight : 56.0) * 3;
+                        // The panels come first, so they never scroll on a
+                        // phone; the tree keeps one row and scrolls itself.
+                        final minTree = m.compact ? m.rowHeight : 56.0;
                         final bottomPad = MediaQuery.paddingOf(context).bottom;
                         final cap = math.max(0.0, room - minTree);
                         final avail = math.max(0.0, cap - headers - bottomPad);

@@ -55,6 +55,11 @@ void main() {
         {...HomeLayout.offByDefault, HomeSection.messages});
   });
 
+  test('Reset to default leaves Drives and Notifications off', () {
+    final reset = const HomeLayout().reset();
+    expect(reset.hidden, HomeLayout.offByDefault);
+  });
+
   test('persists per device', () async {
     SharedPreferences.setMockInitialValues({});
     await const HomeLayout()
