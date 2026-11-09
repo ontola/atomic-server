@@ -2694,7 +2694,7 @@ void main() {
       }
     });
 
-    testWidgets('the last button is the page on top\'s menu, else none',
+    testWidgets('the header holds the page on top\'s menu, else none',
         (tester) async {
       await pumpHome(tester);
       expect(find.byTooltip('Settings'), findsNothing);

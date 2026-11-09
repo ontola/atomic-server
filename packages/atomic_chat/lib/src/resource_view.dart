@@ -1289,11 +1289,9 @@ class _ResourceViewState extends State<ResourceView>
                               child: const ResourceSkeleton(),
                             ),
                           ),
-                        // Next to the list the bar has no room for the resource's
-                        // menu: it sits in the pane's top right corner.
+                        // The resource's menu, in the header's top right corner.
                         if (widget.path == null &&
-                            ShellScope.maybeOf(context) != null &&
-                            ShellScope.layoutOf(context) == ShellLayout.split)
+                            ShellScope.maybeOf(context) != null)
                           Positioned(
                             top: 0,
                             right: kEmbedNavBarTrailingInset,
@@ -1305,9 +1303,7 @@ class _ResourceViewState extends State<ResourceView>
                           Positioned(
                             top: 0,
                             right: kEmbedNavBarTrailingInset +
-                                (ShellScope.maybeOf(context) != null &&
-                                        ShellScope.layoutOf(context) ==
-                                            ShellLayout.split
+                                (ShellScope.maybeOf(context) != null
                                     ? kEmbedNavBarHeight
                                     : 8),
                             height: kEmbedNavBarHeight,
