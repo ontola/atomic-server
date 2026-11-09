@@ -29,6 +29,7 @@ import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { FileDropZone } from '@components/forms/FileDropzone/FileDropzone';
+import { GettingStartedPanel } from '@components/SideBar/GettingStartedPanel';
 import { DriveSettingsDialog } from './DriveSettingsDialog';
 import { EmptyDriveStart } from './EmptyDriveStart';
 import {
@@ -131,6 +132,11 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               propertyURL={core.properties.description}
               datatype={Datatype.MARKDOWN}
               buttonLabel='Add description'
+            />
+
+            <GettingStartedPanel
+              key={`getting-started-page:${resource.subject}`}
+              placement='page'
             />
 
             <ActivityFeed

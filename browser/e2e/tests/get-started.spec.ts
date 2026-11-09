@@ -332,3 +332,36 @@ test('Read Start here points at the Start here row and ticks once it is opened',
   await expect(hint).toHaveCount(0);
   await expect(step).toHaveAttribute('data-done', 'true');
 });
+
+test('The Getting started list is on the drive page of a phone, with the sidebar closed', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  const list = page.getByTestId('getting-started-page');
+  await expect(list).toBeVisible({ timeout: 60_000 });
+  await expect(list).toContainText('0 of 6');
+
+  // Sidebar closed: the page's own list is the way in.
+  // (it only peeks out as a thin edge).
+  const sidebarRight = async () =>
+    (await page.getByTestId('sidebar').boundingBox())!.x +
+    (await page.getByTestId('sidebar').boundingBox())!.width;
+
+  await expect.poll(sidebarRight).toBeLessThan(24);
+
+  // A step about the page shows its hint right there.
+  await list.getByRole('button', { name: 'Name your drive' }).click();
+  await expect(page.getByTestId('ui-hint-drive-title')).toHaveText(
+    'Click to name your drive',
+  );
+  await page.keyboard.press('Escape');
+
+  // A step about the sidebar opens it first, then shows the hint.
+  await list.getByRole('button', { name: 'Make something' }).click();
+  await expect(page.getByTestId('ui-hint-new-row')).toHaveText(
+    'Make a document or table here',
+  );
+  await expect.poll(sidebarRight).toBeGreaterThan(150);
+});

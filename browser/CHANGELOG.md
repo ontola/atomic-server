@@ -3,6 +3,7 @@
 This changelog covers all five packages, as they are (for now) updated as a whole
 
 ## UNRELEASED
+- Getting started: the step list is also a section on the drive page, above Activity, so it can be found on a phone where the sidebar is closed. It has the same rows, hover and click hints and count as the sidebar panel; a step that points into the sidebar opens it first on a narrow screen.
 - Getting started: the unsaved save step now shows the same open-circle checkbox as the other steps (still the accent label and "Only saved on this device" under it) and is called "Register with email" ("Connect a device" without an account portal); the Save dialog title and the share dialog's account button use the same wording.
 - Get started: the Welcome drive's title is no longer put in edit mode with its text selected on arrival (the "just created" signal is only for New drive).
 - Getting started: the unsaved "Save & register" step is the panel's last row (cloud-off icon, accent label, "Only saved on this device") and opens the Save dialog directly; the separate sidebar row above the account row is gone. Once saved it is a ticked step like the others.

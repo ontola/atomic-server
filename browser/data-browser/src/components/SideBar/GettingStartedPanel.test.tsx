@@ -81,10 +81,10 @@ const drive: never = {
   subject: 'did:ad:drive',
   get: (p: string) => (p === 'write' ? writers : 'Welcome to Atomic'),
 } as never;
-const render = () =>
+const render = (placement?: 'sidebar' | 'page') =>
   renderToStaticMarkup(
     <ThemeProvider theme={{ colors: {} } as unknown as DefaultTheme}>
-      <GettingStartedPanel />
+      <GettingStartedPanel placement={placement} />
     </ThemeProvider>,
   );
 const fresh = (): Step[] =>
@@ -128,6 +128,19 @@ describe('GettingStartedPanel', () => {
       html.split('<button').find(b => b.includes(`>${title}<`));
     expect(row('Name your drive')).toContain('disabled=""');
     expect(row('Talk to the AI')).not.toContain('disabled=""');
+  });
+
+  it('renders the same steps as a drive page section, without the panel', () => {
+    const html = render('page');
+
+    expect(html).toContain('data-testid="getting-started-page"');
+    expect(html).not.toContain('<h2>Getting started</h2>');
+    expect(html).toContain('Getting started');
+    expect(html).toMatch(/0\s*(<!-- -->)?\s*of/);
+    expect(html).toContain('Name your drive');
+    expect(html).toContain('Register with email');
+    steps = steps.map(s => ({ ...s, done: true }));
+    expect(render('page')).toBe('');
   });
 
   it("is gone when finished, read-only, private or someone else's", () => {

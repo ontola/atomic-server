@@ -32,14 +32,23 @@ import { userSettingProps, useUserSetting } from '@hooks/useUserSetting';
 import { SideBarPanel } from './SideBarPanel';
 import { hideHoverUiHint, showUiHint, type UiHintTarget } from '@hooks/uiHint';
 import { UiHint } from '../UiHint';
+import { SectionTitle } from '@views/Drive/SectionTitle';
+
+/** Where the list is shown: the sidebar panel, or a section of the drive page. */
+export type GettingStartedPlacement = 'sidebar' | 'page';
 
 /**
- * The first things worth trying, as a sidebar panel on a drive of your own.
+ * The first things worth trying, on a drive of your own: a sidebar panel, or a
+ * section of the drive page (so it is also found where the sidebar is closed).
  * Every tick is derived from what exists, so deleting a drive un-ticks it.
  * Folding the panel is the panel's own, always reversible; it goes away by
  * itself once every step is done.
  */
-export function GettingStartedPanel(): JSX.Element | null {
+export function GettingStartedPanel({
+  placement = 'sidebar',
+}: {
+  placement?: GettingStartedPlacement;
+}): JSX.Element | null {
   const { drive } = useSettings();
   const resource = useResource(drive);
   const canEdit = useCanWrite(resource);
@@ -50,11 +59,20 @@ export function GettingStartedPanel(): JSX.Element | null {
   const mine = writers?.[0];
 
   return canEdit && !isPrivate && agent && mine === agent.subject ? (
-    <Steps drive={resource} />
+    <Steps drive={resource} placement={placement} />
   ) : null;
 }
 
-function Steps({ drive }: { drive: Resource }): JSX.Element | null {
+/** Targets that live in the sidebar, which is a drawer on a narrow screen. */
+const SIDEBAR_TARGETS: UiHintTarget[] = ['start-here', 'new-row'];
+
+function Steps({
+  drive,
+  placement,
+}: {
+  drive: Resource;
+  placement: GettingStartedPlacement;
+}): JSX.Element | null {
   const [name] = useString(drive, core.properties.name);
   const { steps, doneCount, startHere } = useOnboardingProgress(
     drive.subject,
@@ -71,10 +89,12 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
   const navigateToNewRoute = useNewRoute(drive.subject);
   const { setSideBarLocked } = useSettings();
 
-  // Hints on the page need the drawer out of the way; sidebar ones are
-  // already in view, since the step was clicked there.
-  const closeDrawer = () => {
-    if (sidebarCoversPage()) setSideBarLocked(false);
+  // The hint's target has to be in view. From the sidebar drawer that means
+  // closing it, for a target on the page. From the page it means opening it,
+  // for a target in the sidebar.
+  const closeDrawer = (target: UiHintTarget) => {
+    if (!sidebarCoversPage()) return;
+    setSideBarLocked(placement === 'page' && SIDEBAR_TARGETS.includes(target));
   };
 
   if (doneCount === steps.length) return null;
@@ -96,7 +116,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       pointer: 'Open Start here',
       target: 'start-here',
       run: () => {
-        closeDrawer();
+        closeDrawer('start-here');
         pointAt(
           'start-here',
           copy.start.pointer,
@@ -113,7 +133,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       run: () => {
         // The title on screen may belong to a document: go to the drive's own
         // page, where the hint points at that page's title.
-        closeDrawer();
+        closeDrawer('drive-title');
         navigate(constructOpenURL(drive.subject));
         showUiHint('drive-title', copy.name.pointer, {
           scope: drive.subject,
@@ -128,7 +148,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       pointer: 'Make a document or table here',
       target: 'new-row',
       run: () => {
-        closeDrawer();
+        closeDrawer('new-row');
         pointAt('new-row', copy.create.pointer, navigateToNewRoute);
       },
     },
@@ -138,7 +158,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       pointer: 'Talk to the AI here',
       target: 'ai-button',
       run: () => {
-        closeDrawer();
+        closeDrawer('ai-button');
         pointAt('ai-button', copy.ai.pointer, () =>
           openChat(undefined, { withoutContext: true }),
         );
@@ -150,7 +170,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
       pointer: 'Share this drive here',
       target: 'share-button',
       run: () => {
-        closeDrawer();
+        closeDrawer('share-button');
         navigate(constructOpenURL(drive.subject));
         pointAt('share-button', copy.invite.pointer, () =>
           openShareDialog(drive.subject),
@@ -168,20 +188,14 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
     },
   };
 
-  return (
-    <SideBarPanel
-      title='Getting started'
-      heightStorageKey='gettingStartedPanelHeight'
-      initialHeight={280}
-      open={panelOpen}
-      onOpenChange={setPanelOpen}
-      data-testid='getting-started'
-      actions={
-        <Count>
-          {doneCount} of {steps.length}
-        </Count>
-      }
-    >
+  const count = (
+    <Count>
+      {doneCount} of {steps.length}
+    </Count>
+  );
+
+  const rows = (
+    <>
       {steps.map(step => {
         const { title, hint, pointer, run, target } = copy[step.id];
 
@@ -215,7 +229,16 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
             : undefined;
         const inert = step.done;
         const tooltip = need ? `${hint}. ${need}` : hint;
-        const hoverHint = () =>
+
+        const hoverHint = () => {
+          // A drawer that is out of view has nothing to point at.
+          if (
+            placement === 'page' &&
+            sidebarCoversPage() &&
+            SIDEBAR_TARGETS.includes(target)
+          )
+            return;
+
           showUiHint(target, pointer, {
             hover: true,
             scope:
@@ -225,6 +248,7 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
                   ? startHere
                   : undefined,
           });
+        };
 
         return (
           <StepRow
@@ -255,6 +279,32 @@ function Steps({ drive }: { drive: Resource }): JSX.Element | null {
           </StepRow>
         );
       })}
+    </>
+  );
+
+  if (placement === 'page') {
+    return (
+      <section aria-label='Getting started' data-testid='getting-started-page'>
+        <SectionHeading>
+          <SectionTitle>Getting started</SectionTitle>
+          {count}
+        </SectionHeading>
+        <PageSteps>{rows}</PageSteps>
+      </section>
+    );
+  }
+
+  return (
+    <SideBarPanel
+      title='Getting started'
+      heightStorageKey='gettingStartedPanelHeight'
+      initialHeight={280}
+      open={panelOpen}
+      onOpenChange={setPanelOpen}
+      data-testid='getting-started'
+      actions={count}
+    >
+      {rows}
     </SideBarPanel>
   );
 }
@@ -332,4 +382,23 @@ const Count = styled.small`
   white-space: nowrap;
   padding-right: 0.5rem;
   color: ${p => p.theme.colors.textLight};
+`;
+
+const SectionHeading = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+
+  h2 {
+    margin: 0;
+  }
+`;
+
+const PageSteps = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  max-width: 28rem;
 `;

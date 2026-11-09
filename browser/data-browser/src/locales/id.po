@@ -13013,6 +13013,8 @@ msgid "Invite someone"
 msgstr "Undang seseorang"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Memulai"
 
