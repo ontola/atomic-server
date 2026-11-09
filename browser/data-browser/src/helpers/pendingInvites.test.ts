@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { contacts, core, type Resource } from '@tomic/react';
 import {
+  INVITE_LINK_NAME,
   pendingInviteProps,
   pendingInviteQuery,
   toPendingInvite,
@@ -56,5 +57,34 @@ describe('toPendingInvite', () => {
         ?.role,
     ).toBe('read');
     expect(toPendingInvite(fake('c', {}))).toBeUndefined();
+  });
+});
+
+describe('invite link records', () => {
+  it('has an empty address and reads back as a link', () => {
+    const props = pendingInviteProps({
+      email: '',
+      target: 'did:ad:x',
+      role: 'write',
+      sentAt: 5,
+    });
+
+    expect(props[core.properties.name]).toBe(INVITE_LINK_NAME);
+    expect(props[contacts.properties.email]).toBe('');
+    expect(
+      toPendingInvite(
+        fake('c', {
+          [contacts.properties.email]: '',
+          [contacts.properties.invitedRole]: 'write',
+          [contacts.properties.invitedAt]: 5,
+        }),
+      ),
+    ).toEqual({
+      subject: 'c',
+      email: '',
+      link: true,
+      role: 'write',
+      sentAt: 5,
+    });
   });
 });

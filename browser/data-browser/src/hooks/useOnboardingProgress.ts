@@ -1,9 +1,11 @@
 // @wc-ignore-file
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import {
   contacts,
   core,
+  StoreEvents,
   urls,
+  useStore,
   useCollection,
   useCollectionPage,
   useCurrentAgent,
@@ -22,7 +24,9 @@ import { canonicalizeScheme } from '@tomic/lib';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useDriveChats } from '@components/SideBar/AIPanel';
 import { useIsLinkedToAccount } from './useIsLinkedToAccount';
+import { pendingInviteQuery } from '../helpers/pendingInvites';
 import { usePrivateDrive } from './usePrivateDrive';
+import { usePrivateDriveSync } from './usePrivateDriveSync';
 import { useSavedDrives } from './useSavedDrives';
 import { userSettingProps, useUserSetting } from './useUserSetting';
 
@@ -143,12 +147,27 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
           a !== urls.instances.publicAgent,
       ),
   );
-  const { collection } = useCollection(
-    {
-      property: contacts.properties.invitedTo,
-      drive: privateDrive,
-    },
+  // The query the Share dialog's pending list uses. A query on the property
+  // alone (any target) returns nothing in the browser, so this asks for the
+  // panel's own drive, which is the drive the step is about.
+  const { collection, invalidateCollection } = useCollection(
+    pendingInviteQuery(privateDrive, drive),
     { pageSize: 100 },
+  );
+  usePrivateDriveSync(privateDrive, invalidateCollection);
+  // A filter on the property alone does not recognise a brand-new Contact as a
+  // member, so an invite recorded in this session (the Share dialog) would
+  // only show after a reload. Refresh when one is made.
+  const store = useStore();
+  useEffect(
+    () =>
+      store.on(StoreEvents.ResourceManuallyCreated, r => {
+        const to = r.get(contacts.properties.invitedTo);
+
+        if (typeof to === 'string' && same(to, drive))
+          void invalidateCollection();
+      }),
+    [store, drive, invalidateCollection],
   );
   const inviteMembers = useCollectionPage(collection, 0);
   const inviteContacts = useResources(privateDrive ? inviteMembers : []);

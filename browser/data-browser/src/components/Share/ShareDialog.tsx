@@ -316,7 +316,10 @@ function ShareOverview({
             <SeatsNote>{describeEditorSeats(editorSeats)}</SeatsNote>
           )}
           {canWrite && !isSaas && (
-            <InviteLinkField createInviteLink={createInviteLink} />
+            <InviteLinkField
+              createInviteLink={createInviteLink}
+              onCopied={pending.recordLink}
+            />
           )}
           {composing ? (
             <MessageField>
@@ -405,7 +408,10 @@ function ShareOverview({
         ) : (
           <>
             {canWrite && isSaas && (
-              <CopyInviteLinkSplit createInviteLink={createInviteLink} />
+              <CopyInviteLinkSplit
+                createInviteLink={createInviteLink}
+                onCopied={pending.recordLink}
+              />
             )}
             <Spacer />
             <Button onClick={onDone}>Done</Button>
@@ -422,12 +428,16 @@ async function copyInviteLink(
   createInviteLink: CreateInviteLink,
   role: ShareRole,
   maxUsages?: number,
+  onCopied?: (role: ShareRole) => Promise<void>,
 ): Promise<string> {
   const link = await createInviteLink({ write: role === 'write', maxUsages });
 
   try {
     await navigator.clipboard.writeText(link);
     toast.success('Invite link copied');
+    // Leaves a record, so "someone was invited" can be derived later. The
+    // link works either way; failing to note it must not read as a failed copy.
+    await onCopied?.(role).catch(() => undefined);
   } catch {
     toast.error('Could not copy the link. Select it and copy it by hand.');
   }
@@ -438,8 +448,10 @@ async function copyInviteLink(
 /** Hosted: a secondary way to invite, next to email. */
 function CopyInviteLinkSplit({
   createInviteLink,
+  onCopied,
 }: {
   createInviteLink: CreateInviteLink;
+  onCopied: (role: ShareRole) => Promise<void>;
 }): JSX.Element {
   const [role, setRole] = useState<ShareRole>('read');
   const [busy, setBusy] = useState(false);
@@ -448,7 +460,7 @@ function CopyInviteLinkSplit({
     setBusy(true);
 
     try {
-      await copyInviteLink(createInviteLink, role);
+      await copyInviteLink(createInviteLink, role, undefined, onCopied);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -483,8 +495,10 @@ function CopyInviteLinkSplit({
  */
 function InviteLinkField({
   createInviteLink,
+  onCopied,
 }: {
   createInviteLink: CreateInviteLink;
+  onCopied: (role: ShareRole) => Promise<void>;
 }): JSX.Element {
   const store = useStore();
   const [role, setRole] = useState<ShareRole>('write');
@@ -499,7 +513,9 @@ function InviteLinkField({
 
     try {
       const maxUsages = parseMaxUsages(limit);
-      setLink(await copyInviteLink(createInviteLink, role, maxUsages));
+      setLink(
+        await copyInviteLink(createInviteLink, role, maxUsages, onCopied),
+      );
     } catch (e) {
       setErr(e as Error);
     }

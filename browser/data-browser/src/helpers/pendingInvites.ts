@@ -11,7 +11,10 @@ import {
 export interface PendingInvite {
   /** The Contact in the inviter's private drive. */
   subject: string;
+  /** Empty for an invite link: it is not addressed to anyone. */
   email: string;
+  /** True when this records a copied invite link rather than an email invite. */
+  link?: boolean;
   role: 'read' | 'write';
   sentAt?: number;
 }
@@ -37,11 +40,21 @@ export function pendingInviteQuery(
   };
 }
 
+/**
+ * Copying an invite link is recorded like an email invite, so that "someone
+ * was invited" is derivable and syncs across devices. The Contact class
+ * requires `email`, so a link record keeps it as an empty string: it is
+ * addressed to nobody. Changing the class to make it optional would need every
+ * server to be upgraded first; an empty address needs nothing.
+ */
+export const INVITE_LINK_NAME = 'Invite link';
+
 export function pendingInviteProps(
   invite: Omit<PendingInvite, 'subject'> & { target: string },
 ): Record<string, string | number> {
   return {
-    [core.properties.name]: invite.email,
+    // Data, not UI: the list shows "Invite link" in the viewer's language.
+    [core.properties.name]: invite.email || INVITE_LINK_NAME,
     [contacts.properties.email]: invite.email,
     [contacts.properties.invitedTo]: invite.target,
     [contacts.properties.invitedRole]: invite.role,
@@ -53,7 +66,7 @@ export function pendingInviteProps(
 export function toPendingInvite(resource: Resource): PendingInvite | undefined {
   const email = resource.get(contacts.properties.email);
 
-  if (typeof email !== 'string' || !email) return undefined;
+  if (typeof email !== 'string') return undefined;
 
   const role = resource.get(contacts.properties.invitedRole);
   const sentAt = resource.get(contacts.properties.invitedAt);
@@ -61,6 +74,7 @@ export function toPendingInvite(resource: Resource): PendingInvite | undefined {
   return {
     subject: resource.subject,
     email,
+    ...(email === '' ? { link: true } : {}),
     role: role === 'write' ? 'write' : 'read',
     sentAt: typeof sentAt === 'number' ? sentAt : undefined,
   };
@@ -92,4 +106,14 @@ export async function savePendingInvites(
       store.notifyResourceManuallyCreated(contact);
     }),
   );
+}
+
+/** Records that an invite link for `target` was copied. */
+export function savePendingInviteLink(
+  store: Store,
+  privateDrive: string,
+  target: string,
+  role: 'read' | 'write',
+): Promise<void> {
+  return savePendingInvites(store, privateDrive, target, [''], role);
 }

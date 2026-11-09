@@ -10,6 +10,7 @@ import { usePrivateDriveSync } from '../../hooks/usePrivateDriveSync';
 import {
   pendingInviteQuery,
   savePendingInvites,
+  savePendingInviteLink,
   toPendingInvite,
   type PendingInvite,
 } from '../../helpers/pendingInvites';
@@ -19,6 +20,8 @@ export function usePendingInvites(target: string): {
   invites: PendingInvite[];
   remove: (subject: string) => Promise<void>;
   /** Saves an invite per address, then shows them. */
+  /** Notes that a link was copied, once per role (copying again adds nothing). */
+  recordLink: (role: 'read' | 'write') => Promise<void>;
   record: (emails: string[], role: 'read' | 'write') => Promise<void>;
 } {
   const store = useStore();
@@ -55,5 +58,12 @@ export function usePendingInvites(target: string): {
     await savePendingInvites(store, privateDrive, target, emails, role);
   };
 
-  return { invites, remove, record };
+  const recordLink = async (role: 'read' | 'write') => {
+    if (!privateDrive) return;
+    if (invites.some(i => i.link && i.role === role)) return;
+
+    await savePendingInviteLink(store, privateDrive, target, role);
+  };
+
+  return { invites, remove, record, recordLink };
 }

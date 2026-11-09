@@ -365,3 +365,41 @@ test('The Getting started list is on the drive page of a phone, with the sidebar
   );
   await expect.poll(sidebarRight).toBeGreaterThan(150);
 });
+
+test('Copying an invite link ticks the Invite step, with no account portal', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto(`${FRONTEND_URL}/app/welcome`);
+  await page.getByRole('button', { name: 'Get started' }).click();
+  const panel = page.getByTestId('getting-started');
+  await expect(panel).toBeVisible({ timeout: 60_000 });
+  await page.keyboard.press('Escape');
+  await expect(panel).toContainText('0 of 6');
+
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  // First share: the dialog asks who you are before it shows the invite UI.
+  await dialog.getByLabel('Full name').fill('Test Person');
+  await dialog.getByLabel('Full name').press('Enter');
+  await dialog.getByRole('button', { name: 'Copy invite link' }).click();
+  await expect(page.getByText('Invite link copied')).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // The link is listed as an invite, without an address, and the step ticks.
+  const row = dialog.locator('[data-test="share-invited"]');
+  await expect(row).toContainText('Invite link');
+  await expect(row).toContainText('Copied');
+  await page.keyboard.press('Escape');
+  await expect(panel).toContainText('1 of 6', { timeout: 30_000 });
+
+  // Derived from the record, so it survives a reload and shows in the list.
+  await page.reload();
+  await expect(panel).toContainText('1 of 6', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await expect(
+    page.getByRole('dialog').locator('[data-test="share-invited"]'),
+  ).toContainText('Invite link', { timeout: 30_000 });
+});

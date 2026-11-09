@@ -8,7 +8,7 @@ import type { DirectRight } from './useShareRights';
 import type { MergedRight } from '../../routes/Share/useRights';
 import { useClassLabel } from './useClassLabel';
 import { AtomicLink } from '../AtomicLink';
-import { FaEnvelope } from 'react-icons/fa6';
+import { FaEnvelope, FaLink } from 'react-icons/fa6';
 import type { PendingInvite } from '../../helpers/pendingInvites';
 
 interface PeopleWithAccessProps {
@@ -76,12 +76,18 @@ export function PeopleWithAccess({
         {invites.map(invite => (
           <Row key={invite.subject} data-test='share-invited'>
             <CountCircle aria-hidden>
-              <FaEnvelope />
+              {invite.link ? <FaLink /> : <FaEnvelope />}
             </CountCircle>
             <Who>
-              <Name>{invite.email}</Name>
+              <Name>{invite.link ? 'Invite link' : invite.email}</Name>
               <BadgeLine>
-                <InvitedBadge>Invited</InvitedBadge>
+                <InvitedBadge>
+                  {invite.link
+                    ? invite.sentAt
+                      ? `Copied ${new Date(invite.sentAt).toLocaleDateString()}`
+                      : 'Copied'
+                    : 'Invited'}
+                </InvitedBadge>
               </BadgeLine>
             </Who>
             <StaticRole>{roleLabel(invite.role)}</StaticRole>
@@ -93,7 +99,11 @@ export function PeopleWithAccess({
                     toast.error((e as Error).message),
                   )
                 }
-                aria-label={`Remove invite for ${invite.email}`}
+                aria-label={
+                  invite.link
+                    ? 'Remove invite link'
+                    : `Remove invite for ${invite.email}`
+                }
               >
                 Remove
               </ShowButton>

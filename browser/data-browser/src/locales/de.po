@@ -13497,3 +13497,20 @@ msgstr "Mit E-Mail registrieren"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email to keep it safe on every device"
 msgstr "Registriere deine E-Mail, um alles auf jedem Gerät sicher zu halten"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Invite link"
+msgstr "Einladungslink"
+
+#. 0: new Date(invite.sentAt).toLocaleDateString()
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied {0}"
+msgstr "Kopiert am {0}"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied"
+msgstr "Kopiert"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Remove invite link"
+msgstr "Einladungslink entfernen"

@@ -106,4 +106,11 @@ describe('hasInviteForDrives', () => {
     );
     expect(hasInviteForDrives([], ['did:ad:a'])).toBe(false);
   });
+
+  it('counts a copied invite link record, which has no address', () => {
+    // Same target the record holds (see pendingInvites.test.ts).
+    expect(hasInviteForDrives(['did:ad:a'], ['did:ad:a', 'did:ad:b'])).toBe(
+      true,
+    );
+  });
 });
