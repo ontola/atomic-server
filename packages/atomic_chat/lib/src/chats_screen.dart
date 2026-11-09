@@ -823,20 +823,25 @@ class _ChatsScreenState extends State<ChatsScreen> {
         final lead = leadingOf(a.picture, _icons[a.subject], a.className);
         final style = TextStyle(color: c.textSecondary, fontSize: 12);
         final driveName = a.driveName ?? '';
+        // The drive's own picture or emoji only: the generic drive icon on
+        // every row was noise.
+        final drivePicture = ImageSource.of(a.drivePicture);
         final driveCaption = showDrive && driveName.isNotEmpty
             ? Row(
                 key: const Key('activity-drive'),
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                    SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: RowLeading(
-                            size: 14,
-                            fallbackIcon: driveIcon,
-                            fallbackLabel: driveName,
-                            image: ImageSource.of(a.drivePicture))),
-                    const SizedBox(width: 6),
+                    if (drivePicture != null) ...[
+                      SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: RowLeading(
+                              size: 14,
+                              fallbackIcon: driveIcon,
+                              fallbackLabel: driveName,
+                              image: drivePicture)),
+                      const SizedBox(width: 6),
+                    ],
                     Flexible(
                         child: Text(driveName,
                             style: style,
