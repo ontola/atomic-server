@@ -1,4 +1,4 @@
-import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText;
+import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText, AtomicSpinner;
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -1874,7 +1874,7 @@ class _ActivityPageState extends State<_ActivityPage> {
                   if (_driveList.length > 1) _driveChips(c),
                   Expanded(
                       child: entries.isEmpty && _all.isEmpty
-                          ? const Center(child: CircularProgressIndicator())
+                          ? const Center(child: AtomicSpinner())
                           : ListView.builder(
                               key: const Key('activity-all-list'),
                               // The rows, then a spinner while more may come
@@ -1895,8 +1895,7 @@ class _ActivityPageState extends State<_ActivityPage> {
                                         child: SizedBox(
                                             width: 20,
                                             height: 20,
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 2))),
+                                            child: AtomicSpinner())),
                                   );
                                 }
                                 return Padding(
@@ -2131,7 +2130,7 @@ class _ChatsPageState extends State<_ChatsPage> {
                               width: 20,
                               height: 20,
                               child:
-                                  CircularProgressIndicator(strokeWidth: 2))),
+                                  AtomicSpinner())),
                     );
                   }
                   return switch (_entries[i]) {
@@ -2185,7 +2184,7 @@ class _Loading extends StatelessWidget {
         child: SizedBox(
             width: 18,
             height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2)),
+            child: AtomicSpinner()),
       ),
     );
   }

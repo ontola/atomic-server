@@ -1,4 +1,4 @@
-import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText;
+import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText, AtomicSpinner;
 import 'dart:async';
 
 import 'package:atomic_flutter/atomic_flutter.dart'
@@ -244,7 +244,7 @@ class _ConversationScreenState extends State<ConversationScreen>
       );
     }
     if (!_window.loaded) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: AtomicSpinner());
     }
     final shown = [..._window.items, ..._pending];
     if (shown.isEmpty) {
@@ -294,7 +294,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                         child: SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))),
+                            child: AtomicSpinner())),
                   );
                 }
                 _scroll.built(i);

@@ -1,4 +1,4 @@
-import 'package:atomic_flutter/atomic_flutter.dart' show AppColorsExt;
+import 'package:atomic_flutter/atomic_flutter.dart' show AppColorsExt, AtomicSpinner;
 import 'package:flutter/material.dart';
 
 import 'meeting_call.dart';
@@ -75,7 +75,7 @@ class _CallView extends StatelessWidget {
           Padding(
             padding: full ? pad : EdgeInsets.zero,
             child: page == null
-                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                ? const Center(child: AtomicSpinner())
                 : page.build(),
           ),
           if (!call.expanded)

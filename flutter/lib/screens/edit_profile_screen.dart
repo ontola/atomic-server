@@ -118,7 +118,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2))
+                  child: shared.AtomicSpinner())
               : const Text('Save'),
         ),
       ]),

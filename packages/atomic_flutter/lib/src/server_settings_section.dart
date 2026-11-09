@@ -366,7 +366,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: SyncGap.l),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: AtomicSpinner()),
       );
     }
 

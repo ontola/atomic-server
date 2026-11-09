@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:atomic_chat/atomic_chat.dart' show AppTopBar;
 import 'package:atomic_flutter/atomic_flutter.dart'
     show
+        AtomicSpinner,
         SyncActionButton,
         SyncButtonKind,
         SyncGap,
@@ -307,7 +308,7 @@ class _PairScreenState extends State<PairScreen> {
         return const SizedBox(
           key: ValueKey('loading'),
           height: 200,
-          child: Center(child: CircularProgressIndicator()),
+          child: Center(child: AtomicSpinner()),
         );
 
       case _Step.showQr:
@@ -373,7 +374,7 @@ class _PairScreenState extends State<PairScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const CircularProgressIndicator(),
+              const AtomicSpinner(),
               const SizedBox(height: 16),
               Text(
                 'Connecting to $label',

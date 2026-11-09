@@ -467,7 +467,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: AtomicSpinner());
     final c = syncColors(context);
     final info = _info;
     return ListView(

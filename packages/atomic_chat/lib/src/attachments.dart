@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:atomic_flutter/atomic_flutter.dart'
-    show AppColors, AppColorsExt;
+    show AppColors, AppColorsExt, AtomicSpinner;
 import 'package:flutter/material.dart';
 
 import 'assistant_api.dart';
@@ -264,7 +264,7 @@ class _DrivePickerState extends State<_DrivePicker> {
       ] else if (hits == null)
         const Padding(
           padding: EdgeInsets.all(24),
-          child: Center(child: CircularProgressIndicator()),
+          child: Center(child: AtomicSpinner()),
         )
       else if (hits.isEmpty)
         Padding(

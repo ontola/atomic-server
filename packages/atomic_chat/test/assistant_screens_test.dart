@@ -701,11 +701,11 @@ void main() {
           .pumpWidget(app(ChatsScreen(drive: 'did:ad:drive', api: api)));
       // The first load shows a spinner until the chats arrive.
       await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsWidgets);
+      expect(find.byType(AtomicSpinner), findsWidgets);
       api.pending.removeAt(0).complete(api.chatList);
       await tester.pumpAndSettle();
       expect(find.text('Trip plan'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(AtomicSpinner), findsNothing);
 
       // Open the chat and come back: that reloads the home.
       await tester.tap(find.text('Trip plan'));
@@ -717,7 +717,7 @@ void main() {
 
       // While it is pending the old row stays and nothing spins.
       expect(find.text('Trip plan'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(AtomicSpinner), findsNothing);
 
       api.pending.removeAt(0).complete([
         (subject: 'did:ad:1', name: 'Trip plan', lastActivity: 5, emoji: null),
@@ -766,7 +766,7 @@ void main() {
       await tester
           .pumpWidget(app(ChatsScreen(drive: 'did:ad:drive', api: api)));
       await tester.pump();
-      final spinner = find.byType(CircularProgressIndicator).first;
+      final spinner = find.byType(AtomicSpinner).first;
       final loadingX = tester.getTopLeft(spinner).dx;
       expect(loadingX, lessThan(60));
       api.pending.removeAt(0).complete(const []);
@@ -1361,7 +1361,7 @@ void main() {
       expect(api.asked, ['z']);
       // No blank list and no spinner while it runs: the recents stay.
       expect(find.text('Opened doc'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(AtomicSpinner), findsNothing);
 
       api.searchGate = null;
       gate.complete();
