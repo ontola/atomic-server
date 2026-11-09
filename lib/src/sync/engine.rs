@@ -1717,6 +1717,19 @@ pub async fn handle_sync_vv_reconcile(
                         remove_commits.insert(subject.clone(), json);
                     }
                 }
+            } else if store
+                .kv
+                .get(Tree::LoroSnapshots, subject.as_bytes())
+                .is_ok_and(|s| s.is_some())
+            {
+                // Held here, but outside this drive (an agent kept in its own
+                // drive): the import refuses it, so asking for it only makes
+                // every reconcile differ again, forever.
+                tracing::debug!(
+                    "SYNC: drive {} — not asking for {}: kept in another drive here",
+                    drive,
+                    subject
+                );
             } else {
                 pull.push(subject.clone());
                 pull_from.entry(subject.clone()).or_default();

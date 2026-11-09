@@ -2610,4 +2610,49 @@ mod peer_sync_tests {
         assert_eq!(dense, sparse, "an empty client is answered identically");
         assert_ne!(dense[0][0], tag::SYNC_OK, "and it has something to pull");
     }
+
+    /// A peer that keeps a resource in this drive which this side keeps in
+    /// another drive is not asked to push it: the import would skip it, and
+    /// the drives would differ again on every reconcile.
+    #[tokio::test]
+    async fn sync_does_not_ask_for_what_is_kept_in_another_drive() {
+        use crate::sync::engine::{drive_items_for, handle_frame};
+        use crate::sync::protocol::{decode_sync_diff, encode_sync_sparse, tag};
+        use std::collections::HashMap;
+
+        let db = Db::init_temp("kept_elsewhere").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let other = db.create_drive("Other").await.unwrap();
+        let mut sudo = ForAgent::Sudo;
+
+        let mut client: HashMap<String, HashMap<String, i32>> = drive_items_for(&db, &drive, &sudo)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|(subject, vv)| (subject, vv.into_iter().collect()))
+            .collect();
+        let other_subject = crate::Subject::from_raw(&other, None).pure_id();
+        assert!(
+            !client.contains_key(&other_subject),
+            "the other drive is not in this one"
+        );
+        client.insert(other_subject.clone(), HashMap::from([("1".to_string(), 5)]));
+
+        let answer = handle_frame(
+            &encode_sync_sparse(&drive, "stale", &client),
+            &db,
+            &mut sudo,
+        )
+        .await;
+        assert_eq!(answer[0][0], tag::SYNC_DIFF);
+        let diff = decode_sync_diff(&answer[0][1..]).unwrap();
+        assert!(
+            !diff
+                .pull
+                .iter()
+                .any(|s| crate::Subject::from_raw(s, None).pure_id() == other_subject),
+            "kept in another drive: {:?}",
+            diff.pull
+        );
+    }
 }
