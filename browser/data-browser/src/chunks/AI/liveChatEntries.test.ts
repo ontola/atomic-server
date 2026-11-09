@@ -55,10 +55,7 @@ describe('mergeLiveMessages', () => {
     const saved = msg('p#1', 'q');
     const inFlight = msg('local2', 'streaming...');
     const remote = msg('p#2', 'new');
-    const { messages } = mergeLiveMessages(
-      [saved, inFlight],
-      [saved, remote],
-    );
+    const { messages } = mergeLiveMessages([saved, inFlight], [saved, remote]);
     expect(messages).toEqual([saved, remote, inFlight]);
   });
 });
