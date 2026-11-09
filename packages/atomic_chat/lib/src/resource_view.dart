@@ -307,8 +307,8 @@ class _ResourceViewState extends State<ResourceView>
     unawaited(_page
         ?.runJavaScript('(function(){var s=$subject,n=$title,t=Date.now(),'
             'why="";function done(){requestAnimationFrame(function(){'
-            'requestAnimationFrame(function(){AtomicFlutter.postMessage('
-            'JSON.stringify({method:"revealed",ms:Date.now()-t,why:why}))})})}'
+            'requestAnimationFrame(function(){'
+            '${_post('{method:"revealed",ms:Date.now()-t,why:why}')}})})}'
             'function c(){var all=document.querySelectorAll("main"),m=null;'
             'for(var i=0;i<all.length;i++)if(all[i].getAttribute("about")===s)'
             'm=all[i];var st=m&&m.querySelector("[role=status]");'
@@ -426,13 +426,20 @@ class _ResourceViewState extends State<ResourceView>
             'var m=document.querySelector("main");'
             'if(m&&m.innerText.indexOf($title)>=0){requestAnimationFrame('
             'function(){requestAnimationFrame(function(){'
-            'AtomicFlutter.postMessage(JSON.stringify({method:"painted",'
-            'ms:Date.now()-t0}))})});return}'
+            '${_post('{method:"painted",ms:Date.now()-t0}')}})});return}'
             'if(Date.now()-s<20000)setTimeout(c,16)}c()})()')
         .catchError((_) {}));
   }
 
   bool _paintWatched = false;
+
+  /// JS that posts [object] to this screen as the page's channel carries it
+  /// (with its token, else the app drops it).
+  String _post(String object) {
+    final page = _page;
+    return appMessageScript(
+        page is WebViewEmbedPage ? page.channelToken : '', object);
+  }
 
   void _pageLoaded() {
     _watchPainted();
@@ -861,8 +868,7 @@ class _ResourceViewState extends State<ResourceView>
     final id = ++_flushes;
     final done = Completer<void>();
     _flushed[id] = done;
-    final reply = "AtomicFlutter.postMessage(JSON.stringify("
-        "{method:'flushed',flush:$id}))";
+    final reply = _post("{method:'flushed',flush:$id}");
     page
         .runJavaScript('Promise.resolve(window.atomicEmbed && '
             'window.atomicEmbed.flush && window.atomicEmbed.flush($leaving))'

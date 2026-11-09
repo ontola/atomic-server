@@ -66,6 +66,18 @@ Uri withChannelToken(Uri url, String token) => url.replace(
 bool acceptsChannelMessage(String expected, String raw) =>
     expected.isNotEmpty && raw.startsWith('{"token":${jsonEncode(expected)},');
 
+/// JS that posts [object] (a JS object expression) on the app's channel the
+/// way [acceptsChannelMessage] takes it: `{"token":[token],...}`. For the
+/// scripts the app runs in the page itself (reveal, paint and flush answers):
+/// the page's locked channel is not reachable from them, and without the
+/// token the app drops the message and waits for its fallback timer.
+String appMessageScript(String token, String object) {
+  final message = token.isEmpty
+      ? object
+      : 'Object.assign({token:${jsonEncode(token)}},$object)';
+  return 'AtomicFlutter.postMessage(JSON.stringify($message))';
+}
+
 /// The page's own "I am up" (`{"method":"ready"}`) as [acceptsChannelMessage]
 /// accepts it.
 String channelReadyMessage(String token) =>
@@ -79,9 +91,14 @@ typedef WarmPageBuilder = Future<WarmPage> Function(
 /// The embedded renderer in a real web view. [create] starts the load; the
 /// cold path of a [ResourceView] and the [WarmResourceWebView] both use it.
 class WebViewEmbedPage implements WarmPage {
-  WebViewEmbedPage._(this.controller);
+  WebViewEmbedPage._(this.controller, this.channelToken);
 
   final WebViewController controller;
+
+  /// The secret this page was given (`#ch=`): what the app posts to itself
+  /// from a script it runs in the page has to carry it too
+  /// ([appMessageScript]).
+  final String channelToken;
 
   /// Keeps the web view's platform view (its Android view, attached to the
   /// window, and its texture) when [build] moves from the pool's hidden slot
@@ -185,7 +202,7 @@ class WebViewEmbedPage implements WarmPage {
     if (!Platform.isMacOS) {
       unawaited(controller.setBackgroundColor(Colors.transparent));
     }
-    page = WebViewEmbedPage._(controller)
+    page = WebViewEmbedPage._(controller, token)
       .._onMessage = onMessage
       .._onLoaded = onLoaded;
     // Debug and profile builds can be inspected from chrome://inspect (the
