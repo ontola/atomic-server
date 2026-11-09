@@ -231,6 +231,25 @@ describe('fillAgentPrompt', () => {
       '2026-01-02T03:04:05.000Z|did:ad:d|No custom classes found on the current drive.|- Home (#a)\n\nSKILLS',
     );
   });
+
+  it('answers without the parts that take too long or fail', async () => {
+    const prompt = await fillAgentPrompt(
+      '{{drive}}|{{custom-classes}}|{{drive-structure}}',
+      {
+        drive: 'did:ad:d',
+        driveTree: () => new Promise<string>(() => undefined),
+        customClasses: async () => {
+          throw new Error('offline');
+        },
+        now: new Date(),
+      },
+      20,
+    );
+
+    expect(prompt).toMatch(
+      /^did:ad:d\|No custom classes found on the current drive\.\|The drive structure could not be loaded in time/,
+    );
+  });
 });
 
 describe('withSearchFallback', () => {

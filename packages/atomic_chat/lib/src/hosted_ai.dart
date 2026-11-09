@@ -681,17 +681,20 @@ class HostedAi {
   /// The web app's tools and prompt from [bridge]; null when it cannot be
   /// reached or offers no tool (the built-in tools are then used).
   Future<_WebSetup?> _webSetup(WebToolBridge bridge) async {
+    // Asked together: the prompt walks the drive and can be slow, and the
+    // tools waiting for it held the first answer back without them.
+    final prompt = bridge
+        .systemPrompt()
+        .timeout(webSetupTimeout)
+        .then<String?>((t) => t.trim().isEmpty ? null : t, onError: (e) {
+      debugPrint('[ai] no system prompt from the web app: $e');
+      return null;
+    });
     try {
       final defs = await bridge.listTools().timeout(webSetupTimeout);
       if (defs.isEmpty) return null;
-      String? prompt;
-      try {
-        final text = await bridge.systemPrompt().timeout(webSetupTimeout);
-        if (text.trim().isNotEmpty) prompt = text;
-      } catch (e) {
-        debugPrint('[ai] no system prompt from the web app: $e');
-      }
-      return _WebSetup([for (final d in defs) AiTool.web(d, bridge)], prompt);
+      return _WebSetup(
+          [for (final d in defs) AiTool.web(d, bridge)], await prompt);
     } catch (e) {
       debugPrint('[ai] web tools unavailable, using the built-in ones: $e');
       return null;

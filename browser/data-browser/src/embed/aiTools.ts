@@ -278,6 +278,37 @@ export async function aiCall(
   post(JSON.stringify({ method: 'aiResult', callId, ok, payload }));
 }
 
+/** How long one slow part of the prompt may take before it is left out. */
+export const PROMPT_PART_BUDGET_MS = 5_000;
+
+/** [promise], or [fallback] when it fails or takes longer than [ms]. */
+async function within<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T,
+  what: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`took longer than ${ms} ms`)),
+          ms,
+        );
+      }),
+    ]);
+  } catch (e) {
+    console.warn(`[ai] system prompt goes without the ${what}: ${message(e)}`);
+
+    return fallback;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** What the web chat fills into its system prompt (`ClientOnlyTransport`). */
 export interface PromptValues {
   drive: string;
@@ -297,16 +328,33 @@ export interface PromptValues {
 export async function fillAgentPrompt(
   template: string,
   values: PromptValues,
+  budgetMs = PROMPT_PART_BUDGET_MS,
 ): Promise<string> {
   let prompt = template.replaceAll('{{drive}}', values.drive);
 
-  if (prompt.includes('{{drive-structure}}')) {
-    prompt = prompt.replaceAll('{{drive-structure}}', await values.driveTree());
+  // Both parts walk the drive; on a large drive or a slow connection that
+  // took longer than the app waits, and the app then went without the
+  // prompt and without the web tools. A part that is not there in time is
+  // left out, so the prompt always answers.
+  const [tree, classes] = await Promise.all([
+    prompt.includes('{{drive-structure}}')
+      ? within(
+          values.driveTree(),
+          budgetMs,
+          'The drive structure could not be loaded in time; list children of the drive to explore it.',
+          'drive structure',
+        )
+      : undefined,
+    prompt.includes('{{custom-classes}}')
+      ? within(values.customClasses(), budgetMs, [], 'custom classes')
+      : undefined,
+  ]);
+
+  if (tree !== undefined) {
+    prompt = prompt.replaceAll('{{drive-structure}}', tree);
   }
 
-  if (prompt.includes('{{custom-classes}}')) {
-    const classes = await values.customClasses();
-
+  if (classes !== undefined) {
     prompt = prompt.replaceAll(
       '{{custom-classes}}',
       classes.length === 0
