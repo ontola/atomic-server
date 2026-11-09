@@ -5812,7 +5812,8 @@ export class Store {
         new Error(
           `You are not allowed to ${action}, so ${what} was not synced. ` +
             `It is kept on this device. Ask the owner of the drive for ` +
-            `access, or move it somewhere you can edit.`,
+            `access, or move it somewhere you can edit. Review it on the ` +
+            `Sync page, where you can discard it.`,
         ),
       );
 

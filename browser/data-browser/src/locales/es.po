@@ -13524,3 +13524,7 @@ msgstr "Al pulsar Enviar informe compartes con el equipo de Atomic, mediante Sen
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Informa de un error o sugiere una mejora. Tu mensaje y tu correo opcional se envían al equipo de Atomic mediante Sentry, junto con detalles técnicos de tu configuración (versión de la app, dirección y estado del servidor). No incluyas contenido privado del espacio de trabajo."
+
+#: src/components/Toaster.tsx
+msgid "<0/> Report"
+msgstr "<0/> Informar"
