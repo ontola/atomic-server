@@ -13398,118 +13398,118 @@ msgstr "Melde einen Fehler oder schlage eine Verbesserung vor. Deine Nachricht u
 
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Show experimental apps"
-msgstr ""
+msgstr "Experimentelle Apps anzeigen"
 
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "The integration-proxy server that integrations call through. This setting is saved in this browser."
-msgstr ""
+msgstr "Der Integrations-Proxy-Server, über den Integrationen Aufrufe senden. Diese Einstellung wird in diesem Browser gespeichert."
 
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Apps are offered from these catalogs, in this order. When two have an app with the same name, the one listed first wins. Saved in this browser."
-msgstr ""
+msgstr "Apps werden aus diesen Katalogen angeboten, in dieser Reihenfolge. Haben zwei Kataloge eine App mit demselben Namen, gewinnt der zuerst aufgeführte. In diesem Browser gespeichert."
 
 #: src/routes/IntegrationStore.tsx
 msgid "Community apps"
-msgstr ""
+msgstr "Community-Apps"
 
 #: src/actions/resourceActions.tsx
 msgid "Run this app and review what it proposes before anything is written."
-msgstr ""
+msgstr "Führe diese App aus und prüfe ihre Vorschläge, bevor etwas geschrieben wird."
 
 #: src/routes/IntegrationStore.tsx
 msgid "This is a new feature. You are seeing experimental apps to try out."
-msgstr ""
+msgstr "Dies ist eine neue Funktion. Du siehst experimentelle Apps zum Ausprobieren."
 
 #: src/routes/IntegrationStore.tsx
 msgid "This is a new feature. Apps will show up here soon for you to try out."
-msgstr ""
+msgstr "Dies ist eine neue Funktion. Bald erscheinen hier Apps zum Ausprobieren."
 
 #: src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental apps"
-msgstr ""
+msgstr "<0/> Experimentelle Apps anzeigen"
 
 #: src/routes/IntegrationStore.tsx
 msgid "No apps to show here."
-msgstr ""
+msgstr "Hier gibt es keine Apps anzuzeigen."
 
 #. 0: ' '; 1: formatBytes(maxBytes(accepts))
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "The file is read by this app on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
-msgstr ""
+msgstr "Die Datei wird von dieser App auf deinem AtomicServer gelesen, bis zu{0} {1}. Prüfe die vorgeschlagenen Änderungen, bevor etwas gespeichert wird."
 
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "This app has no source yet."
-msgstr ""
+msgstr "Diese App hat noch keine Quelle."
 
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 msgid "This app has not run yet."
-msgstr ""
+msgstr "Diese App wurde noch nicht ausgeführt."
 
 #. 0: ' '; 1: ' '
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "This app asks for no credentials. To use one, have it declare what it needs —{0} <0/>{1} — or reference <1/> in a header and a slot will appear here."
-msgstr ""
+msgstr "Diese App fordert keine Zugangsdaten an. Um welche zu verwenden, lass sie angeben, was sie braucht:{0} <0/>{1}, oder verweise in einem Header auf <1/>, dann erscheint hier ein Platz dafür."
 
 #. 0: describeUse(secret)
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "No longer asked for by this app — {0}"
-msgstr ""
+msgstr "Wird von dieser App nicht mehr angefordert: {0}"
 
 #. 0: ' '
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Sent only to <0/>. The app uses it as{0} <1/> and never sees the value."
-msgstr ""
+msgstr "Wird nur an <0/> gesendet. Die App verwendet es als{0} <1/> und sieht den Wert nie."
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Used as <0/>. This app requests several origins — pick the one this credential belongs to."
-msgstr ""
+msgstr "Verwendet als <0/>. Diese App fragt mehrere Ursprünge an: Wähle den, zu dem diese Zugangsdaten gehören."
 
 #. 0: e.message
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "Could not run this app: {0}"
-msgstr ""
+msgstr "Diese App konnte nicht ausgeführt werden: {0}"
 
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "This app ran too long and was stopped. Nothing was planned."
-msgstr ""
+msgstr "Diese App lief zu lange und wurde gestoppt. Es wurde nichts geplant."
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Available once you have run this app and applied its changes at least once."
-msgstr ""
+msgstr "Verfügbar, sobald du diese App ausgeführt und ihre Änderungen mindestens einmal übernommen hast."
 
 #: src/chunks/Plugins/NewPluginButton.tsx
 msgid "Upload App"
-msgstr ""
+msgstr "App hochladen"
 
 #: src/views/Drive/PluginList.tsx
 msgid "No apps installed"
-msgstr ""
+msgstr "Keine Apps installiert"
 
 #: src/views/Installation/InstallationPage.tsx
 msgid "App Description"
-msgstr ""
+msgstr "App-Beschreibung"
 
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "App agent"
-msgstr ""
+msgstr "App-Agent"
 
 #: src/views/Installation/InstallationPage.tsx
 msgid "Uninstall app"
-msgstr ""
+msgstr "App deinstallieren"
 
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoking uninstalls the app and retires its agent. The Installation record stays, so you can see what was installed; installing again needs a new Installation."
-msgstr ""
+msgstr "Das Widerrufen deinstalliert die App und setzt ihren Agenten außer Dienst. Der Installationseintrag bleibt erhalten, damit du siehst, was installiert war; für eine erneute Installation ist eine neue Installation nötig."
 
 #: src/views/Installation/InstallationPage.tsx
 msgid "Are you sure you want to uninstall this app? This removes the Installation record."
-msgstr ""
+msgstr "Möchtest du diese App wirklich deinstallieren? Dadurch wird der Installationseintrag entfernt."
 
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow all reads done by this app"
-msgstr ""
+msgstr "Alle Lesezugriffe dieser App erlauben"
 
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow all writes done by this app"
-msgstr ""
+msgstr "Alle Schreibzugriffe dieser App erlauben"
