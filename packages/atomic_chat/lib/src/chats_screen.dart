@@ -1149,9 +1149,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
         fill: true,
         drives: _driveList,
         current: _drive,
+        // On a phone only the sidebar changes: the drive page would cover
+        // the drive's tree just picked. Next to a detail pane the drive
+        // also opens there.
         onSelect: (d) => closing(() async {
           await _selectDrive(d);
-          if (mounted) _openDrivePage(d);
+          if (mounted &&
+              ShellScope.layoutOf(context) == ShellLayout.split) {
+            _openDrivePage(d);
+          }
         }),
         onManage: () => closing(() => _openSectionPage(HomeSection.drives)),
         onNew: shell == null
