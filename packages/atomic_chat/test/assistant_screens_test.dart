@@ -2673,7 +2673,7 @@ void main() {
       expect(tester.element(bar), same(element));
     });
 
-    testWidgets('buttons keep their order: search, new chat, profile, more',
+    testWidgets('buttons keep their order and place; More is in the header',
         (tester) async {
       await pumpHome(tester);
       expect(x(tester, 'Search'), lessThan(x(tester, 'New')));
@@ -2684,14 +2684,10 @@ void main() {
 
       await tester.tap(find.text('A doc'));
       await tester.pumpAndSettle();
-      expect(x(tester, 'Profile'), lessThan(x(tester, 'More')));
-      // More takes a slot of its own: the others move left to share the width.
-      final shifted = [
-        for (final t in ['Search', 'New', 'Profile']) x(tester, t)
-      ];
-      for (var i = 0; i < xs.length; i++) {
-        expect(shifted[i], lessThan(xs[i]));
-      }
+      // More sits at the top, in the page's header; the bar does not move.
+      expect(tester.getCenter(find.byTooltip('More')).dy,
+          lessThan(tester.getCenter(find.byTooltip('Profile')).dy));
+      expect([for (final t in ['Search', 'New', 'Profile']) x(tester, t)], xs);
     });
 
     testWidgets('the header holds the page on top\'s menu, else none',

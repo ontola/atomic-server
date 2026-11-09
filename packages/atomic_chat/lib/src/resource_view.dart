@@ -1257,7 +1257,17 @@ class _ResourceViewState extends State<ResourceView>
           body: SafeArea(
             bottom: false,
             child: _error != null
-                ? Center(child: ErrorText('$_error', color: c.alert))
+                ? Stack(children: [
+                    Center(child: ErrorText('$_error', color: c.alert)),
+                    // The menu stays reachable on a page that failed.
+                    if (widget.path == null &&
+                        ShellScope.maybeOf(context) != null)
+                      const Positioned(
+                        top: 0,
+                        right: kEmbedNavBarTrailingInset,
+                        child: ResourceMoreButton(),
+                      ),
+                  ])
                 : Column(children: [
                     // A meeting is happening in this drive and this device is
                     // not in it: one tap to join.
