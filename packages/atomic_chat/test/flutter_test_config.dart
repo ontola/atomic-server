@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:atomic_chat/atomic_chat.dart' show HomeLayout;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Every test runs on a phone (393 x 851, as a Pixel), unless it sets its own
 /// size: the test default of 800 x 600 is wide enough for the shell's tablet
@@ -15,6 +16,8 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
     // say otherwise. Drives and Notifications start off, as in the app.
     HomeLayout.fresh = const HomeLayout(hidden: HomeLayout.offByDefault);
     HomeLayout.accordionOverride = false;
+    // A layout one test saved does not carry into the next.
+    SharedPreferences.setMockInitialValues({});
     final view = TestWidgetsFlutterBinding.ensureInitialized()
         .platformDispatcher
         .views
