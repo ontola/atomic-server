@@ -90,19 +90,68 @@ describe('buildFeedbackDiagnostics', () => {
   });
 });
 
+const statusOf = (serverConnected: boolean) => () => ({
+  serverUrl: 'http://localhost:11870/some/path?q=1',
+  serverConnected,
+  blockedCount: 0,
+});
+const store = (getSyncStatus: () => unknown) =>
+  ({
+    getSyncStatus,
+    outbox: { pending: () => [{ failures: 3 }] },
+    getDefaultWebSocket: () => ({ serverCapabilities: [] }),
+  }) as unknown as Store;
+
+describe('diagnostics registered before Sentry.init', () => {
+  // App.tsx registers the processor while it is imported, before index.tsx
+  // calls initSentry(). This has to run before any other test initialises
+  // Sentry, so keep it above the describe blocks that do.
+  it('still tags events, because the app registers it at import time', async () => {
+    expect(Sentry.isEnabled()).toBe(false);
+
+    const sent: Sentry.Event[] = [];
+
+    // A processor cannot be unregistered, so this store goes inert at the end:
+    // a throwing store makes the processor leave events untouched.
+    let inert = false;
+
+    addDiagnosticsToSentryEvents(
+      store(() => {
+        if (inert) throw new Error('inert');
+
+        return { serverUrl: 'http://localhost:11870', serverConnected: true };
+      }),
+    );
+
+    Sentry.init({
+      dsn: 'https://public@example.com/1',
+      integrations: [],
+      transport: () => ({
+        send: async envelope => {
+          for (const [, item] of envelope[1])
+            sent.push(item as unknown as Sentry.Event);
+
+          return {};
+        },
+        flush: async () => true,
+      }),
+    });
+
+    Sentry.captureException(new Error('boom'));
+    await Sentry.flush(1000);
+
+    expect(sent[0].tags).toMatchObject({
+      server: 'http://localhost:11870',
+      connected: true,
+      outboxSize: 1,
+    });
+
+    inert = true;
+  });
+});
+
 describe('diagnostics on every Sentry event', () => {
   const sent: Sentry.Event[] = [];
-  const statusOf = (serverConnected: boolean) => () => ({
-    serverUrl: 'http://localhost:11870/some/path?q=1',
-    serverConnected,
-    blockedCount: 0,
-  });
-  const store = (getSyncStatus: () => unknown) =>
-    ({
-      getSyncStatus,
-      outbox: { pending: () => [{ failures: 3 }] },
-      getDefaultWebSocket: () => ({ serverCapabilities: [] }),
-    }) as unknown as Store;
 
   async function report(send: () => unknown): Promise<Sentry.Event> {
     sent.length = 0;

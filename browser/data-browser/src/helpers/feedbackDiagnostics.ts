@@ -171,8 +171,6 @@ function loroFailureTags(error: unknown): Tags {
  * sent.
  */
 export function addDiagnosticsToSentryEvents(store: Store): void {
-  if (!Sentry.isEnabled()) return;
-
   Sentry.addEventProcessor((event, hint) => {
     try {
       event.tags = {
