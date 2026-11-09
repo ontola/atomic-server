@@ -41,7 +41,7 @@ export const PluginList: React.FC<PluginListProps> = ({ drive }) => {
   );
 };
 
-function useInstallations(drive: string): string[] {
+export function useInstallations(drive: string): string[] {
   const store = useStore();
   const [subjects, setSubjects] = useState<string[]>([]);
 

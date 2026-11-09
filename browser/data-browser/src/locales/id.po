@@ -8238,6 +8238,7 @@ msgstr "<0/> Salin tautan"
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
+#: src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Selesai"
 
@@ -10750,6 +10751,7 @@ msgid "Data"
 msgstr "Data"
 
 #: src/components/MetaSetter.tsx
+#: src/views/Installation/InstallationPage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr "Mulai"
@@ -12969,6 +12971,7 @@ msgstr "Waktu habis saat mengambil {0}"
 
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/usePanelList.ts
 #: src/routes/IntegrationStore.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Apps"
@@ -12990,6 +12993,7 @@ msgstr "Cari aplikasi, integrasi, domain, atau standar"
 msgid "Loading apps…"
 msgstr "Memuat aplikasi…"
 
+#: src/components/SideBar/AppsPanel.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Temukan aplikasi"
@@ -13507,4 +13511,76 @@ msgstr ""
 
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow all writes done by this app"
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Show Apps panel"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Build an app with AI"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Guide: publishing an app"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Missing an app? Build it yourself with AI"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Install the app and review what it can access"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Fill in the required settings"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "To do"
+msgstr ""
+
+#. 0: stepsDone; 1: steps.length
+#: src/views/Installation/InstallationPage.tsx
+msgid "Get started, {0} of {1} steps done"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Advanced: edit as JSON"
+msgstr ""
+
+#: src/views/Installation/configForm.ts
+msgid "This field is required."
+msgstr ""
+
+#: src/views/Installation/configForm.ts
+msgid "Pick one of the available options."
+msgstr ""
+
+#: src/views/Installation/configForm.ts
+msgid "Enter a number."
+msgstr ""
+
+#: src/views/Installation/configForm.ts
+msgid "Enter a whole number."
+msgstr ""
+
+#. 0: def.minimum
+#: src/views/Installation/configForm.ts
+msgid "Must be at least {0}."
+msgstr ""
+
+#. 0: def.maximum
+#: src/views/Installation/configForm.ts
+msgid "Must be at most {0}."
+msgstr ""
+
+#. 0: def.minLength
+#: src/views/Installation/configForm.ts
+msgid "Must be at least {0} characters."
 msgstr ""

@@ -23,6 +23,7 @@
     - [Creating Apps](plugins/creating-plugins.md)
     - [Custom Views](plugins/custom-views.md)
     - [Host ABI](plugins/host-abi.md)
+    - [Publishing an app](plugins/publishing-apps.md)
 
 - [Atomic Sync](atomic-sync/overview.md)
   - [Transports](atomic-sync/transports.md)

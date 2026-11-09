@@ -8240,6 +8240,7 @@ msgstr "<0/> Copy link"
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
+#: src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Done"
 
@@ -10753,6 +10754,7 @@ msgid "Data"
 msgstr "Data"
 
 #: src/components/MetaSetter.tsx
+#: src/views/Installation/InstallationPage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr "Get started"
@@ -12972,6 +12974,7 @@ msgstr "Timed out fetching {0}"
 
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/usePanelList.ts
 #: src/routes/IntegrationStore.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Apps"
@@ -12993,6 +12996,7 @@ msgstr "Search apps, integrations, domains or standards"
 msgid "Loading apps…"
 msgstr "Loading apps…"
 
+#: src/components/SideBar/AppsPanel.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Discover apps"
@@ -13516,3 +13520,75 @@ msgstr "Allow all reads done by this app"
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow all writes done by this app"
 msgstr "Allow all writes done by this app"
+
+#: src/routes/AppSettings.tsx
+msgid "Show Apps panel"
+msgstr "Show Apps panel"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Build an app with AI"
+msgstr "Build an app with AI"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Guide: publishing an app"
+msgstr "Guide: publishing an app"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Missing an app? Build it yourself with AI"
+msgstr "Missing an app? Build it yourself with AI"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
+msgstr "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Install the app and review what it can access"
+msgstr "Install the app and review what it can access"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Fill in the required settings"
+msgstr "Fill in the required settings"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "To do"
+msgstr "To do"
+
+#. 0: stepsDone; 1: steps.length
+#: src/views/Installation/InstallationPage.tsx
+msgid "Get started, {0} of {1} steps done"
+msgstr "Get started, {0} of {1} steps done"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Advanced: edit as JSON"
+msgstr "Advanced: edit as JSON"
+
+#: src/views/Installation/configForm.ts
+msgid "This field is required."
+msgstr "This field is required."
+
+#: src/views/Installation/configForm.ts
+msgid "Pick one of the available options."
+msgstr "Pick one of the available options."
+
+#: src/views/Installation/configForm.ts
+msgid "Enter a number."
+msgstr "Enter a number."
+
+#: src/views/Installation/configForm.ts
+msgid "Enter a whole number."
+msgstr "Enter a whole number."
+
+#. 0: def.minimum
+#: src/views/Installation/configForm.ts
+msgid "Must be at least {0}."
+msgstr "Must be at least {0}."
+
+#. 0: def.maximum
+#: src/views/Installation/configForm.ts
+msgid "Must be at most {0}."
+msgstr "Must be at most {0}."
+
+#. 0: def.minLength
+#: src/views/Installation/configForm.ts
+msgid "Must be at least {0} characters."
+msgstr "Must be at least {0} characters."

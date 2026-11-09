@@ -265,6 +265,13 @@ const AppSettings: React.FunctionComponent = () => {
                           </CheckboxLabel>
                           <CheckboxLabel>
                             <Checkbox
+                              checked={enabledPanels.has(Panel.Apps)}
+                              onChange={changePanelPref(Panel.Apps)}
+                            />{' '}
+                            <span>Show Apps panel</span>
+                          </CheckboxLabel>
+                          <CheckboxLabel>
+                            <Checkbox
                               checked={enabledPanels.has(Panel.Ontologies)}
                               onChange={changePanelPref(Panel.Ontologies)}
                             />{' '}

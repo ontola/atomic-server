@@ -8240,6 +8240,7 @@ msgstr "<0/> Link kopiëren"
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
+#: src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Klaar"
 
@@ -10753,6 +10754,7 @@ msgid "Data"
 msgstr "Gegevens"
 
 #: src/components/MetaSetter.tsx
+#: src/views/Installation/InstallationPage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr "Aan de slag"
@@ -12972,6 +12974,7 @@ msgstr "Time-out bij ophalen van {0}"
 
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/usePanelList.ts
 #: src/routes/IntegrationStore.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Apps"
@@ -12993,6 +12996,7 @@ msgstr "Zoek apps, integraties, domeinen of standaarden"
 msgid "Loading apps…"
 msgstr "Apps laden…"
 
+#: src/components/SideBar/AppsPanel.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Apps ontdekken"
@@ -13516,3 +13520,75 @@ msgstr "Alle leesacties van deze app toestaan"
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow all writes done by this app"
 msgstr "Alle schrijfacties van deze app toestaan"
+
+#: src/routes/AppSettings.tsx
+msgid "Show Apps panel"
+msgstr "Toon Apps-paneel"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Build an app with AI"
+msgstr "Bouw een app met AI"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Guide: publishing an app"
+msgstr "Handleiding: een app publiceren"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Missing an app? Build it yourself with AI"
+msgstr "Mis je een app? Bouw hem zelf met AI"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
+msgstr "Beschrijf wat je wilt en de assistent bouwt de app in je drive. Deel hem daarna met je drive, host je eigen marktplaats, of dien hem in bij de community-marktplaats."
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Install the app and review what it can access"
+msgstr "Installeer de app en bekijk waar hij bij mag"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Fill in the required settings"
+msgstr "Vul de verplichte instellingen in"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "To do"
+msgstr "Nog te doen"
+
+#. 0: stepsDone; 1: steps.length
+#: src/views/Installation/InstallationPage.tsx
+msgid "Get started, {0} of {1} steps done"
+msgstr "Aan de slag, {0} van {1} stappen gedaan"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Advanced: edit as JSON"
+msgstr "Geavanceerd: bewerk als JSON"
+
+#: src/views/Installation/configForm.ts
+msgid "This field is required."
+msgstr "Dit veld is verplicht."
+
+#: src/views/Installation/configForm.ts
+msgid "Pick one of the available options."
+msgstr "Kies een van de beschikbare opties."
+
+#: src/views/Installation/configForm.ts
+msgid "Enter a number."
+msgstr "Vul een getal in."
+
+#: src/views/Installation/configForm.ts
+msgid "Enter a whole number."
+msgstr "Vul een geheel getal in."
+
+#. 0: def.minimum
+#: src/views/Installation/configForm.ts
+msgid "Must be at least {0}."
+msgstr "Moet minimaal {0} zijn."
+
+#. 0: def.maximum
+#: src/views/Installation/configForm.ts
+msgid "Must be at most {0}."
+msgstr "Mag maximaal {0} zijn."
+
+#. 0: def.minLength
+#: src/views/Installation/configForm.ts
+msgid "Must be at least {0} characters."
+msgstr "Moet minimaal {0} tekens bevatten."
