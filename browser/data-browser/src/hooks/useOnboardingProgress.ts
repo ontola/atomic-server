@@ -27,7 +27,6 @@ import { useIsLinkedToAccount } from './useIsLinkedToAccount';
 import { pendingInviteQuery } from '../helpers/pendingInvites';
 import { usePrivateDrive } from './usePrivateDrive';
 import { usePrivateDriveSync } from './usePrivateDriveSync';
-import { useSavedDrives } from './useSavedDrives';
 import { userSettingProps, useUserSetting } from './useUserSetting';
 
 export type OnboardingStepId =
@@ -74,9 +73,9 @@ export interface OnboardingInput {
   templateChildCount: number;
   hasAIChat: boolean;
   aiAvailable: boolean;
-  /** Agents with rights on any of the user's non-personal drives, other than the signed-in one. */
+  /** Agents with rights on the panel's drive, other than the signed-in one. */
   otherAgentsOnDrives: boolean;
-  /** An email invite was sent for one of those drives (not necessarily accepted yet). */
+  /** An invite was sent for that drive (not necessarily accepted yet). */
   inviteSent?: boolean;
   accountLinked: boolean;
 }
@@ -118,7 +117,6 @@ export function hasInviteForDrives(
 export function useOnboardingProgress(drive: string, driveName?: string) {
   const [agent] = useCurrentAgent();
   const { privateDrive } = usePrivateDrive();
-  const [savedDrives] = useSavedDrives();
   const { enableAI, availableProviders } = useAISettings();
   const chats = useDriveChats(privateDrive);
   const [welcomeDrive] = useUserSetting<string | undefined>(
@@ -132,10 +130,9 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
   const templateChildCount = same(drive, welcomeDrive)
     ? TEMPLATE_CATALOG.find(t => t.id === 'welcome')!.parts.length
     : 0;
-  // The panel's own drive counts even when it is not on the saved list yet.
-  const shared = [...new Set([...savedDrives, drive])].filter(
-    d => !same(d, privateDrive),
-  );
+  // Only the panel's own drive: fetching every saved drive to look for other
+  // members hits legacy drives on dead servers on every render.
+  const shared = same(drive, privateDrive) ? [] : [drive];
   const resources = useResources(shared);
   const others = [...resources.values()].some(r =>
     [r.get(core.properties.read), r.get(core.properties.write)]

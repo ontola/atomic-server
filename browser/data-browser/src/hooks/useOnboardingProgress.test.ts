@@ -9,7 +9,6 @@ vi.mock('@tomic/react', () => ({
 vi.mock('@components/AI/AISettingsContext', () => ({}));
 vi.mock('@components/SideBar/AIPanel', () => ({}));
 vi.mock('./usePrivateDrive', () => ({}));
-vi.mock('./useSavedDrives', () => ({}));
 vi.mock('./useUserSetting', () => ({}));
 vi.mock('./useVisibleDriveChildren', () => ({}));
 vi.mock('@helpers/managed/binding', () => ({}));
