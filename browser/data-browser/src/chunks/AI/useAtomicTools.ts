@@ -1545,11 +1545,11 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.CREATE_PLUGIN]: tool({
         description:
-          "Create or update an app: JavaScript that proposes changes for the user to review. Use this for imports from an external service, or any repeatable transformation of the user's data. " +
-          'For a new automation, pass its workspace and explicit connections (an empty array when none). Workspace association does not change permissions or start any job. For an attached automation draft, read it and the referenced integration first, then update that draft by passing its app subject. Preserve its event filters and automation-integrations references; do not replace the integration source or duplicate the draft. Use run_plugin to test, and leave change approval and automatic enablement to the user. Integrations can sync without automations; do not modify their sync schedule as part of automation authoring. ' +
-          "An app returns proposed Atomic changes. Manual preview runs do not execute integration writes, even when the automation has an automatic-action grant. It must `export function run(ctx)` returning `{ intents: [...], problems: [...] }`. Intents are the only way to change data: `{op:'create', localId, parent, isA:[classSubject], set:{[propertySubject]: value}}`, `{op:'set', subject, set:{...}}`, `{op:'remove', subject, properties:[...]}`, `{op:'destroy', subject}`. Refer to something the same run creates as `'local:<localId>'` — links resolve in any order. Default to nested app data: create app-owned tables and supporting resources beneath the app (`ctx.trigger.subject`), and rows beneath their table. The drive is an authorization scope, not the default parent for every imported record. Preserve explicitly selected existing destinations and shared resources; do not move them or populate the drive root unless the user asks. Property and class keys are full subjects; use find_schema or create a table first if you need them. Problems are `{severity:'error'|'warning', message}`; an error blocks the whole run. \n\nWhat ctx gives you: `ctx.trigger.at` (the ONLY clock — Date.now() is frozen to it and Math.random is seeded, so runs are reproducible), `ctx.http({method,url,headers,body})` returning `{status, body}`, `ctx.read(subject)`, `ctx.query(property, value)`. Server-side automations can also call `ctx.integration({connection, release, call:{action, arguments, id}})` for an explicitly referenced integration. Discover its named actions and pinned release first with list_integration_actions. Use a stable event-derived id for retries. Reads return provider data. In manual previews, writes return needs_review and require review on the integration connection. Scheduled and event runs can execute writes under an existing automatic-action grant. Never claim a prepared write was sent. App-scoped callers need an explicit connection/action grant. Grants are tied to the actual code and connection, expire after 30 days, and may require each write to be reviewed or allow automatic writes. The host suspends runs waiting for integration approval and resumes the same queued event after approval; completed calls reuse their receipts. Never enable a grant through an assistant tool. There is no fetch, no process, no filesystem. \n\nCredentials: put `'Bearer secret:<name>'` in a HEADER VALUE and the host substitutes the real value; the app never sees it. A `secret:` handle in a URL or body is refused. DECLARE every secret you use, or the user has to work out what to enter: `export const manifest = { secrets: [{ name: 'google', origin: 'https://www.googleapis.com', description: 'Google Calendar token' }] };` — the app page then shows one labelled field per declared secret, and the origin allowlist comes from this. `manifest` and `run` are the only exports that mean anything; anything else you export is ignored. You cannot store a secret yourself, so write the app, then tell the user to open it and fill in the fields. If the user wants this to happen regularly rather than on a button press, call schedule_plugin afterwards; `ctx.trigger.kind` is then `'cron'` instead of `'manual'`, and a scheduled run's changes wait for the user to review rather than being written.",
+          "Create or update a plugin: JavaScript that proposes changes for the user to review. Use this for imports from an external service, or any repeatable transformation of the user's data. " +
+          'For a new automation, pass its workspace and explicit connections (an empty array when none). Workspace association does not change permissions or start any job. For an attached automation draft, read it and the referenced integration first, then update that draft by passing its plugin subject. Preserve its event filters and automation-integrations references; do not replace the integration source or duplicate the draft. Use run_plugin to test, and leave change approval and automatic enablement to the user. Integrations can sync without automations; do not modify their sync schedule as part of automation authoring. ' +
+          "A plugin returns proposed Atomic changes. Manual preview runs do not execute integration writes, even when the automation has an automatic-action grant. It must `export function run(ctx)` returning `{ intents: [...], problems: [...] }`. Intents are the only way to change data: `{op:'create', localId, parent, isA:[classSubject], set:{[propertySubject]: value}}`, `{op:'set', subject, set:{...}}`, `{op:'remove', subject, properties:[...]}`, `{op:'destroy', subject}`. Refer to something the same run creates as `'local:<localId>'` — links resolve in any order. Default to nested app data: create app-owned tables and supporting resources beneath the plugin (`ctx.trigger.subject`), and rows beneath their table. The drive is an authorization scope, not the default parent for every imported record. Preserve explicitly selected existing destinations and shared resources; do not move them or populate the drive root unless the user asks. Property and class keys are full subjects; use find_schema or create a table first if you need them. Problems are `{severity:'error'|'warning', message}`; an error blocks the whole run. \n\nWhat ctx gives you: `ctx.trigger.at` (the ONLY clock — Date.now() is frozen to it and Math.random is seeded, so runs are reproducible), `ctx.http({method,url,headers,body})` returning `{status, body}`, `ctx.read(subject)`, `ctx.query(property, value)`. Server-side automations can also call `ctx.integration({connection, release, call:{action, arguments, id}})` for an explicitly referenced integration. Discover its named actions and pinned release first with list_integration_actions. Use a stable event-derived id for retries. Reads return provider data. In manual previews, writes return needs_review and require review on the integration connection. Scheduled and event runs can execute writes under an existing automatic-action grant. Never claim a prepared write was sent. App-scoped callers need an explicit connection/action grant. Grants are tied to the actual code and connection, expire after 30 days, and may require each write to be reviewed or allow automatic writes. The host suspends runs waiting for integration approval and resumes the same queued event after approval; completed calls reuse their receipts. Never enable a grant through an assistant tool. There is no fetch, no process, no filesystem. \n\nCredentials: put `'Bearer secret:<name>'` in a HEADER VALUE and the host substitutes the real value; the plugin never sees it. A `secret:` handle in a URL or body is refused. DECLARE every secret you use, or the user has to work out what to enter: `export const manifest = { secrets: [{ name: 'google', origin: 'https://www.googleapis.com', description: 'Google Calendar token' }] };` — the plugin page then shows one labelled field per declared secret, and the origin allowlist comes from this. `manifest` and `run` are the only exports that mean anything; anything else you export is ignored. You cannot store a secret yourself, so write the plugin, then tell the user to open it and fill in the fields. If the user wants this to happen regularly rather than on a button press, call schedule_plugin afterwards; `ctx.trigger.kind` is then `'cron'` instead of `'manual'`, and a scheduled run's changes wait for the user to review rather than being written.",
         inputSchema: z.object({
-          name: z.string().describe('Display name of the app.'),
+          name: z.string().describe('Display name of the plugin.'),
           source: z
             .string()
             .describe(
@@ -1559,7 +1559,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             .string()
             .optional()
             .describe(
-              'Subject of an existing app to update. Omit to create a new one.',
+              'Subject of an existing plugin to update. Omit to create a new one.',
             ),
           parent: z
             .string()
@@ -1575,7 +1575,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             .array(z.string())
             .optional()
             .describe(
-              'For an automation, its explicit connection references. Use an empty array for an automation without external services. Omit for an ordinary app.',
+              'For an automation, its explicit connection references. Use an empty array for an automation without external services. Omit for an ordinary plugin.',
             ),
         }),
         execute: async ({
@@ -1613,7 +1613,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             return {
               plugin: shortenSubject(subject),
               created: true,
-              next: 'Run it with run_plugin to see what it proposes. If it needs a credential, ask the user to add a secret on the app page and name the origin.',
+              next: 'Run it with run_plugin to see what it proposes. If it needs a credential, ask the user to add a secret on the plugin page and name the origin.',
             };
           } catch (e) {
             return { error: (e as Error).message };
@@ -1622,9 +1622,9 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.RUN_PLUGIN]: tool({
         description:
-          'Run an app and see what it proposes, WITHOUT writing anything. Use this after create_plugin to check your work, and again after each fix — the problems it returns are how you correct the app. Nothing is written: the user reviews and approves the changes themselves.',
+          'Run a plugin and see what it proposes, WITHOUT writing anything. Use this after create_plugin to check your work, and again after each fix — the problems it returns are how you correct the plugin. Nothing is written: the user reviews and approves the changes themselves.',
         inputSchema: z.object({
-          plugin: z.string().describe('Subject of the app to run.'),
+          plugin: z.string().describe('Subject of the plugin to run.'),
           sampleEvent: previewEventSchema
             .optional()
             .describe(
@@ -1641,7 +1641,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             const source = typeof value === 'string' ? value : undefined;
 
             if (!source) {
-              return { error: 'That resource has no app source.' };
+              return { error: 'That resource has no plugin source.' };
             }
 
             const prepared = await prepareRun(
@@ -1686,7 +1686,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
               totalChanges: plan.changes.length,
               next: plan.blocked
                 ? 'Fix the errors and call create_plugin again with the corrected source.'
-                : 'Looks runnable. Tell the user to open the app and press Run to review and apply it.',
+                : 'Looks runnable. Tell the user to open the plugin and press Run to review and apply it.',
             };
           } catch (e) {
             return { error: (e as Error).message };
@@ -1695,9 +1695,9 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.SCHEDULE_PLUGIN]: tool({
         description:
-          "Run an app on a schedule, for a user who asked for something to happen regularly rather than when they press a button. A scheduled run FETCHES BUT DOES NOT WRITE — nobody is there to approve at 3am — so what it proposes waits on the app page until the user reviews it. Say so when you set one. The app sees `ctx.trigger.kind === 'cron'`. Minimum 60 seconds, and prefer much longer: an app hammering an API gets the user's credential rate-limited.",
+          "Run a plugin on a schedule, for a user who asked for something to happen regularly rather than when they press a button. A scheduled run FETCHES BUT DOES NOT WRITE — nobody is there to approve at 3am — so what it proposes waits on the plugin page until the user reviews it. Say so when you set one. The plugin sees `ctx.trigger.kind === 'cron'`. Minimum 60 seconds, and prefer much longer: a plugin hammering an API gets the user's credential rate-limited.",
         inputSchema: z.object({
-          plugin: z.string().describe('Subject of the app.'),
+          plugin: z.string().describe('Subject of the plugin.'),
           intervalSeconds: z
             .number()
             .nullable()
@@ -1720,7 +1720,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
               next:
                 intervalSeconds === null
                   ? 'It now runs only when the user presses Run.'
-                  : 'Tell the user it will run on its own, and that its proposed changes will wait on the app page for them to review.',
+                  : 'Tell the user it will run on its own, and that its proposed changes will wait on the plugin page for them to review.',
             };
           } catch (e) {
             return { error: (e as Error).message };
