@@ -30,7 +30,7 @@ import 'native_views.dart';
 import 'new_document_sheet.dart';
 
 /// Items per section on the home; the rest is behind its "Show all" row.
-const _homeItems = 4;
+const _homeItems = 3;
 
 /// Most entries the activity feed holds.
 const _maxActivity = 100;
