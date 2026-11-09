@@ -39,6 +39,11 @@ class ResourceView extends StatefulWidget {
   /// Then [subject] may be empty.
   final String? path;
 
+  /// The web page of [subject] even when its class has a native view: the
+  /// page's own ask to open it natively is declined (a meeting's notes,
+  /// opened from its native screen).
+  final bool webPage;
+
   /// Where the bundled page comes from. A test swaps it for one that fails
   /// fast instead of starting a real server.
   static Future<EmbedServer> Function() serverFactory = EmbedServer.instance;
@@ -85,6 +90,7 @@ class ResourceView extends StatefulWidget {
     this.subject = '',
     this.title = '',
     this.path,
+    this.webPage = false,
     this.call,
     this.menuAnchor,
   });
@@ -1112,7 +1118,8 @@ class _ResourceViewState extends State<ResourceView>
       final kind = '${args[0]}';
       final subject = '${args[1]}';
       final title = args.length > 2 ? '${args[2]}' : '';
-      if (mounted && subject.isNotEmpty && hasNativeView(kind)) {
+      final ownPage = widget.webPage && subject == widget.subject;
+      if (mounted && subject.isNotEmpty && hasNativeView(kind) && !ownPage) {
         handled = true;
         widget.api.noteOpened(widget.drive, subject);
         unawaited(Navigator.of(context)

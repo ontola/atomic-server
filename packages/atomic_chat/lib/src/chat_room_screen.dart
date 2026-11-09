@@ -22,6 +22,7 @@ import 'native_views.dart';
 import 'slide_back_route.dart';
 import 'list_and_field.dart';
 import 'resource_chrome.dart';
+import 'resource_view.dart';
 
 /// Messages of one author closer together than this are one group: the author
 /// is named once above it.
@@ -294,7 +295,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         drive: widget.drive,
                         subject: widget.subject),
                     actions: [
-                      if (widget.meeting) _JoinCallButton(widget.subject),
+                      if (widget.meeting) ...[
+                        IconButton(
+                          key: const Key('meeting-notes'),
+                          tooltip: 'Notes',
+                          icon: const Icon(Icons.description_outlined),
+                          onPressed: _openNotes,
+                        ),
+                        _JoinCallButton(widget.subject),
+                      ],
                       const ResourceMoreButton(),
                     ],
                   ),
@@ -309,6 +318,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                   ]),
                 ))));
   }
+
+  /// The meeting's notes: its web page (the notes are its text). Back comes
+  /// here again; a call goes on as the tile meanwhile.
+  void _openNotes() => Navigator.of(context).push(SlideBackRoute<void>(
+        builder: (_) => ResourceView(
+            api: widget.api,
+            drive: widget.drive,
+            subject: widget.subject,
+            title: _title,
+            webPage: true),
+      ));
 
   /// The room, and how many people have spoken in it.
   String get _subtitle {
