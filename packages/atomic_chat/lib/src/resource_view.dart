@@ -622,7 +622,10 @@ class _ResourceViewState extends State<ResourceView>
   /// Join on the live meeting strip: follow the leader and open the meeting.
   /// Following goes on from there (the leader's page replaces it).
   void _joinLive(LiveMeeting live) {
-    _follow.follow(live.leader.agent, session: live.leader.sessionId);
+    _follow.follow(live.leader.agent,
+        session: live.leader.sessionId,
+        meeting: live.meeting,
+        name: _watch?.identity(live.leader.agent)?.name?.trim());
     if (live.meeting == widget.subject) {
       _leaderMoved();
       return;
@@ -748,7 +751,10 @@ class _ResourceViewState extends State<ResourceView>
     if (!mounted || choice == null) return;
     switch (choice) {
       case PresenceChoice.follow:
-        _follow.follow(who.agent, session: who.sessionId);
+        _follow.follow(who.agent,
+            session: who.sessionId,
+            meeting: who.session,
+            name: identity?.name?.trim());
         // Go to where they are right away.
         _leaderMoved();
       case PresenceChoice.stopFollowing:

@@ -12,10 +12,16 @@ import 'profile_avatar.dart';
 /// shows them: any of their sessions on it counts. Picking only an agent's
 /// freshest session hid a browser that moved here while the same person's
 /// other tablet, idle elsewhere, had announced later.
-List<PresenceItem> viewersOf(List<PresenceItem> items, String subject) {
+///
+/// [inMeeting]: [subject] is a meeting, and whoever announces it as their
+/// `session` (its leader, wherever they are) counts as being there too.
+List<PresenceItem> viewersOf(List<PresenceItem> items, String subject,
+    {bool inMeeting = false}) {
   final here = <String, PresenceItem>{};
   for (final item in items) {
-    if (item.resource != subject) continue;
+    if (item.resource != subject && !(inMeeting && item.session == subject)) {
+      continue;
+    }
     final seen = here[item.agent];
     if (seen == null || item.updatedAt > seen.updatedAt) {
       here[item.agent] = item;
@@ -121,12 +127,16 @@ class PresenceFacepile extends StatelessWidget {
   final String subject;
   final void Function(PresenceItem who) onTap;
 
+  /// [subject] is a meeting (see [viewersOf]).
+  final bool inMeeting;
+
   const PresenceFacepile({
     super.key,
     required this.watch,
     required this.follow,
     required this.subject,
     required this.onTap,
+    this.inMeeting = false,
   });
 
   @override
@@ -134,7 +144,8 @@ class PresenceFacepile extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([watch, follow]),
       builder: (context, _) {
-        final viewers = viewersOf(watch.items, subject);
+        final viewers =
+            viewersOf(watch.items, subject, inMeeting: inMeeting);
         if (viewers.isEmpty) return const SizedBox.shrink();
         final c = context.appColors;
         final shown = viewers.take(maxShown).toList();

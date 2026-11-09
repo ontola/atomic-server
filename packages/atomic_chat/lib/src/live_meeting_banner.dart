@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'assistant_api.dart';
 import 'follow_controller.dart';
+import 'meeting_call.dart';
 import 'meeting_lead.dart';
 import 'models.dart';
 import 'presence_facepile.dart';
@@ -214,6 +215,100 @@ class _LiveMeetingBannerState extends State<LiveMeetingBanner> {
           ]),
         ),
       ),
+    );
+  }
+}
+
+/// The strip that stays while the person is in a meeting: in its call,
+/// leading it, or following someone. It sits on top of the bottom bar, so
+/// every page shows it. Tapping it opens the meeting ([onOpen]); its buttons
+/// stop following and leave the call.
+class InMeetingBar extends StatelessWidget {
+  final MeetingCall? call;
+  final MeetingLead lead;
+  final FollowController follow;
+  final void Function(String meeting) onOpen;
+
+  const InMeetingBar({
+    super.key,
+    required this.call,
+    required this.lead,
+    required this.follow,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([call, lead, follow]),
+      builder: (context, _) {
+        final inCall = call?.active ?? false;
+        final following = follow.agent != null;
+        final leading = lead.leading;
+        if (!inCall && !following && !leading) return const SizedBox.shrink();
+        final meeting = call?.meeting ?? lead.meeting ?? follow.meeting;
+        final name = follow.name?.trim() ?? '';
+        final String label;
+        if (following) {
+          label = name.isEmpty ? 'Following' : 'Following $name';
+        } else if (leading) {
+          label = 'You are leading the meeting';
+        } else {
+          label = 'In a meeting';
+        }
+        final c = context.appColors;
+        final primary = Theme.of(context).colorScheme.primary;
+        return Material(
+          color: c.bgBody,
+          child: InkWell(
+            key: const Key('in-meeting-bar'),
+            onTap: meeting == null ? null : () => onOpen(meeting),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsetsDirectional.only(start: 16, end: 4),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: c.border)),
+                color: primary.withValues(alpha: 0.08),
+              ),
+              child: Row(children: [
+                Icon(
+                    following
+                        ? Icons.visibility_outlined
+                        : Icons.videocam_outlined,
+                    size: 20,
+                    color: primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: c.textPrimary, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (following)
+                  TextButton(
+                    key: const Key('in-meeting-stop-following'),
+                    onPressed: follow.stop,
+                    child: const Text('Stop following'),
+                  ),
+                if (inCall)
+                  IconButton(
+                    key: const Key('in-meeting-leave'),
+                    tooltip: 'Leave call',
+                    icon: const Icon(Icons.call_end),
+                    color: Colors.red,
+                    onPressed: () {
+                      call?.leave();
+                      follow.stop();
+                    },
+                  ),
+              ]),
+            ),
+          ),
+        );
+      },
     );
   }
 }

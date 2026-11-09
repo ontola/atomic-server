@@ -10,6 +10,8 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'app_shell.dart' show ShellScope;
 import 'app_top_bar.dart';
 import 'meeting_call.dart';
+import 'follow_controller.dart';
+import 'presence_facepile.dart';
 import 'home_sections.dart' show HomeSection;
 import 'chat_bubbles.dart';
 import 'chat_text_styles.dart';
@@ -302,6 +304,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                           icon: const Icon(Icons.description_outlined),
                           onPressed: _openNotes,
                         ),
+                        _MeetingPeople(
+                            api: widget.api,
+                            drive: widget.drive,
+                            meeting: widget.subject),
                         _JoinCallButton(widget.subject),
                       ],
                       const ResourceMoreButton(),
@@ -543,6 +549,154 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
           ],
         ),
       );
+}
+
+/// Who is in the meeting, as avatars; a tap offers to follow them. While
+/// following and this page is on top, the leader's next page opens over the
+/// meeting (back returns here), and that page follows on from there.
+class _MeetingPeople extends StatefulWidget {
+  final AssistantApi api;
+  final String drive;
+  final String meeting;
+
+  const _MeetingPeople(
+      {required this.api, required this.drive, required this.meeting});
+
+  @override
+  State<_MeetingPeople> createState() => _MeetingPeopleState();
+}
+
+class _MeetingPeopleState extends State<_MeetingPeople> {
+  late final PresenceWatch _watch = PresenceWatch(widget.api, widget.drive)
+    ..start();
+  FollowController? _follow;
+
+  /// Where the leader was when last looked at; they moving on from it opens
+  /// their new page.
+  String? _seen;
+
+  /// The watch answered at least once.
+  bool _answered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _watch.addListener(_watched);
+  }
+
+  void _watched() {
+    _answered = true;
+    _moved();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final follow = ShellScope.maybeOf(context)?.follow;
+    if (follow != _follow) {
+      _follow?.removeListener(_moved);
+      _follow = follow?..addListener(_moved);
+    }
+  }
+
+  @override
+  void dispose() {
+    _watch.removeListener(_watched);
+    _follow?.removeListener(_moved);
+    _watch.dispose();
+    super.dispose();
+  }
+
+  /// The resource the followed person is on, if any.
+  String? get _target {
+    final follow = _follow;
+    final leader = follow?.agent;
+    if (follow == null || leader == null) return null;
+    final items = _watch.items.where((i) => i.agent == leader).toList();
+    if (items.isEmpty) return null;
+    return (items.where((i) => i.sessionId == follow.session).firstOrNull ??
+            items.reduce((a, b) => b.updatedAt > a.updatedAt ? b : a))
+        .resource;
+  }
+
+  /// The first read only notes where the leader is: opening the meeting
+  /// (from the strip, say) shows the meeting, not their page.
+  bool _primed = false;
+
+  void _moved() {
+    if (!mounted) return;
+    if (!_primed) {
+      if (!_answered) return;
+      _primed = true;
+      _seen = _target;
+      return;
+    }
+    final target = _target;
+    final moved = target != _seen;
+    _seen = target;
+    final onTop = ModalRoute.of(context)?.isCurrent ?? true;
+    if (moved && onTop) _open(target);
+  }
+
+  void _open(String? target) {
+    if (target == null || target == widget.meeting) return;
+    widget.api.noteOpened(widget.drive, target);
+    unawaited(Navigator.of(context).push(SlideBackRoute<void>(
+      builder: (_) => openResourceView(
+          api: widget.api, drive: widget.drive, subject: target),
+    )));
+  }
+
+  Future<void> _tapped(PresenceItem who) async {
+    final follow = _follow;
+    if (follow == null) return;
+    final identity = _watch.identity(who.agent);
+    final choice = await showPresenceSheet(context,
+        who: who,
+        identity: identity,
+        following: follow.isFollowing(who.agent),
+        canMessage: false);
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case PresenceChoice.follow:
+        follow.follow(who.agent,
+            session: who.sessionId,
+            meeting: widget.meeting,
+            name: identity?.name?.trim());
+        // Go to where they are right away.
+        _seen = _target;
+        _open(_seen);
+      case PresenceChoice.stopFollowing:
+        follow.stop();
+      case PresenceChoice.profile:
+        unawaited(Navigator.of(context).push(SlideBackRoute<void>(
+          builder: (_) => openResourceView(
+              api: widget.api,
+              drive: widget.drive,
+              subject: who.agent,
+              title: identity?.name?.trim() ?? ''),
+        )));
+      case PresenceChoice.message:
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final follow = _follow;
+    if (follow == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: PresenceFacepile(
+        key: const Key('meeting-people'),
+        watch: _watch,
+        follow: follow,
+        subject: widget.meeting,
+        inMeeting: true,
+        onTap: _tapped,
+      ),
+    );
+  }
 }
 
 /// The meeting's call, if it is not on yet: joins it (the shell's call, so
