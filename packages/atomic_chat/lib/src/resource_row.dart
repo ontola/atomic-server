@@ -1,6 +1,7 @@
 import 'package:atomic_flutter/atomic_flutter.dart'
     show AppColorsExt, SectionHeaderStyle;
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'app_shell.dart';
 import 'app_sidebar_icons.dart';
@@ -9,11 +10,12 @@ import 'row_leading.dart';
 import 'sidebar_metrics.dart';
 
 /// A drive's icon: the web app's hard drive, not a folder.
-const driveIcon = Icons.dns_outlined;
+const driveIcon = FontAwesomeIcons.solidHardDrive;
 
 /// The icon of a class, by the class's name as the rows carry it (the class's
-/// own name, or the last part of its subject), as the web app's
-/// `getIconForClass` does. [Icons.description_outlined] for the rest.
+/// own name, or the last part of its subject): the same Font Awesome glyph as
+/// the web app's `getIconForClass` (`helpers/iconMap.ts`), the atom for a
+/// class it does not know, a document when there is no class at all.
 IconData iconForClass(String className) {
   final key = className
       .split('/')
@@ -21,19 +23,31 @@ IconData iconForClass(String className) {
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]'), '');
   return switch (key) {
-    'folder' => Icons.folder_outlined,
+    'folder' => FontAwesomeIcons.solidFolder,
     'drive' => driveIcon,
-    'table' => Icons.table_chart_outlined,
-    'canvas' => Icons.draw_outlined,
-    'aichat' || 'conversation' || 'chatroom' => Icons.chat_bubble_outline,
-    'meeting' => Icons.videocam_outlined,
-    'class' || 'property' || 'ontology' => Icons.data_object,
-    'formfield' || 'form' => Icons.input,
-    'bookmark' => Icons.bookmark_border,
-    'file' => Icons.insert_drive_file_outlined,
-    'dashboard' => Icons.show_chart,
-    'tag' => Icons.sell_outlined,
-    _ => Icons.description_outlined,
+    'document' || 'documentv2' || '' => FontAwesomeIcons.solidFileLines,
+    'table' => FontAwesomeIcons.table,
+    'canvas' => FontAwesomeIcons.paintbrush,
+    // The web app's own sparkle (`AIIcon`); Font Awesome has none like it.
+    'aichat' => Icons.auto_awesome,
+    'conversation' || 'chatroom' => FontAwesomeIcons.solidComment,
+    'meeting' => FontAwesomeIcons.video,
+    'class' => FontAwesomeIcons.cube,
+    'property' => FontAwesomeIcons.hashtag,
+    'ontology' => FontAwesomeIcons.shapes,
+    'form' => FontAwesomeIcons.wpforms,
+    'bookmark' => FontAwesomeIcons.book,
+    'file' => FontAwesomeIcons.solidFile,
+    'dashboard' => FontAwesomeIcons.chartLine,
+    'tag' => FontAwesomeIcons.tag,
+    'plugin' || 'installation' => FontAwesomeIcons.puzzlePiece,
+    'pluginscript' => FontAwesomeIcons.plug,
+    'websiteproject' => FontAwesomeIcons.globe,
+    'app' => FontAwesomeIcons.grip,
+    'collection' => FontAwesomeIcons.list,
+    'commit' => FontAwesomeIcons.solidClock,
+    'invite' => FontAwesomeIcons.solidShareFromSquare,
+    _ => FontAwesomeIcons.atom,
   };
 }
 

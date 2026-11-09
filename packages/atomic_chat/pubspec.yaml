@@ -12,6 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_svg: ^2.2.0
+  font_awesome_flutter: ^10.12.0
   shared_preferences: ^2.3.3
   webview_flutter: ^4.14.1
   webview_flutter_android: ^4.10.0

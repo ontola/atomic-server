@@ -1,6 +1,7 @@
 import 'package:atomic_chat/atomic_chat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 Widget _host(Widget child) => MaterialApp(
       theme: ThemeData(extensions: const [AppColors.light]),
@@ -29,26 +30,26 @@ void main() {
     }
   });
 
-  test('class names map to icons, anything else to a document', () {
+  test('class names map to the web app\'s icons, an unknown one to the atom',
+      () {
     const expected = {
-      'Folder': Icons.folder_outlined,
+      'Folder': FontAwesomeIcons.solidFolder,
       'Drive': driveIcon,
-      'Table': Icons.table_chart_outlined,
-      'Canvas': Icons.draw_outlined,
-      'AI chat': Icons.chat_bubble_outline,
-      'ai-chat': Icons.chat_bubble_outline,
-      'Conversation': Icons.chat_bubble_outline,
-      'ChatRoom': Icons.chat_bubble_outline,
-      'meeting': Icons.videocam_outlined,
-      'Class': Icons.data_object,
-      'property': Icons.data_object,
-      'form-field': Icons.input,
-      'Document': Icons.description_outlined,
-      'document-v2': Icons.description_outlined,
-      'row': Icons.description_outlined,
-      '': Icons.description_outlined,
+      'Table': FontAwesomeIcons.table,
+      'Canvas': FontAwesomeIcons.paintbrush,
+      'AI chat': Icons.auto_awesome,
+      'ai-chat': Icons.auto_awesome,
+      'Conversation': FontAwesomeIcons.solidComment,
+      'ChatRoom': FontAwesomeIcons.solidComment,
+      'meeting': FontAwesomeIcons.video,
+      'Class': FontAwesomeIcons.cube,
+      'property': FontAwesomeIcons.hashtag,
+      'Document': FontAwesomeIcons.solidFileLines,
+      'document-v2': FontAwesomeIcons.solidFileLines,
+      '': FontAwesomeIcons.solidFileLines,
+      'row': FontAwesomeIcons.atom,
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-chat':
-          Icons.chat_bubble_outline,
+          Icons.auto_awesome,
     };
     for (final e in expected.entries) {
       expect(iconForClass(e.key), e.value, reason: e.key);
