@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:atomic_chat/atomic_chat.dart' show HomeLayout;
+import 'package:atomic_chat/atomic_chat.dart' show HomeLayout, SearchScreen;
 import 'package:flutter_test/flutter_test.dart';
 
 /// Every test runs on a phone (393 x 851, as a Pixel), unless it sets its own
@@ -15,6 +15,8 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
     // say otherwise.
     HomeLayout.fresh = const HomeLayout();
     HomeLayout.accordionOverride = false;
+    // The keyboard a search saw does not carry into the next test.
+    SearchScreen.keyboardHeight = 0;
     final view = TestWidgetsFlutterBinding.ensureInitialized()
         .platformDispatcher
         .views
