@@ -38,6 +38,12 @@ void main() {
     RowPictures.loader = null;
   });
 
+  testWidgets('the glyph is never larger than its slot', (tester) async {
+    await tester.pumpWidget(_host(const RowLeading(
+        size: 14, fallbackIcon: ClassIcons.drive, iconSize: 20)));
+    expect(tester.getSize(find.byIcon(ClassIcons.drive)), const Size(14, 14));
+  });
+
   testWidgets('bytes show an image, an emoji shows text, nothing the icon',
       (tester) async {
     await tester.pumpWidget(_host(RowLeading(

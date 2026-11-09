@@ -345,10 +345,12 @@ class _RowLeadingState extends State<RowLeading> {
       // Grey, as the web app's sidebar draws its icons (`textLight`); blue
       // only on the circle of a person or chat without a picture.
       final ink = background == null ? c.textSecondary : c.main;
+      // Never larger than the slot: the glyph is not clipped any more, and a
+      // 20 dp icon stuck out of a 14 dp caption slot into the text next to it.
+      final glyph = widget.iconSize < size ? widget.iconSize : size;
       base = widget.alignGlyphStart
-          ? GlyphStart(
-              icon: widget.fallbackIcon, size: widget.iconSize, color: ink)
-          : Icon(widget.fallbackIcon, size: widget.iconSize, color: ink);
+          ? GlyphStart(icon: widget.fallbackIcon, size: glyph, color: ink)
+          : Icon(widget.fallbackIcon, size: glyph, color: ink);
     }
     final radius =
         BorderRadius.circular(circle ? size / 2 : widget.cornerRadius);
