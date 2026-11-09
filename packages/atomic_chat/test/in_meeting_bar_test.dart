@@ -24,7 +24,8 @@ void main() {
     await tester.pump();
     expect(find.text('Following Ann'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('in-meeting-bar')));
+    await tester.tap(find.text('Following Ann'));
+    await tester.pump();
     expect(opened, ['did:ad:meeting']);
 
     await tester.tap(find.byKey(const Key('in-meeting-stop-following')));
