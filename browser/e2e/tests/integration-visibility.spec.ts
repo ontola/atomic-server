@@ -186,7 +186,7 @@ test('a user who is not unlocked has no experimental toggle in Settings', async 
 }) => {
   await page.goto(new URL('/app/settings', page.url()).href);
   await page.getByPlaceholder('Search settings...').fill('marketplaces');
-  await expect(page.getByLabel('Plugin catalog URL')).toBeVisible();
+  await expect(page.getByLabel('Add marketplace URL')).toBeVisible();
   await expect(
     page.getByRole('checkbox', { name: 'Show experimental apps' }),
   ).toHaveCount(0);
