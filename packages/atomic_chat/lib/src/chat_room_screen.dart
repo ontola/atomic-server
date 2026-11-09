@@ -584,7 +584,9 @@ class _CallDockState extends State<_CallDock> {
 
   @override
   void dispose() {
-    _call?.setDock(this, null);
+    // Disposed while the tree is locked: the overlay rebuilds after it.
+    final call = _call;
+    if (call != null) scheduleMicrotask(() => call.setDock(this, null));
     super.dispose();
   }
 
