@@ -1608,8 +1608,10 @@ class _SectionState<T> extends State<_Section<T>>
                       child: _body(context, list, error),
                     )
                   : ClipRect(
+                      // Top start: an empty section's one short line would
+                      // sit centred while folding and jump left when open.
                       child: Align(
-                        alignment: Alignment.topCenter,
+                        alignment: AlignmentDirectional.topStart,
                         heightFactor: _shape.value,
                         child: FadeTransition(
                           opacity: _shape,
@@ -2204,21 +2206,16 @@ class _Empty extends StatelessWidget {
 
   const _Empty(this.text, this.c, {super.key});
 
-  /// One quiet line under the heading, where the first row would start: a
-  /// centred block with 32 px around it made an empty section taller than a
-  /// full one.
+  /// One quiet line under the heading, in the first row's place: as tall as
+  /// a row and with its text where a row's text starts. A centred block with
+  /// 32 px around it made an empty section taller than a full one.
   @override
   Widget build(BuildContext context) {
     final m = SidebarMetrics.of(context);
-    if (m.compact) {
-      return Padding(
-        padding: EdgeInsets.fromLTRB(m.hPad, 4, m.hPad, 8),
-        child: Text(text, style: SidebarRow.text(c.textSecondary, m.textSize)),
-      );
-    }
-    return Padding(
-      padding: EdgeInsets.fromLTRB(m.hPad, 4, m.hPad, 16),
-      child: Text(text, style: TextStyle(color: c.textSecondary)),
+    return SidebarRow(
+      title: text,
+      slot: SidebarIconsScope.of(context),
+      titleStyle: SidebarRow.text(c.textSecondary, m.textSize),
     );
   }
 }
