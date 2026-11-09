@@ -1,12 +1,15 @@
 import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText;
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:atomic_flutter/atomic_flutter.dart'
     show AppColors, AppColorsExt, Perf;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
+import 'app_shell.dart' show ShellScope;
 import 'app_top_bar.dart';
+import 'meeting_call.dart';
 import 'home_sections.dart' show HomeSection;
 import 'chat_bubbles.dart';
 import 'chat_text_styles.dart';
@@ -40,12 +43,17 @@ class ChatRoomScreen extends StatefulWidget {
   /// The room's or meeting's name.
   final String title;
 
+  /// [subject] is a Meeting: a call button in the bar, and while its call is
+  /// on, the video above the chat.
+  final bool meeting;
+
   const ChatRoomScreen({
     super.key,
     required this.api,
     this.drive = '',
     required this.subject,
     this.title = '',
+    this.meeting = false,
   });
 
   @override
@@ -276,19 +284,29 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       child: ChatHeader(
                         title: _title.isEmpty ? 'Chat' : _title,
                         subtitle: _subtitle,
-                        icon: Icons.forum_outlined,
+                        icon: widget.meeting
+                            ? Icons.groups_outlined
+                            : Icons.forum_outlined,
                       ),
                     ),
                     bottom: ResourceBreadcrumbs(
                         api: widget.api,
                         drive: widget.drive,
                         subject: widget.subject),
-                    actions: const [ResourceMoreButton()],
+                    actions: [
+                      if (widget.meeting) _JoinCallButton(widget.subject),
+                      const ResourceMoreButton(),
+                    ],
                   ),
-                  body: ListAndField(
-                      fullWidthField: true,
-                      list: _list(c),
-                      field: _composer(c)),
+                  body: Column(children: [
+                    if (widget.meeting) _CallDock(widget.subject),
+                    Expanded(
+                      child: ListAndField(
+                          fullWidthField: true,
+                          list: _list(c),
+                          field: _composer(c)),
+                    ),
+                  ]),
                 ))));
   }
 
@@ -505,4 +523,103 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
           ],
         ),
       );
+}
+
+/// The meeting's call, if it is not on yet: joins it (the shell's call, so
+/// it goes on when this screen is left).
+class _JoinCallButton extends StatelessWidget {
+  final String meeting;
+
+  const _JoinCallButton(this.meeting);
+
+  @override
+  Widget build(BuildContext context) {
+    final call = ShellScope.maybeOf(context)?.call;
+    if (call == null) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: call,
+      builder: (context, _) => call.meeting == meeting
+          ? const SizedBox.shrink()
+          : IconButton(
+              key: const Key('meeting-join-call'),
+              tooltip: 'Join call',
+              icon: const Icon(Icons.videocam_outlined),
+              // Above the chat, not over it: the chat stays in view.
+              onPressed: () => call.start(meeting,
+                  expanded: false,
+                  scheme: Theme.of(context).brightness == Brightness.dark
+                      ? 'dark'
+                      : 'light'),
+            ),
+    );
+  }
+}
+
+/// Room for the call above the meeting's chat while its call is on and this
+/// screen is on top. The call's web view stays the shell's
+/// ([MeetingCallOverlay]); this only tells it where to sit, so it is never
+/// rebuilt and the call goes on when the screen is left (as the tile).
+class _CallDock extends StatefulWidget {
+  final String meeting;
+
+  const _CallDock(this.meeting);
+
+  @override
+  State<_CallDock> createState() => _CallDockState();
+}
+
+class _CallDockState extends State<_CallDock> {
+  final _key = GlobalKey();
+  MeetingCall? _call;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final call = ShellScope.maybeOf(context)?.call;
+    if (call != _call) {
+      _call?.setDock(this, null);
+      _call = call;
+    }
+  }
+
+  @override
+  void dispose() {
+    _call?.setDock(this, null);
+    super.dispose();
+  }
+
+  void _report() {
+    final call = _call;
+    if (!mounted || call == null) return;
+    final box = _key.currentContext?.findRenderObject() as RenderBox?;
+    final onTop = ModalRoute.of(context)?.isCurrent ?? true;
+    if (box == null || !box.hasSize || !onTop || call.meeting != widget.meeting) {
+      call.setDock(this, null);
+      return;
+    }
+    call.setDock(this, box.localToGlobal(Offset.zero) & box.size);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final call = _call;
+    if (call == null) return const SizedBox.shrink();
+    // Rebuilt when the route stops or starts being on top.
+    ModalRoute.of(context);
+    return ListenableBuilder(
+      listenable: call,
+      builder: (context, _) {
+        final on = call.meeting == widget.meeting && !call.expanded;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _report());
+        if (!on) return const SizedBox.shrink();
+        return LayoutBuilder(builder: (context, box) {
+          final room = MediaQuery.sizeOf(context);
+          final height =
+              math.min(box.maxWidth * 9 / 16, room.height * 0.45);
+          return SizedBox(
+              key: _key, width: double.infinity, height: height);
+        });
+      },
+    );
+  }
 }
