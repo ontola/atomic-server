@@ -7,13 +7,19 @@ export enum Panel {
   Messages = 'messages',
   Favorites = 'favorites',
   SharedWithMe = 'sharedwithme',
+  Apps = 'apps',
 }
 
 /** Panels that start hidden and are switched on in settings. */
 const OPT_IN: Panel[] = [Panel.Ontologies, Panel.AIChats];
 
 /** Panels that are visible until someone hides them. */
-const OPT_OUT: Panel[] = [Panel.Messages, Panel.Favorites, Panel.SharedWithMe];
+const OPT_OUT: Panel[] = [
+  Panel.Messages,
+  Panel.Favorites,
+  Panel.SharedWithMe,
+  Panel.Apps,
+];
 
 export const usePanelList = (): {
   enabledPanels: Set<Panel>;
@@ -78,5 +84,7 @@ export const panelTitle = (panel: Panel): string => {
       return 'Favorites';
     case Panel.SharedWithMe:
       return 'Shared with me';
+    case Panel.Apps:
+      return 'Apps';
   }
 };

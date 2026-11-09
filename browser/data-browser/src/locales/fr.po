@@ -8234,6 +8234,7 @@ msgstr "<0/> Copier le lien"
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
 #: src/views/Drive/GettingStartedCard.tsx
+#: src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Terminé"
 
@@ -10747,6 +10748,7 @@ msgid "Data"
 msgstr "Données"
 
 #: src/components/MetaSetter.tsx
+#: src/views/Installation/InstallationPage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr "Commencer"
@@ -12966,6 +12968,7 @@ msgstr "Délai dépassé lors de la récupération de {0}"
 
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/usePanelList.ts
 #: src/routes/IntegrationStore.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Apps"
@@ -12987,6 +12990,7 @@ msgstr "Rechercher des applications, intégrations, domaines ou standards"
 msgid "Loading apps…"
 msgstr "Chargement des applications…"
 
+#: src/components/SideBar/AppsPanel.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Découvrir des applications"
@@ -13510,3 +13514,75 @@ msgstr "Autoriser toutes les lectures effectuées par cette app"
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow all writes done by this app"
 msgstr "Autoriser toutes les écritures effectuées par cette app"
+
+#: src/routes/AppSettings.tsx
+msgid "Show Apps panel"
+msgstr "Afficher le panneau Apps"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Build an app with AI"
+msgstr "Créer une app avec l'IA"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Guide: publishing an app"
+msgstr "Guide : publier une app"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Missing an app? Build it yourself with AI"
+msgstr "Il manque une app ? Créez-la vous-même avec l'IA"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
+msgstr "Décrivez ce que vous voulez et l'assistant crée l'app dans votre drive. Partagez-la ensuite avec votre drive, hébergez votre propre marketplace ou soumettez-la au marketplace de la communauté."
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Install the app and review what it can access"
+msgstr "Installez l'app et vérifiez à quoi elle peut accéder"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Fill in the required settings"
+msgstr "Renseignez les paramètres requis"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "To do"
+msgstr "À faire"
+
+#. 0: stepsDone; 1: steps.length
+#: src/views/Installation/InstallationPage.tsx
+msgid "Get started, {0} of {1} steps done"
+msgstr "Pour commencer, {0} étapes sur {1} terminées"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Advanced: edit as JSON"
+msgstr "Avancé : modifier en JSON"
+
+#: src/views/Installation/configFormLogic.ts
+msgid "This field is required."
+msgstr "Ce champ est obligatoire."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "Pick one of the available options."
+msgstr "Choisissez l'une des options disponibles."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "Enter a number."
+msgstr "Saisissez un nombre."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "Enter a whole number."
+msgstr "Saisissez un nombre entier."
+
+#. 0: def.minimum
+#: src/views/Installation/configFormLogic.ts
+msgid "Must be at least {0}."
+msgstr "Doit être au moins {0}."
+
+#. 0: def.maximum
+#: src/views/Installation/configFormLogic.ts
+msgid "Must be at most {0}."
+msgstr "Doit être au plus {0}."
+
+#. 0: def.minLength
+#: src/views/Installation/configFormLogic.ts
+msgid "Must be at least {0} characters."
+msgstr "Doit contenir au moins {0} caractères."

@@ -51,6 +51,7 @@ import { Button } from '@components/Button';
 import { Input } from '@components/forms/InputStyles';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { useSettings } from '@helpers/AppSettings';
+import { useAISidebar } from '@components/AI/AISidebarContext';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
 
@@ -111,6 +112,7 @@ function IntegrationStore(): React.JSX.Element {
   // The ontology can hydrate after this page mounts on a full navigation.
   const pluginClass = usePluginClass(drive);
   const navigate = useNavigateWithTransition();
+  const { askAI } = useAISidebar();
   const [listings, setListings] = useState<Listing[]>();
   const [installed, setInstalled] = useState<string[]>([]);
   const [installations, setInstallations] = useState<string[]>([]);
@@ -336,6 +338,35 @@ function IntegrationStore(): React.JSX.Element {
               Install apps into your drive, connect integrations and keep your
               work in sync. Add automations when you need them.
             </p>
+            <Card>
+              <Column gap='0.75rem' align='start'>
+                <h2>Missing an app? Build it yourself with AI</h2>
+                <p>
+                  Describe what you want and the assistant builds the app in
+                  your drive. Then share it with your drive, host your own
+                  marketplace, or submit it to the community marketplace.
+                </p>
+                <Row center gap='1rem' wrapItems>
+                  <Button
+                    onClick={() =>
+                      askAI({
+                        prompt:
+                          /* @wc-ignore */ 'I want to build an app in my drive. Ask me what it should do, then create it with create_app.',
+                      })
+                    }
+                  >
+                    Build an app with AI
+                  </Button>
+                  <a
+                    href='https://docs.atomicdata.dev/plugins/publishing-apps'
+                    target='_blank'
+                    rel='noreferrer'
+                  >
+                    Guide: publishing an app
+                  </a>
+                </Row>
+              </Column>
+            </Card>
             <NewFeatureNote role='note'>
               <NewBadge>New</NewBadge>
               <span>

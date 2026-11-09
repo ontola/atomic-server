@@ -19,6 +19,7 @@ import { SideBarHomePanels } from './SideBarHomePanels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useSidebarSwipe } from '../../hooks/useSidebarSwipe';
 import { Column } from '../Row';
+import { AppsPanel } from './AppsPanel';
 import { OntologiesPanel } from './OntologySideBar/OntologiesPanel';
 import { SideBarPanel } from './SideBarPanel';
 import { Panel, panelTitle, usePanelList } from './usePanelList';
@@ -163,6 +164,9 @@ export function SideBar(): JSX.Element {
                   >
                     <OntologiesPanel />
                   </SideBarPanel>
+                )}
+                {enabledPanels.has(Panel.Apps) && (
+                  <AppsPanel onItemClick={closeSideBar} key={drive} />
                 )}
                 <AccountMenu onItemClick={closeSideBar} />
               </Column>

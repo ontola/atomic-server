@@ -44,6 +44,17 @@ export function appsForClass(
 }
 
 /**
+ * Subjects the Apps panel lists: the drive's own apps, then the installed ones.
+ * Pure so the order and the de-duplication can be tested.
+ */
+export function appPanelSubjects(
+  driveApps: string[],
+  installations: string[],
+): string[] {
+  return [...new Set([...driveApps, ...installations])];
+}
+
+/**
  * `resource` as a drive app, or `undefined` when it is not one (any more).
  *
  * Read from the resource itself, not from a query, so a change that arrives
