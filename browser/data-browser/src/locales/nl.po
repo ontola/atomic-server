@@ -13562,33 +13562,33 @@ msgstr "Aan de slag, {0} van {1} stappen gedaan"
 msgid "Advanced: edit as JSON"
 msgstr "Geavanceerd: bewerk als JSON"
 
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "This field is required."
 msgstr "Dit veld is verplicht."
 
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Pick one of the available options."
 msgstr "Kies een van de beschikbare opties."
 
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Enter a number."
 msgstr "Vul een getal in."
 
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Enter a whole number."
 msgstr "Vul een geheel getal in."
 
 #. 0: def.minimum
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Must be at least {0}."
 msgstr "Moet minimaal {0} zijn."
 
 #. 0: def.maximum
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Must be at most {0}."
 msgstr "Mag maximaal {0} zijn."
 
 #. 0: def.minLength
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Must be at least {0} characters."
 msgstr "Moet minimaal {0} tekens bevatten."

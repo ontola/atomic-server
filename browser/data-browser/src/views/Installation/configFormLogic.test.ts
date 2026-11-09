@@ -1,7 +1,7 @@
 // @wc-ignore-file
 import { describe, expect, it } from 'vitest';
 import type { JSONSchema7 } from 'ai';
-import { configFields, fieldError, onboardingSteps } from './configForm';
+import { configFields, fieldError, onboardingSteps } from './configFormLogic';
 
 const schema: JSONSchema7 = {
   type: 'object',

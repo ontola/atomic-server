@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
 import { appPanelSubjects, useDriveApps } from '@chunks/AppPage/useDriveApps';
-import { useInstallations } from '../../views/Drive/PluginList';
+import { useInstallations } from '../../views/Drive/useInstallations';
 import { useSettings } from '../../helpers/AppSettings';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { paths } from '../../routes/paths';

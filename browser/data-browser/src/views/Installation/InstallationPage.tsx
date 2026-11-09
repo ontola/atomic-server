@@ -55,7 +55,7 @@ import {
   fieldError,
   onboardingSteps,
   type OnboardingStepId,
-} from './configForm';
+} from './configFormLogic';
 import { useInstallationConfigSchema } from './useInstallationConfigSchema';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
@@ -334,7 +334,7 @@ export const InstallationPage: React.FC<
                 Get started, {stepsDone} of {steps.length} steps done
               </h3>
               {steps.map(({ id, done }) => (
-                <Button
+                <StepButton
                   key={id}
                   clean
                   onClick={() =>
@@ -349,7 +349,7 @@ export const InstallationPage: React.FC<
                     <FaRegCircle aria-label='To do' />
                   )}
                   <span>{stepTarget[id].label}</span>
-                </Button>
+                </StepButton>
               ))}
             </Column>
           </Card>
@@ -493,6 +493,20 @@ export const InstallationPage: React.FC<
     </ContainerNarrow>
   );
 };
+
+/** A checklist row: icon and label left-aligned with a gap between them. */
+const StepButton = styled(Button)`
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: ${p => p.theme.size(2)};
+  text-align: left;
+  width: 100%;
+
+  svg {
+    flex-shrink: 0;
+  }
+`;
 
 const PluginName = styled.span`
   font-weight: bold;

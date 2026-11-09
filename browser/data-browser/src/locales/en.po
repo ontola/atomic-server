@@ -13562,33 +13562,33 @@ msgstr "Get started, {0} of {1} steps done"
 msgid "Advanced: edit as JSON"
 msgstr "Advanced: edit as JSON"
 
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "This field is required."
 msgstr "This field is required."
 
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Pick one of the available options."
 msgstr "Pick one of the available options."
 
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Enter a number."
 msgstr "Enter a number."
 
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Enter a whole number."
 msgstr "Enter a whole number."
 
 #. 0: def.minimum
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Must be at least {0}."
 msgstr "Must be at least {0}."
 
 #. 0: def.maximum
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Must be at most {0}."
 msgstr "Must be at most {0}."
 
 #. 0: def.minLength
-#: src/views/Installation/configForm.ts
+#: src/views/Installation/configFormLogic.ts
 msgid "Must be at least {0} characters."
 msgstr "Must be at least {0} characters."

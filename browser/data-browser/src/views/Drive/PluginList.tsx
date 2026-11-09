@@ -1,18 +1,18 @@
 import {
   core,
-  readConnectionSubjects,
   server,
   useResource,
-  useStore,
   useString,
   type Resource,
   type Server,
 } from '@tomic/react';
-import { useEffect, useState } from 'react';
+import { useInstallations } from './useInstallations';
 import type React from 'react';
 import { AtomicLink } from '@components/AtomicLink';
 import styled from 'styled-components';
 import { TableList } from '@components/TableList';
+
+export { useInstallations };
 
 interface PluginListProps {
   drive: Resource<Server.Drive>;
@@ -40,34 +40,6 @@ export const PluginList: React.FC<PluginListProps> = ({ drive }) => {
     </TableList>
   );
 };
-
-export function useInstallations(drive: string): string[] {
-  const store = useStore();
-  const [subjects, setSubjects] = useState<string[]>([]);
-
-  useEffect(() => {
-    let active = true;
-    readConnectionSubjects(
-      store,
-      drive,
-      core.properties.isA,
-      server.classes.installation,
-    )
-      .then(found => {
-        if (active) setSubjects(found);
-      })
-      .catch(() => {
-        // Shown as empty; the drive may be on a server without the
-        // Installation class.
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [store, drive]);
-
-  return subjects;
-}
 
 const PluginItem: React.FC<{ subject: string }> = ({ subject }) => {
   // Subscribe to each field so the row re-renders when the resource finishes

@@ -9,7 +9,7 @@ import {
   fieldError,
   type ConfigField,
   type ConfigObject,
-} from './configForm';
+} from './configFormLogic';
 
 interface ConfigFormProps {
   fields: ConfigField[];
