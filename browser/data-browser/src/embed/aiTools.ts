@@ -62,9 +62,9 @@ export const EMBED_TOOL_DENYLIST: Record<string, string> = {
     'Reads integrations from a server; the page has no server (host-backed store).',
   list_integration_actions: 'Needs a server connection; the page has none.',
   call_integration_action: 'Needs a server connection; the page has none.',
-  create_plugin: 'Needs a server (plugin runs); the page has none.',
-  run_plugin: 'Needs a server (plugin runs); the page has none.',
-  schedule_plugin: 'Needs a server (plugin runs); the page has none.',
+  create_plugin: 'Needs a server (app runs); the page has none.',
+  run_plugin: 'Needs a server (app runs); the page has none.',
+  schedule_plugin: 'Needs a server (app runs); the page has none.',
 };
 
 /** The tools and the prompt the page offers, set by `AiToolsHost`. */

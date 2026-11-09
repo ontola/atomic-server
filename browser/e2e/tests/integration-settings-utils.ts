@@ -30,7 +30,7 @@ export async function enableIntegrationDiscovery(page: Page) {
     timeout: 30_000,
   });
   const experimental = page.getByRole('checkbox', {
-    name: 'Show experimental plugins',
+    name: 'Show experimental apps',
   });
   await experimental.check();
   await expect(visibility).toHaveAttribute('aria-busy', 'false', {

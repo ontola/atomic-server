@@ -75,7 +75,7 @@ export { usePluginClass, useAppClass } from './useDriveClass';
  * carries, and the fact that returning intents is how a plugin writes. An LLM
  * asked to change a plugin reads this first, so it is written to be copied.
  */
-const STARTER_SOURCE = `// A plugin proposes changes; the host reviews and writes them.
+const STARTER_SOURCE = `// An app proposes changes; the host reviews and writes them.
 // Return intents — never write directly. You have no network and no clock:
 // use input.trigger.at for the time.
 
@@ -88,7 +88,7 @@ export function run(input) {
         parent: input.trigger.subject,
         isA: [],
         set: {
-          'https://atomicdata.dev/properties/name': 'Made by a plugin',
+          'https://atomicdata.dev/properties/name': 'Made by an app',
         },
       },
     ],
@@ -110,7 +110,7 @@ export async function createPlugin(
     workspace?: string;
     connections?: string[];
   },
-  name = 'New plugin',
+  name = 'New app',
   source = STARTER_SOURCE,
   schemas: Record<string, string> = {},
 ): Promise<string> {

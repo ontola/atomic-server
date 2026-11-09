@@ -136,8 +136,8 @@ export const resourceActions: ActionDefinition[] = [
     section: 'action',
     label: () => 'Run',
     helper: () =>
-      'Run this plugin and review what it proposes before anything is written.',
-    keywords: ['plugin', 'execute', 'automation', 'import'],
+      'Run this app and review what it proposes before anything is written.',
+    keywords: ['plugin', 'app', 'execute', 'automation', 'import'],
     icon: () => <FaPlay />,
     available: ctx =>
       ctx.openPluginRun !== undefined &&

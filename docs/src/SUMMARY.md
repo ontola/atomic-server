@@ -19,8 +19,8 @@
   - [Sharing](app/sharing.md)
   - [Interface language](app/language.md)
   - [Apps](app/apps.md)
-  - [Plugins](plugins.md)
-    - [Creating Plugins](plugins/creating-plugins.md)
+  - [Apps](plugins.md)
+    - [Creating Apps](plugins/creating-plugins.md)
     - [Custom Views](plugins/custom-views.md)
     - [Host ABI](plugins/host-abi.md)
 

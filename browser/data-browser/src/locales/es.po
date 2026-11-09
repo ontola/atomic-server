@@ -1002,10 +1002,6 @@ msgid "Default Ontology"
 msgstr "Ontología predeterminada"
 
 #: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Plugins"
-msgstr "Plugins"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Remove tag"
 msgstr "Quitar etiqueta"
 
@@ -1265,10 +1261,6 @@ msgstr "Configuración de tema"
 #: src/routes/ShortcutsRoute.tsx
 msgid "Keyboard shortcuts"
 msgstr "Atajos de teclado"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Plugin Description"
-msgstr "Descripción del Plugin"
 
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -1964,10 +1956,6 @@ msgstr "sin vista previa..."
 msgid "Could not load preview 😞"
 msgstr "No se pudo cargar la vista previa 😞"
 
-#: src/views/Drive/PluginList.tsx
-msgid "No plugins installed"
-msgstr "No hay plugins instalados"
-
 #: src/components/ResourceUsage/UsageCard.tsx
 #: src/views/Card/CollectionCard.tsx
 msgid "No resources"
@@ -2273,14 +2261,6 @@ msgstr "Solicitud de lectura"
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Write Request"
 msgstr "Solicitud de escritura"
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid "Allow all reads done by this plugin"
-msgstr "Permitir todas las lecturas realizadas por este complemento"
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid "Allow all writes done by this plugin"
-msgstr "Permitir todas las escrituras realizadas por este complemento"
 
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
@@ -6101,10 +6081,6 @@ msgstr "Ocultar plantillas en la página de nuevo recurso"
 msgid "Enable keyboard drag & drop in sidebar"
 msgstr "Activar arrastrar y soltar con el teclado en la barra lateral"
 
-#: src/chunks/Plugins/NewPluginButton.tsx
-msgid "Upload Plugin"
-msgstr "Subir plugin"
-
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Reading"
 msgstr "Leyendo"
@@ -6560,15 +6536,6 @@ msgstr "Cargando ajustes de IA…"
 msgid "Run"
 msgstr "Ejecutar"
 
-#: src/actions/resourceActions.tsx
-msgid "Run this plugin and review what it proposes before anything is written."
-msgstr "Ejecuta este complemento y revisa lo que propone antes de que se escriba nada."
-
-#. 0: e.message
-#: src/chunks/PluginRuns/RunPluginDialog.tsx
-msgid "Could not run this plugin: {0}"
-msgstr "No se ha podido ejecutar este complemento: {0}"
-
 #. 0: result.message
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "Could not apply: {0}"
@@ -6589,16 +6556,8 @@ msgid "Apply {0} changes"
 msgstr "Aplicar {0} cambios"
 
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
-msgid "This plugin ran too long and was stopped. Nothing was planned."
-msgstr "Este complemento ha tardado demasiado y se ha detenido. No se ha planificado nada."
-
-#: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "This run proposes no changes."
 msgstr "Esta ejecución no propone cambios."
-
-#: src/chunks/PluginRuns/PluginRunHistory.tsx
-msgid "This plugin has not run yet."
-msgstr "Este complemento aún no se ha ejecutado."
 
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 msgid "Runs"
@@ -6640,23 +6599,9 @@ msgstr "Sin sesión iniciada"
 msgid "Source"
 msgstr "Código fuente"
 
-#: src/chunks/PluginRuns/PluginPage.tsx
-msgid "This plugin has no source yet."
-msgstr "Este complemento aún no tiene código fuente."
-
-#. 0: describeUse(secret)
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "No longer asked for by this plugin — {0}"
-msgstr "Este complemento ya no lo solicita: {0}"
-
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "<0/> Revoke"
 msgstr "<0/> Revocar"
-
-#. 0: ' '
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "Sent only to <0/>. The plugin uses it as{0} <1/> and never sees the value."
-msgstr "Solo se envía a <0/>. El complemento lo usa como{0} <1/> y nunca ve el valor."
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
@@ -6722,10 +6667,6 @@ msgstr "Cada {0} segundos"
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Allowed by {0}. Every write is still checked against what that account may change."
 msgstr "Autorizado por {0}. Cada escritura se sigue comprobando según lo que esa cuenta puede cambiar."
-
-#: src/chunks/PluginRuns/PluginSchedule.tsx
-msgid "Available once you have run this plugin and applied its changes at least once."
-msgstr "Disponible cuando hayas ejecutado este complemento y aplicado sus cambios al menos una vez."
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Apply background runs without asking me"
@@ -7967,29 +7908,12 @@ msgid "No capabilities were granted."
 msgstr "No se ha autorizado ninguna capacidad."
 
 #: src/views/Installation/InstallationPage.tsx
-#: src/views/Installation/InstallationPage.tsx
-msgid "Plugin agent"
-msgstr "Agente del complemento"
-
-#: src/views/Installation/InstallationPage.tsx
 msgid "Permissions"
 msgstr "Permisos"
 
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoke installation"
 msgstr "Revocar instalación"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Uninstall plugin"
-msgstr "Desinstalar complemento"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Revoking uninstalls the plugin and retires its agent. The Installation record stays, so you can see what was installed; installing again needs a new Installation."
-msgstr "La revocación desinstala el complemento y retira su agente. El registro de instalación se conserva para que puedas ver qué se instaló; volver a instalarlo requiere una instalación nueva."
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Are you sure you want to uninstall this plugin? This removes the Installation record."
-msgstr "¿Seguro que quieres desinstalar este complemento? Esto elimina el registro de instalación."
 
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "No"
@@ -8334,10 +8258,6 @@ msgstr "No se ha podido leer este espacio de trabajo en este dispositivo. Intent
 #: src/routes/IntegrationStore.tsx
 msgid "No integrations match your search."
 msgstr "Ninguna integración coincide con tu búsqueda."
-
-#: src/routes/IntegrationStore.tsx
-msgid "No plugins to show here."
-msgstr "No hay complementos que mostrar aquí."
 
 #. 0: ' '
 #: src/helpers/privateHomeNudge.tsx
@@ -8698,11 +8618,6 @@ msgstr "La configuración crea una tabla de {0} para este importador. Aún no se
 msgid "File to import"
 msgstr "Archivo para importar"
 
-#. 0: ' '; 1: formatBytes(maxBytes(accepts))
-#: src/chunks/PluginRuns/FileImport.tsx
-msgid "The file is read by this plugin on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
-msgstr "Este complemento lee el archivo en tu AtomicServer, hasta{0} {1}. Revisa los cambios propuestos antes de que se guarde nada."
-
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Open imported data"
 msgstr "Abrir datos importados"
@@ -8866,14 +8781,6 @@ msgstr "No hay nada abierto."
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
 msgstr "No hay nada cerrado."
-
-#: src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental plugins to try out."
-msgstr "Esta es una función nueva. Estás viendo plugins experimentales para probar."
-
-#: src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Plugins will show up here soon for you to try out."
-msgstr "Esta es una función nueva. Pronto aparecerán aquí plugins para que los pruebes."
 
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
 msgid "Some recurring meetings could not be displayed"
@@ -11193,10 +11100,6 @@ msgstr "Uso"
 msgid "Loading integrations…"
 msgstr "Cargando integraciones…"
 
-#: src/routes/IntegrationStore.tsx
-msgid "<0/> Show experimental plugins"
-msgstr "<0/> Mostrar complementos experimentales"
-
 #: src/routes/SyncRoute.tsx
 msgid "No other devices yet — your data is safe on this one."
 msgstr "Aún no hay otros dispositivos: tus datos están seguros en este."
@@ -11276,19 +11179,10 @@ msgstr "<0/> Ejecutar"
 msgid "The last background run failed: {0}"
 msgstr "La última ejecución en segundo plano ha fallado: {0}"
 
-#. 0: ' '; 1: ' '
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "This plugin asks for no credentials. To use one, have it declare what it needs —{0} <0/>{1} — or reference <1/> in a header and a slot will appear here."
-msgstr "Este complemento no solicita credenciales. Para usar una, haz que declare lo que necesita —{0} <0/>{1}— o que haga referencia a <1/> en un encabezado y aparecerá aquí un campo."
-
 #. 0: ' '
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Used as <0/>, sent only to{0} <1/>. Undeclared, so this was read from the URLs it requests."
 msgstr "Se usa como <0/> y solo se envía a{0} <1/>. No está declarado, así que se ha deducido de las URL que solicita."
-
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "Used as <0/>. This plugin requests several origins — pick the one this credential belongs to."
-msgstr "Se usa como <0/>. Este complemento solicita varios orígenes; elige a cuál pertenece esta credencial."
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Used as <0/>. Its URLs are built at run time, so say which origin it may be sent to."
@@ -13073,6 +12967,7 @@ msgstr "Se ha agotado el tiempo de espera al obtener {0}"
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/IntegrationStore.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Apps"
 msgstr "Aplicaciones"
 
@@ -13512,4 +13407,106 @@ msgstr ""
 
 #: src/routes/IntegrationStore.tsx
 msgid "Community apps"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Run this app and review what it proposes before anything is written."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. You are seeing experimental apps to try out."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. Apps will show up here soon for you to try out."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "<0/> Show experimental apps"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "No apps to show here."
+msgstr ""
+
+#. 0: ' '; 1: formatBytes(maxBytes(accepts))
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "The file is read by this app on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
+msgstr ""
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "This app has no source yet."
+msgstr ""
+
+#: src/chunks/PluginRuns/PluginRunHistory.tsx
+msgid "This app has not run yet."
+msgstr ""
+
+#. 0: ' '; 1: ' '
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "This app asks for no credentials. To use one, have it declare what it needs —{0} <0/>{1} — or reference <1/> in a header and a slot will appear here."
+msgstr ""
+
+#. 0: describeUse(secret)
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "No longer asked for by this app — {0}"
+msgstr ""
+
+#. 0: ' '
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Sent only to <0/>. The app uses it as{0} <1/> and never sees the value."
+msgstr ""
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Used as <0/>. This app requests several origins — pick the one this credential belongs to."
+msgstr ""
+
+#. 0: e.message
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Could not run this app: {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "This app ran too long and was stopped. Nothing was planned."
+msgstr ""
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Available once you have run this app and applied its changes at least once."
+msgstr ""
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Upload App"
+msgstr ""
+
+#: src/views/Drive/PluginList.tsx
+msgid "No apps installed"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "App Description"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "App agent"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Uninstall app"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Revoking uninstalls the app and retires its agent. The Installation record stays, so you can see what was installed; installing again needs a new Installation."
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Are you sure you want to uninstall this app? This removes the Installation record."
+msgstr ""
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all reads done by this app"
+msgstr ""
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all writes done by this app"
 msgstr ""

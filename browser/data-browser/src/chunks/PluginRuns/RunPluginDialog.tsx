@@ -129,7 +129,7 @@ export function RunPluginDialog({
       if (!cancelled) setPrepared(result);
     })().catch((e: Error) => {
       if (cancelled) return;
-      toast.error(`Could not run this plugin: ${e.message}`);
+      toast.error(`Could not run this app: ${e.message}`);
       closeDialog();
     });
 
@@ -193,7 +193,7 @@ export function RunPluginDialog({
           <Column>
             {prepared.timedOut && (
               <Message $tone='error'>
-                This plugin ran too long and was stopped. Nothing was planned.
+                This app ran too long and was stopped. Nothing was planned.
               </Message>
             )}
             {plan!.blocked && (

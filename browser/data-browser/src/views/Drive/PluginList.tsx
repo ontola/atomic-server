@@ -27,7 +27,7 @@ export const PluginList: React.FC<PluginListProps> = ({ drive }) => {
   const installations = useInstallations(drive.subject);
 
   if (installations.length === 0) {
-    return <NoPluginsInstalled>No plugins installed</NoPluginsInstalled>;
+    return <NoPluginsInstalled>No apps installed</NoPluginsInstalled>;
   }
 
   return (

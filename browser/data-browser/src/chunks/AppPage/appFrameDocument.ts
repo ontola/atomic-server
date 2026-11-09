@@ -70,7 +70,7 @@ export function appFrameDocument({
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${frameCsp(nonce)}" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Plugin</title>
+<title>App</title>
 <style>html,body{margin:0;padding:0;height:100%}#root{height:100%}</style>
 <style id="__atomic_theme"></style>
 <script type="application/json" id="__atomic_sources">${scriptJson({ source, client })}</script>
@@ -82,7 +82,7 @@ try {
   const plugin = await load(sources.source);
   const { store } = await load(sources.client);
   if (typeof plugin.view !== 'function') {
-    throw new Error('This plugin exports no view() function.');
+    throw new Error('This app exports no view() function.');
   }
   await plugin.view({ root, store });
   // Says it got to the end, and how much it drew. Silence is not success: an

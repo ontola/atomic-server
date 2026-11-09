@@ -100,7 +100,7 @@ export function PluginRunHistory({
     <Column gap='0.5rem'>
       <Heading>Runs</Heading>
       {runs === undefined && <Muted>Loading…</Muted>}
-      {runs?.length === 0 && <Muted>This plugin has not run yet.</Muted>}
+      {runs?.length === 0 && <Muted>This app has not run yet.</Muted>}
       {runs?.map(run => (
         <Details
           key={run.subject}

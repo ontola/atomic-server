@@ -1,4 +1,4 @@
-# Creating Plugins
+# Creating Apps
 
 Plugins can be made in any programming language that compiles to a Wasm component.
 To be specific, they should be compiled to WASM + WASI Preview 2 (aka wasip2).

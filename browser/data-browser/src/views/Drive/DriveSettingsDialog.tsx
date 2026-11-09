@@ -101,7 +101,7 @@ function DriveSettingsBody({
         </Column>
       </SettingsSection>
       <ExternalAppList drive={drive.subject} />
-      <SettingsSection label='Plugins' initialState>
+      <SettingsSection label='Apps' initialState>
         <Column gap='1rem'>
           <PluginList drive={drive} />
           {canEdit && (

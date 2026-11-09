@@ -44,7 +44,7 @@ test.describe('Plugins', () => {
 
     // Upload a plugin
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await settings.getByText('Upload Plugin').click();
+    await settings.getByText('Upload App').click();
     const fileChooser = await fileChooserPromise;
 
     await fileChooser.setFiles(testFilePath('test-plugin.zip'));
@@ -53,7 +53,7 @@ test.describe('Plugins', () => {
     // review screen the Store uses opens for it.
     await inDialog(page, async (dialog, closeWith) => {
       await expect(
-        dialog.getByRole('heading', { name: 'Install plugin' }),
+        dialog.getByRole('heading', { name: 'Install app' }),
       ).toBeVisible();
       await expect(
         dialog.getByText('ontola/test-plugin', { exact: true }),
@@ -247,7 +247,7 @@ test.describe('Plugins', () => {
     await expect(
       page.getByText('by Updated author', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByLabel('Plugin Description')).toHaveText(
+    await expect(page.getByLabel('App Description')).toHaveText(
       'Updated description',
     );
     await expect(page.getByLabel('Config', { exact: true })).toContainText(
@@ -302,7 +302,7 @@ test.describe('Plugins', () => {
 
     await inDialog(page, async (dialog, closeWith) => {
       await expect(
-        dialog.getByRole('heading', { name: 'Uninstall plugin' }),
+        dialog.getByRole('heading', { name: 'Uninstall app' }),
       ).toBeVisible();
       await closeWith('Uninstall');
     });
@@ -323,7 +323,7 @@ test.describe('Plugins', () => {
 
     // The Plugins setting no longer lists the plugin.
     const settingsAfter = await openDriveSettings(page);
-    await expect(settingsAfter.getByText('No plugins installed')).toBeVisible();
+    await expect(settingsAfter.getByText('No apps installed')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(currentDialog(page)).toBeHidden();
 
