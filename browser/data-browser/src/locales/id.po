@@ -1359,7 +1359,6 @@ msgstr "Teks alternatif"
 #: src/components/AvatarCropper.tsx
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -7242,10 +7241,6 @@ msgstr "Eksekusi otomatisasi yang menggunakan tindakan ini"
 msgid "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished or been explicitly abandoned at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
 msgstr "Hapus payload tindakan lama sambil mempertahankan ID, hasil, dan bukti pemulihan. Hasil yang selesai harus berusia setidaknya 30 hari. Hasil otomatisasi juga mensyaratkan setiap eksekusi yang menggunakannya telah selesai atau secara eksplisit ditinggalkan setidaknya 30 hari lalu. Eksekusi yang belum selesai, penggunaan yang tidak terlacak, penulisan yang tidak pasti atau gagal, serta bukti dengan tanggal penyelesaian tidak diketahui tetap disimpan."
 
-#: src/routes/IntegrationStore.tsx
-msgid "Community plugins"
-msgstr "Plugin komunitas"
-
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 msgid "Loading proposal…"
@@ -7922,10 +7917,6 @@ msgstr "Juga berubah pada sumber asli sejak fork ini dibuat:"
 #: src/routes/AppSettings.tsx
 msgid "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 msgstr "Aktifkan animasi transisi halaman (eksperimental, diketahui bermasalah di luar Chromium pada desktop)"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Show experimental plugins"
-msgstr "Tampilkan plugin eksperimental"
 
 #: src/routes/IntegrationStore.tsx
 msgid "Published releases. Open one to review what it can do before installing it into this drive, or create a draft to adapt its code."
@@ -8766,20 +8757,6 @@ msgstr "Aplikasi drive"
 msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 msgstr "Aplikasi yang berjalan dalam bingkainya sendiri pada drive ini dan menyimpan barisnya dalam tabel tersendiri. Masing-masing adalah versi yang diterbitkan; penginstalan memeriksa kodenya terhadap katalog sebelum apa pun disimpan."
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
-msgstr "Server integration-proxy yang menjadi perantara panggilan plugin API. Pengaturan ini disimpan di browser ini."
-
-#: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Plugin catalog URL"
-msgstr "URL katalog plugin"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Discover integrations from this catalog.json. This setting is saved in this browser."
-msgstr "Temukan integrasi dari catalog.json ini. Pengaturan ini disimpan di browser ini."
-
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Masukkan URL HTTPS atau URL HTTP localhost yang mengarah ke file catalog.json."
@@ -13154,10 +13131,6 @@ msgid "Marketplaces"
 msgstr "Marketplace"
 
 #: src/components/Settings/IntegrationSettings.tsx
-msgid "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
-msgstr "Aplikasi dari katalog ini ditawarkan bersama katalog di atas. Saat dua katalog memiliki aplikasi dengan nama yang sama, katalog yang terdaftar lebih dahulu diprioritaskan. Pengaturan ini disimpan di browser ini."
-
-#: src/components/Settings/IntegrationSettings.tsx
 msgid "Add marketplace URL"
 msgstr "Tambahkan URL marketplace"
 
@@ -13522,3 +13495,19 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Show experimental apps"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "The integration-proxy server that integrations call through. This setting is saved in this browser."
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Apps are offered from these catalogs, in this order. When two have an app with the same name, the one listed first wins. Saved in this browser."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Community apps"
+msgstr ""

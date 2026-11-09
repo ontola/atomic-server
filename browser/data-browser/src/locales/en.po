@@ -1359,7 +1359,6 @@ msgstr "Alt text"
 #: src/components/AvatarCropper.tsx
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -7244,10 +7243,6 @@ msgstr "Automation runs using this action"
 msgid "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished or been explicitly abandoned at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
 msgstr "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished or been explicitly abandoned at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
 
-#: src/routes/IntegrationStore.tsx
-msgid "Community plugins"
-msgstr "Community plugins"
-
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 msgid "Loading proposal…"
@@ -7924,10 +7919,6 @@ msgstr "Also changed on the original since this fork was made:"
 #: src/routes/AppSettings.tsx
 msgid "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 msgstr "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Show experimental plugins"
-msgstr "Show experimental plugins"
 
 #: src/routes/IntegrationStore.tsx
 msgid "Published releases. Open one to review what it can do before installing it into this drive, or create a draft to adapt its code."
@@ -8768,20 +8759,6 @@ msgstr "Drive apps"
 msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 msgstr "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
-msgstr "The integration-proxy server that API plugins call through. This setting is saved in this browser."
-
-#: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Plugin catalog URL"
-msgstr "Plugin catalog URL"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Discover integrations from this catalog.json. This setting is saved in this browser."
-msgstr "Discover integrations from this catalog.json. This setting is saved in this browser."
-
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
@@ -13157,10 +13134,6 @@ msgid "Marketplaces"
 msgstr "Marketplaces"
 
 #: src/components/Settings/IntegrationSettings.tsx
-msgid "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
-msgstr "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
-
-#: src/components/Settings/IntegrationSettings.tsx
 msgid "Add marketplace URL"
 msgstr "Add marketplace URL"
 
@@ -13530,3 +13503,19 @@ msgstr "Pressing Send report shares the reviewed chat text, error messages, and 
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Show experimental apps"
+msgstr "Show experimental apps"
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "The integration-proxy server that integrations call through. This setting is saved in this browser."
+msgstr "The integration-proxy server that integrations call through. This setting is saved in this browser."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Apps are offered from these catalogs, in this order. When two have an app with the same name, the one listed first wins. Saved in this browser."
+msgstr "Apps are offered from these catalogs, in this order. When two have an app with the same name, the one listed first wins. Saved in this browser."
+
+#: src/routes/IntegrationStore.tsx
+msgid "Community apps"
+msgstr "Community apps"

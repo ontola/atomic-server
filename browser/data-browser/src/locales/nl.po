@@ -1359,7 +1359,6 @@ msgstr "Alternatieve tekst"
 #: src/components/AvatarCropper.tsx
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -7244,10 +7243,6 @@ msgstr "Automatiseringsuitvoeringen die deze actie gebruiken"
 msgid "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished or been explicitly abandoned at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
 msgstr "Verwijder oude actiegegevens en behoud ID's, uitkomsten en herstelbewijzen. Voltooide resultaten moeten minstens 30 dagen oud zijn. Voor automatiseringsresultaten moeten ook alle uitvoeringen die ze gebruiken minstens 30 dagen geleden zijn voltooid of expliciet afgebroken. Onvoltooide uitvoeringen, niet-bijgehouden gebruik, onzekere of mislukte schrijfacties en ontvangstbewijzen met een onbekende voltooiingsdatum blijven behouden."
 
-#: src/routes/IntegrationStore.tsx
-msgid "Community plugins"
-msgstr "Communityplugins"
-
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 msgid "Loading proposal…"
@@ -7924,10 +7919,6 @@ msgstr "Ook gewijzigd in het origineel sinds deze fork is gemaakt:"
 #: src/routes/AppSettings.tsx
 msgid "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 msgstr "Paginaovergangsanimaties inschakelen (experimenteel, bekende problemen buiten Chromium op desktop)"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Show experimental plugins"
-msgstr "Experimentele plugins tonen"
 
 #: src/routes/IntegrationStore.tsx
 msgid "Published releases. Open one to review what it can do before installing it into this drive, or create a draft to adapt its code."
@@ -8768,20 +8759,6 @@ msgstr "Schijfapps"
 msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 msgstr "Apps die in hun eigen frame op deze schijf draaien en hun rijen in een eigen tabel bewaren. Elke app is een gepubliceerde versie; bij installatie wordt de code gecontroleerd aan de hand van de catalogus voordat er iets wordt opgeslagen."
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
-msgstr "De integratieproxyserver waarlangs API-plugins aanroepen doen. Deze instelling wordt opgeslagen in deze browser."
-
-#: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Plugin catalog URL"
-msgstr "URL van plugincatalogus"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Discover integrations from this catalog.json. This setting is saved in this browser."
-msgstr "Ontdek integraties uit deze catalog.json. Deze instelling wordt opgeslagen in deze browser."
-
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Voer een HTTPS-URL of een localhost-HTTP-URL in die verwijst naar een catalog.json-bestand."
@@ -13157,10 +13134,6 @@ msgid "Marketplaces"
 msgstr "Marktplaatsen"
 
 #: src/components/Settings/IntegrationSettings.tsx
-msgid "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
-msgstr "Apps uit deze catalogi worden naast de bovenstaande aangeboden. Als twee catalogi een app met dezelfde naam hebben, krijgt de eerst vermelde voorrang. Deze instelling wordt opgeslagen in deze browser."
-
-#: src/components/Settings/IntegrationSettings.tsx
 msgid "Add marketplace URL"
 msgstr "Marktplaats-URL toevoegen"
 
@@ -13530,3 +13503,19 @@ msgstr "Met Melding verzenden deel je de gecontroleerde chattekst, foutmeldingen
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team, samen met technische gegevens over je opstelling (app-versie, serveradres en status). Vermeld geen privé-inhoud uit je werkruimte."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Show experimental apps"
+msgstr "Experimentele apps tonen"
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "The integration-proxy server that integrations call through. This setting is saved in this browser."
+msgstr "De integratieproxyserver waarlangs integraties aanroepen doen. Deze instelling wordt opgeslagen in deze browser."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Apps are offered from these catalogs, in this order. When two have an app with the same name, the one listed first wins. Saved in this browser."
+msgstr "Apps worden uit deze catalogi aangeboden, in deze volgorde. Als twee catalogi een app met dezelfde naam hebben, krijgt de eerst vermelde voorrang. Opgeslagen in deze browser."
+
+#: src/routes/IntegrationStore.tsx
+msgid "Community apps"
+msgstr "Community-apps"

@@ -4,35 +4,57 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   addMarketplace,
   defaultPluginCatalogUrl,
-  getExtraMarketplaces,
+  getMarketplaceUrls,
   removeMarketplace,
+  resetMarketplaces,
 } from './pluginCatalogUrl';
 
 beforeEach(() => localStorage.clear());
 
-describe('extra marketplaces', () => {
-  it('stores added URLs in order and removes them again', () => {
-    addMarketplace('https://a.test/catalog.json');
-    addMarketplace(' https://b.test/catalog.json ');
-    expect(getExtraMarketplaces()).toEqual([
-      'https://a.test/catalog.json',
-      'https://b.test/catalog.json',
-    ]);
-    removeMarketplace('https://a.test/catalog.json');
-    expect(getExtraMarketplaces()).toEqual(['https://b.test/catalog.json']);
+const A = 'https://a.test/catalog.json';
+const B = 'https://b.test/catalog.json';
+
+describe('marketplaces', () => {
+  it('is just the default when nothing is stored', () => {
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl]);
   });
 
-  it('ignores duplicates and the primary catalog', () => {
-    addMarketplace('https://a.test/catalog.json');
-    addMarketplace('https://a.test/catalog.json');
+  it('falls back to a legacy single-catalog value without writing it', () => {
+    localStorage.setItem('plugin-catalog-url', A);
+    expect(getMarketplaceUrls()).toEqual([A]);
+    expect(localStorage.getItem('plugin-marketplaces')).toBeNull();
+    localStorage.setItem('plugin-catalog-url', 'http://evil.test/x');
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl]);
+  });
+
+  it('appends added URLs in order and removes them again', () => {
+    addMarketplace(A);
+    addMarketplace(` ${B} `);
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl, A, B]);
+    removeMarketplace(A);
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl, B]);
+  });
+
+  it('ignores duplicates', () => {
+    addMarketplace(A);
+    addMarketplace(A);
     addMarketplace(defaultPluginCatalogUrl);
-    expect(getExtraMarketplaces()).toEqual(['https://a.test/catalog.json']);
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl, A]);
+  });
+
+  it('lets the default be removed and stays empty, until reset', () => {
+    removeMarketplace(defaultPluginCatalogUrl);
+    expect(getMarketplaceUrls()).toEqual([]);
+    removeMarketplace('https://nope.test/c.json');
+    expect(getMarketplaceUrls()).toEqual([]);
+    resetMarketplaces();
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl]);
   });
 
   it('rejects insecure and malformed URLs', () => {
     expect(() => addMarketplace('http://example.com/catalog.json')).toThrow();
     expect(() => addMarketplace('nope')).toThrow();
-    expect(getExtraMarketplaces()).toEqual([]);
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl]);
   });
 
   it('drops stored values that no longer validate', () => {
@@ -40,8 +62,8 @@ describe('extra marketplaces', () => {
       'plugin-marketplaces',
       JSON.stringify(['http://example.com/x', 'https://ok.test/c.json', 5]),
     );
-    expect(getExtraMarketplaces()).toEqual(['https://ok.test/c.json']);
+    expect(getMarketplaceUrls()).toEqual(['https://ok.test/c.json']);
     localStorage.setItem('plugin-marketplaces', '{broken');
-    expect(getExtraMarketplaces()).toEqual([]);
+    expect(getMarketplaceUrls()).toEqual([]);
   });
 });

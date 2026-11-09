@@ -190,7 +190,7 @@ describe('mergeCatalogs', () => {
 });
 
 describe('useIntegrationCatalog with several marketplaces', () => {
-  it('shows an unreachable extra marketplace as an error next to the rest', async () => {
+  it('shows an unreachable marketplace as an error next to the rest', async () => {
     const entry = (shortname: string) => ({
       [IS_A]: [ENTRY_CLASS],
       [SHORTNAME]: shortname,
@@ -209,6 +209,7 @@ describe('useIntegrationCatalog with several marketplaces', () => {
       getItem: (key: string) =>
         key === 'plugin-marketplaces'
           ? JSON.stringify([
+              'https://main.test/catalog.json',
               'https://extra.test/catalog.json',
               'https://down.test/catalog.json',
             ])

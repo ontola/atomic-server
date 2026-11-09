@@ -1359,7 +1359,6 @@ msgstr "Texto alternativo"
 #: src/components/AvatarCropper.tsx
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -7238,10 +7237,6 @@ msgstr "Ejecuciones de automatizaciones que usan esta acción"
 msgid "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished or been explicitly abandoned at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
 msgstr "Elimina los datos de acciones antiguas y conserva sus ID, resultados y pruebas de recuperación. Los resultados completados deben tener al menos 30 días. Los resultados de automatizaciones también requieren que todas las ejecuciones que los utilicen hayan finalizado o se hayan abandonado explícitamente hace al menos 30 días. Se conservan las ejecuciones sin finalizar, los usos sin registrar, las escrituras inciertas o fallidas y los comprobantes con fecha de finalización desconocida."
 
-#: src/routes/IntegrationStore.tsx
-msgid "Community plugins"
-msgstr "Complementos de la comunidad"
-
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 msgid "Loading proposal…"
@@ -7918,10 +7913,6 @@ msgstr "También ha cambiado en el original desde que se creó esta bifurcación
 #: src/routes/AppSettings.tsx
 msgid "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 msgstr "Activar animaciones de transición entre páginas (experimental; se conocen fallos fuera de Chromium en escritorio)"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Show experimental plugins"
-msgstr "Mostrar complementos experimentales"
 
 #: src/routes/IntegrationStore.tsx
 msgid "Published releases. Open one to review what it can do before installing it into this drive, or create a draft to adapt its code."
@@ -8762,20 +8753,6 @@ msgstr "Aplicaciones de la unidad"
 msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 msgstr "Aplicaciones que se ejecutan en su propio marco en esta unidad y guardan sus filas en una tabla propia. Cada una es una versión publicada; la instalación comprueba su código con el catálogo antes de guardar nada."
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
-msgstr "El servidor integration-proxy a través del cual realizan llamadas los complementos de API. Este ajuste se guarda en este navegador."
-
-#: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Plugin catalog URL"
-msgstr "URL del catálogo de complementos"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Discover integrations from this catalog.json. This setting is saved in this browser."
-msgstr "Descubre integraciones desde este catalog.json. Este ajuste se guarda en este navegador."
-
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Introduce una URL HTTPS o una URL HTTP de localhost que apunte a un archivo catalog.json."
@@ -13151,10 +13128,6 @@ msgid "Marketplaces"
 msgstr "Tiendas"
 
 #: src/components/Settings/IntegrationSettings.tsx
-msgid "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
-msgstr "Las aplicaciones de estos catálogos se ofrecen junto a las del anterior. Cuando dos tienen una aplicación con el mismo nombre, tiene prioridad el que aparece primero. Este ajuste se guarda en este navegador."
-
-#: src/components/Settings/IntegrationSettings.tsx
 msgid "Add marketplace URL"
 msgstr "Añadir URL de tienda"
 
@@ -13524,3 +13497,19 @@ msgstr "Al pulsar Enviar informe compartes con el equipo de Atomic, mediante Sen
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Informa de un error o sugiere una mejora. Tu mensaje y tu correo opcional se envían al equipo de Atomic mediante Sentry, junto con detalles técnicos de tu configuración (versión de la app, dirección y estado del servidor). No incluyas contenido privado del espacio de trabajo."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Show experimental apps"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "The integration-proxy server that integrations call through. This setting is saved in this browser."
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Apps are offered from these catalogs, in this order. When two have an app with the same name, the one listed first wins. Saved in this browser."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Community apps"
+msgstr ""

@@ -6,8 +6,6 @@ import {
   validDefault,
 } from './runtimeSetting';
 
-const CATALOG_URL_KEY = 'plugin-catalog-url';
-
 // Published from the `integrations/` folder of
 // https://github.com/ontola/atomic-plugins (gh-pages). Kept as a separate,
 // publicly reachable catalog so a data-browser build isn't tied to whichever
@@ -29,54 +27,34 @@ export const defaultPluginCatalogUrl: string = validDefault(
   DEFAULT_PLUGIN_CATALOG_URL,
 );
 
-export function getPluginCatalogUrl(): string {
-  // Seeded before the first paint by anything that can write localStorage for
-  // the origin — the settings screen, or playwright's `storageState`. That is
-  // what lets one binary serve e2e lanes whose catalog sits on another port,
-  // instead of a rebuild per lane. Blocked storage or a stored value that no
-  // longer validates falls back to the default rather than throwing.
-  try {
-    const stored = localStorage.getItem(CATALOG_URL_KEY);
-
-    return stored ? validateCatalogUrl(stored) : defaultPluginCatalogUrl;
-  } catch {
-    return defaultPluginCatalogUrl;
-  }
-}
-
-const event = 'plugin-catalog-url-change';
-
-export function setPluginCatalogUrl(value: string) {
-  const trimmed = value.trim();
-
-  if (!trimmed) {
-    localStorage.removeItem(CATALOG_URL_KEY);
-  } else {
-    localStorage.setItem(CATALOG_URL_KEY, validateCatalogUrl(trimmed));
-  }
-
-  window.dispatchEvent(new Event(event));
-}
-
-const subscribe = subscribeToSetting(event);
-
-export const usePluginCatalogUrl = (): string =>
-  useSyncExternalStore(subscribe, getPluginCatalogUrl);
-
-// Extra marketplaces, on top of the primary catalog above. Earlier ones win a
-// duplicate shortname, the primary first (see `mergeCatalogs`).
+// The marketplaces, in order: earlier ones win a duplicate shortname (see
+// `mergeCatalogs`). Seeded before the first paint by anything that can write
+// localStorage for the origin (the settings screen, or playwright's
+// `storageState`), so one binary serves e2e lanes whose catalog sits on another
+// port. With no stored list it is just the default.
 const MARKETPLACES_KEY = 'plugin-marketplaces';
-const marketplacesEvent = 'plugin-marketplaces-change';
+// Single-catalog setting of earlier versions; read, never written.
+const LEGACY_KEY = 'plugin-catalog-url';
+const event = 'plugin-marketplaces-change';
 
-function readMarketplacesRaw(): string {
+/** The list as a JSON string, so it can be a stable store snapshot. */
+function readRaw(): string {
   try {
-    return localStorage.getItem(MARKETPLACES_KEY) ?? '[]';
+    const stored = localStorage.getItem(MARKETPLACES_KEY);
+
+    if (stored !== null) return stored;
+
+    const legacy = localStorage.getItem(LEGACY_KEY);
+
+    return JSON.stringify([
+      legacy ? validateCatalogUrl(legacy) : defaultPluginCatalogUrl,
+    ]);
   } catch {
-    return '[]';
+    return JSON.stringify([defaultPluginCatalogUrl]);
   }
 }
 
-function parseMarketplaces(raw: string): string[] {
+function parse(raw: string): string[] {
   try {
     const parsed: unknown = JSON.parse(raw);
 
@@ -95,42 +73,37 @@ function parseMarketplaces(raw: string): string[] {
   }
 }
 
-export function getExtraMarketplaces(): string[] {
-  return parseMarketplaces(readMarketplacesRaw());
+export function getMarketplaceUrls(): string[] {
+  return parse(readRaw());
 }
 
-function writeMarketplaces(urls: string[]) {
+function write(urls: string[]) {
   localStorage.setItem(MARKETPLACES_KEY, JSON.stringify(urls));
-  window.dispatchEvent(new Event(marketplacesEvent));
+  window.dispatchEvent(new Event(event));
 }
 
 /** Throws when the URL is invalid. Adding one already listed is a no-op. */
 export function addMarketplace(value: string) {
   const url = validateCatalogUrl(value.trim());
-  const current = getExtraMarketplaces();
+  const current = getMarketplaceUrls();
 
-  if (url === getPluginCatalogUrl() || current.includes(url)) return;
-
-  writeMarketplaces([...current, url]);
+  if (!current.includes(url)) write([...current, url]);
 }
 
+/** Any entry may go, the default included; an empty list stays empty. */
 export function removeMarketplace(url: string) {
-  writeMarketplaces(getExtraMarketplaces().filter(u => u !== url));
+  write(getMarketplaceUrls().filter(u => u !== url));
 }
 
-const subscribeMarketplaces = subscribeToSetting(marketplacesEvent);
-
-export function useExtraMarketplaces(): string[] {
-  // The raw string is the snapshot: a fresh array each call would never settle.
-  const raw = useSyncExternalStore(subscribeMarketplaces, readMarketplacesRaw);
-
-  return parseMarketplaces(raw);
+/** Back to just the default marketplace. */
+export function resetMarketplaces() {
+  localStorage.removeItem(MARKETPLACES_KEY);
+  window.dispatchEvent(new Event(event));
 }
 
-/** Primary catalog first, then the extra marketplaces. */
+const subscribe = subscribeToSetting(event);
+
 export function useMarketplaceUrls(): string[] {
-  const primary = usePluginCatalogUrl();
-  const extra = useExtraMarketplaces();
-
-  return [primary, ...extra.filter(url => url !== primary)];
+  // The raw string is the snapshot: a fresh array each call would never settle.
+  return parse(useSyncExternalStore(subscribe, readRaw));
 }

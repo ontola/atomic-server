@@ -429,7 +429,7 @@ function IntegrationStore(): React.JSX.Element {
           <Column gap='0.75rem'>
             {visible && visible.length > 0 && (
               <>
-                <h2>Community plugins</h2>
+                <h2>Community apps</h2>
                 <p>
                   Published releases. Open one to review what it can do before
                   installing it into this drive, or create a draft to adapt its
