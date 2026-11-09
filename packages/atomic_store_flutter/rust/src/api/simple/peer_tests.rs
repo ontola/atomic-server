@@ -16,7 +16,7 @@
 //! the real dial path, since `peer_sync` builds its dial target from exactly
 //! that stored data.
 
-use super::tests::shared_drive;
+use super::tests::{shared_drive, PRIVATE_DRIVE};
 use super::*;
 
 const CHILD_DIR_ENV: &str = "ATOMIC_BRIDGE_PEER_CHILD_DIR";
@@ -185,6 +185,8 @@ async fn start_remote_device(secret: String, subject: String) -> (RemoteDevice, 
 #[tokio::test]
 async fn a_resource_syncs_to_a_second_device_through_the_bridge() {
     let drive = shared_drive().await;
+    // `peer_sync` syncs the active drive, which `server_tests` moves.
+    let _guard = PRIVATE_DRIVE.lock().await;
 
     let subject = db()
         .unwrap()
