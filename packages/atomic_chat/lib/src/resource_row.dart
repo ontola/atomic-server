@@ -1,7 +1,6 @@
 import 'package:atomic_flutter/atomic_flutter.dart'
     show AppColorsExt, SectionHeaderStyle;
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'app_shell.dart';
 import 'app_sidebar_icons.dart';
@@ -9,13 +8,46 @@ import 'models.dart';
 import 'row_leading.dart';
 import 'sidebar_metrics.dart';
 
+/// The class icons of the web app's sidebar (`react-icons/fa6`, through
+/// `getIconForClass`): Font Awesome Free 6 solid glyphs, from the subset fonts
+/// in `fonts/` (icons CC BY 4.0, fonts SIL OFL 1.1, fontawesome.com).
+abstract final class ClassIcons {
+  static const _s = 'FaSolid';
+  static const _b = 'FaBrands';
+  static const _p = 'atomic_chat';
+
+  static const folder = IconData(0xf07b, fontFamily: _s, fontPackage: _p);
+  static const book = IconData(0xf02d, fontFamily: _s, fontPackage: _p);
+  static const comment = IconData(0xf075, fontFamily: _s, fontPackage: _p);
+  static const document = IconData(0xf15c, fontFamily: _s, fontPackage: _p);
+  static const video = IconData(0xf03d, fontFamily: _s, fontPackage: _p);
+  static const file = IconData(0xf15b, fontFamily: _s, fontPackage: _p);
+  static const drive = IconData(0xf0a0, fontFamily: _s, fontPackage: _p);
+  static const plugin = IconData(0xf12e, fontFamily: _s, fontPackage: _p);
+  static const commit = IconData(0xf017, fontFamily: _s, fontPackage: _p);
+  static const list = IconData(0xf03a, fontFamily: _s, fontPackage: _p);
+  static const cls = IconData(0xf1b2, fontFamily: _s, fontPackage: _p);
+  static const table = IconData(0xf0ce, fontFamily: _s, fontPackage: _p);
+  static const dashboard = IconData(0xf201, fontFamily: _s, fontPackage: _p);
+  static const property = IconData(0x23, fontFamily: _s, fontPackage: _p);
+  static const ontology = IconData(0xf61f, fontFamily: _s, fontPackage: _p);
+  static const tag = IconData(0xf02b, fontFamily: _s, fontPackage: _p);
+  static const canvas = IconData(0xf1fc, fontFamily: _s, fontPackage: _p);
+  static const pluginScript = IconData(0xf1e6, fontFamily: _s, fontPackage: _p);
+  static const app = IconData(0xf58d, fontFamily: _s, fontPackage: _p);
+  static const website = IconData(0xf0ac, fontFamily: _s, fontPackage: _p);
+  static const atom = IconData(0xf5d2, fontFamily: _s, fontPackage: _p);
+  static const invite = IconData(0xf14d, fontFamily: _s, fontPackage: _p);
+  static const form = IconData(0xf298, fontFamily: _b, fontPackage: _p);
+}
+
 /// A drive's icon: the web app's hard drive, not a folder.
-const driveIcon = FontAwesomeIcons.solidHardDrive;
+const driveIcon = ClassIcons.drive;
 
 /// The icon of a class, by the class's name as the rows carry it (the class's
-/// own name, or the last part of its subject): the same Font Awesome glyph as
-/// the web app's `getIconForClass` (`helpers/iconMap.ts`), the atom for a
-/// class it does not know, a document when there is no class at all.
+/// own name, or the last part of its subject): the web app's glyph
+/// ([ClassIcons]), the atom for a class it does not know, a document when
+/// there is no class at all.
 IconData iconForClass(String className) {
   final key = className
       .split('/')
@@ -23,31 +55,31 @@ IconData iconForClass(String className) {
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]'), '');
   return switch (key) {
-    'folder' => FontAwesomeIcons.solidFolder,
+    'folder' => ClassIcons.folder,
     'drive' => driveIcon,
-    'document' || 'documentv2' || '' => FontAwesomeIcons.solidFileLines,
-    'table' => FontAwesomeIcons.table,
-    'canvas' => FontAwesomeIcons.paintbrush,
+    'document' || 'documentv2' || '' => ClassIcons.document,
+    'table' => ClassIcons.table,
+    'canvas' => ClassIcons.canvas,
     // The web app's own sparkle (`AIIcon`); Font Awesome has none like it.
     'aichat' => Icons.auto_awesome,
-    'conversation' || 'chatroom' => FontAwesomeIcons.solidComment,
-    'meeting' => FontAwesomeIcons.video,
-    'class' => FontAwesomeIcons.cube,
-    'property' => FontAwesomeIcons.hashtag,
-    'ontology' => FontAwesomeIcons.shapes,
-    'form' => FontAwesomeIcons.wpforms,
-    'bookmark' => FontAwesomeIcons.book,
-    'file' => FontAwesomeIcons.solidFile,
-    'dashboard' => FontAwesomeIcons.chartLine,
-    'tag' => FontAwesomeIcons.tag,
-    'plugin' || 'installation' => FontAwesomeIcons.puzzlePiece,
-    'pluginscript' => FontAwesomeIcons.plug,
-    'websiteproject' => FontAwesomeIcons.globe,
-    'app' => FontAwesomeIcons.grip,
-    'collection' => FontAwesomeIcons.list,
-    'commit' => FontAwesomeIcons.solidClock,
-    'invite' => FontAwesomeIcons.solidShareFromSquare,
-    _ => FontAwesomeIcons.atom,
+    'conversation' || 'chatroom' => ClassIcons.comment,
+    'meeting' => ClassIcons.video,
+    'class' => ClassIcons.cls,
+    'property' => ClassIcons.property,
+    'ontology' => ClassIcons.ontology,
+    'form' => ClassIcons.form,
+    'bookmark' => ClassIcons.book,
+    'file' => ClassIcons.file,
+    'dashboard' => ClassIcons.dashboard,
+    'tag' => ClassIcons.tag,
+    'plugin' || 'installation' => ClassIcons.plugin,
+    'pluginscript' => ClassIcons.pluginScript,
+    'websiteproject' => ClassIcons.website,
+    'app' => ClassIcons.app,
+    'collection' => ClassIcons.list,
+    'commit' => ClassIcons.commit,
+    'invite' => ClassIcons.invite,
+    _ => ClassIcons.atom,
   };
 }
 
@@ -185,7 +217,7 @@ class ResourceRow extends StatelessWidget {
       cornerRadius: m.compact ? 4 : 8,
       image: source,
       fallbackLabel: label ?? title,
-      fallbackIcon: icon ?? Icons.description_outlined,
+      fallbackIcon: icon ?? ClassIcons.document,
       shape: shape,
       showInitial: showInitial,
       // The touch rows' icons start where avatars and pictures do (and the

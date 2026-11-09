@@ -1208,7 +1208,7 @@ void main() {
       expect(find.text('🏔'), findsOneWidget);
       // Filled in after the activity list was shown.
       expect(find.text('🚀'), findsOneWidget);
-      expect(find.byIcon(Icons.table_chart_outlined), findsOneWidget);
+      expect(find.byIcon(ClassIcons.table), findsOneWidget);
       // The drive with an emoji has no drive icon.
       expect(find.byIcon(driveIcon), findsNothing);
     });
@@ -1243,8 +1243,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
       expect(find.text('🦊'), findsOneWidget);
-      expect(find.byIcon(Icons.draw_outlined), findsOneWidget);
-      expect(find.byIcon(Icons.description_outlined), findsNothing);
+      expect(find.byIcon(ClassIcons.canvas), findsOneWidget);
+      expect(find.byIcon(ClassIcons.document), findsNothing);
     });
 
     testWidgets('the new-chat context pills prefix the emoji', (tester) async {
@@ -2736,7 +2736,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Today'), findsOneWidget);
       expect(find.text('Earlier'), findsOneWidget);
-      expect(find.byIcon(Icons.chat_bubble_outline), findsNWidgets(5));
+      expect(find.byIcon(Icons.auto_awesome), findsNWidgets(5));
     });
   });
 

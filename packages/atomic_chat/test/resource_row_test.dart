@@ -1,7 +1,6 @@
 import 'package:atomic_chat/atomic_chat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 Widget _host(Widget child) => MaterialApp(
       theme: ThemeData(extensions: const [AppColors.light]),
@@ -33,21 +32,21 @@ void main() {
   test('class names map to the web app\'s icons, an unknown one to the atom',
       () {
     const expected = {
-      'Folder': FontAwesomeIcons.solidFolder,
+      'Folder': ClassIcons.folder,
       'Drive': driveIcon,
-      'Table': FontAwesomeIcons.table,
-      'Canvas': FontAwesomeIcons.paintbrush,
+      'Table': ClassIcons.table,
+      'Canvas': ClassIcons.canvas,
       'AI chat': Icons.auto_awesome,
       'ai-chat': Icons.auto_awesome,
-      'Conversation': FontAwesomeIcons.solidComment,
-      'ChatRoom': FontAwesomeIcons.solidComment,
-      'meeting': FontAwesomeIcons.video,
-      'Class': FontAwesomeIcons.cube,
-      'property': FontAwesomeIcons.hashtag,
-      'Document': FontAwesomeIcons.solidFileLines,
-      'document-v2': FontAwesomeIcons.solidFileLines,
-      '': FontAwesomeIcons.solidFileLines,
-      'row': FontAwesomeIcons.atom,
+      'Conversation': ClassIcons.comment,
+      'ChatRoom': ClassIcons.comment,
+      'meeting': ClassIcons.video,
+      'Class': ClassIcons.cls,
+      'property': ClassIcons.property,
+      'Document': ClassIcons.document,
+      'document-v2': ClassIcons.document,
+      '': ClassIcons.document,
+      'row': ClassIcons.atom,
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-chat':
           Icons.auto_awesome,
     };

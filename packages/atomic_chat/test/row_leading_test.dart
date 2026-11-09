@@ -5,7 +5,6 @@ import 'package:atomic_chat/atomic_chat.dart';
 import 'package:atomic_chat/src/sidebar_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'assistant_screens_test.dart' show FakeApi, app;
@@ -260,7 +259,7 @@ void main() {
       // A group: its own icon, no initial.
       expect(inRow('Bob, Carol', find.byIcon(Icons.groups_outlined)), findsOneWidget);
       // Resources.
-      expect(inRow('Plain doc', find.byIcon(FontAwesomeIcons.solidFileLines)), findsOneWidget);
+      expect(inRow('Plain doc', find.byIcon(ClassIcons.document)), findsOneWidget);
       expect(inRow('Fox doc', find.text('🦊')), findsOneWidget);
       expect(inRow('Pic doc', find.byKey(const Key('row-picture'))), findsOneWidget);
       expect(rowOf('Pic doc').shape, RowShape.square);

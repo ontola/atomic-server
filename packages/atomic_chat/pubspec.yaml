@@ -12,7 +12,6 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_svg: ^2.2.0
-  font_awesome_flutter: ^10.12.0
   shared_preferences: ^2.3.3
   webview_flutter: ^4.14.1
   webview_flutter_android: ^4.10.0
@@ -28,3 +27,12 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 flutter:
   uses-material-design: true
+  # Font Awesome Free 6 (fontawesome.com; icons CC BY 4.0, fonts SIL OFL 1.1),
+  # subset to the class icons the web app's sidebar shows (`ClassIcons`).
+  fonts:
+    - family: FaSolid
+      fonts:
+        - asset: fonts/fa-solid-subset.ttf
+    - family: FaBrands
+      fonts:
+        - asset: fonts/fa-brands-subset.ttf
