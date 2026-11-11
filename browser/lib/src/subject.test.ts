@@ -13,6 +13,9 @@ import {
   isValidSubject,
   identifierKind,
   isPropertySubject,
+  isClassSubject,
+  classSubject,
+  toLegacyScheme,
   isResourceSubject,
   canonicalIdentifier,
   isAtomicIdentifier,
@@ -272,5 +275,29 @@ describe('isLoopbackHost', () => {
     ]) {
       expect(isLoopbackHost(host)).toBe(false);
     }
+  });
+});
+
+describe('class subjects', () => {
+  const hex = 'a'.repeat(64);
+
+  it('recognises atomic:class:', () => {
+    expect(identifierKind(`atomic:class:${hex}`)).toBe('class');
+    expect(identifierKind('atomic:class:')).toBe('other');
+    expect(isClassSubject(`atomic:class:${hex}`)).toBe(true);
+    expect(isClassSubject(`atomic:prop:${hex}`)).toBe(false);
+    expect(classSubject(hex)).toBe(`atomic:class:${hex}`);
+  });
+
+  it('is not a resource subject', () => {
+    expect(isResourceSubject(`atomic:class:${hex}`)).toBe(false);
+  });
+
+  it('is never rewritten to the legacy scheme', () => {
+    expect(toLegacyScheme(`atomic:class:${hex}`)).toBe(`atomic:class:${hex}`);
+    expect(emitSubjectForCaps(`atomic:class:${hex}`, [])).toBe(
+      `atomic:class:${hex}`,
+    );
+    expect(toLegacyScheme(`atomic:prop:${hex}`)).toBe(`did:ad:prop:${hex}`);
   });
 });
