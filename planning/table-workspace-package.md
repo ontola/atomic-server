@@ -40,6 +40,12 @@ The dedicated CI lane also checks Atomic host types and navigation/saved-tab
 tests. This removes one host dependency; query, schema, mutation and saved-view
 persistence extraction remain open.
 
+Query increment: `TableQuery` now carries scoped requests and backend capability
+preflight without Atomic client types. The Atomic collection adapter translates
+those requests; rows and totals use identical predicates and class-loading
+guards. Indexed query results, aggregate subscriptions and the NextGraph adapter
+still need extraction/integration. No new ORM capability is claimed.
+
 - [ ] Extract TablePage/TableResource orchestration and explicit scoped query,
       schema/property, mutation/draft, saved-view, permission and reactive
       navigation services from actual call sites.

@@ -3,8 +3,6 @@ import {
   type ExpressionFilter,
   PropVal,
   Resource,
-  unknownSubject,
-  useCollection,
   UseCollectionResult,
   useResource,
   useStore,
@@ -14,11 +12,14 @@ import { useTableView, UseTableViewResult } from './useTableView';
 import { toAggregation } from './tableAggregates';
 import { getTableDrive } from './tableDrive';
 import { quantizedNow, splitFilters } from './tableFiltering';
+import { useAtomicTableQuery } from './useAtomicTableQuery';
+import type { TableQuery } from '@tomic/table';
 
 const PAGE_SIZE = 30;
 
 type UseTableDataResult = {
   tableClass: Resource;
+  query: TableQuery;
   /**
    * The constraints the grid queries with (class + the view's filters). Shared
    * so the totals can be computed over exactly the rows the grid shows.
@@ -53,15 +54,6 @@ export function useTableData(
     quantizedNow(),
   );
 
-  // Constrain rows to instances of the table's classtype. This keeps non-row
-  // children — notably the table's own View resources — out of the row list.
-  // Don't query at all until the classtype is known: a `parent=` query
-  // without `isA` briefly lists views as rows, then filters them out.
-  const classReady = !!classSubject && classSubject !== unknownSubject;
-  const classFilter: PropVal[] = classReady
-    ? [{ property: core.properties.isA, value: classSubject }]
-    : [];
-
   // The view's statistics ride along with the query, so the store computes them
   // over every matching row (filters included, paging excluded) instead of the
   // client adding up the page it happens to have.
@@ -72,39 +64,30 @@ export function useTableData(
     tableView.viewDerivedColumns,
   );
 
-  const queryFilter = {
-    property: core.properties.parent,
-    // `Collection.fetchPage` no-ops when value is undefined. Hold the
-    // query until classtype is known so views don't flash as rows.
-    value: classReady ? resource.subject : undefined,
-    filters: [...classFilter, ...userFilters],
-    expression_filters: expressionFilters,
-    sort_by: sorting.prop,
-    sort_desc: sorting.sortDesc,
-    aggregation,
-    // The table's own drive, not the active one: a deep link can open a table
-    // from another drive, and the local index is keyed by drive.
-    drive: getTableDrive(store, resource),
-  };
-
-  const { collection, ready, invalidateCollection, mapAll } = useCollection(
-    queryFilter,
-    {
-      pageSize: PAGE_SIZE,
-      server: resource.subject.startsWith('http')
-        ? new URL(resource.subject).origin
-        : store.getServerUrl(),
+  const query: TableQuery = {
+    scope: {
+      table: resource.subject,
+      rowClass: classSubject,
+      // Deep links query the table's drive rather than the active workspace.
+      drive: getTableDrive(store, resource),
     },
+    filters: userFilters,
+    expressionFilters,
+    sort: { property: sorting.prop, descending: sorting.sortDesc },
+    aggregation,
+    pageSize: PAGE_SIZE,
+  };
+  const rows = useAtomicTableQuery(
+    query,
+    resource.subject.startsWith('http')
+      ? new URL(resource.subject).origin
+      : store.getServerUrl(),
   );
 
   return {
     ...tableView,
     tableClass,
-    queryFilters: queryFilter.filters,
-    queryExpressionFilters: expressionFilters,
-    collection,
-    ready: classReady && ready,
-    invalidateCollection,
-    mapAll,
+    query,
+    ...rows,
   };
 }
