@@ -6123,6 +6123,17 @@ export class Store {
     }
 
     this.emitSyncStatus();
+
+    // A node that does not host this drive refuses all of it. Ask the app
+    // whether it is an unhosted drive it can keep browser-only, the same as
+    // for a refused outbox write. Moving it local clears the error again
+    // (`makeDriveLocal`), so the Sync page stops showing the refusal.
+    if (isNotEnrolledMessage(message) && this.refusedDriveHandler) {
+      void this.healRefusedDrive(
+        this.refusedDriveOf(message) ?? drive,
+        message,
+      ).catch(e => console.warn('[Store] refused drive handler failed:', e));
+    }
   }
 
   /** How long a read waits for the local database before asking the

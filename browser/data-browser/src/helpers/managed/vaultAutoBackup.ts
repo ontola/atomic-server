@@ -33,7 +33,7 @@ import {
 import { evaluateIdentityReconciliation } from './reconcile';
 import { nodeVault } from './nodeVault';
 import { isRunningInTauri } from '../tauri';
-import { reopenRestoredDrive } from '../driveData';
+import { keepUnhostedRestoreLocal, reopenRestoredDrive } from '../driveData';
 import { asError } from '@tomic/react';
 
 /**
@@ -619,11 +619,11 @@ export async function restoreFromVault(
       driveKey,
     });
 
-    // Restoring a vault copy does not upload it to the node. Preserve a
-    // confirmed node absence so saves and subscriptions stay on this device.
+    // Restoring a vault copy does not upload it to the node. Keep a drive no
+    // Cloud Server hosts on this device, so saves and subscriptions stay here.
     // A transport failure alone says nothing about where the drive is hosted.
-    if (absentFromNode && outcome.resourcesRestored > 0) {
-      store.registerLocalOnlyDrive(driveSubject);
+    if (outcome.resourcesRestored > 0) {
+      await keepUnhostedRestoreLocal(store, driveSubject, absentFromNode);
     }
 
     // The import wrote the drive into the local database only. The store

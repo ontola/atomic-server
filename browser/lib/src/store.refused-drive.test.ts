@@ -162,6 +162,40 @@ describe('the app resolving a refused drive before it is reported', () => {
     expect(errors[0]).toContain('does not host this drive');
   });
 
+  describe('a whole-drive SYNC_REJECTED', () => {
+    it('asks the handler once about the drive the refusal names', async ({
+      expect,
+    }) => {
+      const store = new Store({ serverUrl: 'http://localhost:9883' });
+      const handler = vi.fn(async () => true);
+      store.setRefusedDriveHandler(handler);
+
+      store.failDriveSync(OTHER, REFUSAL);
+      store.failDriveSync(OTHER, REFUSAL);
+      await settle();
+
+      expect(handler).toHaveBeenCalledExactlyOnceWith(DRIVE, REFUSAL);
+    });
+
+    it.each([
+      ['no write right', `You do not have write rights on ${DRIVE}.`],
+      [
+        'over quota',
+        `Drive ${DRIVE} has reached its storage quota on this node.`,
+      ],
+    ])('does not ask the handler for a refusal for %s', async (_, message) => {
+      const expect = globalExpect;
+      const store = new Store({ serverUrl: 'http://localhost:9883' });
+      const handler = vi.fn(async () => true);
+      store.setRefusedDriveHandler(handler);
+
+      store.failDriveSync(DRIVE, message);
+      await settle();
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+  });
+
   it('asks about a drive once, however many of its writes are refused', async ({
     expect,
   }) => {
