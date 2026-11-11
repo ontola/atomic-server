@@ -8,8 +8,9 @@ import toast, {
 import { FaComment, FaCopy, FaXmark } from 'react-icons/fa6';
 import styled, { useTheme } from 'styled-components';
 import { zIndex } from '../styling';
-import { Row } from './Row';
+import { Column, Row } from './Row';
 import { IconButton } from './IconButton/IconButton';
+import { Button } from './Button';
 import { useSettings } from '../helpers/AppSettings';
 import { shortenSubjects } from '../helpers/shortenSubjects';
 import {
@@ -124,11 +125,26 @@ function ToastMessage({ icon, message, t, onReport }: ToastMessageProps) {
   }
 
   return (
-    <StyledRow gap='1ch' center>
+    <StyledRow gap='1ch' align='flex-start'>
       {icon}
-      <div ref={textRef} style={{ display: 'contents' }}>
-        {fullText === undefined ? resolved : shortenSubjects(fullText)}
-      </div>
+      <Column gap='0.5rem' align='flex-start'>
+        <div ref={textRef}>
+          {fullText === undefined ? resolved : shortenSubjects(fullText)}
+        </div>
+        {reportable && (
+          <Button
+            subtle
+            title='Report this error'
+            onClick={() => {
+              onReport(reportable);
+              toast.dismiss(t.id);
+            }}
+          >
+            <FaComment />
+            Report
+          </Button>
+        )}
+      </Column>
       {t.type !== 'loading' && (
         <div
           style={{
@@ -144,17 +160,6 @@ function ToastMessage({ icon, message, t, onReport }: ToastMessageProps) {
               <FaCopy />
             </IconButton>
           )}
-          {reportable && (
-            <IconButton
-              title='Report this error'
-              onClick={() => {
-                onReport(reportable);
-                toast.dismiss(t.id);
-              }}
-            >
-              <FaComment />
-            </IconButton>
-          )}
         </div>
       )}
     </StyledRow>
@@ -162,6 +167,6 @@ function ToastMessage({ icon, message, t, onReport }: ToastMessageProps) {
 }
 
 const StyledRow = styled(Row)`
-  max-height: 10rem;
+  max-height: 16rem;
   overflow-y: auto;
 `;
