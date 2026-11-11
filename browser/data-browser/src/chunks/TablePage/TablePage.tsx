@@ -8,8 +8,8 @@ import {
   type JSX,
 } from 'react';
 import { core, useString, useResource, useCanWrite } from '@tomic/react';
-import { useNavigate } from '@tanstack/react-router';
-import { ShowRoute } from '../../routes/ShowRoute';
+import { useTableNavigation } from '@tomic/table';
+import { AtomicTableNavigation } from './AtomicTableNavigation';
 import { useTableFormColumns } from '../FormBuilder/useTableFormColumns';
 import { EditPropertyDialog } from './PropertyForm/EditPropertyDialog';
 import { styled } from 'styled-components';
@@ -34,9 +34,16 @@ const WorkspaceControls = lazy(() =>
 );
 
 export function TablePage({ resource }: ResourcePageProps): JSX.Element {
+  return (
+    <AtomicTableNavigation>
+      <TablePageContent resource={resource} />
+    </AtomicTableNavigation>
+  );
+}
+
+function TablePageContent({ resource }: ResourcePageProps): JSX.Element {
   const titleId = useId();
-  const search = ShowRoute.useSearch();
-  const navigate = useNavigate();
+  const { location: search, navigate } = useTableNavigation();
   const column = useResource(search.editColumn);
   const [classSubject] = useString(resource, core.properties.classtype);
   const { columns } = useTableFormColumns(classSubject ?? '');
@@ -111,11 +118,7 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
           showDialog
           bindShow={visible => {
             if (!visible)
-              void navigate({
-                to: ShowRoute.fullPath,
-                search: { ...search, editColumn: undefined },
-                replace: true,
-              });
+              void navigate({ editColumn: undefined }, { replace: true });
           }}
         />
       )}

@@ -44,7 +44,7 @@ try {
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver, getComputedStyle: dom.window.getComputedStyle, requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout, IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
     globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
-    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList } from '@tomic/table';
+    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation } from '@tomic/table';
     assert.equal(parseInteger('42'), 42);
     assert.equal(typeof IntegerCell.Edit, 'function');
     assert.notEqual(CursorMode.Edit, CursorMode.Visual);
@@ -58,6 +58,17 @@ try {
     assert.match(document.getElementById('app').innerHTML, /role="grid"/);
     assert.match(document.getElementById('app').innerHTML, /role="tab"/);
     assert.match(document.getElementById('app').textContent, /All rows/);
+    const commands = [];
+    function Location() {
+      const { location, navigate } = useTableNavigation();
+      return React.createElement('button', { onClick: () => navigate({ view: 'next' }, { replace: true }) }, location.view);
+    }
+    const navigation = { location: { view: 'first' }, navigate: (...args) => commands.push(args) };
+    await act(async () => root.render(React.createElement(TableNavigationProvider, { value: navigation }, React.createElement(Location))));
+    await act(async () => document.querySelector('button').click());
+    assert.deepEqual(commands, [[{ view: 'next' }, { replace: true }]]);
+    await act(async () => root.render(React.createElement(TableNavigationProvider, { value: { ...navigation, location: { view: 'back' } } }, React.createElement(Location))));
+    assert.equal(document.querySelector('button').textContent, 'back');
     await act(async () => root.unmount());
     dom.window.close();
   `,
@@ -66,7 +77,7 @@ try {
   writeFileSync(
     join(consumer, 'consumer.tsx'),
     `
-    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, type FancyTableProps } from '@tomic/table';
+    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type FancyTableProps } from '@tomic/table';
     const props: FancyTableProps<{ id: string }> = {
       columns: [{ id: 'name' }], itemCount: 1, columnToKey: column => column.id,
       labelledBy: 'title', HeadingComponent: ({ column }) => <span>{column.id}</span>,
@@ -78,7 +89,11 @@ try {
     // @ts-expect-error The public declarations must reject an invalid row count.
     const invalid: FancyTableProps<string>['itemCount'] = 'one';
     const views = <ViewTabList><ViewTab name="All rows" active onRename={name => void name} onEditingChange={editing => void editing} /></ViewTabList>;
-    void [grid, editor, invalid, views];
+    const navigation: TableNavigation = { location: { view: 'saved' }, navigate: (patch, options) => { void [patch, options]; } };
+    const host = <TableNavigationProvider value={navigation}>{views}</TableNavigationProvider>;
+    // @ts-expect-error Host resource routing is not part of the table patch.
+    navigation.navigate({ subject: 'another-table' });
+    void [grid, editor, invalid, views, host];
   `,
   );
   writeFileSync(

@@ -40,13 +40,23 @@ immediately or become a draft. `renameLabel` lets the host localize the input.
 
 ## Package CI
 
+`TableNavigationProvider` supplies a reactive `{ location, navigate }` host
+adapter for saved-view and edit-column state. `navigate(patch, { replace })`
+patches the latest host location; an explicit `undefined` clears a field. The
+host retains resource/collection routing and supplies updated snapshots after
+navigation, including Back/Forward. The table package imports no router.
+Atomic's boundary supplies its existing ShowRoute adapter unless an embedding
+host already provided one. This is a host seam for the full-page extraction,
+not a claim that the package exports the complete TablePage yet.
+
 The dedicated `Table package` workflow runs on package/config changes in pull
 requests and develop, and can be dispatched manually. It lints, typechecks and
 tests the package, then builds a tarball and installs it in a clean external
 consumer. That consumer mounts the browser component in a DOM and checks
 NodeNext declarations. The lane needs no server, Rust or WASM build and uploads
-the tested preview archive. Full AtomicServer integration stays in the main
-pipeline.
+the tested preview archive. A separate Atomic adapter job builds its JavaScript
+dependencies, typechecks the Data Browser and runs navigation and saved-view tab tests without a
+Rust/server build. Full backend integration stays in the main pipeline.
 
 ## Build and release
 

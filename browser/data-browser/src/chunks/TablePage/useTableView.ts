@@ -21,7 +21,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ShowRoute } from '../../routes/ShowRoute';
+import { useTableNavigation } from '@tomic/table';
 import {
   filterKey,
   parseFilterKey,
@@ -253,8 +253,8 @@ export function useTableView(
   // a reload, and lands in browser history — back/forward moves between views
   // instead of leaving the page. Absent = the table's `default-view` (or the
   // first one) once they load.
-  const activeViewParam = ShowRoute.useSearch({ select: s => s.view });
-  const navigate = ShowRoute.useNavigate();
+  const { location, navigate } = useTableNavigation();
+  const activeViewParam = location.view;
   const activeView =
     viewOverride ??
     (embedded ? undefined : activeViewParam) ??
@@ -548,12 +548,7 @@ export function useTableView(
    */
   const goToView = useCallback(
     (subject: string | undefined, replace: boolean) => {
-      void navigate({
-        // `.` keeps us on this resource; only the search param changes.
-        to: '.',
-        search: prev => ({ ...prev, view: subject }),
-        replace,
-      });
+      void navigate({ view: subject }, { replace });
     },
     [navigate],
   );

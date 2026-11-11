@@ -33,6 +33,13 @@ make TablePage's Atomic Resource/Store contracts storage-independent.
 
 ## Full TablePage gate
 
+Implementation increment: the shared package now supplies reactive saved-view /
+edit-column navigation, with an Atomic router adapter used by TablePage and
+TableResource. Embedded hosts can override it without mounting Atomic's router.
+The dedicated CI lane also checks Atomic host types and navigation/saved-tab
+tests. This removes one host dependency; query, schema, mutation and saved-view
+persistence extraction remain open.
+
 - [ ] Extract TablePage/TableResource orchestration and explicit scoped query,
       schema/property, mutation/draft, saved-view, permission and reactive
       navigation services from actual call sites.

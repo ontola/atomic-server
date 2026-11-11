@@ -4,6 +4,13 @@ on:
   pull_request:
     paths:
       - 'browser/table/**'
+      - 'browser/data-browser/**'
+      - 'browser/form-renderer/**'
+      - 'browser/edit-mode/**'
+      - 'browser/plugin/**'
+      - 'browser/service-ui/**'
+      - 'browser/lib/**'
+      - 'browser/react/**'
       - 'browser/pnpm-lock.yaml'
       - 'browser/pnpm-workspace.yaml'
       - 'browser/package.json'
@@ -13,6 +20,13 @@ on:
     branches: [develop]
     paths:
       - 'browser/table/**'
+      - 'browser/data-browser/**'
+      - 'browser/form-renderer/**'
+      - 'browser/edit-mode/**'
+      - 'browser/plugin/**'
+      - 'browser/service-ui/**'
+      - 'browser/lib/**'
+      - 'browser/react/**'
       - 'browser/pnpm-lock.yaml'
       - 'browser/pnpm-workspace.yaml'
       - 'browser/package.json'
@@ -28,6 +42,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  atomic-adapter:
+    name: Atomic TablePage adapter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+      - name: Build JavaScript host dependencies
+        run: pnpm --filter @tomic/lib --filter @tomic/react --filter @tomic/form-renderer --filter @tomic/edit-mode --filter @tomic/plugin --filter @tomic/service-ui -r build
+      - name: Check Atomic host types
+        run: pnpm --filter @tomic/data-browser typecheck
+      - name: Test navigation adapter and saved-view tabs
+        working-directory: browser/data-browser
+        run: pnpm exec vitest run src/chunks/TablePage/AtomicTableNavigation.test.tsx src/chunks/TablePage/TableViewTabs.test.tsx
   package:
     name: Build, test and install packed table
     runs-on: ubuntu-latest
