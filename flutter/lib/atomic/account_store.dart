@@ -46,7 +46,12 @@ class AccountStore {
   /// The portal agents sign in to when no portal is linked yet.
   static const defaultPortal = 'https://atomic.place';
 
+  /// The agent the portal last refused to sign in, and when: not asked again
+  /// for [_refusalLasts], so every chat opening is not a round trip, yet an
+  /// account made since (in a browser, or by a link opened later) is found.
   static String? _attemptedAgent;
+  static DateTime? _attemptedAt;
+  static const _refusalLasts = Duration(minutes: 2);
 
   /// Asks the portal to mail [email] a link that creates the account with the
   /// active agent as its identity (no new identity, nothing is switched).
@@ -63,6 +68,7 @@ class AccountStore {
       // Sign-in may have been refused before the account existed; let the
       // next look-up try it again.
       _attemptedAgent = null;
+      _attemptedAt = null;
     } finally {
       client.close();
     }
@@ -77,14 +83,21 @@ class AccountStore {
     try {
       if (await read() != null) return true;
       final info = await AtomicClient.getActiveAgent();
-      if (info == null || _attemptedAgent == info.subject) return false;
+      if (info == null) return false;
+      final at = _attemptedAt;
+      if (_attemptedAgent == info.subject &&
+          at != null &&
+          DateTime.now().difference(at) < _refusalLasts) {
+        return false;
+      }
       final agent = AtomicAgent.fromSecret(info.secret);
       final client = shared.AtomicAccountClient(portal);
       try {
         final signedIn = await client.signInWithAgent(agent.subject,
             (message) async => signMessage(message, agent.privateKeyB64));
-        // A refusal is final for this run; an unreachable portal throws below.
+        // A refusal holds for a while; an unreachable portal throws below.
         _attemptedAgent = info.subject;
+        _attemptedAt = DateTime.now();
         if (!signedIn) return false;
         await save(client.exportSession());
         return true;
@@ -95,6 +108,41 @@ class AccountStore {
       return false;
     }
   }
+
+  /// The saved session, if the portal no longer takes it (it expired or was
+  /// signed out elsewhere: 401), is dropped and the agent signs in again,
+  /// as on a fresh start. True when a new session is saved. A session that
+  /// still works, or a portal that cannot be reached, leaves things as
+  /// they are.
+  static Future<bool> renewExpired() async {
+    final saved = await read();
+    if (saved == null) return false;
+    final Uri origin;
+    try {
+      origin = shared.AtomicAccountClient.sessionOrigin(saved);
+    } catch (_) {
+      return false;
+    }
+    final client = shared.AtomicAccountClient(origin.toString())
+      ..restoreSession(saved);
+    try {
+      await client.account();
+      return false;
+    } on StateError catch (e) {
+      if (e.message != expiredMessage) return false;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close();
+    }
+    await clear();
+    _attemptedAgent = null;
+    return signInWithAgent(portal: origin.toString());
+  }
+
+  /// What the account client says for a 401.
+  @visibleForTesting
+  static const expiredMessage = 'Sign in again to continue';
 
   /// The `session_token` cookie that signs a web view in to [portal] as the
   /// active agent, or null when it cannot (no agent, not an account identity,
