@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.js';
 import { Datatype } from './datatypes.js';
 import { isCommitSubject } from './commit.js';
 import { canonicalIdentifier } from './subject.js';
@@ -102,7 +103,7 @@ export async function applyImportReferences(
           throw new Error('Links changed since review. Refresh the review.');
 
       if (pending.length) {
-        const id = crypto.randomUUID();
+        const id = randomUUID();
 
         try {
           await host.write(subject, {
