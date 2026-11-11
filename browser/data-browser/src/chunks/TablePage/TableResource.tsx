@@ -1438,6 +1438,8 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
   );
 
   const handleClearCells = useHandleClearCells(
+    resource,
+    tableClass,
     rowCollection,
     addItemsToHistoryStack,
   );

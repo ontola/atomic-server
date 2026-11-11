@@ -61,6 +61,14 @@ history/save policy and resource-aware renderers. Native host wiring is separate
 schema, mutation-service, saved-view persistence and full-page extraction remain
 open.
 
+Mutation increment: shared scoped update/delete execution checks stable field
+identities, writable flags, optional schema revisions and baselines, then delegates
+validation/transactions/read-back to the backend and releases read handles. Atomic
+bulk clearing consumes it, including immutable localized-text clearing and scope
+metadata protection. Native adapter integration remains separately pinned; schema
+dialogs/activation, creation, undo and full page orchestration are not extracted
+by this command service.
+
 - [ ] Extract TablePage/TableResource orchestration and explicit scoped query,
       schema/property, mutation/draft, saved-view, permission and reactive
       navigation services from actual call sites.

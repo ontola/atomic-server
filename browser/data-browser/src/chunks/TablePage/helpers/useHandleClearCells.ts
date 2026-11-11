@@ -1,16 +1,22 @@
-import type { IndexedTableRows } from '@tomic/table';
-import { Datatype, useStore } from '@tomic/react';
-import { useCallback } from 'react';
-import { CellIndex } from '@chunks/TableEditor';
 import {
-  AddItemToHistoryStack,
-  HistoryItemBatch,
-  createValueChangedHistoryItem,
+  executeTableRowMutation,
+  clearTableFields,
+  type IndexedTableRows,
+} from '@tomic/table';
+import { Datatype, useStore, type Resource } from '@tomic/react';
+import { useCallback } from 'react';
+import type { CellIndex } from '@chunks/TableEditor';
+import {
+  type AddItemToHistoryStack,
+  type HistoryItemBatch,
 } from './useTableHistory';
 import { transformToPropertiesPerSubject } from './transformPropertiesPerSubject';
 import type { TableColumn } from '../useTableColumns';
+import { atomicClearMutationBackend } from '../atomicClearMutation';
 
 export function useHandleClearCells(
+  table: Resource,
+  tableClass: Resource,
   collection: IndexedTableRows,
   addItemsToHistoryStack: AddItemToHistoryStack,
 ) {
@@ -18,66 +24,44 @@ export function useHandleClearCells(
 
   return useCallback(
     async (cells: CellIndex<TableColumn>[]) => {
-      const resourcePropMap = await transformToPropertiesPerSubject(
-        cells,
-        collection,
-      );
-
-      const historyItemBatch: HistoryItemBatch = [];
-
-      const removePropvals = async ([subject, cols]: [
-        string,
-        TableColumn[],
-      ]) => {
-        const res = await store.getResource(subject);
-
-        // Sequential on purpose: clearing several split cells of the SAME
-        // LocalizedText property is a read-modify-write on one map — parallel
-        // writes would race and resurrect cleared languages.
-        for (const col of cols) {
-          // Virtual columns (a duration, a row action) hold no stored value.
-          if (!col.property) {
-            continue;
-          }
-
-          const property = col.property;
-
-          historyItemBatch.push(
-            createValueChangedHistoryItem(res, property.subject),
-          );
-
-          if (
-            col.languageTag !== undefined &&
-            property.datatype === Datatype.LOCALIZEDTEXT
-          ) {
-            // Clear only this column's language; other languages stay.
-            const existing = res.get(property.subject);
-            const map =
-              existing &&
-              typeof existing === 'object' &&
-              !Array.isArray(existing)
-                ? { ...(existing as Record<string, string>) }
-                : {};
-            delete map[col.languageTag];
-            await res.set(
-              property.subject,
-              Object.keys(map).length > 0 ? map : undefined,
-              false,
-            );
-          } else {
-            await res.set(property.subject, undefined, false);
-          }
-        }
-
-        await res.save();
-      };
-
+      const groups = await transformToPropertiesPerSubject(cells, collection);
+      const history: HistoryItemBatch = [];
+      const backend = atomicClearMutationBackend(store, tableClass, history);
       await Promise.all(
-        Array.from(Object.entries(resourcePropMap)).map(removePropvals),
+        Object.entries(groups).map(async ([subject, columns]) => {
+          const fields = columns.flatMap(column =>
+            column.property
+              ? [
+                  {
+                    id: column.property.subject,
+                    language:
+                      column.property.datatype === Datatype.LOCALIZEDTEXT
+                        ? column.languageTag
+                        : undefined,
+                  },
+                ]
+              : [],
+          );
+          if (!fields.length) return;
+          await executeTableRowMutation(
+            {
+              kind: 'update',
+              target: {
+                subject,
+                scope: {
+                  collection: table.subject,
+                  rowClass: tableClass.subject,
+                },
+              },
+              schemaRevision: backend.schema.revision,
+              changes: current => clearTableFields(current, fields),
+            },
+            backend,
+          );
+        }),
       );
-
-      addItemsToHistoryStack(historyItemBatch);
+      addItemsToHistoryStack(history);
     },
-    [store, collection],
+    [store, table, tableClass, collection, addItemsToHistoryStack],
   );
 }
