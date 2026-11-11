@@ -44,7 +44,8 @@ try {
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver, getComputedStyle: dom.window.getComputedStyle, requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout, IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
     globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
-    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount } from '@tomic/table';
+    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell } from '@tomic/table';
+    assert.equal(typeof ValueCell, 'function');
     assert.equal(parseInteger('42'), 42);
     assert.equal(typeof IntegerCell.Edit, 'function');
     assert.notEqual(CursorMode.Edit, CursorMode.Visual);
@@ -81,7 +82,7 @@ try {
   writeFileSync(
     join(consumer, 'consumer.tsx'),
     `
-    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type TableQuery, type IndexedTableRows, type WindowedTableRows, type FancyTableProps } from '@tomic/table';
+    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type TableQuery, type IndexedTableRows, type WindowedTableRows, ValueCell, StringCell, type FancyTableProps } from '@tomic/table';
     const props: FancyTableProps<{ id: string }> = {
       columns: [{ id: 'name' }], itemCount: 1, columnToKey: column => column.id,
       labelledBy: 'title', HeadingComponent: ({ column }) => <span>{column.id}</span>,
@@ -103,7 +104,11 @@ try {
     const window: WindowedTableRows = { subjects: ['row:101'] };
     // @ts-expect-error A bounded window is not an indexed complete collection.
     const indexed: IndexedTableRows = window;
-    void [grid, editor, invalid, views, host, query, indexed];
+    const valueCell = <ValueCell identity="row:one/name" rowIndex={0} columnIndex={1} label="Name" value="Example"
+      onChange={value => void value} editStart={{ kind: 'value', fromCharacter: key => key }}
+      renderEditor={state => <StringCell.Edit {...state} property="name" />}
+      renderDisplay={state => <StringCell.Display {...state} property="name" />} />;
+    void [grid, editor, invalid, views, host, query, indexed, valueCell];
   `,
   );
   writeFileSync(

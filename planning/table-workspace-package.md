@@ -54,6 +54,13 @@ snapshot has no enumeration/total-count capability. Windowed grid paging,
 backend capability handling for whole-result views, and native row/schema/write
 adapters remain open; this is not full NextGraph TablePage integration.
 
+Cell-interaction increment: the shared `ValueCell` now owns editing mode,
+first-character buffers, parsed-editor seeds, picker behavior, context menus and
+row-advance orchestration. Atomic TableCell supplies Resource reads/writes,
+history/save policy and resource-aware renderers. Native host wiring is separate;
+schema, mutation-service, saved-view persistence and full-page extraction remain
+open.
+
 - [ ] Extract TablePage/TableResource orchestration and explicit scoped query,
       schema/property, mutation/draft, saved-view, permission and reactive
       navigation services from actual call sites.

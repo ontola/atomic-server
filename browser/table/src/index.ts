@@ -34,6 +34,12 @@ export {
 export { DEFAULT_SIZE_PX } from './chunks/TableEditor/hooks/useCellSizes.js';
 export { TableHostProvider, type TableHost } from './host.js';
 export {
+  ValueCell,
+  type ValueCellProps,
+  type ValueCellState,
+  type CellEditStart,
+} from './ValueCell.js';
+export {
   tableRowList,
   tableRowCount,
   readTableRow,
