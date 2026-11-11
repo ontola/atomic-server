@@ -6,7 +6,7 @@ import {
   type Resource,
 } from '@tomic/react';
 import { useCallback } from 'react';
-import { withTableRowDefaults } from '../rowDefaults';
+import { createAtomicTableRow } from '../atomicCreateRow';
 
 /**
  * Creates a named row of the table's class, as a child of the table.
@@ -27,36 +27,21 @@ export function useCreateRow(
 
   return useCallback(
     async (name: string, extra: Record<string, JSONValue | null> = {}) => {
-      const preset: Record<string, JSONValue> = {};
-      const unset: string[] = [];
-
-      for (const [property, value] of Object.entries(extra)) {
-        if (value === null) {
-          unset.push(property);
-        } else {
-          preset[property] = value;
-        }
-      }
-
-      const propVals = await withTableRowDefaults(store, tableSubject, {
+      const values: Record<string, JSONValue> = {
         [core.properties.name]: name,
         [commits.properties.createdAt]: Date.now(),
-        ...preset,
-      });
+      };
 
-      for (const property of unset) {
-        delete propVals[property];
+      for (const [property, value] of Object.entries(extra)) {
+        values[property] = value === null ? undefined : value;
       }
 
-      const row = await store.newResource({
-        parent: tableSubject,
-        isA: tableClass.subject,
-        propVals,
-      });
-      await row.save();
-      store.notifyResourceManuallyCreated(row);
-
-      return row;
+      return createAtomicTableRow(
+        store,
+        tableSubject,
+        tableClass.subject,
+        values,
+      );
     },
     [store, tableSubject, tableClass],
   );

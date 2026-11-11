@@ -132,3 +132,15 @@ An npm release is not a prerequisite. A pinned Git submodule can build and
 consume compiled modules while preserving the tested package boundary.
 `@tomic/table` returned npm 404 on 11 November 2026. Trusted Publisher setup remains
 necessary only before a future registry release, independently of this port.
+
+### Persisted creation increment
+
+- [x] Shared prepare/validate/persist/read-back creation service with schema and
+  scope guards, cleanup and no implicit retries.
+- [x] Atomic named-row and quick-add flows use the service, retaining row defaults,
+  explicit unset and existing save policy; notify only after confirmation.
+- [x] Native adapter applies native defaults, validates with the runtime schema,
+  writes through the public ORM and confirms with an independent bounded read.
+- [ ] Deferred grid drafts, paste, calendar/timer creation and insert-below still
+  need migration; this increment does not claim all creation paths or TablePage.
+- [ ] Undo and schema form extraction remain follow-up work.
