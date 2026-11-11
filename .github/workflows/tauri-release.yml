@@ -143,7 +143,10 @@ jobs:
             # Ubuntu silently drops support for every older distro. 22.04 is the
             # oldest image GitHub still provides with webkit2gtk 4.1.
             os: ubuntu-22.04
-            args: ""
+            # deb + AppImage only. The rpm bundler requires a version without
+            # a pre-release identifier and dies on `0.41.0-beta.8` with
+            # `invalid version ... contains invalid character`.
+            args: "--bundles deb,appimage"
             rust-targets: "wasm32-unknown-unknown"
           - name: Windows (x86_64)
             os: windows-latest
