@@ -1,18 +1,19 @@
 // @wc-ignore-file
-import { core, urls, useCurrentAgent, useResources } from '@tomic/react';
-import { canonicalizeScheme } from '@tomic/lib';
-import { useAISettings } from '@components/AI/AISettingsContext';
-import { useDriveChats } from '@components/SideBar/AIPanel';
-import { readManagedAccountBinding } from '@helpers/managed/binding';
-import { isDeviceLinked } from '@helpers/managed/deviceLink';
-import { useLocalStorage } from './useLocalStorage';
-import { usePrivateDrive } from './usePrivateDrive';
-import { useSavedDrives } from './useSavedDrives';
+import { core, urls, useCurrentAgent, useResources } from "@tomic/react";
+import { canonicalizeScheme } from "@tomic/lib";
+import { useAISettings } from "@components/AI/AISettingsContext";
+import { useDriveChats } from "@components/SideBar/AIPanel";
+import { readManagedAccountBinding } from "@helpers/managed/binding";
+import { isDeviceLinked } from "@helpers/managed/deviceLink";
+import { useHasManagedAccount } from "./useHasManagedAccount";
+import { useLocalStorage } from "./useLocalStorage";
+import { usePrivateDrive } from "./usePrivateDrive";
+import { useSavedDrives } from "./useSavedDrives";
 
-export type OnboardingStepId = 'name' | 'project' | 'ai' | 'invite' | 'save';
+export type OnboardingStepId = "name" | "project" | "ai" | "invite" | "save";
 
 /** What a step is waiting for before its button can do anything. */
-export type OnboardingNeed = 'project' | 'ai-source';
+export type OnboardingNeed = "project" | "ai-source";
 
 export interface OnboardingStep {
   id: OnboardingStepId;
@@ -58,7 +59,7 @@ export interface OnboardingInput {
 /** The project drive: the most recently added one that is neither home nor Welcome. */
 export function projectDrives(input: OnboardingInput): string[] {
   return input.savedDrives.filter(
-    d => !same(d, input.privateDrive) && !same(d, input.welcomeDrive),
+    (d) => !same(d, input.privateDrive) && !same(d, input.welcomeDrive),
   );
 }
 
@@ -69,19 +70,19 @@ export function deriveOnboardingSteps(
   const hasProject = projectDrives(input).length > 0;
 
   return [
-    { id: 'name', done: !isDefaultDriveName(input.driveName) },
-    { id: 'project', done: hasProject },
+    { id: "name", done: !isDefaultDriveName(input.driveName) },
+    { id: "project", done: hasProject },
     {
-      id: 'ai',
+      id: "ai",
       done: input.hasAIChat,
-      needs: input.aiAvailable ? undefined : 'ai-source',
+      needs: input.aiAvailable ? undefined : "ai-source",
     },
     {
-      id: 'invite',
+      id: "invite",
       done: input.invited || input.otherAgentsOnProjects,
-      needs: hasProject ? undefined : 'project',
+      needs: hasProject ? undefined : "project",
     },
-    { id: 'save', done: input.accountLinked },
+    { id: "save", done: input.accountLinked },
   ];
 }
 
@@ -103,15 +104,18 @@ export function useOnboardingProgress(driveName?: string) {
     onboardingKeys.hidden(agent?.subject),
     false,
   );
+  // Signing in with an email lands a cookie session, which leaves neither a
+  // binding nor a device token; the account itself is the proof.
+  const hasAccount = useHasManagedAccount();
   const base = { savedDrives, privateDrive, welcomeDrive } as OnboardingInput;
   const projects = projectDrives(base);
   const resources = useResources(projects);
-  const others = [...resources.values()].some(r =>
+  const others = [...resources.values()].some((r) =>
     [r.get(core.properties.read), r.get(core.properties.write)]
       .flat()
       .some(
-        a =>
-          typeof a === 'string' &&
+        (a) =>
+          typeof a === "string" &&
           a !== agent?.subject &&
           a !== urls.instances.publicAgent,
       ),
@@ -123,7 +127,8 @@ export function useOnboardingProgress(driveName?: string) {
     aiAvailable: enableAI && availableProviders.length > 0,
     otherAgentsOnProjects: others,
     invited,
-    accountLinked: !!readManagedAccountBinding() || isDeviceLinked(),
+    accountLinked:
+      !!readManagedAccountBinding() || isDeviceLinked() || hasAccount === true,
   };
   const steps = deriveOnboardingSteps(input);
 
@@ -131,7 +136,7 @@ export function useOnboardingProgress(driveName?: string) {
     steps,
     /** Where Invite points: the project drive made last. */
     projectDrive: projects.at(-1),
-    doneCount: steps.filter(s => s.done).length,
+    doneCount: steps.filter((s) => s.done).length,
     hidden,
     hide: () => setHidden(true),
   };
