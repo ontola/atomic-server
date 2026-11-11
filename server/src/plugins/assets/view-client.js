@@ -488,7 +488,12 @@ async function capabilityFor(platform, connectionId, fresh) {
   const { publicKey } = await getFrameKey();
   const minted = await send('proxyCapability', { platform, connectionId, publicKey });
 
-  if (!minted || typeof minted.capability !== 'string' || typeof minted.aud !== 'string') {
+  if (
+    !minted ||
+    typeof minted.capability !== 'string' ||
+    typeof minted.aud !== 'string' ||
+    typeof minted.connectionKey !== 'string'
+  ) {
     throw new Error('The host returned no capability.');
   }
 
@@ -497,13 +502,22 @@ async function capabilityFor(platform, connectionId, fresh) {
   return minted;
 }
 
-/** Version 2 request signature headers, signed with this frame's key. */
-async function signV2(method, url, body) {
+/**
+ * Version 2 request signature headers, signed with this frame's key. With a
+ * `connectionKey` (the key grant the host minted with the capability) the
+ * request also sends it as `x-connection-key`, and the signature covers its
+ * SHA-256 as a sixth line, so it cannot be swapped in transit.
+ */
+async function signV2(method, url, body, connectionKey) {
   const { privateKey, publicKey, agent } = await getFrameKey();
   const timestamp = Date.now();
   const bytes = new TextEncoder().encode(body ?? '');
   const digest = hex(await crypto.subtle.digest('SHA-256', bytes));
-  const message = ['atomic-request-v2', method, url, String(timestamp), digest].join('\n');
+  const lines = ['atomic-request-v2', method, url, String(timestamp), digest];
+  if (connectionKey !== undefined) {
+    lines.push(hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(connectionKey))));
+  }
+  const message = lines.join('\n');
   const signature = b64url(await crypto.subtle.sign({ name: 'Ed25519' }, privateKey, new TextEncoder().encode(message)));
 
   return {
@@ -512,6 +526,7 @@ async function signV2(method, url, body) {
     'x-atomic-timestamp': String(timestamp),
     'x-atomic-signature': signature,
     'x-atomic-signature-version': '2',
+    ...(connectionKey !== undefined ? { 'x-connection-key': connectionKey } : {}),
   };
 }
 
@@ -579,7 +594,7 @@ async function proxyRequest({ platform, connectionId, path, method, query, body,
     const url = proxyTarget(cap.aud, connectionId, platform, path, query).href;
     const headers = {
       Authorization: `Capability ${cap.capability}`,
-      ...(await signV2(verb, url, body)),
+      ...(await signV2(verb, url, body, cap.connectionKey)),
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(ifMatch ? { 'If-Match': ifMatch } : {}),
     };

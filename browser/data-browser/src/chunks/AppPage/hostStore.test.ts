@@ -344,6 +344,7 @@ describe('isHostRequest', () => {
 describe('integration-proxy capabilities', () => {
   const minted = {
     capability: 'payload.sig',
+    connectionKey: 's1.grant',
     aud: 'https://proxy.example',
     exp: 1,
     connectionId: 'c1',

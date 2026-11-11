@@ -269,6 +269,7 @@ it('calls the proxy directly with a capability and a v2 signature by its own key
       id: ask.id,
       result: {
         capability: `cap-${mint}`,
+        connectionKey: `s1.grant-${mint}`,
         aud: 'https://proxy.example',
         exp: Math.floor(Date.now() / 1000) + 600,
       },
@@ -296,6 +297,9 @@ it('calls the proxy directly with a capability and a v2 signature by its own key
   });
   const headers = init.headers as Record<string, string>;
   expect(headers.Authorization).toBe('Capability cap-1');
+  // The key grant minted with the capability goes along, and the signature
+  // covers it as a sixth line.
+  expect(headers['x-connection-key']).toBe('s1.grant-1');
   expect(headers['x-atomic-signature-version']).toBe('2');
   const publicKey = headers['x-atomic-public-key'];
   expect(headers['x-atomic-agent']).toBe(`atomic:agent:${publicKey}`);
@@ -305,6 +309,7 @@ it('calls the proxy directly with a capability and a v2 signature by its own key
     url,
     headers['x-atomic-timestamp'],
     await sha256Hex('{"name":"Rex"}'),
+    await sha256Hex('s1.grant-1'),
   ].join('\n');
   const key = await crypto.subtle.importKey(
     'raw',
@@ -344,6 +349,7 @@ it('refuses a path that would leave the connection, before asking anything', asy
     id: ask.id,
     result: {
       capability: 'cap',
+      connectionKey: 's1.grant',
       aud: 'https://proxy.example',
       exp: Math.floor(Date.now() / 1000) + 600,
     },
@@ -436,6 +442,7 @@ it('forgets its capabilities for a platform once disconnected', async () => {
     f.reply({ type: 'atomic.view.response', version: 1, id, result });
   const capability = {
     capability: 'cap',
+    connectionKey: 's1.grant',
     aud: 'https://proxy.example',
     exp: Math.floor(Date.now() / 1000) + 600,
   };
