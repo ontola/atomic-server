@@ -1,10 +1,11 @@
-import { Collection, Property, useStore } from '@tomic/react';
+import type { IndexedTableRows } from '@tomic/table';
+import { Property, useStore } from '@tomic/react';
 import { useCallback } from 'react';
 import { CellIndex, CopyValue } from '@chunks/TableEditor';
 import { getValuesFromSubject } from './clipboard';
 import { transformToPropertiesPerSubject } from './transformPropertiesPerSubject';
 
-export function useHandleCopyCommand(collection: Collection) {
+export function useHandleCopyCommand(collection: IndexedTableRows) {
   const store = useStore();
 
   return useCallback(

@@ -1,8 +1,8 @@
+import type { IndexedTableRows } from '@tomic/table';
 import {
   unknownSubject,
   type AggregateFunction,
   type AggregateOutcome,
-  type Collection,
   type Property,
 } from '@tomic/react';
 import { createContext } from 'react';
@@ -117,7 +117,7 @@ export interface TablePageContextType {
 }
 
 export type RowSource =
-  | { kind: 'member'; collection: Collection; index: number }
+  | { kind: 'member'; collection: IndexedTableRows; index: number }
   | { kind: 'session'; key: string };
 
 export const TablePageContext = createContext<TablePageContextType>({

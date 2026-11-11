@@ -1,5 +1,5 @@
+import type { IndexedTableRows } from '@tomic/table';
 import {
-  Collection,
   Datatype,
   JSONValue,
   Property,
@@ -38,7 +38,7 @@ interface IssuesViewProps {
   tableClass: Resource;
   /** Every property of the class (used to find/adopt the status enum). */
   allColumns: Property[];
-  collection: Collection;
+  collection: IndexedTableRows;
   ready: boolean;
   viewGroupBy: string | undefined;
   setViewGroupBy: (property: string) => void;

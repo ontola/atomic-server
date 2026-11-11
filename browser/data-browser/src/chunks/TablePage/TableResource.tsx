@@ -169,6 +169,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     deleteView,
     reorderViews,
     collection,
+    answeredQuery: answeredQueryState,
     ready,
     invalidateCollection,
     viewKind,
@@ -797,10 +798,10 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     sorting.sortDesc,
   );
   const answeredQuery = queryIdentity(
-    collection.filters,
-    collection.expressionFilters,
-    collection.sortBy,
-    collection.sortDesc,
+    answeredQueryState.filters,
+    answeredQueryState.expressionFilters,
+    answeredQueryState.sortBy,
+    answeredQueryState.sortDesc,
   );
 
   // A count captured under a different query says nothing about this one.

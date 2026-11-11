@@ -14,6 +14,7 @@ import {
 } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import {
+  commits,
   Datatype,
   type JSONValue,
   LoroLoader,
@@ -93,6 +94,9 @@ async function renderCell(
     noParent: true,
   });
   await row.set(property.subject, stored, false);
+  // Existing-row edits already have a creation timestamp. Seed it locally so
+  // this editor fixture does not wait for remote commit-property metadata.
+  await row.set(commits.properties.createdAt, Date.now(), false);
 
   // StrictMode as the app runs it: an editor that stores on unmount must not
   // store when React only re-runs its effects.

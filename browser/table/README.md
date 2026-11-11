@@ -40,6 +40,20 @@ immediately or become a draft. `renameLabel` lets the host localize the input.
 
 ## Page host services
 
+`IndexedTableRows` is the small identity-access contract used by the Atomic
+grid, selection, clipboard, presence and whole-result renderers. It exposes
+indexed lookup, exact membership size and enumeration without Resource, Store
+or Collection. `tableRowList` captures a finite immutable identity snapshot,
+replacing the quick-filter result's previous cast to an Atomic Collection.
+
+`WindowedTableRows` exposes only retained identities. It has no whole-result
+enumerator or total count. Shared row lookup accepts either source; full-result
+consumers explicitly require the indexed capability. `useTableRowSubject` and
+`useTableRowSubjects` reject stale asynchronous results after source changes and
+expose read errors. Atomic resource hydration stays in the host adapter.
+The TablePage grid still uses indexed results: native window paging and the
+availability of whole-result features are not implemented by these interfaces.
+
 `TableQuery` describes explicit table/class/drive scope, property and formula
 filters, sorting, whole-collection aggregation and a page size without importing
 Atomic Resource, Store or Collection. The Atomic adapter translates that request

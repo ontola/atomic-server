@@ -1,3 +1,4 @@
+import type { IndexedTableRows } from '@tomic/table';
 import {
   JSONValue,
   Property,
@@ -8,7 +9,6 @@ import {
   useStore,
   useValue,
   type Store,
-  type Collection,
 } from '@tomic/react';
 import { useCallback, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
@@ -26,7 +26,7 @@ import { useTimerProps, type TimerPropsStatus } from './useTimerProps';
  */
 async function stopAllRunning(
   store: Store,
-  collection: Collection,
+  collection: IndexedTableRows,
   startProp: string,
   endProp: string,
   except?: string,
@@ -81,7 +81,7 @@ export function useTimerColumns(
   tableSubject: string,
   tableClass: Resource,
   allColumns: Property[],
-  collection: Collection,
+  collection: IndexedTableRows,
   viewGroupBy: string | undefined,
   setViewGroupBy: (property: string) => void,
   viewEndProp: string | undefined,

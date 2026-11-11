@@ -1,12 +1,9 @@
+import { useTableRowResource } from './useTableRowResource';
+import type { IndexedTableRows } from '@tomic/table';
 import { useContext, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaMessage, FaRegMessage } from 'react-icons/fa6';
-import {
-  unknownSubject,
-  useMemberFromCollection,
-  useResource,
-  type Collection,
-} from '@tomic/react';
+import { unknownSubject, useResource } from '@tomic/react';
 import { useRightPanel } from '@components/RightPanel/RightPanelContext';
 import { useCommentCount } from '../../hooks/useCommentCount';
 import { TablePageContext } from './tablePageContext';
@@ -46,10 +43,10 @@ function MemberRowComments({
   collection,
   index,
 }: {
-  collection: Collection;
+  collection: IndexedTableRows;
   index: number;
 }): JSX.Element | null {
-  const resource = useMemberFromCollection(collection, index);
+  const resource = useTableRowResource(collection, index);
 
   return resource.subject === unknownSubject ? null : (
     <RowCommentBubble subject={resource.subject} />

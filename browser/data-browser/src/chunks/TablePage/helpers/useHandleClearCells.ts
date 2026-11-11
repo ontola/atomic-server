@@ -1,4 +1,5 @@
-import { Collection, Datatype, useStore } from '@tomic/react';
+import type { IndexedTableRows } from '@tomic/table';
+import { Datatype, useStore } from '@tomic/react';
 import { useCallback } from 'react';
 import { CellIndex } from '@chunks/TableEditor';
 import {
@@ -10,7 +11,7 @@ import { transformToPropertiesPerSubject } from './transformPropertiesPerSubject
 import type { TableColumn } from '../useTableColumns';
 
 export function useHandleClearCells(
-  collection: Collection,
+  collection: IndexedTableRows,
   addItemsToHistoryStack: AddItemToHistoryStack,
 ) {
   const store = useStore();

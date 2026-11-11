@@ -1,5 +1,10 @@
 import { useCollection, unknownSubject } from '@tomic/react';
-import type { TableQuery } from '@tomic/table';
+import type {
+  TableQuery,
+  IndexedTableRows,
+  TableQueryFilter,
+  TableExpressionFilter,
+} from '@tomic/table';
 import { toAtomicTableQuery } from './atomicTableQuery';
 
 /** Atomic's indexed collection implementation; no full-table mirror is built. */
@@ -10,8 +15,23 @@ export function useAtomicTableQuery(query: TableQuery, server: string) {
     server,
   });
 
+  const collection: IndexedTableRows = result.collection;
+  const answeredQuery: {
+    filters: TableQueryFilter[];
+    expressionFilters: TableExpressionFilter[];
+    sortBy?: string;
+    sortDesc: boolean;
+  } = {
+    filters: result.collection.filters,
+    expressionFilters: result.collection.expressionFilters,
+    sortBy: result.collection.sortBy,
+    sortDesc: result.collection.sortDesc,
+  };
+
   return {
-    ...result,
+    collection,
+    answeredQuery,
+    invalidateCollection: result.invalidateCollection,
     ready:
       !!query.scope.rowClass &&
       query.scope.rowClass !== unknownSubject &&
