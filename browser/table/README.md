@@ -40,6 +40,21 @@ immediately or become a draft. `renameLabel` lets the host localize the input.
 
 ## Page host services
 
+`executeTableRowMutation` runs one scoped update/delete command against a host
+backend. Its schema snapshot uses stable field IDs and writable flags. The
+service captures command identity, checks optional schema revisions and field
+baselines, invokes host validation/write policy, reads back the result, and
+releases opened handles on failures as well as success. `clearTableFields`
+builds immutable clear updates, including selected languages of localized text.
+
+The backend owns authorization, datatype validation, transaction semantics and
+read freshness. Native adapters supply separate bounded ORM reads; Atomic's
+bulk-clear adapter uses its live Resource cache and preserves `Resource.save`'s
+persisted/offline/no-op policy. These are distinct confirmation guarantees. Preflight and read-back
+do not provide cross-peer compare-and-swap or cross-document atomicity. Callers
+keep drafts until a command resolves; creation, undo policy, bulk partial-success
+handling and schema activation remain host services/follow-up extraction.
+
 `ValueCell` owns shared edit-mode orchestration: first-character buffering,
 text seeds for parsed editors, picker behavior, editor/display switching,
 context-menu behavior and draft-row advance. Hosts supply a stable cell identity,

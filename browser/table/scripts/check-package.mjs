@@ -44,7 +44,7 @@ try {
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver, getComputedStyle: dom.window.getComputedStyle, requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout, IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
     globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
-    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell } from '@tomic/table';
+    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell, executeTableRowMutation } from '@tomic/table';
     assert.equal(typeof ValueCell, 'function');
     assert.equal(parseInteger('42'), 42);
     assert.equal(typeof IntegerCell.Edit, 'function');
@@ -63,6 +63,14 @@ try {
     assert.equal(await readTableRow(tableRowList(['row:one']), 0), 'row:one');
     assert.equal(tableRowCount({ subjects: ['row:101', 'row:102'] }), 2);
     assert.equal(await readTableRow({ subjects: ['row:101'] }, 1), undefined);
+    const mutationTarget = { subject: 'row:one', scope: { collection: 'table:one', rowClass: 'class:row' } };
+    let mutationValue = 1;
+    await executeTableRowMutation({ target: mutationTarget, kind: 'update', baseline: { quantity: 1 }, changes: { quantity: 0 } }, {
+      schema: { columns: [{ id: 'quantity', writable: true }] },
+      read: async () => ({ target: mutationTarget, values: { quantity: mutationValue }, handle: undefined }),
+      write: async (_, command, changes) => { mutationValue = changes.quantity; },
+    });
+    assert.equal(mutationValue, 0);
     const commands = [];
     function Location() {
       const { location, navigate } = useTableNavigation();
@@ -82,7 +90,7 @@ try {
   writeFileSync(
     join(consumer, 'consumer.tsx'),
     `
-    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type TableQuery, type IndexedTableRows, type WindowedTableRows, ValueCell, StringCell, type FancyTableProps } from '@tomic/table';
+    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type TableQuery, type IndexedTableRows, type WindowedTableRows, ValueCell, StringCell, type TableRowMutation, type FancyTableProps } from '@tomic/table';
     const props: FancyTableProps<{ id: string }> = {
       columns: [{ id: 'name' }], itemCount: 1, columnToKey: column => column.id,
       labelledBy: 'title', HeadingComponent: ({ column }) => <span>{column.id}</span>,
@@ -108,7 +116,8 @@ try {
       onChange={value => void value} editStart={{ kind: 'value', fromCharacter: key => key }}
       renderEditor={state => <StringCell.Edit {...state} property="name" />}
       renderDisplay={state => <StringCell.Display {...state} property="name" />} />;
-    void [grid, editor, invalid, views, host, query, indexed, valueCell];
+    const mutation: TableRowMutation = { kind: 'update', target: { subject: 'row:one', scope: { collection: 'table:one', rowClass: 'class:row' } }, changes: { quantity: 0 } };
+    void [grid, editor, invalid, views, host, query, indexed, valueCell, mutation];
   `,
   );
   writeFileSync(
