@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Integrations: provider credentials at the integration proxy are sealed under keys only this app holds (ontola/atomic-plugins#730). The data browser chooses each connection's id and derives its key from the agent's vault proof, sends it once when connecting, and gives each app frame a key grant (the key encrypted to the proxy with HPKE, naming the app) with its capability; the frame signs it as `x-connection-key`. The default proxy is now `https://integrations.atomic.place`, which speaks this protocol; `https://localthought.io` does not, so a setting that still names it uses the new default. Connections made at localthought.io have to be made again.
 - Recover stalled individual WebSocket reads over authenticated HTTP; show table loading status while membership is pending.
 - Show schema-backed JSON table values as single-line readable previews with ellipses and text tooltips, while retaining full JSON editing and fallback for unsupported schemas. Preserve null fields inside nested JSON arrays when editing.
 

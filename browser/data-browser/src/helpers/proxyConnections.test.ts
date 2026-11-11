@@ -426,7 +426,8 @@ describe('ProxyConnections', () => {
       .map(c => new URL(c.url).pathname);
     expect(deletes).toEqual(
       ['old', id, 'gone'].map(
-        id => `/connections/${id}/agents/${encodeURIComponent(APP_AGENT)}`,
+        connection =>
+          `/connections/${connection}/agents/${encodeURIComponent(APP_AGENT)}`,
       ),
     );
   });
