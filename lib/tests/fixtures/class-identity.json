@@ -1,0 +1,197 @@
+{
+  "context": "atomic class identity v1",
+  "description": "Shared by atomic_lib (lib/src/class_identity.rs) and @tomic/lib (browser/lib/src/class-identity.test.ts). Recipe: id = 'atomic:class:' + BLAKE3.derive_key('atomic class identity v1', JCS({ontology, requires: sorted, shortname})).hex. `recommends` is not an input. Spec: docs/src/schema/class-identity.md.",
+  "invalid": [
+    {
+      "name": "uppercase shortname",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "Task"
+    },
+    {
+      "name": "empty shortname",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": ""
+    },
+    {
+      "name": "underscore shortname",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "my_task"
+    },
+    {
+      "name": "empty ontology",
+      "ontology": "",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "name": "duplicate member",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74",
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "name": "duplicate across spellings",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74",
+        "did:ad:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "name": "lens member",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:lens:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "name": "class member",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:class:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "name": "uppercase hex member",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5A939A7CA63806573C204C88E8994252EF6E14F125F8BD258BCE672344B2BA74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "name": "empty prop member",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:"
+      ],
+      "shortname": "task"
+    },
+    {
+      "name": "bare name member",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "name"
+      ],
+      "shortname": "task"
+    },
+    {
+      "name": "internal member",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "internal:/name"
+      ],
+      "shortname": "task"
+    }
+  ],
+  "valid": [
+    {
+      "id": "atomic:class:32ea82da62c4bb016fd04dd163819ed3a67c444c131c2e8c7195a245ffa4838b",
+      "name": "no required properties",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [],
+      "shortname": "task"
+    },
+    {
+      "id": "atomic:class:86ecb3e704eece30cbcf75b27d93ed59841a0bf4270e4e6630ed478a4f19f961",
+      "name": "one required property",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "id": "atomic:class:b957eb2e5ec1a154e5a1b15c5613bffaf868c7349e59897ec7d5bb7f145760f7",
+      "name": "two required properties",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74",
+        "atomic:prop:d744c0c58cf42bff6246a015b5e1429c93f1ca505c3355dd84c695c8da6e6626"
+      ],
+      "shortname": "task"
+    },
+    {
+      "id": "atomic:class:b957eb2e5ec1a154e5a1b15c5613bffaf868c7349e59897ec7d5bb7f145760f7",
+      "name": "requires order does not matter",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:d744c0c58cf42bff6246a015b5e1429c93f1ca505c3355dd84c695c8da6e6626",
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "id": "atomic:class:86ecb3e704eece30cbcf75b27d93ed59841a0bf4270e4e6630ed478a4f19f961",
+      "name": "did:ad: ontology normalizes",
+      "ontology": "did:ad:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "id": "atomic:class:86ecb3e704eece30cbcf75b27d93ed59841a0bf4270e4e6630ed478a4f19f961",
+      "name": "did:ad:prop: member normalizes",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "did:ad:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "id": "atomic:class:580ff4d90ff82739a914b07e6f2961ba23a334b30b6ef7136b8bc6172b5235cd",
+      "name": "another shortname",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "todo"
+    },
+    {
+      "id": "atomic:class:8d2a9f9f8411c63405169dee1a3d163120839620bf2360dd50343fe526991eb3",
+      "name": "another ontology",
+      "ontology": "atomic:otherOntology",
+      "requires": [
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "id": "atomic:class:fa73e5a48316efe94e390dc6aaace4e1749a4a4fa33a0657e643248add7a774d",
+      "name": "https core member is hashed as is",
+      "ontology": "atomic:ontologyGenesis",
+      "requires": [
+        "https://atomicdata.dev/properties/name",
+        "atomic:prop:5a939a7ca63806573c204c88e8994252ef6e14f125f8bd258bce672344b2ba74"
+      ],
+      "shortname": "task"
+    },
+    {
+      "id": "atomic:class:ff7bd97c6b62c680c07c3a16e81a6db3ce682a717f762df631218beb7d699bdb",
+      "name": "https ontology",
+      "ontology": "https://atomicdata.dev/ontology/core",
+      "requires": [
+        "https://atomicdata.dev/properties/name"
+      ],
+      "shortname": "task"
+    }
+  ]
+}

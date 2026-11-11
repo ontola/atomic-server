@@ -1,5 +1,12 @@
 # Schema routes: one on-ramp for Classes and Properties
 
+> **Note 2026-10-28: `did:ad:frozen` was superseded by #2151.** #1262 and `atomic:frozen:`
+> (#2045) are closed. Content-addressed Properties (`atomic:prop:{blake3}`, #2151) replaced
+> the parallel frozen-schema API, and Classes follow as `atomic:class:{blake3}`
+> ([`../content-addressed-schemas.md`](../content-addressed-schemas.md)). The write-path
+> policy below (optional schema, option A) still stands. Read the `did:ad:frozen`,
+> `Tree::Frozen` and `/frozen` mechanism as history.
+
 **Status:** Accepted 2026-09-01 as policy (#1316) — option B. #1251 is to be converted to a frozen ontology; the bootstrap sentinel-gate fix is being built on branch `fix/defaults-bootstrap-gate`.
 
 > **Decision needed by maintainer**
