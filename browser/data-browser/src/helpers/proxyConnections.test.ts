@@ -1,6 +1,12 @@
 // @wc-ignore-file
 import { describe, expect, it, vi } from 'vitest';
-import { Agent, JSCryptoProvider, decodeB64 } from '@tomic/react';
+import {
+  AGENT_VAULT_PROOF_MESSAGE,
+  Agent,
+  JSCryptoProvider,
+  decodeB64,
+} from '@tomic/react';
+import { deriveConnectionKey, fromBase64url } from './connectionKeys';
 import {
   CAPABILITY_TTL_SECONDS,
   ProxyConnections,
@@ -17,6 +23,8 @@ const USER = `atomic:agent:${USER_PUBLIC}`;
 const APP_AGENT = `atomic:agent:${'A'.repeat(42)}E`;
 const FRAME_KEY = `${'B'.repeat(42)}E`;
 const SCOPE = { drive: 'atomic:drive', app: 'atomic:app', appAgent: APP_AGENT };
+/** Any 32 bytes do as the proxy's grant public key here. */
+const PROXY_GRANT_KEY = 'C'.repeat(42) + 'E';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();
@@ -94,8 +102,18 @@ function fakeProxy() {
   const http = vi.fn(async (url: string, init: RequestInit = {}) => {
     const method = init.method ?? 'GET';
     const body = init.body as string | undefined;
-    const h = init.headers as Record<string, string>;
+    const h = (init.headers ?? {}) as Record<string, string>;
     calls.push({ method, url, body });
+
+    // Public and unsigned.
+    if (new URL(url).pathname === '/connection-key-grants/key')
+      return Response.json({
+        kem: 'DHKEM(X25519, HKDF-SHA256)',
+        kdf: 'HKDF-SHA256',
+        aead: 'AES-256-GCM',
+        info: 'integration-proxy-connection-key-grant-v1',
+        public_key: PROXY_GRANT_KEY,
+      });
     const message = [
       'atomic-request-v2',
       method,
@@ -121,15 +139,26 @@ function fakeProxy() {
     const path = new URL(url).pathname;
 
     if (path === '/connect/redeem') {
+      const { connection_id, connection_key } = JSON.parse(body!);
+
+      if (
+        !/^[A-Za-z0-9_-]{43}$/.test(connection_id) ||
+        !/^k1\.[A-Za-z0-9_-]{43}$/.test(connection_key)
+      )
+        return Response.json(
+          { error: 'bad_request', message: 'id or key' },
+          { status: 400 },
+        );
+
       connections.push({
-        connection_id: 'new',
+        connection_id,
         platform: 'pets',
         owner: h['x-atomic-agent'],
         delegations: [],
       });
 
       return Response.json({
-        connection_id: 'new',
+        connection_id,
         platform: 'pets',
         owner: h['x-atomic-agent'],
       });
@@ -192,15 +221,41 @@ describe('ProxyConnections', () => {
     expect(finished).toEqual({
       returnTo: `${PAGE}/app/show?subject=x`,
       connected: true,
-      connectionId: 'new',
+      connectionId: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
     });
   });
 
+  it('chooses the connection id and sends the key derived for it', async () => {
+    const { proxy, finished } = await connected();
+    const id = finished.connectionId!;
+    const redeem = JSON.parse(proxy.calls[0].body!);
+    expect(redeem.connection_id).toBe(id);
+    // The key is the user's vault proof through HKDF, for this proxy and id:
+    // every device holding the agent derives it again, and nothing stores it.
+    const proof = new Uint8Array(
+      decodeB64(await user().signBytes(AGENT_VAULT_PROOF_MESSAGE)),
+    );
+    const key = deriveConnectionKey(proof, ORIGIN, id);
+    expect(redeem.connection_key).toBe(
+      `k1.${btoa(String.fromCharCode(...key))
+        .replaceAll('+', '-')
+        .replaceAll('/', '_')
+        .replaceAll('=', '')}`,
+    );
+    // Another proxy or connection gets another key.
+    expect(deriveConnectionKey(proof, 'https://other.example', id)).not.toEqual(
+      key,
+    );
+    // A second connect picks a new id.
+    const second = await connected();
+    expect(second.finished.connectionId).not.toBe(id);
+  });
+
   it('redeems signed by the user, then delegates to the app, signed too', async () => {
-    const { proxy, storage } = await connected();
+    const { proxy, storage, finished } = await connected();
     expect(proxy.calls.map(c => [c.method, new URL(c.url).pathname])).toEqual([
       ['POST', '/connect/redeem'],
-      ['POST', '/connections/new/agents'],
+      ['POST', `/connections/${finished.connectionId}/agents`],
     ]);
     expect(JSON.parse(proxy.calls[0].body!)).toMatchObject({
       code: 'handoff',
@@ -209,9 +264,10 @@ describe('ProxyConnections', () => {
       agent: APP_AGENT,
       label: 'Pets app',
     });
-    expect(proxy.connections.find(c => c.connection_id === 'new')?.owner).toBe(
-      USER,
-    );
+    expect(
+      proxy.connections.find(c => c.connection_id === finished.connectionId)
+        ?.owner,
+    ).toBe(USER);
     // The handoff state is spent, and nothing credential-like stays behind.
     expect(storage.length).toBe(0);
   });
@@ -225,9 +281,9 @@ describe('ProxyConnections', () => {
   });
 
   it('lists only connections delegated to the app', async () => {
-    const { connections } = await connected();
+    const { connections, finished } = await connected();
     expect(await connections.delegated(APP_AGENT, 'pets')).toEqual([
-      { connectionId: 'new', platform: 'pets' },
+      { connectionId: finished.connectionId, platform: 'pets' },
     ]);
     expect(
       await connections.delegated(`atomic:agent:${FRAME_KEY}`, 'pets'),
@@ -235,20 +291,40 @@ describe('ProxyConnections', () => {
   });
 
   it('mints a capability bound to the frame key, signed by the user', async () => {
-    const { connections } = await connected();
+    const { connections, finished, proxy } = await connected();
+    const id = finished.connectionId!;
     const minted = await connections.mintCapability({
       appAgent: APP_AGENT,
       platform: 'pets',
-      connectionId: 'new',
+      connectionId: id,
       publicKey: FRAME_KEY,
     });
+    // With it, a key grant for the frame to pass on: HPKE to the proxy's
+    // grant key, so the frame never holds the key itself. Its plaintext is
+    // checked by the proxy's tests and the RFC 9180 vector in
+    // `connectionKeys.test.ts`; here, only its shape.
+    expect(minted.connectionKey).toMatch(/^s1\.[A-Za-z0-9_-]+$/);
+    const sealed = fromBase64url(minted.connectionKey.slice(3));
+    const plaintext = JSON.stringify({
+      v: 1,
+      connection_id: id,
+      sub: APP_AGENT,
+      key: 'x'.repeat(43),
+      exp: minted.exp,
+    });
+    expect(sealed.length).toBe(32 + plaintext.length + 16);
+    // The grant key was fetched once, unsigned.
+    const grantKeyCalls = proxy.calls.filter(
+      c => new URL(c.url).pathname === '/connection-key-grants/key',
+    );
+    expect(grantKeyCalls).toHaveLength(1);
     expect(minted.aud).toBe(ORIGIN);
     expect(minted.exp).toBe(1_790_000_000 + CAPABILITY_TTL_SECONDS);
     const [payload, sig] = minted.capability.split('.');
     const json = new TextDecoder().decode(decodeB64(payload));
     expect(JSON.parse(json)).toEqual({
       v: 2,
-      connection_id: 'new',
+      connection_id: id,
       platform: 'pets',
       aud: ORIGIN,
       app: APP_AGENT,
@@ -265,7 +341,7 @@ describe('ProxyConnections', () => {
   });
 
   it('refuses to mint for a connection not delegated to the app', async () => {
-    const { connections } = await connected();
+    const { connections, finished } = await connected();
     await expect(
       connections.mintCapability({
         appAgent: APP_AGENT,
@@ -278,7 +354,7 @@ describe('ProxyConnections', () => {
       connections.mintCapability({
         appAgent: APP_AGENT,
         platform: 'github',
-        connectionId: 'new',
+        connectionId: finished.connectionId!,
         publicKey: FRAME_KEY,
       }),
     ).rejects.toThrow('is delegated to this app');
@@ -286,7 +362,7 @@ describe('ProxyConnections', () => {
       connections.mintCapability({
         appAgent: APP_AGENT,
         platform: 'pets',
-        connectionId: 'new',
+        connectionId: finished.connectionId!,
         publicKey: 'short',
       }),
     ).rejects.toThrow('Ed25519');

@@ -501,7 +501,14 @@ function required(value: string | undefined, name: string): string {
 
 const PROXY_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 const PROXY_RESPONSE_HEADERS = ['link', 'retry-after', 'etag', 'content-type'];
-const PROXY_REQUEST_HEADERS = ['authorization', 'content-type', 'if-match'];
+const PROXY_REQUEST_HEADERS = [
+  'authorization',
+  'content-type',
+  'if-match',
+  // A key grant the page minted with the capability; the proxy needs it to
+  // open the connection's credential (ontola/atomic-plugins#730).
+  'x-connection-key',
+];
 const PROXY_MAX_BODY = 10 * 1024 * 1024;
 const PROXY_TIMEOUT = 30_000;
 
