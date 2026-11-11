@@ -5,6 +5,7 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import { useDriveChats } from '@components/SideBar/AIPanel';
 import { readManagedAccountBinding } from '@helpers/managed/binding';
 import { isDeviceLinked } from '@helpers/managed/deviceLink';
+import { useHasManagedAccount } from './useHasManagedAccount';
 import { useLocalStorage } from './useLocalStorage';
 import { usePrivateDrive } from './usePrivateDrive';
 import { useSavedDrives } from './useSavedDrives';
@@ -103,6 +104,9 @@ export function useOnboardingProgress(driveName?: string) {
     onboardingKeys.hidden(agent?.subject),
     false,
   );
+  // Signing in with an email lands a cookie session, which leaves neither a
+  // binding nor a device token; the account itself is the proof.
+  const hasAccount = useHasManagedAccount();
   const base = { savedDrives, privateDrive, welcomeDrive } as OnboardingInput;
   const projects = projectDrives(base);
   const resources = useResources(projects);
@@ -123,7 +127,8 @@ export function useOnboardingProgress(driveName?: string) {
     aiAvailable: enableAI && availableProviders.length > 0,
     otherAgentsOnProjects: others,
     invited,
-    accountLinked: !!readManagedAccountBinding() || isDeviceLinked(),
+    accountLinked:
+      !!readManagedAccountBinding() || isDeviceLinked() || hasAccount === true,
   };
   const steps = deriveOnboardingSteps(input);
 
