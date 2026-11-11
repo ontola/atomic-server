@@ -600,6 +600,44 @@ impl From<crate::Subject> for SubResource {
     }
 }
 
+/// A JSON value as the datatype its property declares.
+///
+/// Used where a script or a page names values as plain JSON (an app's write,
+/// a plugin verdict): the planner or the page already checked the shape, so a
+/// failure here means the two disagree, which is worth an error rather than a
+/// coercion.
+pub fn json_to_value(value: serde_json::Value, datatype: &DataType) -> Result<Value, String> {
+    use serde_json::Value as Json;
+    match (datatype, value) {
+        (DataType::Json | DataType::LocalizedText, value) => Ok(Value::Json(value)),
+        (DataType::Integer, Json::Number(n)) => n
+            .as_i64()
+            .map(Value::Integer)
+            .ok_or_else(|| format!("{n} is not a whole number")),
+        (DataType::Timestamp, Json::Number(n)) => n
+            .as_i64()
+            .map(Value::Timestamp)
+            .ok_or_else(|| format!("{n} is not a timestamp")),
+        (DataType::Float, Json::Number(n)) => n
+            .as_f64()
+            .map(Value::Float)
+            .ok_or_else(|| format!("{n} is not a number")),
+        (DataType::Boolean, Json::Bool(b)) => Ok(Value::Boolean(b)),
+        (DataType::ResourceArray, Json::Array(items)) => Ok(Value::ResourceArray(
+            items
+                .iter()
+                .map(|item| {
+                    item.as_str()
+                        .map(|subject| SubResource::Subject(Subject::from_raw(subject, None)))
+                        .ok_or_else(|| format!("{item} is not a subject"))
+                })
+                .collect::<Result<Vec<_>, String>>()?,
+        )),
+        (datatype, Json::String(text)) => Value::new(&text, datatype).map_err(|e| e.to_string()),
+        (datatype, value) => Err(format!("{value} is not a {datatype}")),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

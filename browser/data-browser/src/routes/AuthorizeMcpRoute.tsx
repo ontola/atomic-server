@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { createRoute } from '@tanstack/react-router';
-import { grantAgent, useStore } from '@tomic/react';
+import {
+  GrantAgentError,
+  grantAgent,
+  isLoopbackHost,
+  useStore,
+} from '@tomic/react';
 import { Button } from '../components/Button';
 import {
   ConnectAppForm,
@@ -9,6 +14,7 @@ import {
   useConnectableDrives,
 } from '../components/ConnectAppForm';
 import { useSettings } from '../helpers/AppSettings';
+import { grantFailureMessage } from '../helpers/connectableDrives';
 import { rememberConnectedApp } from '../helpers/connectedApps';
 import {
   approveAuthorization,
@@ -16,6 +22,7 @@ import {
   requestIssuedAgent,
 } from '../helpers/hostedMcp';
 import { isRunningInTauri } from '../helpers/tauri';
+import { signInPath } from '../helpers/returnPath';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { pathNames, paths } from './paths';
 import { appRoute } from './RootRoutes';
@@ -60,7 +67,7 @@ export const AuthorizeMcpRoute = createRoute({
 
 function isLoopback(uri: string): boolean {
   try {
-    return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(uri).hostname);
+    return isLoopbackHost(new URL(uri).hostname);
   } catch {
     return false;
   }
@@ -81,7 +88,8 @@ function AuthorizeMcpPage() {
   const navigate = useNavigateWithTransition();
   const { agent, drive } = useSettings();
   const search = AuthorizeMcpRoute.useSearch();
-  const { privateDrive, homeLoading, catalog } = useConnectableDrives();
+  const { privateDrive, homeLoading, catalog, available, unavailable } =
+    useConnectableDrives();
   const [picked, setPicked] = useState<string[] | undefined>();
   const [write, setWrite] = useState<boolean | undefined>();
   const [busy, setBusy] = useState(false);
@@ -98,8 +106,9 @@ function AuthorizeMcpPage() {
       drive,
       privateDrive,
     ]);
-  const selected =
-    picked ?? (drive && catalog.subjects.includes(drive) ? [drive] : []);
+  const selected = (
+    picked ?? (drive && available.includes(drive) ? [drive] : [])
+  ).filter(subject => available.includes(subject));
   const canEdit = write ?? search.scope?.split(' ').includes('write') === true;
   const action = canEdit ? 'read and edit' : 'read';
   const complete =
@@ -137,8 +146,25 @@ function AuthorizeMcpPage() {
       <ConnectPage>
         <h1>Connect an app</h1>
         <p>Sign in first, then open this link again.</p>
-        <Button onClick={() => navigate(paths.welcome)}>Sign in</Button>
+        <Button onClick={() => navigate(signInPath(window.location))}>
+          Sign in
+        </Button>
       </ConnectPage>
+    );
+  }
+
+  async function describeFailure(e: GrantAgentError) {
+    const titles = new Map<string, string>();
+
+    for (const { subject } of e.failed) {
+      titles.set(subject, (await store.getResource(subject)).title);
+    }
+
+    return grantFailureMessage(
+      e.failed,
+      subject => titles.get(subject) ?? 'A drive',
+      name,
+      serverHost ?? 'this server',
     );
   }
 
@@ -159,7 +185,14 @@ function AuthorizeMcpPage() {
         search.client_id,
       );
 
-      await grantAgent(store, issued.agent, selected, canEdit);
+      try {
+        await grantAgent(store, issued.agent, selected, canEdit);
+      } catch (e) {
+        throw e instanceof GrantAgentError
+          ? new Error(await describeFailure(e))
+          : e;
+      }
+
       await rememberConnectedApp(store, home, issued.agent);
 
       const redirect = await approveAuthorization(store, search.server, {
@@ -207,10 +240,12 @@ function AuthorizeMcpPage() {
 
       <ConnectAppForm
         subjects={catalog.subjects}
+        unavailable={unavailable}
         selected={selected}
         onToggle={(subject, on) =>
           setPicked(toggleSubject(selected, subject, on))
         }
+        onToggleAll={on => setPicked(on ? available : [])}
         canEdit={canEdit}
         onCanEditChange={setWrite}
         error={error}

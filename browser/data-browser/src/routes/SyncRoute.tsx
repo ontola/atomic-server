@@ -8,7 +8,10 @@ import {
 } from '../helpers/knownPeers';
 import { resumePeerLinks } from '../helpers/browserPeerSync';
 import { syncSummary, showSavedServer } from '../helpers/syncPresentation';
-import { driveBillingUrl } from '../helpers/driveBillingUrl';
+import {
+  cloudServerSalesUrl,
+  driveBillingUrl,
+} from '../helpers/driveBillingUrl';
 import { reportUserFacingFailure } from '../helpers/sentry';
 import {
   deriveNodeStatuses,
@@ -39,22 +42,21 @@ import {
   type StoreSyncStatus,
   type CommitLogEntry,
   useStore,
+  useProperty,
   useResource,
   useString,
-  core,
-  useProperty,
   truncateUrl,
   Datatype,
   isAtomicIdentifier,
   nodeId as parseNodeId,
   nodeSubject,
+  core,
 } from '@tomic/react';
 import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
 import {
   cardSurface,
   CardIcon,
   CARD_SUB_FONT,
-  CARD_TITLE_FONT,
 } from '../components/cardSurface';
 import { openExternal } from '../helpers/openExternal';
 import { formatBytes } from '../helpers/formatBytes';
@@ -81,10 +83,9 @@ import {
 } from '../components/Cloud/ServiceRow';
 import { CloudServerDetails } from '../components/Cloud/CloudServerDetails';
 import { SyncProblemBanner } from '../components/SyncProblemBanner';
-import { describeSyncProblem, notHostedTitle } from '../helpers/syncProblem';
+import { describeSyncProblem } from '../helpers/syncProblem';
 import { isErrorReportingEnabled, reportSyncProblem } from '../helpers/sentry';
-import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
-import { isDeviceLinked } from '../helpers/managed/deviceLink';
+import { SyncProviderAccount } from '../components/Cloud/SyncProviderAccount';
 import {
   getManagedAccount,
   type ManagedAccount,
@@ -127,6 +128,7 @@ import {
   PairingEnvelopeError,
   PAIRING_URI_PREFIX,
   signRequest,
+  isLoopbackHost,
 } from '@tomic/lib';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { PRODUCT_NAME } from '../helpers/managed/product';
@@ -177,6 +179,14 @@ function StatusIcon({ status }: { status: NodeStatus }) {
     case 'unknown':
       return <FaQuestion />;
   }
+}
+
+/** Connected and answering usage for this drive, but no finished sync is
+ *  recorded here yet: not "In sync", and no longer just "Connecting…". */
+function serverStatusLabel(status: NodeStatus, answersUsage: boolean): string {
+  return status === 'unknown' && answersUsage
+    ? 'Connected'
+    : statusLabel(status);
 }
 
 function statusLabel(status: NodeStatus): string {
@@ -290,6 +300,17 @@ function ServerCard({
     (refusedByServer ||
       (isCloudSyncAvailable(managedInfo) && cloudEnrolled === false));
   const isCloud = isActive && cloudHosted;
+  // A managed node admits a drive it does not host for a short bootstrap window,
+  // so first sync can finish while the enrollment propagates. In that window
+  // the connection looks healthy ("In sync") for a drive the node will refuse
+  // minutes later. The node says so itself via `/drive-usage`.
+  const hostingPending =
+    isActive &&
+    !isCloud &&
+    !refusedByServer &&
+    managedInfo.managed &&
+    cloudEnrolled === false &&
+    nodeUsage?.enrolled === false;
   const serverHostname = status.serverUrl
     ? new URL(status.serverUrl).hostname
     : undefined;
@@ -374,7 +395,7 @@ function ServerCard({
         message:
           error instanceof Error
             ? error.message
-            : 'Could not change workspace sync.',
+            : 'Could not change drive sync.',
       });
     } finally {
       setSyncChange(null);
@@ -389,12 +410,17 @@ function ServerCard({
       title={isCloud ? 'Cloud Server' : serverLabel(server)}
       status={
         localOnlyDrive
-          ? { tone: 'unknown', label: 'Workspace sync off' }
+          ? { tone: 'unknown', label: 'Drive sync off' }
           : refusedByServer
             ? { tone: 'offline', label: 'Not hosted here' }
-            : isActive
-              ? { tone: serverStatus, label: statusLabel(serverStatus) }
-              : { tone: 'unknown', label: 'Not connected' }
+            : hostingPending
+              ? { tone: 'unsynced', label: 'Not hosted yet' }
+              : isActive
+                ? {
+                    tone: serverStatus,
+                    label: serverStatusLabel(serverStatus, !!nodeUsage),
+                  }
+                : { tone: 'unknown', label: 'Not connected' }
       }
       controls={
         isSelectedServer ? (
@@ -430,7 +456,9 @@ function ServerCard({
         isActive
           ? isCloud
             ? serverHostname
-            : ['Always-on · in use', syncedFact].filter(Boolean).join(' · ')
+            : ['Always-on · in use', hostingPending ? null : syncedFact]
+                .filter(Boolean)
+                .join(' · ')
           : 'Always-on device'
       }
       facts={isActive ? facts : undefined}
@@ -454,9 +482,19 @@ function ServerCard({
         <ConnError role='alert'>
           <FaCircleExclamation aria-hidden />
           <span>
-            This server doesn’t host this workspace, so it refuses its changes.
-            Set up Cloud Server to sync it here, or turn off sync to keep it on
-            this device only.
+            This server doesn’t host this drive, so it refuses its changes. Set
+            up Cloud Server to sync it here, or turn off sync to keep it on this
+            device only.
+          </span>
+        </ConnError>
+      )}
+      {hostingPending && (
+        <ConnError role='status'>
+          <FaCircleExclamation aria-hidden />
+          <span>
+            Cloud Server isn’t on for this drive. This server only accepts it
+            for a short while; after that it stops syncing. Set up Cloud Server
+            to keep it here, or turn off sync to keep it on this device only.
           </span>
         </ConnError>
       )}
@@ -474,13 +512,13 @@ function ServerCard({
               onChange={next => void toggleWorkspaceSync(next)}
             />
             <label htmlFor='workspace-server-sync'>
-              Sync this workspace with this server
+              Sync this drive with this server
             </label>
           </WorkspaceSyncControl>
           <ConnMeta>
-            Off stops server sync for this workspace on this browser. The
-            server’s existing copy and other devices are unchanged; browser sync
-            can still connect open browsers.
+            Off stops server sync for this drive on this browser. The server’s
+            existing copy and other devices are unchanged; browser sync can
+            still connect open browsers.
           </ConnMeta>
           {syncChange && syncChange.drive === status.drive && (
             <ConnMeta role='status'>
@@ -650,6 +688,12 @@ function SyncPage() {
   const [clientDbOn, setClientDbOn] = useState(() => isClientDbEnabled());
   const { setServer, setDrive, baseURL } = useSettings();
   const { drive: requestedDrive } = SyncRoute.useSearch();
+  // The portal does not know the name of a drive this account only belongs to,
+  // so the links to it carry the name this app shows.
+  const [driveName] = useString(
+    useResource(status.drive ?? undefined),
+    core.properties.name,
+  );
   const [hostedCopy, setHostedCopy] = useState<{
     drive: string;
     origin: string;
@@ -721,20 +765,6 @@ function SyncPage() {
   // onboarding screen uses too — both have to agree about whether a vault
   // exists for this drive.
   const vault = useDriveVault(status.drive ?? null);
-
-  /**
-   * Does this client need to link before it can reach the provider at all?
-   *
-   * True only when nothing is linked yet and `/api/me` says there is no
-   * session — the state a self-hosted, desktop or Android client starts in,
-   * and never the state of a browser served from the provider's own site.
-   *
-   * Deliberately not gated on the vault's own status: the vault reports
-   * `unavailable` only once it has an agent, a drive and its wasm keys to ask
-   * with. A fresh install has none of those and sits at `loading`, so gating
-   * on it hid the one control that could have fixed the situation.
-   */
-  const [needsProviderLink, setNeedsProviderLink] = useState(false);
 
   /**
    * The provider account this client is signed in to, if any.
@@ -912,7 +942,6 @@ function SyncPage() {
       // Asked even when this device is already linked. The link only settles
       // *how* this client authenticates; it says nothing about who, and the
       // portal link needs the account itself.
-      const linked = isDeviceLinked();
 
       try {
         const account = await getManagedAccount();
@@ -920,14 +949,12 @@ function SyncPage() {
         if (cancelled || requestGeneration !== generation) return;
 
         setManagedAccount(account);
-        setNeedsProviderLink(!linked && account === null);
       } catch {
         // Unreachable control plane. Offering to link is the useful answer —
         // the alternative is a Sync page that silently omits backup with no
         // way to ask for it.
         if (!cancelled && requestGeneration === generation) {
           setManagedAccount(null);
-          setNeedsProviderLink(!linked);
         }
       }
     };
@@ -1002,6 +1029,7 @@ function SyncPage() {
     refusedByServer: store.isDriveRefusedByServer(status.drive),
     status,
     resourceCount: nodeUsage?.resourceCount,
+    enrolled: nodeUsage?.enrolled,
   });
   const cloudEnrolled = hostedByNode ? true : accountEnrolled;
 
@@ -1172,7 +1200,7 @@ function SyncPage() {
   // no address, port or certificate to dial: that is the point of Iroh.
   const isNode = isRunningInTauri();
   const pairNodeId = isNode ? localNodeId : serverNodeId;
-  // A local-only drive (the demo, or any drive made offline) is a normal
+  // A local-only drive (a guest's Welcome drive, or any drive made offline) is a normal
   // drive the sync engine was simply told to skip — not a special code path.
   // When the active drive is local-only the "syncs with N places" story is a
   // lie for it, so the page leads with an honest, drive-specific state + the
@@ -1189,12 +1217,11 @@ function SyncPage() {
     ? new URL(status.serverUrl).hostname
     : undefined;
   const embeddedActive =
-    isNode &&
-    (serverHostname === 'localhost' || serverHostname === '127.0.0.1');
+    isNode && !!serverHostname && isLoopbackHost(serverHostname);
   // Show a server connection card whenever the active server isn't this
   // device's own embedded one (browser: always; Tauri: only a real remote) —
   // and is a server at all. The hosted build's shared origin is not (see
-  // `originNode.ts`): counting it made a free-tier workspace "sync with 1
+  // `originNode.ts`): counting it made a free-tier drive "sync with 1
   // other device" and call moving it to Cloud Server "a migration".
   const showServerConn =
     !!status.serverUrl &&
@@ -1225,7 +1252,7 @@ function SyncPage() {
     try {
       const { hostname } = new URL(server);
 
-      return hostname !== 'localhost' && hostname !== '127.0.0.1';
+      return !isLoopbackHost(hostname);
     } catch {
       return false;
     }
@@ -1252,11 +1279,11 @@ function SyncPage() {
    */
   function cloudServerBlocker(): string | null {
     if (!status.drive) {
-      return 'Open a workspace to see whether it can be hosted.';
+      return 'Open a drive to see whether it can be hosted.';
     }
 
     if (driveMissing) {
-      return 'This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here.';
+      return 'This device doesn’t have this drive yet. Pair the device that does, and you can host it from here.';
     }
 
     if (!isCloudSyncAvailable(managedInfo)) {
@@ -1267,8 +1294,8 @@ function SyncPage() {
       // The enrollment list needs a portal session. Without one the answer
       // never arrives, so say what would get it instead of waiting forever.
       return managedAccount
-        ? 'Checking whether this workspace is hosted…'
-        : `Sign in to ${PRODUCT_NAME} to see whether this workspace is hosted.`;
+        ? 'Checking whether this drive is hosted…'
+        : `Sign in to ${PRODUCT_NAME} to see whether this drive is hosted.`;
     }
 
     if (!isAtomicIdentifier(status.drive)) {
@@ -1288,7 +1315,7 @@ function SyncPage() {
       serverSync: showServerConn,
       hosting: cloudEnrolled,
       managed: isCloudSyncAvailable(managedInfo),
-      vaultOn: vault.status.state === 'on',
+      vaultOn: vault.status.state === 'on' || vault.status.state === 'other',
     });
   }
 
@@ -1455,8 +1482,8 @@ function SyncPage() {
       if (auto) {
         toast.success(
           result.replicated
-            ? 'Cloud Server received this workspace. Your source server is still connected.'
-            : 'Connected to Cloud Server. Syncing this workspace…',
+            ? 'Cloud Server received this drive. Your source server is still connected.'
+            : 'Connected to Cloud Server. Syncing this drive…',
         );
       }
     } catch (e) {
@@ -1489,13 +1516,16 @@ function SyncPage() {
           return;
         }
 
-        const billingUrl = new URL('/billing', accountPortalUrl);
-        billingUrl.searchParams.set('drive', drive);
+        const salesUrl = cloudServerSalesUrl(
+          accountPortalUrl,
+          drive,
+          driveName,
+        );
 
         if (isRunningInTauri()) {
-          await openExternal(billingUrl.toString());
+          await openExternal(salesUrl);
         } else {
-          window.location.assign(billingUrl.toString());
+          window.location.assign(salesUrl);
         }
       } else {
         store.notifyError(e as Error);
@@ -1508,7 +1538,7 @@ function SyncPage() {
   const cloudTier: CloudTier =
     managedServer || hostedCopyOrigin
       ? 'server'
-      : vault.status.state === 'on'
+      : vault.status.state === 'on' || vault.status.state === 'other'
         ? 'vault'
         : 'local';
   const planActive =
@@ -1582,12 +1612,19 @@ function SyncPage() {
     details?: ReactNode;
     actions: ReactNode;
   } = (() => {
-    const managePlan = accountPortalUrl && status.drive && (
+    // Hosting belongs to the drive, but the plan belongs to whoever pays for
+    // it. Unknown (not yet loaded, or no session) counts as not paying: a
+    // member should never be offered another account's controls.
+    const paysForDrive =
+      subscriptionStatus !== null && subscriptionStatus !== 'free';
+    const managePlan = paysForDrive && accountPortalUrl && status.drive && (
       <Button
         subtle
         data-testid='cloud-server-manage'
         onClick={() =>
-          void openExternal(driveBillingUrl(accountPortalUrl, status.drive))
+          void openExternal(
+            driveBillingUrl(accountPortalUrl, status.drive, driveName),
+          )
         }
       >
         Manage plan
@@ -1609,7 +1646,7 @@ function SyncPage() {
                 : tone === 'unknown'
                   ? 'muted'
                   : 'busy',
-          text: `${statusLabel(tone)} · ${serverHostname ?? managedServer}`,
+          text: `${serverStatusLabel(tone, !!nodeUsage)} · ${serverHostname ?? managedServer}`,
         },
         details: status.drive ? (
           <CloudServerDetails
@@ -1618,6 +1655,8 @@ function SyncPage() {
             usage={nodeUsage}
             quotaBytes={quotaBytes}
             signedIn={!!managedAccount}
+            managed={paysForDrive}
+            managedBy={nodeUsage?.managedBy}
           />
         ) : undefined,
         actions: managePlan,
@@ -1630,7 +1669,7 @@ function SyncPage() {
         standing: 'current',
         status: {
           tone: 'waiting',
-          text: 'This workspace is on Cloud Server. This device still syncs with its old server.',
+          text: 'This drive is on Cloud Server. This device still syncs with its old server.',
         },
         actions: (
           <>
@@ -1671,7 +1710,7 @@ function SyncPage() {
         standing: 'current',
         status: {
           tone: 'busy',
-          text: 'Moving this workspace to Cloud Server. It switches on by itself; you can keep working.',
+          text: 'Moving this drive to Cloud Server. It switches on by itself; you can keep working.',
         },
         actions: managePlan,
       };
@@ -1685,8 +1724,8 @@ function SyncPage() {
           tone: 'waiting',
           text:
             serverAccessGranted || subscriptionSource === 'grant'
-              ? `${PRODUCT_NAME} added Cloud Server to this workspace. It waits for your consent.`
-              : 'This workspace’s plan includes Cloud Server. It waits for your consent.',
+              ? `${PRODUCT_NAME} added Cloud Server to this drive. It waits for your consent.`
+              : 'This drive’s plan includes Cloud Server. It waits for your consent.',
         },
         actions: (
           <Button
@@ -1711,7 +1750,9 @@ function SyncPage() {
           <Button
             data-testid='cloud-server-upgrade'
             onClick={() =>
-              void openExternal(driveBillingUrl(accountPortalUrl, status.drive))
+              void openExternal(
+                cloudServerSalesUrl(accountPortalUrl, status.drive, driveName),
+              )
             }
           >
             Upgrade to Cloud Server
@@ -1861,7 +1902,7 @@ function SyncPage() {
     setKnownServers(serverURLStorage.getKnownServers());
   }
 
-  // Why this workspace is not syncing, if it is not. A local-only workspace is
+  // Why this drive is not syncing, if it is not. A local-only drive is
   // not supposed to be, so it has nothing to explain.
   const syncProblemInput = {
     status,
@@ -1870,20 +1911,9 @@ function SyncPage() {
     serverName: serverLabel(status.serverUrl ?? ''),
     driveOf: (subject: string) => store.driveOfSubject(subject),
   };
-  const described = localOnlyDrive
+  const syncProblem = localOnlyDrive
     ? null
     : describeSyncProblem(syncProblemInput);
-  // A problem can be about another workspace than the one in view; name it by
-  // its title, which can only be loaded once the problem says which one it is.
-  const problemDriveResource = useResource(described?.otherDrive);
-  const [problemDriveName] = useString(
-    problemDriveResource,
-    core.properties.name,
-  );
-  const syncProblem =
-    described?.otherDrive && problemDriveName
-      ? { ...described, title: notHostedTitle(problemDriveName) }
-      : described;
   const syncProblemKey = syncProblem?.key;
   const syncProblemOurs = syncProblem?.cause === 'ours';
   const syncProblemReported = syncProblem?.reported ?? true;
@@ -1907,13 +1937,40 @@ function SyncPage() {
     status.serverUrl,
   ]);
 
+  // A drive the server refuses may be one nobody hosts; the app then moves it
+  // to browser-only when the refusal is seen again. The refusal that triggered
+  // the first look may have come too early, so re-arm the drive's parked
+  // changes once per visit to hand the app another chance.
+  const rearmedRefusedDrive = useRef<string | null>(null);
+  const refusedDrive =
+    !localOnlyDrive &&
+    status.drive &&
+    store.isDriveRefusedByServer(status.drive)
+      ? status.drive
+      : undefined;
+
+  useEffect(() => {
+    if (!refusedDrive || rearmedRefusedDrive.current === refusedDrive) return;
+
+    rearmedRefusedDrive.current = refusedDrive;
+
+    for (const entry of store.outbox.pending()) {
+      if (
+        entry.blocked &&
+        store.driveOfSubject(entry.subject) === refusedDrive
+      ) {
+        store.outbox.markDirty(entry.subject);
+      }
+    }
+  }, [refusedDrive, store]);
+
   async function tryAgainSync() {
     if (syncRetrying) return;
 
     setSyncRetrying(true);
 
     // A parked change is only sent again after a fresh signal. Reconnecting
-    // repeats the workspace handshake, which also retries a refused sync.
+    // repeats the drive handshake, which also retries a refused sync.
     for (const entry of store.outbox.pending()) {
       if (entry.blocked) store.outbox.markDirty(entry.subject);
     }
@@ -1944,7 +2001,7 @@ function SyncPage() {
 
             These used to be loose entries in the Devices list, on the reasoning
             that a person does not think of "this device", "the backup" and "the
-            hosted workspace" as different kinds of thing — they are all places
+            hosted drive" as different kinds of thing — they are all places
             the same data lives. True as far as it goes, but it left no answer to
             a different question the page is also asked: which of this is a
             product I am paying for, and where do I go to manage it. Grouping
@@ -1970,34 +2027,13 @@ function SyncPage() {
             from anything hardcoded here. */}
         {accountPortalUrl && (
           <ProviderCard data-testid='provider-card'>
-            <ProviderHeader>
-              <CardIcon $tone='provider'>
-                <FaCloud />
-              </CardIcon>
-              <AccountBody>
-                <AccountLabel>{PRODUCT_NAME}</AccountLabel>
-                <AccountEmail data-testid='provider-account'>
-                  {managedAccount
-                    ? recoveryBackup === 'stored'
-                      ? `${managedAccount.email} · Email recovery on`
-                      : managedAccount.email
-                    : 'Not signed in'}
-                </AccountEmail>
-              </AccountBody>
-              {/* Signed in, the dashboard rather than the portal root, which
-                  is the marketing page. Signed out, `/signin` both creates an
-                  account and returns to an existing one. */}
-              <ManagedLink
-                data-testid='provider-portal-link'
-                {...externalLinkProps(
-                  managedAccount
-                    ? `${accountPortalUrl}/dashboard`
-                    : `${accountPortalUrl}/signin`,
-                )}
-              >
-                {managedAccount ? 'Manage account →' : 'Sign in →'}
-              </ManagedLink>
-            </ProviderHeader>
+            <SyncProviderAccount
+              key={accountPortalUrl}
+              portalUrl={accountPortalUrl}
+              email={managedAccount?.email ?? null}
+              emailRecoveryOn={recoveryBackup === 'stored'}
+              onLinked={() => window.location.reload()}
+            />
 
             {/* Only when it needs you: signed out, or no backup that gets you
                 back in on a new device. Set up, it is one phrase in the
@@ -2021,7 +2057,7 @@ function SyncPage() {
                   <ConnTitle>Email recovery</ConnTitle>
                   <ConnSub>
                     {!managedAccount
-                      ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this workspace with a passkey or secret does not by itself connect your cloud account.`
+                      ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account.`
                       : recoveryBackup === null
                         ? `Signed in as ${managedAccount.email}.`
                         : recoveryBackup === 'stored'
@@ -2032,12 +2068,9 @@ function SyncPage() {
                               ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
                               : recoveryBackup === 'device-only'
                                 ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                                : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
+                                : `${managedAccount.email}. No recovery backup stored, so losing every device loses this drive.`}
                   </ConnSub>
-                  {/* Signed out, the account itself is the missing piece, and it
-                      is made in the portal: on a device that cannot hold our
-                      cookie the sign-in is approved from a browser anyway.
-
+                  {/* Signed out, use the account header's sign-in action.
                       Signed in with nothing stored, the flow is in settings,
                       where the rest of account recovery already lives. It asks
                       for the agent secret, which this page has no business
@@ -2048,18 +2081,11 @@ function SyncPage() {
                       Nothing to press once it is on. Rotating a code or reading
                       the secret back are settings' business, and this row's job
                       is answering whether you are covered. */}
-                  {!managedAccount ? (
-                    <ConnActions>
-                      <LearnMore
-                        {...externalLinkProps(`${accountPortalUrl}/signin`)}
-                      >
-                        Sign in to check recovery
-                      </LearnMore>
-                    </ConnActions>
-                  ) : recoveryBackup === 'none' ||
+                  {managedAccount &&
+                  (recoveryBackup === 'none' ||
                     recoveryBackup === 'device-only' ||
                     recoveryBackup === 'sign-in-not-on' ||
-                    recoveryBackup === 'passkey-only' ? (
+                    recoveryBackup === 'passkey-only') ? (
                     <ConnActions>
                       <LearnMoreLink
                         to={paths.agentSettings}
@@ -2104,7 +2130,7 @@ function SyncPage() {
                 kind='server'
                 title='Cloud Server'
                 standing={serverRow.standing}
-                tagline='Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here.'
+                tagline='Everything in Cloud Vault, plus a hosted drive on atomic.place, always online. Our servers process what you put here.'
                 points={[
                   'Shareable links and API access',
                   'Search across everything',
@@ -2117,10 +2143,10 @@ function SyncPage() {
                     <>
                       <strong>Before you turn it on:</strong> unlike Cloud
                       Vault, Cloud Server stores a readable, unencrypted copy of
-                      this workspace on our servers, so we can run search,
-                      shareable links and the API for it. Your sharing
-                      permissions still control who else sees it, and you can
-                      turn it off at any time.
+                      this drive on our servers, so we can run search, shareable
+                      links and the API for it. Your sharing permissions still
+                      control who else sees it, and you can turn it off at any
+                      time.
                     </>
                   ) : undefined
                 }
@@ -2140,9 +2166,7 @@ function SyncPage() {
               <FaMobileScreenButton />
             </CardIcon>
             <ConnBody>
-              <ConnTitle>
-                This workspace could not be read on this device
-              </ConnTitle>
+              <ConnTitle>This drive could not be read on this device</ConnTitle>
               {isNode && status.drive ? (
                 <DiscoverWorkspace
                   key={status.drive}
@@ -2156,8 +2180,8 @@ function SyncPage() {
                     node, otherwise the server's — the other device scans it and
                     syncs the drive somewhere this one can read. */}
                     {pairNodeId
-                      ? 'If another device has this workspace, scan the code below to connect it.'
-                      : 'If another device has this workspace, you can connect it.'}
+                      ? 'If another device has this drive, scan the code below to connect it.'
+                      : 'If another device has this drive, you can connect it.'}
                   </ConnSub>
                   <ConnActions>
                     {!pairNodeId && (
@@ -2178,7 +2202,7 @@ function SyncPage() {
             determine its status, so a missing session never renders a dead
             button. */}
 
-        {/* A local-only drive (demo, or any drive made offline) isn't synced.
+        {/* A local-only drive (any drive made offline) isn't synced.
             Offer to promote it to a normal synced drive on the connected
             server — the same reconcile a regular drive uses, no special path. */}
         {localOnlyDrive && !driveMissing && !showCloudBackup && (
@@ -2191,15 +2215,15 @@ function SyncPage() {
             <ConnBody>
               <ConnTitle>Only on this device</ConnTitle>
               <ConnSub>
-                This workspace hasn’t been synced. It’s safe here, but not
-                backed up and not on your other devices.
+                This drive hasn’t been synced. It’s safe here, but not backed up
+                and not on your other devices.
               </ConnSub>
               <ConnActions>
                 <Button
                   onClick={promoteDrive}
                   disabled={promoting || !status.serverConnected}
                 >
-                  {promoting ? 'Syncing…' : 'Sync this workspace'}
+                  {promoting ? 'Syncing…' : 'Sync this drive'}
                 </Button>
               </ConnActions>
               {!status.serverConnected && (
@@ -2217,7 +2241,7 @@ function SyncPage() {
               built to avoid: that earlier layout scattered them as separate
               offer cards, where they are now one card under the account that
               pays for them. What is left here is an inventory of places this
-              workspace physically lives. */}
+              drive physically lives. */}
           {/* This device — always the source of truth for local-first data. */}
           <SyncCard
             spacious
@@ -2238,26 +2262,8 @@ function SyncPage() {
             nodeId={isNode && localNodeId ? localNodeId : undefined}
           />
 
-          {/* A client that cannot hold the provider's cookie — a self-hosted
-              origin, or the desktop and Android apps on tauri://localhost — has
-              to link before any of the vault works.
-
-              Gated on whether this client has a session, not on what the vault
-              says. The vault reports `unavailable` only once it has an agent, a
-              drive and its wasm keys to ask with; a fresh install has none of
-              those and sits at `loading` forever, so gating on the vault hid the
-              one control that could have fixed it. */}
-          {needsProviderLink && (
-            <LinkProviderPanel
-              portalUrl={getManagedPortalUrl(managedInfo)}
-              onLinked={() => window.location.reload()}
-            />
-          )}
-
           {localOnlyDrive && connectionCount > 0 && (
-            <ConnNote>
-              These sync your other drives — not this workspace.
-            </ConnNote>
+            <ConnNote>These sync your other drives — not this drive.</ConnNote>
           )}
 
           {/* About *other* devices specifically. This device and any cloud
@@ -2731,13 +2737,6 @@ const ProviderCard = styled(ServiceGroup)`
   background: ${p => `${p.theme.colors.main}0a`};
 `;
 
-const ProviderHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.9rem 1rem;
-`;
-
 /**
  * One service under the account header.
  *
@@ -2796,27 +2795,6 @@ const ProviderService = styled(ServiceSection)`
     text-overflow: clip;
     white-space: normal;
   }
-`;
-
-const AccountBody = styled.div`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-`;
-
-const AccountLabel = styled.span`
-  font-size: ${CARD_TITLE_FONT};
-  font-weight: 600;
-`;
-
-const AccountEmail = styled.span`
-  color: ${p => p.theme.colors.textLight};
-  font-size: ${CARD_SUB_FONT};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 `;
 
 const Section = styled.section`

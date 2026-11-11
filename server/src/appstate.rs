@@ -41,6 +41,13 @@ pub struct AppState {
     /// Short-lived capabilities that let a null-origin plugin iframe read the
     /// one plugin's source it was opened for. See `plugins::view_token`.
     pub view_tokens: Arc<crate::plugins::view_token::ViewTokens>,
+    /// Apps loaded on the host ABI (`plugins::host_abi`), by drive.
+    #[cfg(feature = "wasm-plugins")]
+    pub host_abi: Arc<crate::plugins::host_abi::HostAbiRegistry>,
+    /// Which Installations' background work this node may run
+    /// (`plugins::lease`).
+    #[cfg(feature = "wasm-plugins")]
+    pub leases: Arc<crate::plugins::lease::Leases>,
     /// Per-agent and per-peer budgets for the write endpoints; see
     /// `crate::rate_limit`. Sized from `--write-rate-limit` and
     /// `--anonymous-write-rate-limit`.
@@ -108,18 +115,30 @@ impl AppState {
         }
 
         // Register all built-in class extenders
-        store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
         store.add_endpoint(plugins::invite::invite_endpoint())?;
         store.add_endpoint(plugins::conversations::conversations_endpoint())?;
+        // One registry for every runtime: modules loaded below and by an
+        // Installation's activation reach the same apps as `/host/call`.
+        #[cfg(feature = "wasm-plugins")]
+        let host_abi: Arc<plugins::host_abi::HostAbiRegistry> = Arc::default();
         store.add_class_extender(plugins::plugin::build_installation_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
+            #[cfg(feature = "wasm-plugins")]
+            host_abi.clone(),
         ))?;
         store.add_class_extender(plugins::files::build_file_extender(
             config.uploads_path.clone(),
         ))?;
         store.add_class_extender(plugins::form::build_form_extender())?;
+        // A built-in app: the same hooks and imports as an installed module,
+        // compiled in.
+        #[cfg(feature = "wasm-plugins")]
+        store.add_class_extender(plugins::chatroom::build_chatroom_extender(
+            &store,
+            host_abi.clone(),
+        ))?;
 
         // Owned here rather than in the AppState literal below, because the
         // `/server` endpoint closes over them to report this node's status.
@@ -158,35 +177,6 @@ impl AppState {
         #[cfg(feature = "vector-search")]
         store.add_endpoint(plugins::vector_search::vector_search_endpoint())?;
 
-        // Get and register Wasm class extender plugins
-        #[cfg(feature = "wasm-plugins")]
-        {
-            let extenders = wasm::load_wasm_class_extenders(
-                &config.plugin_path,
-                &config.plugin_cache_path,
-                &store,
-            )
-            .await?;
-
-            for extender in extenders {
-                // A paused installation keeps its files, so the loader above
-                // finds them. Registering them anyway would resume every
-                // paused plugin on restart.
-                if let Some(subject) = &extender.subject {
-                    if let Ok(resource) = store.get_resource(&subject.as_str().into()).await {
-                        if plugins::installation::is_suspended(&resource) {
-                            tracing::info!(
-                                %subject,
-                                "skipped a class extender: its installation is not active"
-                            );
-                            continue;
-                        }
-                    }
-                }
-                store.add_class_extender(extender)?;
-            }
-        }
-
         set_default_agent(&config, &store).await?;
 
         // The core models (classes, properties, default ontologies) are seeded
@@ -208,12 +198,23 @@ impl AppState {
         }
 
         // Legacy `Plugin` + `pluginFile` resources become Installations, once.
-        // After the extenders above are loaded (so their meta is current) and
-        // after the default agent is set (the migration commits as the server).
+        // After the default agent is set (the migration commits as the server)
+        // and before the modules are loaded, so a migrated plugin loads too.
         #[cfg(feature = "wasm-plugins")]
         if let Err(e) = plugins::plugin::migrate_legacy_plugins(&store).await {
             tracing::warn!("legacy plugin migration failed: {e}");
         }
+
+        // Load the Wasm class extenders: the operator's `global/` folder and
+        // the active Installations of a server module, from their releases.
+        #[cfg(feature = "wasm-plugins")]
+        wasm::load_wasm_class_extenders(
+            &config.plugin_path,
+            &config.plugin_cache_path,
+            &store,
+            &host_abi,
+        )
+        .await?;
 
         // Who may put a *new* Drive here. Installed after populate so the scan
         // below sees every Drive already on disk, and before anything binds so
@@ -291,6 +292,10 @@ impl AppState {
             managed: server_info.managed,
             managed_dashboard_url: server_info.managed_dashboard_url,
             view_tokens: Arc::new(Default::default()),
+            #[cfg(feature = "wasm-plugins")]
+            host_abi,
+            #[cfg(feature = "wasm-plugins")]
+            leases: Arc::new(crate::plugins::lease::Leases::system()),
         })
     }
 

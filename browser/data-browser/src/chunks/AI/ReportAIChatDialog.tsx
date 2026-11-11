@@ -137,7 +137,9 @@ export default function ReportAIChatDialog({
               Pressing Send report shares the reviewed chat text, error
               messages, and your optional description and email with the Atomic
               team through Sentry. Attachments, tool payloads, and reasoning are
-              excluded. Remove private information before sending.
+              excluded. Technical details about your setup (app version, server
+              address and status) are attached. Remove private information
+              before sending.
             </p>
             {loading ? (
               <p role='status'>Preparing chat transcript…</p>

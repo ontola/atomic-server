@@ -1,4 +1,4 @@
-import { isViewRequest } from '@tomic/plugin';
+import { HostError, isViewRequest } from '@tomic/plugin';
 import { viewSession } from '@helpers/extensions/viewSession';
 import { useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
@@ -9,7 +9,7 @@ import {
   useStore,
   useTitle,
 } from '@tomic/react';
-import { findSchema, pluginSchema } from '@tomic/lib';
+import { appSourceOf, readSchema, schemaValue } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
 import {
   appChanges,
@@ -35,16 +35,39 @@ import {
   ProxyConnections,
   type ProxyConnection,
 } from '@helpers/proxyConnections';
+import { NO_SERVER_APP_MESSAGE } from './noServer';
+import {
+  VIEW_CLIENT_SOURCE,
+  appFrameDocument,
+  newFrameNonce,
+} from './appFrameDocument';
 import { appAgentOf } from './appAgent';
+import { subscribeAppKeyHandover } from './appKeyHandover';
 import { ConnectDialog } from './ConnectDialog';
 import { useHostUI } from '@components/HostUI/hostUI';
 import type { ViewChanges } from '@helpers/extensions/viewApply';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
+  const store = useStore();
+  const [identityRevision, setIdentityRevision] = useState(0);
+  useEffect(
+    () =>
+      subscribeAppKeyHandover(store, recovered => {
+        if (recovered.app === props.app && recovered.drive === props.drive)
+          setIdentityRevision(revision => revision + 1);
+      }),
+    [store, props.app, props.drive],
+  );
+
   return (
     <AppFrameSession
-      key={JSON.stringify([props.app, props.drive, props.table])}
+      key={JSON.stringify([
+        props.app,
+        props.drive,
+        props.table,
+        identityRevision,
+      ])}
       {...props}
     />
   );
@@ -59,6 +82,13 @@ export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
  * in the URL. Loading via `src` rather than `srcdoc` matters for the same
  * reason it does for installed plugins: a `srcdoc`, `blob:` or `data:` frame
  * inherits this page's CSP and the app's script would be blocked.
+ *
+ * A page with no server (`store.noServer`, the embedded renderer) has nothing
+ * to mint a token with or to load from. There the page already holds the
+ * source, so it builds the same shell as a `srcdoc` (`appFrameDocument`), whose
+ * meta CSP narrows the inherited one to the server's directives. Same sandbox,
+ * so the frame is still null-origin. Writing as the app and calling other apps
+ * still need a server.
  */
 function AppFrameSession({
   app,
@@ -90,6 +120,7 @@ function AppFrameSession({
 }): React.JSX.Element {
   const store = useStore();
   const [src, setSrc] = useState<string>();
+  const [srcDoc, setSrcDoc] = useState<string>();
   const [entrypoint, setEntrypoint] = useState<string | null>();
   const [problem, setProblem] = useState<string>();
   const [appError, setAppError] = useState<AppError>();
@@ -103,7 +134,9 @@ function AppFrameSession({
   // Held in a ref so an inline callback does not tear down the listener — and
   // with it every subscription — on each render.
   const onOutcomeRef = useRef(onOutcome);
-  onOutcomeRef.current = onOutcome;
+  useEffect(() => {
+    onOutcomeRef.current = onOutcome;
+  }, [onOutcome]);
   // Subject to the store's unsubscribe, so a view that re-renders does not
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
@@ -124,17 +157,16 @@ function AppFrameSession({
     let cancelled = false;
 
     (async () => {
-      const schema = await findSchema(store, drive, pluginSchema());
-      const property = schema.properties?.entrypoint;
+      const schema = await readSchema(store, drive);
       // Read through the store rather than from a passed resource, so this
       // depends on a subject string instead of a proxy whose identity churns.
       const resource = await store.getResource(app);
-      const found = property
-        ? (resource.get(property) as string | undefined)
-        : undefined;
+      const value = await schemaValue(store, schema, resource, 'entrypoint');
+      const found = typeof value === 'string' ? value : undefined;
 
       if (!cancelled) setEntrypoint(found ?? null);
-    })().catch(() => {
+    })().catch(e => {
+      console.warn('Could not read the entry point of', app, e);
       if (!cancelled) setEntrypoint(null);
     });
 
@@ -147,6 +179,36 @@ function AppFrameSession({
     if (!entrypoint) return;
 
     let cancelled = false;
+
+    if (store.noServer) {
+      appSourceOf(store, drive, entrypoint)
+        .then(source => {
+          if (cancelled) return;
+
+          if (source === undefined) {
+            setProblem(
+              /* @wc-ignore */ 'This app has no source, so there is nothing to run.',
+            );
+
+            return;
+          }
+
+          setSrcDoc(
+            appFrameDocument({
+              source,
+              client: VIEW_CLIENT_SOURCE,
+              nonce: newFrameNonce(),
+            }),
+          );
+        })
+        .catch((e: Error) => {
+          if (!cancelled) setProblem(e.message);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }
 
     mintViewToken(store, drive, entrypoint)
       .then(result => {
@@ -225,6 +287,12 @@ function AppFrameSession({
       }
 
       if (data.op === 'proxyConnect') {
+        if (store.noServer) {
+          session.post({ id: data.id, error: NO_SERVER_APP_MESSAGE });
+
+          return;
+        }
+
         if (!isPlatformId(data.platform)) {
           session.post({ id: data.id, error: 'platform is required' });
 
@@ -284,11 +352,11 @@ function AppFrameSession({
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src, handleUI, forwardKey]);
+  }, [store, app, drive, table, src, srcDoc, handleUI, forwardKey]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`, colorScheme);
-  }, [stylesheet, colorScheme, src]);
+  }, [stylesheet, colorScheme, src, srcDoc]);
 
   // The app never got as far as running: no token, no entry point, no source.
   // Reported as a failure like any other, so a caller waiting on an outcome
@@ -318,7 +386,7 @@ function AppFrameSession({
     );
   }
 
-  if (src === undefined) {
+  if (src === undefined && srcDoc === undefined) {
     return <LoaderBlock />;
   }
 
@@ -366,16 +434,18 @@ function AppFrameSession({
   const fixIt = () => {
     if (!appError) return;
 
+    // Written as what the user would say, because it becomes the first
+    // message of the chat and they have to be able to read it back.
+    const prompt = /* @wc-ignore */ [
+      'The app I have open just hit an error. Read its source with',
+      'describe_app, work out what went wrong, and fix it with update_app.',
+      '',
+      `Error (${appError.phase === 'load' ? 'while opening the app' : 'while using it'}): ${appError.message}`,
+      ...(appError.stack ? ['', 'Stack:', appError.stack] : []),
+    ].join('\n');
+
     askAI({
-      // Written as what the user would say, because it becomes the first
-      // message of the chat and they have to be able to read it back.
-      prompt: /* @wc-ignore */ [
-        'The app I have open just hit an error. Read its source with',
-        'describe_app, work out what went wrong, and fix it with update_app.',
-        '',
-        `Error (${appError.phase === 'load' ? 'while opening the app' : 'while using it'}): ${appError.message}`,
-        ...(appError.stack ? ['', 'Stack:', appError.stack] : []),
-      ].join('\n'),
+      prompt,
       context: [
         newContextItem<AIAtomicResourceMessageContext>({
           type: 'atomic-resource',
@@ -415,12 +485,17 @@ function AppFrameSession({
       <Frame
         ref={frameRef}
         src={src}
+        srcDoc={srcDoc}
         // `allow-modals` because confirm() and alert() are the first things
         // an app reaches for to guard a delete, and without it they return
         // false silently — the button does nothing and nothing says why. Still
         // no allow-same-origin, so the frame stays null-origin and cannot
         // touch this page.
         sandbox='allow-scripts allow-modals'
+        // So an app can go full screen (`element.requestFullscreen()`); a
+        // frame is not allowed to without it.
+        allow='fullscreen'
+        allowFullScreen
         title='App'
       />
     </Wrapper>
@@ -467,7 +542,11 @@ async function answer(
       ),
     });
   } catch (e) {
-    post({ id: request.id, error: (e as Error).message });
+    post({
+      id: request.id,
+      error: (e as Error).message,
+      ...(e instanceof HostError ? { code: e.code } : {}),
+    });
   }
 }
 
@@ -507,7 +586,7 @@ function proxyHost(
   app: string,
   drive: string,
 ) {
-  return store.getAgent()
+  return store.getAgent() && !store.noServer
     ? proxyConnections(store).host(() => cachedAppAgent(store, drive, app))
     : undefined;
 }
@@ -574,11 +653,17 @@ async function mintViewToken(
   const url = `${store.getServerUrl()}/plugin-view-token`;
 
   try {
-    const headers = await signRequest(url, agent, {});
+    const payload = JSON.stringify({ drive, plugin });
+    const headers = await signRequest(
+      url,
+      agent,
+      {},
+      { method: 'POST', body: payload },
+    );
     const response = await fetch(url, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ drive, plugin }),
+      body: payload,
     });
 
     if (!response.ok) {

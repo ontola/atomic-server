@@ -1,10 +1,6 @@
 import { Spinner } from '../../components/Spinner';
 import { resumeInviteUrl } from '../../helpers/inviteSignup';
 import { signInAccountWithAgent } from '../../helpers/managed/agentSession';
-import {
-  pendingTemplateUrl,
-  readPendingTemplate,
-} from '../../chunks/Templates/pendingTemplate';
 import { WorkspaceLoading } from './WorkspaceLoading';
 import {
   PRODUCT_NAME,
@@ -16,15 +12,22 @@ import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { styled, keyframes } from 'styled-components';
 import { useStore } from '@tomic/react';
 import { Agent, decodeSecret } from '@tomic/lib';
+import { parseReturnPath } from '../../helpers/returnPath';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useWelcomeLayoutEffect } from '../../hooks/useWelcomeLayoutEffect';
 import { useSettings } from '../../helpers/AppSettings';
 import { saveAgentToIDB } from '../../helpers/agentStorage';
+import {
+  applyBroughtAlong,
+  prepareIdentitySwitch,
+} from '../../helpers/bringAlong';
 import { beat } from '../../helpers/deviceLock';
 import { fetchPrivateDriveSubject } from '../../helpers/privateDrive';
 import { connectHostedDrive, shortDid } from '../../helpers/managed/reconcile';
 import { deviceHasDriveData } from '../../helpers/driveData';
 import { discoverHomeServerForApp } from '../../helpers/discoverHomeServer';
+import { startLocalIdentity } from '../../helpers/startLocalIdentity';
+import { startWelcomeDrive } from '../../helpers/startWelcomeDrive';
 import { openPrivateHome } from '../../helpers/openPrivateHome';
 import { privateHomeNudge } from '../../helpers/privateHomeNudge';
 import { withDeadline } from '../../helpers/withDeadline';
@@ -32,6 +35,7 @@ import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
+import { ResourceRow } from '../ResourceRow';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
 import {
   accountAddress,
@@ -43,7 +47,6 @@ import {
   fetchManagedInfo,
   accountCreationTarget,
   type AccountCreationTarget,
-  isHostedDistribution,
 } from '../../helpers/managedServer';
 import {
   ensureVaultBackup,
@@ -98,6 +101,7 @@ import {
   FooterBar,
   BackLabel,
 } from './chrome';
+import { asError } from '@tomic/react';
 
 type Step =
   | 'welcome'
@@ -106,6 +110,7 @@ type Step =
   | 'restore'
   | 'restore-upgraded'
   | 'secret-conflict'
+  | 'bring-along'
   | 'connect-device'
   | 'opening-workspace';
 
@@ -221,24 +226,20 @@ export function GettingStartedFlow({
   // here with `next` carrying that drive's subject, so we open straight to the
   // sign-in step and return them to that drive afterwards (not their home).
   const inviteToken = new URLSearchParams(window.location.search).get('invite');
-  // A demo guest who chose a template was sent to make an account first; once
-  // it exists they go back to that template instead of to their home.
-  const [pendingTemplate] = useState(() =>
-    fromManaged && !inviteToken ? readPendingTemplate() : undefined,
-  );
   const nextDrive =
     new URLSearchParams(window.location.search).get('next') ||
     new URLSearchParams(window.location.search).get('drive') ||
     new URLSearchParams(window.location.search).get('subject') ||
     undefined;
-  // Only this named, internal destination is accepted; never navigate to an
-  // arbitrary return URL supplied by a link. Adding a passkey needs the local
-  // identity unlocked before the account settings can edit its backup.
-  const returnToAgent =
-    !fromManaged &&
-    !inviteToken &&
-    !nextDrive &&
-    new URLSearchParams(window.location.search).get('return_to') === 'agent';
+  // Only `agent` and connect-an-app links are accepted (see parseReturnPath);
+  // never navigate to an arbitrary return URL supplied by a link. Both need the
+  // key, not a restored drive (adding a passkey needs the local identity unlocked).
+  const returnPath =
+    !fromManaged && !inviteToken && !nextDrive
+      ? parseReturnPath(
+          new URLSearchParams(window.location.search).get('return_to'),
+        )
+      : undefined;
   const signInRequested =
     new URLSearchParams(window.location.search).get('step') === 'signin';
   const [step, setStep] = useState<Step>(
@@ -246,13 +247,7 @@ export function GettingStartedFlow({
       ? 'create'
       : inviteToken
         ? 'restore'
-        : nextDrive ||
-            returnToAgent ||
-            signInRequested ||
-            // Hosted builds have no Create/Sign-in/Demo choice: creating an
-            // account happens in the portal, so signed-out people get the
-            // sign-in options directly.
-            (isHostedDistribution() && initialStep === 'welcome')
+        : nextDrive || returnPath || signInRequested
           ? 'signin'
           : initialStep,
   );
@@ -261,7 +256,7 @@ export function GettingStartedFlow({
   // Account creation and the explicit Back action can still open the portal.
   const [loading, setLoading] = useState(false);
   const [workspaceStage, setWorkspaceStage] = useState<
-    'identity' | 'local' | 'backup'
+    'identity' | 'local' | 'backup' | 'setup'
   >('identity');
   const [error, setError] = useState<Error | undefined>();
   // The drive a freshly signed-in device is missing, handed to the
@@ -277,6 +272,11 @@ export function GettingStartedFlow({
   const [secretConflict, setSecretConflict] = useState<
     (SecretAccountConflict & { secret: string }) | null
   >(null);
+  /** The question before this browser's own work is left behind or brought along. */
+  const [bringPrompt, setBringPrompt] = useState<{
+    drives: string[];
+    answer: (bring: boolean) => void;
+  } | null>(null);
   /** Shown only after blur/Enter — every prefix of a valid secret is invalid,
    * so erroring while typing would be constant noise. */
   const [secretError, setSecretError] = useState<string | undefined>();
@@ -593,6 +593,18 @@ export function GettingStartedFlow({
       }
 
       setSecretConflict(null);
+      // The identity this browser holds is kept on the device. When it has
+      // work, ask before it is left behind (see helpers/bringAlong.ts).
+      const outcome = await prepareIdentitySwitch(
+        store,
+        newAgent.subject,
+        drives =>
+          new Promise<boolean>(resolve => {
+            setBringPrompt({ drives, answer: resolve });
+            setStep('bring-along');
+          }),
+      );
+      setBringPrompt(null);
       setWorkspaceStage('identity');
       setStep('opening-workspace');
       setAgent(newAgent);
@@ -697,7 +709,7 @@ export function GettingStartedFlow({
       // "your data is on another device" hides which one this is.
       let vaultReason: string | undefined;
 
-      if (!hasData && target && !returnToAgent) {
+      if (!hasData && target && !returnPath) {
         setWorkspaceStage('backup');
         const restored = await withDeadline(
           restoreFromVault(store, target),
@@ -731,12 +743,19 @@ export function GettingStartedFlow({
       // Recover first, but connecting a device is optional for the identity's
       // own home. A foreign requested workspace must never be synthesized.
       const home =
-        !hasData && target && !returnToAgent
+        !hasData && target && !returnPath
           ? await openPrivateHome(store, target, true)
           : undefined;
 
+      // The drives brought along are listed in the home, so only once it is here.
+      const listBroughtAlong = async () => {
+        if (outcome === 'brought' && newAgent.subject && target)
+          await applyBroughtAlong(store, newAgent.subject, target);
+      };
+
       if (home) {
         if (home === 'created') privateHomeNudge();
+        await listBroughtAlong();
         navigate(constructOpenURL(target!));
       } else if (hasData) {
         // The home drive is derived from the key rather than looked up, so
@@ -764,12 +783,11 @@ export function GettingStartedFlow({
         // the whole drive, and sign-in should not wait on an upload.
         void ensureVaultBackup(store, target!);
 
-        navigate(
-          returnToAgent ? paths.agentSettings : constructOpenURL(target!),
-        );
-      } else if (returnToAgent) {
+        await listBroughtAlong();
+        navigate(returnPath ?? constructOpenURL(target!));
+      } else if (returnPath) {
         // Passkey management needs the key, not a downloaded copy of the drive.
-        navigate(paths.agentSettings);
+        navigate(returnPath);
       } else {
         setMissingDrive(target);
         setMissingDriveVaultReason(vaultReason);
@@ -883,6 +901,36 @@ export function GettingStartedFlow({
   async function handleRestoreWithPasskey() {
     if (restore.phase !== 'ready') return;
     await unlockWithPasskey(restore.secret);
+  }
+
+  /**
+   * Start without an account: a real key on this device and its own drive,
+   * opened at once. No profile, secret or email; those come later, if wanted.
+   */
+  async function handleGetStarted() {
+    setError(undefined);
+    setWorkspaceStage('setup');
+    setStep('opening-workspace');
+
+    try {
+      const { agent, drive } = await startLocalIdentity(store);
+      let open = { drive };
+
+      try {
+        open = await startWelcomeDrive(store, drive);
+      } catch (e) {
+        // Never block starting: the personal drive is there and works.
+        console.error('Could not create the welcome drive', e);
+      }
+
+      setAgent(agent);
+      setDrive(open.drive);
+      // The drive page, with the Getting started card above its documents.
+      navigate(constructOpenURL(open.drive));
+    } catch (err) {
+      setError(asError(err));
+      setStep('welcome');
+    }
   }
 
   /**
@@ -1049,37 +1097,14 @@ export function GettingStartedFlow({
                 </CardSubtitle>
               ) : (
                 <CtaButton
-                  key='create'
+                  key='start'
                   type='button'
-                  disabled={!createTarget}
-                  onClick={() => {
-                    // Belt and braces with `disabled`: the button is unclickable
-                    // until `/server` answers, so this only guards a
-                    // programmatic call.
-                    if (!createTarget) return;
-
-                    // Hosted build or managed node → create the account on the
-                    // portal (email verification). FOSS node → local identity.
-                    if (createTarget.kind === 'portal') {
-                      const url = safePortalUrl(createTarget.url);
-
-                      if (url) window.location.assign(url);
-                    } else {
-                      setStep('create');
-                    }
-                  }}
+                  disabled={!createTarget || loading}
+                  onClick={() => void handleGetStarted()}
                 >
-                  Create account
+                  Get started
                 </CtaButton>
               )}
-              {/* No account-less create path in a hosted build. It minted a
-                  second identity that the portal then swapped away the
-                  moment its owner signed in with an email that already had
-                  one (staging, 2026-09-03). One email, one identity: the
-                  hosted welcome creates through the portal or signs in with
-                  an existing secret — nothing in between. A FOSS build's
-                  "Create account" is the local path, and someone with their
-                  own secret has Sign in below. */}
               <CtaButton
                 key='signin'
                 type='button'
@@ -1088,18 +1113,6 @@ export function GettingStartedFlow({
                 onClick={handleSignInClick}
               >
                 {loading ? 'Waiting for your passkey…' : 'Sign in'}
-              </CtaButton>
-              <CtaButton
-                key='demo'
-                type='button'
-                subtle
-                onClick={() => {
-                  // No account needed: the demo mints a throwaway
-                  // guest agent and runs entirely on this device.
-                  navigate(paths.demo);
-                }}
-              >
-                Try the live demo
               </CtaButton>
             </ButtonStack>
             {/* Below the buttons on purpose: what this node offers comes
@@ -1372,9 +1385,6 @@ export function GettingStartedFlow({
                     window.location.assign(
                       new URL('/dashboard', knownPortalUrl).toString(),
                     );
-                  } else if (isHostedDistribution() && knownPortalUrl) {
-                    // No welcome step in a hosted build; Back leaves for the portal.
-                    window.location.assign(knownPortalUrl);
                   } else {
                     setStep('welcome');
                   }
@@ -1622,6 +1632,45 @@ export function GettingStartedFlow({
             </OnboardingCard>
           </OnboardingWrap>
         </Swap>
+      ) : step === 'bring-along' && bringPrompt ? (
+        <Swap key='bring-along'>
+          <OnboardingWrap>
+            <OnboardingCard key='card' data-testid='bring-along'>
+              <Column gap='1rem'>
+                <CardTitle key='title'>
+                  Add your work from this browser to your account?
+                </CardTitle>
+                <p key='copy'>
+                  Your account gets access to it. Nothing is copied or deleted.
+                </p>
+                {bringPrompt.drives.length > 0 && (
+                  <Column key='drives' gap='0.5rem'>
+                    {bringPrompt.drives.map(drive => (
+                      <ResourceRow key={drive} subject={drive} />
+                    ))}
+                  </Column>
+                )}
+                <Button
+                  key='bring'
+                  type='button'
+                  data-testid='bring-along-yes'
+                  onClick={() => bringPrompt.answer(true)}
+                >
+                  Add to my account
+                </Button>
+                <Button
+                  key='leave'
+                  type='button'
+                  subtle
+                  data-testid='bring-along-no'
+                  onClick={() => bringPrompt.answer(false)}
+                >
+                  Don&apos;t add, keep it in this browser only
+                </Button>
+              </Column>
+            </OnboardingCard>
+          </OnboardingWrap>
+        </Swap>
       ) : step === 'restore-upgraded' ? (
         <Swap key='restore-upgraded'>
           <OnboardingWrap>
@@ -1675,7 +1724,7 @@ export function GettingStartedFlow({
                 ) : (
                   <NewIdentitySection
                     autoStart
-                    navigateToDrive={!inviteToken && !pendingTemplate}
+                    navigateToDrive={!inviteToken}
                     // Already saved and confirmed on the portal.
                     verifySecret={!presetKeys}
                     presetKeys={presetKeys}
@@ -1694,8 +1743,6 @@ export function GettingStartedFlow({
                     }
                     onDone={() => {
                       if (inviteToken) navigate(resumeInviteUrl(inviteToken));
-                      else if (pendingTemplate)
-                        navigate(pendingTemplateUrl(pendingTemplate));
                     }}
                   />
                 )}

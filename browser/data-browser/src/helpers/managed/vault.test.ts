@@ -4,6 +4,7 @@ import {
   enrollVault,
   getVaultUsage,
   freeUpVaultStorage,
+  deleteVaultSnapshot,
   vaultLaneId,
   backupDrive,
   restoreDrive,
@@ -12,6 +13,7 @@ import {
   nextSegmentFor,
   runVaultBackup,
   compactVaultBackup,
+  VaultSessionEndedError,
   type VaultCapableDb,
   type VaultKeyOps,
   type VaultDriveState,
@@ -934,6 +936,38 @@ describe('key management', () => {
     expect(calls.map(call => call.url)).toHaveLength(1);
   });
 
+  /**
+   * Signing out in another tab ends the shared session mid-pass. The key
+   * read must report that as a session end, which the automatic backup skips
+   * quietly, not as a failed backup carrying the server's "No session".
+   */
+  it('reports a 401 on the key read as a session end', async () => {
+    mockFetch(url => {
+      if (url.endsWith('/enroll')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ enrollment: { drive_pseudonym: PSEUDONYM } }),
+        };
+      }
+
+      return {
+        ok: false,
+        status: 401,
+        json: async () => ({ error: 'No session' }),
+      };
+    });
+
+    await expect(
+      setUpVaultForDrive({
+        keys: fakeKeys(),
+        driveSubject: 'did:ad:drive',
+        agentSubject: 'did:ad:agent:x',
+        agentSecret: AGENT_SECRET,
+      }),
+    ).rejects.toBeInstanceOf(VaultSessionEndedError);
+  });
+
   it('reuses an existing key rather than minting a second one', async () => {
     const keys = fakeKeys();
     const stored = keys.vaultWrapKey(new Uint8Array(32).fill(99), AGENT_SECRET);
@@ -1654,6 +1688,39 @@ describe('storage routes the control plane does not have yet', () => {
     );
 
     await expect(freeUpVaultStorage('pseudonym', false)).rejects.toThrow(
+      'Storage details are not available on your account yet.',
+    );
+  });
+});
+
+describe('managing storage', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const freed = {
+    pruned: 2,
+    blobs_pruned: 0,
+    bytes_reclaimed: 9,
+    delete_failures: 0,
+  };
+
+  it('deletes a snapshot with a POST to its route', async () => {
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify(freed), { status: 200 }));
+
+    await expect(deleteVaultSnapshot('ps', 'snap-1')).resolves.toEqual(freed);
+    const call = fetch.mock.calls.find(c =>
+      String(c[0]).endsWith('/cloud-vault/ps/snapshots/snap-1/delete'),
+    );
+    expect(call?.[1]?.method).toBe('POST');
+  });
+
+  it('answers a missing route with the plain sentence', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Not found', { status: 404 }),
+    );
+
+    await expect(deleteVaultSnapshot('ps', 'x')).rejects.toThrow(
       'Storage details are not available on your account yet.',
     );
   });

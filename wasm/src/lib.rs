@@ -44,7 +44,8 @@ const WRONG_KEY_MARKER: &str = "ATOMIC_DB_WRONG_KEY";
 /// as a plain degraded-mode sentence rather than a wasm stack trace.
 const STORAGE_BLOCKED_MARKER: &str = "ATOMIC_DB_STORAGE_BLOCKED";
 
-/// A client-side Atomic Data database backed by redb (in-memory, future OPFS).
+/// A client-side Atomic Data database backed by redb with in-memory and
+/// persistent browser OPFS storage.
 /// Provides indexed queries, resource storage, and commit application.
 ///
 /// A JS binding over [`AtomicNode`]: query and commit application go through
@@ -507,6 +508,7 @@ impl ClientDb {
         filters: JsValue,
         aggregation: JsValue,
         expression_filters: JsValue,
+        include_trashed: Option<bool>,
     ) -> Result<JsValue, JsError> {
         // Extra `(property, value)` AND constraints from JS. `null`/`undefined`
         // → none, keeping single-filter callers unchanged.
@@ -600,6 +602,10 @@ impl ClientDb {
             end_val: None,
             include_external: false,
             include_nested: include_resources.unwrap_or(false),
+            // Same rule as `construct_collection_from_params`: hide trashed
+            // items unless asked. The Trash-view exemption lives in
+            // `atomic_lib::trash::filter_for_query`, so it applies here too.
+            exclude_trashed: !include_trashed.unwrap_or(false),
             for_agent: atomic_lib::agents::ForAgent::Sudo,
             // `Subject::from` drops the base domain, leaving a localized drive
             // as an `External` subject that matches no stored drive prefix.
@@ -620,6 +626,7 @@ impl ClientDb {
         limit: Option<u32>,
         parents: JsValue,
         filters: JsValue,
+        include_trashed: Option<bool>,
     ) -> Result<JsValue, JsError> {
         let parents: Option<Vec<String>> = if parents.is_null() || parents.is_undefined() {
             None
@@ -632,6 +639,7 @@ impl ClientDb {
             limit,
             parents,
             filter_pairs: Some(js_to_filter_pairs(filters)),
+            include_trashed: include_trashed.unwrap_or(false),
             ..Default::default()
         };
         let hits = self.node.search(&query, &opts).map_err(to_js_err)?;
@@ -1044,6 +1052,72 @@ impl QueryResponse {
 
 fn resource_to_json_ad(resource: &Resource, origin: &str) -> Result<String, JsError> {
     resource.to_json_ad(Some(origin)).map_err(to_js_err)
+}
+
+/// One cell of a row handed to `evaluateFormula`.
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum CellValue {
+    Number(f64),
+    Bool(bool),
+    Text(String),
+}
+
+impl CellValue {
+    /// Same reading as a stored value: numbers as themselves, booleans as 1/0,
+    /// a numeric string as that number, a DATE string as midnight in the
+    /// caller's zone, any other ISO string as its instant.
+    fn as_number(&self, compiled: &atomic_lib::expression::Compiled) -> Option<f64> {
+        use atomic_lib::aggregate::value_as_number;
+        match self {
+            CellValue::Number(n) => Some(*n),
+            CellValue::Bool(b) => Some(f64::from(*b)),
+            CellValue::Text(s) => value_as_number(&Value::String(s.clone())).or_else(|| {
+                // `instant` shifts only a DATE; a full timestamp string stays put.
+                if s.len() == 10 {
+                    compiled.instant(&Value::Date(s.clone()))
+                } else {
+                    value_as_number(&Value::Date(s.clone()))
+                }
+            }),
+        }
+    }
+}
+
+/// Evaluate a computed-column expression (formula or legacy kind) against a
+/// row's current values, `{ [propertySubject]: number | string | boolean | null }`.
+/// `tz_offset_minutes` is the caller's zone, minutes east of UTC. Needs no
+/// `ClientDb`. Returns a number, or `null` when the row has no value.
+#[wasm_bindgen(js_name = "evaluateFormula")]
+pub fn evaluate_formula(
+    expression: JsValue,
+    values: JsValue,
+    now_ms: f64,
+    tz_offset_minutes: f64,
+) -> Result<JsValue, JsError> {
+    let expression: atomic_lib::expression::Expression =
+        serde_wasm_bindgen::from_value(expression).map_err(to_js_err)?;
+    let values: std::collections::HashMap<String, Option<CellValue>> =
+        serde_wasm_bindgen::from_value(values).map_err(to_js_err)?;
+    let Ok(compiled) = expression.compile(atomic_lib::expression::Clock {
+        now_ms: now_ms as i64,
+        tz_offset_minutes: tz_offset_minutes as i64,
+    }) else {
+        return Ok(JsValue::NULL);
+    };
+    let result =
+        compiled.evaluate(&|property| values.get(property)?.as_ref()?.as_number(&compiled));
+
+    Ok(result.map_or(JsValue::NULL, JsValue::from_f64))
+}
+
+/// The formula's error message, or `null` when it is valid.
+#[wasm_bindgen(js_name = "validateFormula")]
+pub fn validate_formula(expression: JsValue) -> Result<Option<String>, JsError> {
+    let expression: atomic_lib::expression::Expression =
+        serde_wasm_bindgen::from_value(expression).map_err(to_js_err)?;
+
+    Ok(expression.validate().err())
 }
 
 fn to_js_err(e: impl std::fmt::Display) -> JsError {

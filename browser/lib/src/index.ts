@@ -38,6 +38,7 @@ export * from './ontologies/ai.js';
 export * from './ontologies/canvas.js';
 export * from './ontologies/forks.js';
 export * from './ontologies/notifications.js';
+export * from './ontologies/contacts.js';
 export * from './ontologies/conversations.js';
 export * from './ontologies/i18n.js';
 export * from './ontologies/forms.js';
@@ -91,8 +92,11 @@ export * from './search.js';
 export * from './resource.js';
 export * from './chat-log.js';
 export * from './forks.js';
+export * from './copy.js';
 export * from './store.js';
 export * from './property-identity.js';
+export { getOrCreateDriveLocation } from './drive-location.js';
+export { readTrashFolder, type IsTrashedOptions } from './trash.js';
 export * from './lens.js';
 export * from './lens-ensure.js';
 export * from './subject.js';
@@ -105,6 +109,7 @@ export * from './ontology.js';
 export * from './invites.js';
 export * from './pairing.js';
 export * from './loro-loader.js';
+export { getLoroFailure, loroCall, type LoroFailure } from './loro-context.js';
 export * from './page-request-signal.js';
 export * from './presence.js';
 export * from './json-ad-compact.js';
@@ -114,6 +119,14 @@ export * from './class-schema.js';
 export * from './assistant-tools.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker, STORAGE_BLOCKED_ERROR_NAME } from './client-db.js';
+export {
+  NativeClientDb,
+  NativeCryptoProvider,
+  nativeHostOf,
+  type NativeAppAgent,
+  type NativeAppWrite,
+  type NativeChannel,
+} from './client-db.native.js';
 export {
   getIndexMigration,
   subscribeIndexMigration,
@@ -240,6 +253,9 @@ export {
 export * from './agent-grants.js';
 export * from './issue-access-agent.js';
 export {
+  appSourceOf,
+  readSchema,
+  schemaValue,
   createApp,
   describeApp,
   updateApp,

@@ -61,6 +61,14 @@ pub struct RedbStore {
     /// durable-flush tick skip the fsync (and the sentinel write) when nothing
     /// changed, which is most ticks on an idle node or a phone in a pocket.
     dirty: AtomicBool,
+    /// Serializes `flush`, so a second caller waits for the first one's
+    /// durable commit instead of seeing a cleared `dirty` and returning early.
+    flush_lock: std::sync::Mutex<()>,
+    /// Keeps this process from opening the file a second time while `db`
+    /// has it (see `recovery::OpenFileGuard`). Declared last so it is
+    /// released after the database closes.
+    #[cfg(not(target_arch = "wasm32"))]
+    _open_guard: Option<super::recovery::OpenFileGuard>,
 }
 
 /// Per-tree map of pending operations. Used for fast read-your-writes lookups.
@@ -133,6 +141,32 @@ impl RedbStore {
         Self,
         Result<super::compaction::CompactionRecord, super::compaction::Skip>,
     )> {
+        Self::new_file_with_options(path, policy, None)
+    }
+
+    /// [`Self::new_file`] with redb's read cache at `cache_bytes` instead of
+    /// its 1 GiB default (for a phone). No startup compaction.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_file_with_cache(path: &std::path::Path, cache_bytes: usize) -> AtomicResult<Self> {
+        Self::new_file_with_options(
+            path,
+            &super::compaction::CompactionPolicy::disabled(),
+            Some(cache_bytes),
+        )
+        .map(|(store, _)| store)
+    }
+
+    /// [`Self::new_file_with_policy`], with the read cache at `cache_bytes`
+    /// (redb's default when `None`).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_file_with_options(
+        path: &std::path::Path,
+        policy: &super::compaction::CompactionPolicy,
+        cache_bytes: Option<usize>,
+    ) -> AtomicResult<(
+        Self,
+        Result<super::compaction::CompactionRecord, super::compaction::Skip>,
+    )> {
         // `Database::create` with defaults uses a 1 GiB cache and the
         // slow full-scan repair path on any unclean shutdown. On a
         // multi-GB store that's 40+ seconds added to every boot
@@ -141,9 +175,10 @@ impl RedbStore {
         // below persists the allocator state on every commit so the
         // next open is "almost instant" (redb transactions.rs:1246-1258
         // describes the mechanism).
+        let open_guard = super::recovery::OpenFileGuard::acquire(path)?;
         let t = std::time::Instant::now();
-        let mut db = Database::create(path)
-            .map_err(|e| format!("Failed to create redb at {}: {e}", path.display()))?;
+        // A damaged file makes redb panic; this says so in an error instead.
+        let mut db = super::recovery::create_database_with_cache(path, cache_bytes)?;
         let open_duration = t.elapsed();
         tracing::info!(
             "RedbStore::new_file: Database::create in {:?}",
@@ -182,6 +217,8 @@ impl RedbStore {
                 db: Arc::new(db),
                 batch_buffer: std::sync::Mutex::new(None),
                 dirty: AtomicBool::new(false),
+                flush_lock: std::sync::Mutex::new(()),
+                _open_guard: Some(open_guard),
             },
             compaction,
         ))
@@ -209,6 +246,9 @@ impl RedbStore {
             db: Arc::new(db),
             batch_buffer: std::sync::Mutex::new(None),
             dirty: AtomicBool::new(false),
+            flush_lock: std::sync::Mutex::new(()),
+            #[cfg(not(target_arch = "wasm32"))]
+            _open_guard: None,
         })
     }
 
@@ -253,6 +293,7 @@ impl RedbStore {
             db: Arc::new(db),
             batch_buffer: std::sync::Mutex::new(None),
             dirty: AtomicBool::new(false),
+            flush_lock: std::sync::Mutex::new(()),
         })
     }
 }
@@ -568,43 +609,28 @@ impl KvStore for RedbStore {
     }
 
     fn flush(&self) -> AtomicResult<()> {
+        // Hold the lock for the whole flush, including the commit. A second
+        // caller then waits for the first one's durable commit instead of
+        // seeing `dirty == false` and acknowledging durability too early; once
+        // it gets the lock it either finds nothing left to do or flushes again.
+        let _guard = self
+            .flush_lock
+            .lock()
+            .map_err(|e| format!("redb flush lock poisoned: {e}"))?;
         // Nothing committed since the last durable point: skip. A write that
         // lands between this swap and the commit below sets the flag again
         // and is picked up by the next flush.
         if !self.dirty.swap(false, Ordering::SeqCst) {
             return Ok(());
         }
-        // Per-commit writes use Durability::None (no fsync) for throughput.
-        // redb only persists those to disk once a *subsequent* Immediate
-        // commit lands, so this flush — a quick Immediate commit — is what
-        // actually makes recent commits durable. The server calls it on a
-        // periodic tick (see `serve.rs`), amortizing one fsync across many
-        // commits instead of paying one per commit. `set_quick_repair`
-        // persists redb's allocator state so an unclean shutdown still boots
-        // fast.
-        let mut tx = self
-            .db
-            .begin_write()
-            .map_err(|e| format!("redb flush begin_write: {e}"))?;
-        tx.set_quick_repair(true);
-        // Touch a sentinel key so the transaction is non-empty and redb
-        // definitely writes (and, at Immediate durability, fsyncs) a new
-        // commit point that persists all prior Durability::None commits.
-        {
-            let mut table = tx
-                .open_table(table_def(Tree::DriveMapping))
-                .map_err(|e| format!("redb flush open table: {e}"))?;
-            table
-                .insert(b"__flush_sentinel__".as_slice(), b"".as_slice())
-                .map_err(|e| format!("redb flush sentinel: {e}"))?;
-        }
-        // Immediate is the default durability; committing flushes + fsyncs all
-        // prior Durability::None commits.
-        if let Err(e) = tx.commit() {
+        // The flag is already cleared, so any failure must put it back or the
+        // next tick would skip the fsync. Never clear it unconditionally
+        // afterwards: concurrent writes set it and must keep it.
+        let result = self.flush_commit();
+        if result.is_err() {
             self.dirty.store(true, Ordering::SeqCst);
-            return Err(format!("redb flush commit: {e}").into());
         }
-        Ok(())
+        result
     }
 
     fn len(&self, tree: Tree) -> AtomicResult<usize> {
@@ -668,6 +694,39 @@ impl KvStore for RedbStore {
     }
 }
 
+impl RedbStore {
+    /// Per-commit writes use Durability::None (no fsync) for throughput.
+    /// redb only persists those to disk once a *subsequent* Immediate
+    /// commit lands, so this flush — a quick Immediate commit — is what
+    /// actually makes recent commits durable. The server calls it on a
+    /// periodic tick (see `serve.rs`), amortizing one fsync across many
+    /// commits instead of paying one per commit. `set_quick_repair`
+    /// persists redb's allocator state so an unclean shutdown still boots
+    /// fast.
+    fn flush_commit(&self) -> AtomicResult<()> {
+        let mut tx = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("redb flush begin_write: {e}"))?;
+        tx.set_quick_repair(true);
+        // Touch a sentinel key so the transaction is non-empty and redb
+        // definitely writes (and, at Immediate durability, fsyncs) a new
+        // commit point that persists all prior Durability::None commits.
+        {
+            let mut table = tx
+                .open_table(table_def(Tree::DriveMapping))
+                .map_err(|e| format!("redb flush open table: {e}"))?;
+            table
+                .insert(b"__flush_sentinel__".as_slice(), b"".as_slice())
+                .map_err(|e| format!("redb flush sentinel: {e}"))?;
+        }
+        // Immediate is the default durability; committing flushes + fsyncs all
+        // prior Durability::None commits.
+        tx.commit().map_err(|e| format!("redb flush commit: {e}"))?;
+        Ok(())
+    }
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
@@ -684,6 +743,26 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("atomic.redb")
+    }
+
+    /// A store opened with a small read cache (the phone's) stores and
+    /// reads like any other, also after a reopen.
+    #[test]
+    fn new_file_with_cache_opens_a_working_store() {
+        let path = temp_path("small-cache");
+        {
+            let store = RedbStore::new_file_with_cache(&path, 1 << 20).unwrap();
+            for k in 0..40u8 {
+                store
+                    .insert(Tree::PluginMeta, &[k], &vec![k; 200_000])
+                    .unwrap();
+            }
+        }
+        let store = RedbStore::new_file_with_cache(&path, 1 << 20).unwrap();
+        for k in 0..40u8 {
+            let v = store.get(Tree::PluginMeta, &[k]).unwrap().unwrap();
+            assert!(v.len() == 200_000 && v.iter().all(|b| *b == k));
+        }
     }
 
     /// A store written before redb's table names followed `Tree::name`
@@ -780,6 +859,197 @@ mod tests {
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
+    /// A file backend without redb's `flock`, standing in for a platform
+    /// where the lock does not keep a second handle out.
+    #[derive(Debug)]
+    struct UnlockedFile(std::fs::File);
+
+    impl redb::StorageBackend for UnlockedFile {
+        fn len(&self) -> Result<u64, std::io::Error> {
+            Ok(self.0.metadata()?.len())
+        }
+        fn read(&self, offset: u64, out: &mut [u8]) -> Result<(), std::io::Error> {
+            std::os::unix::fs::FileExt::read_exact_at(&self.0, out, offset)
+        }
+        fn set_len(&self, len: u64) -> Result<(), std::io::Error> {
+            self.0.set_len(len)
+        }
+        fn sync_data(&self) -> Result<(), std::io::Error> {
+            self.0.sync_data()
+        }
+        fn write(&self, offset: u64, data: &[u8]) -> Result<(), std::io::Error> {
+            std::os::unix::fs::FileExt::write_all_at(&self.0, data, offset)
+        }
+    }
+
+    fn unlocked(path: &std::path::Path) -> Database {
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)
+            .unwrap();
+        Database::builder()
+            .create_with_backend(UnlockedFile(file))
+            .unwrap()
+    }
+
+    /// The store lost on Android: a second handle on a file that is still
+    /// open. Dropping it trims the file to what that handle thinks is free;
+    /// the first handle's next commit writes its own, longer, layout into
+    /// the header. After a kill the header describes more file than there
+    /// is and `Database::create` panics in redb's page manager.
+    #[test]
+    fn a_second_handle_on_an_open_file_leaves_it_shorter_than_its_header() {
+        let path = temp_path("second-handle");
+        let first = unlocked(&path);
+        let table = TableDefinition::<u32, &[u8]>::new("t");
+        let write = |db: &Database, keys: std::ops::Range<u32>, len: usize, durable: bool| {
+            let mut tx = db.begin_write().unwrap();
+            if !durable {
+                tx.set_durability(redb::Durability::None).unwrap();
+            }
+            tx.set_quick_repair(true);
+            {
+                let mut t = tx.open_table(table).unwrap();
+                for k in keys {
+                    t.insert(k, vec![1u8; len].as_slice()).unwrap();
+                }
+            }
+            tx.commit().unwrap();
+        };
+        write(&first, 0..5, 100, true);
+        // Unflushed app writes: the file has grown, its header not yet.
+        write(&first, 0..200, 20_000, false);
+        {
+            let second = unlocked(&path);
+            drop(second);
+        }
+        write(&first, 0..10, 100, true);
+        // The app is killed: no destructor runs.
+        std::mem::forget(first);
+        let check = crate::db::recovery::inspect(&path).unwrap().unwrap();
+        assert!(check.is_short(), "{check:?}");
+        let Err(err) = crate::db::recovery::create_database(&path) else {
+            panic!("redb cannot open a file shorter than its header");
+        };
+        assert!(
+            crate::db::recovery::is_damaged_store_error(&err.to_string()),
+            "{err}"
+        );
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// What keeps the second handle above from happening: one process opens
+    /// a store file once, whether or not the platform has file locks.
+    #[test]
+    fn a_store_file_is_opened_once_per_process() {
+        let path = temp_path("once");
+        let store = RedbStore::new_file(&path).unwrap();
+        let Err(err) = RedbStore::new_file(&path) else {
+            panic!("a second open must be refused");
+        };
+        assert!(err.to_string().contains("already open"), "{err}");
+        assert!(!crate::db::recovery::is_damaged_store_error(
+            &err.to_string()
+        ));
+        drop(store);
+        RedbStore::new_file(&path).expect("closed stores open again");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    const KILL_LOOP_CHILD_ENV: &str = "ATOMIC_REDB_KILL_LOOP_CHILD_PATH";
+    const KILL_LOOP_TEST_NAME: &str = "db::redb_store::tests::store_opens_after_repeated_sigkill";
+
+    /// The app's write pattern, killed with SIGKILL at random moments, again
+    /// and again on the same file: `Durability::None` commits of values from
+    /// a few bytes to a few hundred kB (the file grows), bursts of deletes
+    /// (the file shrinks at the next durable commit) and the 100 ms durable
+    /// flush tick. After every kill the store must open. `ATOMIC_KILL_LOOP_N`
+    /// sets the number of kills (default 30).
+    #[test]
+    #[ignore = "kill-loop stress test, several seconds; run with --ignored"]
+    fn store_opens_after_repeated_sigkill() {
+        use rand::Rng;
+        if let Ok(path) = std::env::var(KILL_LOOP_CHILD_ENV) {
+            let path = std::path::PathBuf::from(path);
+            let (store, _) = RedbStore::new_file_with_policy(
+                &path,
+                &crate::db::compaction::CompactionPolicy::default(),
+            )
+            .unwrap();
+            let store: Arc<dyn KvStore> = Arc::new(store);
+            let flusher = Arc::downgrade(&store);
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let Some(kv) = flusher.upgrade() else { break };
+                kv.flush().unwrap();
+            });
+            let mut rng = rand::thread_rng();
+            loop {
+                if rng.gen_ratio(1, 40) {
+                    for k in 0..400u32 {
+                        store.remove(Tree::PluginMeta, &k.to_be_bytes()).unwrap();
+                    }
+                } else {
+                    let k: u32 = rng.gen_range(0..400);
+                    let len = if rng.gen_ratio(1, 10) {
+                        rng.gen_range(10_000..300_000)
+                    } else {
+                        rng.gen_range(10..2_000)
+                    };
+                    store
+                        .insert(Tree::PluginMeta, &k.to_be_bytes(), &vec![k as u8; len])
+                        .unwrap();
+                }
+            }
+        }
+
+        let kills: usize = std::env::var("ATOMIC_KILL_LOOP_N")
+            .ok()
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(30);
+        let path = temp_path("kill-loop");
+        let mut rng = rand::thread_rng();
+        let mut failures = Vec::new();
+        for i in 0..kills {
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    KILL_LOOP_TEST_NAME,
+                    "--ignored",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .env(KILL_LOOP_CHILD_ENV, &path)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(50..1_500)));
+            child.kill().unwrap();
+            child.wait().unwrap();
+
+            let opened = std::panic::catch_unwind(|| RedbStore::new_file(&path).map(drop));
+            match opened {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => failures.push(format!("kill {i}: {e}")),
+                Err(_) => failures.push(format!("kill {i}: panic while opening")),
+            }
+            if !failures.is_empty() {
+                break;
+            }
+        }
+        let len = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        assert!(
+            failures.is_empty(),
+            "store did not open after a kill ({len} bytes at {}): {failures:?}",
+            path.display()
+        );
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
     #[test]
     fn flush_is_a_no_op_when_nothing_changed() {
         let path = temp_path("noop");
@@ -797,6 +1067,63 @@ mod tests {
             std::fs::metadata(&path).unwrap().len(),
             size_after_first_flush
         );
+        drop(store);
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn concurrent_flushes_all_succeed_and_leave_store_clean() {
+        let path = temp_path("concurrent_flush");
+        let store = Arc::new(RedbStore::new_file(&path).unwrap());
+        let n = 8;
+        let barrier = Arc::new(std::sync::Barrier::new(n));
+        let handles: Vec<_> = (0..n)
+            .map(|i| {
+                let store = store.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    store
+                        .insert(Tree::PluginMeta, format!("k{i}").as_bytes(), b"v")
+                        .unwrap();
+                    store.flush()
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap().expect("every flush must return Ok");
+        }
+        store.flush().unwrap();
+        assert!(!store.dirty.load(Ordering::SeqCst));
+        drop(store);
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn flush_waits_while_another_flush_holds_the_lock() {
+        let path = temp_path("flush_lock");
+        let store = Arc::new(RedbStore::new_file(&path).unwrap());
+        store.insert(Tree::PluginMeta, b"k", b"v").unwrap();
+
+        let guard = store.flush_lock.lock().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker = {
+            let store = store.clone();
+            std::thread::spawn(move || {
+                tx.send(store.flush()).ok();
+            })
+        };
+        assert!(
+            rx.recv_timeout(std::time::Duration::from_millis(200))
+                .is_err(),
+            "flush must not return while another flush holds the lock"
+        );
+        drop(guard);
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .expect("flush must finish once the lock is released")
+            .unwrap();
+        worker.join().unwrap();
+        assert!(!store.dirty.load(Ordering::SeqCst));
         drop(store);
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }

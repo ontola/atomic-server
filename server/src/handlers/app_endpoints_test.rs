@@ -17,6 +17,103 @@ use atomic_lib::{agents::Agent, db::app_agent::AppAgentKey, urls, Storelike, Val
 use crate::appstate::AppState;
 use crate::plugins::test_fixture::{fixture, genesis, Fixture};
 
+/// An interrupted browser install must be repeatable without changing identity,
+/// overwriting a replacement, or undoing revocation.
+#[actix_rt::test]
+async fn app_key_handover_initializes_once_and_never_revives_a_key() {
+    use actix_web::http::Method;
+    let fixture = fixture("app_key_handover").await;
+    let app = genesis(
+        &fixture.appstate.store,
+        vec![
+            (
+                urls::PARENT,
+                Value::AtomicUrl(fixture.drive.as_str().into()),
+            ),
+            (urls::NAME, Value::String("Offline app".into())),
+        ],
+    )
+    .await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let agent = Agent::new(Some("pending app")).unwrap();
+    let other = Agent::new(Some("replacement app")).unwrap();
+    let payload = |agent: &Agent| {
+        serde_json::json!({
+            "drive": fixture.drive, "app": app,
+            "secret": agent.build_secret().unwrap(), "initializeOnly": true
+        })
+        .to_string()
+    };
+    let post = |body: &str| {
+        signed_v2("/app-agent", &fixture.appstate, Method::POST, body, body).to_request()
+    };
+    let query = format!(
+        "/app-agent?drive={}&app={}&handover=true",
+        urlencoding::encode(&fixture.drive),
+        urlencoding::encode(&app)
+    );
+    let probe = test::call_service(
+        &service,
+        signed_v2(&query, &fixture.appstate, Method::GET, "", "").to_request(),
+    )
+    .await;
+    assert_eq!(probe.status(), 200);
+    let probe: serde_json::Value = serde_json::from_str(&body_of(probe)).unwrap();
+    assert_eq!(probe["handover"], "initialize-only-v1");
+    assert_eq!(probe["state"], "missing");
+
+    let body = payload(&agent);
+    let first = test::call_service(&service, post(&body)).await;
+    assert_eq!(first.status(), 200);
+    let first = body_of(first);
+    let again = test::call_service(&service, post(&body)).await;
+    assert_eq!(again.status(), 200);
+    assert_eq!(
+        body_of(again),
+        first,
+        "a lost response retries idempotently"
+    );
+    let replaced = test::call_service(&service, post(&payload(&other))).await;
+    assert_eq!(replaced.status(), 409);
+    let key = AppAgentKey::new(&fixture.drive, &app);
+    assert_eq!(
+        fixture
+            .appstate
+            .store
+            .get_app_agent_info(&key)
+            .unwrap()
+            .unwrap()
+            .agent,
+        agent.subject.to_string()
+    );
+
+    let deleted = test::call_service(
+        &service,
+        signed_v2(&query, &fixture.appstate, Method::DELETE, "", "").to_request(),
+    )
+    .await;
+    assert_eq!(deleted.status(), 200);
+    let stale = test::call_service(&service, post(&body)).await;
+    assert_eq!(
+        stale.status(),
+        409,
+        "a queued retry cannot revive a revoked identity"
+    );
+    assert!(fixture.appstate.store.app_agent_was_revoked(&key).unwrap());
+    let probe = test::call_service(
+        &service,
+        signed_v2(&query, &fixture.appstate, Method::GET, "", "").to_request(),
+    )
+    .await;
+    let probe: serde_json::Value = serde_json::from_str(&body_of(probe)).unwrap();
+    assert_eq!(probe["state"], "revoked");
+}
+
 /// Signs as the store's default agent, the way every other server test does.
 fn signed(path: &str, appstate: &AppState) -> TestRequest {
     let origin = appstate.config.get_origin();
@@ -703,12 +800,13 @@ async fn v2_signatures_bind_the_body() {
 
 /// An endpoint that does not bind method and body yet refuses a v2
 /// signature outright instead of checking it as v1, and an unknown version
-/// is refused everywhere.
+/// is refused everywhere. `/upload` is the one that stays on v1: it streams a
+/// multipart body, so there is nothing buffered to hash.
 #[actix_rt::test]
 async fn v2_is_never_downgraded_to_v1() {
     use actix_web::http::Method;
 
-    let (fixture, app) = app_fixture("app_v2_downgrade").await;
+    let (fixture, _app) = app_fixture("app_v2_downgrade").await;
     let service = test::init_service(
         App::new()
             .app_data(Data::new(fixture.appstate.clone()))
@@ -716,17 +814,13 @@ async fn v2_is_never_downgraded_to_v1() {
     )
     .await;
 
-    let payload = create_payload(&fixture, &app, "v2");
+    let path = format!("/upload?parent={}", urlencoding::encode(&fixture.drive));
+    let multipart = "--b\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a.txt\"\r\n\r\nhi\r\n--b--\r\n";
     let unbound = test::call_service(
         &service,
-        signed_v2(
-            "/app-write",
-            &fixture.appstate,
-            Method::POST,
-            &payload,
-            &payload,
-        )
-        .to_request(),
+        signed_v2(&path, &fixture.appstate, Method::POST, multipart, multipart)
+            .insert_header(("Content-Type", "multipart/form-data; boundary=b"))
+            .to_request(),
     )
     .await;
     assert_eq!(unbound.status(), 401);
@@ -763,4 +857,92 @@ async fn v2_is_never_downgraded_to_v1() {
     )
     .await;
     assert_eq!(relabelled.status(), 401);
+}
+
+/// A plugin write route that takes a JSON body (`/plugin-schedule`) accepts a
+/// version 2 signature and checks the body with it: the same headers on a
+/// different body are refused, which is the replay a version 1 proof allows.
+/// Version 1 keeps working.
+#[actix_rt::test]
+async fn plugin_routes_bind_the_body_with_v2() {
+    use actix_web::http::Method;
+
+    let (fixture, _app) = app_fixture("plugin_v2_signatures").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let body = |interval: &str| {
+        format!(
+            r#"{{"drive":{:?},"plugin":{:?},"intervalSeconds":{interval}}}"#,
+            fixture.drive, fixture.plugin,
+        )
+    };
+    let stop = body("null");
+
+    let ok = test::call_service(
+        &service,
+        signed_v2(
+            "/plugin-schedule",
+            &fixture.appstate,
+            Method::POST,
+            &stop,
+            &stop,
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(ok.status(), 200, "{}", body_of(ok));
+
+    // Signed for "stop", sent as "every 60 seconds": refused, and nothing set.
+    let swapped = test::call_service(
+        &service,
+        signed_v2(
+            "/plugin-schedule",
+            &fixture.appstate,
+            Method::POST,
+            &stop,
+            &body("60"),
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(swapped.status(), 401, "a different body than was signed");
+    assert!(body_of(swapped).contains("version 2"));
+    let key =
+        atomic_lib::db::plugin_schedule::PluginScheduleKey::new(&fixture.drive, &fixture.plugin);
+    assert!(fixture
+        .appstate
+        .store
+        .get_plugin_schedule(&key)
+        .unwrap()
+        .is_none());
+
+    let v1 = test::call_service(
+        &service,
+        signed("/plugin-schedule", &fixture.appstate)
+            .method(Method::POST)
+            .insert_header(("Content-Type", "application/json"))
+            .set_payload(stop.clone())
+            .to_request(),
+    )
+    .await;
+    assert_eq!(v1.status(), 200, "{}", body_of(v1));
+
+    // A body that is not JSON is a 400, not a crash.
+    let garbled = test::call_service(
+        &service,
+        signed_v2(
+            "/plugin-schedule",
+            &fixture.appstate,
+            Method::POST,
+            "{",
+            "{",
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(garbled.status(), 400);
 }

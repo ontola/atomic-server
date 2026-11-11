@@ -11,6 +11,7 @@ mod app_endpoints_test;
 #[cfg(feature = "wasm-plugins")]
 pub mod app_write;
 pub mod blob;
+pub mod client_reports;
 pub mod commit;
 pub mod download;
 pub mod drive_usage;
@@ -20,6 +21,10 @@ pub mod form;
 pub mod genesis;
 pub mod get_resource;
 pub mod history_attribution;
+#[cfg(feature = "wasm-plugins")]
+pub mod host_call;
+#[cfg(all(test, feature = "wasm-plugins"))]
+mod host_call_test;
 #[cfg(feature = "image")]
 pub mod image;
 #[cfg(feature = "wasm-plugins")]

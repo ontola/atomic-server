@@ -7,6 +7,7 @@ import { listAppSetups } from '../../components/AppSetup/registry';
 import { previewEventSchema, previewTrigger } from './previewTrigger';
 import {
   core,
+  dataBrowser,
   createResourceFromCompact,
   expandSubject,
   getClassesOnDrive,
@@ -188,15 +189,16 @@ const derivedColumnSchema = z.object({
     .describe(
       "The heading of the computed column, e.g. 'Duration' or 'Days since'.",
     ),
-  kind: z
-    .enum(['difference', 'elapsed', 'daysSince', 'product', 'offset'])
+  formula: z
+    .string()
     .describe(
-      "The generator: 'difference' (to − from, a finished duration), 'elapsed' (until − from, ticking live while `until` is empty), 'daysSince' (whole days between a date and now), 'product' (a × b), 'offset' (a date plus a number of days, e.g. a next-due date).",
+      "A formula over this table's columns, each written as the lowercase slug of its name ('Last watered' is last_watered), e.g. `coalesce(end, now()) - start`, `quantity * price`, `days(now() - last_contact)`, `addDays(last_done, every_days)`, `daysUntilAnniversary(birthday) <= 14`. Functions: now(), coalesce(a, b), days(ms), addDays(ms, n), daysUntilAnniversary(date), min, max, if(test, a, b), math::floor. Dates are milliseconds; a row missing a column used in the formula has an empty cell. Integer arithmetic stays integer, so write 1.0/2, not 1/2. Read the table-formulas skill for more.",
     ),
-  args: z
-    .record(z.string(), z.union([z.string(), z.number()]))
+  valueKind: z
+    .enum(['duration', 'days', 'number', 'date', 'boolean'])
+    .optional()
     .describe(
-      "The generator's arguments, each naming a column of this table (or a literal number where a number makes sense, like a rate). 'difference': { from, to }. 'elapsed': { from, until }. 'daysSince': { from }. 'product': { a, b }. 'offset': { from, days }.",
+      "How the result is shown: 'duration' (milliseconds as a clock), 'days' (whole days since, '3d ago'), 'date' (a date in ms), 'boolean' (a comparison, shown as a check mark). A plain number when omitted.",
     ),
 });
 
@@ -981,8 +983,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
         strict: true,
       }),
       [TOOL_NAMES.CREATE_RESOURCE]: tool({
-        description:
-          'Create one or more new resources from compact JSON-AD. Provide one object, or an ARRAY of objects to create many resources (e.g. table rows) in a single call — always prefer one batched call over multiple calls. Each object needs "@class" (class shortname or URL) and "@parent" (subject), plus property shortnames as keys, e.g. {"@class": "deal", "@parent": "did:ad:…", "name": "Acme", "status": "Lead"}. Full property URLs also work as keys. DO NOT include an @id, it is auto generated.',
+        description: `Create one or more new resources from compact JSON-AD. Give "@class" as the class URL. To create a document use "@class": "${dataBrowser.classes.documentV2}" (a document-v2, the only kind edit_document_resource can fill; ${dataBrowser.classes.document} is an old kind without an editable body). Provide one object, or an ARRAY of objects to create many resources (e.g. table rows) in a single call — always prefer one batched call over multiple calls. Each object needs "@class" (the class URL) and "@parent" (subject), plus property shortnames as keys, e.g. {"@class": "<class URL>", "@parent": "did:ad:…", "name": "Acme", "status": "Lead"}. Full property URLs also work as keys. DO NOT include an @id, it is auto generated.`,
         inputSchema: z.object({
           jsonAD: z
             .string()
@@ -1004,7 +1005,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
 
           if (!Array.isArray(data)) {
             try {
-              const { subject, resolved } = await createOne(
+              const { subject, resolved, classes } = await createOne(
                 data as Record<string, JSONValue>,
               );
 
@@ -1016,7 +1017,9 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
                   ? `Resolved properties: ${JSON.stringify(resolved)}\n`
                   : '';
 
-              return `${resolvedLine}Created new resource with subject ${shortenSubject(subject)}`;
+              // The class it really got: a document that came out as another
+              // class cannot be edited, and the model should see that here.
+              return `${resolvedLine}Class: ${classes.join(', ')}\nCreated new resource with subject ${shortenSubject(subject)}`;
             } catch (err) {
               return `Error creating resource: ${err}`;
             }
@@ -1340,7 +1343,10 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             // The node needs the key to write as this app when nobody is
             // present. Reported rather than thrown: the app exists and works
             // either way, it just cannot act on its own yet.
-            let unattended = true;
+            // Only a node runs apps with nobody present; the phone's host
+            // holds the key (so the app writes while you use it) but nothing
+            // runs there on its own.
+            let unattended = !store.noServer;
             let keyProblem: string | undefined;
 
             try {

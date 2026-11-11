@@ -102,12 +102,13 @@ Keep these in step. A change to one is usually a change to its twin.
 | Concern | Browser | Flutter |
 | --- | --- | --- |
 | sync screen | `data-browser/src/routes/SyncRoute.tsx` | `packages/atomic_flutter/lib/src/server_settings_section.dart` |
-| settings shell | (same route) | `packages/atomic_flutter/lib/src/agent_settings_dialog.dart` |
+| settings shell | (same route) | `packages/atomic_flutter/lib/src/user_panel.dart` |
 | onboarding, data elsewhere | `data-browser/src/views/getting-started/ConnectDeviceStep.tsx` | `flutter/lib/screens/login_screen.dart` |
 | pairing code, show / scan | `components/PairingCode.tsx`, `ConnectToDeviceForm.tsx` (`ScanCodeButton`), shown by `ConnectDevice.tsx` | `flutter/lib/screens/pair_screen.dart` |
 | pairing code, format | `browser/lib/src/pairing.ts` | `pair_screen.dart` (`_parsePairingUri`) |
 | URL rules (scheme, local address) | `data-browser/src/helpers/serverUrl.ts` | `flutter/lib/atomic/server_url.dart` |
 | what a machine says about itself | `data-browser/src/helpers/managedServer.ts` | `flutter/lib/atomic/server_info.dart` |
+| browser peer sync (WebRTC rooms, handshake, reconcile) | `browser/lib/src/browser-peer-sync.ts`, `webrtc-transport.ts`, `data-browser/src/helpers/browserPeerSync.ts` | `flutter/lib/atomic/webrtc/`, `lib/src/sync/webrtc_link.rs`; see [`flutter-webrtc-peer.md`](./flutter-webrtc-peer.md) |
 
 A FOSS node on a public address must not present **Create account** as if it
 were an open host — that path calls `createDrive` and, under today's
@@ -268,8 +269,29 @@ Developer.
   (50 GiB, against 100 MB for free Cloud Vault), and quoting it on the vault
   row reads as the vault's own limit. The bar returns at 90% of the quota even
   when included. Cloud Vault adds a **Manage storage**
-  action in its row actions (subtle, like Restore and Turn off) that opens the
-  breakdown inside the row. Cloud Server, once on, shows
+  action in its row actions (subtle, like Restore and Turn off) that opens a
+  **dialog** (`VaultStorage`), not a nested card: one stacked bar (Snapshots,
+  Change history, Files and images, Other) sized by bytes, a legend with count
+  and size per item ("Snapshots · 3 · 21 MB"), and, when the control plane sends
+  the optional `history` field, a short list of why change history remains
+  (newest change pack of each device, changes no snapshot covers yet, the undo
+  window, and what can be freed now). A snapshot counts `checkpoint` objects;
+  `checkpoint_image` objects are chunks of a snapshot and only add to its size.
+  Actions: one primary **Compress history** (fresh snapshot, then free what it
+  covers) and a separate destructive **Discard history…** behind a confirmation.
+  The dialog also lets a person manage storage by hand, each part only when the
+  control plane sends it (old servers keep the dialog above, without these):
+  a **Snapshots** list (date, size, **Delete**; the latest says "Always kept"
+  and has no button; with only the latest it says older snapshots are removed
+  automatically) from `snapshots`, and a **Devices** list from
+  `history.devices` (first 8 characters of the device key, "This device" when
+  it matches, size, last activity, **Remove history…**). Removing a device's
+  history is confirmed and says that edits only that device made and never
+  synced elsewhere are lost, and that the workspace is not touched. Compress and
+  Discard cannot free another device's history, because a snapshot only covers
+  the devices its author imported; the device rows are the way to remove it.
+  The Flutter app has no storage view yet (no vault code exists there), so it
+  has no twin for this dialog. Cloud Server, once on, shows
   `CloudServerDetails`: the usage meter with "(see where space goes)", a line
   "N resources · Synced <ago>", and the drive's web address
   (`DriveAddress`, backed by `helpers/managed/aliases.ts` against the portal's
@@ -296,3 +318,39 @@ Developer.
   connection loss (Try again). A commit that keeps failing is reported by the
   outbox (`reportRepeatedCommitFailures`); the page reports only what that does
   not cover (`reportSyncProblem`). Flutter has no equivalent banner.
+
+## This device, data per device, Sync styling (2026-10-20)
+
+Flutter Sync screen (`flutter/lib/screens/sync_screen.dart`,
+`this_device_card.dart`; shared pieces in `packages/atomic_flutter/lib/src/sync_widgets.dart`).
+
+- **This device** shows: name (tap renames), platform and CPU, engine version,
+  Online/Offline, device id and identity (shortened, tap copies), data stored
+  here (total, resources, files), store size on disk, one row per workspace
+  (size, resources, share bar, biggest first), synced-with count, last sync,
+  devices connected now. Source: bridge `store_stats()` (host
+  `atomic_lib::host::store_stats`, counted on the async pool, cached 30 s in
+  `AppSettingsBackend`) and `device_info()`. Free disk space and the Android
+  model are not shown: no plugin for them is a dependency yet.
+- **Style tokens** (`SyncGap`, `SyncText`, `SyncTone`, `SyncCard`, `SyncSection`,
+  `KeyValueRow`, `SyncRow`, `StatusChip`, `SyncActionButton`): 4/8/12/16/24
+  spacing; 15 sp section header, 14 body, 13 caption, 12 chip, 20 title; cards
+  `bg1` + 1 dp `bg2` border, 12 dp radius, no shadow; 48 dp rows and buttons;
+  tone hues equal `ToastPalette` (test: `sync_tone_test.dart`). The data-browser
+  twin has not been restyled.
+- **Pairing camera** (`scanner_frame.dart`): preview at the camera's aspect
+  ratio, portrait on a portrait screen.
+
+### TODO: how much of my data a paired device holds
+
+The Devices list shows, per paired device, when it last synced. It cannot show
+how much of the person's data that device holds: nothing in the protocol says.
+The card says "Data size unknown" instead of guessing.
+
+- [ ] Let a peer report its `store_stats` (resources and bytes per drive, the
+  same JSON `store_stats()` returns) in the Iroh handshake / the `SYNC` reply,
+  and store the last report next to `last_synced` in `KnownPeer`
+  (`lib/src/sync/peer.rs`). The report is only the peer's own claim about its
+  own store, shown as such ("as of 2 h ago"); it grants nothing.
+- [ ] Then show it in the peer card and per drive ("holds 3.1 MB of Team").
+- [ ] Same for always-on servers: `driveUsage` already gives the server's side.

@@ -13,9 +13,11 @@ import {
   isOriginWithoutNode,
   originMayLackNode,
   probeOriginForNode,
+  recallOriginProbe,
 } from './helpers/originNode';
 
 import { useEffect, type JSX } from 'react';
+import { addDiagnosticsToSentryEvents } from './helpers/feedbackDiagnostics';
 import {
   identifyAgentInSentry,
   reportRepeatedCommitFailures,
@@ -104,12 +106,16 @@ const serverUrl =
   storedIsValid && !embeddedNodeWins ? storedServerUrl! : defaultServerUrl;
 
 // The hosted build may be served by something that is not a node (see
-// `originNode.ts`). Find out before the Store exists: it opens its WebSocket
-// in the constructor, and it is also the moment `createPrivateDrive` needs
-// the answer for — a workspace made against a non-node is local-only from
-// its first save. One same-origin request, hosted builds only.
+// `originNode.ts`). The Store opens its WebSocket in the constructor, and
+// `createPrivateDrive` needs the answer, so the first visit waits for the
+// probe. A returning visit uses the answer remembered from last time and
+// re-probes in the background, so boot does not wait a round trip.
 if (originMayLackNode() && serverUrl === window.location.origin) {
-  await probeOriginForNode(serverUrl);
+  if (recallOriginProbe(serverUrl)) {
+    void probeOriginForNode(serverUrl);
+  } else {
+    await probeOriginForNode(serverUrl);
+  }
 }
 
 // Fire-and-forget — first paint doesn't wait. Catch so a failed import
@@ -216,13 +222,20 @@ import { isClientDbEnabled } from './helpers/clientDbMode';
 
 if (isClientDbEnabled()) {
   initClientDb(store, {
-    // The demo makes a guest identity straight away, and that identity gets
-    // its own database: opening the anonymous one first only to close it
-    // again cost a second worker and WebAssembly start on every first visit.
-    deferAnonymous:
-      window.location.pathname === '/app/dev-drive' ||
-      window.location.pathname === '/app/demo',
+    // Dev drive makes an identity straight away, and that identity gets its
+    // own database: opening the anonymous one first only to close it again
+    // cost a second worker and WebAssembly start.
+    deferAnonymous: window.location.pathname === '/app/dev-drive',
   });
+}
+
+// Ask for the stored drive now instead of when the sidebar first renders. The
+// request waits for the database attach announced above, then answers from
+// it; the resource is the one React asks for later.
+{
+  const home = store.getDrive();
+
+  if (!locked && home) void store.getResource(home);
 }
 
 store.parseMetaTags();
@@ -241,6 +254,12 @@ registerCustomDeleteDialogs();
 // Register global event handlers.
 registerHandlers(store);
 
+// App resources sync through the normal outbox; signing keys deliberately do
+// not. Resume their encrypted local handovers after that outbox has drained.
+import { startAppKeyRecovery } from './chunks/AppPage/appKeyHandover';
+const stopAppKeyRecovery = startAppKeyRecovery(store);
+if (import.meta.hot) import.meta.hot.dispose(stopAppKeyRecovery);
+
 // Make the Store available globally for debugging
 window.store = store;
 
@@ -250,6 +269,7 @@ window.store = store;
 attachStoreToProfiler(store);
 reportRepeatedCommitFailures(store);
 identifyAgentInSentry(store);
+addDiagnosticsToSentryEvents(store);
 registerRefusedDriveHealing(store);
 
 if (isDev()) {

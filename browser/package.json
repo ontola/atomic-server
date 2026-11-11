@@ -29,6 +29,7 @@
     "build": "pnpm run -r build",
     "test": "pnpm run -r test",
     "test-e2e": "pnpm run --filter @tomic/e2e test-e2e",
+    "docs:screenshots": "pnpm run --filter @tomic/e2e docs:screenshots",
     "test-e2e:light": "pnpm run --filter @tomic/e2e test-e2e:light",
     "test-query": "pnpm run --filter @tomic/e2e test-query",
     "test-query-debug": "pnpm run --filter @tomic/e2e test-query-debug",

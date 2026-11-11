@@ -42,8 +42,7 @@ const integrationProxy =
   process.env.INTEGRATION_PROXY_URL || process.env.VITE_INTEGRATION_PROXY_URL;
 
 // RFC 6761 gives the whole `.localhost` TLD to loopback; this mirrors
-// `isLoopbackHost` in data-browser/src/helpers/runtimeSetting.ts, which both of the
-// runtime validators use.
+// `isLoopbackHost` in @tomic/lib (e2e config cannot import it).
 const isLoopbackHost = (host: string) =>
   host === 'localhost' ||
   host.endsWith('.localhost') ||
@@ -103,6 +102,9 @@ const seededStorage = [
 ];
 
 const config: PlaywrightTestConfig = {
+  // docs-screenshots/ has its own config (`pnpm docs:screenshots`) and is not
+  // part of the e2e suite.
+  testIgnore: '**/docs-screenshots/**',
   // Default `expect` timeout. Playwright's built-in is 5s; bump to 10s
   // so retrying assertions match the action timeout below. Tests that
   // need a longer specific budget still pass `{ timeout: ... }` directly.

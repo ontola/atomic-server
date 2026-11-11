@@ -1,4 +1,5 @@
 import { WebRtcTransport } from './webrtc-transport.js';
+import { asError } from './error.js';
 
 const PROTOCOL = 'atomic-sync-v2-framed-v1';
 
@@ -24,7 +25,12 @@ export class WebRtcPeer {
     // Pairing can fail while the caller is still exchanging SDP.
     void this.transport.catch(() => {});
     this.timer = setTimeout(
-      () => this.close(new Error('WebRTC pairing timed out')),
+      () =>
+        this.close(
+          new Error(
+            'Could not open a direct connection (no route between the two browsers)',
+          ),
+        ),
       timeoutMs,
     );
     this.connection.addEventListener('datachannel', event =>
@@ -35,7 +41,13 @@ export class WebRtcPeer {
         this.connection.connectionState === 'failed' ||
         this.connection.connectionState === 'closed'
       ) {
-        this.close(new Error('WebRTC connection closed'));
+        this.close(
+          new Error(
+            this.connection.connectionState === 'failed'
+              ? 'Could not open a direct connection (no route between the two browsers)'
+              : 'WebRTC connection closed',
+          ),
+        );
       }
     });
   }
@@ -151,7 +163,7 @@ export class WebRtcPeer {
           clearTimeout(this.timer);
           this.resolve(this.pipe);
         } catch (error) {
-          this.close(error instanceof Error ? error : new Error(String(error)));
+          this.close(asError(error));
         }
       },
       { once: true },

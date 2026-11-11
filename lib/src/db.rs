@@ -7,6 +7,7 @@ mod ai_chat_migration_test;
 pub mod app_agent;
 pub mod blob_backend;
 pub mod blob_gc;
+pub mod bring_along;
 mod canonical_scheme;
 mod chat_migration;
 #[cfg(test)]
@@ -14,7 +15,8 @@ mod chat_migration_test;
 #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub mod compaction;
 mod compressed_kv;
-mod encoding;
+pub mod drive_events;
+pub(crate) mod encoding;
 pub mod encrypted_backend;
 mod index_keys;
 pub mod kv_store;
@@ -29,8 +31,11 @@ pub mod plugin_secret;
 pub mod plugin_trigger;
 pub(crate) mod prop_val_sub_index;
 mod query_index;
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+pub mod recovery;
 pub mod redb_store;
 pub mod website;
+pub mod write_log;
 /// The set of drives [`Db::migrate_messages_step`] may write chat log pages
 /// for, from the drives' subjects in any spelling.
 pub fn chat_migration_drive_set(drives: Vec<String>) -> std::collections::HashSet<String> {
@@ -91,8 +96,8 @@ use self::{
     kv_store::KvStore,
     prop_val_sub_index::{add_atom_to_prop_val_sub_index, find_in_prop_val_sub_index},
     query_index::{
-        check_if_atom_matches_watched_query_filters, query_sorted_indexed, update_indexed_member,
-        IndexIterator,
+        check_if_atom_matches_watched_query_filters, query_sorted_indexed,
+        query_sorted_indexed_page, update_indexed_member, IndexIterator,
     },
     val_prop_sub_index::add_atom_to_valpropsub_index,
 };
@@ -307,6 +312,12 @@ const MANAGED_ALIAS_HOSTS_KEY: &[u8] = b"managed_drive_alias_hosts";
 /// looking up lowercased is what makes `ACME.example.com` resolve the Drive
 /// that `acme.example.com` was bound to, instead of silently missing the
 /// mapping and falling through to the store root.
+/// What a replicated resource says changed: it arrives whole, so every
+/// property it holds.
+fn replicated_props(resource: &Resource) -> std::collections::BTreeSet<String> {
+    resource.get_propvals().keys().cloned().collect()
+}
+
 fn drive_mapping_key(host: &str) -> String {
     host.trim().trim_end_matches('.').to_ascii_lowercase()
 }
@@ -405,9 +416,14 @@ pub const DURABLE_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::fro
 
 type PendingBlobRequests = HashMap<[u8; 32], (String, web_time::Instant)>;
 
-/// The Db is a persistent on-disk Atomic Data store.
+/// **Internal:** embedded Atomic Data storage with indexed queries and persistence.
+///
+/// This implementation remains reachable as `atomic_lib::Db` for first-party
+/// consumers and compatibility. It is outside the application API contract;
+/// the documentation label does not change its Rust visibility or behavior.
 /// It's an implementation of [Storelike].
-/// It uses a [KvStore] backend for key-value storage (sled, BTreeMap, etc.).
+/// It uses a [KvStore] backend: redb over a native file, memory, or browser OPFS;
+/// optional sled support provides legacy-store compatibility and migration.
 /// It stores [Resource]s as [PropVals]s by their subject as key.
 /// It builds a value index for performant [Query]s.
 /// It keeps track of Queries and updates their index when [crate::Commit]s are applied.
@@ -418,6 +434,9 @@ pub struct Db {
     /// The key-value store backend. Abstracted behind a trait so different
     /// backends (sled, BTreeMap, etc.) can be used interchangeably.
     pub kv: Arc<dyn KvStore>,
+    /// Which subjects `kv` wrote, in order; see [`write_log`].
+    write_log: Arc<write_log::WriteLog>,
+    probe_cache: Arc<write_log::ProbeCache>,
     /// Optional remote file storage. Configure before sharing this Db.
     pub blob_backend: Option<Arc<dyn blob_backend::BlobBackend>>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
@@ -467,6 +486,11 @@ pub struct Db {
     /// store, not global — see [`crate::subject_lock`].
     pub(crate) subject_locks: crate::subject_lock::SubjectLocks,
     plugin_locks: crate::subject_lock::SubjectLocks,
+    /// Last sequence number given per drive, held while a commit's batch
+    /// lands so the stream stays in order. See [`drive_events`].
+    drive_event_seq: Arc<std::sync::Mutex<HashMap<String, u64>>>,
+    /// Drives that log events (they have an app). See [`drive_events`].
+    drive_events_on: Arc<RwLock<std::collections::HashSet<String>>>,
     /// Where the DB is stored on disk.
     #[allow(dead_code)]
     path: std::path::PathBuf,
@@ -564,13 +588,24 @@ impl Db {
         }
     }
 
+    pub fn write_log(&self) -> &Arc<write_log::WriteLog> {
+        &self.write_log
+    }
+
+    pub fn probe_cache(&self) -> &Arc<write_log::ProbeCache> {
+        &self.probe_cache
+    }
+
     /// A `Db` over `kv` with every other field at its default. Not usable
     /// until [`Db::open`] has run.
     fn from_kv(path: std::path::PathBuf, kv: Arc<dyn KvStore>, base_domain: Option<String>) -> Db {
+        let write_log = Arc::new(write_log::WriteLog::default());
         Db {
             path,
             blob_backend: None,
-            kv: Arc::new(compressed_kv::CompressedKv::new(kv)),
+            kv: Arc::new(compressed_kv::CompressedKv::with_log(kv, write_log.clone())),
+            write_log,
+            probe_cache: Default::default(),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
             endpoints: vec![],
@@ -582,6 +617,8 @@ impl Db {
             filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
+            drive_event_seq: Default::default(),
+            drive_events_on: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
@@ -757,7 +794,7 @@ impl Db {
             let built = self
                 .build_projection_tx(&resource, false, true, true, snapshot, &mut transaction)
                 .await;
-            match built.and_then(|()| self.apply_transaction(&mut transaction)) {
+            match built.and_then(|_| self.apply_transaction(&mut transaction)) {
                 Ok(()) => {}
                 Err(e) => {
                     tracing::warn!(%subject, error = %e, "Could not backfill lens");
@@ -792,9 +829,9 @@ impl Db {
     /// parent's member list, the name index) is written once instead of once
     /// per resource. A large first sync is bound by that cost.
     ///
-    /// A resource named twice keeps its last entry. One with an import
-    /// identity goes through the single-resource path, which serialises on the
-    /// identity lock and flushes.
+    /// A resource named twice keeps its last entry. Import identities share
+    /// the same projection transaction under sorted identity locks; this
+    /// public wrapper makes their receipt durable with one flush afterwards.
     pub async fn persist_replicated_resources(
         &self,
         entries: Vec<(Resource, Option<Vec<u8>>)>,
@@ -810,45 +847,110 @@ impl Db {
         entries: Vec<(Resource, Option<Vec<u8>>)>,
         defer_search: bool,
     ) -> AtomicResult<()> {
+        let has_import_identity = entries
+            .iter()
+            .any(|(resource, _)| crate::import_identity::identity(resource).is_some());
+        let resources = self
+            .persist_replicated_resources_prepared(entries, defer_search, None)
+            .await?;
+        self.finish_replicated_resources(resources).await;
+        // The public batch API is also used by live UPDATE imports, whose
+        // localId receipts must survive a process kill before acknowledgement.
+        // One flush covers the whole batch.
+        if has_import_identity {
+            self.flush()?;
+        }
+        Ok(())
+    }
+
+    /// Apply a replicated batch while its caller holds any subject locks that
+    /// protect the snapshots it resolved. The returned resources still need
+    /// lens activation and change notifications; callers that also hold locks
+    /// must release them before [`Self::finish_replicated_resources`].
+    pub(crate) async fn persist_replicated_resources_prepared(
+        &self,
+        entries: Vec<(Resource, Option<Vec<u8>>)>,
+        defer_search: bool,
+        admitted_drive: Option<&str>,
+    ) -> AtomicResult<Vec<Resource>> {
         let mut last: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
         for (i, (resource, _)) in entries.iter().enumerate() {
             last.insert(self.normalize_subject(resource.get_subject()).pure_id(), i);
         }
-        let mut transaction = Transaction::new();
-        let mut batched: Vec<&Resource> = Vec::new();
-        for (i, (resource, snapshot)) in entries.iter().enumerate() {
-            let key = self.normalize_subject(resource.get_subject()).pure_id();
-            if last.get(&key) != Some(&i) {
-                continue;
+        // Import review holds these same locks while reading every copy. Take
+        // them in a stable order, after sync's subject locks, so a batch never
+        // exposes a half-written localId group and concurrent batches cannot
+        // deadlock each other.
+        let mut identity_keys: Vec<String> = entries
+            .iter()
+            .enumerate()
+            .filter(|(i, (resource, _))| {
+                last.get(&self.normalize_subject(resource.get_subject()).pure_id()) == Some(i)
+            })
+            .filter_map(|(_, (resource, _))| {
+                crate::import_identity::identity(resource)
+                    .map(|(parent, id)| crate::import_identity::lock_key(&parent, &id))
+            })
+            .collect();
+        identity_keys.sort();
+        identity_keys.dedup();
+
+        let batched: Vec<Resource> = {
+            let mut _identity_guards = Vec::with_capacity(identity_keys.len());
+            for key in &identity_keys {
+                _identity_guards.push(self.subject_locks.lock(key).await);
             }
-            if crate::import_identity::identity(resource).is_some() {
-                self.persist_replicated(resource, snapshot.clone()).await?;
-                continue;
+
+            let mut transaction = Transaction::new();
+            let mut batched = Vec::new();
+            let mut events = Vec::new();
+            for (i, (resource, snapshot)) in entries.iter().enumerate() {
+                let key = self.normalize_subject(resource.get_subject()).pure_id();
+                if last.get(&key) != Some(&i) {
+                    continue;
+                }
+                let before = transaction.len();
+                let changed = self
+                    .build_projection_tx(
+                        resource,
+                        false,
+                        true,
+                        true,
+                        snapshot.clone(),
+                        &mut transaction,
+                    )
+                    .await?;
+                if defer_search {
+                    let mut added = transaction.split_off(before);
+                    added.retain(|op| !crate::search::is_search_op(op));
+                    transaction.extend(added);
+                    transaction.push(crate::search::pending_marker(&key));
+                }
+                if let Some(changed) = changed {
+                    events.extend(
+                        drive_events::PendingEvent::new_for_drive(
+                            self,
+                            resource,
+                            false,
+                            changed,
+                            admitted_drive,
+                        )
+                        .await,
+                    );
+                }
+                batched.push(resource.clone());
             }
-            let before = transaction.len();
-            self.build_projection_tx(
-                resource,
-                false,
-                true,
-                true,
-                snapshot.clone(),
-                &mut transaction,
-            )
-            .await?;
-            if defer_search {
-                let mut added = transaction.split_off(before);
-                added.retain(|op| !crate::search::is_search_op(op));
-                transaction.extend(added);
-                transaction.push(crate::search::pending_marker(&key));
+            if !batched.is_empty() {
+                self.apply_transaction_with_source(&mut transaction, None, events)?;
             }
-            batched.push(resource);
-        }
-        if batched.is_empty() {
-            return Ok(());
-        }
-        self.apply_transaction(&mut transaction)?;
-        for resource in batched {
-            self.note_lens_related(resource).await;
+            batched
+        };
+        Ok(batched)
+    }
+
+    pub(crate) async fn finish_replicated_resources(&self, resources: Vec<Resource>) {
+        for resource in resources {
+            self.note_lens_related(&resource).await;
             let _ = self.db_events.send(DbEvent::Changed {
                 subject: resource.get_subject().without_params(),
                 delta: None,
@@ -857,7 +959,6 @@ impl Db {
                 from_commit: false,
             });
         }
-        Ok(())
     }
 
     async fn persist_replicated(
@@ -871,10 +972,7 @@ impl Db {
         {
             Some(
                 self.subject_locks
-                    .lock(&format!(
-                        "import-identity:{}",
-                        serde_json::to_string(&(parent.pure_id(), &id))?
-                    ))
+                    .lock(&crate::import_identity::lock_key(&parent, &id))
                     .await,
             )
         } else {
@@ -893,16 +991,21 @@ impl Db {
         snapshot: Option<Vec<u8>>,
     ) -> AtomicResult<()> {
         let mut transaction = Transaction::new();
-        self.build_projection_tx(
-            resource,
-            check_required_props,
-            update_index,
-            overwrite_existing,
-            snapshot,
-            &mut transaction,
-        )
-        .await?;
-        self.apply_transaction(&mut transaction)?;
+        let changed = self
+            .build_projection_tx(
+                resource,
+                check_required_props,
+                update_index,
+                overwrite_existing,
+                snapshot,
+                &mut transaction,
+            )
+            .await?;
+        let event = match changed {
+            Some(changed) => drive_events::PendingEvent::new(self, resource, false, changed).await,
+            None => None,
+        };
+        self.apply_transaction_with_source(&mut transaction, None, event.into_iter().collect())?;
         if crate::import_identity::identity(resource).is_some() {
             self.flush()?;
         }
@@ -931,7 +1034,7 @@ impl Db {
         overwrite_existing: bool,
         snapshot: Option<Vec<u8>>,
         transaction: &mut Transaction,
-    ) -> AtomicResult<()> {
+    ) -> AtomicResult<Option<std::collections::BTreeSet<String>>> {
         // This only works if no external functions rely on using add_resource for atom-like operations!
         // However, add_atom uses set_propvals, which skips the validation.
         let subject = self.normalize_subject(resource.get_subject());
@@ -965,6 +1068,51 @@ impl Db {
             )
             .into());
         }
+        // What this write changes, for the drive's event stream. Whether it
+        // changed anything is decided from the CRDT: the incoming state's
+        // version against the stored one, so an edit that leaves the
+        // projected properties alone (rich text, say) still counts, and a
+        // peer pushing again what we hold does not. A resource with no CRDT
+        // state of its own (it would be seeded from its properties, with a
+        // fresh peer id each time) is compared by its properties instead.
+        // Which properties differ is listed either way, as extra information.
+        let differing: std::collections::BTreeSet<String> = match &existing {
+            None => replicated_props(resource),
+            Some(old) => {
+                let new = resource.get_propvals();
+                new.iter()
+                    .filter(|(prop, value)| {
+                        // `Value` has no equality; its debug form names the
+                        // variant and the content.
+                        old.get(*prop).map(|v| format!("{v:?}")) != Some(format!("{value:?}"))
+                    })
+                    .map(|(prop, _)| prop.clone())
+                    .chain(old.keys().filter(|prop| !new.contains_key(*prop)).cloned())
+                    .collect()
+            }
+        };
+        let incoming = snapshot.clone().or_else(|| resource.materialized_state());
+        let changed = match (&existing, incoming) {
+            (None, _) => Some(differing),
+            (Some(_), Some(incoming)) => {
+                let stored = self.get_loro_snapshot_bytes(&subject_str);
+                let same = match &stored {
+                    None => false,
+                    Some(stored) if *stored == incoming => true,
+                    Some(stored) => {
+                        match (
+                            crate::loro::AtomicLoroDoc::from_snapshot(stored),
+                            crate::loro::AtomicLoroDoc::from_snapshot(&incoming),
+                        ) {
+                            (Ok(old), Ok(new)) => old.oplog_vv() == new.oplog_vv(),
+                            _ => false,
+                        }
+                    }
+                };
+                (!same).then_some(differing)
+            }
+            (Some(_), None) => (!differing.is_empty()).then_some(differing),
+        };
         if check_required_props {
             resource.check_required_props(self).await?;
         }
@@ -1012,7 +1160,7 @@ impl Db {
         // and the removal of other identifier spellings: the same write a
         // commit makes.
         self.add_resource_tx(resource, transaction)?;
-        Ok(())
+        Ok(changed)
     }
 
     /// Install a sync admission/quota policy (managed nodes). The default is
@@ -1107,6 +1255,16 @@ impl Db {
             .await
     }
 
+    /// Open an adapter-supplied backend through the normal initialization path.
+    pub(crate) async fn init_with_store(
+        kv: Arc<dyn KvStore>,
+        base_domain: Option<String>,
+    ) -> AtomicResult<Db> {
+        Db::from_kv(std::path::PathBuf::new(), kv, base_domain)
+            .open()
+            .await
+    }
+
     /// Creates a Db backed by redb with file-based persistent storage.
     /// Works on all native targets (not WASM — use init_redb_opfs for that).
     ///
@@ -1139,6 +1297,20 @@ impl Db {
         base_domain: Option<String>,
         uploads_path: &std::path::Path,
         policy: &compaction::CompactionPolicy,
+    ) -> AtomicResult<Db> {
+        Self::init_redb_file_with_cache(path, base_domain, uploads_path, policy, None).await
+    }
+
+    /// `init_redb_file_with_policy` with redb's read cache at `cache_bytes`
+    /// instead of its 1 GiB default. The cache keeps whatever was read, up
+    /// to the store's size; a phone sets tens of MiB.
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+    pub async fn init_redb_file_with_cache(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        policy: &compaction::CompactionPolicy,
+        cache_bytes: Option<usize>,
     ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
@@ -1199,7 +1371,7 @@ impl Db {
         let _ = uploads_path;
 
         let (redb_store, compaction) =
-            redb_store::RedbStore::new_file_with_policy(&redb_path, policy)?;
+            redb_store::RedbStore::new_file_with_options(&redb_path, policy, cache_bytes)?;
 
         let store = Db::from_kv(path.to_path_buf(), Arc::new(redb_store), base_domain);
 
@@ -1436,15 +1608,49 @@ impl Db {
             .and_then(|v| String::from_utf8(v).ok())
     }
 
+    /// Every drive that has been the active one on this device, oldest first.
+    fn opened_drives(&self) -> Vec<String> {
+        self.kv
+            .get(trees::Tree::PluginMeta, b"opened_drives")
+            .ok()
+            .flatten()
+            .and_then(|v| serde_json::from_slice(&v).ok())
+            .unwrap_or_default()
+    }
+
     /// Set the active drive subject. Persisted in the database.
     pub fn set_active_drive(&self, drive: &str) -> AtomicResult<()> {
         self.kv
             .insert(trees::Tree::PluginMeta, b"active_drive", drive.as_bytes())?;
+        // Remember every drive that was ever opened: one made by a client
+        // (the Welcome drive) is on no `drives` list, and would drop out of
+        // `list_drives` as soon as another drive became the active one.
+        let mut opened = self.opened_drives();
+        if !opened.iter().any(|d| d == drive) {
+            opened.push(drive.to_string());
+            self.kv.insert(
+                trees::Tree::PluginMeta,
+                b"opened_drives",
+                serde_json::to_string(&opened)
+                    .unwrap_or_default()
+                    .as_bytes(),
+            )?;
+        }
         // Durable now: with Durability::None a freshly adopted drive is rolled
         // back on the next app kill, and the auto-connect loop (which needs an
         // active drive) then has nothing to reconnect to. Rare write; cheap.
         let _ = self.flush();
         Ok(())
+    }
+
+    /// A handle on the same store (same key-value store, indexes, events and
+    /// outbox) with its own default agent, set to `agent`. Unlike `clone`,
+    /// which shares the agent, changing the agent of one does not change the
+    /// other. For hosts that serve several agents from one open file.
+    pub fn with_own_agent(&self, agent: Option<crate::agents::Agent>) -> Db {
+        let mut db = self.clone();
+        db.default_agent = Arc::new(Mutex::new(agent));
+        db
     }
 
     /// Clear the default agent.
@@ -1524,7 +1730,21 @@ impl Db {
     /// Repeat genesis for the same subject merges.
     pub async fn ensure_private_drive(&self) -> AtomicResult<String> {
         let agent = self.get_default_agent()?;
-        let did = self.private_drive_subject()?;
+        self.ensure_private_drive_for(&agent).await
+    }
+
+    /// [`Self::ensure_private_drive`] for an explicit agent rather than the
+    /// default one. The agent needs its private key.
+    pub async fn ensure_private_drive_for(
+        &self,
+        agent: &crate::agents::Agent,
+    ) -> AtomicResult<String> {
+        let agent = agent.clone();
+        let private_key = agent
+            .private_key
+            .as_ref()
+            .ok_or("Cannot derive a private drive without a private key")?;
+        let did = crate::genesis::GenesisCert::private_drive_subject(private_key)?;
         if self.get_resource(&did.as_str().into()).await.is_ok() {
             return Ok(did);
         }
@@ -1627,11 +1847,28 @@ impl Db {
     /// If `drive_needs_sync` is true, the caller must sync with another device
     /// before the user can create resources — the drive's genesis commit is missing.
     pub async fn load_agent_from_secret(&self, secret: &str) -> AtomicResult<AgentLoadResult> {
-        let agent = crate::agents::Agent::from_secret(secret)?;
+        let mut agent = crate::agents::Agent::from_secret(secret)?;
+
+        // A secret carries no name (nor when the agent was made). Signing in
+        // again on the device that made the agent (every app start does) used
+        // to replace its stored resource with this nameless one, so the
+        // agent showed as "Someone" and the embedded page found no name.
+        // What the store already holds wins; the secret fills in the rest.
+        let stored = self.get_resource_shallow(&agent.subject).ok();
+        if agent.name.is_none() {
+            if let Some(Ok(Value::String(name))) = stored.as_ref().map(|r| r.get(urls::NAME)) {
+                agent.name = Some(name.clone());
+            }
+        }
         self.set_default_agent(agent.clone());
 
         // Persist so list_drives() can read the agent's `drives` property
-        let agent_resource = agent.to_resource()?;
+        let mut agent_resource = agent.to_resource()?;
+        if let Some(stored) = stored {
+            for (property, value) in stored.get_propvals().iter() {
+                agent_resource.set_unsafe(property.clone(), value.clone())?;
+            }
+        }
         self.add_resource_opts(&agent_resource, false, false, true)
             .await?;
 
@@ -1699,10 +1936,19 @@ impl Db {
                 subjects.push(active);
             }
         }
+        // Drives opened here that no list names (the Welcome drive).
+        for opened in self.opened_drives() {
+            if !subjects.contains(&opened) {
+                subjects.push(opened);
+            }
+        }
 
         let mut drives = Vec::with_capacity(subjects.len());
         for subject in subjects {
-            let name = match self.get_resource(&subject.as_str().into()).await {
+            // Stored state only: `get_resource` would go and fetch every drive
+            // this device does not hold (the agent lists dozens of old ones),
+            // one after the other, before the list could be shown.
+            let name = match self.get_resource_shallow(&subject.as_str().into()) {
                 Ok(r) => r.get(urls::NAME).map(|v| v.to_string()).unwrap_or_default(),
                 Err(_) => String::new(),
             };
@@ -1763,6 +2009,30 @@ impl Db {
             .get(Tree::LoroSnapshots, key.as_bytes())
             .ok()
             .flatten()
+    }
+
+    /// Give `resource` its derived `lastCommit`. The value the stored row
+    /// carries wins (set when the commit was applied, equal to the newest
+    /// envelope's commit id). Without one, a stamp an old doc still holds
+    /// stands; without that, the newest envelope (a row written from a synced
+    /// doc), then the genesis commit of a resource named after it.
+    pub(crate) fn serve_derived_last_commit(
+        &self,
+        resource: &mut Resource,
+        subject: &str,
+        stored: Option<Value>,
+    ) {
+        let derived = stored.or_else(|| {
+            if resource.get(urls::LAST_COMMIT).is_ok() {
+                return None;
+            }
+            crate::envelopes::latest_commit_id(self, subject)
+                .or_else(|| crate::envelopes::genesis_commit_id(subject))
+                .map(|id| Value::AtomicUrl(id.into()))
+        });
+        if let Some(derived) = derived {
+            resource.set_derived_last_commit(derived);
+        }
     }
 
     fn get_did_mapping_hint(&self, subject: &str) -> Option<String> {
@@ -2282,6 +2552,16 @@ impl Db {
     }
 
     /// Every host → Drive mapping in this store, sorted by host.
+    /// The first stored subject that starts with `prefix`, if any. For the
+    /// short refs an AI writes (`#<start of the subject>`), see
+    /// `browser/lib/src/subject-refs.ts`.
+    pub fn subject_with_prefix(&self, prefix: &str) -> Option<String> {
+        self.kv
+            .scan_prefix(Tree::Resources, prefix.as_bytes())
+            .flatten()
+            .find_map(|(key, _)| String::from_utf8(key.to_vec()).ok())
+    }
+
     pub fn list_drive_mappings(&self) -> AtomicResult<Vec<(String, String)>> {
         let mut out = Vec::new();
 
@@ -2737,9 +3017,16 @@ impl Db {
     async fn remove_applied(&self, subject: &Subject) -> AtomicResult<Vec<RemovedSubject>> {
         let mut transaction = Transaction::new();
         let mut removed = Vec::new();
-        self.recursive_remove(subject, &mut transaction, &mut removed, None)
-            .await?;
-        self.apply_transaction(&mut transaction)?;
+        let mut events = Vec::new();
+        self.recursive_remove(
+            subject,
+            &mut transaction,
+            &mut removed,
+            None,
+            Some(&mut events),
+        )
+        .await?;
+        self.apply_transaction_with_source(&mut transaction, None, events)?;
         // Tombstone every removed subject so bulk sync (Iroh / WS `SYNC`)
         // does not resurrect them from a peer that still holds a stale copy.
         // Only after the apply succeeded: a tombstone for a resource that is
@@ -3090,6 +3377,24 @@ impl Db {
         })
     }
 
+    /// The agents every app installed on `drive` signs as, revoked ones
+    /// included: a name that was an Installation's agent stays one. The drive
+    /// is compared by its canonical form, whichever spelling (`did:ad:` or
+    /// `atomic:`, with or without a drive hint) the key was stored under.
+    pub fn app_agents_in_drive(&self, drive: &str) -> Vec<String> {
+        let canonical = |drive: &str| Subject::from(drive.to_string()).pure_id();
+        let want = canonical(drive);
+        self.kv
+            .scan_prefix(Tree::AppAgent, b"")
+            .flatten()
+            .filter(|(key, _)| {
+                let drive_part = key.split(|b| *b == 0).next().unwrap_or_default();
+                std::str::from_utf8(drive_part).is_ok_and(|d| canonical(d) == want)
+            })
+            .filter_map(|(_, bin)| Some(AppAgent::from_bytes(&bin).ok()?.agent))
+            .collect()
+    }
+
     /// Read identity and lifecycle atomically, so revocation cannot look legacy
     /// between separate existence and status probes.
     pub fn get_app_agent_state(&self, key: &AppAgentKey) -> AtomicResult<AppAgentState> {
@@ -3126,6 +3431,37 @@ impl Db {
         let agent = crate::agents::Agent::from_secret(&secret)?;
 
         Ok(Some(f(&agent)))
+    }
+
+    /// The signing agent of every app that has a live key on this node,
+    /// revoked ones skipped. A key that cannot be opened is skipped too (with
+    /// a warning): one bad row must not stop the others from syncing.
+    ///
+    /// For a caller that signs on the apps' behalf in bulk (the outbox drain),
+    /// never one that hands the agents on. Two apps given the same key appear
+    /// once.
+    pub fn app_agent_keys(&self) -> Vec<crate::agents::Agent> {
+        let mut agents: Vec<crate::agents::Agent> = Vec::new();
+        for (_, bin) in self.kv.scan_prefix(Tree::AppAgent, b"").flatten() {
+            let Ok(stored) = AppAgent::from_bytes(&bin) else {
+                continue;
+            };
+            if stored.revoked {
+                continue;
+            }
+            let agent = self
+                .unwrap_secret(&stored.secret)
+                .and_then(|secret| crate::agents::Agent::from_secret(&secret));
+            match agent {
+                Ok(agent) => {
+                    if !agents.iter().any(|a| a.subject == agent.subject) {
+                        agents.push(agent);
+                    }
+                }
+                Err(e) => tracing::warn!("[app-agent] skipping a key that cannot be opened: {e}"),
+            }
+        }
+        agents
     }
 
     pub fn delete_app_agent(&self, key: &AppAgentKey) -> AtomicResult<()> {
@@ -3269,8 +3605,12 @@ impl Db {
         // would sit there looking armed and never fire.
         trigger.query.watch(self)?;
 
+        let is_new = self.kv.get(Tree::PluginTrigger, &key.encode()?)?.is_none();
         self.kv
             .insert(Tree::PluginTrigger, &key.encode()?, &trigger.encode()?)?;
+        if is_new {
+            self.start_trigger_cursor(key)?;
+        }
         Ok(())
     }
 
@@ -3290,31 +3630,16 @@ impl Db {
         // — may be watching the same filter, and unwatching one that is still
         // in use would silently stop delivering to it.
         self.kv.remove(Tree::PluginTrigger, &key.encode()?)?;
+        self.forget_trigger_cursor(key)?;
         Ok(())
     }
 
-    /// Every trigger whose query is the one that just changed.
-    ///
-    /// A whole-tree scan, for the same reason `due_plugin_schedules` is one:
-    /// there is one entry per triggered plugin, which is a very small set. An
-    /// index keyed by query id would be another thing to keep in step for no
-    /// gain at this size.
-    pub fn plugin_triggers_for_query(
-        &self,
-        query_id: &[u8],
-    ) -> AtomicResult<Vec<(PluginTriggerKey, PluginTrigger)>> {
-        let mut found = Vec::new();
-
-        for entry in self.kv.iter_tree(Tree::PluginTrigger) {
-            let (key, value) = entry?;
-            let trigger = PluginTrigger::from_bytes(&value)?;
-
-            if crate::db::query_index::query_id(&trigger.query)?.as_slice() == query_id {
-                found.push((PluginTriggerKey::from_bytes(&key)?, trigger));
-            }
-        }
-
-        Ok(found)
+    /// The ids of the queries plugin triggers watch.
+    fn trigger_query_ids(&self) -> AtomicResult<std::collections::HashSet<Vec<u8>>> {
+        self.plugin_triggers()?
+            .iter()
+            .map(|(_, t)| Ok(crate::db::query_index::query_id(&t.query)?.to_vec()))
+            .collect()
     }
 
     /// Re-registers every stored trigger's query as watched.
@@ -3329,6 +3654,9 @@ impl Db {
             let (_, value) = entry?;
             PluginTrigger::from_bytes(&value)?.query.watch(self)?;
             watched += 1;
+        }
+        for (key, _) in self.plugin_triggers()? {
+            self.enable_drive_events(&key.drive)?;
         }
 
         Ok(watched)
@@ -3671,64 +3999,71 @@ impl Db {
     /// membership from the raw atom stream.
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn apply_transaction(&self, transaction: &mut Transaction) -> AtomicResult<()> {
-        self.apply_transaction_with_source(transaction, None)
+        self.apply_transaction_with_source(transaction, None, Vec::new())
     }
 
     fn apply_transaction_with_source(
         &self,
         transaction: &mut Transaction,
         source_id: Option<&str>,
+        events: Vec<drive_events::PendingEvent>,
     ) -> AtomicResult<()> {
-        // Persist delivery before publishing the wake-up. A crashed or lagging
-        // subscriber can replay the queue; it is never the owner of the event.
-        // A sorted member moving positions has a delete and insert in this
-        // batch, which is not a membership edge.
-        let mut edges = std::collections::BTreeMap::new();
-        for op in transaction
-            .iter()
-            .filter(|op| op.tree == Tree::QueryMembers)
-        {
-            if let Some((query, subject)) = query_index::parse_members_key_id_subject(&op.key) {
-                let delta = edges.entry((query, subject)).or_insert(0i32);
-                *delta += if matches!(op.method, Method::Insert) {
-                    1
-                } else {
-                    -1
-                };
-            }
-        }
-        for ((query, subject), delta) in edges {
-            if delta == 0 {
-                continue;
-            }
-            let edge = plugin_trigger::Edge::of(delta > 0);
-            for (key, trigger) in self.plugin_triggers_for_query(&query)? {
-                if !trigger.wants(edge) {
-                    continue;
+        // A change's query edges ride in its drive event, in the same batch, so
+        // a trigger that was down or lagging replays them from its cursor. A
+        // sorted member moving positions has a delete and insert in this
+        // batch, which is not a membership edge. With several events in one
+        // batch (a replicated page, a recursive removal) an edge goes to the
+        // event of the subject it is about; the rest go to the first.
+        let events = if events.is_empty() {
+            events
+        } else {
+            let mut edges = vec![std::collections::BTreeMap::<Vec<u8>, i32>::new(); events.len()];
+            for op in transaction
+                .iter()
+                .filter(|op| op.tree == Tree::QueryMembers)
+            {
+                if let Some((query, member)) = query_index::parse_members_key_id_subject(&op.key) {
+                    let member = drive_events::pure(&member);
+                    let at = events
+                        .iter()
+                        .position(|e| e.subject_id() == member)
+                        .unwrap_or(0);
+                    *edges[at].entry(query).or_insert(0i32) +=
+                        if matches!(op.method, Method::Insert) {
+                            1
+                        } else {
+                            -1
+                        };
                 }
-                let event = plugin_trigger::QueuedEvent {
-                    id: format!(
-                        "{:020}-{}",
-                        crate::utils::now(),
-                        crate::utils::random_string(24)
-                    ),
-                    key,
-                    subject: subject.clone(),
-                    edge,
-                    at: crate::utils::now(),
-                    verdict: None,
-                    waiting_for_review: false,
-                    authorization: None,
-                };
-                transaction.push(Operation {
-                    tree: Tree::PluginMeta,
-                    method: Method::Insert,
-                    key: format!("plugin-event/v1/{}", event.id).into_bytes(),
-                    val: Some(serde_json::to_vec(&event)?),
-                });
             }
+            let mut watched = None;
+            let mut with_edges = Vec::with_capacity(events.len());
+            for (event, edges) in events.into_iter().zip(edges) {
+                let mut found = Vec::new();
+                for (query, delta) in edges.into_iter().filter(|(_, d)| *d != 0) {
+                    let ids = match &watched {
+                        Some(ids) => ids,
+                        None => watched.insert(self.trigger_query_ids()?),
+                    };
+                    if ids.contains(&query) {
+                        found.push((hex::encode(query), delta > 0));
+                    }
+                }
+                with_edges.push(event.with_edges(found));
+            }
+            with_edges
+        };
+        // The drive's event joins the same batch. The sequence lock is held
+        // until the batch has landed, so rows appear in sequence order.
+        let mut sequence = self
+            .drive_event_seq
+            .lock()
+            .map_err(|_| "drive event lock poisoned")?;
+        for event in events {
+            self.queue_drive_event(event, &mut sequence, transaction)?;
         }
         self.kv.apply_batch(transaction)?;
+        drop(sequence);
 
         for op in transaction.iter() {
             if op.tree != Tree::QueryMembers {
@@ -3768,6 +4103,7 @@ impl Db {
         subject: &Subject,
         q: &Query,
         rights_cache: &std::sync::Mutex<RightsCache>,
+        trash: Option<&std::sync::Mutex<crate::trash::TrashLookup<'_>>>,
     ) -> Option<Option<Resource>> {
         let mut resource = match self.get_resource_shallow(subject) {
             Ok(resource) => resource,
@@ -3801,6 +4137,17 @@ impl Db {
             .is_err()
         {
             return None;
+        }
+
+        // Parked in the Trash: not a member unless the query asked for it.
+        if let Some(trash) = trash {
+            if trash
+                .lock()
+                .map(|mut lookup| lookup.is_hidden_member(&resource))
+                .unwrap_or(false)
+            {
+                return None;
+            }
         }
 
         if !q.include_nested {
@@ -3874,6 +4221,7 @@ impl Db {
         let mut total_count = 0;
         let mut seen = HashSet::new();
         let rights_cache = std::sync::Mutex::new(RightsCache::default());
+        let trash = crate::trash::filter_for_query(self, q).map(std::sync::Mutex::new);
         let base_domain = self.get_base_domain();
 
         let atoms = self.get_index_iterator_for_query(q);
@@ -3901,12 +4249,15 @@ impl Db {
             // must not hide a later readable row.
             if q.limit.is_none() || subjects.len() < q.limit.unwrap() {
                 // Sudo without nested bodies needs no per-member work at all.
-                if q.for_agent == ForAgent::Sudo && !q.include_nested {
+                if q.for_agent == ForAgent::Sudo && !q.include_nested && trash.is_none() {
                     subjects.push(subject);
                     continue;
                 }
 
-                match self.resolve_query_member(&subject, q, &rights_cache).await {
+                match self
+                    .resolve_query_member(&subject, q, &rights_cache, trash.as_ref())
+                    .await
+                {
                     Some(body) => {
                         subjects.push(subject);
                         if let Some(resource) = body {
@@ -3976,6 +4327,7 @@ impl Db {
             drive: q.drive.clone(),
             aggregation: None,
             expression_filters: Vec::new(),
+            exclude_trashed: q.exclude_trashed,
         };
 
         let subjects = if requires_query_index(&scan) {
@@ -4054,7 +4406,21 @@ impl Db {
 
         // One instant for the whole pass: a `daysSince` evaluated per row against
         // a moving clock could put two rows of the same day in different buckets.
-        let now_ms = aggregation.now_ms.unwrap_or_else(crate::utils::now);
+        let clock = crate::expression::Clock {
+            now_ms: aggregation.now_ms.unwrap_or_else(crate::utils::now),
+            tz_offset_minutes: aggregation.tz_offset_minutes,
+        };
+        // Parse each formula once for the whole pass, not once per row.
+        let compiled: Vec<_> = aggregation
+            .aggregates
+            .iter()
+            .map(|aggregate| {
+                aggregate
+                    .expression
+                    .as_ref()
+                    .map(|expression| expression.compile(clock).ok())
+            })
+            .collect();
 
         for subject in subjects {
             let Ok(resource) = self.get_resource_shallow(&subject) else {
@@ -4069,10 +4435,16 @@ impl Db {
                 // A computed value stands in for a stored one: `Some(None)` means
                 // "this row has nothing to contribute", which is exactly how a
                 // missing property already reads below.
-                let computed = aggregate
-                    .expression
-                    .as_ref()
-                    .map(|expression| expression.evaluate(&resource, now_ms));
+                let computed = compiled[index].as_ref().map(|compiled| {
+                    compiled.as_ref().and_then(|compiled| {
+                        compiled.evaluate(&|p| {
+                            resource
+                                .get(p)
+                                .ok()
+                                .and_then(|value| compiled.instant(value))
+                        })
+                    })
+                });
 
                 let stored = if computed.is_some() {
                     None
@@ -4163,6 +4535,21 @@ impl Db {
         }
 
         Ok(outcomes)
+    }
+
+    /// The subjects of one page of a sorted (or multi-filter) query, reading
+    /// only as far into the query index as the page reaches (`offset` +
+    /// `limit`), not every member as [`Storelike::query`] does to count them.
+    /// The first call for a filter builds its index the usual way (a full
+    /// pass); after that a page of the newest 50 of 200 000 costs 50 reads.
+    pub async fn query_page(&self, q: &Query) -> AtomicResult<Vec<Subject>> {
+        if q.expression_filters.is_empty() && requires_query_index(q) {
+            let q_filter = QueryFilter::try_from_query(q)?;
+            if q_filter.is_watched(self) {
+                return Ok(query_sorted_indexed_page(self, q, &q_filter).await?.0);
+            }
+        }
+        Ok(self.query(q).await?.subjects)
     }
 
     async fn query_complex(&self, q: &Query) -> AtomicResult<QueryResult> {
@@ -4319,6 +4706,7 @@ impl Db {
         transaction: &mut Transaction,
         removed: &mut Vec<RemovedSubject>,
         inherited_drive: Option<Subject>,
+        mut events: Option<&mut Vec<drive_events::PendingEvent>>,
     ) -> AtomicResult<()> {
         // Key by `pure_id()` — that is how resources and Loro snapshots are
         // stored (`add_resource_tx`, `apply_commit`). Looking up by the raw
@@ -4332,6 +4720,13 @@ impl Db {
             // Read the drive now, while the resource still exists: a listener
             // reacting to the removal cannot look it up any more.
             let drive = resource.get_drive().or(inherited_drive);
+            if let Some(events) = events.as_deref_mut() {
+                // Still stored, so its parent chain can be read.
+                events.extend(
+                    drive_events::PendingEvent::new(self, &resource, true, Default::default())
+                        .await,
+                );
+            }
             removed.push(RemovedSubject {
                 subject: subject.without_params(),
                 drive: drive.clone(),
@@ -4344,6 +4739,7 @@ impl Db {
                     transaction,
                     removed,
                     drive.clone(),
+                    events.as_deref_mut(),
                 ))
                 .await?;
             }
@@ -4570,10 +4966,7 @@ impl Storelike for Db {
         let _import_guard = if let Some((parent, id)) = crate::import_identity::identity(resource) {
             let guard = self
                 .subject_locks
-                .lock(&format!(
-                    "import-identity:{}",
-                    serde_json::to_string(&(parent.pure_id(), &id))?
-                ))
+                .lock(&crate::import_identity::lock_key(&parent, &id))
                 .await;
             if let Some(found) = crate::import_identity::find_existing(self, &parent, &id).await? {
                 if Subject::from(found).pure_id() != resource.get_subject().pure_id() {
@@ -4657,10 +5050,7 @@ impl Storelike for Db {
             if let Some((parent, id)) = crate::import_identity::identity(new) {
                 let guard = self
                     .subject_locks
-                    .lock(&format!(
-                        "import-identity:{}",
-                        serde_json::to_string(&(parent.pure_id(), &id))?
-                    ))
+                    .lock(&crate::import_identity::lock_key(&parent, &id))
                     .await;
                 if let Some(found) = crate::import_identity::validate_candidate(
                     self,
@@ -4764,6 +5154,9 @@ impl Storelike for Db {
         // cascade-deleted children). Tombstoned and announced once the
         // transaction has landed; empty for anything but a destroy.
         let mut removed: Vec<RemovedSubject> = Vec::new();
+        // The destroyed resource's drive event and one per cascade-deleted
+        // child, each with its own query edges.
+        let mut destroy_events: Vec<drive_events::PendingEvent> = Vec::new();
 
         match (&commit_response.resource_old, &commit_response.resource_new) {
             (None, None) if !commit_response.commit.destroy.unwrap_or(false) => {
@@ -4795,8 +5188,14 @@ impl Storelike for Db {
                 // destroy — what `SYNC_DIFF.removeCommits` carries — lands
                 // with the deletion it signs, or not at all. Tombstones and
                 // the children's `Destroyed` events follow the apply below.
-                self.recursive_remove(&subject, &mut transaction, &mut removed, None)
-                    .await?;
+                self.recursive_remove(
+                    &subject,
+                    &mut transaction,
+                    &mut removed,
+                    None,
+                    Some(&mut destroy_events),
+                )
+                .await?;
             }
             _ => {}
         };
@@ -4864,9 +5263,32 @@ impl Storelike for Db {
             }
         }
 
+        let drive_events_for_commit: Vec<drive_events::PendingEvent> = if !removed.is_empty() {
+            // A destroy: the cascade already built the event of every subject
+            // it removes, the destroyed one first.
+            destroy_events
+        } else {
+            match commit_response
+                .resource_new
+                .as_ref()
+                .or(commit_response.resource_old.as_ref())
+            {
+                Some(resource) => drive_events::PendingEvent::new(
+                    store,
+                    resource,
+                    commit_response.commit.destroy.unwrap_or(false),
+                    commit_response.changed_props.iter().cloned().collect(),
+                )
+                .await
+                .into_iter()
+                .collect(),
+                None => Vec::new(),
+            }
+        };
         store.apply_transaction_with_source(
             &mut transaction,
             commit_response.source_id.as_deref(),
+            drive_events_for_commit,
         )?;
 
         // An import receipt may be the only evidence available when retrying
@@ -5032,6 +5454,10 @@ impl Storelike for Db {
                 }
             }
 
+            // `lastCommit` is derived, not part of the doc: the row carries the
+            // id of the envelope the last signed commit kept. Re-applying the
+            // doc below rebuilds the propvals, so hold it aside.
+            let stored_last_commit = propvals.get(urls::LAST_COMMIT).cloned();
             let mut resource = Resource::from_propvals(propvals, res_subject);
             // Authoritative merged CRDT state (full oplog) lives in LoroSnapshots.
             // Propvals may carry a smaller incremental `loroUpdate` from the last commit.
@@ -5065,6 +5491,7 @@ impl Storelike for Db {
                         "Failed to read stored Loro snapshot; serving the stored propvals instead"
                     ),
                 }
+                self.serve_derived_last_commit(&mut resource, &subject_str, stored_last_commit);
             }
             Ok(resource)
         } else {

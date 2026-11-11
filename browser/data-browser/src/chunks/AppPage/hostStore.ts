@@ -1,17 +1,18 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
-import type { Store } from '@tomic/react';
+import type { NativeAppWrite, Store } from '@tomic/react';
+import { HostError, toHostErrorCode } from '@tomic/plugin';
 import type { ProxyHost } from '@helpers/proxyConnections';
 import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
+import { noServerHost } from './noServer';
 import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import {
   core,
   destinationTablesFor,
   errorMessageFromResponse,
-  findSchema,
-  pluginSchema,
   signRequest,
 } from '@tomic/react';
+import { readSchema, schemaValue } from '@tomic/lib';
 
 /**
  * Answers the data requests an app's view makes.
@@ -48,6 +49,10 @@ export interface HostRequest {
   method?: string;
   headers?: unknown;
   body?: string;
+  /** `call`: the app export to call, and its arguments. */
+  interface?: string;
+  function?: string;
+  args?: unknown;
   /** `getMany`: the subjects to read, in order. Checked, since the frame sends it. */
   subjects?: unknown;
 }
@@ -62,6 +67,8 @@ export interface HostReply {
   id: number | string;
   result?: unknown;
   error?: string;
+  /** With `error`, from a failed `call`: the host ABI error code. */
+  code?: string;
 }
 
 export function isHostRequest(data: unknown): data is HostRequest {
@@ -125,10 +132,9 @@ export async function handleRequest(
       // app can be its own thing on its own page and a view of someone
       // else's rows on a table tab, without knowing which it is.
       const resource = await store.getResource(app);
-      const schema = await findSchema(store, drive, pluginSchema());
-      const own = schema.properties?.['app-data']
-        ? (resource.get(schema.properties['app-data']) as string | undefined)
-        : undefined;
+      const schema = await readSchema(store, drive);
+      const value = await schemaValue(store, schema, resource, 'app-data');
+      const own = typeof value === 'string' && value ? value : undefined;
       const subject = table ?? own;
 
       if (!subject) return undefined;
@@ -292,6 +298,19 @@ export async function handleRequest(
       return await proxyFetch(proxy.origin, request);
     }
 
+    // Another app's export, over the same signed route as MCP uses. The
+    // app must be a readable resource here, like any read it makes.
+    case 'call':
+      await canViewAccess(store, app, { kind: 'app', root: app }, 'read');
+
+      return await callExport(
+        store,
+        drive,
+        required(request.interface, 'interface'),
+        required(request.function, 'function'),
+        request.args,
+      );
+
     case 'proxyConnections':
       return proxy
         ? await proxy.connections(required(request.platform, 'platform'))
@@ -365,7 +384,8 @@ export function appChanges(
 }
 
 /**
- * Asks the server to perform a write as the app.
+ * Asks the server to perform a write as the app (or, in a page with no
+ * server, the device's host, which holds the app's key).
  *
  * Not done in the page, because a commit is signed by whoever's key is here —
  * the user's. A write signed by the person is authored by the person and
@@ -381,19 +401,30 @@ async function writeAsApp(
   store: Store,
   drive: string,
   app: string,
-  request: Record<string, unknown>,
+  request: NativeAppWrite,
 ): Promise<{ subject: string }> {
+  // No server: the device's host holds the app's key and signs the write.
+  if (store.noServer) {
+    return await noServerHost(store).appWrite(drive, app, request);
+  }
+
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to use this app');
 
   const url = `${store.getServerUrl()}/app-write`;
-  const headers = await signRequest(url, agent, {});
+  const payload = JSON.stringify({ drive, app, ...request });
+  const headers = await signRequest(
+    url,
+    agent,
+    {},
+    { method: 'POST', body: payload },
+  );
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ drive, app, ...request }),
+    body: payload,
   });
 
   if (!response.ok) {
@@ -473,6 +504,81 @@ const PROXY_RESPONSE_HEADERS = ['link', 'retry-after', 'etag', 'content-type'];
 const PROXY_REQUEST_HEADERS = ['authorization', 'content-type', 'if-match'];
 const PROXY_MAX_BODY = 10 * 1024 * 1024;
 const PROXY_TIMEOUT = 30_000;
+
+/** The export effects a frame may call, until approval UI exists. */
+export const FRAME_EFFECTS = ['read'];
+
+/**
+ * `POST /host/call` as the signed-in person. The server bounds the app by this
+ * person's rights, so the frame gets no more than they could do themselves.
+ */
+async function callExport(
+  store: Store,
+  drive: string,
+  iface: string,
+  fn: string,
+  args: unknown,
+): Promise<unknown> {
+  // Another app's export runs on a node; the device host has none to ask.
+  if (store.noServer)
+    throw new HostError('unsupported', 'Calling another app needs a server');
+
+  const agent = store.getAgent();
+
+  if (!agent) throw new Error('Sign in to call an app');
+
+  if (args !== undefined && (typeof args !== 'object' || args === null))
+    throw new Error('call arguments are an object');
+
+  const url = `${store.getServerUrl()}/host/call`;
+  const payload = JSON.stringify({
+    drive,
+    interface: iface,
+    function: fn,
+    args: args ?? {},
+    // Until the host can ask the person to approve a write, an external
+    // effect or a dialog on a frame's behalf, a frame may only read. The
+    // frame cannot set this: it has no network, and `request` is not read.
+    allowEffects: FRAME_EFFECTS,
+  });
+  // Version 2: the signature covers the method and exactly this body.
+  const headers = await signRequest(
+    url,
+    agent,
+    {},
+    { method: 'POST', body: payload },
+  );
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: payload,
+  });
+  const text = await response.text();
+  let body: {
+    result?: unknown;
+    error?: { code?: unknown; message?: unknown };
+  } = {};
+
+  try {
+    body = JSON.parse(text);
+  } catch {
+    // Not ours (a proxy's error page, say): reported below.
+  }
+
+  if (response.ok && 'result' in body) return body.result;
+
+  if (body.error) {
+    throw new HostError(
+      toHostErrorCode(body.error.code),
+      String(body.error.message ?? `Call failed (${response.status})`),
+    );
+  }
+
+  throw new HostError(
+    'internal',
+    errorMessageFromResponse(text, response.status),
+  );
+}
 
 /** Send a frame's signed proxy request, if it stays within the proxy. */
 async function proxyFetch(

@@ -30,12 +30,15 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 
 const MAX_SHOWN_DRIVES = 10;
 
-const DefaultTrigger = buildDefaultTrigger(<FaCaretDown />, 'Switch Drive');
+const DefaultTrigger = buildDefaultTrigger(
+  <FaCaretDown />,
+  () => 'Switch Drive',
+);
 
 /** Up/down chevron trigger, for placing the switcher next to a drive title. */
 export const DriveSwitcherChevronTrigger = buildDefaultTrigger(
   <LuChevronsUpDown />,
-  'Switch Drive',
+  () => 'Switch Drive',
 );
 
 function getTitle(resource: Resource): string {
@@ -51,8 +54,11 @@ function getTitle(resource: Resource): string {
  */
 export function DriveSwitcher({
   Trigger = DefaultTrigger,
+  onSwitch,
 }: {
   Trigger?: DropdownTriggerComponent;
+  /** Called when a drive is picked, e.g. to close the mobile sidebar. */
+  onSwitch?: () => unknown;
 }) {
   const hosting = useDriveHostingStates();
   const badge = (subject: string) => (
@@ -110,6 +116,7 @@ export function DriveSwitcher({
     setDrive(subject);
     addToHistory(subject);
     recordVisit(subject);
+    onSwitch?.();
     navigate(constructOpenURL(subject));
   };
 

@@ -353,6 +353,14 @@ impl Resource {
         Ok(())
     }
 
+    /// Set the served `lastCommit` on the propvals only. The value is derived
+    /// (the id of the newest retained envelope) and never written into the
+    /// Loro doc, so it costs no change in the oplog and cannot diverge between
+    /// replicas. A doc that still holds an old stamp keeps it; this wins.
+    pub(crate) fn set_derived_last_commit(&mut self, id: Value) {
+        self.propvals.insert(urls::LAST_COMMIT.into(), id);
+    }
+
     /// Add the values `lenses` derive to the propvals, keeping real values.
     /// Returns the properties that were derived.
     pub fn apply_lenses(&mut self, lenses: &crate::lens::LensIndex) -> Vec<String> {
@@ -1063,6 +1071,19 @@ impl Resource {
         // contains the complete state, not just the appended item.
         self.commit.set(property.into(), full_array);
         Ok(self)
+    }
+
+    /// Append an entry to this `ChatLog` page's `entries` map (a Loro op, so
+    /// entries from different devices merge). Returns the entry's key; the
+    /// change is saved by `save_locally` like any other edit.
+    pub fn add_chat_entry(
+        &mut self,
+        entry: &crate::chat_log::Entry,
+    ) -> crate::errors::AtomicResult<String> {
+        self.ensure_materialized()?;
+        let key = self.loro().add_entry(entry)?;
+        self.loro().commit();
+        Ok(key)
     }
 
     /// Append a JSON item to a Json property. CRDT-friendly — appends to the
@@ -2586,11 +2607,17 @@ mod test {
         let mut reloaded = store.get_resource(&subject).await.unwrap();
         reloaded.warm_history().unwrap();
         let history = reloaded.get_history();
+        // Both saves land in the stored doc. Rust-path saves carry no commit
+        // boundary, so Loro may merge them into one change; the server's own
+        // `lastCommit` change used to make this count 2 by accident.
         assert!(
-            history.len() >= 2,
-            "get_resource should expose merged Loro oplog (got {} entries)",
-            history.len()
+            !history.is_empty(),
+            "get_resource should expose the Loro oplog"
         );
+        match reloaded.get(stroke_data) {
+            Ok(Value::Json(serde_json::Value::Array(arr))) => assert_eq!(arr.len(), 2),
+            other => panic!("expected both strokes after two saves, got {other:?}"),
+        }
     }
 
     #[tokio::test]

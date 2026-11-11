@@ -1,5 +1,4 @@
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
-import { isLoopbackHost } from './runtimeSetting';
+import { isLoopbackHost } from '@tomic/lib';
 import { fetchManagedInfo } from './managedServer';
 import {
   BrowserPeerSync,
@@ -62,17 +61,6 @@ export function savePeerLink(store: Store, link: SavedPeerLink): void {
   active.get(store)?.delete(link.drive);
   active.get(store)?.get(`automatic:${link.drive}`)?.close();
   active.get(store)?.delete(`automatic:${link.drive}`);
-  window.dispatchEvent(new Event(PEER_LINK_CHANGED));
-}
-
-export function removePeerLink(store: Store, drive: string): void {
-  localStorage.setItem(
-    key(store),
-    JSON.stringify(savedPeerLinks(store).filter(link => link.drive !== drive)),
-  );
-  active.get(store)?.get(drive)?.close();
-  active.get(store)?.delete(drive);
-  statuses.delete(drive);
   window.dispatchEvent(new Event(PEER_LINK_CHANGED));
 }
 
@@ -336,7 +324,6 @@ export async function discoverPeerDrives(store: Store): Promise<void> {
       if (!current()) return;
 
       if (
-        readTemplateDemo()?.drive === drive ||
         !isAtomicIdentifier(drive) ||
         !resource.isReady() ||
         resource.error ||

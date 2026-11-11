@@ -7,13 +7,13 @@ import { sameAgent } from './recovery';
  * Handing a local identity's drives to the account identity that replaces it.
  *
  * One email has one identity. When the account already has one and this
- * browser made a demo guest, the account's wins — but the guest may already
- * own drives (a kept template preview). Before the switch, while the guest
+ * browser started a guest with Get started, the account's wins, but the
+ * guest already owns drives (its Welcome drive and anything made since). Before the switch, while the guest
  * can still sign, it adds the account agent to each of those drives'
  * `write`, and copies the local-only ones out of its own database
  * (`driveCarryOver.ts`). After the switch, the account imports those copies
  * and lists every handed-over drive in its own home, the way
- * `addToSavedDrives` does for the demo.
+ * `addToSavedDrives` does for a drive the agent opens.
  *
  * The guest's own home is read for the drives it lists, never handed over
  * itself: it holds nothing but that list, and the account has a home of its
@@ -32,6 +32,8 @@ export type HandoverResource = {
   push(property: string, values: string[], unique?: boolean): void;
   canWrite(agent?: string): Promise<[boolean, string | undefined]>;
   save(): Promise<unknown>;
+  /** Only read on the personal drive, to see whether it holds anything. */
+  getChildrenCollection?(pageSize?: number): Promise<{ totalMembers: number }>;
 };
 
 export type HandoverStore = {
@@ -49,8 +51,8 @@ export type DriveHandoverOptions = {
    * agent resource cannot be read, which must not hide the drives on it.
    */
   personalDrive?: string;
-  /** Drives that are not the user's to hand over: demo and preview drives. */
-  skip: (string | undefined)[];
+  /** Drives that are not the user's to hand over. */
+  skip?: (string | undefined)[];
   /** Keep `from`'s key on this device; see `archiveStoredAgent`. */
   archiveIdentity: (
     subject: string,
@@ -135,7 +137,29 @@ async function drivesOf(
     return [];
   }
 
-  return drivesListedIn(home).filter(drive => drive !== personalDrive);
+  const listed = drivesListedIn(home).filter(drive => drive !== personalDrive);
+
+  // A home that holds documents of its own is work too; an empty one is only
+  // the list, and handing that over gave the account a second empty "My drive".
+  return (await holdsContent(home)) ? [...listed, personalDrive] : listed;
+}
+
+async function holdsContent(home: HandoverResource): Promise<boolean> {
+  if (!home.getChildrenCollection) return false;
+
+  return (await home.getChildrenCollection(1)).totalMembers > 0;
+}
+
+/**
+ * The drives `from` could hand over, before any grant: what a sign-in as
+ * someone else would bring along. Throws when they cannot be read.
+ */
+export async function listHandoverDrives(
+  store: HandoverStore,
+  from: string,
+  personalDrive?: string,
+): Promise<string[]> {
+  return [...new Set(await drivesOf(store, from, personalDrive))];
 }
 
 const inFlight = new Map<string, Promise<PendingDriveHandover>>();
@@ -175,7 +199,7 @@ async function runHandover(
     from,
     to,
     personalDrive,
-    skip,
+    skip = [],
     archiveIdentity,
     carryOver,
   }: DriveHandoverOptions,
@@ -262,6 +286,8 @@ export async function applyPendingDriveHandover(
   store: Pick<HandoverStore, 'getResource'>,
   agent: string,
   importCarriedDrives: (agent: string) => Promise<string[]> = async () => [],
+  /** `agent`'s home when the caller knows it: its agent resource may not be readable yet. */
+  knownPersonalDrive?: string,
 ): Promise<boolean> {
   try {
     const imported = await importCarriedDrives(agent);
@@ -277,10 +303,14 @@ export async function applyPendingDriveHandover(
   if (!pending || !sameAgent(pending.agent, agent)) return false;
 
   try {
-    const agentResource = await store.getResource(agent);
-    const personalDrive = agentResource.error
-      ? undefined
-      : personalDriveOf(agentResource);
+    let personalDrive = knownPersonalDrive;
+
+    if (!personalDrive) {
+      const agentResource = await store.getResource(agent);
+      personalDrive = agentResource.error
+        ? undefined
+        : personalDriveOf(agentResource);
+    }
 
     if (!personalDrive) return false;
 

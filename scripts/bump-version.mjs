@@ -23,6 +23,9 @@
  * - Historical version mentions in prose docs (e.g. docs/src/svelte.md,
  *   CONTRIBUTING.md's own examples) — those describe a specific past
  *   release, not a live pin, and bumping them would misstate history.
+ * - The Flutter build number (the `+N` in flutter/pubspec.yaml). It must keep
+ *   increasing in App Store Connect and Play, so it is raised by hand per
+ *   upload.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -70,6 +73,13 @@ const TEMPLATE_PACKAGE_FILES = [
 // Plain "version" field, JSON, not an npm package.
 const VERSION_ONLY_JSON_FILES = ['desktop/tauri.conf.json'];
 
+// The Flutter app declares `version: x.y.z+build`. App stores accept only a
+// numeric x.y.z (no `-beta.N`), so it follows the release version minus its
+// pre-release suffix; the build number after `+` is left alone.
+const FLUTTER_PUBSPEC = 'flutter/pubspec.yaml';
+const FLUTTER_VERSION_RE = /^version:\s*([^+\s]+)/m;
+const storeVersion = (version) => version.split('-')[0];
+
 let changedFiles = 0;
 
 /**
@@ -81,16 +91,18 @@ const DECLARED_VERSION_SITES = [
   ...RUST_FILES.map(f => ({ file: f, re: /^version = "([^"]+)"/m })),
   ...JS_PACKAGE_FILES.map(f => ({ file: f, re: /"version":\s*"([^"]+)"/ })),
   ...VERSION_ONLY_JSON_FILES.map(f => ({ file: f, re: /"version":\s*"([^"]+)"/ })),
+  { file: FLUTTER_PUBSPEC, re: FLUTTER_VERSION_RE, expected: storeVersion },
 ];
 
 function runCheck(expected) {
   const mismatches = [];
 
-  for (const { file, re } of DECLARED_VERSION_SITES) {
+  for (const { file, re, expected: expectedFor = (v) => v } of DECLARED_VERSION_SITES) {
     const found = fs.readFileSync(path.join(ROOT, file), 'utf8').match(re)?.[1];
+    const want = expectedFor(expected);
 
-    if (found !== expected) {
-      mismatches.push(`  ${file}: ${found ?? '(no version field)'}`);
+    if (found !== want) {
+      mismatches.push(`  ${file}: ${found ?? '(no version field)'} (want ${want})`);
     }
   }
 
@@ -169,6 +181,11 @@ for (const relPath of VERSION_ONLY_JSON_FILES) {
     content.replace(`"version": "${oldVersion}"`, `"version": "${newVersion}"`),
   );
 }
+
+console.log(`\nFlutter app (build number kept): ${storeVersion(oldVersion)} -> ${storeVersion(newVersion)}`);
+replaceInFile(FLUTTER_PUBSPEC, (content) =>
+  content.replace(FLUTTER_VERSION_RE, `version: ${storeVersion(newVersion)}`),
+);
 
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -35,7 +35,6 @@ import {
   persistSidebarMessage,
   type TitlePromise,
 } from './persistSidebarMessage';
-import { getOrCreateAiChatsFolder } from '@helpers/standardLocations';
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
@@ -100,6 +99,9 @@ const AISidebar: React.FC = () => {
   const [currentSubject] = useCurrentSubject();
   const titlePromiseRef = useRef<TitlePromise | undefined>(undefined);
   const autoContextSubjectRef = useRef<string | undefined>(undefined);
+  // Set when a chat is started from the sidebar: no current resource is
+  // attached, neither as context nor as the chat's `about`.
+  const withoutContextRef = useRef(false);
   // Subject for which a re-open lookup already ran (or was suppressed).
   const reopenAttemptRef = useRef<string | undefined>(undefined);
   // Mirror for async draft creation, which runs outside the render cycle.
@@ -122,34 +124,29 @@ const AISidebar: React.FC = () => {
     const generation = chatGenerationRef.current;
 
     if (!draftChatPromiseRef.current) {
-      // Chats live in the personal drive's "AI Chats" folder (a deterministic
-      // standard location) instead of cluttering the drive root. `about` records which
-      // resource the chat was started on, so the sidebar can re-open it when
+      // Chats live in the personal drive; the drive listing hides them by
+      // class. `about` records which resource the chat was started on, so the sidebar can re-open it when
       // the user returns to that resource.
-      const aboutSubject =
-        autoContextSubjectRef.current ?? currentSubjectRef.current;
-      draftChatPromiseRef.current = getOrCreateAiChatsFolder(
-        store,
-        privateDrive,
-      ).then(folder =>
-        store.newResource<Ai.AiChat>({
-          parent: folder,
-          isA: ai.classes.aiChat,
-          propVals: {
-            [core.properties.name]: DEFAULT_AICHAT_NAME,
-            ...(aboutSubject && {
-              [dataBrowser.properties.about]: aboutSubject,
-            }),
-          },
-        }),
-      );
+      const aboutSubject = withoutContextRef.current
+        ? undefined
+        : (autoContextSubjectRef.current ?? currentSubjectRef.current);
+      draftChatPromiseRef.current = store.newResource<Ai.AiChat>({
+        parent: privateDrive,
+        isA: ai.classes.aiChat,
+        propVals: {
+          [core.properties.name]: DEFAULT_AICHAT_NAME,
+          ...(aboutSubject && {
+            [dataBrowser.properties.about]: aboutSubject,
+          }),
+        },
+      });
     }
 
     const draftChatPromise = draftChatPromiseRef.current;
 
     // Forget the attempt whether it worked or not. A rejected promise left in
     // the ref is answered from cache for the rest of the session, so one failed
-    // folder or drive read used to mean every later message in this chat failed
+    // drive read used to mean every later message in this chat failed
     // the same way, logging the same error again with nothing asking again.
     const forget = () => {
       if (draftChatPromiseRef.current === draftChatPromise) {
@@ -307,28 +304,32 @@ const AISidebar: React.FC = () => {
     setMessages(nextMessages);
   };
 
-  const startNewChat = useCallback(() => {
-    // The user explicitly wants a fresh chat — don't immediately re-open the
-    // existing chat for the resource they're viewing.
-    reopenAttemptRef.current = currentSubject;
-    chatGenerationRef.current += 1;
-    draftChatPromiseRef.current = null;
-    chatResourceRef.current = undefined;
-    setChatResource(undefined);
-    isChatSavedRef.current = false;
-    setIsChatSaved(false);
-    setMessages([]);
-    setCompactedMessages([]);
-    messagesRef.current = [];
-    messageToResourceMapRef.current = new Map();
-    setMessageToResourceMap(new Map());
-    titlePromiseRef.current = undefined;
-    autoContextSubjectRef.current = undefined;
-    setContextItems([]);
-    updateRenderKey();
-    // Everything above is a ref or a setState, both stable — so this identity
-    // only changes with the subject, and the effect below can depend on it.
-  }, [currentSubject, setContextItems]);
+  const startNewChat = useCallback(
+    (withoutContext = false) => {
+      withoutContextRef.current = withoutContext;
+      // The user explicitly wants a fresh chat — don't immediately re-open the
+      // existing chat for the resource they're viewing.
+      reopenAttemptRef.current = currentSubject;
+      chatGenerationRef.current += 1;
+      draftChatPromiseRef.current = null;
+      chatResourceRef.current = undefined;
+      setChatResource(undefined);
+      isChatSavedRef.current = false;
+      setIsChatSaved(false);
+      setMessages([]);
+      setCompactedMessages([]);
+      messagesRef.current = [];
+      messageToResourceMapRef.current = new Map();
+      setMessageToResourceMap(new Map());
+      titlePromiseRef.current = undefined;
+      autoContextSubjectRef.current = undefined;
+      setContextItems([]);
+      updateRenderKey();
+      // Everything above is a ref or a setState, both stable — so this identity
+      // only changes with the subject, and the effect below can depend on it.
+    },
+    [currentSubject, setContextItems],
+  );
 
   // A request handed off from another screen. Always a NEW chat: auto-submit only fires on
   // an empty one, and a new request does not belong in the middle of whatever
@@ -363,7 +364,7 @@ const AISidebar: React.FC = () => {
       const timing = userTiming('chat:sidebar');
       await prepareToLeaveRef.current?.();
       timing.step('leave');
-      startNewChat();
+      startNewChat(pendingChat.withoutContext);
       timing.step('reset');
       if (pendingChat.subject) await loadExistingChat(pendingChat.subject);
       timing.step('load');
@@ -487,12 +488,19 @@ const AISidebar: React.FC = () => {
       });
   }, [isOpen, currentSubject, privateDrive, store, loadExistingChat]);
 
+  // Closing the panel ends the sidebar-started chat's opt-out, so opening it
+  // from the topbar attaches the current resource again.
+  useEffect(() => {
+    if (!isOpen) withoutContextRef.current = false;
+  }, [isOpen]);
+
   useEffect(() => {
     // Avoid re-adding the same subject after the user removes or changes the
     // auto-inserted context item.
     // When the user opens the AI sidebar and the chat is completely empty, we add the current subject to the context.
     if (
       !pendingAsk &&
+      !withoutContextRef.current &&
       isOpen &&
       currentSubject &&
       messages.length === 0 &&

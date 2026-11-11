@@ -1,0 +1,78 @@
+[
+  {
+    "@id": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/shortname": "contacts",
+    "https://atomicdata.dev/properties/description": "People you know by email address, kept in your own private drive so the address stays yours. Today a Contact is how an invite you sent by email stays visible: it is pending until you remove it. Matching an address to an Agent who joined is not possible, as the address is never stored on the shared resource.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/classes/Contact"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/properties/email",
+      "https://atomicdata.dev/properties/invitedTo",
+      "https://atomicdata.dev/properties/invitedRole",
+      "https://atomicdata.dev/properties/invitedAt"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Contact",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "contact",
+    "https://atomicdata.dev/properties/description": "A person known by email address. `name` is what to call them (the address when nothing better is known). Lives in the private drive of the person who knows them. With `invitedTo` set it is a pending invite: that resource was shared with this address by email.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/email"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/invitedTo",
+      "https://atomicdata.dev/properties/invitedRole",
+      "https://atomicdata.dev/properties/invitedAt"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/email",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "email",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "An email address."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invitedTo",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "invited-to",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The resource this person was invited to by email."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invitedRole",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "invited-role",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The access the invite gave: `read` or `write`."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invitedAt",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "invited-at",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "When the invite was sent."
+  }
+]

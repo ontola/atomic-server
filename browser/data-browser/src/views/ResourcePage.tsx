@@ -14,7 +14,10 @@ import {
   notifications,
   conversations,
   useArray,
+  useString,
 } from '@tomic/react';
+import { useNavigate } from '@tanstack/react-router';
+import { paths } from '../routes/paths';
 
 import { ContainerNarrow } from '../components/Containers';
 import Collection from '../views/CollectionPage';
@@ -25,6 +28,7 @@ import { DocumentPage } from './DocumentPage';
 import ErrorPage, { ErrorBoundary } from './ErrorPage';
 import { ClassPage } from './ClassPage';
 import { FilePage } from './File/FilePage';
+import AgentPage from './AgentPage';
 import { ResourcePageDefault } from './ResourcePageDefault';
 import { Spinner } from '../components/Spinner';
 import { ChatRoomPage } from './ChatRoomPage';
@@ -114,6 +118,11 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   const store = useStore();
   const drive = store.getDrive();
   const appClass = useAppClass(drive);
+  // The drive's schema can be unread on a device that has only part of the
+  // drive (the embedded app has no server to ask), so an app is also known
+  // by its class: the plugin schema's `app`.
+  const classResource = useResource(isA);
+  const [classShortname] = useString(classResource, core.properties.shortname);
   const websiteClass = useWebsiteClass(isAList.join('|'));
   const websiteExportClass = useWebsiteClass(
     isAList.join('|'),
@@ -231,7 +240,10 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
 
     // Like a plugin's, an app's class is minted per drive, so it cannot be a
     // case in `selectComponent`. An app opens to its own view.
-    if (appClass !== undefined && resource.hasClasses(appClass)) {
+    if (
+      (appClass !== undefined && resource.hasClasses(appClass)) ||
+      (appClass === undefined && classShortname === 'app')
+    ) {
       return (
         <Main subject={subject}>
           <ErrorBoundary>
@@ -289,6 +301,31 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   );
 };
 
+/**
+ * A Redirect has two origins. The answer to accepting an invite is never stored
+ * and has no `parent`: `InvitePage` keeps the page while it finishes the
+ * sign-in. One left behind by "Move..." is stored where the original lived, so
+ * it keeps its `parent`: follow its `destination`.
+ */
+const RedirectPage: React.FC<ResourcePageProps> = ({ resource }) => {
+  const navigate = useNavigate();
+  const [parent] = useString(resource, core.properties.parent);
+  const [destination] = useString(resource, server.properties.destination);
+  const follow = !!parent && !!destination;
+
+  useEffect(() => {
+    if (follow) {
+      navigate({
+        to: paths.show,
+        search: { subject: destination },
+        replace: true,
+      });
+    }
+  }, [follow, destination, navigate]);
+
+  return follow ? <Spinner /> : <InvitePage resource={resource} />;
+};
+
 function selectComponent(klass: string | undefined) {
   switch (klass) {
     case collections.classes.collection:
@@ -298,14 +335,17 @@ function selectComponent(klass: string | undefined) {
     case server.classes.drive:
       return DrivePage;
     case server.classes.invite:
-    case server.classes.redirect:
       return InvitePage;
+    case server.classes.redirect:
+      return RedirectPage;
     case dataBrowser.classes.document:
       return DocumentPage;
     case core.classes.class:
       return ClassPage;
     case server.classes.file:
       return FilePage;
+    case core.classes.agent:
+      return AgentPage;
     case dataBrowser.classes.chatroom:
       return ChatRoomPage;
     case conversations.classes.conversation:

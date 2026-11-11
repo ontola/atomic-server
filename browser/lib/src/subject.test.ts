@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isLoopbackHost } from './urls.js';
 import {
   asSubject,
   blobSubjectFromDownloadUrl,
@@ -243,5 +244,33 @@ describe('property subjects', () => {
     expect(canonicalIdentifier(`did:ad:prop:${hex}`)).toBe(
       `atomic:prop:${hex}`,
     );
+  });
+});
+
+describe('isLoopbackHost', () => {
+  it('accepts loopback forms', () => {
+    for (const host of [
+      'localhost',
+      'atomic.localhost',
+      '127.0.0.1',
+      '127.1.2.3',
+      '::1',
+      '[::1]',
+    ]) {
+      expect(isLoopbackHost(host)).toBe(true);
+    }
+  });
+
+  it('rejects everything else', () => {
+    for (const host of [
+      'example.com',
+      'notlocalhost',
+      'localhost.example.com',
+      '128.0.0.1',
+      '127.0.0.1.evil.com',
+      '10.0.0.1',
+    ]) {
+      expect(isLoopbackHost(host)).toBe(false);
+    }
   });
 });

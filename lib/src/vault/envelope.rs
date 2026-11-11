@@ -183,12 +183,6 @@ pub fn open(key: &DriveVaultKey, sealed: &[u8]) -> AtomicResult<(EnvelopeHeader,
     Ok((header, plaintext))
 }
 
-/// Read the cleartext header without a key. This is what the vault operator
-/// (and a GC worker) can see, and the reason the header is deliberately dull.
-pub fn peek_header(sealed: &[u8]) -> AtomicResult<EnvelopeHeader> {
-    EnvelopeHeader::from_bytes(sealed)
-}
-
 /// Subkey length, re-exported so callers sizing buffers do not hardcode 32.
 pub const SUBKEY_LEN: usize = VAULT_KEY_LEN;
 
@@ -278,14 +272,6 @@ mod tests {
         sealed[0] = 99;
         let err = open(&k, &sealed).unwrap_err().to_string();
         assert!(err.contains("version"), "{err}");
-    }
-
-    #[test]
-    fn header_is_readable_without_a_key() {
-        let sealed = seal(&key(7), ObjectKind::Checkpoint, b"x").unwrap();
-        let header = peek_header(&sealed).unwrap();
-        assert_eq!(header.kind, ObjectKind::Checkpoint);
-        assert_eq!(header.key_epoch, 7);
     }
 
     /// Blobs and packs use different subkeys, so a blob sealed under one cannot

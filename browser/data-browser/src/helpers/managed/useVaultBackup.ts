@@ -1,3 +1,4 @@
+import type { Store } from '@tomic/react';
 import { getManagedAccount } from './session';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -5,6 +6,7 @@ import {
   compactVaultBackup,
   type CompactResult,
   disableVault,
+  getVaultDriveSummary,
   getVaultState,
   listVaultDrives,
   recoverDriveKey,
@@ -25,6 +27,7 @@ import {
   restoreDriveFromFile,
   suggestedFileName,
 } from './vaultFile';
+import { restoreDriveToSnapshot } from './vaultRestore';
 import { onVaultChanged, setVaultOptOut } from './vaultAutoBackup';
 
 /**
@@ -39,12 +42,24 @@ export type VaultStatus =
   | { state: 'loading' }
   | { state: 'unavailable'; reason: string }
   | { state: 'off' }
+  /**
+   * Backed up by another account. Members see that the drive is covered, and
+   * by whom; managing it stays with the account that turned it on.
+   */
+  | {
+      state: 'other';
+      backedUpBy: string | null;
+      lastBackupAt: number | null;
+      suspended: boolean;
+    }
   | { state: 'on'; enrollment: VaultEnrollment; details: VaultDriveState };
 
 export type UseVaultBackup = {
   status: VaultStatus;
   busy: boolean;
   error: string | null;
+  /** This device's public key, to mark its row in the storage dialog. */
+  devicePubkey: string | null;
   enable: () => Promise<void>;
   disable: () => Promise<void>;
   backupNow: () => Promise<void>;
@@ -56,7 +71,13 @@ export type UseVaultBackup = {
    * (`error` says why).
    */
   compact: (includeUndoWindow: boolean) => Promise<CompactResult | null>;
-  restore: () => Promise<RestoreOutcome | null>;
+  /**
+   * Bring the drive back from the vault. Without a snapshot id that merges
+   * everything stored into this device (a new or empty device). With one it
+   * overwrites the drive with its state at that snapshot, as new changes that
+   * sync to every device; what was added since goes to the Trash.
+   */
+  restore: (snapshotId?: string) => Promise<RestoreOutcome | null>;
   /**
    * Save the sealed backup to this device as one `.atomic-vault` file. Resolves
    * to `'saved'`, `'cancelled'` (no location chosen), `'empty'` (nothing is
@@ -121,7 +142,10 @@ export function useVaultBackup({
   proofMessage,
   devicePubkey,
   getDisplayMetadata,
+  store,
 }: {
+  /** Needed to restore a snapshot: the overwrite goes through its resources. */
+  store?: Store;
   db: VaultCapableDb | null;
   keys: VaultKeyOps | null;
   driveSubject: string | null;
@@ -174,7 +198,22 @@ export function useVaultBackup({
       const enrollment = drives.find(d => d.drive_subject === driveSubject);
 
       if (!enrollment) {
-        setStatus({ state: 'off' });
+        // Not ours does not mean not backed up: the account that pays may be
+        // someone else. A control plane without this endpoint reads as off.
+        const summary = await getVaultDriveSummary(driveSubject).catch(
+          () => null,
+        );
+
+        setStatus(
+          summary?.enabled && !summary.is_yours
+            ? {
+                state: 'other',
+                backedUpBy: summary.backed_up_by,
+                lastBackupAt: summary.last_backup_at,
+                suspended: summary.suspended,
+              }
+            : { state: 'off' },
+        );
 
         return;
       }
@@ -399,31 +438,61 @@ export function useVaultBackup({
     ],
   );
 
-  const restore = useCallback(async () => {
-    if (status.state !== 'on') return null;
+  const restore = useCallback(
+    async (snapshotId?: string) => {
+      if (status.state !== 'on') return null;
 
-    return run(async () => {
-      const key = await ensureKey(status.enrollment.drive_pseudonym);
-      setRestoreProgress(0);
+      return run(async () => {
+        const key = await ensureKey(status.enrollment.drive_pseudonym);
+        setRestoreProgress(0);
 
-      try {
-        return await restoreDrive({
-          db: db!,
-          drivePseudonym: status.enrollment.drive_pseudonym,
-          // This device's lane, so the import can record which *other* lanes it
-          // now provably holds. That is what lets a checkpoint published from
-          // here later claim coverage for them — the only way a lane belonging
-          // to a device that is gone ever becomes prunable.
-          devicePubkey: devicePubkey!,
-          driveKey: key.driveKey,
-          onProgress: (done, total) =>
-            setRestoreProgress(total === 0 ? 1 : done / total),
-        });
-      } finally {
-        setRestoreProgress(null);
-      }
-    });
-  }, [run, status, ensureKey, db, devicePubkey]);
+        try {
+          if (snapshotId) {
+            const clientDb = store?.getClientDb();
+
+            if (!store || !driveSubject || !clientDb || !keys?.openScratchDb) {
+              throw new Error(
+                'Restoring a snapshot is not available on this device yet.',
+              );
+            }
+
+            return await restoreDriveToSnapshot({
+              store,
+              db: db!,
+              drive: driveSubject,
+              drivePseudonym: status.enrollment.drive_pseudonym,
+              devicePubkey: devicePubkey!,
+              driveKey: key.driveKey,
+              keyEpoch: key.keyEpoch,
+              snapshotId,
+              openScratchDb: keys.openScratchDb,
+              listDriveSubjects: drive => clientDb.getDriveSubjects(drive),
+              onProgress: setRestoreProgress,
+            });
+          }
+
+          return await restoreDrive({
+            db: db!,
+            drivePseudonym: status.enrollment.drive_pseudonym,
+            // This device's lane, so the import can record which *other* lanes it
+            // now provably holds. That is what lets a checkpoint published from
+            // here later claim coverage for them — the only way a lane belonging
+            // to a device that is gone ever becomes prunable.
+            devicePubkey: devicePubkey!,
+            driveKey: key.driveKey,
+            // The epoch the key was sealed under; restoreDrive's default of 1 is
+            // wrong after a re-key and the import then fails to open anything.
+            keyEpoch: key.keyEpoch,
+            onProgress: (done, total) =>
+              setRestoreProgress(total === 0 ? 1 : done / total),
+          });
+        } finally {
+          setRestoreProgress(null);
+        }
+      });
+    },
+    [run, status, ensureKey, db, devicePubkey, store, driveSubject, keys],
+  );
 
   const downloadBackup = useCallback(async () => {
     if (status.state !== 'on') return null;
@@ -497,6 +566,7 @@ export function useVaultBackup({
     status,
     busy,
     error,
+    devicePubkey,
     downloadBackup,
     restoreFromFile,
     enable,

@@ -21,6 +21,7 @@ import {
   LabelStyled,
 } from '../../components/forms/InputStyles';
 import { useOpenConversation } from '../../helpers/conversations/useConversations';
+import { asError } from '@tomic/react';
 
 /**
  * Starts a conversation with someone by their Atomic ID. The other way in is
@@ -51,7 +52,7 @@ export function NewMessageDialogBody({ onDone }: { onDone: () => void }) {
       await openConversation([trimmed]);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err : new Error(String(err)));
+      setError(asError(err));
     }
   };
 

@@ -4,6 +4,7 @@ import {
   DriveCatalogSync,
   catalogCacheKey,
   readCatalogCache,
+  shareCatalogReports,
 } from './driveCatalog';
 const identity = { email: 'one@example.com', agent: 'did:ad:agent:one' };
 const remote = {
@@ -88,4 +89,61 @@ it('restores an offline cache only for its bound account and agent', () => {
     readCatalogCache({ ...identity, email: 'other@example.com' }, storage),
   ).toBeNull();
   expect(readCatalogCache({ ...identity, agent: 'other' }, storage)).toBeNull();
+});
+
+describe('catalog reports', () => {
+  it('sends one report for drive lists that report the same catalog together', async () => {
+    vi.useFakeTimers();
+    const post = vi.fn().mockResolvedValue(remote);
+    const reports = shareCatalogReports(post, 25_000);
+    const [a, b] = await Promise.all([
+      reports.send('k', '[]'),
+      reports.send('k', '[]'),
+    ]);
+    expect(a).toBe(remote);
+    expect(b).toBe(remote);
+    expect(post).toHaveBeenCalledTimes(1);
+
+    // A different catalog, a later report, or a reset asks again.
+    await reports.send('k2', '[1]');
+    expect(post).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(25_001);
+    await reports.send('k2', '[1]');
+    expect(post).toHaveBeenCalledTimes(3);
+    reports.reset();
+    await reports.send('k2', '[1]');
+    expect(post).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
+  });
+
+  it('does not share a failed report', async () => {
+    const post = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue(remote);
+    const reports = shareCatalogReports(post);
+    await expect(reports.send('k', '[]')).rejects.toThrow('offline');
+    await expect(reports.send('k', '[]')).resolves.toBe(remote);
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  it('expire() asks again after an answer, but keeps sharing one in flight', async () => {
+    let resolve!: (value: unknown) => void;
+    const post = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise(r => (resolve = r)))
+      .mockResolvedValue(remote);
+    const reports = shareCatalogReports(post);
+    const first = reports.send('k', '[]');
+    reports.expire();
+    const second = reports.send('k', '[]');
+    expect(post).toHaveBeenCalledTimes(1);
+    resolve(remote);
+    await Promise.all([first, second]);
+
+    // Back online with the same catalog: the server is asked again.
+    reports.expire();
+    await reports.send('k', '[]');
+    expect(post).toHaveBeenCalledTimes(2);
+  });
 });

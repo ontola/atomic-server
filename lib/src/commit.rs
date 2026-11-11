@@ -27,8 +27,9 @@ pub struct CommitResponse {
     /// Optional transport/source identity for echo suppression.
     pub source_id: Option<String>,
     /// Every op the stored doc gained while applying this commit: the
-    /// author's own ops plus what the server wrote on top (the `lastCommit`
-    /// stamp, `createdAt` at genesis). This, not `commit.loro_update`, is
+    /// author's own ops plus what the server wrote on top (`createdAt` at
+    /// genesis, a derived `drive`; older servers also stamped `lastCommit`).
+    /// This, not `commit.loro_update`, is
     /// what live subscribers must receive — see [`Self::fanout_delta`].
     pub broadcast_update: Option<Vec<u8>>,
 }
@@ -36,11 +37,12 @@ pub struct CommitResponse {
 impl CommitResponse {
     /// The delta to push to live subscribers.
     ///
-    /// The server stamps `lastCommit` on the resource after importing the
-    /// author's update. That stamp is a Loro op under the server's own peer,
-    /// and the next edit by anyone who loaded a snapshot depends on it. A
-    /// subscriber that only ever received `commit.loro_update` lacks the
-    /// stamp, parks that edit as pending, and every later delta parks behind
+    /// The server may write ops of its own after importing the author's
+    /// update (`createdAt` at genesis, a derived `drive`; `lastCommit` is no
+    /// longer one, it is derived). Those are Loro ops under the server's own
+    /// peer, and the next edit by anyone who loaded a snapshot depends on
+    /// them. A subscriber that only ever received `commit.loro_update` lacks
+    /// them, parks that edit as pending, and every later delta parks behind
     /// it: the document quietly stops being live. Falls back to the commit's
     /// own bytes when the apply did not go through a Loro doc.
     pub fn fanout_delta(&self) -> Option<&[u8]> {
@@ -757,8 +759,10 @@ impl Commit {
 
         // Create a new resource if it doesn't exist yet.
         // For agent DIDs, get_resource() returns a synthetic "just-in-time" agent
-        // even when no data is stored. Detect this by checking for a lastCommit —
-        // a real stored resource always has one after its genesis commit.
+        // even when no data is stored, and a profile the server stored without
+        // a commit (an invite) is not created yet either. Both lack a
+        // `lastCommit`, which is served from the row of the last applied
+        // commit, so a missing one means "no commit has created this".
         let (resource_old, is_new) = match store.get_resource(&commit.subject.clone()).await {
             Ok(rs) => {
                 let is_synthetic_agent =
@@ -1358,29 +1362,10 @@ impl Commit {
 
         let commit_resource: Resource = commit.into_resource(store).await?;
 
-        // Stamp `lastCommit` with this envelope's id. The id is a receipt,
-        // not a refetchable resource — ordinary content commits are not stored.
-        //
-        // Not on later commits to a chat log page: the stamp is a ~100 byte
-        // incompressible string written as its own Loro change per commit,
-        // which would triple the cost of a chat message (planning/chat-log.md).
-        // The page keeps its genesis value.
-        if is_new || !crate::hierarchy::is_chat_log(&applied.resource_new) {
-            applied
-                .resource_new
-                .set(
-                    urls::LAST_COMMIT.to_string(),
-                    Value::AtomicUrl(commit_resource.get_subject().clone()),
-                    store,
-                )
-                .await?;
-        }
-
         let destroyed = commit.destroy.unwrap_or(false);
 
         // Lenses derive values for the properties the doc does not really
-        // hold. Done last: setting `lastCommit` above rebuilds the propvals
-        // from the doc. The index follows the derived values like real ones.
+        // hold. The index follows the derived values like real ones.
         if !destroyed {
             if let Some(lenses) = store.lens_index() {
                 reconcile_lens_atoms(
@@ -1391,6 +1376,22 @@ impl Commit {
                     &mut applied.remove_atoms,
                 );
             }
+            // `lastCommit` is derived, never written into the doc: it is the
+            // id of the envelope this commit keeps, set on the propvals only
+            // (the stored row carries it from there; `Db::get_resource` serves
+            // it on read). It used to be a ~100 byte server-peer Loro change
+            // per commit. An unsigned write has no envelope: it leaves the
+            // previous value (still the newest envelope), and only a resource
+            // that has none yet gets the commit's own id, so clients can tell
+            // it exists.
+            let previous = (!is_new)
+                .then(|| applied.resource_old.get(urls::LAST_COMMIT).ok().cloned())
+                .flatten();
+            let id = match (commit.signature.is_some(), previous) {
+                (false, Some(previous)) => previous,
+                _ => Value::AtomicUrl(commit_resource.get_subject().clone()),
+            };
+            applied.resource_new.set_derived_last_commit(id);
         }
 
         // Export what the doc gained during this apply — the author's ops and
@@ -1553,6 +1554,73 @@ impl Commit {
             changed_property_keys,
             datatypes_changed,
             entry_changes,
+        })
+    }
+
+    /// Parses a signed JSON-AD commit straight into a [`Commit`], without
+    /// building an Atomic Resource first. A genesis commit omits `subject`;
+    /// it is derived from the signature. Unknown keys (`@id`, `isA`, ...)
+    /// are ignored: only the fields below are signed.
+    pub fn from_json_ad(json: &str) -> AtomicResult<Commit> {
+        let map: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(json).map_err(|e| {
+                crate::AtomicError::parse_error(&format!("Invalid JSON: {e}"), None, None)
+            })?;
+        Self::from_json_map(&map)
+    }
+
+    /// [`Commit::from_json_ad`] for an already parsed object.
+    pub fn from_json_map(map: &serde_json::Map<String, serde_json::Value>) -> AtomicResult<Commit> {
+        let bad = |msg: &str, prop: &str| crate::AtomicError::parse_error(msg, None, Some(prop));
+        let text = |prop: &str| -> AtomicResult<Option<String>> {
+            match map.get(prop) {
+                None => Ok(None),
+                Some(serde_json::Value::String(s)) => Ok(Some(s.clone())),
+                Some(_) => Err(bad("must be a string", prop)),
+            }
+        };
+        let flag = |prop: &str| -> AtomicResult<Option<bool>> {
+            match map.get(prop) {
+                None => Ok(None),
+                Some(serde_json::Value::Bool(b)) => Ok(Some(*b)),
+                Some(_) => Err(bad("must be a boolean", prop)),
+            }
+        };
+        let url_of = |prop: &str| -> AtomicResult<Option<String>> {
+            let found = text(prop)?;
+            if let Some(url) = &found {
+                crate::utils::check_valid_url(url)?;
+            }
+            Ok(found)
+        };
+        let signature = text(urls::SIGNATURE)?.ok_or_else(|| {
+            crate::AtomicError::parse_error("No signature field in Commit.", None, None)
+        })?;
+        let subject = match url_of(urls::SUBJECT)? {
+            Some(subject) => subject,
+            None => crate::identifiers::resource_subject(&signature),
+        };
+        let created_at = map
+            .get(urls::CREATED_AT)
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| bad("createdAt must be an integer", urls::CREATED_AT))?;
+        let signer = url_of(SIGNER)?.ok_or_else(|| bad("signer is required", SIGNER))?;
+        let loro_update = text(urls::LORO_UPDATE)?
+            .map(|b64| {
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &b64)
+                    .map_err(|e| format!("loroUpdate is not valid Base64: {e}"))
+            })
+            .transpose()?;
+        Ok(Commit {
+            subject: subject.into(),
+            created_at,
+            signer: signer.into(),
+            loro_update,
+            destroy: flag(urls::DESTROY)?,
+            previous_commit: url_of(urls::PREVIOUS_COMMIT)?,
+            is_genesis: flag(urls::IS_GENESIS)?,
+            url: Some(crate::identifiers::commit_subject(&signature)),
+            signature: Some(signature),
         })
     }
 

@@ -3,6 +3,7 @@ import type { Agent } from './agent.js';
 import type { ClientDbWorker } from './client-db.js';
 import type { Store } from './store.js';
 import { createAuthentication } from './authentication.js';
+import { isLoopbackHost } from './urls.js';
 import { WebRtcPeer } from './webrtc-peer.js';
 import { Tag, decodeCommit, encodeAuth, encodeSync } from './ws-v2.js';
 import type { WebRtcTransport } from './webrtc-transport.js';
@@ -81,6 +82,7 @@ export class BrowserPeerSync {
   private readonly readyAt = new Map<string, number>();
   private reconnect?: ReturnType<typeof setTimeout>;
   private stopped = false;
+  private lastError = '';
   private iceServers: RTCIceServer[] = [];
   private peerId = randomPeerToken();
   private identity?: Promise<string>;
@@ -102,10 +104,7 @@ export class BrowserPeerSync {
     const url = new URL(options.signalingUrl);
     if (
       url.protocol !== 'wss:' &&
-      !(
-        url.protocol === 'ws:' &&
-        ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-      )
+      !(url.protocol === 'ws:' && isLoopbackHost(url.hostname))
     )
       throw new Error('Peer discovery requires a secure WebSocket URL');
     this.connect();
@@ -127,16 +126,26 @@ export class BrowserPeerSync {
   }
 
   private status(): void {
-    const ready = [...this.connections.values()].filter(
-      connection => connection.ready,
-    );
-    const relayed = ready.filter(
-      connection => connection.path === 'relayed',
-    ).length;
+    // Several tabs of one remote browser share an id prefix and each has its
+    // own connection; count the browsers, not the connections.
+    const browsers = new Map<string, boolean>();
+
+    for (const [id, connection] of this.connections) {
+      if (!connection.ready) continue;
+      const prefix = id.slice(0, BROWSER_PREFIX_LENGTH);
+      browsers.set(
+        prefix,
+        (browsers.get(prefix) ?? true) && connection.path === 'relayed',
+      );
+    }
+
+    const relayed = [...browsers.values()].filter(Boolean).length;
     this.options.onStatus?.(
-      ready.length
-        ? `Connected to ${ready.length} ${ready.length === 1 ? 'browser' : 'browsers'}${relayed ? ` (${relayed} relayed)` : ''}`
-        : 'Waiting for a peer',
+      browsers.size
+        ? `Connected to ${browsers.size} ${browsers.size === 1 ? 'browser' : 'browsers'}${relayed ? ` (${relayed} relayed)` : ''}`
+        : this.lastError
+          ? `Waiting for a peer (last attempt failed: ${this.lastError.slice(0, 120)})`
+          : 'Waiting for a peer',
     );
   }
 
@@ -297,6 +306,7 @@ export class BrowserPeerSync {
       { ...this.options, onStatus: undefined, iceServers: this.iceServers },
       () => {
         this.readyAt.set(id, Date.now());
+        this.lastError = '';
         this.status();
       },
       error => this.failed(id, connection, error),
@@ -325,10 +335,13 @@ export class BrowserPeerSync {
     error: unknown,
   ): void {
     if (this.stopped || this.connections.get(id) !== connection) return;
+    const raw = error instanceof Error ? error.message : String(error);
+    const message = describePeerFailure(raw);
+    if (message !== raw) console.warn('[browser-peer-sync] peer failed:', raw);
+    // Kept so the next status() does not wipe it with a bare "Waiting".
+    this.lastError = message;
     this.remove(id, connection);
-    this.options.onStatus?.(
-      error instanceof Error ? error.message : String(error),
-    );
+    this.options.onStatus?.(message);
 
     if (this.members.has(id) && id > this.peerId && !this.retries.has(id)) {
       const delay = this.retryDelays.get(id) ?? 3000;
@@ -342,6 +355,27 @@ export class BrowserPeerSync {
       );
     }
   }
+}
+
+/** Errors the frame transport raises when the other side sends bytes it cannot parse. */
+const UNREADABLE_FRAME_ERRORS = new Set([
+  'Invalid Atomic frame size',
+  'Missing Atomic frame length',
+  'Atomic frame overflow',
+  'Expected binary Atomic frame',
+  'Atomic receive queue full',
+  'Truncated Atomic frame',
+]);
+
+/**
+ * What a person can read for a peer failure. The transport's own wording
+ * ("Invalid Atomic frame size") says nothing to a user; the raw text stays in
+ * the console. Anything not recognised passes through unchanged.
+ */
+export function describePeerFailure(message: string): string {
+  return UNREADABLE_FRAME_ERRORS.has(message)
+    ? 'A peer sent data this version could not read. Reload or update the app on both devices'
+    : message;
 }
 
 class BrowserPeerConnection {
@@ -435,6 +469,9 @@ class BrowserPeerConnection {
           const auth = await createAuthentication(
             `${this.options.drive}#${remoteChallenge}`,
             this.agent!,
+            // Not the did:ad: spelling servers get: this session compares the
+            // agent to the invite's issuer and to ephemeral frames by string.
+            { agentSubject: this.agent!.subject },
           );
 
           if (invitation) {

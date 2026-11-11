@@ -12,7 +12,12 @@ import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
 import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
 import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
-import { FaEllipsisVertical, FaFlag, FaWpforms } from 'react-icons/fa6';
+import {
+  FaArrowUpRightFromSquare,
+  FaEllipsisVertical,
+  FaFlag,
+  FaWpforms,
+} from 'react-icons/fa6';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
@@ -26,11 +31,14 @@ import { runAction } from '../../actions/runAction';
 import type { ActionDefinition } from '../../actions/types';
 import { usePluginClass } from '@chunks/PluginRuns/useDriveClass';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
-import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
+import { MoveResourceDialog } from '../MoveResourceDialog';
+import { CoverPickerDialog, IconPickerDialog } from '../ResourceDecorations';
 import { ResourceInline } from '../../views/ResourceInline';
 import { ResourceUsage } from '../ResourceUsage';
 import { getDeleteDialog } from './deleteDialogRegistry';
 import { useAfterResourceDelete } from '../../hooks/useAfterResourceDelete';
+import { useExternalApps } from '../../hooks/useExternalApps';
+import { appsForResource } from '../../helpers/driveApps';
 
 const CreateTableFormDialog = lazy(() =>
   import('../../chunks/TablePage/CreateTableFormDialog').then(module => ({
@@ -73,6 +81,7 @@ export const ContextMenuOptions = {
   Export: 'export',
   Open: 'open',
   AddToChat: 'addToChat',
+  Comment: 'comment',
   ReportAIChat: 'reportAIChat',
   Favorite: 'favorite',
   Parent: 'parent',
@@ -83,6 +92,7 @@ export const ContextMenuOptions = {
   SetCover: 'setCover',
   CreateTableForm: 'createTableForm',
   Reload: 'reload',
+  Move: 'move',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -147,8 +157,10 @@ export function ResourceContextMenu({
   // undefined = never opened (dialog not mounted), boolean = mounted.
   const [emojiPickerOpen, setEmojiPickerOpen] = useState<boolean>();
   const [coverPickerOpen, setCoverPickerOpen] = useState<boolean>();
+  const [moveOpen, setMoveOpen] = useState<boolean>();
   const [pluginRunOpen, setPluginRunOpen] = useState<boolean>();
   const [reportChatOpen, setReportChatOpen] = useState<boolean>();
+  const openMoveDialog = useCallback(() => setMoveOpen(true), []);
   const openPluginRun = useCallback(() => setPluginRunOpen(true), []);
   const [currentDrive] = useDrive();
   const pluginClass = usePluginClass(currentDrive);
@@ -160,6 +172,7 @@ export function ResourceContextMenu({
     showCodeUsageDialog: openCodeUsageDialog,
     openEmojiPicker,
     openCoverPicker,
+    openMoveDialog,
     openPluginRun,
     pluginClass,
   });
@@ -169,6 +182,7 @@ export function ResourceContextMenu({
   const CustomDeleteDialog = getDeleteDialog(ctx.resource.getClasses()[0]);
   const afterDelete = useAfterResourceDelete(subject, onAfterDelete);
   const appMenu = useAppMenuItems();
+  const externalApps = useExternalApps(currentDrive);
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
 
   const handleBindActive = useCallback(
@@ -311,6 +325,20 @@ export function ResourceContextMenu({
     });
   }
 
+  // Native apps registered in this drive that handle the resource's class.
+  for (const { app, url } of appsForResource(
+    externalApps,
+    ctx.resource.getClasses(),
+    subject,
+  )) {
+    items.push({
+      id: `open-in-${app.subject}`,
+      label: `Open in ${app.name}`,
+      icon: <FaArrowUpRightFromSquare />,
+      onClick: () => window.open(url, '_blank', 'noopener,noreferrer'),
+    });
+  }
+
   // Add custom items from context (if any) before filtering
   const allItems = [
     ...pageItems,
@@ -426,7 +454,7 @@ export function ResourceContextMenu({
       />
       {/* Mounted lazily on first use — most menus never open these. */}
       {emojiPickerOpen !== undefined && (
-        <EmojiPickerDialog
+        <IconPickerDialog
           resource={ctx.resource}
           show={emojiPickerOpen}
           onShowChange={setEmojiPickerOpen}
@@ -437,6 +465,13 @@ export function ResourceContextMenu({
           resource={ctx.resource}
           show={coverPickerOpen}
           onShowChange={setCoverPickerOpen}
+        />
+      )}
+      {moveOpen !== undefined && (
+        <MoveResourceDialog
+          subject={subject}
+          show={moveOpen}
+          onShowChange={setMoveOpen}
         />
       )}
       {pluginRunOpen !== undefined && ctx.drive !== undefined && (

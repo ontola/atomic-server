@@ -147,7 +147,18 @@ describe('explicit save acknowledgement', () => {
     store.setServerConnected(false);
   });
 
-  it('reports writes refused for a missing parent once per workspace', async () => {
+  it("keeps each drive's finished sync, so another drive finishing later does not hide it", async () => {
+    const { store } = await testStore();
+    const ontola = 'did:ad:ontola';
+    store.finishDriveSync(ontola, 5, 100);
+    store.finishDriveSync('did:ad:own', 2, 200);
+    store.setDrive(ontola);
+    expect(store.getSyncStatus().lastDriveSync?.drive).toBe(ontola);
+    expect(store.getSyncStatus().lastDriveSync?.timestamp).toBe(100);
+    store.setServerConnected(false);
+  });
+
+  it('reports writes refused for a missing parent once per drive', async () => {
     const { store } = await testStore();
     const drive = await store.newResource({
       isA: 'https://atomicdata.dev/classes/Drive',
@@ -169,8 +180,34 @@ describe('explicit save acknowledgement', () => {
     notify(drive.subject);
 
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain('workspace');
+    expect(errors[0]).toContain('drive');
     expect(errors[0]).not.toContain('Not retrying; edit again');
+    store.setServerConnected(false);
+  });
+
+  it('explains a missing append right in plain words, once per resource', async () => {
+    const { store } = await testStore();
+    const drive = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      noParent: true,
+    });
+    const refusal =
+      'Unauthorized. No https://atomicdata.dev/properties/append right has been found for atomic:agent:x in this resource or its parents';
+    const errors: string[] = [];
+    store.on(StoreEvents.Error, e => errors.push(e.message));
+    const notify = () =>
+      (
+        store as unknown as {
+          notifyBlockedSync(subject: string, message: string): void;
+        }
+      ).notifyBlockedSync(drive.subject, refusal);
+
+    notify();
+    notify();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('not allowed to add this here');
+    expect(errors[0]).not.toContain('right has been found');
     store.setServerConnected(false);
   });
 

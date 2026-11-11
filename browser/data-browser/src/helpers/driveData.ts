@@ -78,7 +78,7 @@ export async function deviceHasDriveData(
 
 /**
  * Whether a server can answer queries about this drive. Not for a local-only
- * drive (the demo workspace, a browser-only drive), and not on an origin with
+ * drive (a browser-only drive, such as a guest's Welcome drive), and not on an origin with
  * no node behind it, where `/query` gets the app's HTML instead of data.
  */
 export function driveHasServer(

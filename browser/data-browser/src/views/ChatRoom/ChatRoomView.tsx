@@ -1,4 +1,3 @@
-import { useMessageSpeaker } from '../../chunks/Demo/messageSpeaker';
 import {
   commits,
   conversations,
@@ -11,6 +10,7 @@ import {
   useCanWrite,
   useCollection,
   useCreatedAt,
+  useCreatedBy,
   useCurrentAgent,
   useResource,
   useResourceSnapshot,
@@ -64,7 +64,12 @@ import { formatCompactDateTime } from '../../helpers/dates/compactDateTime';
 import { ResourceInline } from '../ResourceInline';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { TypingIndicator } from '../../components/Presence/TypingIndicator';
-import { findMentionTrigger, insertMention } from '../../helpers/chatMention';
+import {
+  findMentionTrigger,
+  insertMention,
+  serializeMentions,
+  type RecordedMention,
+} from '../../helpers/chatMention';
 import {
   ChatMentionPicker,
   type ChatMentionPickerHandle,
@@ -123,6 +128,7 @@ export function ChatView({
   // Start index of an `@` token closed with Escape; reopens on a new `@`.
   const [dismissedAt, setDismissedAt] = useState<number>();
   const pickerRef = useRef<ChatMentionPickerHandle>(null);
+  const [mentions, setMentions] = useState<RecordedMention[]>([]);
 
   const { typers, notifyTyping, stopTyping } = useTypingPresence(threadSubject);
 
@@ -180,17 +186,23 @@ export function ChatView({
 
     const messageBackup = newMessageVal;
     const replyBackup = isReplyTo;
+    const mentionsBackup = mentions;
 
     try {
       setScrollToBottomTrigger(prev => prev + 1);
       setNewMessage('');
+      setMentions([]);
       // The message shows up before the server has answered, so the reply
       // state is cleared with the text: the next message is a plain one.
       setReplyTo(undefined);
       stopTyping();
-      await onSend(messageBackup, replyBackup);
+      await onSend(
+        serializeMentions(messageBackup, mentionsBackup),
+        replyBackup,
+      );
     } catch (err) {
       setNewMessage(messageBackup);
+      setMentions(mentionsBackup);
       setReplyTo(replyBackup);
       toast.error(err.message);
     }
@@ -204,9 +216,10 @@ export function ChatView({
 
   const handleSelectMention = (subject: string, label: string) => {
     if (!openTrigger) return;
-    const result = insertMention(newMessageVal, openTrigger, subject, label);
+    const result = insertMention(newMessageVal, openTrigger, label);
 
     setNewMessage(result.text);
+    setMentions(prev => [...prev, { id: subject, label }]);
     setCaret(result.caret);
     // Put the caret behind the inserted mention once React has rendered it.
     requestAnimationFrame(() => {
@@ -570,7 +583,7 @@ function ResourceMessage({ subject, setReplyTo }: MessageProps) {
   // Loro oplog (materialized into propvals) — no commit fetch, so they survive
   // a refresh. The commit subject is intentionally NOT passed.
   const createdAt = useCreatedAt(resource);
-  const createdBy = useMessageSpeaker(resource);
+  const createdBy = useCreatedBy(resource);
   const [plainReplyTo] = useSubject(resource, dataBrowser.properties.replyTo);
   const replyTo = sealed.sealed ? sealed.payload?.replyTo : plainReplyTo;
   const navigate = useNavigateWithTransition();
@@ -880,7 +893,7 @@ function ResourceMessageLine({ subject }: MessageLineProps) {
   const description = sealed.sealed ? sealedText(sealed) : plainDescription;
   // Author from the resource's own genesis metadata (createdBy) — not a commit
   // fetch, so it survives a refresh.
-  const author = useMessageSpeaker(resource);
+  const author = useCreatedBy(resource);
 
   return (
     <MessageLineView

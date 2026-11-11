@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use actix_web::{http::header, web, HttpResponse};
 use atomic_lib::{
     db::plugin_meta::PluginMetaKey, hierarchy::check_read, urls, Storelike, Subject, Value,
@@ -8,9 +6,8 @@ use base64::{engine::general_purpose, Engine as _};
 
 use crate::{
     appstate::AppState,
-    context::RequestContext,
     errors::{AtomicServerError, AtomicServerResult},
-    helpers::get_client_agent,
+    helpers::get_client_agent_for_signed_url,
 };
 
 #[derive(serde::Deserialize, Debug)]
@@ -61,8 +58,7 @@ pub async fn handle_mint_view_token(
 ) -> AtomicServerResult<HttpResponse> {
     // Raw bytes rather than `web::Json`, so a version 2 request signature can
     // cover exactly the body acted on.
-    let body: MintTokenBody = serde_json::from_slice(&raw)
-        .map_err(|e| AtomicServerError::bad_request(format!("Invalid JSON body: {e}")))?;
+    let body: MintTokenBody = crate::helpers::parse_json(&raw)?;
     if !is_subject(&body.plugin) {
         return Err(AtomicServerError::bad_request(
             "Only a plugin stored in the drive needs a token",
@@ -72,18 +68,7 @@ pub async fn handle_mint_view_token(
     let store = &appstate.store;
     let resource = store.get_resource(&body.plugin.as_str().into()).await?;
 
-    let path_and_query = req
-        .head()
-        .uri
-        .path_and_query()
-        .ok_or("Path must be given")?
-        .to_string();
-    let signed_subject =
-        atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&context.origin);
-
-    let agent =
-        crate::helpers::get_client_agent_for_request(&req, &raw, &appstate, &signed_subject)
-            .await?;
+    let agent = crate::helpers::authenticate(&req, &appstate, &context, &raw).await?;
     check_read(store, &resource, &agent).await?;
 
     let now = atomic_lib::utils::now();
@@ -125,32 +110,23 @@ fn split_plugin_name(plugin: &str) -> AtomicServerResult<(&str, &str)> {
     Ok((namespace, name))
 }
 
-pub fn get_plugin_file_path(
+/// A file of the release an Installation pins (`ui.js`, `ui.css`), read from
+/// its package.
+async fn release_file(
     appstate: &AppState,
-    drive_subject: &str,
-    plugin_name: &str,
+    installation: &atomic_lib::Resource,
     format: &str,
-) -> AtomicServerResult<PathBuf> {
-    split_plugin_name(plugin_name)?;
-    let encoded_drive = general_purpose::URL_SAFE.encode(drive_subject);
-
-    let plugin_dir = appstate
-        .config
-        .plugin_path
-        .join("class-extenders")
-        .join("scoped")
-        .join(encoded_drive);
-
-    let extension = match format {
-        "js" => "js",
-        "css" => "css",
-        _ => return Err("Invalid format".into()),
+) -> AtomicServerResult<Option<Vec<u8>>> {
+    if !matches!(format, "js" | "css") {
+        return Err("Invalid format".into());
+    }
+    let Ok(Value::String(release_id)) = installation.get(urls::RELEASE_ID) else {
+        return Ok(None);
     };
-
-    let file_name = format!("{}.ui.{}", plugin_name, extension);
-    let file_path = plugin_dir.join(file_name);
-
-    Ok(file_path)
+    Ok(
+        crate::plugins::release::package_file(&appstate.store, release_id, &format!("ui.{format}"))
+            .await?,
+    )
 }
 
 /// Generates a random CSP nonce for the plugin iframe document.
@@ -181,6 +157,7 @@ fn render_plugin_ui_html(nonce: &str) -> String {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Plugin</title>
+<style>html,body{{margin:0;padding:0;height:100%}}#root{{height:100%}}</style>
 <style id="__atomic_theme"></style>
 <script nonce="{nonce}">
 var loaded = false;
@@ -285,6 +262,7 @@ try {{
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Plugin</title>
 {css_link}
+<style>html,body{{margin:0;padding:0;height:100%}}#root{{height:100%}}</style>
 <style id="__atomic_theme"></style>
 {script}
 <script nonce="{nonce}">
@@ -392,9 +370,7 @@ pub async fn handle_plugin_ui(
     // as the same agent that fetches the page — signed headers or the
     // session cookie, like any other handler.
     let store = &appstate.store;
-    let origin = RequestContext::new(&req, &appstate).origin;
-    let full_url = format!("{}{}", origin, req.uri());
-    let for_agent = get_client_agent(req.headers(), &appstate, &full_url).await?;
+    let for_agent = get_client_agent_for_signed_url(&req, &appstate).await?;
     let Some(meta) = store.get_plugin_meta(&PluginMetaKey::new(drive_subject, namespace, name))?
     else {
         return Ok(HttpResponse::NotFound().body("Plugin UI file not found"));
@@ -404,16 +380,10 @@ pub async fn handle_plugin_ui(
         .await?;
     atomic_lib::hierarchy::check_read(store, &plugin_resource, &for_agent).await?;
 
-    let file_path = get_plugin_file_path(&appstate, drive_subject, plugin_name, format)?;
-
-    if !file_path.exists() {
-        // No path in the body: the plugin directory layout is not the
-        // caller's business.
+    // No path in the body: the plugin's layout is not the caller's business.
+    let Some(content) = release_file(&appstate, &plugin_resource, format).await? else {
         return Ok(HttpResponse::NotFound().body("Plugin UI file not found"));
-    }
-
-    let content = std::fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read plugin UI file: {}", e))?;
+    };
 
     let content_type = match format.as_str() {
         "js" => "application/javascript",
@@ -476,7 +446,7 @@ async fn serve_drive_plugin(
         return Ok(HttpResponse::Ok()
             .content_type("application/javascript")
             .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"))
-            .body(include_str!("../plugins/assets/view-client.js")));
+            .body(include_str!("../../assets_tmp/view-client.js")));
     }
 
     if format != "js" {
@@ -544,9 +514,7 @@ pub async fn handle_plugin_list(
     let store = &appstate.store;
     let drive_subject = &query.drive;
 
-    let origin = RequestContext::new(&req, &appstate).origin;
-    let full_url = format!("{}{}", origin, req.uri());
-    let for_agent = get_client_agent(req.headers(), &appstate, &full_url).await?;
+    let for_agent = get_client_agent_for_signed_url(&req, &appstate).await?;
 
     let plugins = store.get_class_extenders_on_drive(drive_subject);
     let mut plugin_list: Vec<UIPluginListItem> = vec![];
@@ -576,8 +544,6 @@ pub async fn handle_plugin_list(
         };
 
         let plugin_name = format!("{}.{}", namespace, name);
-        let js_file_path = get_plugin_file_path(&appstate, drive_subject, &plugin_name, "js")?;
-        let css_file_path = get_plugin_file_path(&appstate, drive_subject, &plugin_name, "css")?;
 
         let Some(meta) =
             store.get_plugin_meta(&PluginMetaKey::new(drive_subject, namespace, name))?
@@ -586,7 +552,7 @@ pub async fn handle_plugin_list(
             continue;
         };
 
-        if !js_file_path.exists() {
+        if release_file(&appstate, &resource, "js").await?.is_none() {
             continue;
         }
 
@@ -594,7 +560,7 @@ pub async fn handle_plugin_list(
             plugin: plugin_name,
             classes: plugin.classes,
             ui_manifest: PluginUIManifest {
-                css: css_file_path.exists(),
+                css: release_file(&appstate, &resource, "css").await?.is_some(),
             },
             resource: meta.subject,
         });
@@ -618,6 +584,92 @@ mod tests {
         assert!(csp.contains("font-src 'self' data:;"));
         assert!(csp.starts_with("sandbox allow-scripts "));
         assert!(csp.contains("script-src 'nonce-n0nce'"));
+    }
+
+    /// The browser draws the same frame itself when there is no server
+    /// (`appFrameDocument.ts`); its shell and CSP must not drift from ours.
+    const APP_FRAME_TS: &str =
+        include_str!("../../../browser/data-browser/src/chunks/AppPage/appFrameDocument.ts");
+
+    #[test]
+    fn browser_frame_shell_matches() {
+        let html = render_drive_plugin_ui_html_with("format=html", false, "n0nce", true);
+
+        for part in [
+            "type: '__atomic_plugin_rendered'",
+            "type: '__atomic_plugin_error'",
+            "type: '__atomic_plugin_ready'",
+            "'__atomic_style'",
+            "window.addEventListener('unhandledrejection'",
+        ] {
+            assert!(html.contains(part), "server frame lacks {part}");
+            assert!(
+                APP_FRAME_TS.contains(part),
+                "appFrameDocument.ts lacks {part}"
+            );
+        }
+    }
+
+    /// Directives as `name -> value` pairs, `'self'` and `sandbox` left out.
+    fn csp_directives(csp: &str) -> Vec<(String, String)> {
+        let mut out: Vec<_> = csp
+            .split(';')
+            .filter_map(|d| d.trim().split_once(' '))
+            .filter(|(name, _)| *name != "sandbox")
+            .map(|(name, value)| {
+                (
+                    name.to_string(),
+                    value.replace("'self'", "").trim().to_string(),
+                )
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn browser_frame_csp_matches() {
+        // The `'name': value,` lines of `frameCspDirectives`, each value a
+        // single string literal.
+        let ts = APP_FRAME_TS
+            .split("function frameCspDirectives")
+            .nth(1)
+            .unwrap();
+        let ts = ts.split("\n}\n").next().unwrap();
+        let ours = ts
+            .lines()
+            .filter_map(|l| l.trim().strip_suffix(',')?.split_once(": "))
+            .map(|(name, v)| {
+                // Strip the JS string quotes around each value.
+                let v = v[1..v.len() - 1].replace("${nonce}", "N");
+                (name.trim_matches('\'').to_string(), v)
+            })
+            .collect::<Vec<_>>();
+        let server = csp_directives(&frame_csp("N"));
+
+        // The srcdoc imports its sources through blob URLs and has no server to
+        // be 'self' of; `form-action` is ours alone (the sandbox has no forms).
+        let expect = |name: &str, value: &str| {
+            let found = ours
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, v)| v.as_str());
+            assert_eq!(found, Some(value), "{name}");
+        };
+        expect("script-src", "'nonce-N' blob:");
+        expect("form-action", "'none'");
+
+        let mut ours: Vec<_> = ours
+            .into_iter()
+            .filter(|(n, _)| n != "script-src" && n != "form-action")
+            .collect();
+        ours.sort();
+        let server: Vec<_> = server
+            .into_iter()
+            .filter(|(n, _)| n != "script-src")
+            .collect();
+
+        assert_eq!(ours, server);
     }
 
     /// An app's frame is null-origin, so its console is reachable by nobody:

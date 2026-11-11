@@ -6,6 +6,7 @@ export interface TemplateDefinition {
   title: string;
   description: string;
   icon: string;
+  /** Where it is offered: as a table, or as a starter for an empty drive. Empty: only code starts it (the welcome drive). */
   entryPoints: Array<'table' | 'workspace'>;
   parts: TemplatePart[];
 }
@@ -18,12 +19,12 @@ export type TemplatePart =
       name?: string;
     }
   | { key: string; kind: 'table'; catalogId: string; name: string }
+  | { key: string; kind: 'canvas'; name: string }
   | {
       key: string;
       kind: 'document';
       name: string;
       text: string;
-      exampleText?: string;
     };
 export interface TemplatePlan {
   release: { id: string; version: string };

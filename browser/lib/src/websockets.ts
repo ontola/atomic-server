@@ -82,6 +82,7 @@ import {
   LIVENESS_PROBE_TIMEOUT_MS,
 } from './liveness.js';
 import { perfMark, perfSpan } from './perf-trace.js';
+import { asError } from './error.js';
 
 /** How long a drive's sync probe waits so the screen's first reads are not
  *  queued behind the version-vector scan. */
@@ -1047,9 +1048,7 @@ export class WSClient {
     if (!this.supportsGetMany) {
       return Promise.all(
         subjects.map(subject =>
-          this.fetch(subject).catch((e: unknown) =>
-            e instanceof Error ? e : new Error(String(e)),
-          ),
+          this.fetch(subject).catch((e: unknown) => asError(e)),
         ),
       );
     }
@@ -1268,6 +1267,7 @@ export class WSClient {
         // Resolved by waitForTag. The payload is the server's capability
         // list; remember it so features negotiate instead of guessing.
         this._serverCaps = decodeAuthOk(payload);
+
         break;
 
       case Tag.KEEPALIVE:
@@ -1303,6 +1303,12 @@ export class WSClient {
           } else {
             this.takePendingCommit(msg.requestId)?.reject(err);
           }
+        } else if (msg.code === ErrorCode.DEPRECATED_CLIENT) {
+          // A notice, not a failure: the server says this client predates
+          // `canonical-scheme` and will stop working in a coming release.
+          // Nothing is pending on it, so neither `rejectAllPending` nor a
+          // toast is right.
+          console.warn(`[WS] ${msg.message}`);
         } else if (msg.code === ErrorCode.SYNC_REJECTED) {
           // Our SYNC_PUSH was refused as a whole (no write right on the
           // drive, quota, not enrolled). Nothing we sent landed and no

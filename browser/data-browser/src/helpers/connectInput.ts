@@ -1,5 +1,9 @@
 import { looksLikePairingUri } from '@tomic/lib';
 import { normalizeServerUrl } from './serverUrl';
+import {
+  isLocalNetworkUrl,
+  requiresLocalNetworkPermission,
+} from './localNetworkAccess';
 
 /**
  * What someone typed or pasted into the "Add a device" box.
@@ -39,4 +43,23 @@ export function classifyConnectInput(raw: string): ConnectInput {
   } catch {
     return { kind: 'invalid' };
   }
+}
+
+/**
+ * Why a server that did not answer might not have answered, said so a person
+ * can act on it. A local server is the common case: the address is fine, but
+ * the browser may be holding the request back.
+ */
+export function describeUnreachable(url: string): string {
+  if (!isLocalNetworkUrl(url)) return 'Could not reach that address.';
+
+  if (url.startsWith('https://')) {
+    return `Could not reach ${url}. A server on your own machine usually speaks plain http, so try ${url.replace('https://', 'http://')}.`;
+  }
+
+  if (requiresLocalNetworkPermission(url)) {
+    return `Could not reach ${url}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin.`;
+  }
+
+  return `Could not reach ${url}. Check that the server is running on that port.`;
 }

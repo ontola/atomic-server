@@ -15,32 +15,55 @@ import {
 } from '@components/SideBar/DriveSwitcher';
 import { styled } from 'styled-components';
 import { useDialog } from '@components/Dialog/useDialog';
-import { FaGear } from 'react-icons/fa6';
-import type { JSX } from 'react';
+import { FaGear, FaRegStar, FaStar } from 'react-icons/fa6';
+import { useEffect, useState, type JSX } from 'react';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
+import { useSavedDriveToggle } from '@hooks/useSavedDriveToggle';
+import { useDriveHistory } from '@hooks/useDriveHistory';
+import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { FileDropZone } from '@components/forms/FileDropzone/FileDropzone';
 import { DriveSettingsDialog } from './DriveSettingsDialog';
+import { GettingStartedCard } from './GettingStartedCard';
+import { EmptyDriveStart } from './EmptyDriveStart';
 import {
   ActivityFeed,
   DrivePeople,
   QuickCreateCards,
-  RecentlyOpened,
-  ResourceTiles,
+  ResourceList,
   SectionTitle,
 } from './DriveHome';
 
 /** A View for Drives, which function similar to a homepage or dashboard. */
 function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
-  const { subjects: subResources } = useVisibleDriveChildren(resource.subject);
+  const { subjects: subResources, loading } = useVisibleDriveChildren(
+    resource.subject,
+  );
   const [dialogProps, showSettings, , settingsOpen] = useDialog();
 
   const vectorIndexing = useVectorIndexStatus();
 
   const canEdit = useCanWrite(resource);
+  const empty = useSettledEmpty(!loading && subResources.length === 0);
+  // A starter being added: the drive has its first resource, not all of them.
+  const [filling, setFilling] = useState(false);
+  const showStart =
+    canEdit && (filling || (empty && subResources.length === 0));
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
+  const { privateDrive } = usePrivateDrive();
+  const [isSaved, toggleSaved] = useSavedDriveToggle(resource.subject);
+  const [, addToHistory] = useDriveHistory();
+  const canSave = !!privateDrive && !isPrivateDrive;
+
+  // A drive opened by link shows up under Recently visited, where it can be
+  // starred later, unless it is already one of My drives.
+  useEffect(() => {
+    if (canSave && !isSaved) {
+      addToHistory(resource.subject);
+    }
+  }, [canSave, isSaved, resource.subject, addToHistory]);
 
   if (!baseURL) {
     setBaseURL(resource.subject);
@@ -77,6 +100,24 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                     Set as current drive
                   </Button>
                 )}
+                {canSave && (
+                  <Button
+                    subtle
+                    onClick={toggleSaved}
+                    aria-pressed={isSaved}
+                    data-testid='drive-save-button'
+                  >
+                    {isSaved ? (
+                      <>
+                        <FaStar /> In My drives
+                      </>
+                    ) : (
+                      <>
+                        <FaRegStar /> Add to My drives
+                      </>
+                    )}
+                  </Button>
+                )}
                 <Button
                   subtle
                   onClick={showSettings}
@@ -87,6 +128,12 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               </Row>
             </Header>
 
+            {showStart && (
+              <EmptyDriveStart drive={resource.subject} onActive={setFilling} />
+            )}
+
+            <GettingStartedCard drive={resource} canEdit={canEdit} />
+
             <ValueFormAddButton
               resource={resource}
               propertyURL={core.properties.description}
@@ -94,24 +141,29 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               buttonLabel='Add description'
             />
 
-            <RecentlyOpened drive={resource.subject} />
+            <ActivityFeed
+              key={resource.subject}
+              subjects={subResources}
+              drive={resource.subject}
+            />
 
-            <ActivityFeed subjects={subResources} drive={resource.subject} />
+            {!showStart && (subResources.length > 0 || !canEdit) && (
+              <section>
+                <SectionTitle>Resources</SectionTitle>
+                {subResources.length > 0 ? (
+                  <ResourceList
+                    key={resource.subject}
+                    subjects={subResources}
+                  />
+                ) : (
+                  <p>Nothing here yet.</p>
+                )}
+              </section>
+            )}
 
-            <section>
-              <SectionTitle>Resources</SectionTitle>
-              {subResources.length > 0 ? (
-                <ResourceTiles subjects={subResources} />
-              ) : (
-                <EmptyHint>
-                  {canEdit
-                    ? 'Nothing here yet. Create something with New, or drop files on this page.'
-                    : 'Nothing here yet.'}
-                </EmptyHint>
-              )}
-            </section>
-
-            {canEdit && <QuickCreateCards parent={resource.subject} />}
+            {canEdit && !showStart && subResources.length > 0 && (
+              <QuickCreateCards parent={resource.subject} />
+            )}
           </Column>
         </ContainerNarrow>
       </FileDropZone>
@@ -124,6 +176,29 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   );
 }
 
+/**
+ * Whether the drive has stayed empty for a moment. The child list is built in
+ * steps, so it reads empty for a beat while a full drive is still loading;
+ * the empty-drive start must not flash up then.
+ */
+function useSettledEmpty(empty: boolean): boolean {
+  const [settled, setSettled] = useState(false);
+
+  useEffect(() => {
+    if (!empty) {
+      setSettled(false);
+
+      return;
+    }
+
+    const timer = setTimeout(() => setSettled(true), 400);
+
+    return () => clearTimeout(timer);
+  }, [empty]);
+
+  return settled;
+}
+
 export default DrivePage;
 
 const Header = styled.div`
@@ -132,8 +207,4 @@ const Header = styled.div`
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
-`;
-
-const EmptyHint = styled.p`
-  color: ${p => p.theme.colors.textLight};
 `;

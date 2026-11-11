@@ -11,10 +11,10 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { core, dataBrowser, useStore } from '@tomic/react';
+import { conversations, core, dataBrowser, useStore } from '@tomic/react';
 import { useCallback, useRef, useState, type MouseEvent } from 'react';
 import toast from 'react-hot-toast';
-import { isContentAddressed } from '../../helpers/propertyIdentity';
+import { moveBlockedReason } from '../../helpers/moveResource';
 import {
   SIDEBAR_TRANSITION_TAG,
   getTransitionName,
@@ -22,6 +22,7 @@ import {
 import { useSettings } from '../../helpers/AppSettings';
 import { useFavorites } from '../../hooks/useFavorites';
 import { moveToTrash } from '../../helpers/trash';
+import { leaveConversation } from '../../helpers/conversations/hiddenConversations';
 import { useResourceContextMenu } from '../ResourceContextMenu/ResourceContextMenuContext';
 import { HoldMoveTouchSensor } from './holdMoveTouchSensor';
 // Fractional-key math shared with table row insertion.
@@ -89,6 +90,9 @@ interface ZoneDropDeps {
   favorites: string[];
   addFavorite: (subject: string) => void;
   moveToTrash: (subject: string) => Promise<unknown>;
+  /** Whether the subject is a conversation, which is left, never trashed. */
+  isConversation?: (subject: string) => boolean;
+  leaveConversation?: (subject: string) => Promise<unknown>;
 }
 
 /**
@@ -99,10 +103,25 @@ interface ZoneDropDeps {
 export const handleZoneDrop = async (
   zone: SideBarZoneKind,
   subject: string,
-  { favorites, addFavorite, moveToTrash: move }: ZoneDropDeps,
+  {
+    favorites,
+    addFavorite,
+    moveToTrash: move,
+    isConversation,
+    leaveConversation: leave,
+  }: ZoneDropDeps,
 ): Promise<void> => {
   if (zone === 'trash') {
     try {
+      // A conversation can't be trashed: dropping it here removes it from
+      // your messages.
+      if (isConversation?.(subject) && leave) {
+        await leave(subject);
+        toast.success('Removed from your messages');
+
+        return;
+      }
+
       if (await move(subject)) {
         toast.success('Moved to Trash');
       }
@@ -214,49 +233,62 @@ export const useSidebarDnd = (
 
       return new Promise<void>(resolve => {
         // Favorites keeps the item in place, so flying back to its row is right.
-        (waitForSaveRef.current ?? Promise.resolve()).then(() => {
-          const targetNode = document.querySelector(
-            `[data-sidebar-id="${getTransitionName(
-              SIDEBAR_TRANSITION_TAG,
-              active.id as string,
-            )}"]`,
-          ) as HTMLElement;
+        // A failed save must not leave this promise pending: dnd-kit keeps the
+        // overlay on screen until it settles.
+        (waitForSaveRef.current ?? Promise.resolve())
+          .catch(() => undefined)
+          .then(() => {
+            const targetNode = document.querySelector(
+              `[data-sidebar-id="${getTransitionName(
+                SIDEBAR_TRANSITION_TAG,
+                active.id as string,
+              )}"]`,
+            ) as HTMLElement;
 
-          if (!targetNode) {
-            return resolve();
-          }
+            if (!targetNode) {
+              return resolve();
+            }
 
-          targetNode.style.opacity = '0';
+            targetNode.style.opacity = '0';
 
-          const { top: originTop, left: originLeft } = dragOverlay.rect;
-          const { x: originTransformX, y: originTransformY } = transform;
+            const { top: originTop, left: originLeft } = dragOverlay.rect;
+            const { x: originTransformX, y: originTransformY } = transform;
 
-          const { top: targetTop, left: targetLeft } =
-            targetNode.getBoundingClientRect();
+            const { top: targetTop, left: targetLeft } =
+              targetNode.getBoundingClientRect();
 
-          const targetTransformX = targetLeft - originLeft + originTransformX;
-          const targetTransformY = targetTop - originTop + originTransformY;
+            const targetTransformX = targetLeft - originLeft + originTransformX;
+            const targetTransformY = targetTop - originTop + originTransformY;
 
-          const dropAnimation = dragOverlay.node.animate(
-            [
+            const dropAnimation = dragOverlay.node.animate(
+              [
+                {
+                  transform: `translate(${originTransformX}px, ${originTransformY}px)`,
+                },
+                {
+                  transform: `translate(${targetTransformX}px, ${targetTransformY}px)`,
+                },
+              ],
               {
-                transform: `translate(${originTransformX}px, ${originTransformY}px)`,
+                duration: 300,
+                easing: 'cubic-bezier(0.2, 0, 0, 1)',
               },
-              {
-                transform: `translate(${targetTransformX}px, ${targetTransformY}px)`,
-              },
-            ],
-            {
-              duration: 300,
-              easing: 'cubic-bezier(0.2, 0, 0, 1)',
-            },
-          );
+            );
 
-          dropAnimation.onfinish = () => {
-            targetNode.style.opacity = '1';
-            resolve();
-          };
-        });
+            // `finish` is not guaranteed: a cancelled animation (node detached,
+            // tab throttled) never fires it, which left the overlay stuck on
+            // screen. Settle on cancel and after a timeout too.
+            const settle = () => {
+              clearTimeout(fallback);
+              targetNode.style.opacity = '1';
+              resolve();
+            };
+
+            const fallback = setTimeout(settle, 300 + 500);
+
+            dropAnimation.onfinish = settle;
+            dropAnimation.oncancel = settle;
+          });
       });
     },
     [],
@@ -300,12 +332,21 @@ export const useSidebarDnd = (
         favorites,
         addFavorite,
         moveToTrash: s => moveToTrash(store, s, drive),
+        isConversation: s =>
+          store
+            .getResourceLoading(s)
+            .hasClasses(conversations.classes.conversation),
+        leaveConversation: s => leaveConversation(store, s),
       });
 
       waitForSaveRef.current = promise;
-      await promise;
-      setDraggingResource(undefined);
-      onIsRearangingChange(false);
+
+      try {
+        await promise;
+      } finally {
+        setDraggingResource(undefined);
+        onIsRearangingChange(false);
+      }
 
       return;
     }
@@ -329,9 +370,14 @@ export const useSidebarDnd = (
       return;
     }
 
-    // A content-addressed property's parent is part of its ID: it cannot move.
-    if (renderedUnder !== dropParent && isContentAddressed(subject)) {
-      toast.error("A property can't be moved to another parent.");
+    // Same rules as the More menu's Move dialog (property, descendant, other drive).
+    const blocked =
+      renderedUnder !== dropParent
+        ? moveBlockedReason(store, subject, dropParent)
+        : undefined;
+
+    if (blocked) {
+      toast.error(blocked);
       onIsRearangingChange(false);
       setDraggingResource(undefined);
       waitForSaveRef.current = Promise.resolve();
@@ -377,9 +423,15 @@ export const useSidebarDnd = (
     })();
 
     waitForSaveRef.current = promise;
-    await promise;
-    setDraggingResource(undefined);
-    onIsRearangingChange(false);
+
+    // A failed save must still leave drag mode, or the overlay and the
+    // drop zones stay on screen.
+    try {
+      await promise;
+    } finally {
+      setDraggingResource(undefined);
+      onIsRearangingChange(false);
+    }
   };
 
   const dndExplanation: string = sidebarKeyboardDndEnabled

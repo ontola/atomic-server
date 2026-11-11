@@ -1,4 +1,4 @@
-import { isMobileTauri, isRunningInTauri } from './tauri';
+import { isRunningInTauri } from './tauri';
 
 /** Mirrors the Rust `VfsStatus` returned by the desktop virtual-drive commands. */
 export interface VirtualDriveStatus {
@@ -12,12 +12,10 @@ export interface VirtualDriveStatus {
 
 /**
  * The virtual drive is a desktop-only Tauri feature: it runs a local NFS server
- * and mounts it into the filesystem. Mobile can't mount NFS (it uses provider
- * APIs), and the browser has no local node — so the settings UI is shown only
- * when this is true.
+ * and mounts it into the filesystem. The browser has no local node, so the
+ * settings UI is shown only when this is true.
  */
-export const isVirtualDriveAvailable = (): boolean =>
-  isRunningInTauri() && !isMobileTauri();
+export const isVirtualDriveAvailable = (): boolean => isRunningInTauri();
 
 async function invokeVirtualDrive(
   command:

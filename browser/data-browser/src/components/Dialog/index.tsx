@@ -26,7 +26,6 @@ import { useDialogGlobalContext } from './DialogGlobalContextProvider';
 import { DIALOG_CONTENT_CONTAINER } from '../../helpers/containers';
 import { CurrentBackgroundColor } from '../../globalCssVars';
 import { timeoutEffect } from '@helpers/timeoutEffect';
-import { useAndroidBack } from '../../helpers/androidBack';
 
 const FeedbackButton = lazy(() =>
   import('../SideBar/FeedbackButton').then(module => ({
@@ -209,14 +208,6 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
       enabled: show && !hasOpenInnerPopup && isTopLevel,
     },
   );
-
-  // Android back is a close request, like Escape. A dialog that can't be
-  // dismissed still takes it, so back doesn't navigate away underneath it.
-  useAndroidBack(show && isTopLevel, () => {
-    if (!disableLightDismiss && !hasOpenInnerPopup) {
-      cancelDialog();
-    }
-  });
 
   const finishClose = useCallback(() => {
     dialogRef.current?.close();

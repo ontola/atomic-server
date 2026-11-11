@@ -36,6 +36,12 @@ export interface PresenceItem<T = unknown> extends PresenceEntry<T> {
   sessionId: string;
 }
 
+/** Hears this session's own presence entry change (`Store.onLocalPresence`). */
+export type LocalPresenceListener = (
+  drive: string,
+  entry: PresenceEntry | undefined,
+) => void;
+
 /** Keys expire on all peers when not refreshed within this window. */
 const PRESENCE_TTL_MS = 30_000;
 /** Re-set the local entry well inside the TTL so it never expires while
@@ -176,6 +182,7 @@ export class DrivePresenceManager {
 
     if (!entry || !agent) {
       this.local = undefined;
+      this.store.__localPresenceChanged(this.drive, undefined);
       this.onEphemeral('clearing the local entry', e =>
         e.delete(this.sessionId),
       );
@@ -190,6 +197,7 @@ export class DrivePresenceManager {
     }
 
     this.local = next;
+    this.store.__localPresenceChanged(this.drive, next);
     this.writeLocal();
   }
 
@@ -218,6 +226,7 @@ export class DrivePresenceManager {
     }
 
     this.local = next;
+    this.store.__localPresenceChanged(this.drive, next);
     this.writeLocal();
   }
 
@@ -254,7 +263,13 @@ export class DrivePresenceManager {
    * stick to local-only drives.
    */
   public injectEntry(sessionId: string, entry: PresenceEntry): void {
-    const stamped = this.storable({ ...entry, updatedAt: Date.now() });
+    // An entry that brings its own `updatedAt` (a host relaying a peer's
+    // entry) keeps it: re-stamping on every refresh would make the snapshot
+    // change each time and defeat "freshest session wins".
+    const stamped = this.storable({
+      ...entry,
+      updatedAt: entry.updatedAt ?? Date.now(),
+    });
 
     if (!stamped) {
       return;

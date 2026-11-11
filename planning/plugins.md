@@ -624,7 +624,7 @@ So `view` moves onto that substrate, and the work is:
 - **B3. Built (2026-08-22).** A view receives `{ root, store }`, and that
   store is shaped after `@tomic/lib`'s — `getResource`, `query`,
   `newResource`, and resources with `get`/`set`/`save`/`destroy`. The client
-  is `server/src/plugins/assets/view-client.js`, embedded rather than
+  is `browser/data-browser/src/chunks/AppPage/viewClient.js`, embedded rather than
   generated so it stays lintable.
 
   **Writes are confined to the app's own subtree**, which is what makes this

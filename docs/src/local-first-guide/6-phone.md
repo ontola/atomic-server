@@ -4,8 +4,8 @@ A browser tab cannot be dialed by another device, so in step 4 the server was th
 A phone running `atomic_lib` is different: it is a full peer.
 It holds its own copy, can be dialed directly, and can serve the Drive to yet another device.
 
-This step uses the [Flutter reference app](../flutter.md).
-Building your own Flutter UI on the same SDK is the same sequence of calls.
+This step uses the [Flutter SDK](../flutter.md).
+Building a Flutter UI on it is the same sequence of calls.
 
 ## Restore the identity
 
@@ -13,8 +13,9 @@ On the phone, sign in with the secret from step 1.
 In the SDK that is one call:
 
 ```dart
-await AtomicClient.openDb('$appDir/atomic.redb');
-await AtomicClient.loadAgent(secret); // the string from Agent.buildSecret
+await AtomicFlutter.init();
+final node = await AtomicFlutter.open(path: appDir, agentName: 'Phone');
+await node.identity.signIn(secret); // the string from Agent.buildSecret
 ```
 
 This restores *who you are*.
@@ -27,7 +28,8 @@ Two routes, and they can both be on:
 **Through the server.** Give the phone the server's address. It opens a WebSocket as your Agent and fetches the Drives it lacks, including the reading list, then subscribes to live updates.
 
 ```dart
-await AtomicClient.openWsSync('http://your-server:9883');
+await node.sync.connect('http://your-server:9883');
+// on later launches: await node.sync.resume(savedOrigin);
 ```
 
 **Directly from the laptop**, if the laptop runs the desktop app or a local AtomicServer rather than only a browser tab.
@@ -35,10 +37,10 @@ Show the pairing code on one side and scan it on the other.
 Both devices prove their Agent over the link, compare version vectors, and exchange only what differs.
 
 ```dart
-await AtomicClient.startPeer();
-final code = await AtomicClient.getPeerId(); // render as a QR code
+await node.peers.start();
+final code = node.peers.pairingCode; // render as a QR code
 // on the scanning side:
-await AtomicClient.peerSync(scannedNodeId);
+await node.peers.pair(scannedText);
 ```
 
 The code carries the *route* to the device and nothing else.
@@ -49,7 +51,7 @@ What crosses the link is decided by the rights on each Resource, the same check 
 Add a Book on the phone in a tunnel.
 It is signed, saved locally, and queued.
 When the phone next sees the server or the laptop, the commit travels, the browser's `store.subscribe` callback fires, and the list updates.
-Edit the same Book on both devices while apart and the two edits merge; nobody is asked to pick a winner.
+Accepted edits to the same Book merge automatically. Your application decides when the result needs human review; merging does not guarantee that business rules are satisfied.
 
 ## What you have
 
@@ -59,6 +61,8 @@ That is the whole local-first story, in one small app.
 
 ## Where to go from here
 
+- Choose your app's [transports, availability model and offline conflict policy](7-design-decisions.md).
+- Plan an incremental [migration from PostgreSQL](8-from-postgres.md) if you have an existing backend.
 - Model your own data with the [ontology editor](../atomicserver/gui.md) and generate types with [`@tomic/cli`](../js-cli.md).
 - Use [`@tomic/react`](../usecases/react.md) or [`@tomic/svelte`](../svelte.md) instead of raw `store.subscribe` calls.
 - Read [Atomic Sync](../sync.md) for what the engine does under the hood, and [URLs and identifiers](../urls.md) for every identifier you met along the way.

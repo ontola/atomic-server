@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { createRoute } from '@tanstack/react-router';
-import { agentSubjectFromPublicKey, grantAgent, useStore } from '@tomic/react';
+import {
+  GrantAgentError,
+  agentSubjectFromPublicKey,
+  grantAgent,
+  useStore,
+} from '@tomic/react';
 import { Button } from '../components/Button';
 import {
   ConnectAppForm,
@@ -9,7 +14,9 @@ import {
   useConnectableDrives,
 } from '../components/ConnectAppForm';
 import { useSettings } from '../helpers/AppSettings';
+import { grantFailureMessage } from '../helpers/connectableDrives';
 import { rememberConnectedApp } from '../helpers/connectedApps';
+import { signInPath } from '../helpers/returnPath';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { pathNames, paths } from './paths';
 import { appRoute } from './RootRoutes';
@@ -47,6 +54,14 @@ export const ConnectAgentRoute = createRoute({
   }),
 });
 
+function hostOf(uri: string): string | undefined {
+  try {
+    return new URL(uri).host || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function ConnectAgentPage() {
   const store = useStore();
   const navigate = useNavigateWithTransition();
@@ -57,7 +72,8 @@ function ConnectAgentPage() {
     write: requestedWrite,
     target: requestedTargets,
   } = ConnectAgentRoute.useSearch();
-  const { privateDrive, homeLoading, catalog } = useConnectableDrives();
+  const { privateDrive, homeLoading, catalog, available, unavailable } =
+    useConnectableDrives();
 
   const name = requestedName.trim() || 'An app';
   const [picked, setPicked] = useState<string[] | undefined>();
@@ -68,16 +84,15 @@ function ConnectAgentPage() {
 
   // Until the person touches the list, offer what the app asked for, or else
   // the drive they are on. Only drives of theirs can be offered either way.
-  const asked = (requestedTargets ?? []).filter(t =>
-    catalog.subjects.includes(t),
-  );
-  const selected =
+  const asked = (requestedTargets ?? []).filter(t => available.includes(t));
+  const selected = (
     picked ??
     (asked.length > 0
       ? asked
-      : drive && catalog.subjects.includes(drive)
+      : drive && available.includes(drive)
         ? [drive]
-        : []);
+        : [])
+  ).filter(subject => available.includes(subject));
 
   let keySubject: string | undefined;
 
@@ -104,7 +119,9 @@ function ConnectAgentPage() {
       <ConnectPage>
         <h1>Connect an app</h1>
         <p>Sign in first, then open this link again.</p>
-        <Button onClick={() => navigate(paths.welcome)}>Sign in</Button>
+        <Button onClick={() => navigate(signInPath(window.location))}>
+          Sign in
+        </Button>
       </ConnectPage>
     );
   }
@@ -136,7 +153,27 @@ function ConnectAgentPage() {
         throw new Error('Open one of your drives first.');
       }
 
-      await grantAgent(store, keySubject!, selected, write);
+      try {
+        await grantAgent(store, keySubject!, selected, write);
+      } catch (e) {
+        if (!(e instanceof GrantAgentError)) throw e;
+
+        const titles = new Map<string, string>();
+
+        for (const { subject } of e.failed) {
+          titles.set(subject, (await store.getResource(subject)).title);
+        }
+
+        throw new Error(
+          grantFailureMessage(
+            e.failed,
+            subject => titles.get(subject) ?? 'A drive',
+            name,
+            hostOf(store.getServerUrl()) ?? 'this server',
+          ),
+        );
+      }
+
       await rememberConnectedApp(store, home, keySubject!);
       setDone(true);
     } catch (e) {
@@ -157,10 +194,12 @@ function ConnectAgentPage() {
 
       <ConnectAppForm
         subjects={catalog.subjects}
+        unavailable={unavailable}
         selected={selected}
         onToggle={(subject, on) =>
           setPicked(toggleSubject(selected, subject, on))
         }
+        onToggleAll={on => setPicked(on ? available : [])}
         canEdit={write}
         onCanEditChange={setWrite}
         error={error}

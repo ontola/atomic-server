@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, parseAstAsync } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { oxcReactCompiler } from './oxcReactCompilerPlugin';
@@ -227,6 +227,61 @@ export default defineConfig(({ mode }) => {
         },
       },
       {
+        // mdast-util-gfm-autolink-literal finds emails with a lookbehind,
+        // which Safari before 16.4 rejects (see the check below). Its
+        // `findEmail` checks the previous character itself, so the
+        // lookbehind can go. A transform, not a pnpm patch: pnpm applies a
+        // new patch to a fresh install only, and an existing node_modules
+        // keeps the unpatched file in the patched package's folder.
+        name: 'autolink-email-without-lookbehind',
+        enforce: 'pre',
+        transform(code, id) {
+          if (!id.includes('mdast-util-gfm-autolink-literal')) return;
+
+          const lookbehind = '/(?<=^|\\s|\\p{P}|\\p{S})([-.\\w+]+)@';
+
+          if (!code.includes(lookbehind)) return;
+
+          return code.replace(lookbehind, '/([-.\\w+]+)@');
+        },
+      },
+      {
+        // Safari before 16.4 (iOS 16.3 and older) throws a SyntaxError on a
+        // regex literal with a lookbehind, `(?<=` or `(?<!`, and then loads
+        // none of the bundle: a blank page that never reaches Sentry. The
+        // build target doesn't lower regexes, so fail the build instead.
+        name: 'no-lookbehind-regex-literals',
+        apply: 'build',
+        async generateBundle(_options, bundle) {
+          const found: string[] = [];
+
+          const walk = (node: unknown, file: string) => {
+            if (!node || typeof node !== 'object') return;
+
+            const regex = (node as { regex?: { pattern: string } }).regex;
+
+            if (regex && /\(\?<[=!]/.test(regex.pattern)) {
+              found.push(`${file}: /${regex.pattern.slice(0, 80)}/`);
+            }
+
+            for (const child of Object.values(node)) walk(child, file);
+          };
+
+          for (const item of Object.values(bundle)) {
+            if (item.type === 'chunk') {
+              walk(await parseAstAsync(item.code), item.fileName);
+            }
+          }
+
+          if (found.length > 0) {
+            this.error(
+              `Lookbehind regex literals break Safari < 16.4; rewrite them ` +
+                `(or patch the dependency):\n${found.join('\n')}`,
+            );
+          }
+        },
+      },
+      {
         // `prefetch.json`: what a first visit downloads before the app can
         // start, for another page to warm the HTTP cache with ahead of time.
         // atomic.place's homepage reads it while a visitor looks at the "Try
@@ -355,6 +410,10 @@ export default defineConfig(({ mode }) => {
             ],
           },
           workbox: {
+            // The Sentry upload deletes the build's source maps, but workbox
+            // writes its own (`sw.js.map`, `workbox-*.js.map`) afterwards,
+            // which would then be served publicly. Never emit them.
+            sourcemap: false,
             // See https://github.com/atomicdata-dev/atomic-data-browser/issues/294
             // index.html is excluded from precaching because atomic-server injects
             // CSP nonces dynamically. Instead we use runtime caching with NetworkFirst

@@ -18,11 +18,10 @@ import { AccountMenu } from './AccountMenu';
 import { SideBarHomePanels } from './SideBarHomePanels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useSidebarSwipe } from '../../hooks/useSidebarSwipe';
-import { useAndroidBack } from '../../helpers/androidBack';
 import { Column } from '../Row';
 import { OntologiesPanel } from './OntologySideBar/OntologiesPanel';
 import { SideBarPanel } from './SideBarPanel';
-import { Panel, usePanelList } from './usePanelList';
+import { Panel, panelTitle, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
 import { CalculatedPageHeight } from '../../globalCssVars';
@@ -80,10 +79,6 @@ export function SideBar(): JSX.Element {
     onOpen: () => setSideBarLocked(true),
     onClose: () => setSideBarLocked(false),
   });
-
-  // On a narrow screen the open sidebar is a drawer over the page, and back
-  // closes it before it navigates.
-  useAndroidBack(sideBarLocked && !isWideScreen, () => setSideBarLocked(false));
 
   const { enabledPanels } = usePanelList();
 
@@ -160,7 +155,7 @@ export function SideBar(): JSX.Element {
                 )}
                 {enabledPanels.has(Panel.Ontologies) && (
                   <SideBarPanel
-                    title='Ontologies'
+                    title={panelTitle(Panel.Ontologies)}
                     panel={Panel.Ontologies}
                     heightStorageKey='ontologiesPanelHeight'
                     initialHeight={160}

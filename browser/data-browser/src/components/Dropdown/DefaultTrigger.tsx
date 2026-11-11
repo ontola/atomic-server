@@ -9,7 +9,7 @@ import {
  */
 export const buildDefaultTrigger = (
   icon: React.ReactNode,
-  title = 'Open menu',
+  title: string | (() => string) = () => 'Open menu',
   ButtonComp: typeof IconButton = IconButton,
 ): DropdownTriggerComponent => {
   const Comp = ({
@@ -27,7 +27,7 @@ export const buildDefaultTrigger = (
         aria-haspopup='menu'
         onClick={onClick}
         ref={ref}
-        title={title}
+        title={typeof title === 'function' ? title() : title}
       >
         {icon}
       </ButtonComp>

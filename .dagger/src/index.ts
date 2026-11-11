@@ -30,7 +30,7 @@ const TOUCH_WORKSPACE_SOURCES = [
   'sh',
   '-c',
   'find /code/server /code/lib /code/cli /code/desktop /code/wasm ' +
-    '/code/plugin-examples /code/atomic-plugin /code/tools ' +
+    '/code/plugin-examples /code/atomic-plugin /code/atomic-host /code/tools ' +
     '-type f -exec touch {} +',
 ];
 
@@ -763,7 +763,7 @@ export class AtomicServer {
 
   /**
    * Flutter unit/widget tests + static analysis. The FFI plugin (cargokit)
-   * compiles `flutter/rust` against repo-root `lib/` (`atomic_lib`);
+   * compiles `packages/atomic_store_flutter/rust` against repo-root `lib/` (`atomic_lib`);
    * both trees are mounted under `/workspace/`.
    */
   @func()
@@ -796,21 +796,14 @@ export class AtomicServer {
         // Persist the rustup toolchain so a layer-cache miss doesn't
         // re-download rustc. Idempotent install below.
         .withMountedCache('/root/.rustup', flutterRustup)
-        .withExec(['apt-get', 'update', '-qq'])
+        // One layer: a cached `apt-get update` layer can come back without
+        // its package lists, and the install then finds no packages.
         .withExec([
-          'apt-get',
-          'install',
-          '-y',
-          '--no-install-recommends',
-          'ca-certificates',
-          'curl',
-          'git',
-          'build-essential',
-          'cmake',
-          'ninja-build',
-          'pkg-config',
-          'libssl-dev',
-          'clang',
+          'sh',
+          '-c',
+          'apt-get update -qq && apt-get install -y --no-install-recommends ' +
+            'ca-certificates curl git build-essential cmake ninja-build ' +
+            'pkg-config libssl-dev clang',
         ])
         .withExec([
           'sh',
@@ -828,7 +821,7 @@ export class AtomicServer {
           '/workspace/packages',
           this.source.directory('packages'),
         )
-        .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
+        .withMountedCache('/workspace/packages/atomic_store_flutter/rust/target', flutterRustTarget, {
           sharing: CacheSharingMode.Locked,
         })
         .withWorkdir('/workspace/flutter')
@@ -872,7 +865,7 @@ export class AtomicServer {
           '-lc',
           `${pathPrefix} && ` +
             'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
-            'cargo test --manifest-path rust/Cargo.toml',
+            'cargo test --manifest-path ../packages/atomic_store_flutter/rust/Cargo.toml',
         ])
         .stdout()
     );
@@ -919,6 +912,8 @@ export class AtomicServer {
           '/code/atomic-plugin',
           this.source.directory('atomic-plugin'),
         )
+        // The host ABI's WIT, read by the server's and the examples' bindgen.
+        .withDirectory('/code/atomic-host', this.source.directory('atomic-host'))
         .withDirectory('/code/tools', this.source.directory('tools'))
         .withMountedCache(
           '/code/target',
@@ -955,8 +950,11 @@ export class AtomicServer {
           // light`, since `ort`'s missing-prebuilt-binary gap is musl-cuda
           // specific). Matches the apt list already on `rustBuild()` /
           // `rustChecksContainer()` — this container just never had it.
-          .withExec(['apt-get', 'update', '-qq'])
-          .withExec(['apt', 'install', '-y', 'protobuf-compiler']),
+          .withExec([
+            'sh',
+            '-c',
+            'apt-get update -qq && apt-get install -y protobuf-compiler',
+          ]),
         CARGO_HOME_BOOKWORM,
       )
         .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
@@ -978,6 +976,8 @@ export class AtomicServer {
           '/code/atomic-plugin',
           this.source.directory('atomic-plugin'),
         )
+        // The host ABI's WIT, read by the server's and the examples' bindgen.
+        .withDirectory('/code/atomic-host', this.source.directory('atomic-host'))
         .withDirectory('/code/tools', this.source.directory('tools'))
         // `server/src/forms.rs` pins its validation verdicts to the cases the
         // browser form renderer shares (`include_str!`), so the Rust tests need
@@ -985,6 +985,17 @@ export class AtomicServer {
         .withFile(
           '/code/browser/form-renderer/shared/validation-cases.json',
           this.source.file('browser/form-renderer/shared/validation-cases.json'),
+        )
+        // server/build.rs copies the app view client from the browser into
+        // assets_tmp, and plugin_ui.rs's tests read the frame shell it pairs
+        // with. Mount only those two files.
+        .withFile(
+          '/code/browser/data-browser/src/chunks/AppPage/viewClient.js',
+          this.source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
+        )
+        .withFile(
+          '/code/browser/data-browser/src/chunks/AppPage/appFrameDocument.ts',
+          this.source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
         )
         .withMountedCache('/code/target', this.targetCache('rust-slim-target-v3'))
         .with(touchWorkspaceSources)
@@ -1386,6 +1397,13 @@ export class AtomicServer {
       // Integration sources live at the repository root. The browser mounts at
       // /app, and its raw imports resolve these paths from /integrations.
       .withDirectory('/integrations', this.source.directory('integrations'))
+      // `@tomic/plugin`'s export-bindings test reads the Rust example's
+      // manifest and checked-in bindings from the repository root, which
+      // resolves from /app/plugin/src to /plugin-examples.
+      .withDirectory(
+        '/plugin-examples/host-abi-statement',
+        this.source.directory('plugin-examples/host-abi-statement'),
+      )
       // integrations/localthought/tsconfig.json extends the repo-root-relative
       // `../../browser/tsconfig.build.json`. Alias /browser to the /app mount
       // so that relative path resolves.
@@ -1413,6 +1431,14 @@ export class AtomicServer {
         this.source.directory('lib/test_files/loro-compat'),
       )
       .withFile('/Cargo.lock', this.source.file('Cargo.lock'))
+      // data-browser's identityHandback.test.ts opens the vector the Dart
+      // package tests against, by repository-root path. Mount only that file.
+      .withFile(
+        '/packages/atomic_flutter/test/fixtures/identity_handback_vector.json',
+        this.source.file(
+          'packages/atomic_flutter/test/fixtures/identity_handback_vector.json',
+        ),
+      )
       // Fixtures shared by the Rust and TS twins (class constraints, lenses,
       // JSON Schema interop, schema lockfiles), read by repository-root
       // path. Same /lib collision: mount only that directory.
@@ -1431,15 +1457,6 @@ export class AtomicServer {
       .withFile(
         '/lib/defaults/vocabularies.json',
         this.source.file('lib/defaults/vocabularies.json'),
-      )
-      // browser/e2e/tests/apps.spec.ts serves this checkout's embedded app SDK
-      // as a fixture, read with a plain `readFileSync` at
-      // `../../../server/src/plugins/assets/view-client.js`. From /app/e2e/tests
-      // that resolves to /server/..., and the Rust tree is not mounted here, so
-      // mount just this one file.
-      .withFile(
-        '/server/src/plugins/assets/view-client.js',
-        this.source.file('server/src/plugins/assets/view-client.js'),
       );
 
     return sourceContainer;
@@ -1481,8 +1498,11 @@ export class AtomicServer {
       dag
         .container()
         .from(image)
-        .withExec(['apt-get', 'update', '-qq'])
-        .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler']),
+        .withExec([
+          'sh',
+          '-c',
+          'apt-get update -qq && apt-get install -y nasm protobuf-compiler',
+        ]),
       CARGO_HOME_MUSL,
     )
       .withExec(['rustup', 'target', 'add', target])
@@ -1520,12 +1540,23 @@ export class AtomicServer {
         source.directory('plugin-examples'),
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
+      .withDirectory('/code/atomic-host', source.directory('atomic-host'))
       .withDirectory('/code/tools', source.directory('tools'))
       // See the slim container above: the form validation cases are shared
       // with the browser and `include_str!`d by the Rust tests.
       .withFile(
         '/code/browser/form-renderer/shared/validation-cases.json',
         source.file('browser/form-renderer/shared/validation-cases.json'),
+      )
+      // build.rs embeds the app view client from the browser, and plugin_ui.rs's
+      // tests read the frame shell it pairs with: mount just those two files.
+      .withFile(
+        '/code/browser/data-browser/src/chunks/AppPage/viewClient.js',
+        source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
+      )
+      .withFile(
+        '/code/browser/data-browser/src/chunks/AppPage/appFrameDocument.ts',
+        source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
       )
       .withMountedCache('/code/target', this.targetCache('rust-target-v3'))
       .with(touchWorkspaceSources)
@@ -1712,14 +1743,17 @@ export class AtomicServer {
         dag
           .container()
           .from(image)
-          .withExec(['apt-get', 'update', '-qq'])
           // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
           // build script (a transitive dep via the vector-search feature) —
           // without it `cargo fetch`-triggered builds under this container
           // (nextest, clippy) fail with "Could not find `protoc`". Matches
           // `rustBuild()`'s apt list; this container split off from it later
           // and the package was missed.
-          .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler']),
+          .withExec([
+            'sh',
+            '-c',
+            'apt-get update -qq && apt-get install -y nasm protobuf-compiler',
+          ]),
         CARGO_HOME_MUSL,
       )
         .withExec(['rustup', 'target', 'add', 'x86_64-unknown-linux-musl'])
@@ -1764,6 +1798,17 @@ export class AtomicServer {
           '/code/browser/form-renderer/shared/validation-cases.json',
           source.file('browser/form-renderer/shared/validation-cases.json'),
         )
+        // server/build.rs copies the app view client from the browser into
+        // assets_tmp, and plugin_ui.rs's tests read the frame shell it pairs
+        // with. Mount only those two files.
+        .withFile(
+          '/code/browser/data-browser/src/chunks/AppPage/viewClient.js',
+          source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
+        )
+        .withFile(
+          '/code/browser/data-browser/src/chunks/AppPage/appFrameDocument.ts',
+          source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
+        )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
@@ -1780,6 +1825,7 @@ export class AtomicServer {
           source.directory('plugin-examples'),
         )
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
+        .withDirectory('/code/atomic-host', source.directory('atomic-host'))
         .withDirectory('/code/tools', source.directory('tools'))
         .withMountedCache('/code/target', this.targetCache('rust-checks-target-v3'))
         .with(touchWorkspaceSources)
@@ -1896,6 +1942,21 @@ export class AtomicServer {
         '--no-default-features',
         '--features',
         'light,wasm-plugins',
+      ])
+      // The minimal `light` server, without the plugin runtime: catches code
+      // that uses `wasm-plugins`-gated modules or `AppState` fields without
+      // the same gate (#2412).
+      .withExec([
+        'cargo',
+        'clippy',
+        '--locked',
+        '-p',
+        'atomic-server',
+        '--no-deps',
+        '--all-targets',
+        '--no-default-features',
+        '--features',
+        'light',
       ])
       .stdout();
   }
@@ -2240,15 +2301,12 @@ export class AtomicServer {
         // playwright.config.ts starts testdata/atomic-plugins-mock/serve.mjs
         // (../../testdata from /app/e2e) as the suite's plugin catalog.
         .withDirectory('/testdata', this.source.directory('testdata'))
-        // Same shape, one file: apps.spec.ts reads the embedded app SDK with a
-        // plain `readFileSync` at `../../../server/src/plugins/assets/
-        // view-client.js`, which from /app/e2e/tests is /server/... . jsSource()
-        // mounts it for browser/plugin's unit test, but the specs run here, in a
-        // fresh Playwright image that copies only what is named, so this
-        // container needs its own copy.
+        // apps.spec.ts reads the app SDK with a plain `readFileSync` at
+        // `../../data-browser/src/chunks/AppPage/viewClient.js`; this fresh
+        // Playwright image copies only what is named, so mount that one file.
         .withFile(
-          '/server/src/plugins/assets/view-client.js',
-          this.source.file('server/src/plugins/assets/view-client.js'),
+          '/app/data-browser/src/chunks/AppPage/viewClient.js',
+          this.source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
         )
         .withWorkdir('/app/e2e')
         .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
@@ -2580,7 +2638,11 @@ export class AtomicServer {
           mv ~/atomic-server-x86_64-unknown-linux-musl ~/atomic-server &&
           cp ~/atomic-server ~/atomic-server-$(date +"%Y-%m-%dT%H:%M:%S") &&
           systemctl stop atomic &&
-          ./atomic-server export &&
+          data_dir=$(sed -n "s/^ATOMIC_DATA_DIR=//p" ~/.env 2>/dev/null | tail -1 | tr -d "\\"\\047") &&
+          store=\${data_dir:-\$HOME/.local/share/atomic-data}/store/atomic.redb &&
+          test -f "$store" &&
+          cp "$store" ~/atomic-store-$(date +"%Y-%m-%dT%H:%M:%S").redb &&
+          ls -1t ~/atomic-store-2*.redb | tail -n +4 | xargs -r rm -f &&
           systemctl start atomic &&
           systemctl status atomic
         '`,

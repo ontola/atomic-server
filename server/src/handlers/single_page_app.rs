@@ -66,10 +66,7 @@ pub async fn single_page(
         .content_type("text/html")
         // This prevents the browser from displaying the JSON response upon re-opening a closed tab
         // https://github.com/atomicdata-dev/atomic-server/issues/137
-        .insert_header((
-            "Cache-Control",
-            "no-store, no-cache, must-revalidate, private",
-        ))
+        .insert_header(("Cache-Control", crate::helpers::NO_STORE))
         .insert_header((
             "Content-Security-Policy",
             format!(
@@ -262,9 +259,10 @@ fn sentry_script(dsn: Option<&str>) -> String {
             .unwrap_or_else(|_| "\"\"".into())
     };
     format!(
-        "window.__ATOMIC_SENTRY__={{dsn:{},environment:{}}};",
+        "window.__ATOMIC_SENTRY__={{dsn:{},environment:{},tunnel:{}}};",
         encode(dsn),
-        encode(&environment)
+        encode(&environment),
+        encode(super::client_reports::TUNNEL_PATH)
     )
 }
 

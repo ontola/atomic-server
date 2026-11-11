@@ -17,6 +17,7 @@ import {
   contextMenuClick,
   currentDialogOkButton,
   currentDriveTitle,
+  openCurrentDrive,
   editProfileAndCommit,
   editTitle,
   editableTitle,
@@ -87,14 +88,14 @@ test.describe('data-browser', async () => {
         await page.evaluate(() => window.store.getAgent()),
       ).toBeUndefined();
       await expect(
-        page.getByRole('button', { name: 'Create account' }),
+        page.getByRole('button', { name: 'Get started' }),
       ).toBeVisible();
       await expect(
         page.getByRole('button', { name: 'Sign in', exact: true }),
       ).toBeVisible();
       await page.reload();
       await expect(
-        page.getByRole('button', { name: 'Create account' }),
+        page.getByRole('button', { name: 'Get started' }),
       ).toBeVisible();
     },
   );
@@ -116,7 +117,7 @@ test.describe('data-browser', async () => {
 
       await signIn(page);
       const { driveURL, driveTitle } = await newDrive(page);
-      await currentDriveTitle(page).click();
+      await openCurrentDrive(page);
 
       // Initialize unauthorized page for reader. An anonymous user landing on a
       // private drive is redirected to the welcome flow (ErrorPage redirects on
@@ -745,6 +746,10 @@ test.describe('data-browser', async () => {
     // delete (and its cascade) is only offered once the item sits there.
     await contextMenuClick('trash', page);
     await expect(sidebarParent).toHaveCount(0);
+    // The sidebar drops the row as soon as it is moved here. The move reaches
+    // the server a round trip later, and reloading before that restores the
+    // row from the old parent, where the menu offers the Trash again.
+    await waitForSynced(page);
     await openSubject(page, parentResource);
     await page.click(contextMenu);
     await expect(page.getByTestId('menu-item-trash')).toHaveCount(0);

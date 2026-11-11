@@ -2,8 +2,8 @@
 //!
 //! Committing an `Installation` with `installationStatus: active` resolves the
 //! pinned Release, verifies its id, refuses what an Installation may not carry,
-//! checks the grants and then materializes by runtime: a wasip2 package is
-//! extracted into `scoped/<drive>/` and loaded as a class extender; a JS
+//! checks the grants and then loads by runtime: a wasip2 package is
+//! loaded from the release's package as a class extender; a JS
 //! release only needs its installation identity. `revoked` or destroy undoes
 //! both.
 //!
@@ -29,7 +29,7 @@ pub const STATUS_ACTIVE: &str = "active";
 pub const STATUS_PAUSED: &str = "paused";
 pub const STATUS_REVOKED: &str = "revoked";
 
-async fn get_parent_drive(resource: &Resource, store: &Db) -> AtomicResult<String> {
+pub(crate) async fn get_parent_drive(resource: &Resource, store: &Db) -> AtomicResult<String> {
     // Loro materialization decodes scalar string values as `Value::String`,
     // not `Value::AtomicUrl` — there's no type marker in the stored string.
     // Accept either so genesis commits (where the only source of state is
@@ -213,21 +213,18 @@ fn on_resource_get(context: GetExtenderContext) -> BoxFuture<AtomicResult<Resour
 mod installation_hook {
     use super::*;
     use crate::plugins::{
+        host_abi::HostAbiRegistry,
+        installation::{within, Scopes},
         manifest::Manifest,
-        release,
-        wasm::{
-            describe_package, install_or_update_plugin, register_installed_plugin, suspend_plugin,
-            uninstall_plugin,
-        },
+        release, wasm,
     };
     use atomic_lib::db::{
         app_agent::{AppAgent, AppAgentKey, AppAgentState},
         plugin_meta::PluginMeta,
         plugin_release::{PluginRelease, WORLD_SERVER_EXTENSION},
     };
+    use atomic_lib::{hierarchy, values::SubResource, Subject};
     use tracing::info;
-    use zip::ZipArchive;
-
     fn json_value(resource: &Resource, prop: &str) -> AtomicResult<serde_json::Value> {
         match resource.get(prop) {
             Ok(Value::Json(v)) => Ok(v.clone()),
@@ -239,7 +236,7 @@ mod installation_hook {
 
     /// Namespace and name identify the installation on the drive. They come
     /// from the resource, or from the manifest when the resource has none;
-    /// when both name them they must agree, since the package is extracted
+    /// when both name them they must agree, since the plugin is recorded
     /// under the manifest's names and the resource is found by its own.
     pub(super) fn identifiers(
         resource: &Resource,
@@ -271,6 +268,7 @@ mod installation_hook {
         signer: &str,
         plugins_dir: &Path,
         plugin_cache_dir: &Path,
+        registry: &std::sync::Arc<HostAbiRegistry>,
     ) -> AtomicResult<()> {
         let subject = resource.get_subject().to_string();
         let reference = string_value(resource, urls::RELEASE_PROP)
@@ -303,6 +301,13 @@ mod installation_hook {
         //    Installation are the approved set the host reads back.
         release::check_grants(&release.manifest, &json_value(resource, urls::GRANTS)?)?;
 
+        // Checked here, written after the commit (`after_activate`): a refusal
+        // below must leave nothing behind, and these are commits of their own.
+        scope_roots(resource, drive, store, signer).await?;
+        if let Some(schema) = declared_schema(&release) {
+            schema.check(store, drive, &for_agent).await?;
+        }
+
         let (namespace, name) = identifiers(resource, &release.manifest)?;
         let key = PluginMetaKey::new(drive, &namespace, &name);
         let existing = store.get_plugin_meta(&key)?;
@@ -315,65 +320,34 @@ mod installation_hook {
             }
         }
 
-        // 3. Materialize by runtime.
-        if release.is_wasip2() {
-            // The exact release whose code is already on disk, by id: a config
-            // change or the legacy migration then extracts and compiles
-            // nothing again. Comparing manifests instead would be wrong, since
-            // two releases of one plugin can agree on every manifest field and
-            // differ in their package bytes. A record from before the id was
-            // stored says nothing about what is on disk, so it materializes.
-            let materialized = existing
+        // 3. Load by runtime. A `sandboxed-app` (host ABI) is a wasip2
+        //    component too, but it is no class extender: no hook is
+        //    registered. Like a JS installation it has only an identity;
+        //    `host_abi::HostAbiRegistry::refresh` loads the component from the
+        //    pinned release when the app is first called. A class extender is
+        //    loaded from the release's package in memory, unless this exact
+        //    release (by id: two releases of one plugin can agree on every
+        //    manifest field and differ in their code) already runs, which is
+        //    a config change on a running plugin.
+        if wasm::is_server_module(&release) {
+            let running = existing
                 .as_ref()
-                .and_then(|meta| meta.release_id.as_deref())
-                .is_some_and(|installed| installed == actual);
-            if materialized {
-                info!("installation {subject} already has {actual} materialized");
-                // A paused installation keeps its files, so resuming it finds
-                // them materialized and has only to put the extender back.
-                register_installed_plugin(
-                    store,
-                    drive,
-                    &namespace,
-                    &name,
-                    plugins_dir,
-                    plugin_cache_dir,
-                )
-                .await?;
+                .is_some_and(|meta| meta.release_id.as_deref() == Some(actual.as_str()))
+                && store.has_class_extender(&wasm::extender_id(drive, &subject));
+            if running {
+                info!("installation {subject} already runs {actual}");
             } else {
-                let package = release
-                    .package
-                    .as_deref()
-                    .ok_or("a wasip2 release without a package")?;
-                let bytes = release::package_bytes(store, package).await?;
-                let mut zip = ZipArchive::new(std::io::Cursor::new(bytes))
-                    .map_err(|e| AtomicError::from(format!("package is not a zip archive: {e}")))?;
-                // A release published before manifests were unified carries
-                // its `plugin.json`; the package itself says what it translates to.
-                let manifest = match Manifest::parse(release.manifest.clone()) {
-                    Ok(Some(manifest)) => manifest,
-                    Ok(None) => describe_package(store, &mut zip).await?,
-                    Err(e) => {
-                        return Err(AtomicError::from(format!(
-                            "release manifest is invalid: {e}"
-                        )))
-                    }
-                };
-                install_or_update_plugin(
-                    &mut zip,
+                wasm::activate_module(
+                    store,
                     drive,
                     &subject,
-                    &manifest,
-                    store,
+                    &actual,
+                    &release,
                     plugins_dir,
                     plugin_cache_dir,
+                    registry,
                 )
                 .await?;
-                // Now that this release's code is the code on disk, say so, so
-                // the next activation can tell. Written after the install
-                // rather than by it: a failed extraction leaves no id, and no
-                // id means materialize again.
-                record_materialized_release(store, &key, &actual)?;
             }
         } else {
             ensure_js_identity(store, drive, &subject, &namespace, &name, &release, &actual)
@@ -383,6 +357,102 @@ mod installation_hook {
             "activated installation {subject} ({namespace}/{name}, {})",
             release.runtime
         );
+        Ok(())
+    }
+
+    fn declared_schema(release: &PluginRelease) -> Option<crate::plugins::app_schema::AppSchema> {
+        Manifest::parse(release.manifest.clone())
+            .ok()
+            .flatten()
+            .and_then(|m| m.schema)
+    }
+
+    /// What activation does once the Installation is stored: the classes and
+    /// properties the app declares exist, and its agent is on the scope roots.
+    /// Both are commits of their own, so they follow the Installation's
+    /// instead of running inside the hook that can still refuse it.
+    pub async fn after_activate(
+        resource: &Resource,
+        drive: &str,
+        store: &Db,
+        signer: &str,
+    ) -> AtomicResult<()> {
+        let reference = string_value(resource, urls::RELEASE_PROP)
+            .ok_or("an active Installation needs a release")?;
+        let for_agent = ForAgent::AgentSubject(signer.to_string().into());
+        let release = release::resolve(store, &reference, &for_agent).await?;
+        if let Some(schema) = declared_schema(&release) {
+            schema.ensure(store, drive).await?;
+        }
+        let roots = scope_roots(resource, drive, store, signer).await?;
+        grant_scopes(roots, resource, drive, store).await
+    }
+
+    /// The roots the Installation's scopes name, read, checked and not yet
+    /// granted. Every one must be in the drive and writable by whoever commits
+    /// the Installation: nobody can hand an app more than they hold. Checked
+    /// before anything is installed, so a bad scope leaves nothing behind.
+    async fn scope_roots(
+        resource: &Resource,
+        drive: &str,
+        store: &Db,
+        signer: &str,
+    ) -> AtomicResult<Vec<(&'static str, Resource)>> {
+        let scopes = Scopes::of(resource, drive);
+        let signer = ForAgent::AgentSubject(signer.into());
+        let in_drive = [drive.to_string()];
+        let mut roots = Vec::new();
+        for (property, listed) in [(urls::READ, &scopes.read), (urls::WRITE, &scopes.write)] {
+            for root in listed.iter().flatten() {
+                let target = store
+                    .get_resource(&root.as_str().into())
+                    .await
+                    .map_err(|e| AtomicError::from(format!("scope {root} cannot be read: {e}")))?;
+                if !within(store, &target, Some(&in_drive)).await {
+                    return Err(AtomicError::from(format!(
+                        "scope {root} is not in the drive of this installation"
+                    )));
+                }
+                hierarchy::check_write(store, &target, &signer)
+                    .await
+                    .map_err(|e| {
+                        AtomicError::from(format!(
+                            "you cannot grant {root}, since you may not write it: {e}"
+                        ))
+                    })?;
+                roots.push((property, target));
+            }
+        }
+        Ok(roots)
+    }
+
+    /// Puts the Installation's agent on those roots, so the hierarchy and the
+    /// scopes say the same thing. This is the one place a scope becomes a
+    /// right, for every runtime; the host enforces the list itself on top
+    /// (`installation::Scopes`). Rights an earlier set of scopes gave are not
+    /// taken back here; the scopes make them inert for the host.
+    async fn grant_scopes(
+        roots: Vec<(&'static str, Resource)>,
+        resource: &Resource,
+        drive: &str,
+        store: &Db,
+    ) -> AtomicResult<()> {
+        let key = AppAgentKey::new(drive, &resource.get_subject().to_string());
+        let Some(identity) = store.get_app_agent_info(&key)? else {
+            return Ok(());
+        };
+        for (property, mut target) in roots {
+            let held = target
+                .get(property)
+                .ok()
+                .and_then(|list| list.to_subjects(None).ok())
+                .is_some_and(|list| list.contains(&identity.agent));
+            if !held {
+                let agent = Subject::from(identity.agent.as_str());
+                target.push(property, SubResource::Subject(agent), true)?;
+                target.save(store).await?;
+            }
+        }
         Ok(())
     }
 
@@ -447,37 +517,22 @@ mod installation_hook {
     ///
     /// `paused` and `draft` both mean "installed, not running". For a wasip2
     /// class extender that is an unregistration: the hooks stop firing on the
-    /// next commit, while the files and `PluginMeta` stay, so resuming keeps
-    /// the plugin's agent rather than minting a new one. A JS installation has
-    /// no extender to unregister; its runs are refused by
-    /// `installation::resolve`, which reads the status.
-    pub async fn suspend(resource: &Resource, drive: &str, store: &Db) -> AtomicResult<()> {
+    /// next commit, while `PluginMeta` stays, so resuming keeps the plugin's
+    /// agent rather than minting a new one. A JS installation has no extender
+    /// to unregister; its runs are refused by `installation::resolve`, which
+    /// reads the status.
+    pub fn suspend(resource: &Resource, drive: &str, store: &Db) -> AtomicResult<()> {
         let subject = resource.get_subject().to_string();
-        let Some((namespace, name)) = identifiers_of_installed(resource, store) else {
-            return Ok(());
-        };
-        let key = PluginMetaKey::new(drive, &namespace, &name);
-        // Only this installation's own extender, never one that happens to
-        // share a namespace and name.
-        if store
-            .get_plugin_meta(&key)?
-            .is_some_and(|meta| meta.subject == subject)
-        {
-            suspend_plugin(store, drive, &namespace, &name)?;
-            info!("suspended installation {subject}");
-        }
+        store.remove_class_extender(&wasm::extender_id(drive, &subject))?;
+        info!("suspended installation {subject}");
         Ok(())
     }
 
     /// Undo an activation. Best effort on every step, so a half-installed
     /// plugin can still be revoked or destroyed.
-    pub async fn deactivate(
-        resource: &Resource,
-        drive: &str,
-        store: &Db,
-        plugins_dir: &Path,
-    ) -> AtomicResult<()> {
+    pub async fn deactivate(resource: &Resource, drive: &str, store: &Db) -> AtomicResult<()> {
         let subject = resource.get_subject().to_string();
+        store.remove_class_extender(&wasm::extender_id(drive, &subject))?;
         // Identifiers live on the resource, or in the manifest of the pinned
         // release, which is in this node's cache once it was ever activated.
         let identifiers = identifiers_of_installed(resource, store);
@@ -485,12 +540,17 @@ mod installation_hook {
             let key = PluginMetaKey::new(drive, &namespace, &name);
             if let Some(meta) = store.get_plugin_meta(&key)? {
                 if meta.subject == subject {
-                    // The wasm path removes the files and the meta; a JS
-                    // installation has no files, so only the meta is left.
-                    if let Err(e) =
-                        uninstall_plugin(&name, &namespace, drive, store, plugins_dir).await
-                    {
-                        tracing::debug!("no wasm files to remove for {subject}: {e}");
+                    // A module's agent is a resource of its own to destroy; a
+                    // JS installation's is the app agent, retired below.
+                    let is_module = string_value(resource, urls::RELEASE_ID)
+                        .and_then(|id| store.get_plugin_release(&id).ok())
+                        .is_some_and(|release| wasm::is_server_module(&release));
+                    if is_module {
+                        if let Err(e) =
+                            wasm::delete_plugin_meta(store, drive, &namespace, &name).await
+                        {
+                            tracing::debug!("could not remove the agent of {subject}: {e}");
+                        }
                     }
                     store.delete_plugin_meta(&key)?;
                 }
@@ -501,32 +561,14 @@ mod installation_hook {
             // Leaves the revocation tombstone `installation::resolve` honours.
             store.delete_app_agent(&app_key)?;
         }
+        // The app's filters and checkpoint on the drive's event stream.
+        store.forget_event_consumer(drive, &subject)?;
         info!("deactivated installation {subject}");
         Ok(())
     }
 
     pub fn status(resource: &Resource) -> String {
         string_value(resource, urls::INSTALLATION_STATUS).unwrap_or_else(|| STATUS_DRAFT.into())
-    }
-
-    /// Records which release's code is now on disk for this plugin.
-    fn record_materialized_release(
-        store: &Db,
-        key: &PluginMetaKey,
-        release_id: &str,
-    ) -> AtomicResult<()> {
-        let Some(meta) = store.get_plugin_meta(key)? else {
-            return Err(AtomicError::from(
-                "the install wrote no plugin metadata to record a release on",
-            ));
-        };
-        store.set_plugin_meta(
-            key,
-            &PluginMeta {
-                release_id: Some(release_id.to_string()),
-                ..meta
-            },
-        )
     }
 
     /// The namespace and name a materialized installation was installed under.
@@ -545,11 +587,59 @@ mod installation_hook {
     }
 }
 
+/// Whether this commit (re)activates the Installation.
+#[cfg(feature = "wasm-plugins")]
+fn activation_changed(is_new: bool, changed_props: &std::collections::HashSet<String>) -> bool {
+    is_new
+        || [
+            urls::INSTALLATION_STATUS,
+            urls::RELEASE_PROP,
+            urls::RELEASE_ID,
+            urls::GRANTS,
+            urls::CONFIG,
+        ]
+        .iter()
+        .any(|prop| changed_props.contains(*prop))
+}
+
+/// The writes an activation makes as commits of their own (the app's schema
+/// and its scope grants) follow the Installation's commit, so an Installation
+/// that is refused leaves none of them behind. A failure here is logged by the
+/// commit pipeline; the Installation stays.
+#[allow(unused_variables)]
+fn on_installation_after_commit(context: CommitExtenderContext) -> BoxFuture<AtomicResult<()>> {
+    Box::pin(async move {
+        #[cfg(feature = "wasm-plugins")]
+        {
+            let CommitExtenderContext {
+                store,
+                commit,
+                resource,
+                is_new,
+                changed_props,
+            } = context;
+            if commit.destroy == Some(true)
+                || installation_hook::status(resource) != STATUS_ACTIVE
+                || !activation_changed(is_new, changed_props)
+            {
+                return Ok(());
+            }
+            let drive = get_parent_drive(resource, store).await?;
+            installation_hook::after_activate(resource, &drive, store, commit.signer.as_str())
+                .await?;
+        }
+        Ok(())
+    })
+}
+
 #[allow(unused_variables)]
 fn on_installation_before_commit(
     context: CommitExtenderContext,
     plugins_dir: PathBuf,
     plugin_cache_dir: PathBuf,
+    #[cfg(feature = "wasm-plugins")] registry: std::sync::Arc<
+        crate::plugins::host_abi::HostAbiRegistry,
+    >,
 ) -> BoxFuture<AtomicResult<()>> {
     Box::pin(async move {
         let CommitExtenderContext {
@@ -564,7 +654,7 @@ fn on_installation_before_commit(
 
         if commit.destroy == Some(true) {
             #[cfg(feature = "wasm-plugins")]
-            installation_hook::deactivate(resource, &drive, store, &plugins_dir).await?;
+            installation_hook::deactivate(resource, &drive, store).await?;
             return Ok(());
         }
 
@@ -582,16 +672,7 @@ fn on_installation_before_commit(
         {
             use installation_hook::*;
             let status = status(resource);
-            let activation_changed = is_new
-                || [
-                    urls::INSTALLATION_STATUS,
-                    urls::RELEASE_PROP,
-                    urls::RELEASE_ID,
-                    urls::GRANTS,
-                    urls::CONFIG,
-                ]
-                .iter()
-                .any(|prop| changed_props.contains(*prop));
+            let activation_changed = activation_changed(is_new, changed_props);
             match status.as_str() {
                 STATUS_ACTIVE if activation_changed => {
                     activate(
@@ -601,12 +682,13 @@ fn on_installation_before_commit(
                         commit.signer.as_str(),
                         &plugins_dir,
                         &plugin_cache_dir,
+                        &registry,
                     )
                     .await?
                 }
                 STATUS_ACTIVE => {}
                 STATUS_REVOKED if changed_props.contains(urls::INSTALLATION_STATUS) => {
-                    deactivate(resource, &drive, store, &plugins_dir).await?
+                    deactivate(resource, &drive, store).await?
                 }
                 // Installed but not running. Unlike `revoked` this keeps the
                 // files and the identity, so it is an unregistration, not an
@@ -614,7 +696,7 @@ fn on_installation_before_commit(
                 STATUS_PAUSED | STATUS_DRAFT
                     if !is_new && changed_props.contains(urls::INSTALLATION_STATUS) =>
                 {
-                    suspend(resource, &drive, store).await?
+                    suspend(resource, &drive, store)?
                 }
                 STATUS_REVOKED | STATUS_DRAFT | STATUS_PAUSED => {}
                 other => {
@@ -632,6 +714,9 @@ fn on_installation_before_commit(
 pub fn build_installation_extender(
     plugins_dir: PathBuf,
     plugin_cache_dir: PathBuf,
+    #[cfg(feature = "wasm-plugins")] registry: std::sync::Arc<
+        crate::plugins::host_abi::HostAbiRegistry,
+    >,
 ) -> ClassExtender {
     ClassExtender::builder()
         .id("installation".to_string())
@@ -639,8 +724,17 @@ pub fn build_installation_extender(
         .on_resource_get(ClassExtender::wrap_get_handler(move |context| {
             on_resource_get(context)
         }))
+        .after_commit(ClassExtender::wrap_commit_handler(
+            on_installation_after_commit,
+        ))
         .before_commit(ClassExtender::wrap_commit_handler(move |context| {
-            on_installation_before_commit(context, plugins_dir.clone(), plugin_cache_dir.clone())
+            on_installation_before_commit(
+                context,
+                plugins_dir.clone(),
+                plugin_cache_dir.clone(),
+                #[cfg(feature = "wasm-plugins")]
+                registry.clone(),
+            )
         }))
         .build()
 }
@@ -657,9 +751,7 @@ pub fn build_installation_extender(
 /// `<server>/releases/<id>`; the resource then becomes an Installation pinned
 /// to that release, with `grants` equal to the manifest's capabilities, its
 /// `config` untouched and `installationStatus: active`. The subject does not
-/// change, and neither do the files on disk: the plugin's meta already holds
-/// this exact manifest, so the Installation hook sees the release as
-/// materialized and does not extract or compile anything again.
+/// change. The module is loaded from the release afterwards, at boot.
 ///
 /// Signed by the server's agent. Returns how many resources were migrated;
 /// a resource that cannot be migrated is logged and left as it is.
@@ -694,7 +786,6 @@ pub async fn migrate_legacy_plugins(store: &Db) -> AtomicResult<usize> {
 #[cfg(feature = "wasm-plugins")]
 async fn migrate_legacy_plugin(store: &Db, mut resource: Resource) -> AtomicResult<bool> {
     use crate::plugins::release;
-    use atomic_lib::db::plugin_meta::PluginMeta;
 
     let subject = resource.get_subject().to_string();
     let Some(plugin_file) = string_value(&resource, urls::PLUGIN_FILE) else {
@@ -710,27 +801,6 @@ async fn migrate_legacy_plugin(store: &Db, mut resource: Resource) -> AtomicResu
     let release_url = release::record_release(store, &id, &published, &drive, None, &origin)
         .await?
         .resolve(&origin);
-
-    // The plugin's meta is what the loader wrote from its `plugin.json`; give
-    // it the manifest the release carries, which is that same `plugin.json`
-    // translated, so activation finds the release already materialized.
-    let (namespace, name) = installation_hook::identifiers(&resource, &published.manifest)?;
-    let key = PluginMetaKey::new(&drive, &namespace, &name);
-    if let Some(meta) = store.get_plugin_meta(&key)? {
-        if meta.subject == subject
-            && (meta.manifest != published.manifest
-                || meta.release_id.as_deref() != Some(id.as_str()))
-        {
-            store.set_plugin_meta(
-                &key,
-                &PluginMeta {
-                    manifest: published.manifest.clone(),
-                    release_id: Some(id.clone()),
-                    ..meta
-                },
-            )?;
-        }
-    }
 
     let grants: Vec<&str> = manifest
         .capabilities
@@ -1050,7 +1120,7 @@ mod installation_tests {
     }
 
     #[actix_rt::test]
-    async fn a_wasip2_installation_goes_through_the_zip_install_path() {
+    async fn a_wasip2_installation_loads_its_module_from_the_release() {
         let f = fixture("installation_wasm").await;
         let db = &f.appstate.store;
         let (id, release, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
@@ -1104,18 +1174,7 @@ mod installation_tests {
         assert_eq!(meta.release_id.as_deref(), Some(id.as_str()));
 
         // Pausing stops the plugin without uninstalling it: the extender is
-        // gone, the files and the identity stay, so resuming is the same agent.
-        let wasm_file = f
-            .appstate
-            .config
-            .plugin_path
-            .join("class-extenders/scoped")
-            .join(base64::Engine::encode(
-                &base64::engine::general_purpose::URL_SAFE,
-                &f.drive,
-            ))
-            .join("ontola.test-plugin.wasm");
-        let before = std::fs::metadata(&wasm_file).unwrap().modified().unwrap();
+        // gone, the identity stays, so resuming is the same agent.
         let agent_before = db.get_plugin_meta(&key).unwrap().unwrap().agent_secret;
 
         set_status(db, &installation, "paused").await;
@@ -1123,7 +1182,6 @@ mod installation_tests {
             db.get_class_extenders_on_drive(&f.drive).is_empty(),
             "a paused installation must not keep serving its hooks"
         );
-        assert!(wasm_file.exists(), "pausing is not an uninstall");
         assert!(db.get_plugin_meta(&key).unwrap().is_some());
 
         set_status(db, &installation, "active").await;
@@ -1133,14 +1191,9 @@ mod installation_tests {
             agent_before,
             "resuming must keep the plugin's identity"
         );
-        assert_eq!(
-            std::fs::metadata(&wasm_file).unwrap().modified().unwrap(),
-            before,
-            "re-activating the same release must not re-extract"
-        );
 
-        // A config change on a running plugin re-activates it and likewise
-        // extracts nothing, since the release on disk is the one pinned.
+        // A config change on a running plugin re-activates it and keeps
+        // the module that runs, since the release pinned is the one loaded.
         let mut r = db
             .get_resource(&installation.as_str().into())
             .await
@@ -1153,11 +1206,6 @@ mod installation_tests {
         .await
         .unwrap();
         r.save(db).await.unwrap();
-        assert_eq!(
-            std::fs::metadata(&wasm_file).unwrap().modified().unwrap(),
-            before,
-            "a config change must not re-extract"
-        );
         assert_eq!(db.get_class_extenders_on_drive(&f.drive).len(), 1);
 
         let mut r = db
@@ -1166,7 +1214,7 @@ mod installation_tests {
             .unwrap();
         r.destroy(db).await.unwrap();
         assert!(db.get_plugin_meta(&key).unwrap().is_none());
-        assert!(!wasm_file.exists());
+        assert!(db.get_class_extenders_on_drive(&f.drive).is_empty());
     }
 
     /// The same plugin, repackaged: every entry byte-for-byte identical, only
@@ -1195,7 +1243,7 @@ mod installation_tests {
 
     /// Two releases of one plugin can agree on every manifest field and differ
     /// in their code. Repointing an Installation at the second one has to put
-    /// the new code on disk; the manifest cannot be what decides that.
+    /// the new code running; the manifest cannot be what decides that.
     #[actix_rt::test]
     async fn a_new_release_with_an_unchanged_manifest_still_replaces_the_code() {
         let f = fixture("installation_same_manifest").await;
@@ -1243,7 +1291,7 @@ mod installation_tests {
         assert_eq!(
             db.get_plugin_meta(&key).unwrap().unwrap().release_id,
             Some(second),
-            "the installation must record the release whose code is on disk"
+            "the installation must record the release whose code runs"
         );
         assert_eq!(db.get_class_extenders_on_drive(&f.drive).len(), 1);
     }
@@ -1332,9 +1380,8 @@ mod installation_tests {
 
     /// A drive with a plugin installed the way the legacy `Plugin` +
     /// `pluginFile` hook did it: a File holding the zip, a `Plugin` resource
-    /// pointing at it, the package extracted and loaded, and a meta record
-    /// holding the untranslated `plugin.json`.
-    async fn legacy_plugin(f: &crate::plugins::test_fixture::Fixture) -> (String, PathBuf) {
+    /// pointing at it, and a meta record holding the untranslated `plugin.json`.
+    async fn legacy_plugin(f: &crate::plugins::test_fixture::Fixture) -> String {
         let db = &f.appstate.store;
         let package = release::store_package(db, TEST_PLUGIN_ZIP).await.unwrap();
         let file = genesis(
@@ -1367,19 +1414,11 @@ mod installation_tests {
         .await;
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(TEST_PLUGIN_ZIP.to_vec())).unwrap();
         let manifest = wasm::describe_package(db, &mut zip).await.unwrap();
-        wasm::install_or_update_plugin(
-            &mut zip,
-            &f.drive,
-            &plugin,
-            &manifest,
-            db,
-            &f.appstate.config.plugin_path,
-            &f.appstate.config.plugin_cache_path,
-        )
-        .await
-        .unwrap();
-        // The legacy loader kept the `plugin.json` itself.
         let key = PluginMetaKey::new(&f.drive, "ontola", "test-plugin");
+        wasm::create_plugin_meta(db, &key, &manifest, &plugin, "", None)
+            .await
+            .unwrap();
+        // The legacy loader kept the `plugin.json` itself.
         let meta = db.get_plugin_meta(&key).unwrap().unwrap();
         let plugin_json: serde_json::Value = serde_json::from_reader(
             zip::ZipArchive::new(std::io::Cursor::new(TEST_PLUGIN_ZIP.to_vec()))
@@ -1392,33 +1431,22 @@ mod installation_tests {
             &key,
             &PluginMeta {
                 manifest: plugin_json,
+                release_id: None,
                 ..meta
             },
         )
         .unwrap();
-        let wasm_file = f
-            .appstate
-            .config
-            .plugin_path
-            .join("class-extenders/scoped")
-            .join(base64::Engine::encode(
-                &base64::engine::general_purpose::URL_SAFE,
-                &f.drive,
-            ))
-            .join("ontola.test-plugin.wasm");
-        assert!(wasm_file.exists());
-        (plugin, wasm_file)
+        plugin
     }
 
     #[actix_rt::test]
-    async fn a_legacy_plugin_is_migrated_once_into_an_installation_without_reinstalling() {
+    async fn a_legacy_plugin_is_migrated_once_into_an_installation_and_loads_from_its_release() {
         let f = fixture("legacy_plugin_migration").await;
         let db = &f.appstate.store;
-        let (plugin, wasm_file) = legacy_plugin(&f).await;
+        let plugin = legacy_plugin(&f).await;
         let key = PluginMetaKey::new(&f.drive, "ontola", "test-plugin");
         assert!(!db.get_plugin_meta(&key).unwrap().unwrap().has_v2_manifest());
-        let installed_at = std::fs::metadata(&wasm_file).unwrap().modified().unwrap();
-        assert_eq!(db.get_class_extenders_on_drive(&f.drive).len(), 1);
+        assert!(db.get_class_extenders_on_drive(&f.drive).is_empty());
 
         assert_eq!(migrate_legacy_plugins(db).await.unwrap(), 1);
 
@@ -1456,16 +1484,20 @@ mod installation_tests {
             published
         );
 
-        // Same subject, same files, same extender; the meta now holds the
-        // unified manifest.
+        // Same subject; loading it at boot puts the unified manifest in the
+        // meta and the extender back, from the release rather than from disk.
+        wasm::load_wasm_class_extenders(
+            &f.appstate.config.plugin_path,
+            &f.appstate.config.plugin_cache_path,
+            db,
+            &f.appstate.host_abi,
+        )
+        .await
+        .unwrap();
         let meta = db.get_plugin_meta(&key).unwrap().unwrap();
         assert_eq!(meta.subject, plugin);
         assert_eq!(meta.manifest, published.manifest);
-        assert_eq!(
-            std::fs::metadata(&wasm_file).unwrap().modified().unwrap(),
-            installed_at,
-            "the migration must not re-extract the package"
-        );
+        assert_eq!(meta.release_id.as_deref(), Some(id.as_str()));
         assert_eq!(db.get_class_extenders_on_drive(&f.drive).len(), 1);
         // The extender still fires: the test plugin names every new Folder.
         let folder = genesis(
@@ -1489,9 +1521,5 @@ mod installation_tests {
         assert_eq!(migrate_legacy_plugins(db).await.unwrap(), 0);
         let again = db.get_resource(&plugin.as_str().into()).await.unwrap();
         assert_eq!(again.get(urls::RELEASE_ID).unwrap().to_string(), id);
-        assert_eq!(
-            std::fs::metadata(&wasm_file).unwrap().modified().unwrap(),
-            installed_at
-        );
     }
 }

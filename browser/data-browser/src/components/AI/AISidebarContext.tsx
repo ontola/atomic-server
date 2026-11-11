@@ -2,6 +2,7 @@ import React, { useCallback, useContext, useState, createContext } from 'react';
 
 import type { AIMessageContext } from '../../chunks/AI/types';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
+import { askAssistant, hasActionsHost } from '../../embed/hostActions';
 
 /**
  * A request handed to the assistant from another screen, with resource context.
@@ -13,6 +14,19 @@ export interface AIAsk {
   context?: AIMessageContext[];
 }
 
+/**
+ * In the Flutter app there is no sidebar: the app's own assistant opens a chat
+ * with the ask. True when the app took it.
+ */
+function askOnHost(ask: AIAsk): boolean {
+  if (!hasActionsHost()) return false;
+
+  const about = ask.context?.find(c => c.type === 'atomic-resource');
+  void askAssistant(ask.prompt, about?.subject ?? '');
+
+  return true;
+}
+
 export const AISidebarContext = createContext<{
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -20,8 +34,9 @@ export const AISidebarContext = createContext<{
   setContextItems: React.Dispatch<React.SetStateAction<AIMessageContext[]>>;
   /** Opens the panel on a new chat and asks. */
   askAI: (ask: AIAsk) => void;
-  openChat: (subject?: string) => void;
-  pendingChat: { subject?: string } | undefined;
+  /** `withoutContext` starts the chat without attaching the current resource. */
+  openChat: (subject?: string, options?: { withoutContext?: boolean }) => void;
+  pendingChat: { subject?: string; withoutContext?: boolean } | undefined;
   clearPendingChat: () => void;
   pendingAsk: AIAsk | undefined;
   clearPendingAsk: () => void;
@@ -30,7 +45,8 @@ export const AISidebarContext = createContext<{
   setIsOpen: () => {},
   contextItems: [],
   setContextItems: () => {},
-  askAI: () => {},
+  // The embedded page in the Flutter app has no provider: asks go to the app.
+  askAI: askOnHost,
   openChat: () => {},
   pendingChat: undefined,
   clearPendingChat: () => {},
@@ -62,11 +78,14 @@ export const AISidebarContextProvider: React.FC<React.PropsWithChildren> = ({
   // Held here rather than delivered directly, because the sidebar may not be
   // mounted yet when the ask is made — the caller opens it in the same breath.
   const [pendingAsk, setPendingAsk] = useState<AIAsk>();
-  const [pendingChat, setPendingChat] = useState<{ subject?: string }>();
+  const [pendingChat, setPendingChat] = useState<{
+    subject?: string;
+    withoutContext?: boolean;
+  }>();
   const openChat = useCallback(
-    (subject?: string) => {
+    (subject?: string, options?: { withoutContext?: boolean }) => {
       setPendingAsk(undefined);
-      setPendingChat({ subject });
+      setPendingChat({ subject, withoutContext: options?.withoutContext });
       setPanelOpen('ai', true);
     },
     [setPanelOpen],
@@ -75,6 +94,8 @@ export const AISidebarContextProvider: React.FC<React.PropsWithChildren> = ({
 
   const askAI = useCallback(
     (ask: AIAsk) => {
+      if (askOnHost(ask)) return;
+
       setPendingChat(undefined);
       setPendingAsk(ask);
       setPanelOpen('ai', true);

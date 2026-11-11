@@ -37,7 +37,18 @@ pub struct InputSchema {
 pub struct Field {
     pub r#type: String,
     pub description: String,
+    /// A Property of the manifest's `schema` whose datatype the value must
+    /// also satisfy. Only exports use it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub property: Option<String>,
+    /// For `type: "array"` (exports only): the flat object each element is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<Box<InputSchema>>,
 }
+
+/// The most elements an `array` field may hold.
+pub const MAX_ARRAY_ITEMS: usize = 5000;
+
 impl InputSchema {
     pub fn validate(&self, args: &Value) -> Result<(), String> {
         let args = args
@@ -55,6 +66,20 @@ impl InputSchema {
                 "string" => value.is_string(),
                 "integer" => value.is_i64() || value.is_u64(),
                 "boolean" => value.is_boolean(),
+                "array" => {
+                    let (Some(items), Some(list)) = (&field.items, value.as_array()) else {
+                        return Err(format!("invalid type for action argument {name}"));
+                    };
+                    if list.len() > MAX_ARRAY_ITEMS {
+                        return Err(format!("{name} has too many elements"));
+                    }
+                    for item in list {
+                        items
+                            .validate(item)
+                            .map_err(|e| format!("in {name}: {e}"))?;
+                    }
+                    true
+                }
                 _ => false,
             };
             if !valid {
@@ -85,14 +110,12 @@ pub fn validate_actions(manifest: &Manifest) -> Result<(), String> {
         if !manifest.operations.iter().any(|o| o.id == a.operation) {
             return Err("action references an undeclared operation".into());
         }
-        let s = &a.input_schema;
-        if s.r#type != "object"
-            || s.additional_properties
-            || s.properties.len() > 32
-            || s.required.iter().any(|p| !s.properties.contains_key(p))
-            || s.properties
+        // Actions take a flat object of scalars; `property` is for exports.
+        if !super::manifest::flat_object(&a.input_schema, false)
+            || a.input_schema
+                .properties
                 .values()
-                .any(|p| !matches!(p.r#type.as_str(), "string" | "integer" | "boolean"))
+                .any(|p| p.property.is_some())
         {
             return Err("unsupported action input schema".into());
         }

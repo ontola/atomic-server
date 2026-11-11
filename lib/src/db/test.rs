@@ -4,7 +4,424 @@ use super::*;
 use ntest::timeout;
 
 use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    Arc,
+};
 use tokio::sync::OnceCell;
+
+/// Test-only KV adapter that makes sync's acknowledgement durability visible
+/// without relying on redb's filesystem timing.
+struct CountingKv {
+    inner: super::redb_store::RedbStore,
+    flushes: AtomicUsize,
+    applies: AtomicUsize,
+    fail_flush: AtomicBool,
+}
+
+impl CountingKv {
+    fn new() -> Self {
+        Self {
+            inner: super::redb_store::RedbStore::new_memory().unwrap(),
+            flushes: AtomicUsize::new(0),
+            applies: AtomicUsize::new(0),
+            fail_flush: AtomicBool::new(false),
+        }
+    }
+    fn reset(&self) {
+        self.flushes.store(0, Ordering::SeqCst);
+        self.applies.store(0, Ordering::SeqCst);
+    }
+}
+
+impl super::kv_store::KvStore for CountingKv {
+    fn get(
+        &self,
+        tree: super::trees::Tree,
+        key: &[u8],
+    ) -> crate::errors::AtomicResult<Option<Vec<u8>>> {
+        self.inner.get(tree, key)
+    }
+    fn insert(
+        &self,
+        tree: super::trees::Tree,
+        key: &[u8],
+        val: &[u8],
+    ) -> crate::errors::AtomicResult<()> {
+        self.inner.insert(tree, key, val)
+    }
+    fn remove(&self, tree: super::trees::Tree, key: &[u8]) -> crate::errors::AtomicResult<()> {
+        self.inner.remove(tree, key)
+    }
+    fn contains_key(
+        &self,
+        tree: super::trees::Tree,
+        key: &[u8],
+    ) -> crate::errors::AtomicResult<bool> {
+        self.inner.contains_key(tree, key)
+    }
+    fn scan_prefix(&self, tree: super::trees::Tree, prefix: &[u8]) -> super::kv_store::KvIter {
+        self.inner.scan_prefix(tree, prefix)
+    }
+    fn range(
+        &self,
+        tree: super::trees::Tree,
+        start: Vec<u8>,
+        end: Vec<u8>,
+        reverse: bool,
+    ) -> super::kv_store::KvIter {
+        self.inner.range(tree, start, end, reverse)
+    }
+    fn range_page(
+        &self,
+        tree: super::trees::Tree,
+        start: Vec<u8>,
+        end: Vec<u8>,
+        limit: usize,
+    ) -> crate::errors::AtomicResult<Vec<super::kv_store::KvPair>> {
+        self.inner.range_page(tree, start, end, limit)
+    }
+    fn range_value_sizes(
+        &self,
+        tree: super::trees::Tree,
+        start: Vec<u8>,
+        end: Vec<u8>,
+        limit: usize,
+    ) -> crate::errors::AtomicResult<Vec<(Vec<u8>, u64)>> {
+        self.inner.range_value_sizes(tree, start, end, limit)
+    }
+    fn iter_tree(&self, tree: super::trees::Tree) -> super::kv_store::KvIter {
+        self.inner.iter_tree(tree)
+    }
+    fn first_entry(
+        &self,
+        tree: super::trees::Tree,
+    ) -> crate::errors::AtomicResult<Option<super::kv_store::KvPair>> {
+        self.inner.first_entry(tree)
+    }
+    fn clear_tree(&self, tree: super::trees::Tree) -> crate::errors::AtomicResult<()> {
+        self.inner.clear_tree(tree)
+    }
+    fn apply_batch(
+        &self,
+        operations: &[super::trees::Operation],
+    ) -> crate::errors::AtomicResult<()> {
+        self.applies.fetch_add(1, Ordering::SeqCst);
+        self.inner.apply_batch(operations)
+    }
+    fn flush(&self) -> crate::errors::AtomicResult<()> {
+        self.flushes.fetch_add(1, Ordering::SeqCst);
+        if self.fail_flush.load(Ordering::SeqCst) {
+            return Err("injected flush failure".into());
+        }
+        self.inner.flush()
+    }
+    fn len(&self, tree: super::trees::Tree) -> crate::errors::AtomicResult<usize> {
+        self.inner.len(tree)
+    }
+}
+
+async fn counting_db() -> (Db, Arc<CountingKv>) {
+    let kv = Arc::new(CountingKv::new());
+    let db = Db::from_kv(std::path::PathBuf::new(), kv.clone(), None)
+        .open()
+        .await
+        .unwrap();
+    let agent = db.create_agent(None).await.unwrap();
+    db.set_default_agent(agent);
+    db.populate().await.unwrap();
+    kv.reset();
+    (db, kv)
+}
+
+async fn local_id_push(
+    last: bool,
+) -> (crate::sync::protocol::DecodedSyncPush, crate::agents::Agent) {
+    let source = Db::init_temp(&format!("sync_push_counting_source_{}", std::process::id()))
+        .await
+        .unwrap();
+    let (agent, drive) = source.setup("Counting source").await.unwrap();
+    let mut entries = Vec::new();
+    let drive_snapshot = source
+        .kv
+        .get(super::trees::Tree::LoroSnapshots, drive.as_bytes())
+        .unwrap()
+        .unwrap();
+    entries.push((drive.clone(), drive_snapshot));
+    for n in 0..2 {
+        let subject = source
+            .create_resource(urls::FOLDER, &drive, &format!("row {n}"), None)
+            .await
+            .unwrap();
+        let mut resource = source.get_resource(&subject.clone().into()).await.unwrap();
+        resource
+            .set_unsafe(urls::LOCAL_ID.into(), Value::String(format!("source:{n}")))
+            .unwrap();
+        resource.save_locally(&source).await.unwrap();
+        let snapshot = source
+            .kv
+            .get(super::trees::Tree::LoroSnapshots, subject.as_bytes())
+            .unwrap()
+            .unwrap();
+        entries.push((subject, snapshot));
+    }
+    let refs: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(s, b)| (s.as_str(), b.as_slice()))
+        .collect();
+    let frame = crate::sync::protocol::encode_sync_push(&drive, &refs, last);
+    (
+        crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap(),
+        agent,
+    )
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_batches_local_ids_and_flushes_only_at_last() {
+    let (push, agent) = local_id_push(false).await;
+    let (sink, counter) = counting_db().await;
+    crate::sync::engine::import_sync_push(
+        &push,
+        &sink,
+        &crate::agents::ForAgent::from(agent.clone()),
+        false,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        counter.flushes.load(Ordering::SeqCst),
+        0,
+        "non-final chunks are not acknowledgement barriers"
+    );
+    assert_eq!(
+        counter.applies.load(Ordering::SeqCst),
+        1,
+        "localId rows share one projection transaction"
+    );
+    assert_eq!(
+        sink.query(&crate::storelike::Query::new_prop_val(
+            urls::LOCAL_ID,
+            "source:0"
+        ))
+        .await
+        .unwrap()
+        .subjects
+        .len(),
+        1,
+        "the localId projection and its index land with the resource"
+    );
+
+    let last_entries: Vec<(&str, &[u8])> = push
+        .entries
+        .iter()
+        .map(|entry| (entry.subject.as_str(), entry.loro_bytes.as_slice()))
+        .collect();
+    let last_frame = crate::sync::protocol::encode_sync_push(&push.drive, &last_entries, true);
+    let last = crate::sync::protocol::decode_sync_push(&last_frame[1..]).unwrap();
+    counter.reset();
+    crate::sync::engine::import_sync_push(
+        &last,
+        &sink,
+        &crate::agents::ForAgent::from(agent),
+        false,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        counter.flushes.load(Ordering::SeqCst),
+        1,
+        "LAST flushes once after the batch"
+    );
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_last_reports_a_durable_flush_failure_even_when_empty() {
+    let (sink, counter) = counting_db().await;
+    counter.fail_flush.store(true, Ordering::SeqCst);
+    let frame = crate::sync::protocol::encode_sync_push("atomic:empty", &[], true);
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    let error =
+        crate::sync::engine::import_sync_push(&push, &sink, &crate::agents::ForAgent::Sudo, false)
+            .await
+            .unwrap_err();
+    assert!(error.reason.contains("durably flush"));
+    assert_eq!(counter.flushes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn public_replica_batch_flushes_local_ids_once() {
+    let (store, counter) = counting_db().await;
+    let make = |n: usize| {
+        let subject = format!("atomic:public-batch-{n}");
+        let mut authored = crate::Resource::new(subject.clone());
+        authored
+            .set_unsafe(
+                urls::PARENT.into(),
+                Value::AtomicUrl("atomic:public-batch-parent".into()),
+            )
+            .unwrap();
+        authored
+            .set_unsafe(urls::LOCAL_ID.into(), Value::String(format!("public:{n}")))
+            .unwrap();
+        let snapshot = authored.build_state_doc().unwrap().export_snapshot();
+        let mut replica = crate::Resource::new(subject);
+        replica
+            .apply_state_doc(crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).unwrap())
+            .unwrap();
+        (replica, Some(snapshot))
+    };
+    store
+        .persist_replicated_resources(vec![make(0), make(1)])
+        .await
+        .unwrap();
+    assert_eq!(counter.applies.load(Ordering::SeqCst), 1);
+    assert_eq!(counter.flushes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_staged_parent_accepts_an_unstamped_childs_second_delta() {
+    let sink = Db::init_temp("sync_push_staged_parent").await.unwrap();
+    let (agent, drive) = sink.setup("Staged parent").await.unwrap();
+    let parent = "atomic:staged-parent";
+    let child = "atomic:staged-child";
+    let parent_doc = crate::loro::AtomicLoroDoc::new();
+    parent_doc
+        .set_property(urls::DRIVE_PROP, &Value::AtomicUrl(drive.clone().into()))
+        .unwrap();
+    parent_doc
+        .set_property(urls::NAME, &Value::String("parent".into()))
+        .unwrap();
+    let child_doc = crate::loro::AtomicLoroDoc::new();
+    child_doc
+        .set_property(urls::PARENT, &Value::AtomicUrl(parent.into()))
+        .unwrap();
+    child_doc
+        .set_property(urls::NAME, &Value::String("child".into()))
+        .unwrap();
+    let first_child = child_doc.export_snapshot();
+    let second_child_doc = crate::loro::AtomicLoroDoc::from_snapshot(&first_child).unwrap();
+    second_child_doc
+        .set_property(urls::DESCRIPTION, &Value::String("second delta".into()))
+        .unwrap();
+    let parent_snapshot = parent_doc.export_snapshot();
+    let second_child = second_child_doc.export_snapshot();
+    let entries = [
+        (parent, parent_snapshot.as_slice()),
+        (child, first_child.as_slice()),
+        (child, second_child.as_slice()),
+    ];
+    let frame = crate::sync::protocol::encode_sync_push(&drive, &entries, true);
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    let (count, _) = crate::sync::engine::import_sync_push(
+        &push,
+        &sink,
+        &crate::agents::ForAgent::from(agent),
+        false,
+    )
+    .await
+    .unwrap();
+    assert_eq!(count, 3);
+    assert_eq!(
+        sink.get_resource(&child.into())
+            .await
+            .unwrap()
+            .get(urls::DESCRIPTION)
+            .unwrap()
+            .to_string(),
+        "second delta"
+    );
+}
+
+/// Independent Loro updates for the same subject in one frame are merged onto
+/// the staged snapshot, rather than each update replacing the other.  The
+/// entries after the child's initial snapshot are updates-only blobs, as a
+/// pair of offline peers would send.
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_merges_independent_same_subject_deltas_and_keeps_history() {
+    let sink = Db::init_temp("sync_push_independent_deltas").await.unwrap();
+    let (agent, drive) = sink.setup("Independent deltas").await.unwrap();
+    let parent = "atomic:independent-delta-parent";
+    let child = "atomic:independent-delta-child";
+
+    let parent_doc = crate::loro::AtomicLoroDoc::new();
+    parent_doc
+        .set_property(urls::DRIVE_PROP, &Value::AtomicUrl(drive.clone().into()))
+        .unwrap();
+    parent_doc.commit();
+
+    let child_base = crate::loro::AtomicLoroDoc::new();
+    child_base
+        .set_property(urls::PARENT, &Value::AtomicUrl(parent.into()))
+        .unwrap();
+    child_base.commit();
+    let base_snapshot = child_base.export_snapshot();
+    let base_version = child_base.oplog_vv();
+
+    let delta_a_doc = crate::loro::AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+    delta_a_doc.set_peer_id(1_001).unwrap();
+    delta_a_doc
+        .set_property(urls::NAME, &Value::String("from a".into()))
+        .unwrap();
+    delta_a_doc.commit();
+    let delta_a = delta_a_doc.export_updates_since(&base_version);
+
+    let delta_b_doc = crate::loro::AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+    delta_b_doc.set_peer_id(1_002).unwrap();
+    delta_b_doc
+        .set_property(urls::DESCRIPTION, &Value::String("from b".into()))
+        .unwrap();
+    delta_b_doc.commit();
+    let delta_b = delta_b_doc.export_updates_since(&base_version);
+
+    let parent_snapshot = parent_doc.export_snapshot();
+    let entries = [
+        (parent, parent_snapshot.as_slice()),
+        (child, base_snapshot.as_slice()),
+        (child, delta_a.as_slice()),
+        (child, delta_b.as_slice()),
+    ];
+    let frame = crate::sync::protocol::encode_sync_push(&drive, &entries, true);
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    assert_eq!(
+        crate::sync::engine::import_sync_push(
+            &push,
+            &sink,
+            &crate::agents::ForAgent::from(agent),
+            false,
+        )
+        .await
+        .unwrap()
+        .0,
+        4
+    );
+
+    let merged = sink.get_resource(&child.into()).await.unwrap();
+    assert_eq!(merged.get(urls::NAME).unwrap().to_string(), "from a");
+    assert_eq!(merged.get(urls::DESCRIPTION).unwrap().to_string(), "from b");
+    let replay = crate::loro::AtomicLoroDoc::from_snapshot(
+        &sink
+            .get_loro_snapshot_bytes(child)
+            .expect("merged snapshot"),
+    )
+    .unwrap();
+    assert_eq!(
+        replay.get_string_property(urls::NAME),
+        Some("from a".into())
+    );
+    assert_eq!(
+        replay.get_string_property(urls::DESCRIPTION),
+        Some("from b".into())
+    );
+    assert!(
+        replay.get_history().len() >= 3,
+        "the replayable snapshot retains the base and both independent deltas"
+    );
+}
 
 // `#[timeout(120000)]` below: under dagger Main, nextest runs beside e2e
 // Chromium shards and heavy `atomic-server::it` servers. `Db::init_temp` +
@@ -35,6 +452,25 @@ async fn synthetic_agent_reads_have_stable_history_without_persisting() {
 
 /// A profile stored under a padded spelling of the key answers for the
 /// canonical unpadded subject too, instead of an empty synthesized twin.
+/// The Flutter app signs in again with the saved secret on every start. The
+/// secret carries no name, and that used to overwrite the stored agent: a
+/// fresh account's own activity read "Someone created".
+#[tokio::test]
+async fn signing_in_again_with_the_secret_keeps_the_agents_name() {
+    let db = Db::init_redb(None).await.unwrap();
+    let (agent, drive) = db.setup("Tester").await.unwrap();
+    let secret = agent.build_secret().unwrap();
+
+    let loaded = db.load_agent_from_secret(&secret).await.unwrap();
+
+    assert_eq!(loaded.agent.name.as_deref(), Some("Tester"));
+    assert!(!loaded.drive_needs_sync);
+    let stored = db.get_resource(&agent.subject).await.unwrap();
+    assert_eq!(stored.get(urls::NAME).unwrap().to_string(), "Tester");
+    let home = stored.get(urls::PRIVATE_DRIVE).unwrap().to_string();
+    assert_eq!(Subject::from(home.as_str()), Subject::from(drive.as_str()));
+}
+
 #[tokio::test]
 async fn agent_profile_under_padded_key_answers_for_unpadded_subject() {
     let db = Db::init_temp("agent_padded_spelling").await.unwrap();
@@ -266,6 +702,7 @@ async fn destroy_clears_parent_index_count() {
         sort_by: None,
         sort_desc: false,
         include_external: true,
+        exclude_trashed: false,
         include_nested: false,
         for_agent: ForAgent::Sudo,
         drive: None,
@@ -350,6 +787,7 @@ async fn unauthorized_query_count_matches_subjects() {
         sort_by: None,
         sort_desc: false,
         include_external: true,
+        exclude_trashed: false,
         include_nested: false,
         // Public agent: no ACL grants read access to the children we
         // just created, so `get_resource_extended` will fail auth on
@@ -405,6 +843,7 @@ fn parent_query(parent: &Subject, limit: Option<usize>, for_agent: ForAgent) -> 
         sort_by: None,
         sort_desc: false,
         include_external: true,
+        exclude_trashed: false,
         include_nested: false,
         for_agent,
         drive: None,
@@ -638,6 +1077,7 @@ async fn queries() {
         sort_by: None,
         sort_desc: false,
         include_external: true,
+        exclude_trashed: false,
         include_nested: false,
         for_agent: ForAgent::Sudo,
         drive: None,
@@ -783,6 +1223,7 @@ async fn query_include_external() {
         sort_by: None,
         sort_desc: false,
         include_external: true,
+        exclude_trashed: false,
         include_nested: false,
         for_agent: ForAgent::Sudo,
         drive: None,
@@ -934,6 +1375,7 @@ async fn test_collection_update_value(
         sort_by: Some(property_url.into()),
         sort_desc: false,
         include_external: true,
+        exclude_trashed: false,
         include_nested: true,
         for_agent: ForAgent::Sudo,
         drive: Some(Subject::from("internal:/")),
@@ -1001,6 +1443,33 @@ async fn test_collection_update_value(
     );
 }
 
+/// sled holds its directory lock until its background threads have let go of
+/// the handle, which is a moment after `drop`. Opening the same directory right
+/// away fails with "could not acquire lock" on a slow host (develop run 5385,
+/// `test_migration_v2_to_v3`), so wait for the lock, bounded, and let any other
+/// error through at once.
+#[cfg(feature = "db-sled")]
+async fn open_when_unlocked<T, F, Fut>(mut open: F) -> T
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = crate::errors::AtomicResult<T>>,
+{
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+
+    loop {
+        match open().await {
+            Ok(opened) => return opened,
+            Err(error)
+                if error.to_string().contains("could not acquire lock")
+                    && std::time::Instant::now() < deadline =>
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            Err(error) => panic!("{error}"),
+        }
+    }
+}
+
 #[cfg(feature = "db-sled")]
 #[tokio::test]
 async fn test_migration_v2_to_v3() {
@@ -1034,8 +1503,10 @@ async fn test_migration_v2_to_v3() {
     // Manually insert into resources_v2 using raw sled access
     // Drop the Db first so we can open the sled database directly
     drop(store);
-    let sled_store =
-        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
+    let sled_store = open_when_unlocked(|| async {
+        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path))
+    })
+    .await;
     {
         let v2_tree = sled_store.raw_db().open_tree("resources_v2").unwrap();
         v2_tree
@@ -1052,12 +1523,13 @@ async fn test_migration_v2_to_v3() {
     drop(sled_store);
 
     // Re-open the Db to pick up the migrated data
-    let store = crate::Db::init(
-        std::path::Path::new(&tmp_dir_path),
-        Some(server_url.to_string()),
-    )
-    .await
-    .unwrap();
+    let store = open_when_unlocked(|| {
+        crate::Db::init(
+            std::path::Path::new(&tmp_dir_path),
+            Some(server_url.to_string()),
+        )
+    })
+    .await;
 
     // Verify results in v3
     let resource = store
@@ -1086,8 +1558,10 @@ async fn test_migration_v2_to_v3() {
 
     // Verify it is NOT in resources_v2 anymore (it should have been dropped)
     drop(store);
-    let sled_store2 =
-        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
+    let sled_store2 = open_when_unlocked(|| async {
+        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path))
+    })
+    .await;
     assert!(!sled_store2
         .raw_db()
         .tree_names()
@@ -1828,10 +2302,7 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
     let wire_json = crate::client::commit_to_wire_json(&followup, &store)
         .await
         .unwrap();
-    let parsed = crate::parse::parse_json_ad_commit_resource(&wire_json, &store)
-        .await
-        .unwrap();
-    let followup_from_wire = Commit::from_resource(parsed).unwrap();
+    let followup_from_wire = Commit::from_json_ad(&wire_json).unwrap();
     store.apply_commit(followup_from_wire, &opts).await.unwrap();
 
     // (1) Plain get_resource path.
@@ -2933,12 +3404,12 @@ async fn replicated_rows_reach_a_watched_scoped_sorted_query() {
             .is_watched(&store)
     );
 
-    for i in 5..22 {
-        store
-            .persist_replicated_resource(&replicate(i))
-            .await
-            .unwrap();
-    }
+    // The watch is already active. These 17 peer rows must be projected and
+    // maintained by the one bulk transaction that SYNC_PUSH uses.
+    store
+        .persist_replicated_resources((5..22).map(|i| (replicate(i), None)).collect())
+        .await
+        .unwrap();
 
     let unsorted = table_query(false, drive);
     let other_scope = table_query(true, table);
@@ -4258,6 +4729,50 @@ async fn deferred_search_entries_are_added_by_index_pending() {
     assert_eq!(store.search_hits("zebrafish", &opts).unwrap().len(), 1);
 }
 
+/// An index an older build left incomplete is rebuilt once per marker, and
+/// not again.
+#[tokio::test]
+#[timeout(120000)]
+async fn search_index_is_rebuilt_once_per_marker() {
+    let store = Db::init_temp("rebuild_once").await.unwrap();
+    let drive =
+        "did:ad:driveONCEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let subj = "did:ad:once000000000000000000000000000000000000000000000000000000000000000000==";
+    let mut authored = crate::Resource::new(subj.to_string());
+    authored
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    authored
+        .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    authored
+        .set_unsafe(
+            urls::NAME.into(),
+            Value::String("axolotl field guide".into()),
+        )
+        .unwrap();
+    let state = authored.build_state_doc().unwrap().export_snapshot();
+    crate::sync::ws_apply::apply_state_updates(&store, &[(subj.to_string(), state)], false)
+        .await
+        .unwrap();
+    let opts = crate::client::search::SearchOpts::default();
+    assert_eq!(store.search_hits("axolotl", &opts).unwrap().len(), 1);
+
+    // Lose the index entries, as a store filled by an older build can have.
+    for tree in [
+        crate::db::trees::Tree::SearchDocs,
+        crate::db::trees::Tree::SearchPostings,
+        crate::db::trees::Tree::SearchTrigrams,
+    ] {
+        store.kv.clear_tree(tree).unwrap();
+    }
+    assert!(store.search_hits("axolotl", &opts).unwrap().is_empty());
+
+    assert!(crate::search::rebuild_search_index_once(&store, "t1").unwrap());
+    assert_eq!(store.search_hits("axolotl", &opts).unwrap().len(), 1);
+    assert!(!crate::search::rebuild_search_index_once(&store, "t1").unwrap());
+}
+
 #[tokio::test]
 async fn removing_an_atom_also_removes_rows_an_older_store_wrote() {
     use crate::db::trees::{Method, Operation, Transaction, Tree};
@@ -5106,22 +5621,65 @@ mod lenses {
     #[timeout(120000)]
     async fn lens_values_are_indexed_for_synced_resources() {
         let db = Db::init_temp("lens_sync").await.unwrap();
-        let agent = db.get_default_agent().unwrap();
+        let (agent, drive) = db.setup("Lens sync").await.unwrap();
         let title = make_property(&db, &agent, PARENT, "title").await;
         let name = make_property(&db, &agent, PARENT, "name").await;
-        lens_commit(&db, &agent, PARENT, &title, &name)
-            .await
+        assert!(db.lenses().is_empty());
+
+        // The lens and its target arrive in the same SYNC_PUSH. The import
+        // holds sorted subject guards through its projection transaction, so
+        // lens activation must happen only after it has released them.
+        let transform = serde_json::json!({"op": "rename"});
+        let lens_subject = lens_id(&title, &name, &transform).unwrap();
+        let mut lens = Resource::new(lens_subject.clone());
+        lens.set_unsafe(urls::IS_A.into(), Value::from(vec![urls::LENS.to_string()]))
             .unwrap();
-        assert_eq!(db.lenses().len(), 1);
+        lens.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(PARENT.into()))
+            .unwrap();
+        lens.set_unsafe(
+            urls::LENS_FROM.into(),
+            Value::AtomicUrl(title.clone().into()),
+        )
+        .unwrap();
+        lens.set_unsafe(urls::LENS_TO.into(), Value::AtomicUrl(name.clone().into()))
+            .unwrap();
+        lens.set_unsafe(urls::LENS_TRANSFORM.into(), Value::Json(transform))
+            .unwrap();
+        lens.set_unsafe(
+            urls::DRIVE_PROP.into(),
+            Value::AtomicUrl(drive.clone().into()),
+        )
+        .unwrap();
+        let lens_snapshot = lens.build_state_doc().unwrap().export_snapshot();
 
         let doc = crate::loro::AtomicLoroDoc::new();
         doc.set_property(&title, &Value::String("Synced".into()))
             .unwrap();
+        doc.set_property(urls::DRIVE_PROP, &Value::AtomicUrl(drive.clone().into()))
+            .unwrap();
+        let snapshot = doc.export_snapshot();
         let mut replica = Resource::new("atomic:syncedresource0".into());
         replica.apply_state_doc(doc).unwrap();
         assert!(replica.get(&name).is_err(), "no lens on a bare apply");
 
-        db.persist_replicated_resource(&replica).await.unwrap();
+        let frame = crate::sync::protocol::encode_sync_push(
+            &drive,
+            &[
+                (lens_subject.as_str(), lens_snapshot.as_slice()),
+                (replica.get_subject().as_str(), snapshot.as_slice()),
+            ],
+            true,
+        );
+        let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+        crate::sync::engine::import_sync_push(
+            &push,
+            &db,
+            &crate::agents::ForAgent::from(agent),
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(db.lenses().len(), 1);
         assert_eq!(
             indexed(&db, &name, "Synced").await,
             vec!["atomic:syncedresource0".to_string()]
@@ -5273,6 +5831,533 @@ async fn index_keys_migration_rebuilds_old_rows_in_slices() {
     assert!(propvalsub_key(&atom).len() < old_key.len());
 }
 
+/// The drive's event log is written with the commit, in order, and a consumer's
+/// checkpoint survives re-opening the database: nothing is lost, nothing twice.
+#[tokio::test]
+#[timeout(120000)]
+async fn drive_events_survive_a_restart_exactly_once() {
+    use crate::db::drive_events::EventFilter;
+
+    let dir = ".temp/db/drive_events_restart";
+    let _ = std::fs::remove_dir_all(dir);
+    std::fs::create_dir_all(format!("{dir}/uploads")).unwrap();
+    let uploads = format!("{dir}/uploads");
+    let open = || {
+        Db::init_redb_file(
+            std::path::Path::new(dir),
+            Some("https://localhost".into()),
+            std::path::Path::new(&uploads),
+        )
+    };
+    let store = open().await.unwrap();
+    let agent = store.create_agent(None).await.unwrap();
+    store.set_default_agent(agent);
+    store.populate().await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    // A drive without an app writes nothing.
+    let quiet = genesis_child(&store, &drive).await;
+    assert!(
+        store.drive_events(drive.as_str(), 0, 100).is_empty(),
+        "{quiet}"
+    );
+    store.enable_drive_events(drive.as_str()).unwrap();
+    let before = store.drive_events(drive.as_str(), 0, 100).len();
+
+    let a = genesis_child(&store, &drive).await;
+    let b = genesis_child(&store, &drive).await;
+    let events = store.drive_events(drive.as_str(), 0, 100);
+    assert_eq!(events.len(), before + 2, "{events:?}");
+    let (ea, eb) = (&events[before], &events[before + 1]);
+    assert_eq!(
+        (ea.subject.as_str(), eb.subject.as_str()),
+        (a.as_str(), b.as_str())
+    );
+    assert!(ea.seq < eb.seq);
+    assert_eq!(ea.parent.as_deref(), Some(drive.as_str()));
+
+    let only_b = EventFilter {
+        subtree: Some(b.to_string()),
+        ..Default::default()
+    };
+    assert!(!only_b.matches(ea, None) && only_b.matches(eb, None));
+    let under_drive = EventFilter {
+        subtree: Some(drive.to_string()),
+        ..Default::default()
+    };
+    let chain = store.event_ancestors(eb.parent.as_deref()).await;
+    assert!(under_drive.matches(eb, chain.as_deref()));
+    assert!(!under_drive.matches(eb, None));
+    let row = serde_json::to_vec(eb).unwrap().len();
+    println!("event row: {row} B");
+
+    store.ack_events(drive.as_str(), "app", ea.seq).unwrap();
+    // The checkpoint never moves back.
+    store.ack_events(drive.as_str(), "app", 0).unwrap();
+    let agent = store.get_default_agent().unwrap();
+    drop(store);
+
+    let store = open().await.unwrap();
+    store.set_default_agent(agent);
+    let c = genesis_child(&store, &drive).await;
+    let checkpoint = store.event_checkpoint(drive.as_str(), "app");
+    assert_eq!(checkpoint, ea.seq);
+    let missed: Vec<_> = store
+        .drive_events(drive.as_str(), checkpoint, 100)
+        .into_iter()
+        .map(|e| e.subject)
+        .collect();
+    assert_eq!(missed, vec![b.to_string(), c.to_string()]);
+}
+
+/// A trigger's edges come from the drive's event log: closing the database
+/// between arrivals loses none, and one handled before a restart is not
+/// delivered again.
+#[tokio::test]
+#[timeout(120000)]
+async fn a_trigger_misses_no_edge_across_a_reopen() {
+    use crate::db::plugin_trigger::{Edge, PluginTrigger, PluginTriggerKey};
+
+    let dir = ".temp/db/trigger_edges_reopen";
+    let _ = std::fs::remove_dir_all(dir);
+    std::fs::create_dir_all(format!("{dir}/uploads")).unwrap();
+    let uploads = format!("{dir}/uploads");
+    // redb's lock outlives a dropped handle for a moment.
+    let open = || async {
+        let mut tries = 0;
+        loop {
+            match Db::init_redb_file(
+                std::path::Path::new(dir),
+                Some("https://localhost".into()),
+                std::path::Path::new(&uploads),
+            )
+            .await
+            {
+                Err(_) if tries < 50 => {
+                    tries += 1;
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
+                result => break result,
+            }
+        }
+    };
+    let store = open().await.unwrap();
+    let agent = store.create_agent(None).await.unwrap();
+    store.set_default_agent(agent.clone());
+    store.populate().await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let before = genesis_child(&store, &drive).await;
+
+    let key = PluginTriggerKey::new(drive.as_str(), "plugin");
+    let trigger = PluginTrigger::new(
+        crate::db::QueryFilter {
+            filters: vec![crate::storelike::PropVal {
+                property: Some(urls::PARENT.to_string()),
+                value: Some(Value::AtomicUrl(drive.clone())),
+                ..Default::default()
+            }],
+            sort_by: None,
+            drive: drive.as_str().into(),
+        },
+        true,
+        false,
+    )
+    .unwrap();
+    store.set_plugin_trigger(&key, &trigger).unwrap();
+    let a = genesis_child(&store, &drive).await;
+    let b = genesis_child(&store, &drive).await;
+    drop(store);
+
+    let store = open().await.unwrap();
+    store.set_default_agent(agent.clone());
+    let first = store.next_trigger_event(&key, &trigger).unwrap().unwrap();
+    assert_eq!(
+        (first.subject.as_str(), first.edge),
+        (a.as_str(), Edge::Enter)
+    );
+    assert_ne!(first.subject, before.as_str(), "older than the trigger");
+    assert_eq!(store.pending_trigger_events(&key, &trigger).unwrap(), 2);
+    store.acknowledge_plugin_event(&first).unwrap();
+    let c = genesis_child(&store, &drive).await;
+    drop(store);
+
+    let store = open().await.unwrap();
+    let mut seen = Vec::new();
+    while let Some(event) = store.next_trigger_event(&key, &trigger).unwrap() {
+        seen.push(event.subject.clone());
+        store.acknowledge_plugin_event(&event).unwrap();
+    }
+    assert_eq!(seen, vec![b.to_string(), c.to_string()]);
+}
+
+/// A resource that arrives by replication (a synced state update, a bulk
+/// pull) moves the drive's stream and a trigger's edges like a commit does,
+/// and so does everything a recursive removal takes with it.
+#[tokio::test]
+#[timeout(120000)]
+async fn replicated_and_removed_resources_reach_the_event_stream_and_triggers() {
+    use crate::db::plugin_trigger::{Edge, PluginTrigger, PluginTriggerKey};
+
+    let store = Db::init_temp("replication_events").await.unwrap();
+    store.populate().await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let key = PluginTriggerKey::new(drive.as_str(), "plugin");
+    let trigger = PluginTrigger::new(
+        crate::db::QueryFilter {
+            filters: vec![crate::storelike::PropVal {
+                property: Some(urls::PARENT.to_string()),
+                value: Some(Value::AtomicUrl(drive.clone())),
+                ..Default::default()
+            }],
+            sort_by: None,
+            drive: drive.as_str().into(),
+        },
+        true,
+        true,
+    )
+    .unwrap();
+    store.set_plugin_trigger(&key, &trigger).unwrap();
+
+    // Replicated in: one row, one enter edge.
+    let mut replicated = Resource::new("atomic:replicated-1".into());
+    replicated
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.clone()))
+        .unwrap();
+    store
+        .persist_replicated_resource(&replicated)
+        .await
+        .unwrap();
+    let events = store.drive_events(drive.as_str(), 0, 100);
+    assert!(
+        events.iter().any(|e| e.subject == "atomic:replicated-1"),
+        "{events:?}"
+    );
+    let entered = store.next_trigger_event(&key, &trigger).unwrap().unwrap();
+    assert_eq!(
+        (entered.subject.as_str(), entered.edge),
+        ("atomic:replicated-1", Edge::Enter)
+    );
+    store.acknowledge_plugin_event(&entered).unwrap();
+
+    // Removed with its child: both are destroyed rows, and the one the trigger
+    // watches leaves.
+    let folder = genesis_child(&store, &drive).await;
+    let inner = genesis_child(&store, &folder).await;
+    let entered = store.next_trigger_event(&key, &trigger).unwrap().unwrap();
+    store.acknowledge_plugin_event(&entered).unwrap();
+    let seen = store.drive_events(drive.as_str(), 0, 1000).len();
+    store.remove_resource(&folder).await.unwrap();
+    let after: Vec<_> = store
+        .drive_events(drive.as_str(), 0, 1000)
+        .into_iter()
+        .skip(seen)
+        .collect();
+    let destroyed: Vec<_> = after
+        .iter()
+        .filter(|e| e.destroyed)
+        .map(|e| e.subject.clone())
+        .collect();
+    assert!(
+        destroyed.contains(&folder.to_string()) && destroyed.contains(&inner.to_string()),
+        "{after:?}"
+    );
+    let left = store.next_trigger_event(&key, &trigger).unwrap().unwrap();
+    assert_eq!(
+        (left.subject.as_str(), left.edge),
+        (folder.as_str(), Edge::Leave)
+    );
+}
+
+/// A peer pushing again what this node already holds (a reconnect) changes
+/// nothing, so the stream does not move; a push that changes one property
+/// says only that property changed.
+#[tokio::test]
+#[timeout(120000)]
+async fn replicating_what_is_already_held_adds_no_event() {
+    let store = Db::init_temp("replication_noop_events").await.unwrap();
+    store.populate().await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    store.enable_drive_events(drive.as_str()).unwrap();
+
+    let mut replicated = Resource::new("atomic:replicated-noop".into());
+    replicated
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.clone()))
+        .unwrap();
+    replicated
+        .set_unsafe(urls::NAME.into(), Value::String("one".into()))
+        .unwrap();
+    let count = |store: &Db| {
+        store
+            .drive_events(drive.as_str(), 0, 1000)
+            .into_iter()
+            .filter(|e| e.subject == "atomic:replicated-noop")
+            .collect::<Vec<_>>()
+    };
+
+    store
+        .persist_replicated_resource(&replicated)
+        .await
+        .unwrap();
+    assert_eq!(count(&store).len(), 1);
+    store
+        .persist_replicated_resource(&replicated)
+        .await
+        .unwrap();
+    store
+        .persist_replicated_resources(vec![(replicated.clone(), None)])
+        .await
+        .unwrap();
+    assert_eq!(count(&store).len(), 1, "the same state again is not news");
+
+    replicated
+        .set_unsafe(urls::NAME.into(), Value::String("two".into()))
+        .unwrap();
+    store
+        .persist_replicated_resource(&replicated)
+        .await
+        .unwrap();
+    let events = count(&store);
+    assert_eq!(events.len(), 2);
+    assert_eq!(
+        events[1]
+            .props
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        vec![urls::NAME],
+        "only what changed"
+    );
+}
+
+/// Whether a synced Loro state changed anything is decided from the CRDT's
+/// version, not from the projected properties: a rich-text edit that leaves
+/// them alone is still news, and the same state pushed again is not.
+#[tokio::test]
+#[timeout(120000)]
+async fn a_synced_edit_that_leaves_the_properties_alone_still_adds_an_event() {
+    use crate::sync::ws_apply::{persist_update, resolve_update};
+
+    let store = Db::init_temp("replication_loro_version").await.unwrap();
+    store.populate().await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    store.enable_drive_events(drive.as_str()).unwrap();
+    let subject = "atomic:replicated-text";
+
+    let doc = crate::loro::AtomicLoroDoc::new();
+    doc.set_property(urls::PARENT, &Value::AtomicUrl(drive.clone()))
+        .unwrap();
+    doc.set_property(urls::NAME, &Value::String("Doc".into()))
+        .unwrap();
+    doc.commit_with_message("peer");
+    let push = |bytes: Vec<u8>| {
+        let store = store.clone();
+        async move {
+            let resolved = resolve_update(&store, subject, &bytes)
+                .await
+                .expect("the state resolves");
+            persist_update(&store, subject, resolved).await.unwrap();
+        }
+    };
+    let events = |store: &Db| {
+        store
+            .drive_events(drive.as_str(), 0, 1000)
+            .into_iter()
+            .filter(|e| e.subject == subject)
+            .collect::<Vec<_>>()
+    };
+
+    push(doc.export_snapshot()).await;
+    assert_eq!(events(&store).len(), 1);
+    push(doc.export_snapshot()).await;
+    assert_eq!(events(&store).len(), 1, "the same state again is not news");
+
+    // Text lives in its own container: no projected property moves.
+    doc.doc().get_text("body").insert(0, "hello").unwrap();
+    doc.doc().commit();
+    push(doc.export_snapshot()).await;
+    let after = events(&store);
+    assert_eq!(after.len(), 2, "{after:?}");
+    assert!(
+        after[1].props.iter().all(|p| p == urls::LORO_UPDATE),
+        "no property of the resource differs: {after:?}"
+    );
+    push(doc.export_snapshot()).await;
+    assert_eq!(events(&store).len(), 2);
+}
+
+/// A destroy *commit* takes its children with it. Each child is its own row in
+/// the stream, and the leave edge of each is on its own event rather than
+/// merged into the destroyed parent's.
+#[tokio::test]
+#[timeout(120000)]
+async fn a_destroy_commit_gives_every_child_its_own_event_and_leave_edge() {
+    use crate::db::plugin_trigger::{Edge, PluginTrigger, PluginTriggerKey};
+
+    let store = Db::init_temp("destroy_children_events").await.unwrap();
+    store.populate().await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let folder = genesis_child(&store, &drive).await;
+    let mut kids = vec![
+        genesis_child(&store, &folder).await.to_string(),
+        genesis_child(&store, &folder).await.to_string(),
+        genesis_child(&store, &folder).await.to_string(),
+    ];
+    kids.sort();
+    let key = PluginTriggerKey::new(drive.as_str(), "plugin");
+    let trigger = PluginTrigger::new(
+        crate::db::QueryFilter {
+            filters: vec![crate::storelike::PropVal {
+                property: Some(urls::PARENT.to_string()),
+                value: Some(Value::AtomicUrl(folder.clone())),
+                ..Default::default()
+            }],
+            sort_by: None,
+            drive: drive.as_str().into(),
+        },
+        true,
+        true,
+    )
+    .unwrap();
+    store.set_plugin_trigger(&key, &trigger).unwrap();
+    let seen = store.drive_events(drive.as_str(), 0, 1000).len();
+
+    let mut resource = store.get_resource(&folder).await.unwrap();
+    resource.destroy(&store).await.unwrap();
+
+    let destroyed: Vec<String> = store
+        .drive_events(drive.as_str(), 0, 1000)
+        .into_iter()
+        .skip(seen)
+        .filter(|e| e.destroyed)
+        .map(|e| e.subject)
+        .collect();
+    for kid in &kids {
+        assert!(destroyed.contains(kid), "{kid} missing in {destroyed:?}");
+    }
+    assert!(destroyed.contains(&folder.to_string()));
+
+    let mut left = Vec::new();
+    while let Some(event) = store.next_trigger_event(&key, &trigger).unwrap() {
+        assert_eq!(event.edge, Edge::Leave);
+        left.push(event.subject.clone());
+        store.acknowledge_plugin_event(&event).unwrap();
+    }
+    left.sort();
+    assert_eq!(left, kids, "one leave edge per child");
+}
+
+/// Appending finds where the log ended without reading it, and retention
+/// emptying the log does not send the sequence back to 1 (a consumer's
+/// checkpoint would then sit above every new event and miss them).
+#[tokio::test]
+#[timeout(120000)]
+async fn the_event_sequence_outlives_the_rows_retention_removes() {
+    let store = Db::init_temp("event_seq_persisted").await.unwrap();
+    store.populate().await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    store.enable_drive_events(drive.as_str()).unwrap();
+    genesis_child(&store, &drive).await;
+    genesis_child(&store, &drive).await;
+    let last = store.last_event_seq(drive.as_str());
+    assert!(last >= 2);
+    store.ack_events(drive.as_str(), "slow", 1).unwrap();
+    assert_eq!(
+        store.event_consumers_behind(drive.as_str(), last),
+        vec![("slow".to_string(), 1)]
+    );
+
+    // Retention removed every row.
+    for event in store.drive_events(drive.as_str(), 0, 1000) {
+        let key = format!(
+            "drive-event/v1/{}/{:020}",
+            crate::db::drive_events::pure(drive.as_str()),
+            event.seq
+        );
+        store.kv.remove(Tree::PluginMeta, key.as_bytes()).unwrap();
+    }
+    assert!(store.drive_events(drive.as_str(), 0, 1000).is_empty());
+
+    genesis_child(&store, &drive).await;
+    let events = store.drive_events(drive.as_str(), 0, 1000);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].seq, last + 1, "continues, does not restart");
+    // And a cursor from before the gap still sees it.
+    assert_eq!(store.drive_events(drive.as_str(), last, 10).len(), 1);
+    assert!(store.drive_events(drive.as_str(), u64::MAX, 10).is_empty());
+}
+
+/// A trigger that was waiting on a proposal in the queue the event stream
+/// replaced would wait for ever: nothing can release it. Startup clears it, and
+/// leaves a trigger whose in-flight record exists alone.
+#[tokio::test]
+#[timeout(120000)]
+async fn a_proposal_whose_event_is_gone_is_cleared_at_startup() {
+    use crate::db::plugin_trigger::{Edge, PluginTrigger, PluginTriggerKey, QueuedEvent};
+
+    let store = Db::init_temp("orphaned_verdicts").await.unwrap();
+    store.populate().await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let trigger = |waiting: &str| {
+        let mut trigger = PluginTrigger::new(
+            crate::db::QueryFilter {
+                filters: vec![crate::storelike::PropVal {
+                    property: Some(urls::PARENT.to_string()),
+                    value: Some(Value::AtomicUrl(drive.clone())),
+                    ..Default::default()
+                }],
+                sort_by: None,
+                drive: drive.as_str().into(),
+            },
+            true,
+            false,
+        )
+        .unwrap();
+        trigger.pending_verdict = Some(waiting.into());
+        trigger
+    };
+    let orphan = PluginTriggerKey::new(drive.as_str(), "orphan");
+    let live = PluginTriggerKey::new(drive.as_str(), "live");
+    store.set_plugin_trigger(&orphan, &trigger("old")).unwrap();
+    store.set_plugin_trigger(&live, &trigger("new")).unwrap();
+    store
+        .save_plugin_event(&QueuedEvent {
+            id: "1".into(),
+            seq: 1,
+            key: live.clone(),
+            subject: "x".into(),
+            edge: Edge::Enter,
+            at: 0,
+            verdict: Some("new".into()),
+            waiting_for_review: true,
+            authorization: None,
+        })
+        .unwrap();
+    store
+        .kv
+        .insert(
+            Tree::PluginMeta,
+            b"plugin-event/v1/00000000000000000001",
+            b"{}",
+        )
+        .unwrap();
+
+    let cleared = store.drop_orphaned_trigger_verdicts().unwrap();
+    assert_eq!(cleared, vec![orphan.clone()]);
+    let pending = |key: &PluginTriggerKey| {
+        store
+            .get_plugin_trigger(key)
+            .unwrap()
+            .unwrap()
+            .pending_verdict
+    };
+    assert_eq!(pending(&orphan), None);
+    assert_eq!(pending(&live).as_deref(), Some("new"));
+    assert!(store
+        .kv
+        .get(Tree::PluginMeta, b"plugin-event/v1/00000000000000000001")
+        .unwrap()
+        .is_none());
+}
+
 /// Stored bytes of a retained envelope after small edits, measured through
 /// the compressed KV the way the row is written to disk.
 #[tokio::test]
@@ -5348,4 +6433,139 @@ async fn stored_envelope_bytes_per_small_edit_stay_small() {
         "{} bytes for {EDITS} edits",
         edits.iter().sum::<usize>()
     );
+}
+
+/// Signing in as someone else brings the work along: the drives the old agent
+/// can write become writable by the new one and show up in its drive list; a
+/// drive the old agent can only read, and an empty private drive, stay behind.
+#[tokio::test]
+#[timeout(120000)]
+async fn bring_along_moves_writable_drives_to_the_new_agent_once() {
+    let db = Db::init_temp("bring_along_main").await.unwrap();
+    let (a, a_home) = db.setup("Alice").await.unwrap();
+    let a_subject = a.subject.to_string();
+
+    // A shared drive A made, listed on A's home.
+    let shared = db.create_drive("Shared").await.unwrap();
+    // Something in A's private drive, so it counts as work.
+    db.create_resource(urls::FOLDER, &a_home, "Notes", None)
+        .await
+        .unwrap();
+
+    // A drive somebody else made that A lists but cannot write.
+    let other = db.create_agent(Some("Carol")).await.unwrap();
+    db.set_default_agent(other.clone());
+    let read_only = db.create_drive("Carol's").await.unwrap();
+    db.set_default_agent(a.clone());
+    db.push_drive_to_list(&a_home, &read_only).await.unwrap();
+
+    let b = db.create_agent(Some("Bob")).await.unwrap();
+    let b_subject = b.subject.to_string();
+    let b_home =
+        crate::genesis::GenesisCert::private_drive_subject(b.private_key.as_ref().unwrap())
+            .unwrap();
+
+    assert!(db.has_work_to_bring(&a).await.unwrap());
+    let brought = db.bring_along(&a, &b).await.unwrap();
+    let mut got = brought.drives.clone();
+    got.sort();
+    let mut want = vec![shared.clone(), a_home.clone()];
+    want.sort();
+    assert_eq!(
+        got, want,
+        "shared + private-with-content, not the read-only one"
+    );
+
+    // B can write what came along, and lists it.
+    for drive in [&shared, &a_home] {
+        let r = db.get_resource(&drive.as_str().into()).await.unwrap();
+        let write = r.get(urls::WRITE).unwrap().to_subjects(None).unwrap();
+        assert!(write.contains(&a_subject), "A keeps its own right");
+        assert!(write.contains(&b_subject));
+    }
+    let ro = db.get_resource(&read_only.as_str().into()).await.unwrap();
+    assert!(!ro
+        .get(urls::WRITE)
+        .unwrap()
+        .to_subjects(None)
+        .unwrap()
+        .contains(&b_subject));
+    let home = db.get_resource(&b_home.as_str().into()).await.unwrap();
+    let listed = home.get(urls::DRIVES).unwrap().to_subjects(None).unwrap();
+    assert!(listed.contains(&shared) && listed.contains(&a_home));
+    assert!(!listed.contains(&read_only));
+
+    // Second run: nothing to bring, nothing breaks.
+    let again = db.bring_along(&a, &b).await.unwrap();
+    assert!(again.drives.is_empty(), "{again:?}");
+    // Same agent: no-op.
+    assert!(db.bring_along(&a, &a).await.unwrap().drives.is_empty());
+}
+
+/// An agent that only has its empty private drive has nothing to bring.
+#[tokio::test]
+#[timeout(120000)]
+async fn bring_along_skips_an_empty_private_drive() {
+    let db = Db::init_temp("bring_along_empty").await.unwrap();
+    let (a, _home) = db.setup("Alice").await.unwrap();
+    let b = db.create_agent(Some("Bob")).await.unwrap();
+
+    assert!(!db.has_work_to_bring(&a).await.unwrap());
+    assert!(db.bring_along(&a, &b).await.unwrap().drives.is_empty());
+}
+
+/// A legacy drive (listed on the Agent resource, not on the home) comes along.
+#[tokio::test]
+#[timeout(120000)]
+async fn bring_along_finds_drives_listed_on_the_agent() {
+    let db = Db::init_temp("bring_along_legacy").await.unwrap();
+    let (a, _home) = db.setup("Alice").await.unwrap();
+    let drive = db.create_drive("Old").await.unwrap();
+    // Move the entry from the home list to the legacy Agent.drives list.
+    let mut agent_res = db.get_resource(&a.subject).await.unwrap();
+    agent_res
+        .set_unsafe(
+            urls::DRIVES.into(),
+            Value::ResourceArray(vec![drive.clone().into()]),
+        )
+        .unwrap();
+    db.add_resource_opts(&agent_res, false, true, true)
+        .await
+        .unwrap();
+    let home_subject = db.private_drive_subject().unwrap();
+    let mut home = db
+        .get_resource(&home_subject.as_str().into())
+        .await
+        .unwrap();
+    home.set_unsafe(urls::DRIVES.into(), Value::ResourceArray(vec![]))
+        .unwrap();
+    db.add_resource_opts(&home, false, true, true)
+        .await
+        .unwrap();
+
+    let b = db.create_agent(Some("Bob")).await.unwrap();
+    let brought = db.bring_along(&a, &b).await.unwrap();
+    assert_eq!(brought.drives, vec![drive]);
+}
+
+/// A drive made by a client (the Welcome drive) is on no `drives` list. It
+/// showed in the drive list only while it was the active drive, and vanished
+/// the moment another one was opened.
+#[tokio::test]
+async fn opened_drive_stays_listed_after_another_becomes_active() {
+    let db = Db::init_temp("opened_drive_stays_listed").await.unwrap();
+    let welcome = "did:ad:welcome-drive-not-on-any-list";
+    db.set_active_drive(welcome).unwrap();
+    let other = db.create_drive("Mine").await.unwrap();
+    assert_eq!(db.get_active_drive().as_deref(), Some(other.as_str()));
+
+    let subjects: Vec<String> = db
+        .list_drives()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|d| d.subject)
+        .collect();
+    assert!(subjects.contains(&welcome.to_string()), "{subjects:?}");
+    assert!(subjects.contains(&other), "{subjects:?}");
 }

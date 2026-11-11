@@ -24,7 +24,7 @@ import {
 import { useDashboard } from './useDashboard';
 import { DashboardBlock } from './DashboardBlock';
 
-const AddBlockTrigger = buildDefaultTrigger(<FaPlus />, 'Add block');
+const AddBlockTrigger = buildDefaultTrigger(<FaPlus />, () => 'Add block');
 
 const KIND_ICONS: Record<BlockKind, JSX.Element> = {
   stat: <FaHashtag />,

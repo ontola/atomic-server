@@ -6,12 +6,21 @@
 // `policy` and `protocol` are std-only; the rest needs the `db`
 // feature. The module itself stays ungated so `Storelike::sync_policy`
 // (always compiled) can reference `sync::policy` in a no-features build.
+#[cfg(all(feature = "iroh", feature = "db"))]
+pub mod call;
+#[cfg(feature = "iroh")]
+pub mod dial_gate;
 #[cfg(feature = "iroh")]
 pub mod discover;
 #[cfg(feature = "db")]
 pub mod engine;
+/// Redeeming a signed invite token at the inviter's device, without a server.
+#[cfg(all(feature = "iroh", feature = "db"))]
+pub mod invite;
 #[cfg(all(test, feature = "iroh", feature = "db"))]
 mod iroh_e2e;
+#[cfg(feature = "iroh")]
+pub mod local_directory;
 /// The durable dirty-subject queue a device drains to a hub.
 #[cfg(feature = "db")]
 pub mod outbox;
@@ -35,3 +44,5 @@ pub mod ws_apply;
 
 #[cfg(feature = "db")]
 pub mod browser_peer;
+#[cfg(feature = "db")]
+pub mod webrtc_link;

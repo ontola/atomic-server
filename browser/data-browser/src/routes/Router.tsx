@@ -3,7 +3,10 @@ import { ShowRoute } from './ShowRoute';
 import { SearchRoute } from './Search/SearchRoute';
 import { NewRoute } from './NewResource/NewRoute';
 import { AppSettingsRoute } from './AppSettings';
-import { IntegrationStoreRoute } from './IntegrationStore';
+import {
+  IntegrationStoreRoute,
+  LegacyIntegrationsRoute,
+} from './IntegrationStore';
 import { EditRoute } from './EditRoute';
 import { DataRoute } from './DataRoute';
 import { ShortcutsRoute } from './ShortcutsRoute';
@@ -24,6 +27,7 @@ import { HistoryRoute } from './History/HistoryRoute';
 import { InviteRoute } from './InviteRoute';
 import { AuthorizeMcpRoute } from './AuthorizeMcpRoute';
 import { ConnectAgentRoute } from './ConnectAgentRoute';
+import { SendIdentityRoute } from './SendIdentityRoute';
 import { LinkOpenRouter } from './LinkOpenRouter';
 import { OnboardingRoute } from './OnboardingRoute';
 import { WelcomeRoute } from './WelcomeRoute';
@@ -41,11 +45,6 @@ const DevDriveRoute = createRoute({
     return Promise.resolve(unavailableLazyRoute);
   }
 });
-
-const DemoRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: pathNames.demo,
-}).lazy(() => import('./DemoRoute').then(mod => mod.demoRouteLazy));
 
 const PruneTestsRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -79,6 +78,7 @@ const routeTree = rootRoute.addChildren({
     SearchRoute,
     AppSettingsRoute,
     IntegrationStoreRoute,
+    LegacyIntegrationsRoute,
     SyncRoute,
     ShortcutsRoute,
     StorageRoute,
@@ -98,9 +98,9 @@ const routeTree = rootRoute.addChildren({
     PruneTestsRoute,
     SandboxRoute,
     DevDriveRoute,
-    DemoRoute,
     InviteRoute,
     ConnectAgentRoute,
+    SendIdentityRoute,
     AuthorizeMcpRoute,
     LinkOpenRouter,
   }),

@@ -8,9 +8,19 @@ import {
   signRequest,
   legacyAgentForRequest,
 } from './authentication.js';
-import { AtomicError, ErrorType } from './error.js';
+import {
+  AtomicError,
+  ErrorType,
+  isTransportError,
+  NOT_AVAILABLE_LOCALLY_MESSAGE,
+} from './error.js';
 import { busyRetryAfterMs, DEFAULT_BUSY_RETRY_MS, ErrorCode } from './ws-v2.js';
 import { pageRequestSignal } from './page-request-signal.js';
+import {
+  noteOriginReachable,
+  noteOriginUnreachable,
+  originBackoffError,
+} from './origin-backoff.js';
 // Import directly from the modules to avoid a circular dep through `./index.js`
 // — under some bundlers the re-exported binding lands as `undefined` at runtime
 // (TypeError: serializeDeterministically is not a function), which surfaces in
@@ -104,6 +114,53 @@ function retryAfterMsOf(response: Response, message: string): number {
   }
 
   return busyRetryAfterMs(message, ErrorCode.BUSY) ?? DEFAULT_BUSY_RETRY_MS;
+}
+
+/** Origins whose unreachability was already reported. */
+const warnedUnreachable = new Set<string>();
+
+/** Forget which origins were reported (tests). */
+export function resetUnreachableWarnings(): void {
+  warnedUnreachable.clear();
+}
+
+/**
+ * An unreachable server fails every resource it hosts, and a page that lists
+ * many of them (the sync page, one row per drive) would print a stack trace
+ * for each. That is not a bug in the app: say it once per origin, in one line,
+ * and leave the per-resource state to the UI. Other failures stay loud.
+ */
+function logFetchFailure(subject: string, e: unknown): void {
+  const message = e instanceof Error ? e.message : String(e);
+  const unreachable =
+    isTransportError(e as Error) ||
+    // The own server's `/path` proxy answers 502 when the origin it was asked
+    // to fetch is down; its message carries the server's marker (see
+    // UPSTREAM_UNREACHABLE_MARKER in atomic_lib), possibly behind a prefix.
+    (e instanceof AtomicError &&
+      e.type === ErrorType.Server &&
+      message.includes('Upstream unreachable: '));
+
+  if (!unreachable) {
+    console.error(subject, e);
+
+    return;
+  }
+
+  let origin = subject;
+
+  try {
+    origin = new URL(subject).origin;
+  } catch {
+    // Not a URL (a DID): key on the subject itself.
+  }
+
+  if (warnedUnreachable.has(origin)) return;
+
+  warnedUnreachable.add(origin);
+  console.warn(
+    `[atomic] ${origin} is unreachable; not logging further failures for it.`,
+  );
 }
 
 export class Client {
@@ -337,6 +394,9 @@ export class Client {
       // Store keep local state instead of overwriting it with this
       // failure, and retry the resource when the connection returns.
       let response: Response;
+      const backingOff = originBackoffError(url);
+
+      if (backingOff) throw backingOff;
 
       try {
         response = await this.fetch(url, {
@@ -345,7 +405,9 @@ export class Client {
           body: bodyReq,
           signal,
         });
+        noteOriginReachable(url);
       } catch (e) {
+        if (!signal?.aborted) noteOriginUnreachable(url);
         throw new AtomicError(
           `Could not reach ${url}: ${e instanceof Error ? e.message : e}`,
           ErrorType.Transport,
@@ -356,6 +418,17 @@ export class Client {
       const body = await response.text();
 
       if (response.status === 200) {
+        // An origin that runs no node (a portal, a static host) answers every
+        // path with its index.html. For an identifier that means "nothing
+        // here", not "a broken resource": say so, so the UI can offer the
+        // vault instead of a JSON parse error.
+        if (isAtomicIdentifier(subject) && /^\s*</.test(body)) {
+          throw new AtomicError(
+            NOT_AVAILABLE_LOCALLY_MESSAGE,
+            ErrorType.Transport,
+          );
+        }
+
         try {
           const json = JSON.parse(body);
 
@@ -412,7 +485,7 @@ export class Client {
         return { resource, createdResources: [], cancelled: true };
       resource.setError(e);
       createdResources = [resource];
-      console.error(subject, e);
+      logFetchFailure(subject, e);
     }
 
     resource.loading = false;

@@ -222,11 +222,6 @@ impl Subject {
         crate::identifiers::identifier_kind(url.as_str())
     }
 
-    /// Returns true if this is an unprefixed `atomic:{genesis}` / `did:ad:{genesis}` resource.
-    pub fn is_resource_did(&self) -> bool {
-        self.did_kind() == Some(DidKind::Resource)
-    }
-
     /// Returns true if this is an Agent subject (`atomic:agent:` / `did:ad:agent:`).
     pub fn is_agent_did(&self) -> bool {
         self.did_kind() == Some(DidKind::Agent)
@@ -240,11 +235,6 @@ impl Subject {
     /// Returns true if this is a Blob subject (`atomic:blob:` / `did:ad:blob:`).
     pub fn is_blob_did(&self) -> bool {
         self.did_kind() == Some(DidKind::Blob)
-    }
-
-    /// Returns true if this is a Node subject (`atomic:node:` / `did:ad:node:`).
-    pub fn is_node_did(&self) -> bool {
-        self.did_kind() == Some(DidKind::Node)
     }
 
     /// If this is a blob subject, returns the hex-encoded BLAKE3 hash

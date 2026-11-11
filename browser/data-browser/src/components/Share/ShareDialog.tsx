@@ -10,6 +10,7 @@ import React, {
 import {
   core,
   dataBrowser,
+  server,
   urls,
   useArray,
   useCanWrite,
@@ -33,8 +34,11 @@ import {
   profileReviewedBefore,
   rememberProfileReviewed,
 } from './profileReviewed';
+import { paths } from '../../routes/paths';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { useInheritedRights } from '../../routes/Share/useInheritedRights';
+import { CLOUD_SERVER_PRICE } from '../../helpers/cloudServerPrice';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import {
   accountAddress,
@@ -48,6 +52,7 @@ import { ResourceLinkNavigationContext } from '../ResourceLinkNavigationContext'
 import { PublicAccess } from './PublicAccess';
 import { RoleSwitch, type ShareRole } from './RoleSelect';
 import { useShareRights } from './useShareRights';
+import { usePendingInvites } from './usePendingInvites';
 import { useClassLabel } from './useClassLabel';
 import { inviteLinkPrefix, useCreateInviteLink } from './useCreateInviteLink';
 import {
@@ -196,12 +201,18 @@ function ShareOverview({
 }): JSX.Element {
   const isSaas = !!getManagedPortalUrl();
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
+  const store = useStore();
+  const isUnhostedDrive =
+    canWrite &&
+    resource.hasClasses(server.classes.drive) &&
+    store.isLocalOnlyDrive(resource.subject);
   const [agent] = useCurrentAgent();
   const [title] = useTitle(resource);
   const [rights, setRole] = useShareRights(resource);
   const inheritedRights = useInheritedRights(resource);
   const createInviteLink = useCreateInviteLink(resource);
   const editorSeats = useEditorSeats(resource);
+  const pending = usePendingInvites(resource.subject);
   const agentDetail = useCurrentAgentDetail(agent?.subject, isSaas);
   const agentResource = useResource(agent?.subject);
   const [agentName] = useTitle(agentResource);
@@ -256,6 +267,11 @@ function ShareOverview({
         inviterName: agentName,
         message: message.trim(),
       });
+      const sent = Array.from(new Set(recipients));
+      // The invites are out; failing to note them must not read as a failed send.
+      await pending
+        .record(sent, emailRole)
+        .catch(error => store.notifyError(error as Error));
       toast.success(
         recipients.length === 1
           ? `Invite sent to ${recipients[0]}`
@@ -277,6 +293,13 @@ function ShareOverview({
       <Dialog.Content>
         <Stack>
           {isPrivateDrive && <PrivateDriveWarning />}
+          {isUnhostedDrive && (
+            <UnhostedDriveNotice
+              subject={resource.subject}
+              isSaas={isSaas}
+              onDone={onDone}
+            />
+          )}
           {canWrite && isSaas && (
             <EmailInviteInput
               emails={emails}
@@ -325,6 +348,8 @@ function ShareOverview({
                   )}
                   currentAgentDetail={agentDetail}
                   onSetRole={canWrite ? setRole : undefined}
+                  invites={pending.invites}
+                  onRemoveInvite={pending.remove}
                 />
               </ResourceLinkNavigationContext.Provider>
               <PublicAccess
@@ -557,6 +582,60 @@ function PrivateDriveWarning(): JSX.Element {
   );
 }
 
+function UnhostedDriveNotice({
+  subject,
+  isSaas,
+  onDone,
+}: {
+  subject: string;
+  isSaas: boolean;
+  onDone: () => void;
+}): JSX.Element {
+  return (
+    <PrivateDriveWarningBox role='note' data-test='unhosted-drive-notice'>
+      <FaTriangleExclamation />
+      <UnhostedBody>
+        <span>
+          This drive is not on a server. People you invite can open it only
+          while one of your devices has it open in a browser.
+        </span>
+        {isSaas && <UpgradePitch subject={subject} onDone={onDone} />}
+      </UnhostedBody>
+    </PrivateDriveWarningBox>
+  );
+}
+
+function UpgradePitch({
+  subject,
+  onDone,
+}: {
+  subject: string;
+  onDone: () => void;
+}): JSX.Element {
+  const navigate = useNavigateWithTransition();
+
+  return (
+    <>
+      <span>
+        <strong>
+          A Cloud Server keeps this drive online for everyone, so nobody has to
+          keep a browser open.
+        </strong>
+      </span>
+      <UpgradeButton
+        onClick={() => {
+          onDone();
+          void navigate(
+            `${paths.sync}?${new URLSearchParams({ drive: subject })}`,
+          );
+        }}
+      >
+        Upgrade to Cloud Server from {CLOUD_SERVER_PRICE}
+      </UpgradeButton>
+    </>
+  );
+}
+
 /** Long names are cut off, not wrapped, so the close button keeps its place. */
 const ShareTitle = styled.h1`
   margin: 0;
@@ -688,6 +767,20 @@ const LinkText = styled.span<{ $muted: boolean }>`
   white-space: nowrap;
   color: ${p => (p.$muted ? p.theme.colors.textLight : p.theme.colors.text)};
   user-select: all;
+`;
+
+const UnhostedBody = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-width: 0;
+`;
+
+const UpgradeButton = styled(Button)`
+  max-width: 100%;
+  white-space: normal;
+  text-align: start;
 `;
 
 /**

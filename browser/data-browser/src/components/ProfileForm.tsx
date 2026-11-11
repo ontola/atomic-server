@@ -8,6 +8,7 @@ import Field from './forms/Field';
 import { Input } from './forms/InputStyles';
 import { AvatarCropper } from './AvatarCropper';
 import { ErrorLook } from './ErrorLook';
+import { asError } from '@tomic/react';
 
 /**
  * The one profile form: a full name and an optional picture. Used when someone
@@ -70,7 +71,7 @@ export function ProfileForm({
     try {
       await onSave({ name: fullName, picture });
     } catch (caught) {
-      setError(caught instanceof Error ? caught : new Error(String(caught)));
+      setError(asError(caught));
     } finally {
       setBusy(false);
     }

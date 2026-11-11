@@ -29,14 +29,19 @@ use crate::errors::AtomicResult;
 use super::{
     kv_store::{KvIter, KvPair, KvStore},
     trees::{Method, Operation, Tree},
+    write_log::{logged_subject, WriteLog},
 };
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const MARKER: u8 = 0;
 const CODEC_RAW: u8 = 0;
 const CODEC_DEFLATE: u8 = 1;
 /// A snapshot as the deflated updates after the genesis commit.
 const CODEC_SNAPSHOT_DELTA: u8 = 2;
+/// Like [`CODEC_SNAPSHOT_DELTA`] for a resource whose id is not its commit's
+/// signature: the payload opens with the length and the signature of the
+/// genesis commit row the delta is against.
+const CODEC_SNAPSHOT_DELTA_OF: u8 = 3;
 /// miniz_oxide level 6, the usual speed/size trade.
 const LEVEL: u8 = 6;
 /// Below this a value is not worth the extra step.
@@ -78,9 +83,11 @@ fn decode(value: Vec<u8>) -> AtomicResult<Vec<u8>> {
         Some(&CODEC_RAW) => Ok(value[2..].to_vec()),
         Some(&CODEC_DEFLATE) => miniz_oxide::inflate::decompress_to_vec(&value[2..])
             .map_err(|e| format!("Could not decompress a stored value: {e:?}").into()),
-        Some(&CODEC_SNAPSHOT_DELTA) => Err("A snapshot delta can only be read with its key"
-            .to_string()
-            .into()),
+        Some(&CODEC_SNAPSHOT_DELTA | &CODEC_SNAPSHOT_DELTA_OF) => {
+            Err("A snapshot delta can only be read with its key"
+                .to_string()
+                .into())
+        }
         other => Err(format!("Unknown storage codec {other:?}").into()),
     }
 }
@@ -104,6 +111,23 @@ fn base_from_row(row: &[u8]) -> Option<Vec<u8>> {
         .remove(crate::urls::LORO_UPDATE)?
     {
         crate::Value::LoroDoc(bytes) if !bytes.is_empty() => Some(bytes),
+        _ => None,
+    }
+}
+
+/// The `loroUpdate` of `row` when it is the genesis commit of `subject`.
+fn genesis_base_of(row: &[u8], subject: &[u8]) -> Option<Vec<u8>> {
+    let mut propvals = super::encoding::decode_propvals(&decode(row.to_vec()).ok()?).ok()?;
+    let named = propvals.remove(crate::urls::SUBJECT)?.to_string();
+    match (
+        propvals.remove(crate::urls::LORO_UPDATE)?,
+        propvals.get(crate::urls::IS_GENESIS),
+    ) {
+        (crate::Value::LoroDoc(bytes), Some(crate::Value::Boolean(true)))
+            if named.as_bytes() == subject && !bytes.is_empty() =>
+        {
+            Some(bytes)
+        }
         _ => None,
     }
 }
@@ -144,12 +168,32 @@ fn encode_snapshot_delta(base: &[u8], snapshot: &[u8]) -> Option<Vec<u8>> {
 }
 
 fn decode_snapshot(inner: &dyn KvStore, key: &[u8], value: Vec<u8>) -> AtomicResult<Vec<u8>> {
-    if value.get(..2) != Some(&[MARKER, CODEC_SNAPSHOT_DELTA][..]) {
+    let of_commit = value.get(..2) == Some(&[MARKER, CODEC_SNAPSHOT_DELTA_OF][..]);
+    if !of_commit && value.get(..2) != Some(&[MARKER, CODEC_SNAPSHOT_DELTA][..]) {
         return decode(value);
     }
-    let delta = miniz_oxide::inflate::decompress_to_vec(&value[2..])
+    let (commit_key, payload) = if of_commit {
+        let len = *value.get(2).ok_or("A stored snapshot is cut short")? as usize;
+        let signature = value
+            .get(3..3 + len)
+            .ok_or("A stored snapshot is cut short")?;
+        (
+            Some(
+                crate::identifiers::commit_subject(&String::from_utf8_lossy(signature))
+                    .into_bytes(),
+            ),
+            &value[3 + len..],
+        )
+    } else {
+        (genesis_commit_key(key), &value[2..])
+    };
+    let delta = miniz_oxide::inflate::decompress_to_vec(payload)
         .map_err(|e| format!("Could not decompress a stored snapshot: {e:?}"))?;
-    let base = base_from_store(inner, key).ok_or_else(|| {
+    let base = commit_key.and_then(|commit_key| {
+        let row = inner.get(Tree::Resources, &commit_key).ok()??;
+        base_from_row(&row)
+    });
+    let base = base.ok_or_else(|| {
         format!(
             "The genesis commit a snapshot is stored against is missing for {}",
             String::from_utf8_lossy(key)
@@ -171,13 +215,47 @@ fn decode_value(
     }
 }
 
+fn logged_ops(operations: &[Operation]) -> Vec<String> {
+    operations
+        .iter()
+        .filter_map(|op| logged_subject(op.tree, &op.key))
+        .collect()
+}
+
 pub struct CompressedKv {
     inner: Arc<dyn KvStore>,
+    log: Arc<WriteLog>,
+    /// Subjects written since `begin_batch`; logged once `commit_batch`
+    /// succeeds, so the log never counts a write a reader cannot see yet.
+    batched: Mutex<Option<Vec<String>>>,
 }
 
 impl CompressedKv {
+    #[cfg(test)]
     pub fn new(inner: Arc<dyn KvStore>) -> Self {
-        Self { inner }
+        Self::with_log(inner, Arc::new(WriteLog::default()))
+    }
+
+    pub fn with_log(inner: Arc<dyn KvStore>, log: Arc<WriteLog>) -> Self {
+        Self {
+            inner,
+            log,
+            batched: Mutex::new(None),
+        }
+    }
+
+    /// Log a finished write (or buffer it while batching).
+    fn wrote(&self, subjects: Vec<String>) {
+        if subjects.is_empty() {
+            return;
+        }
+        match self.batched.lock() {
+            Ok(mut batch) => match batch.as_mut() {
+                Some(buffer) => buffer.extend(subjects),
+                None => self.log.record(subjects),
+            },
+            Err(_) => self.log.invalidate_all(),
+        }
     }
 
     fn decoded(&self, tree: Tree, iter: KvIter) -> KvIter {
@@ -220,6 +298,36 @@ impl CompressedKv {
             if let Some(delta) = base.and_then(|base| encode_snapshot_delta(&base, val)) {
                 return delta;
             }
+            // A resource named by a genesis certificate: the genesis commit
+            // is the one queued in this batch, and the row says which.
+            {
+                let found = pending.iter().rev().find_map(|op| {
+                    // Cheap checks first: decoding a row is the costly part and
+                    // a bulk batch asks this once per snapshot.
+                    if op.tree != Tree::Resources || !matches!(op.method, Method::Insert) {
+                        return None;
+                    }
+                    let signature = op
+                        .key
+                        .strip_prefix(crate::identifiers::ATOMIC_COMMIT_PREFIX.as_bytes())?;
+                    let row = op.val.as_deref()?;
+                    // The row names the snapshot's subject; skip the decode
+                    // for every other commit in the batch.
+                    if !row.windows(key.len()).any(|w| w == key) {
+                        return None;
+                    }
+                    let base = genesis_base_of(row, key)?;
+                    Some((signature, base))
+                });
+                if let Some((signature, base)) = found {
+                    if let Some(delta) = encode_snapshot_delta(&base, val) {
+                        let mut out = vec![MARKER, CODEC_SNAPSHOT_DELTA_OF, signature.len() as u8];
+                        out.extend_from_slice(signature);
+                        out.extend_from_slice(&delta[2..]);
+                        return out;
+                    }
+                }
+            }
         }
         encode(val)
     }
@@ -239,14 +347,18 @@ impl KvStore for CompressedKv {
     fn insert(&self, tree: Tree, key: &[u8], val: &[u8]) -> AtomicResult<()> {
         if is_compressed_tree(tree) {
             self.inner
-                .insert(tree, key, &self.encoded(tree, key, val, &[]))
+                .insert(tree, key, &self.encoded(tree, key, val, &[]))?;
         } else {
-            self.inner.insert(tree, key, val)
+            self.inner.insert(tree, key, val)?;
         }
+        self.wrote(logged_subject(tree, key).into_iter().collect());
+        Ok(())
     }
 
     fn remove(&self, tree: Tree, key: &[u8]) -> AtomicResult<()> {
-        self.inner.remove(tree, key)
+        self.inner.remove(tree, key)?;
+        self.wrote(logged_subject(tree, key).into_iter().collect());
+        Ok(())
     }
 
     fn contains_key(&self, tree: Tree, key: &[u8]) -> AtomicResult<bool> {
@@ -314,7 +426,11 @@ impl KvStore for CompressedKv {
     }
 
     fn clear_tree(&self, tree: Tree) -> AtomicResult<()> {
-        self.inner.clear_tree(tree)
+        self.inner.clear_tree(tree)?;
+        if matches!(tree, Tree::Resources | Tree::LoroSnapshots) {
+            self.log.invalidate_all();
+        }
+        Ok(())
     }
 
     fn apply_batch(&self, operations: &[Operation]) -> AtomicResult<()> {
@@ -322,7 +438,9 @@ impl KvStore for CompressedKv {
             .iter()
             .any(|op| is_compressed_tree(op.tree) && op.val.is_some())
         {
-            return self.inner.apply_batch(operations);
+            self.inner.apply_batch(operations)?;
+            self.wrote(logged_ops(operations));
+            return Ok(());
         }
         let encoded: Vec<Operation> = operations
             .iter()
@@ -339,7 +457,9 @@ impl KvStore for CompressedKv {
                 },
             })
             .collect();
-        self.inner.apply_batch(&encoded)
+        self.inner.apply_batch(&encoded)?;
+        self.wrote(logged_ops(operations));
+        Ok(())
     }
 
     fn flush(&self) -> AtomicResult<()> {
@@ -347,11 +467,22 @@ impl KvStore for CompressedKv {
     }
 
     fn begin_batch(&self) {
+        if let Ok(mut batch) = self.batched.lock() {
+            batch.get_or_insert_with(Vec::new);
+        }
         self.inner.begin_batch()
     }
 
     fn commit_batch(&self) -> AtomicResult<()> {
-        self.inner.commit_batch()
+        let committed = self.inner.commit_batch();
+        let buffered = self.batched.lock().ok().and_then(|mut b| b.take());
+        if let Err(e) = committed {
+            // Unknown how much landed.
+            self.log.invalidate_all();
+            return Err(e);
+        }
+        self.wrote(buffered.unwrap_or_default());
+        Ok(())
     }
 
     fn len(&self, tree: Tree) -> AtomicResult<usize> {

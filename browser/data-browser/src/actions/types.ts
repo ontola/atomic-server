@@ -34,6 +34,7 @@ export interface ActionContext {
   addFavorite: (subject: string) => void;
   removeFavorite: (subject: string) => void;
   addToChat: () => void;
+  openComments: () => void;
   enableScope: () => void;
   addChild: () => void;
   /** Current drive subject, if any. */
@@ -51,6 +52,8 @@ export interface ActionContext {
   openEmojiPicker?: () => void;
   /** Opens the pick-or-upload dialog for this resource's cover image. */
   openCoverPicker?: () => void;
+  /** Opens the dialog to move this resource to another parent. */
+  openMoveDialog?: () => void;
   /** Runs a plugin and shows what it proposes before anything is written. */
   openPluginRun?: () => void;
   /** The drive's plugin class, once resolved. Absent while looking up. */

@@ -28,6 +28,7 @@ import {
   setCanvasImageResolver,
 } from './canvas-draw';
 import {
+  contentBounds,
   elementBounds,
   lassoSelect,
   TEXT_FONT_FAMILY,
@@ -35,6 +36,7 @@ import {
   transformSelection,
   unionBounds,
 } from './canvas-elements';
+import { useEmbedGestures } from '../../embed/gestures';
 import { useStore, type Store } from '@tomic/react';
 import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
 import { useUpload } from '../../hooks/useUpload';
@@ -221,6 +223,8 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [darkMode] = useDarkMode();
   const store = useStore();
+  // Drawing needs horizontal drags; in the app the swipe-back strip narrows.
+  useEmbedGestures('horizontal');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -2390,26 +2394,16 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       return;
     }
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
+    const bounds = contentBounds(strokes);
 
-    for (const s of strokes) {
-      for (const [x, y] of s.path) {
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-      }
-    }
-
-    if (!Number.isFinite(minX)) {
+    if (!bounds) {
       setScale(1);
       setOffset({ x: 0, y: 0 });
 
       return;
     }
+
+    const { minX, minY, maxX, maxY } = bounds;
 
     const padding = 40;
     const w = container.clientWidth - padding * 2;
@@ -2777,6 +2771,11 @@ const CanvasArea = styled.div<{
   min-height: 400px;
   overflow: hidden;
   touch-action: none;
+  /* A finger held or dragged on iOS selected the whole drawing (the page's
+     text selection and callout) instead of drawing a stroke. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   background: ${p => p.theme.colors.bg};
   cursor: ${p =>
     p.$panMode === 'ready'

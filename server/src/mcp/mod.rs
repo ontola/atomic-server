@@ -19,6 +19,8 @@
 pub mod compact;
 pub mod document_text;
 pub mod endpoint;
+#[cfg(feature = "wasm-plugins")]
+pub mod exports;
 pub mod oauth;
 pub mod schema;
 pub mod tokens;

@@ -124,9 +124,13 @@ enum Decoded {
     Unreadable,
 }
 
-fn decode(key: &[u8], value: Vec<u8>) -> Option<Decoded> {
+fn decode(store: &Db, key: &[u8], value: Vec<u8>) -> Option<Decoded> {
     let (subject, created_at, signature) = parse_key(key)?;
     let json = match value.first() {
+        Some(&GENESIS_ROW) => match envelope_from_commit_row(store, &subject, &signature) {
+            Some(envelope) => envelope.json,
+            None => return Some(Decoded::Unreadable),
+        },
         Some(&COMPACT_V1) => match rebuild_json(&subject, created_at, &signature, &value) {
             Some(json) => json,
             None => return Some(Decoded::Unreadable),
@@ -151,6 +155,9 @@ fn decode(key: &[u8], value: Vec<u8>) -> Option<Decoded> {
 // legacy row is the commit JSON and starts with `{`, so the tag byte tells
 // them apart.
 const COMPACT_V1: u8 = 1;
+/// A genesis envelope whose commit is the `Tree::Resources` row of the same
+/// signature: the row is only this tag, the JSON comes from the commit row.
+const GENESIS_ROW: u8 = 2;
 const AGENT_PREFIX: &str = "atomic:agent:";
 
 /// `value` as raw bytes when it is `prefix` plus the unpadded base64url form
@@ -406,7 +413,9 @@ pub fn record_ops(
             let (old_key, old_val) = existing?;
             // A newest row that cannot be read is not the one to supersede:
             // it stays until someone can say what it was.
-            if old_key != new_key && matches!(decode(&old_key, old_val), Some(Decoded::Row(_))) {
+            if old_key != new_key
+                && matches!(decode(store, &old_key, old_val), Some(Decoded::Row(_)))
+            {
                 transaction.push(Operation {
                     tree: Tree::Envelopes,
                     method: Method::Delete,
@@ -417,7 +426,18 @@ pub fn record_ops(
         }
     }
 
-    let val = value_for(subject, response.commit.created_at, signature, json);
+    // A creation whose id is not its commit signature (a genesis
+    // certificate) keeps a tag row instead of a second copy of the signed
+    // bytes, when the commit row queued in this transaction rebuilds the
+    // same JSON.
+    let val = if response.auth_impact().genesis
+        && response.resource_new.is_some()
+        && commit_row_rebuilds(transaction, signature, &json)
+    {
+        vec![GENESIS_ROW]
+    } else {
+        value_for(subject, response.commit.created_at, signature, json)
+    };
     transaction.push(Operation {
         tree: Tree::Envelopes,
         method: Method::Insert,
@@ -452,7 +472,7 @@ pub fn envelopes_checked(store: &Db, subject: &str) -> Retained {
         .scan_prefix(Tree::Envelopes, &prefix(subject))
         .filter_map(|entry| entry.ok())
     {
-        match decode(&k, v) {
+        match decode(store, &k, v) {
             Some(Decoded::Row(row)) => {
                 out.rows.push(row);
                 out.newest_unreadable = false;
@@ -500,8 +520,31 @@ fn genesis_signature(subject: &str) -> Option<String> {
 /// from that row: the row is the commit resource the envelope was written
 /// from, so the JSON is the same.
 fn genesis_envelope_from_row(store: &Db, subject: &str) -> Option<StoredEnvelope> {
-    let signature = genesis_signature(subject)?;
-    let commit_id = crate::identifiers::commit_subject(&signature);
+    envelope_from_commit_row(store, subject, &genesis_signature(subject)?)
+}
+
+/// Whether the commit row queued in `transaction` for `signature` gives back
+/// exactly `json` when read, so a tag row can stand in for the envelope.
+fn commit_row_rebuilds(transaction: &Transaction, signature: &str, json: &str) -> bool {
+    let id = crate::identifiers::commit_subject(signature);
+    transaction
+        .iter()
+        .rev()
+        .find(|op| op.tree == Tree::Resources && op.key == id.as_bytes())
+        .and_then(|op| op.val.as_deref())
+        .and_then(|bin| crate::db::encoding::decode_propvals(bin).ok())
+        .and_then(|propvals| {
+            crate::Resource::from_propvals(propvals, crate::Subject::from_raw(&id, None))
+                .to_json_ad(None)
+                .ok()
+        })
+        .as_deref()
+        == Some(json)
+}
+
+/// The envelope of the commit stored as the row `signature` names.
+fn envelope_from_commit_row(store: &Db, subject: &str, signature: &str) -> Option<StoredEnvelope> {
+    let commit_id = crate::identifiers::commit_subject(signature);
     let propvals = store.get_propvals(&commit_id).ok()?;
     let row = crate::Resource::from_propvals(propvals, crate::Subject::from_raw(&commit_id, None));
     let created_at = row.get(crate::urls::CREATED_AT).ok()?.to_int().ok()?;
@@ -509,7 +552,7 @@ fn genesis_envelope_from_row(store: &Db, subject: &str) -> Option<StoredEnvelope
     Some(StoredEnvelope {
         subject: subject.to_string(),
         created_at,
-        signature,
+        signature: signature.to_string(),
         json,
     })
 }
@@ -535,6 +578,25 @@ pub fn latest_envelope(store: &Db, subject: &str) -> Option<StoredEnvelope> {
         return None;
     }
     found.rows.into_iter().last()
+}
+
+/// The commit id of the newest retained envelope, read from the row key
+/// alone (no row is decoded). The id `lastCommit` is served as when the
+/// stored row does not carry it.
+pub fn latest_commit_id(store: &Db, subject: &str) -> Option<String> {
+    let (key, _) = store
+        .kv
+        .scan_prefix(Tree::Envelopes, &prefix(subject))
+        .filter_map(|entry| entry.ok())
+        .last()?;
+    let (_, _, signature) = parse_key(&key)?;
+    Some(crate::identifiers::commit_subject(&signature))
+}
+
+/// The id of the genesis commit of a resource whose id was derived from it
+/// (its row is kept; see [`genesis_envelope_from_row`]).
+pub fn genesis_commit_id(subject: &str) -> Option<String> {
+    genesis_signature(subject).map(|signature| crate::identifiers::commit_subject(&signature))
 }
 
 /// The retained envelopes of each subject as commit JSON-AD, for a bulk
@@ -566,8 +628,7 @@ pub fn for_subjects<'a>(
 /// survives, which may be one already here. Idempotent for a row already
 /// stored.
 pub async fn import_envelope(store: &Db, expected_subject: &str, json: &str) -> AtomicResult<()> {
-    let resource = crate::parse::parse_json_ad_commit_resource(json, store).await?;
-    let commit = crate::commit::Commit::from_resource(resource)?;
+    let commit = crate::commit::Commit::from_json_ad(json)?;
     let expected = crate::Subject::from_raw(expected_subject, None).pure_id();
     let actual = commit.subject.pure_id();
     if actual != expected {
@@ -719,8 +780,7 @@ pub async fn attribute_history(store: &Db, subject: &str) -> AtomicResult<Histor
         ..
     } = envelopes_checked(store, subject);
     for envelope in retained {
-        let resource = crate::parse::parse_json_ad_commit_resource(&envelope.json, store).await?;
-        let commit = crate::commit::Commit::from_resource(resource)?;
+        let commit = crate::commit::Commit::from_json_ad(&envelope.json)?;
         let verified = commit.validate_signature(store).await.is_ok();
 
         // Tokens this envelope introduced. A genesis carries a snapshot and
@@ -1612,6 +1672,47 @@ mod tests {
         assert_ne!(kept[0].json, written);
     }
 
+    /// A creation named by a genesis certificate (its id is not the commit
+    /// signature) keeps a one-byte tag row, not a second copy of the commit.
+    #[tokio::test]
+    async fn certificate_genesis_envelope_is_a_tag_row_read_from_the_commit_row() {
+        let db = Db::init_temp("envelopes_cert_genesis_tag").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let subject = child(&db, &drive).await;
+        let rows = raw_rows(&db, &subject);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].1, vec![GENESIS_ROW]);
+        let kept = envelopes(&db, subject.as_str());
+        assert_eq!(kept.len(), 1);
+        let commit_row = db
+            .get_resource(&kept[0].commit_id().as_str().into())
+            .await
+            .unwrap();
+        assert_eq!(kept[0].json, commit_row.to_json_ad(None).unwrap());
+        assert_eq!(
+            db.get_resource(&subject)
+                .await
+                .unwrap()
+                .get(urls::NAME)
+                .unwrap()
+                .to_string(),
+            "Doc"
+        );
+
+        signed_edit(&db, &subject, "edited").await;
+        let kept = envelopes(&db, subject.as_str());
+        assert_eq!(kept.len(), 1, "the edit replaces the tag row");
+        assert_eq!(
+            db.get_resource(&subject)
+                .await
+                .unwrap()
+                .get(urls::NAME)
+                .unwrap()
+                .to_string(),
+            "edited"
+        );
+    }
+
     /// Under `all` the genesis envelope is history: the edit that follows
     /// writes it out so it stays beside the new one.
     #[tokio::test]
@@ -1735,10 +1836,7 @@ mod tests {
 
         // The rebuilt JSON verifies on its own, through the same path a
         // receiving peer uses.
-        let resource = crate::parse::parse_json_ad_commit_resource(&last.json, &db)
-            .await
-            .unwrap();
-        let commit = crate::commit::Commit::from_resource(resource).unwrap();
+        let commit = crate::commit::Commit::from_json_ad(&last.json).unwrap();
         commit
             .validate_signature(&db)
             .await
@@ -1983,5 +2081,177 @@ mod tests {
         assert!(raw_rows(&db, &subject)
             .iter()
             .any(|(k, _)| *k == newest_key));
+    }
+
+    /// Changes in a resource's stored Loro doc with no commit token: what a
+    /// node writes on its own on top of the signed commits.
+    fn untokened_changes(db: &Db, subject: &crate::Subject) -> usize {
+        let doc =
+            crate::loro::AtomicLoroDoc::from_snapshot(&db.get_loro_snapshot(subject).unwrap())
+                .unwrap();
+        let mut untokened = 0;
+        doc.doc()
+            .travel_change_ancestors(
+                &doc.doc().oplog_frontiers().iter().collect::<Vec<_>>(),
+                &mut |change| {
+                    if change.message.as_deref().is_none_or(str::is_empty) {
+                        untokened += 1;
+                    }
+                    std::ops::ControlFlow::Continue(())
+                },
+            )
+            .unwrap();
+        untokened
+    }
+
+    fn doc_stamp(db: &Db, subject: &crate::Subject) -> Option<loro::LoroValue> {
+        crate::loro::AtomicLoroDoc::from_snapshot(&db.get_loro_snapshot(subject).unwrap())
+            .unwrap()
+            .get_all_properties()
+            .get(urls::LAST_COMMIT)
+            .cloned()
+    }
+
+    /// `lastCommit` is served from the newest envelope and is not a change in
+    /// the document: a commit adds exactly the author's change to the oplog.
+    #[tokio::test]
+    async fn last_commit_is_derived_and_adds_nothing_to_the_oplog() {
+        let db = Db::init_temp("envelopes_derived_last_commit")
+            .await
+            .unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let subject = child(&db, &drive).await;
+
+        let size = |db: &Db| db.get_loro_snapshot(&subject).unwrap().len();
+        let (changes_before, bytes_before) = (
+            crate::loro::AtomicLoroDoc::from_snapshot(&db.get_loro_snapshot(&subject).unwrap())
+                .unwrap()
+                .doc()
+                .len_changes(),
+            size(&db),
+        );
+        signed_edit(&db, &subject, "one").await;
+        let doc =
+            crate::loro::AtomicLoroDoc::from_snapshot(&db.get_loro_snapshot(&subject).unwrap())
+                .unwrap();
+        println!(
+            "OPLOG one small edit: snapshot {bytes_before} B -> {} B, changes {changes_before} -> {}",
+            size(&db),
+            doc.doc().len_changes()
+        );
+        assert_eq!(
+            doc.doc().len_changes(),
+            changes_before + 1,
+            "one commit, one change: no server-peer bookkeeping"
+        );
+        assert!(
+            doc_stamp(&db, &subject).is_none(),
+            "nothing is stamped in the doc"
+        );
+
+        let latest = latest_envelope(&db, subject.as_str()).unwrap();
+        let served = db.get_resource(&subject).await.unwrap();
+        assert_eq!(
+            served.get(urls::LAST_COMMIT).unwrap().to_string(),
+            latest.commit_id()
+        );
+        assert_eq!(
+            latest_commit_id(&db, subject.as_str()).as_deref(),
+            Some(latest.commit_id().as_str())
+        );
+        // The shallow read (the stored row) serves it too.
+        assert_eq!(
+            db.get_resource_shallow(&subject)
+                .unwrap()
+                .get(urls::LAST_COMMIT)
+                .unwrap()
+                .to_string(),
+            latest.commit_id()
+        );
+        assert_eq!(untokened_changes(&db, &subject), 0);
+    }
+
+    /// A row written from a synced doc carries no `lastCommit`: the newest
+    /// envelope is served, then the genesis commit.
+    #[tokio::test]
+    async fn last_commit_falls_back_to_the_envelope_when_the_row_has_none() {
+        let db = Db::init_temp("envelopes_last_commit_fallback")
+            .await
+            .unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let subject = child(&db, &drive).await;
+        signed_edit(&db, &subject, "one").await;
+        let latest = latest_envelope(&db, subject.as_str()).unwrap();
+
+        let mut stripped = db.get_resource(&subject).await.unwrap();
+        stripped.remove_propval(urls::LAST_COMMIT).unwrap();
+        db.add_resource_opts(&stripped, false, true, true)
+            .await
+            .unwrap();
+        assert!(db
+            .get_resource_shallow(&subject)
+            .unwrap()
+            .get(urls::LAST_COMMIT)
+            .is_err());
+        assert_eq!(
+            db.get_resource(&subject)
+                .await
+                .unwrap()
+                .get(urls::LAST_COMMIT)
+                .unwrap()
+                .to_string(),
+            latest.commit_id()
+        );
+    }
+
+    /// A doc that still holds the old stamp: the derived value wins, and the
+    /// stamp stands when nothing derived exists.
+    #[tokio::test]
+    async fn a_stamp_in_an_old_doc_loses_to_the_derived_value() {
+        let db = Db::init_temp("envelopes_old_stamp").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let subject = child(&db, &drive).await;
+        signed_edit(&db, &subject, "one").await;
+        let latest = latest_envelope(&db, subject.as_str()).unwrap();
+
+        let old = "atomic:commit:OLDSTAMP";
+        let doc =
+            crate::loro::AtomicLoroDoc::from_snapshot(&db.get_loro_snapshot(&subject).unwrap())
+                .unwrap();
+        doc.set_property(urls::LAST_COMMIT, &Value::AtomicUrl(old.into()))
+            .unwrap();
+        let mut resource = db.get_resource(&subject).await.unwrap();
+        resource.apply_state_doc(doc).unwrap();
+        assert_eq!(resource.get(urls::LAST_COMMIT).unwrap().to_string(), old);
+        db.add_resource_opts(&resource, false, true, true)
+            .await
+            .unwrap();
+        assert!(
+            doc_stamp(&db, &subject).is_some(),
+            "premise: the stored doc holds the stamp"
+        );
+
+        // The row now says `old` too (it was written from the stamped doc);
+        // the next signed commit derives a fresh value over it.
+        signed_edit(&db, &subject, "two").await;
+        let newest = latest_envelope(&db, subject.as_str()).unwrap();
+        assert_ne!(newest.commit_id(), latest.commit_id());
+        assert_eq!(
+            db.get_resource(&subject)
+                .await
+                .unwrap()
+                .get(urls::LAST_COMMIT)
+                .unwrap()
+                .to_string(),
+            newest.commit_id(),
+            "the derived value wins over the doc's stamp"
+        );
+
+        // Without a row value, the stamp the doc holds stands over a
+        // missing envelope.
+        let mut stamped = resource;
+        stamped.set_derived_last_commit(Value::AtomicUrl(old.into()));
+        db.serve_derived_last_commit(&mut stamped, "internal:/no-envelopes", None);
+        assert_eq!(stamped.get(urls::LAST_COMMIT).unwrap().to_string(), old);
     }
 }

@@ -1,59 +1,15 @@
 import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import toast from 'react-hot-toast';
-import { FaCamera } from 'react-icons/fa6';
 import { Button } from './Button';
-import { scanPairingCode } from '../helpers/scanPairingCode';
-import { isMobileTauri } from '../helpers/tauri';
 
 interface ConnectToDeviceFormProps {
-  /** Receives a raw scanned/pasted code — not yet known to be well-formed. */
+  /** Receives a raw pasted code — not yet known to be well-formed. */
   onCode: (code: string) => void;
   disabled?: boolean;
 }
 
 /**
- * Opens the camera to scan another device's QR code. Phones and tablets only:
- * renders nothing elsewhere, where pasting the code is the way in.
- */
-export function ScanCodeButton({
-  onCode,
-  disabled,
-  className,
-}: ConnectToDeviceFormProps & { className?: string }): JSX.Element | null {
-  if (!isMobileTauri()) {
-    return null;
-  }
-
-  const scan = async () => {
-    const result = await scanPairingCode();
-
-    if (result.kind === 'code') {
-      onCode(result.code);
-    } else if (result.kind === 'denied') {
-      toast.error('Camera access is needed to scan a code.');
-    } else if (result.kind === 'unavailable') {
-      toast.error('Could not open the scanner.');
-    }
-  };
-
-  return (
-    <Button
-      className={className}
-      onClick={scan}
-      disabled={disabled}
-      data-testid='scan-code'
-    >
-      <ScanButtonInner>
-        <FaCamera aria-hidden /> Scan a QR code
-      </ScanButtonInner>
-    </Button>
-  );
-}
-
-/**
- * The two ways to take in another device's pairing code: scan its QR with the
- * camera (phones and tablets), or paste the code as text (everywhere).
+ * Takes in another device's pairing code, pasted as text.
  */
 export function ConnectToDeviceForm({
   onCode,
@@ -71,7 +27,6 @@ export function ConnectToDeviceForm({
 
   return (
     <>
-      <StackedScanButton onCode={onCode} disabled={disabled} />
       <CodeForm
         onSubmit={e => {
           e.preventDefault();
@@ -91,16 +46,6 @@ export function ConnectToDeviceForm({
     </>
   );
 }
-
-const StackedScanButton = styled(ScanCodeButton)`
-  margin-bottom: 0.6rem;
-`;
-
-const ScanButtonInner = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
 
 const CodeForm = styled.form`
   display: flex;

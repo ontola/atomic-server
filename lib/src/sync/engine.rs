@@ -171,7 +171,7 @@ pub async fn handle_auth_frame(
 /// through [`WireScheme::subject`]; a peer that listed nothing predates the
 /// rename and gets `did:ad:`, which it can parse. Signed material (commit
 /// JSON, envelopes) is never rewritten: it verifies as stored.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct WireScheme {
     canonical: bool,
 }
@@ -404,19 +404,8 @@ pub async fn handle_frame_full_for_caps(
             match protocol::decode_commit(payload) {
                 Some(decoded) => {
                     let request_id = decoded.request_id;
-                    match apply_peer_commit(store, decoded.commit_json).await {
-                        Ok(commit_json) => {
-                            vec![protocol::encode_commit_ok(request_id, &commit_json)]
-                        }
-                        Err(e) => {
-                            let msg = e.to_string();
-                            vec![protocol::encode_error(
-                                request_id,
-                                protocol::classify_commit_error(&msg),
-                                &msg,
-                            )]
-                        }
-                    }
+                    let result = apply_peer_commit(store, decoded.commit_json).await;
+                    vec![CommitAck::FULL.frame(request_id, &result, 0)]
                 }
                 None => vec![protocol::encode_error(
                     0,
@@ -799,6 +788,70 @@ impl CommitIngestOpts {
     }
 }
 
+/// Which `COMMIT_OK` shape a session was negotiated to receive. Every
+/// transport answers a `COMMIT` through [`CommitAck::frame`], so the
+/// encodings live in one place: the full commit resource (legacy, and what
+/// peers get), the slim commit id (`commit-ok-slim`), or the slim id plus the
+/// node's write-load hint (`commit-ok-slim` and `commit-pace`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CommitAck {
+    pub slim: bool,
+    pub paced: bool,
+}
+
+impl CommitAck {
+    /// The legacy full-commit ack; every format a client did not ask for.
+    pub const FULL: Self = Self {
+        slim: false,
+        paced: false,
+    };
+
+    /// Pick the ack from a client's `HELLO` capabilities. The load hint only
+    /// rides on the slim form.
+    pub fn negotiated(caps: &[String]) -> Self {
+        let has = |cap: &str| caps.iter().any(|c| c == cap);
+        let slim = has(protocol::CAP_COMMIT_OK_SLIM);
+        Self {
+            slim,
+            paced: slim && has(protocol::CAP_COMMIT_PACE),
+        }
+    }
+
+    /// The `COMMIT_OK` or `ERROR` frame answering request `request_id`.
+    /// `pace_ms` is only sent in the paced form.
+    pub fn frame<E: ToString>(
+        self,
+        request_id: u16,
+        result: &Result<String, E>,
+        pace_ms: u32,
+    ) -> Vec<u8> {
+        match result {
+            Ok(commit_json) => {
+                // A slim client only wants the id it must chain the next
+                // commit on; it already holds the commit it just signed.
+                let slim_id = self.slim.then(|| {
+                    serde_json::from_str::<serde_json::Value>(commit_json)
+                        .ok()
+                        .and_then(|v| v.get("@id")?.as_str().map(str::to_owned))
+                });
+                match slim_id.flatten() {
+                    Some(id) if self.paced => {
+                        protocol::encode_commit_ok_paced(request_id, &id, pace_ms)
+                    }
+                    Some(id) => protocol::encode_commit_ok_slim(request_id, &id),
+                    None => protocol::encode_commit_ok(request_id, commit_json),
+                }
+            }
+            Err(e) => {
+                // Classify so the outbox can switch on a structured code
+                // instead of pattern-matching the message text.
+                let msg = e.to_string();
+                protocol::encode_error(request_id, protocol::classify_commit_error(&msg), &msg)
+            }
+        }
+    }
+}
+
 /// Parse a JSON-AD commit and verify its signature, returning the signer it
 /// proves. This is the identity check alone: no schema, timestamp, rights,
 /// ownership or Loro checks run, and nothing is stored.
@@ -813,8 +866,7 @@ pub async fn verify_commit_signer(
     store: &impl crate::Storelike,
     commit_json: &str,
 ) -> crate::errors::AtomicResult<crate::Subject> {
-    let resource = crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
-    let commit = crate::commit::Commit::from_resource(resource)?;
+    let commit = crate::commit::Commit::from_json_ad(commit_json)?;
     commit.validate_signature(store).await?;
     Ok(commit.signer)
 }
@@ -851,16 +903,16 @@ pub async fn ingest_commit(
     commit_json: &str,
     opts: &CommitIngestOpts,
 ) -> crate::errors::AtomicResult<crate::commit::CommitResponse> {
-    let incoming_commit_resource =
-        crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
+    let incoming: serde_json::Map<String, serde_json::Value> = serde_json::from_str(commit_json)
+        .map_err(|e| crate::AtomicError::parse_error(&format!("Invalid JSON: {e}"), None, None))?;
 
     // Reject commits with deprecated set/push/remove fields — use loroUpdate instead.
-    // Checked on the parsed commit's properties, not by substring-matching
+    // Checked on the parsed commit's keys, not by substring-matching
     // the raw body: a commit whose subject *is* one of these Property
     // resources, or whose values merely mention them, must not be refused.
     if [crate::urls::SET, crate::urls::PUSH, crate::urls::REMOVE]
         .iter()
-        .any(|legacy| incoming_commit_resource.get(legacy).is_ok())
+        .any(|legacy| incoming.contains_key(*legacy))
     {
         return Err(
             "Commits with `set`, `push`, or `remove` fields are no longer accepted. Use `loroUpdate` instead."
@@ -868,7 +920,7 @@ pub async fn ingest_commit(
         );
     }
 
-    let incoming_commit = crate::commit::Commit::from_resource(incoming_commit_resource)?;
+    let incoming_commit = crate::commit::Commit::from_json_map(&incoming)?;
 
     // Log incoming commit details for debugging
     if let Some(loro_bytes) = &incoming_commit.loro_update {
@@ -1038,6 +1090,7 @@ pub async fn collect_drive_subjects(
                 sort_by: None,
                 sort_desc: false,
                 include_external: true,
+                exclude_trashed: false,
                 include_nested: false,
                 // Sudo: sync needs to enumerate every subject the
                 // drive actually contains. Per-agent ACL filtering
@@ -1232,6 +1285,24 @@ pub async fn drive_items_for(
     drive: &str,
     agent: &crate::agents::ForAgent,
 ) -> Result<Vec<DriveItem>, String> {
+    Ok(drive_items_walk(store, drive, agent).await?.0)
+}
+
+/// What a drive walk looked at besides the items, for [`ProbeCache`].
+struct DriveWalk {
+    /// Every subject found under the drive, readable or not.
+    subjects: std::collections::HashSet<String>,
+    /// Subjects outside it that a read decision consults: the drive root's
+    /// ancestors, and the `drive` stamp of each walked resource
+    /// (`hierarchy::check_rights` tries that drive's grants first).
+    externals: std::collections::HashSet<String>,
+}
+
+async fn drive_items_walk(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+) -> Result<(Vec<DriveItem>, DriveWalk), String> {
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
     let drive_resource = store
         .get_resource(&drive_subject)
@@ -1244,6 +1315,22 @@ pub async fn drive_items_for(
     let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
     let vvs = build_drive_vvs(store, &drive_subjects);
 
+    let mut externals = std::collections::HashSet::new();
+    let mut ancestor = drive_resource.clone();
+    for _ in 0..32 {
+        let Ok(parent) = ancestor.get(crate::urls::PARENT) else {
+            break;
+        };
+        let parent = crate::Subject::from(parent.to_string());
+        if !externals.insert(parent.pure_id()) {
+            break;
+        }
+        match store.get_resource(&parent).await {
+            Ok(r) => ancestor = r,
+            Err(_) => break,
+        }
+    }
+
     let mut items: Vec<DriveItem> = Vec::with_capacity(vvs.len());
     for (subject, vv) in vvs {
         let readable = match store
@@ -1253,7 +1340,12 @@ pub async fn drive_items_for(
             ))
             .await
         {
-            Ok(r) => crate::hierarchy::check_read(store, &r, agent).await.is_ok(),
+            Ok(r) => {
+                if let Ok(stamp) = r.get(crate::urls::DRIVE_PROP) {
+                    externals.insert(crate::Subject::from(stamp.to_string()).pure_id());
+                }
+                crate::hierarchy::check_read(store, &r, agent).await.is_ok()
+            }
             Err(_) => false,
         };
         if readable {
@@ -1261,7 +1353,14 @@ pub async fn drive_items_for(
         }
     }
     items.sort_by(|a, b| a.0.cmp(&b.0));
-    Ok(items)
+    externals.retain(|e| !drive_subjects.contains(e));
+    Ok((
+        items,
+        DriveWalk {
+            subjects: drive_subjects,
+            externals,
+        },
+    ))
 }
 
 /// Sorted inventory in the peer's spelling. Convert before range filtering or
@@ -1308,16 +1407,52 @@ pub async fn drive_sync_hash_for_wire_version(
     wire: WireScheme,
     hash_version: u8,
 ) -> Result<String, String> {
-    let items = drive_items_for_wire(store, drive, agent, wire).await?;
+    // A probe over a drive that did not change is answered from the cache,
+    // validated against the writes since (see `db::write_log`). Only DID
+    // drives: the HTTP-URL walk is a prefix scan the parent test can't mirror.
+    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+    let key = drive_subject
+        .is_did()
+        .then(|| crate::db::write_log::ProbeKey {
+            drive: drive_subject.pure_id(),
+            agent: agent.to_string(),
+            wire,
+            hash_version,
+        });
+    // Read before computing: a write landing mid-walk then counts as newer.
+    let generation = store.write_log().generation();
+    if let Some(key) = &key {
+        let cached = store
+            .probe_cache()
+            .lookup(store.write_log(), key, |subject| {
+                let propvals = store.get_propvals(subject).ok()?;
+                let parent = propvals.get(crate::urls::PARENT)?;
+                Some(crate::Subject::from(parent.to_string()).pure_id())
+            });
+        if let Some(hash) = cached {
+            return Ok(hash);
+        }
+    }
+
+    let (mut items, walk) = drive_items_walk(store, drive, agent).await?;
+    for (subject, _) in &mut items {
+        *subject = wire.subject(subject);
+    }
     let vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> = items
         .into_iter()
         .map(|(subject, vv)| (subject, vv.into_iter().collect()))
         .collect();
-    Ok(if hash_version >= 2 {
+    let hash = if hash_version >= 2 {
         compute_drive_hash_v2(&vvs)
     } else {
         compute_drive_hash(&vvs)
-    })
+    };
+    if let Some(key) = key {
+        store
+            .probe_cache()
+            .store(key, generation, hash.clone(), walk.subjects, walk.externals);
+    }
+    Ok(hash)
 }
 
 /// Compare client and server VVs, return binary SYNC_OK/SYNC_DIFF/SYNC_PUSH
@@ -1716,7 +1851,9 @@ pub(crate) async fn may_accept_drive_write(
     false
 }
 
-/// Why a `SYNC_PUSH` was refused as a whole. Distinct from "imported zero
+/// Why a `SYNC_PUSH` could not be acknowledged. Admission failures precede
+/// writes; persistence or durability failures may follow partial writes.
+/// Distinct from "imported zero
 /// entries" (every entry tombstoned or malformed), which is still a
 /// successful import from the protocol's point of view.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1788,6 +1925,28 @@ pub(crate) fn admit_unknown_drive(
     }
 }
 
+/// Resolve a parent's drive from accepted state in this frame before storage.
+async fn staged_parent_drive(
+    store: &Db,
+    parent: &crate::Subject,
+    staged: &[(crate::Resource, Option<Vec<u8>>)],
+    by_subject: &std::collections::HashMap<String, usize>,
+) -> Option<String> {
+    let stored;
+    let resource = if let Some(index) = by_subject.get(&parent.pure_id()) {
+        &staged[*index].0
+    } else {
+        stored = store.get_resource(parent).await.ok()?;
+        &stored
+    };
+    Some(
+        resource
+            .get(crate::urls::DRIVE_PROP)
+            .map(|value| value.to_string())
+            .unwrap_or_else(|_| parent.to_string()),
+    )
+}
+
 /// Import resources from a SYNC_PUSH message into the local store.
 ///
 /// `for_agent` is the identity the sending peer proved. `trust_owned` is true
@@ -1796,10 +1955,10 @@ pub(crate) fn admit_unknown_drive(
 /// [`may_accept_drive_write`]). When importing locally, pass `Sudo`.
 ///
 /// `Ok((imported, blob_requests))` when the push was admitted — `imported`
-/// may still be 0 if every entry was skipped. `Err` when the push was refused
-/// as a whole: the agent may not write the drive, or the sync policy does not
-/// admit it. Nothing is written in the `Err` case, and the caller must answer
-/// with the rejection's `ERROR` frame, never `SYNC_OK`.
+/// may still be 0 if every entry was skipped. Admission failures happen before
+/// any projection is written. A later persistence or final durability-barrier
+/// failure can follow a committed batch, so the caller must propagate every
+/// `Err` rather than acknowledging it with `SYNC_OK`.
 pub async fn import_sync_push(
     push: &protocol::DecodedSyncPush,
     store: &Db,
@@ -1863,13 +2022,32 @@ pub async fn import_sync_push(
         });
     }
 
-    let mut count = 0;
-    let mut blob_requests = Vec::new();
-    let mut imported: std::collections::HashSet<String> = std::collections::HashSet::new();
-
     let base_domain = store.get_base_domain();
     let normalize = |s: &str| crate::Subject::from_raw(s, base_domain.as_deref()).pure_id();
     let admitted_drive = normalize(&push.drive);
+    // A SYNC_PUSH is one atomic projection write. Lock every subject in a
+    // stable order before reading any snapshot, then hold those locks until
+    // the batch is committed: otherwise a local commit can land between two
+    // entries and be overwritten by the stale snapshot this push started
+    // from. Db takes import-identity locks afterwards, matching signed commit
+    // ordering and avoiding lock inversion.
+    let mut subject_keys: Vec<String> =
+        push.entries.iter().map(|e| normalize(&e.subject)).collect();
+    subject_keys.sort();
+    subject_keys.dedup();
+    let mut _subject_guards = Vec::with_capacity(subject_keys.len());
+    for key in &subject_keys {
+        _subject_guards.push(store.subject_locks.lock(key).await);
+    }
+
+    let mut count = 0;
+    let mut blob_requests = Vec::new();
+    let mut imported: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut existing_resources: std::collections::HashMap<String, Option<crate::Resource>> =
+        std::collections::HashMap::new();
+    let mut staged: Vec<(crate::Resource, Option<Vec<u8>>)> = Vec::new();
+    let mut staged_by_subject: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
 
     for entry in &push.entries {
         if super::tombstones::is_tombstoned(store, &entry.subject) {
@@ -1883,39 +2061,40 @@ pub async fn import_sync_push(
         let snapshot_key =
             crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref()).pure_id();
 
-        // Same read-modify-write as `ws_apply::persist_update`, so the same
-        // exclusion: everything from the read below to `add_resource_opts` at
-        // the end of this iteration must not interleave with a commit, or one
-        // silently replaces the other's snapshot. Held per entry, released at
-        // the end of each iteration.
-        let _subject_guard = store.subject_locks.lock(&snapshot_key).await;
-
         // Admission above was for `push.drive` as a whole. Each entry names
         // its own subject, so an existing resource must actually live in
         // that drive, or a peer admitted for one drive could overwrite any
         // resource on this node (its ACLs included) by listing it here. Its
         // stored `drive` stamp is authoritative and is read BEFORE the
         // incoming delta is merged (mirrors `ws_apply::persist_update`).
-        let existing_resource = store
-            .get_resource(&crate::Subject::from_raw(
-                &snapshot_key,
-                base_domain.as_deref(),
-            ))
-            .await
-            .ok();
-        if let Some(existing) = &existing_resource {
+        if !existing_resources.contains_key(&snapshot_key) {
+            let existing = store
+                .get_resource(&crate::Subject::from_raw(
+                    &snapshot_key,
+                    base_domain.as_deref(),
+                ))
+                .await
+                .ok();
+            existing_resources.insert(snapshot_key.clone(), existing);
+        }
+        let cached_resource = existing_resources
+            .get(&snapshot_key)
+            .expect("existing resource was cached");
+        // A repeated entry is a continuation of the accepted state staged by
+        // this frame. Its own drive/parent checks must use that state before
+        // falling back to the pre-import DB row.
+        let staged_resource = staged_by_subject
+            .get(&snapshot_key)
+            .map(|index| &staged[*index].0);
+        let existing_resource = staged_resource.or(cached_resource.as_ref());
+        if let Some(existing) = existing_resource {
             let stored_drive = if let Ok(drive) = existing.get(crate::urls::DRIVE_PROP) {
                 drive.to_string()
             } else if let Ok(parent) = existing.get(crate::urls::PARENT) {
                 let parent_subject = crate::Subject::from(parent.to_string());
-                if let Ok(parent_resource) = store.get_resource(&parent_subject).await {
-                    parent_resource
-                        .get(crate::urls::DRIVE_PROP)
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|_| parent_subject.to_string())
-                } else {
-                    existing.get_subject().to_string()
-                }
+                staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject)
+                    .await
+                    .unwrap_or_else(|| existing.get_subject().to_string())
             } else {
                 existing.get_subject().to_string()
             };
@@ -1931,7 +2110,16 @@ pub async fn import_sync_push(
         }
 
         // Load existing doc or create new
-        let doc = if let Ok(Some(existing)) =
+        let doc = if let Some(index) = staged_by_subject.get(&snapshot_key) {
+            let snapshot = staged[*index]
+                .1
+                .as_ref()
+                .expect("sync snapshots are explicit");
+            match AtomicLoroDoc::from_snapshot(snapshot) {
+                Ok(d) if d.import_update(&entry.loro_bytes).is_ok() => d,
+                _ => continue,
+            }
+        } else if let Ok(Some(existing)) =
             store.kv.get(Tree::LoroSnapshots, snapshot_key.as_bytes())
         {
             match AtomicLoroDoc::from_snapshot(&existing) {
@@ -1974,10 +2162,14 @@ pub async fn import_sync_push(
 
         // No `get_resource` — `apply_state_doc` rebuilds propvals from the
         // merged doc, so the read would be discarded. Sync builds directly.
+        let snapshot = doc.export_snapshot();
         let subject = crate::Subject::from_raw(&snapshot_key, store.get_base_domain().as_deref());
         let mut resource = crate::Resource::new(subject.to_string());
 
-        if resource.apply_state_doc(doc).is_err() {
+        if resource
+            .apply_state_doc_with_snapshot(doc, snapshot.clone())
+            .is_err()
+        {
             continue;
         }
 
@@ -1993,11 +2185,10 @@ pub async fn import_sync_push(
                 .unwrap_or_else(|_| resource.get_subject().to_string());
             if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
                 let parent_subject = crate::Subject::from(parent_val.to_string());
-                if let Ok(parent_res) = store.get_resource(&parent_subject).await {
-                    claimed = parent_res
-                        .get(crate::urls::DRIVE_PROP)
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|_| parent_subject.to_string());
+                if let Some(drive) =
+                    staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject).await
+                {
+                    claimed = drive;
                 }
             }
             if normalize(&claimed) != admitted_drive {
@@ -2025,13 +2216,12 @@ pub async fn import_sync_push(
             has_strokes,
         );
 
-        store
-            .persist_replicated_resource(&resource)
-            .await
-            .map_err(|error| SyncPushRejected {
-                drive: push.drive.clone(),
-                reason: format!("Failed to persist {}: {error}", entry.subject),
-            })?;
+        if let Some(index) = staged_by_subject.get(&snapshot_key).copied() {
+            staged[index] = (resource.clone(), Some(snapshot));
+        } else {
+            staged_by_subject.insert(snapshot_key.clone(), staged.len());
+            staged.push((resource.clone(), Some(snapshot)));
+        }
         count += 1;
         imported.insert(snapshot_key.clone());
 
@@ -2041,6 +2231,16 @@ pub async fn import_sync_push(
             blob_requests.push(request);
         }
     }
+
+    let post_commit = store
+        .persist_replicated_resources_prepared(staged, false, Some(&push.drive))
+        .await
+        .map_err(|error| SyncPushRejected {
+            drive: push.drive.clone(),
+            reason: format!("Failed to persist SYNC_PUSH batch: {error}"),
+        })?;
+    drop(_subject_guards);
+    store.finish_replicated_resources(post_commit).await;
 
     // Envelopes ride with the entries they sign. Only a subject imported
     // above may receive one (same admission as its entry), and each is
@@ -2059,6 +2259,16 @@ pub async fn import_sync_push(
         }
     }
 
+    // A LAST chunk is the completed transfer's durability boundary. Make the preceding
+    // projection and its accepted envelopes durable before the caller sends
+    // SYNC_OK; this also covers an empty terminator chunk.
+    if push.last {
+        store.flush().map_err(|error| SyncPushRejected {
+            drive: push.drive.clone(),
+            reason: format!("Failed to durably flush SYNC_PUSH: {error}"),
+        })?;
+    }
+
     tracing::info!(
         "import_sync_push: imported {} resources for drive {}",
         count,
@@ -2074,19 +2284,6 @@ pub async fn import_sync_push(
     Ok((count, blob_requests))
 }
 
-/// Whether the owner deliberately dialled this node. Peer-to-peer sync only
-/// exists with the `iroh` feature — the WASM build of this crate has no peer
-/// module — so without it nothing is ever treated as paired.
-#[cfg(feature = "iroh")]
-fn peer_is_paired(store: &Db, node_id: &str) -> bool {
-    crate::sync::peer::is_paired_peer(store, node_id)
-}
-
-#[cfg(not(feature = "iroh"))]
-fn peer_is_paired(_store: &Db, _node_id: &str) -> bool {
-    false
-}
-
 /// Serve a remote-supplied `pull` list from local Loro snapshots — gated per
 /// subject on `check_read` for the identity the remote proved.
 /// This is the initiator-side mirror of the acceptor's `handle_sync_vv`,
@@ -2097,33 +2294,15 @@ fn peer_is_paired(_store: &Db, _node_id: &str) -> bool {
 /// established that peer's rights. Fail closed: a subject that doesn't
 /// materialize into a resource can't be rights-checked, so it isn't served.
 ///
-/// `paired_peer` is the node id of a peer this node's user deliberately dialled
-/// (see `peer::is_paired_peer`). Such a peer may replicate anything WE can
-/// read, even though its own agent holds no rights: pairing is an authenticated
-/// choice by the owner, and it is the authority a replica should run on. The
-/// alternative — the owner hand-writing an ACL entry naming each device's agent
-/// on each drive — is what made two of the same person's nodes sync nothing at
-/// all while the UI reported "In sync".
 ///
-/// Note this deliberately does NOT widen what gets served: a paired replica is
-/// served exactly the subjects this node can read, never more.
+/// A node the owner paired with gets no extra reach: it is served what the
+/// agent it authenticated as may read. Authenticating as the owner's own
+/// agent passes `check_read` directly, so pairing adds nothing to widen.
 pub async fn collect_readable_snapshots(
     store: &Db,
     agent: &crate::agents::ForAgent,
     subjects: &[String],
-    paired_peer: Option<&str>,
 ) -> Vec<(String, Vec<u8>)> {
-    // Resolved once: a paired peer's entitlement is "whatever we ourselves may
-    // read", so it is our own identity that answers, not the peer's.
-    let own_agent = if paired_peer.is_some_and(|node| peer_is_paired(store, node)) {
-        store
-            .get_default_agent()
-            .ok()
-            .map(crate::agents::ForAgent::from)
-    } else {
-        None
-    };
-
     // Subjects with a pending outbox entry are NOT skipped here, unlike the
     // browser's handleSyncDiff. This collector also serves a same-agent
     // replica that may hold none of the drive yet (a second device's first
@@ -2132,28 +2311,20 @@ pub async fn collect_readable_snapshots(
     // device waiting on a live-link drain that may never come. The signed
     // delta follows from the outbox and applies on top idempotently.
     let mut entries = Vec::new();
+    // This node's own agent resource travels on every connect, whoever
+    // connects. It is the one subject served regardless of rights.
+    let own_agent = store
+        .get_default_agent()
+        .ok()
+        .map(|a| a.subject.to_string());
     for subject in subjects {
         let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
         match store.get_resource(&subj).await {
             Ok(resource) => {
-                let mut readable = crate::hierarchy::check_read(store, &resource, agent)
-                    .await
-                    .is_ok();
-
-                if !readable {
-                    if let Some(own) = own_agent.as_ref() {
-                        readable = crate::hierarchy::check_read(store, &resource, own)
-                            .await
-                            .is_ok();
-
-                        if readable {
-                            tracing::debug!(
-                                "[sync] serving {} to a paired replica",
-                                &subject[..subject.len().min(30)]
-                            );
-                        }
-                    }
-                }
+                let readable = own_agent.as_deref() == Some(subj.pure_id().as_str())
+                    || crate::hierarchy::check_read(store, &resource, agent)
+                        .await
+                        .is_ok();
 
                 if !readable {
                     tracing::warn!(
@@ -2568,7 +2739,7 @@ mod bootstrap_and_sub_tests {
         );
         let agent = ForAgent::from(alice);
         let snapshots =
-            collect_readable_snapshots(&db, &agent, std::slice::from_ref(&legacy), None).await;
+            collect_readable_snapshots(&db, &agent, std::slice::from_ref(&legacy)).await;
         assert_eq!(
             snapshots.len(),
             1,

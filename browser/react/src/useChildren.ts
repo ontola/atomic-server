@@ -11,6 +11,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCollection } from './useCollection.js';
 import { useStore } from './hooks.js';
 
+const sameList = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((subject, i) => subject === b[i]);
+
 /**
  * Returns the subjects of direct children of a resource.
  *
@@ -45,6 +48,18 @@ export function useChildren(
   const [subjects, setSubjects] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const disabled = !parentSubject;
+
+  // The hook stays mounted when the parent changes (the sidebar switching
+  // drives), but the list belongs to one parent. Reset it during render, so
+  // the previous parent's children are never returned for the new one and the
+  // "never produced a list yet" check below means "for this parent".
+  const [listParent, setListParent] = useState(parentSubject);
+
+  if (listParent !== parentSubject) {
+    setListParent(parentSubject);
+    setSubjects([]);
+    setTotal(0);
+  }
 
   // `subjectsRef` mirrors `subjects` for the `ResourceUpdated` listener
   // below — that listener subscribes once and reads the latest list
@@ -115,6 +130,11 @@ export function useChildren(
     // collection-invalidate path can trigger overlapping runs when the
     // user creates resources faster than `waitForReady` resolves, and
     // the late writer used to overwrite the new data with the old.
+    // `useCollection` keeps handing out the previous parent's collection until
+    // the new one is ready. Its members are not ours; this runs again once the
+    // collection for this parent arrives.
+    if (collection.value !== parentSubject) return;
+
     let cancelled = false;
 
     const extractMembers = async (attempt = 0) => {
@@ -149,9 +169,14 @@ export function useChildren(
       // screen, an undefined slot is far more likely to be one that just went
       // away — a delete leaves the count ahead of the page for a moment — and
       // re-fetching then pulls the deleted resource back into the store.
+      //
+      // An empty answer is read the same way: the first query of a drive can
+      // be answered before its index has the children (the sidebar stayed
+      // empty while the drive page, which asks later, listed them all).
       if (
         subjectsRef.current.length === 0 &&
-        resolved.some(member => member === undefined) &&
+        (resolved.length === 0 ||
+          resolved.some(member => member === undefined)) &&
         attempt < 3
       ) {
         await collection.refresh();
@@ -192,12 +217,13 @@ export function useChildren(
       setSubjects(sorted);
     };
 
-    extractMembers();
+    // Never leave the list empty without saying why.
+    extractMembers().catch(e => store.notifyError(e));
 
     return () => {
       cancelled = true;
     };
-  }, [collection, disabled, limit, sortMembers, store]);
+  }, [collection, disabled, limit, parentSubject, sortMembers, store]);
 
   /**
    * Re-sort when any current child's `sortOrder` (or `createdAt`)
@@ -266,12 +292,20 @@ export function useChildren(
           const sorted = await sortMembers([...current, subject]);
           if (cancelled) return;
 
-          setSubjects(prev =>
-            prev.length === sorted.length &&
-            prev.every((sub, i) => sub === sorted[i])
-              ? prev
-              : sorted,
-          );
+          setSubjects(prev => {
+            // The list moved on while the sort awaited (a child trashed or
+            // destroyed, a fresh query answer): `sorted` was built from the
+            // old one and would put back what left. Keep what is there and
+            // append the newcomer, which belongs last.
+            if (prev !== current) {
+              return prev.includes(subject) ||
+                (limit !== undefined && prev.length >= limit)
+                ? prev
+                : [...prev, subject];
+            }
+
+            return sameList(prev, sorted) ? prev : sorted;
+          });
         }
 
         return;
@@ -284,11 +318,11 @@ export function useChildren(
       const resorted = await sortMembers(current);
       if (cancelled) return;
 
+      // Same as above: a re-sort that lands after the list changed under it
+      // is stale, and writing it back made a trashed folder reappear in the
+      // sidebar until the next reload.
       setSubjects(prev =>
-        prev.length === resorted.length &&
-        prev.every((s, i) => s === resorted[i])
-          ? prev
-          : resorted,
+        prev !== current || sameList(prev, resorted) ? prev : resorted,
       );
     });
 

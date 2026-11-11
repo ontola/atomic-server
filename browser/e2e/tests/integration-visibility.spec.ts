@@ -53,7 +53,7 @@ test('experimental plugins default off, behind an unlock, and the preference sur
       ],
     });
   });
-  await page.goto(new URL('/app/integrations', page.url()).href);
+  await page.goto(new URL('/app/apps', page.url()).href);
   // Entries that need API plugins have nothing that can run them until the
   // host proxies their calls (#1624), so no toggle is offered for them.
   const apiToggle = page.getByRole('checkbox', { name: 'Show API plugins' });
@@ -133,7 +133,7 @@ test('experimental plugins default off, behind an unlock, and the preference sur
   await page.getByPlaceholder('Search settings...').fill('plugins');
   await expect(settingsExperimental).not.toBeChecked();
 
-  await page.goto(new URL('/app/integrations', page.url()).href);
+  await page.goto(new URL('/app/apps', page.url()).href);
   await expect(experimentalToggle).not.toBeChecked();
   await expect(page.locator('[data-release]')).toHaveCount(0);
 });
@@ -156,7 +156,7 @@ test('existing connections remain visible while both discovery categories are hi
       .getByRole('main')
       .getByRole('heading', { name: 'New plugin', level: 1 }),
   ).toBeVisible(SCHEMA_CREATED);
-  await page.goto(new URL('/app/integrations', page.url()).href);
+  await page.goto(new URL('/app/apps', page.url()).href);
   await expect(
     page
       .getByRole('region', { name: 'Your integrations' })
@@ -173,7 +173,7 @@ test('visibility toggles are hidden when the catalog enables nothing behind them
 }) => {
   // An enabled entry that needs API plugins still has nothing to run it.
   await enableCatalogEntries(page, ['fixture-api']);
-  await page.goto(new URL('/app/integrations', page.url()).href);
+  await page.goto(new URL('/app/apps', page.url()).href);
   await expect(page.getByText('No plugins to show here.')).toBeVisible();
   await expect(
     page.getByRole('checkbox', { name: 'Show API plugins' }),

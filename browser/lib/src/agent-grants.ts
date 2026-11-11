@@ -20,27 +20,61 @@ export interface AgentGrant {
   write: boolean;
 }
 
-/** Add `agent` to `read` (and `write`) on each target. */
+/** Some targets could not be granted. The others were, and stay granted. */
+export class GrantAgentError extends Error {
+  constructor(
+    public readonly granted: string[],
+    public readonly failed: { subject: string; error: unknown }[],
+  ) {
+    super(
+      failed
+        .map(f =>
+          f.error instanceof Error ? f.error.message : String(f.error),
+        )
+        .join('; '),
+    );
+    this.name = 'GrantAgentError';
+  }
+}
+
+/**
+ * Add `agent` to `read` (and `write`) on each target. One target that cannot
+ * be saved (a drive the node does not host, say) does not stop the rest: every
+ * target is tried, and a {@link GrantAgentError} afterwards lists what
+ * succeeded and what did not. Grants that went through are not undone.
+ */
 export async function grantAgent(
   store: Store,
   agent: string,
   targets: string[],
   write: boolean,
 ): Promise<void> {
+  const granted: string[] = [];
+  const failed: { subject: string; error: unknown }[] = [];
+
   for (const target of targets) {
-    const resource = await store.getResource(target);
+    try {
+      const resource = await store.getResource(target);
 
-    if (resource.error) {
-      throw resource.error;
+      if (resource.error) {
+        throw resource.error;
+      }
+
+      resource.push(core.properties.read, [agent], true);
+
+      if (write) {
+        resource.push(core.properties.write, [agent], true);
+      }
+
+      await resource.save();
+      granted.push(target);
+    } catch (error) {
+      failed.push({ subject: target, error });
     }
+  }
 
-    resource.push(core.properties.read, [agent], true);
-
-    if (write) {
-      resource.push(core.properties.write, [agent], true);
-    }
-
-    await resource.save();
+  if (failed.length > 0) {
+    throw new GrantAgentError(granted, failed);
   }
 }
 

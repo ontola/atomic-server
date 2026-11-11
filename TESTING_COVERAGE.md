@@ -1,3 +1,5 @@
+Resource.set(undefined) (#2315): `browser/lib/src/resource.set-undefined.test.ts` covers removing optional string/date values with default and known-datatype validation, avoiding unnecessary Property reads, exactly one LocalChange event, removal in an exported/reopened Loro snapshot, and rejection of invalid non-undefined values. These are library unit checks; no server is required.
+
 Chat log entries (2026-10-09, `planning/chat-log.md`): `lib/tests/chat_log.rs` applies signed commits through the real rights path for a `ChatLog` page: an author adds, edits and deletes own entries; a member cannot touch another's entry, claim or forge one, or change page properties; a writer on the chat moderates; page genesis grants no `write` and refuses a self-granted one; entries more than ten minutes ahead of the server clock are rejected. `lib/src/db/test.rs` checks entries reach no propval, index or search row, and `measure_chat_log_entry_bytes` (ignored) prints bytes per message. `browser/lib/src/chat-log.test.ts` covers the TS helpers and that entry changes ride in a saved commit's `loroUpdate`. Step 2 (group chat and comments in the log): `browser/lib/tests/chat-log.integration.test.ts` runs two agents against a real server (an appender adds, edits and removes own entries, is refused on another's, a writer moderates). `helpers/chatLog.test.ts` covers entry ids, the merge and window of old messages and entries, and the page choice; `messageNotification.test.ts` covers entry notifications. Playwright: `chat-log.spec.ts` (entry, edit, reply, copy link, delete, reload, a second member seeing entries and edits live and no edit buttons on another's), `e2e.spec.ts` chatroom, `offline-chatroom.spec.ts`, `chat-mention.spec.ts`, `table-row-comments.spec.ts` (comment and count as entries) and `notifications.spec.ts` (chat, reply and comment toasts for entries, unseen badge). Migration of existing messages (`planning/chat-log.md`, "Existing messages"): `lib/src/db/chat_migration_test.rs` checks grouping by chat and by commented item, the split at 256 with the oldest on the first page, authors and times kept, deterministic keys, replies mapped across pages and left alone for an outside target, follow events keeping their kind, an edited message getting `e`, the old resource and its genesis commit row, snapshot, envelopes and indexes gone, a re-run being a no-op, a run that stopped after the pages and a straggler arriving meanwhile, the slices resuming from the stored state, a member editing own migrated entry and not another's while the chat owner can, a cache of a hosted drive only dropping rows that have their entry, opening a store migrating it, and the bytes per message before and after (`migrating_a_chat_shrinks_the_store`). `client-db.worker.migration.test.ts` covers the worker running the message slices after the index rebuild with progress and the local-only drives; `migratedEntryKey` has one test vector in Rust and TS; `helpers/chatLog.test.ts` covers hiding migrated old messages. Playwright: `chat-log-migration.spec.ts` shows old Message resources, then the same chat once their entries exist (stale copies hidden, one without an entry still listed, order kept); `meetings.spec.ts` covers follow events as entries. Not covered: the browser worker migrating a local-only drive end to end (WASM and OPFS), a real server restart with old messages in an e2e run, and an edited message's genesis commit row (kept). Not covered: concurrent edits of one entry by two members, a chat past one page (256 entries) in the browser, scrolling to a linked entry (not built), and DMs (later step).
 
 AI chat in the log (`planning/chat-log.md`, "Step 3: AI chat"): `lib/src/db/ai_chat_migration_test.rs` checks the order coming from the `messages` list and not `createdAt`, parts (reasoning, text, tool calls with input and output) inlined, authors, the old messages and every part resource gone and `messages` cleared, a re-run being a no-op, a run that stopped before the removal resuming without duplicates, a cache of a hosted drive writing nothing, and the bytes before and after for a 20-message chat with tool calls. `client-db.worker.migration.test.ts` covers the AI step after the message step. `chunks/AI/aiChatLog.test.ts` covers message <-> entry (parts, tool calls, context, errors, summary), a re-save keeping key and time, draft chats not saving, the page rollover at 256, removing one and all-following, entries sorted by `c`, and old messages merged in front and hidden once their entry exists. Playwright: `ai-chat-log-migration.spec.ts` (old chat shows once with and without entries; a new chat stores one page and no message resources) next to `ai.spec.ts`, `ai-chat-discovery.spec.ts`, `ai-sidebar-navigation.spec.ts` and `ai-mobile.spec.ts`. Not covered: the browser worker migrating a local-only AI chat end to end, tool outputs large enough to matter for a page's size, and a chat past 256 messages in the browser.
@@ -301,6 +303,19 @@ caught it, and if the answer is "none", that is the row to add.
 
 ## WASM database opening
 
+`browser/lib/src/resource-loro-lifecycle.test.ts` uses V8's full-GC object query
+to verify that abandoned hydrated Resources can be collected. It also retains
+the old public Loro document across `clearUnsafe()` and an authoritative snapshot
+replacement: that document stays usable, its edits cannot dirty the current
+resource, and edits to the replacement still enqueue normally. These are
+in-memory observer lifecycle checks; they do not reset OPFS or replace stored
+resource history.
+`resource-loro-lifecycle.spec.ts` repeats the collection check against the real
+production browser web/WASM runtime: Chromium collects 40 temporary resources
+hydrated from snapshots while a deliberately retained resource and public
+document remain usable. Local browser validation also passed the existing
+ClientDb edit-persistence test.
+
 `browser/lib/src/client-db-open.test.ts` covers `ClientDb.open()` success,
 wrong-key cache recovery, and propagation of blocked/corrupt-storage errors.
 The save-state and crash-durability browser tests exercise the generated WASM
@@ -412,6 +427,22 @@ server's results, and a pasted URL is still selected directly. The server search
 is mocked. There is no E2E. A class the store has not fetched (after a reload,
 say) is only reachable by its URL.
 
+## Trash (Rust)
+
+`lib/src/trash/tests.rs` (`cargo test -p atomic_lib --features db-redb --lib -- trash::`)
+covers `trash` / `restore` / `is_trashed` against a real `Db`: reparent plus
+`trashedFrom`, restore, the no-op cases (trash folder, drive, already trashed),
+the property-subject refusal, restore falling back to the drive when the old
+parent was destroyed or never recorded, a stale trash pointer being replaced,
+deep versus direct `is_trashed` and parent cycles, and collections hiding
+trashed members (direct and under a trashed folder, Sudo and a normal agent)
+unless `include_trashed` or the query lists the Trash itself.
+`lib/src/search/tests.rs` covers search hiding the same by default, with
+`include_trashed`, scoped to the Trash, and the filter-only path. Not covered:
+the `include_trashed` HTTP query param on `/search` and collections (no server
+integration test), the Flutter `delete_canvas` move-to-trash (the bridge crate
+has no trash test), and concurrent first-use creating two Trash folders.
+
 ## Pre-commit lint gate
 
 `node --test scripts/pre-commit.test.mjs` exercises real Git commits with Oxlint
@@ -456,6 +487,38 @@ Still uncovered: two physical devices, forced TURN, full Firefox drive sync,
 public deployment, and interactive rich-text editor/cursor acceptance.
 
 ## How to read this
+
+### Interface translations
+
+`browser/data-browser/scripts/check-translations.test.ts` audits all supported
+UI catalogs against the English source catalog. It checks missing/empty and
+fuzzy entries, duplicate/context keys, every plural form, locale headers and
+interpolation/markup/count placeholders. Fixture regressions cover multiline
+and obsolete PO records, valid unchanged product names, and damaged markup.
+The read-only `pnpm check:translations --json` command lists all gaps with
+source references. `wuchale check --full` separately checks extraction parity.
+These structural checks do not certify linguistic quality or detect every
+unextracted literal; runtime locale switching and production UI verification
+remain necessary. Resource content and plugin-supplied text are separate.
+Known source gaps: `AuthorizeMcpRoute` and `ConnectAgentRoute` interpolate
+unextracted English permission verbs, and `DerivedColumnDialog` interpolates
+an English column-name suggestion. These require complete localized sentences
+in a follow-up; catalog completeness does not cover them.
+
+`browser/e2e/tests/interface-language.spec.ts` switches from English to Spanish,
+French, German, Dutch and Indonesian through Settings, checks translated account
+headings and drive menus, reloads to verify persistence, and switches back. A custom drive
+title remains unchanged. The tests attach account screenshots for each locale.
+Dutch and Indonesian also start from regional browser preferences and verify
+that a saved selection overrides those preferences. `preloadLocale.test.ts`
+covers regional variants, preference order, fallback and configured-locale parity.
+`scripts/wuchale-plurals.test.ts` builds isolated catalogs through the actual
+Wuchale library, checking target-language form counts and interpolation damage.
+It verifies that Indonesian compiles a plural array and rule which render zero,
+one and multiple changes correctly; audit fixtures reject a fixed singular
+count in a single-form target.
+`DefaultTrigger.test.tsx` checks render-time tooltip translation without
+replacing the dropdown button, plus the existing default and string-title API.
 
 Plugin catalog: the e2e suite runs against a static mock of the atomic-plugins
 catalog (`testdata/atomic-plugins-mock`: `catalog.json` plus the test plugins'
@@ -521,7 +584,7 @@ loading notifications before exposing a resource to callers such as table column
 | Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | Local diagnostic |
 | Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on dispatched batches, `develop`, and `v*` tags |
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
-| Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
+| Flutter Rust bridge | `cargo test --manifest-path packages/atomic_store_flutter/rust/Cargo.toml` | `flutterTest` |
 
 CI runs `cargo nextest run --workspace --exclude atomic-server-tauri
 --no-default-features --features light`. Feature unification pulls in
@@ -529,7 +592,7 @@ CI runs `cargo nextest run --workspace --exclude atomic-server-tauri
 
 Two things worth knowing about the runners:
 
-- **`flutter/rust` is excluded from the workspace** (root `Cargo.toml`), so
+- **`packages/atomic_store_flutter/rust` is excluded from the workspace** (root `Cargo.toml`), so
   `--workspace` never compiles it. It is covered only by the explicit
   `--manifest-path` step in `flutterTest`.
 - **`.config/nextest.toml` sets `retries = 2`.** A flaky test passes CI
@@ -543,8 +606,9 @@ Two things worth knowing about the runners:
 
 | Flow | Where |
 |---|---|
-| Two Iroh nodes reconcile (bulk + live) | `lib/src/sync/iroh_e2e.rs` (13 tests, real QUIC) |
+| Two Iroh nodes reconcile (bulk + live) | `lib/src/sync/iroh_e2e.rs` (18 tests, real QUIC) |
 | Stroke appended after sync propagates | `lib/src/sync/iroh_e2e.rs` |
+| Iroh initiator probes first: level drives end on `SYNC_OK` (`probe_hit`), a miss falls back to the full sparse `SYNC` and reconciles both ways; both ends reach live mode | `lib/src/sync/iroh_e2e.rs` (`e2e_probe_*`). Not covered: a responder without `sync-probe` / `sparse-sync` (no cheap way to hide a capability) |
 | A peer only receives what its agent may read | `iroh_e2e.rs`, `peer.rs` |
 | A peer cannot forge a third agent's resource | `iroh_e2e.rs` |
 | Relayed write accepted only for a drive we own and dialled | `peer.rs` |
@@ -589,14 +653,17 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Known-peer store: labels, dedupe, corrupt data, quota | `data-browser/src/helpers/knownPeers.test.ts` | |
 | `forgetServerPeer` signs the exact `?node=` URL, and fails soft | `data-browser/src/helpers/managedServer.test.ts` | mocked `signRequest` |
 | Opening a foreign HTTP drive does not move `serverUrl` | `browser/lib/src/store.set-drive.test.ts` | bare origin still switches the server; path-bearing HTTP is a drive |
-| Canvas editing session merges a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
-| Whole-list rewrite (erase/undo) keeps a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
-| Bridge `start_peer` → `add_known_peer` → `peer_sync` pushes a drawing to a real remote process | `flutter/rust/src/api/simple/peer_tests.rs` | receiving side writes the receipt |
-| Bridge known-peer bookkeeping (add / rename / dedupe / forget) | `flutter/rust/src/api/simple/peer_tests.rs` | |
-| Bridge `peer_sync` to an unreachable node errors rather than hanging | `flutter/rust/src/api/simple/peer_tests.rs` | |
+| Canvas editing session merges a peer's stroke | `packages/atomic_store_flutter/rust/src/api/simple/tests.rs` | |
+| Whole-list rewrite (erase/undo) keeps a peer's stroke | `packages/atomic_store_flutter/rust/src/api/simple/tests.rs` | |
+| Bridge `start_peer` → `add_known_peer` → `peer_sync` pushes a drawing to a real remote process | `packages/atomic_store_flutter/rust/src/api/simple/peer_tests.rs` | receiving side writes the receipt |
+| Bridge known-peer bookkeeping (add / rename / dedupe / forget) | `packages/atomic_store_flutter/rust/src/api/simple/peer_tests.rs` | |
+| Bridge `peer_sync` to an unreachable node errors rather than hanging | `packages/atomic_store_flutter/rust/src/api/simple/peer_tests.rs` | |
 | **`POST /iroh-sync` request shape, both sides** | `testdata/pairing-request.json` + `pairing.test.ts` + `iroh_pairing.rs` | shared fixture binds them |
 | Dart pairing-code parser, peer-sync result formatting | `flutter/test/atomic/` | pure parsers |
 | Rotation does not treat a metrics-change pop as "back to gallery" | `flutter/test/canvas/rotation_pop_test.dart` | |
+| Host layer: chat entries merged across `ChatLog` pages oldest first, AI chats of every drive by last activity, recents/activity index (events, bursts, deletes, persistence), favorites, opened resources, emoji on rows, search (scope, prefix, cross-drive with the hit's drive, synced resources, no full reads), conversations (titles, decrypt both sides, send sealed, unopenable), background agent-name lookup, resource text for an AI, the embed dispatcher (reads, query, search, sign/signBytes policy, applyCommit round trip and push) | `lib/src/host/*.rs` | an in-memory store per test (`host::test_support::Device`) |
+| Bridge end to end: every assistant/home/context/embed function through the process-global store and `push_local_write` | `packages/atomic_store_flutter/rust/src/api/assistant/tests.rs`, `api/context/tests.rs`, `src/embed.rs` | real temp store shared by the bridge tests |
+| Assistant screens (chats list, chat, type-ahead search) with a fake `AssistantApi`; JSON parsing of chats, text parts and hits | `packages/atomic_chat/test/assistant_screens_test.dart` (and the other `packages/atomic_chat/test/` files) | not covered: `ResourceWebView` (needs a platform webview), the app's `AtomicAssistantApi` over the real FFI, Android/iOS devices |
 | `AtomicNode`: `mutate` on one node, `apply_commit(IngestPolicy::Peer)` on another, query + `DbEvent` reflect it | `lib/src/runtime/node.rs` | in-process, no transport; `LocalCache` skips signature check, `Peer` does not |
 
 ## Local full-text search
@@ -611,7 +678,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 | `Store.search` offline hits `ClientDb.search` | JS | `browser/lib/src/store.test.ts` |
 | Search-result excerpts: document preference, exact/prefix before fuzzy, Unicode source offsets, token boundaries, bounded context including long matches | JS | `browser/data-browser/src/helpers/searchResultHint.test.ts` |
 
-Not covered: table `contains`; Playwright search overlay on the KV path and assertion for the search-result excerpt; Flutter bridge `search`. Hosted `/search` is `atomic_lib::search` (Tantivy and MiniSearch are gone). Offline E2E polls `ClientDb.search`. Filters (`isA`, tags) are covered by `lib/src/search/tests.rs` and `server/tests/it/file_search_repro.rs`.
+Not covered: table `contains`; Playwright search overlay on the KV path and assertion for the search-result excerpt; the Flutter bridge `search` end to end only through `assistant/tests.rs` (one prefix query; the logic in `lib/src/host/lists.rs`). Hosted `/search` is `atomic_lib::search` (Tantivy and MiniSearch are gone). Offline E2E polls `ClientDb.search`. Filters (`isA`, tags) are covered by `lib/src/search/tests.rs` and `server/tests/it/file_search_repro.rs`.
 
 ### Flow — the thin layer
 
@@ -882,6 +949,19 @@ Not covered: Flutter `create_drive` still mints a random DID (the Rust
 machine with the old machine offline.
 
 Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enrollment and refresh after edits; SaaS `enrollment_display_metadata_refreshes_and_survives_legacy_clients` verifies persistence and account ownership.
+
+## Sync account sign-in
+
+`components/Cloud/SyncProviderAccount.test.tsx` covers the account card's
+single sign-in entry: off-site clients open the device-link form locally,
+hosted clients retain portal sign-in, and signed-in accounts retain the
+provider dashboard link. Existing `LinkProviderPanel` and `AccountSignInPanel`
+component tests cover device-link polling and the browser sign-in flow.
+`helpers/managed/api.test.ts` and `deviceLink.test.ts` verify that off-site clients
+omit cookies before and after linking, including caller attempts to enable them;
+hosted sessions retain cookie access. The Sync browser regression uses a provider
+that offers no credentialed CORS and requires the issued bearer after approval.
+Live provider deployment and physical passkey acceptance remain separate checks.
 
 ## Cloud Server setup
 
@@ -1405,6 +1485,10 @@ are covered by the follow-up checks below.
 - `lib/tests/import_durability.rs` aborts a child process after an acknowledged
   DID import, reopens redb and verifies identity lookup plus continued nested writes.
   Removing the commit flush reproduces loss; restoring it passes.
+- Its `sync_last_survives_process_kill_with_indexes_snapshot_and_envelope`
+  case imports a non-final chunk followed by an empty LAST, aborts without
+  running database destructors, then verifies resource data, localId and parent
+  indexes, CRDT snapshot and retained signed envelope after reopening redb.
 - Schema unit tests recover unattached saved terms. The resumable-installation
   helper reuses saved logical steps while preserving repeated identical rows.
   `installation-recovery.spec.ts` injects a lost table-class receipt and checks
@@ -1840,21 +1924,28 @@ use the public server URL for generated configuration and signed requests.
 `chunks/Templates/model.test.ts` tests version-pinned composition, duplicate keys,
 missing dependencies and dependency cycles. `aiProposal.test.ts` tests catalog-only
 AI references, size limits and removal of undeclared authority/executable fields.
-`drive-template-onboarding.spec.ts` exercises a mobile local-only preview, edits it,
-then adopts a fresh workspace without the demo edit or sample rows; it also checks
-blank creation and that the mobile feedback footer cannot cover its action.
+`instantiate.test.ts` tests the document markup, including `- [ ]` / `- [x]` task
+lists, and that every starter and the welcome document carry a checklist.
+`drive-template-onboarding.spec.ts` creates a drive from a name alone on a phone
+(no gallery, preview or blank-drive choice; the feedback footer cannot cover the
+button), checks the empty drive offers Document, Table, Canvas and the Student,
+Team and Personal starters (not the welcome template), and that a starter fills
+the drive it was chosen in, the block then disappears, and its document shows a
+task list. `template-recovery.spec.ts` covers drive creation on a managed build
+with an unenrolled home, and reporting a failed create.
 Existing `table-templates.spec.ts` exercises the same table adapter.
+The scripted demo (`/app/demo`, `demo-chat.spec.ts`, `integration-demo.spec.ts`,
+`messageSpeaker.test.ts`, `startDemo.test.ts`) and the template preview/keep-edits
+flow (`keepTemplateDemo.test.ts`, `leaveTemplatePreview.test.ts`,
+`pendingTemplate.test.ts`) are removed along with their tests; the bring-along
+specs start their guest with Get started.
 Not covered: a live AI provider, durable interrupted-install resume, portable graph
 import/export, shared schema IDs, initial identity signup, physical mobile browsers.
-
-- Demo speaker attribution: `browser/data-browser/src/chunks/Demo/messageSpeaker.test.ts` covers local persona display and rejection outside the demo, without overriding verified creator metadata.
-
-Template adoption: `keepTemplateDemo.test.ts` covers retaining graph identity, saved-drive registration, failed-save retry preservation, and expired-preview rejection. `drive-template-onboarding.spec.ts` covers the keep-edits and fresh-template UI choices.
 
 Onboarding dialog feedback: the authorization/invite and chatroom cases in
 `e2e.spec.ts` verify Continue remains clickable while feedback is offered.
 `onboarding-storage.spec.ts` checks feedback availability;
-`drive-template-onboarding.spec.ts` checks mobile creation and dismissal.
+`drive-template-onboarding.spec.ts` checks mobile creation.
 ## Paged table hydration count (2026-09-08)
 
 `collection-page-assemble.test.ts` reproduces 90 rows becoming 150 when deferred
@@ -2460,6 +2551,15 @@ to the class map, `useTableColumns` re-reading columns when the class map
 changes, `TagPropertyCard`'s class usage rows, and forms bound to a table column
 whose options now live only in the class map (see the forms entry below).
 
+Ontology graph position changes (2026-10-30):
+`browser/data-browser/src/chunks/GraphViewer/useGraph.test.ts` reproduces the
+`positionAbsolute` crash on a position notification before any drag. It covers
+layout-only events, keyboard moves, coordinate-less drag stops, batched nodes
+and callbacks before a render, final-position precedence, existing positions,
+non-finite coordinates and empty batches. `browser/e2e/tests/ontology-graph.spec.ts`
+opens an invented checklist ontology, moves a node first with the keyboard and
+then by pointer, and checks that its saved position survives reload without errors.
+
 Class constraints in forms (`planning/class-constraints-and-forms.md`, step 3):
 `formFieldSettings.test.ts` and `formConstraints.test.ts` pin the limit
 keywords, that old names read and are rewritten on edit, that a question can only
@@ -2717,9 +2817,13 @@ resources), the `parent` authority check, ID mismatch and identity
 immutability; `lens.test.ts` covers `ensureLens`, activation, and
 re-materializing a loaded resource when a Lens arrives.
 
-Not covered: lens application on the Iroh and WebSocket sync import paths (they
-share `persist_replicated_*`, which is covered through `build_projection_tx`
-only by reasoning, not a test), a browser reload with lenses loaded through
+`lens_values_are_indexed_for_synced_resources` imports a Lens and its target
+row in the same engine `SYNC_PUSH`, checking activation, backfill and the value
+index under a timeout. It exercises releasing the batch's subject guards before
+lens activation reacquires a target's guard.
+
+Not covered: lens application over a real Iroh or WebSocket connection, a
+browser reload with lenses loaded through
 `loadLenses`, and the data-browser flows that mint a lens (datatype change,
 form question shortname) end to end.
 
@@ -2739,3 +2843,54 @@ managed node, reads a saved child directly over HTTP, queues an edit with WS
 disconnected, reconnects, then signs in on a fresh browser and verifies the
 edited child after reload. It does not certify real billing or a full network
 partition.
+
+Host ABI, first slice (2026-10-14, `planning/host-abi.md` step 1): `server/src/plugins/host_abi/tests.rs` runs real components (`plugin-examples/host-abi-counter` and `-caller`, prebuilt into `testdata/host-abi/` by `scripts/build-host-abi-fixtures.sh`) through real Installations and Releases in a temporary store. `bump_twice_calls_the_counter_twice_through_the_host` calls `bump-twice`, which calls the counter twice through `calls.call`, and checks the count is 2 although only the counter app (not the caller app) has write rights on the resource. Negative cases: a counter without write rights gets `proposed` and nothing is written (also when called by another app, which never lends its rights); the caller's missing rights give `refused`; an Installation or Release cannot be changed through `apply`; an undeclared interface or function is `not-found`; arguments failing the `inputSchema` are refused before the app runs; calls nest at most 8 deep; a paused Installation stops answering; reads need both the caller and the app's agent; `query` filters, pages with a cursor and reports `complete`; `events` are pulled and acknowledged; `net.fetch` refuses undeclared operations, external writes and private addresses. `handlers/host_call_test.rs` covers `POST /host/call`: the owner's call runs, an unsigned one gets 401, an agent without rights gets 403, bad arguments 400, an unknown interface 404. `manifest.rs` `export_tests` cover `exports` in the manifest. Not covered: `net.fetch` reaching a real host (the egress guard refuses loopback), the browser or MCP calling `/host/call`, `search`/`undo` (unsupported), events fed by commits, triggers or cron, a component that traps or runs out of fuel, and publishing a `sandboxed-app` through `/plugin-release-package`.
+
+Server modules (2026-10-16, class extenders on the host ABI): `server/src/plugins/host_abi/module_tests.rs` installs `plugin-examples/host-abi-module` (prebuilt into `testdata/host-abi/module.wasm`) through the zip install path and checks that a `before-commit` hook refuses a create and an update (a warning does not), that `on-get` extends what a reader gets without storing it, that a module's `calls` reach an app export through the node's registry (and are `forbidden` without write on the drive, or without `uses`), and that the module reads and writes only as far as its Installation's agent may: without `full-drive-access` the read is `forbidden` and the write `proposed` with nothing stored, with it the read is `ok` and the write is `committed` and signed by the module's agent. `browser/e2e/tests/fixtures/test-plugin.zip` (rebuilt for the new world, see `plugin-examples/test-plugin/README.md`) still drives the install tests in `plugin.rs` and `plugin_release_test.rs` and the Playwright `plugin.spec.ts`. Not covered: `after-commit` and a module's own commits not re-triggering it, `net.fetch` of a `write` operation from a module, a global module (the operator's folder) and the `storage` folder, a hook that traps or runs out of fuel, and the Playwright suite against the rebuilt zip (not run here).
+
+Installation scopes (2026-10-16, host ABI step 2): `server/src/plugins/host_abi/tests.rs` (`a_read_scope_limits_reads_to_its_subtree`, `a_write_scope_limits_writes_to_its_subtree`, `a_call_scope_limits_the_interfaces_an_app_may_call`, `a_scope_must_name_something_that_exists`) installs the counter and caller apps with `readScope` / `writeScope` / `callScope` and checks that activation puts the agent on the subtree, that reads and writes inside it work and outside it are `forbidden` / `proposed` even when the agent was shared the outside resource by hand, that queries drop out-of-scope rows, and that a scope naming a missing resource refuses the Installation before anything is installed. `installation.rs` unit-tests `Scopes::of` (`full-drive-access` is the drive, nothing set limits nothing). Not covered: a scope outside the drive or one the installer may not write (needs a second drive and a second signer), a module or run plugin under a scope (same `Grant`, no own test), class scopes (not built), a shrinking scope, and the data browser's install dialog.
+
+## Agent page
+
+`browser/e2e/tests/agent-page.spec.ts` (full suite, not `@smoke`) opens another agent's page: the conversation started from its Send message button is listed, a private note typed there survives a reload and is not on the other agent's own page, and a resource that agent created in a shared folder shows under Created (as a resource row), and favoriting the agent from its page menu lists it in the sidebar Favorites. Your own agent page has no messages and no notes. `hasMember` is unit tested in `conversations.test.ts`. Not covered: the Created list is by creator, not by last editor (no index of who edited what, see `planning/auditability-loro-history.md` "Secondary indexes"), and the note's `PlainText` also shows in the private drive's resource list.
+
+Sync probe hash cache: Rust unit tests in `lib/src/db/write_log.rs` check that an unchanged drive is served from the cache (hit counter) and equals a cold computation, and that an edit, a new child, a move out of and into the drive, a ring overflow, `clear_tree` and a committed batch each force a recompute, while a write in another drive and an uncommitted batch do not. Agents keep separate entries (Public and a stranger still get an error after the owner is cached). Not covered: a change to a `drive`-stamp resource outside the drive, and the HTTP-URL drive path (never cached).
+
+## Batched SYNC_PUSH persistence
+
+`db::test::sync_push_batches_local_ids_and_flushes_only_at_last` uses a counting
+KV adapter to verify that localId resources share one projection transaction,
+non-final chunks do not flush, and LAST flushes once. The test-only copy fails
+on the pre-batch implementation (two unexpected per-resource flushes).
+`sync_push_last_reports_a_durable_flush_failure_even_when_empty` injects a flush
+failure and asserts rejection. `sync_push_staged_parent_accepts_an_unstamped_childs_second_delta`
+checks a parent and repeated child arriving in the same batch. Existing sync
+admission and envelope-retention tests cover rejected snapshots and envelope
+subject/signature checks; the offline-duplicate identity test covers preserving
+replica duplicates while rejecting a newly authored duplicate.
+`sync_push_merges_independent_same_subject_deltas_and_keeps_history` merges two
+independent updates onto staged state and verifies the stored replayable
+snapshot. The watched scoped/sorted query regression adds its later 17 rows as
+one replica batch; the public bulk helper's counting test checks that its
+localId durability contract still uses one flush.
+
+Manual acceptance measurements and their limits are recorded in PR #2361.
+The private-dataset harness is kept outside the repository; it is not a CI
+speed assertion. Crash durability is covered by the abort test above.
+
+App identity handover recovery (2026-10-30):
+`browser/data-browser/src/chunks/AppPage/appKeyHandover.test.ts` reproduces a
+failed key handover losing its only copy, then covers an encrypted browser-local
+queue, retry after reload and resource sync, account/node/lock isolation,
+authenticated metadata, older-node compatibility, cancellation after revocation
+or replacement, failed requests, and the successful recovery notification.
+`server/src/handlers/app_endpoints_test.rs` checks the initialization-only protocol
+against a real store: first handover, an idempotent retry after a lost response,
+replacement refusal and a revoked key staying revoked. The existing
+`localDbKey.test.ts` checks the local cache key's wrapping primitive.
+`browser/e2e/tests/apps.spec.ts` blocks the handover POST, reloads the page,
+then unblocks it and verifies automatic frame recovery and a persisted app write.
+Existing installs whose secret was already discarded require reinstalling;
+this does not rotate an app identity or repair provider delegations. New online
+installations still work with older nodes; automatic replay requires a node
+that advertises the initialization-only protocol.

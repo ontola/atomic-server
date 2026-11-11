@@ -55,6 +55,12 @@ vi.mock('@hooks/useVisibleDriveChildren', () => ({
     total: 0,
   }),
 }));
+vi.mock('@hooks/useSavedDriveToggle', () => ({
+  useSavedDriveToggle: () => [false, () => undefined],
+}));
+vi.mock('@hooks/useDriveHistory', () => ({
+  useDriveHistory: () => [[], () => undefined, () => undefined],
+}));
 vi.mock('@hooks/useIsPrivateDrive', () => ({ useIsPrivateDrive: () => false }));
 vi.mock('@components/Drives/PrivateDriveBadge', () => ({
   PrivateDriveBadge: () => <span />,
@@ -74,6 +80,8 @@ vi.mock('react-icons/fa6', () => ({
 vi.mock('@components/Dialog/useDialog', () => ({
   useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
+vi.mock('./GettingStartedCard', () => ({ GettingStartedCard: () => null }));
+vi.mock('./EmptyDriveStart', () => ({ EmptyDriveStart: () => <div /> }));
 vi.mock('./DriveSettingsDialog', () => ({
   DriveSettingsDialog: () => <div />,
 }));
@@ -81,8 +89,7 @@ vi.mock('./DriveHome', () => ({
   ActivityFeed: () => <div />,
   DrivePeople: () => <div />,
   QuickCreateCards: () => <div />,
-  RecentlyOpened: () => <div />,
-  ResourceTiles: () => <div />,
+  ResourceList: () => <div />,
   SectionTitle: ({ children }: { children: React.ReactNode }) => (
     <h2>{children}</h2>
   ),
@@ -132,6 +139,7 @@ describe('drive root file drops', () => {
       expect(state.store.uploadFiles).toHaveBeenCalledWith(
         files,
         resource.subject,
+        { optimistic: undefined },
       );
     },
   );
