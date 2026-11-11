@@ -33,6 +33,13 @@ export {
 } from './chunks/TableEditor/helpers/keyboardHandlers.js';
 export { DEFAULT_SIZE_PX } from './chunks/TableEditor/hooks/useCellSizes.js';
 export { TableHostProvider, type TableHost } from './host.js';
+export {
+  TableNavigationProvider,
+  useTableNavigation,
+  useOptionalTableNavigation,
+  type TableLocation,
+  type TableNavigation,
+} from './navigation.js';
 export { defaultTableTheme, type TableTheme } from './theme.js';
 export { StringCell } from './chunks/TablePage/EditorCells/StringCell.js';
 export { IntegerCell } from './chunks/TablePage/EditorCells/IntegerCell.js';

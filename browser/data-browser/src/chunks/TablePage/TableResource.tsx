@@ -41,6 +41,7 @@ import {
   type TableColumn,
 } from '@chunks/TablePage/useTableColumns';
 import { useTableData } from '@chunks/TablePage/useTableData';
+import { AtomicTableNavigation } from './AtomicTableNavigation';
 import {
   useId,
   useState,
@@ -131,7 +132,13 @@ const queryIdentity = (
     s: [sortBy ?? null, !!sortDesc],
   });
 
-export const TableResource: React.FC<TableResourceProps> = ({
+export const TableResource: React.FC<TableResourceProps> = props => (
+  <AtomicTableNavigation>
+    <TableResourceContent {...props} />
+  </AtomicTableNavigation>
+);
+
+const TableResourceContent: React.FC<TableResourceProps> = ({
   resource,
   viewSubject,
   embedded,
