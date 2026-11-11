@@ -7,7 +7,7 @@ import {
   type Store,
 } from '@tomic/react';
 import { ROW_ACTION_GENERATORS, type RowActionKind } from './rowActions';
-import { withTableRowDefaults } from './rowDefaults';
+import { createAtomicTableRow } from './atomicCreateRow';
 
 /**
  * One value a new row starts with.
@@ -153,18 +153,7 @@ export async function createQuickAddRow(
     }
   }
 
-  const row = await store.newResource({
-    parent: table,
-    isA: rowClass,
-    // The presets above win over the table's defaults.
-    propVals: await withTableRowDefaults(store, table, propVals),
-  });
-  await row.save();
-  // Tells the rest of the app a row appeared that it did not ask for — the
-  // sidebar, the search index, anything watching the parent.
-  store.notifyResourceManuallyCreated(row);
-
-  return row;
+  return createAtomicTableRow(store, table, rowClass, propVals);
 }
 
 /** The property a quick-add's field should default to: the row's own name. */

@@ -100,7 +100,7 @@ export function clearTableFields(
   return changes;
 }
 
-function sameTarget(
+export function sameTableMutationTarget(
   expected: TableMutationTarget,
   actual: TableMutationTarget,
 ) {
@@ -159,7 +159,7 @@ export async function executeTableRowMutation<Handle>(
     );
 
   try {
-    if (!sameTarget(command.target, current.target))
+    if (!sameTableMutationTarget(command.target, current.target))
       throw new TableMutationError(
         'scope',
         'Record is no longer in this collection. Your draft is retained.',
@@ -210,7 +210,7 @@ export async function executeTableRowMutation<Handle>(
         command.kind === 'delete'
           ? confirmed === undefined
           : confirmed !== undefined &&
-            sameTarget(command.target, confirmed.target) &&
+            sameTableMutationTarget(command.target, confirmed.target) &&
             keys.every(key => equals(confirmed.values[key], changes[key]));
       if (!valid)
         throw new TableMutationError(

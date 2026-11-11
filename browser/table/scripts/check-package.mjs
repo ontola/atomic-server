@@ -44,7 +44,7 @@ try {
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver, getComputedStyle: dom.window.getComputedStyle, requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout, IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
     globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
-    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell, executeTableRowMutation } from '@tomic/table';
+    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell, executeTableRowMutation, executeTableRowCreation } from '@tomic/table';
     assert.equal(typeof ValueCell, 'function');
     assert.equal(parseInteger('42'), 42);
     assert.equal(typeof IntegerCell.Edit, 'function');
@@ -71,6 +71,14 @@ try {
       write: async (_, command, changes) => { mutationValue = changes.quantity; },
     });
     assert.equal(mutationValue, 0);
+    const createdRow = { target: mutationTarget, values: { quantity: 0 }, handle: undefined };
+    let persisted = false;
+    assert.deepEqual(await executeTableRowCreation({ scope: mutationTarget.scope, values: {} }, {
+      schema: {}, prepare: async () => createdRow,
+      persist: async () => { persisted = true; },
+      read: async () => persisted ? createdRow : undefined,
+    }), mutationTarget);
+    assert.equal(persisted, true);
     const commands = [];
     function Location() {
       const { location, navigate } = useTableNavigation();

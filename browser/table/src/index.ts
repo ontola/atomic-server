@@ -115,3 +115,8 @@ export {
   ViewTabActions,
   type ViewTabProps,
 } from './views/ViewTabs.js';
+export {
+  executeTableRowCreation,
+  type TableRowCreation,
+  type TableCreationBackend,
+} from './creation.js';

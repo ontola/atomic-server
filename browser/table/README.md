@@ -132,3 +132,12 @@ configure the new package's npm Trusted Publisher for this repository's
 `release.yml` before its first registry release. This PR does not publish to npm.
 External integration can be tested with `pnpm add /path/to/tomic-table.tgz` before
 that release; the tarball is a preview, not a registry version claim.
+
+Persisted row creation uses `executeTableRowCreation` with a host
+`TableCreationBackend`: prepare a final identity and defaults without saving,
+validate, persist once, and confirm the scope and initial values through a read.
+The command captures its scope and supplied values before asynchronous work and
+checks a supplied schema revision before preparation and again before writing.
+The host owns creation field/default/permission policy and confirmation strength.
+A failed confirmation may follow a successful write; there is no automatic retry
+or rollback. Deferred grid drafts remain separate until ready to persist.
