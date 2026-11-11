@@ -77,7 +77,7 @@ import { useRowActions } from './useRowActions';
 import { rowActionKey, type RowActionSpec } from './rowActions';
 import { QuickAddBar } from './QuickAddBar';
 import { useTableAggregates } from './useTableAggregates';
-import { getTableDrive } from './tableDrive';
+import { toAtomicTableAggregateOptions } from './atomicTableQuery';
 import { TableTotalsFooter } from './TableTotalsFooter';
 import { toAggregation } from './tableAggregates';
 import { stringToSlug } from '@helpers/stringToSlug';
@@ -199,6 +199,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     setViewQuickAdd,
     queryFilters,
     queryExpressionFilters,
+    query,
   } = useTableData(resource, viewSubject, embedded);
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
@@ -563,17 +564,18 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
 
   // Totals ride their own query so they can be re-read on every edit without
   // clearing the grid's pages. See `useTableAggregates`.
-  const viewAggregateOutcomes = useTableAggregates({
-    property: core.properties.parent,
-    value: resource.subject,
-    filters: queryFilters,
-    expressionFilters: queryExpressionFilters,
-    aggregation,
-    drive: getTableDrive(store, resource) ?? store.getDrive(),
-    server: resource.subject.startsWith('http')
-      ? new URL(resource.subject).origin
-      : undefined,
-  });
+  const viewAggregateOutcomes = useTableAggregates(
+    toAtomicTableAggregateOptions(
+      {
+        ...query,
+        scope: { ...query.scope, drive: query.scope.drive ?? store.getDrive() },
+        aggregation,
+      },
+      resource.subject.startsWith('http')
+        ? new URL(resource.subject).origin
+        : undefined,
+    ),
+  );
 
   // Under the quick filter, the totals cover the rows that match — the rows on
   // screen, and the ones the footer counts.

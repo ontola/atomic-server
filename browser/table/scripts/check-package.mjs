@@ -44,7 +44,7 @@ try {
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver, getComputedStyle: dom.window.getComputedStyle, requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout, IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
     globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
-    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation } from '@tomic/table';
+    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues } from '@tomic/table';
     assert.equal(parseInteger('42'), 42);
     assert.equal(typeof IntegerCell.Edit, 'function');
     assert.notEqual(CursorMode.Edit, CursorMode.Visual);
@@ -58,6 +58,7 @@ try {
     assert.match(document.getElementById('app').innerHTML, /role="grid"/);
     assert.match(document.getElementById('app').innerHTML, /role="tab"/);
     assert.match(document.getElementById('app').textContent, /All rows/);
+    assert.deepEqual(tableQueryIssues({ scope: { table: 'table:one', rowClass: 'class:row' }, filters: [{ property: 'quantity', operator: 'gt', value: '0' }], expressionFilters: [], pageSize: 30 }, { filterOperators: ['eq'], expressions: false, aggregates: false, grouping: false, sorting: true }), [{ feature: 'filter', index: 0, operator: 'gt' }]);
     const commands = [];
     function Location() {
       const { location, navigate } = useTableNavigation();
@@ -77,7 +78,7 @@ try {
   writeFileSync(
     join(consumer, 'consumer.tsx'),
     `
-    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type FancyTableProps } from '@tomic/table';
+    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type TableQuery, type FancyTableProps } from '@tomic/table';
     const props: FancyTableProps<{ id: string }> = {
       columns: [{ id: 'name' }], itemCount: 1, columnToKey: column => column.id,
       labelledBy: 'title', HeadingComponent: ({ column }) => <span>{column.id}</span>,
@@ -93,7 +94,10 @@ try {
     const host = <TableNavigationProvider value={navigation}>{views}</TableNavigationProvider>;
     // @ts-expect-error Host resource routing is not part of the table patch.
     navigation.navigate({ subject: 'another-table' });
-    void [grid, editor, invalid, views, host];
+    const query: TableQuery = { scope: { table: 'table:one', rowClass: 'class:row' }, filters: [], expressionFilters: [], pageSize: 30 };
+    // @ts-expect-error Filter operators must use the declared query vocabulary.
+    query.filters.push({ property: 'quantity', value: '0', operator: 'arbitrary-code' });
+    void [grid, editor, invalid, views, host, query];
   `,
   );
   writeFileSync(

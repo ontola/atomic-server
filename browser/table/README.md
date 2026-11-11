@@ -38,7 +38,21 @@ blur commits a trimmed, nonempty changed name once; Escape cancels it. Hosts own
 permissions, menus, drag ordering, navigation and whether rename callbacks save
 immediately or become a draft. `renameLabel` lets the host localize the input.
 
-## Package CI
+## Page host services
+
+`TableQuery` describes explicit table/class/drive scope, property and formula
+filters, sorting, whole-collection aggregation and a page size without importing
+Atomic Resource, Store or Collection. The Atomic adapter translates that request
+to its indexed collection API. Row and totals requests share the same scope and
+predicates; both wait for the row class to load.
+
+`tableQueryIssues(request, capabilities)` reports unsupported operators,
+expressions, totals, grouping and sorting without changing the request. Hosts
+must handle those issues before executing a query; a capability match is not an
+authorization check. Property-specific constraints (such as whether a field is
+sortable) remain the backend adapter's responsibility. This request boundary does
+not yet replace Atomic Collection's indexed result contract or implement native
+NextGraph queries.
 
 `TableNavigationProvider` supplies a reactive `{ location, navigate }` host
 adapter for saved-view and edit-column state. `navigate(patch, { replace })`
@@ -48,6 +62,8 @@ navigation, including Back/Forward. The table package imports no router.
 Atomic's boundary supplies its existing ShowRoute adapter unless an embedding
 host already provided one. This is a host seam for the full-page extraction,
 not a claim that the package exports the complete TablePage yet.
+
+## Package CI
 
 The dedicated `Table package` workflow runs on package/config changes in pull
 requests and develop, and can be dispatched manually. It lints, typechecks and

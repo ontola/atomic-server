@@ -34,6 +34,17 @@ export {
 export { DEFAULT_SIZE_PX } from './chunks/TableEditor/hooks/useCellSizes.js';
 export { TableHostProvider, type TableHost } from './host.js';
 export {
+  tableQueryIssues,
+  type TableQuery,
+  type TableQueryCapabilities,
+  type TableQueryIssue,
+  type TableQueryFilter,
+  type TableFilterOperator,
+  type TableFormula,
+  type TableExpressionFilter,
+  type TableQueryAggregation,
+} from './query.js';
+export {
   TableNavigationProvider,
   useTableNavigation,
   useOptionalTableNavigation,

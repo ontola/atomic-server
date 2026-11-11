@@ -62,9 +62,9 @@ jobs:
         run: pnpm --filter @tomic/lib --filter @tomic/react --filter @tomic/form-renderer --filter @tomic/edit-mode --filter @tomic/plugin --filter @tomic/service-ui -r build
       - name: Check Atomic host types
         run: pnpm --filter @tomic/data-browser typecheck
-      - name: Test navigation adapter and saved-view tabs
+      - name: Test table host adapters and saved-view tabs
         working-directory: browser/data-browser
-        run: pnpm exec vitest run src/chunks/TablePage/AtomicTableNavigation.test.tsx src/chunks/TablePage/TableViewTabs.test.tsx
+        run: pnpm exec vitest run src/chunks/TablePage/AtomicTableNavigation.test.tsx src/chunks/TablePage/TableViewTabs.test.tsx src/chunks/TablePage/atomicTableQuery.test.ts src/chunks/TablePage/useAtomicTableQuery.test.tsx
   package:
     name: Build, test and install packed table
     runs-on: ubuntu-latest
