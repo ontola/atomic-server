@@ -40,6 +40,15 @@ immediately or become a draft. `renameLabel` lets the host localize the input.
 
 ## Page host services
 
+`ValueCell` owns shared edit-mode orchestration: first-character buffering,
+text seeds for parsed editors, picker behavior, editor/display switching,
+context-menu behavior and draft-row advance. Hosts supply a stable cell identity,
+value/write callback, editor renderers and a fresh `canAdvance` predicate. Changing
+identity resets pending input so virtual reuse cannot carry a seed to another
+row/property/language. Text-start policies can report `onSeed` to a host that
+retains invalid raw drafts. The host keeps validation, history, permissions and
+its own immediate-save or explicit Save/Discard policy.
+
 `IndexedTableRows` is the small identity-access contract used by the Atomic
 grid, selection, clipboard, presence and whole-result renderers. It exposes
 indexed lookup, exact membership size and enumeration without Resource, Store
