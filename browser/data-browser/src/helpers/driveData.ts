@@ -1,5 +1,43 @@
 import type { Store } from '@tomic/lib';
 import { isOriginWithoutNode } from './originNode';
+import { getManagedEnrollments } from './managed/enrollmentApi';
+
+/**
+ * Keep a drive restored from the Cloud Vault on this device when no Cloud
+ * Server hosts it.
+ *
+ * A vault restore only writes the local database. If the drive is registered
+ * nowhere, the store syncs it against the connected node, and a managed node
+ * that only admits enrolled drives refuses every write ("not enrolled for
+ * sync on this node"). Both restore paths call this, so they follow one rule.
+ *
+ * `confirmedAbsent`: the node already answered "not found" for the drive.
+ * Otherwise the account's enrollments decide. "Could not find out" (signed
+ * out, control plane unreachable, malformed answer) is never "not hosted":
+ * the drive is then left alone.
+ */
+export async function keepUnhostedRestoreLocal(
+  store: Store,
+  drive: string,
+  confirmedAbsent = false,
+): Promise<void> {
+  if (!confirmedAbsent) {
+    try {
+      const wanted = store.normalizeSubject(drive);
+      const hosted = (await getManagedEnrollments(true)).some(
+        e =>
+          store.normalizeSubject(e.drive_subject) === wanted &&
+          e.status !== 'Disabled',
+      );
+
+      if (hosted) return;
+    } catch {
+      return;
+    }
+  }
+
+  store.registerLocalOnlyDrive(drive);
+}
 
 /**
  * Make a drive that a vault restore just put into local storage show up.
