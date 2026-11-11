@@ -42,7 +42,7 @@ const PROXY_KEY = 'integration-proxy-url';
 
 const PUBLIC_CATALOG =
   'https://ontola.github.io/atomic-plugins/integrations/catalog.json';
-const PUBLIC_PROXY = 'https://localthought.io';
+const PUBLIC_PROXY = 'https://integrations.atomic.place';
 
 const catalog = (env?: string) => {
   vi.resetModules();
@@ -162,6 +162,15 @@ describe('integration proxy', () => {
 
     expect(getIntegrationProxy()).toBe(defaultIntegrationProxy);
     expect(defaultIntegrationProxy).toBe(PUBLIC_PROXY);
+  });
+
+  it('moves a stored copy of the retired default to the new one', async () => {
+    // localthought.io stays on the older proxy protocol; this build cannot
+    // use it, and it was only stored because it used to be the default.
+    localStorage.setItem(PROXY_KEY, 'https://localthought.io');
+    const { getIntegrationProxy } = await proxy();
+
+    expect(getIntegrationProxy()).toBe(PUBLIC_PROXY);
   });
 
   it('ignores a build-time default that is not a bare origin', async () => {
