@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Integrations: provider credentials at the integration proxy are sealed under keys only this app holds (ontola/atomic-plugins#730). The data browser chooses each connection's id and derives its key from the agent's vault proof, sends it once when connecting, and gives each app frame a key grant (the key encrypted to the proxy with HPKE, naming the app) with its capability; the frame signs it as `x-connection-key`. The default proxy is now `https://integrations.atomic.place`, which speaks this protocol; `https://localthought.io` does not, so a setting that still names it uses the new default. Connections made at localthought.io have to be made again.
 - Internal: one `isPlainObject` in @tomic/lib replaces 5 local type guards.
 - Internal: one `isLoopbackHost` in @tomic/lib replaces 12 inline localhost checks.
 - Removed the dead mobile-Tauri frontend code: Android back-button handling, the native QR scanner ("Scan a QR code" button) and the `@tauri-apps/plugin-barcode-scanner` dependency. The mobile app is the Flutter app; Tauri is desktop only. Pairing codes are still pasted or typed.
