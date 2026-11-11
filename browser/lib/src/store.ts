@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
@@ -718,7 +719,7 @@ export class Store {
   private presenceManagers: Map<string, DrivePresenceManager> = new Map();
   private localPresenceListeners = new Set<LocalPresenceListener>();
   /** This tab's presence session, shared by every channel it announces in. */
-  public readonly presenceSessionId: string = crypto.randomUUID();
+  public readonly presenceSessionId: string = randomUUID();
   private injectedFetch: Fetch;
   /** The base URL of an Atomic Server. Where commits, search, and
    *  new-instance requests are sent. */

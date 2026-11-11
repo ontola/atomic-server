@@ -1,4 +1,5 @@
 /** One host API for the UI, Atomic assistant and MCP hosts. */
+import { randomUUID } from './uuid.js';
 import { signRequest } from './authentication.js';
 import type { Store } from './store.js';
 import type { DeclaredAction } from './plugin-manifest.js';
@@ -116,7 +117,7 @@ export function integrationMcpAdapter(
         const id =
           typeof _meta?.['atomic/callId'] === 'string'
             ? _meta['atomic/callId']
-            : crypto.randomUUID();
+            : randomUUID();
         const result = await callIntegrationAction(
           store,
           target,
@@ -226,7 +227,7 @@ export function inspectActionRecovery(
     {
       ...target,
       id,
-      call: { id: crypto.randomUUID(), action, arguments: args },
+      call: { id: randomUUID(), action, arguments: args },
       evidence,
     },
   );

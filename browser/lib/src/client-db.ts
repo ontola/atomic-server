@@ -25,6 +25,7 @@
  * ```
  */
 
+import { randomUUID } from './uuid.js';
 import {
   publishIndexMigration,
   type IndexMigrationProgress,
@@ -362,9 +363,7 @@ export class ClientDbWorker {
   private worker: Worker | null = null;
   private bc: BroadcastChannel | null = null;
   private role: Role = 'initializing';
-  private tabId = (crypto as Crypto & { randomUUID?: () => string }).randomUUID
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+  private tabId = randomUUID();
   private nextId = 1;
   private pending = new Map<string, PendingRequest>();
   private observedLeader: string | undefined;
