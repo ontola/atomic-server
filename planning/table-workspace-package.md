@@ -46,6 +46,14 @@ those requests; rows and totals use identical predicates and class-loading
 guards. Indexed query results, aggregate subscriptions and the NextGraph adapter
 still need extraction/integration. No new ORM capability is claimed.
 
+Row-result increment: renderers and row operations now depend on the narrow
+`IndexedTableRows` identity contract rather than Atomic Collection. Shared
+identity lookup/enumeration hooks guard stale results; the quick-filter list is
+a real finite implementation, without a Collection cast. A distinct window
+snapshot has no enumeration/total-count capability. Windowed grid paging,
+backend capability handling for whole-result views, and native row/schema/write
+adapters remain open; this is not full NextGraph TablePage integration.
+
 - [ ] Extract TablePage/TableResource orchestration and explicit scoped query,
       schema/property, mutation/draft, saved-view, permission and reactive
       navigation services from actual call sites.

@@ -9,7 +9,13 @@ import { useAtomicTableQuery } from './useAtomicTableQuery';
 const backend = vi.hoisted(() => ({
   useCollection: vi.fn(),
   refresh: vi.fn(async () => {}),
-  collection: { totalMembers: 250 },
+  collection: {
+    totalMembers: 250,
+    filters: [],
+    expressionFilters: [],
+    sortBy: 'property:title',
+    sortDesc: false,
+  },
 }));
 vi.mock('@tomic/react', async () => ({
   unknownSubject: (await import('@tomic/lib')).unknownSubject,

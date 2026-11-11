@@ -1,3 +1,5 @@
+import { tableRowList } from '@tomic/table';
+import type { IndexedTableRows } from '@tomic/table';
 import {
   core,
   server,
@@ -6,7 +8,6 @@ import {
   useResources,
   type AggregateOutcome,
   type Aggregation,
-  type Collection,
   type Datatype,
   type JSONValue,
   type Property,
@@ -37,7 +38,7 @@ export interface QuickFilterResult {
    * What the view should render: the view's own collection when inactive, the
    * matching rows (in the collection's order) when active.
    */
-  collection: Collection;
+  collection: IndexedTableRows;
   /** The matching subjects, in order. Empty while inactive. */
   matches: string[];
   /** True while the rows to search through are still being fetched. */
@@ -57,7 +58,7 @@ const EMPTY: string[] = [];
  * row you have not scrolled to yet; nothing is fetched while the field is empty.
  */
 export function useQuickFilter(
-  collection: Collection,
+  collection: IndexedTableRows,
   columns: QuickFilterSource[],
   query: string,
 ): QuickFilterResult {
@@ -68,7 +69,7 @@ export function useQuickFilter(
   // Every member, fetched only while filtering. Tagged with the collection it
   // came from, so a stale list is never searched as if it answered a new query.
   const [members, setMembers] = useState<{
-    from: Collection;
+    from: IndexedTableRows;
     subjects: string[];
   }>();
   const totalMembers = collection.totalMembers;
@@ -246,28 +247,5 @@ export function useQuickFilterAggregates(
   }, [quickFilter.active, quickFilter.matches, aggregation, outcomes, rows]);
 }
 
-/**
- * A fixed list of subjects, in the shape the views read a `Collection` in: by
- * index (the grid, its copy/paste/delete and presence helpers), and whole (the
- * board, the issue list, the calendar). Those are the only parts of a
- * `Collection` a row view reads, which is what lets the quick filter narrow
- * every view kind without each of them knowing about it.
- */
-export function subjectListCollection(subjects: string[]): Collection {
-  const list = {
-    totalMembers: subjects.length,
-    getMemberWithIndex: async (index: number) => {
-      if (index < 0 || index >= subjects.length) {
-        throw new Error('Index out of bounds');
-      }
-
-      return subjects[index];
-    },
-    getAllMembers: async () => [...subjects],
-    async *[Symbol.asyncIterator]() {
-      yield* subjects;
-    },
-  };
-
-  return list as unknown as Collection;
-}
+/** Complete finite matches, with no cast to an Atomic Collection. */
+export const subjectListCollection = tableRowList;

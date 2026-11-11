@@ -3,7 +3,6 @@ import {
   type ExpressionFilter,
   PropVal,
   Resource,
-  UseCollectionResult,
   useResource,
   useStore,
   useSubject,
@@ -28,8 +27,11 @@ type UseTableDataResult = {
   /** The constraints on computed values, shared with the totals query so the
    *  numbers describe the same rows. */
   queryExpressionFilters: ExpressionFilter[];
-} & UseCollectionResult &
-  UseTableViewResult;
+  collection: import('@tomic/table').IndexedTableRows;
+  answeredQuery: ReturnType<typeof useAtomicTableQuery>['answeredQuery'];
+  ready: boolean;
+  invalidateCollection: () => Promise<void>;
+} & UseTableViewResult;
 
 export function useTableData(
   resource: Resource,

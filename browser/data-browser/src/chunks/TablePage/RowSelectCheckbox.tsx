@@ -1,15 +1,13 @@
+import { useTableRowResource } from './useTableRowResource';
+import type { IndexedTableRows } from '@tomic/table';
 import { useContext, type JSX } from 'react';
-import {
-  unknownSubject,
-  useMemberFromCollection,
-  type Collection,
-} from '@tomic/react';
+import { unknownSubject } from '@tomic/react';
 import { styled } from 'styled-components';
 import { FaCheck } from 'react-icons/fa6';
 import { TablePageContext } from './tablePageContext';
 
 type RowSelectCheckboxProps = { index: number } & (
-  | { collection: Collection; subject?: undefined }
+  | { collection: IndexedTableRows; subject?: undefined }
   | { subject: string; collection?: undefined }
 );
 
@@ -34,10 +32,10 @@ function CollectionRowCheckbox({
   collection,
   index,
 }: {
-  collection: Collection;
+  collection: IndexedTableRows;
   index: number;
 }): JSX.Element | null {
-  const { subject } = useMemberFromCollection(collection, index);
+  const { subject } = useTableRowResource(collection, index);
 
   return subject === unknownSubject ? null : (
     <SubjectCheckbox subject={subject} index={index} />

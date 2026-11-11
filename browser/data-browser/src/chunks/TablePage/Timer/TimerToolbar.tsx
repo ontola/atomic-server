@@ -1,3 +1,4 @@
+import type { IndexedTableRows } from '@tomic/table';
 import {
   JSONValue,
   Property,
@@ -5,7 +6,6 @@ import {
   commits,
   core,
   useStore,
-  type Collection,
 } from '@tomic/react';
 import { useCallback, useState, type JSX } from 'react';
 import toast from 'react-hot-toast';
@@ -19,7 +19,7 @@ import { withTableRowDefaults } from '../rowDefaults';
 interface TimerToolbarProps {
   tableSubject: string;
   tableClass: Resource;
-  collection: Collection;
+  collection: IndexedTableRows;
   startProp: Property;
   endProp: Property;
   exclusive: boolean;

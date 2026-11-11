@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
+import type { IndexedTableRows } from '@tomic/table';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { useState } from 'react';
@@ -23,7 +24,6 @@ import {
   useString,
   type AggregateOutcome,
   type Aggregation,
-  type Collection,
   type Property,
 } from '@tomic/react';
 import { buildTheme } from '../../styling';
@@ -151,7 +151,7 @@ function Harness({ rows, doneRows }: Omit<Fixture, 'store'>) {
   const [onlyDone, setOnlyDone] = useState(false);
   const [all] = useState(() => subjectListCollection(rows));
   const [done] = useState(() => subjectListCollection(doneRows));
-  const collection: Collection = onlyDone ? done : all;
+  const collection: IndexedTableRows = onlyDone ? done : all;
 
   const quickFilter = useQuickFilter(collection, columns, text);
   const shown = useAllMembers(quickFilter.collection);
