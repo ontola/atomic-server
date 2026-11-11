@@ -656,6 +656,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Canvas editing session merges a peer's stroke | `packages/atomic_store_flutter/rust/src/api/simple/tests.rs` | |
 | Whole-list rewrite (erase/undo) keeps a peer's stroke | `packages/atomic_store_flutter/rust/src/api/simple/tests.rs` | |
 | Bridge `start_peer` → `add_known_peer` → `peer_sync` pushes a drawing to a real remote process | `packages/atomic_store_flutter/rust/src/api/simple/peer_tests.rs` | receiving side writes the receipt |
+| Bridge round trip with a real `atomic-server` process: pull over Iroh (`peer_sync`), push an edit back over WebSocket (`open_ws_sync`) | `packages/atomic_store_flutter/rust/src/api/simple/server_tests.rs` | skips unless `ATOMIC_SERVER_BIN` points at a built server; `flutterTest` does not build one, so CI skips it |
 | Bridge known-peer bookkeeping (add / rename / dedupe / forget) | `packages/atomic_store_flutter/rust/src/api/simple/peer_tests.rs` | |
 | Bridge `peer_sync` to an unreachable node errors rather than hanging | `packages/atomic_store_flutter/rust/src/api/simple/peer_tests.rs` | |
 | **`POST /iroh-sync` request shape, both sides** | `testdata/pairing-request.json` + `pairing.test.ts` + `iroh_pairing.rs` | shared fixture binds them |
