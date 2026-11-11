@@ -19,6 +19,8 @@ import {
   watchForVaultBackups,
   type VaultAutoBackupDeps,
 } from './vaultAutoBackup';
+import { getManagedEnrollments } from './enrollmentApi';
+import { EMPTY_NODE_INFO, fetchManagedInfo } from '../managedServer';
 import {
   VaultSessionEndedError,
   type VaultEnrollment,
@@ -31,6 +33,12 @@ import {
  * drive its owner switched off, and it restores only when there is actually
  * something to restore.
  */
+
+vi.mock('./enrollmentApi', () => ({ getManagedEnrollments: vi.fn() }));
+vi.mock('../managedServer', async importOriginal => ({
+  ...(await importOriginal<typeof import('../managedServer')>()),
+  fetchManagedInfo: vi.fn(),
+}));
 
 const DRIVE = 'did:ad:drive:test';
 const PSEUDONYM = 'pseudonym-1';
@@ -541,6 +549,39 @@ describe('restoreFromVault', () => {
       );
     },
   );
+
+  describe('a drive nobody confirmed missing', () => {
+    const run = async (managed: boolean, hosted: boolean) => {
+      vi.mocked(fetchManagedInfo).mockResolvedValue({
+        ...EMPTY_NODE_INFO,
+        managed,
+      });
+      vi.mocked(getManagedEnrollments).mockResolvedValue(
+        hosted
+          ? [{ drive_subject: DRIVE, agent_subject: null, status: 'Active' }]
+          : [],
+      );
+      const store = await signedInStore();
+
+      await restoreFromVault(store, DRIVE, fakeDeps());
+
+      return store.isLocalOnlyDrive(DRIVE);
+    };
+
+    // Enrollments list Cloud Server hosting only, so a self-hosted server
+    // with a Vault backup has none and must keep saving to its server.
+    it('stays on a self-hosted server', async () => {
+      expect(await run(false, false)).toBe(false);
+    });
+
+    it('becomes local on a managed node that does not host it', async () => {
+      expect(await run(true, false)).toBe(true);
+    });
+
+    it('stays on the managed node that hosts it', async () => {
+      expect(await run(true, true)).toBe(false);
+    });
+  });
 
   it('reloads the restored drive, so a lookup from before the restore stops answering', async () => {
     const store = await signedInStore();

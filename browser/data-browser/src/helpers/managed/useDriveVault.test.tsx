@@ -4,6 +4,7 @@ import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDriveVault } from './useDriveVault';
 import { getManagedEnrollments } from './enrollmentApi';
+import { EMPTY_NODE_INFO, fetchManagedInfo } from '../managedServer';
 
 const DRIVE = 'did:ad:drive';
 const restoreOutcome = {
@@ -33,6 +34,10 @@ vi.mock('./vaultKeyOps', () => ({
   },
 }));
 vi.mock('./enrollmentApi', () => ({ getManagedEnrollments: vi.fn() }));
+vi.mock('../managedServer', async importOriginal => ({
+  ...(await importOriginal<typeof import('../managedServer')>()),
+  fetchManagedInfo: vi.fn(),
+}));
 // A node-backed origin, like the managed node1 in the bug report.
 vi.mock('../originNode', () => ({ isOriginWithoutNode: () => false }));
 
@@ -44,6 +49,10 @@ vi.mock('../originNode', () => ({ isOriginWithoutNode: () => false }));
 describe('useDriveVault restore', () => {
   beforeEach(() => {
     store.registerLocalOnlyDrive.mockClear();
+    vi.mocked(fetchManagedInfo).mockResolvedValue({
+      ...EMPTY_NODE_INFO,
+      managed: true,
+    });
   });
 
   const restore = async () => {
@@ -62,6 +71,15 @@ describe('useDriveVault restore', () => {
     vi.mocked(getManagedEnrollments).mockResolvedValue([
       { drive_subject: DRIVE, agent_subject: null, status: 'Active' },
     ]);
+    await restore();
+    expect(store.registerLocalOnlyDrive).not.toHaveBeenCalled();
+  });
+
+  // Enrollments list Cloud Server hosting only: a drive on a self-hosted
+  // AtomicServer has none, and must keep saving to its server.
+  it('leaves a drive on a self-hosted server alone', async () => {
+    vi.mocked(fetchManagedInfo).mockResolvedValue(EMPTY_NODE_INFO);
+    vi.mocked(getManagedEnrollments).mockResolvedValue([]);
     await restore();
     expect(store.registerLocalOnlyDrive).not.toHaveBeenCalled();
   });
