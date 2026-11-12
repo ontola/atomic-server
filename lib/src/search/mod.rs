@@ -1165,12 +1165,10 @@ fn description_text(resource: &Resource) -> String {
 }
 
 fn body_text(resource: &Resource) -> String {
-    if let Some(snapshot) = resource.materialized_state() {
-        if let Ok(doc) = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
-            let text = doc.extract_document_plain_text();
-            if !text.is_empty() {
-                return text;
-            }
+    if let Some(doc) = resource.loaded_state_doc() {
+        let text = doc.extract_document_plain_text();
+        if !text.is_empty() {
+            return text;
         }
     }
     // `set_unsafe` materializes a properties-only live doc, after which

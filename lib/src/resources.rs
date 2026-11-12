@@ -580,6 +580,12 @@ impl Resource {
         self.loro = None;
     }
 
+    /// Borrow already loaded state for read-only consumers without exporting
+    /// and re-importing a snapshot. Does not initialize a properties-only doc.
+    pub(crate) fn loaded_state_doc(&self) -> Option<&crate::loro::AtomicLoroDoc> {
+        self.loro.as_ref()
+    }
+
     /// Persisted or in-memory materialized state bytes (for sync and signing).
     pub fn materialized_state(&self) -> Option<Vec<u8>> {
         if let Some(doc) = &self.loro {
