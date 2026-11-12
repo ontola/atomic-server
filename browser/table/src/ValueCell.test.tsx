@@ -173,3 +173,32 @@ it('leaves the native context menu available during editing', async () => {
   fireEvent.contextMenu(screen.getByRole('textbox'));
   expect(menu).toHaveBeenCalledTimes(1);
 });
+
+it.each([
+  ['1.23456789', 1.23456789],
+  ['1e-3', 0.001],
+  ['1,5', 1.5],
+] as const)(
+  'uses complete float input %s without truncation',
+  async (text, expected) => {
+    const { FloatCell } =
+      await import('./chunks/TablePage/EditorCells/FloatCell.js');
+    const change = vi.fn();
+    render(
+      <Grid
+        overrides={{
+          value: 0,
+          onChange: change,
+          editStart: { kind: 'text', accepts: () => true },
+          renderEditor: state => (
+            <FloatCell.Edit {...state} property='number' />
+          ),
+        }}
+      />,
+    );
+    await typeToEdit('1');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: text } });
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Tab' });
+    expect(change).toHaveBeenCalledWith(expected);
+  },
+);

@@ -37,7 +37,7 @@ export function TableRangeInput({
       key={resource.subject + ':' + resource.props.datatype}
       minValue={min}
       maxValue={max}
-      integers={resource.props.datatype !== Datatype.FLOAT}
+      integers={!numeric}
       nonNegative={!numeric}
       messages={{
         integer: 'Enter whole numbers or leave the bounds empty.',
