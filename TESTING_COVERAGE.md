@@ -1867,30 +1867,40 @@ Not covered here: live Hetzner rollout and arbitrary large-file memory limits.
 
 ### Cloud Vault file contents
 
+Files are sealed per vault (`planning/vault-file-blobs.md`).
 `lib/src/vault/sync.rs` tests: `vault_restores_uploaded_file_bytes` (multi-chunk
-file comes back, hash verified), `identical_files_upload_one_blob_once`,
-`missing_or_corrupt_blob_is_reported_on_restore`,
-`a_file_shared_by_two_drives_survives_one_deleting_it`,
-`blob_chunks_are_a_pure_function_of_length` (the layout two devices must agree
-on), `proof_hashes_cover_the_challenged_ranges_only`,
-`assemble_blob_rejects_wrong_bytes`.
+file comes back, stored objects contain no plaintext, the importer skips file
+chunks), `the_same_file_twice_in_one_vault_uploads_one_blob` (and a second pass
+uploads nothing), `two_vaults_with_identical_bytes_are_unrelated` (different
+ids and ciphertext, one vault's key cannot open the other's, wiping one does not
+affect the other's restore), `missing_or_corrupt_blob_is_reported_on_restore`,
+`open_blob_rejects_swapped_reordered_or_short_chunks`,
+`the_seal_overhead_constant_matches_the_envelope`,
+`blob_keys_round_trip_and_stay_in_the_drive_prefix`,
+`blob_chunks_are_a_pure_function_of_length`.
 
 `helpers/managed/vaultBlobs.test.ts` runs `backupDrive` / `restoreDrive`
-against a mocked control plane: create-only chunk PUTs confirmed together then
-`retain-blobs` last; a file this vault already references is not read or sent;
-a claim answers the proof challenge with no PUT; 412 still confirms; a rejected
-PUT confirms nothing and publishes no live set; files only the vault holds stay
-live; an empty live set is published; a file's chunks are never split across
+against a mocked control plane: only sealed chunks are PUT, under the keyed id
+and with the sealed size (the plain hash never appears in a request); chunks are
+confirmed together; an ordinary backup never calls `retain-blobs`; an explicit
+compress publishes the live ids last, and skips it when a referenced file is
+missing on the device; an empty live set is published; a file the vault already
+holds is not sent, only missing chunks are; the id cache avoids re-reading files;
+a rejected PUT confirms nothing; a file's chunks are never split across
 `upload-urls` calls; a failed `retain-blobs` does not fail the backup; the
-importer is never handed file chunks; restore reports present / missing /
-unreadable (hash mismatch, chunk gone from storage); backup-file and snapshot
-restores skip files. The atomic-saas side (quota per reference, refcounted
-delete, proof checks) is covered in that repo.
+importer is never handed file chunks; restore matches stored files to wanted
+hashes, stops downloading once everything wanted is back, and reports present /
+missing / unreadable (does not open, gap in chunks, chunk gone from storage);
+backup-file restores skip files. `helpers/managed/vaultRestore.test.ts`
+(`also brings back the file bytes the snapshot references`) and
+`components/Vault/VaultRestoreDialog.test.tsx` cover the snapshot picker path:
+picking a snapshot restores the file bytes its resources name and reports
+files left behind. The atomic-saas side (quota per enrollment, `already_stored`,
+`retain-blobs` delete clock) is covered in that repo.
 
 Not covered: the WASM bindings themselves (`vaultBlob*` run only in a browser
 build, and no Playwright spec uploads a file to a real control plane), the
-worker RPC pass-through, VaultPanel's "not everything restored" notice, and
-files larger than memory.
+worker RPC pass-through, and files larger than memory.
 
 ### Blob garbage collection
 

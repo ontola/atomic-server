@@ -419,6 +419,9 @@ export function useVaultBackup({
               refreshDriveKey: () => refreshKey(drivePseudonym),
               forceCheckpoint: true,
               currentStateOnly,
+              // The one place the file live set is published: compressing is
+              // the explicit request to reclaim what nothing references.
+              retainBlobs: true,
             }),
         });
         await refresh();

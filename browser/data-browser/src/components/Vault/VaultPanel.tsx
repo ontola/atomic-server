@@ -51,7 +51,7 @@ export function VaultPanel({
   // What Cloud Vault is: the same sentence in every state. Declared in here,
   // not at module level, so the translation extractor sees it.
   const tagline =
-    'Backs up your data and files. Your data is encrypted so only you can read it. Files are not.';
+    'Encrypted backup of your data and files. Only you can read it.';
   const on = status.state === 'on';
   const standing: ServiceStanding | null = on
     ? included
@@ -293,10 +293,9 @@ export function VaultPanel({
               facts={[objects]}
             />
             <IncludedNote data-testid='vault-files-note'>
-              Files are included. Each file is stored once, shared with every
-              backup that holds the same file, so files are not end-to-end
-              encrypted and {PRODUCT_NAME} can read them. Every backup counts
-              the full size of each of its files toward its own storage.
+              Files are included. They are encrypted on this device like
+              everything else, and count toward this backup's Cloud Vault
+              storage.
             </IncludedNote>
             {!showQuota && (
               <IncludedNote data-testid='vault-included-note'>

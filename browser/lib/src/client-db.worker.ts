@@ -36,7 +36,21 @@ export interface VaultBlobPlan {
   /** `missing` also covers bytes that do not match their hash. */
   status: 'ready' | 'missing' | 'tooLarge';
   size: number;
-  chunks: { index: number; offset: number; length: number }[];
+  /** The file's id in this vault (keyed BLAKE3 hex); empty unless `ready`. */
+  blobId: string;
+  /** `length` is plaintext, `sealedLength` what is uploaded and charged. */
+  chunks: {
+    index: number;
+    offset: number;
+    length: number;
+    sealedLength: number;
+  }[];
+}
+
+export interface VaultBlobRestoreResult {
+  status: 'restored' | 'unreferenced' | 'unreadable';
+  /** Plain BLAKE3 hex of the stored file, when `restored`. */
+  hash?: string | null;
 }
 
 export interface VaultImportSummary {
@@ -176,21 +190,29 @@ export interface ClientDbRpc {
     { drivePseudonym: string; devicePubkey: string; segment: number },
     void,
   ];
-  // File bytes (`planning/vault-file-blobs.md`): chunking, proof hashing and
-  // hash verification are Rust; the main thread only moves chunks.
+  // File bytes (`planning/vault-file-blobs.md`): hashing, chunking, sealing
+  // and opening are Rust; the main thread only moves sealed chunks.
   vaultFileHashes: [{ driveSubject: string }, string[]];
   vaultBlobPresent: [{ hash: string }, boolean];
-  vaultBlobOpen: [{ hash: string }, VaultBlobPlan];
-  vaultBlobChunk: [{ hash: string; index: number }, Uint8Array];
-  vaultBlobProof: [
-    {
-      hash: string;
-      ranges: { chunkIndex: number; offset: number; length: number }[];
-    },
-    string[],
+  vaultBlobOpen: [
+    { hash: string; key: Uint8Array; keyEpoch: number },
+    VaultBlobPlan,
+  ];
+  vaultBlobChunk: [
+    { hash: string; key: Uint8Array; keyEpoch: number; index: number },
+    Uint8Array,
   ];
   vaultBlobClose: [object, void];
-  vaultBlobRestore: [{ hash: string; chunks: Uint8Array[] }, boolean];
+  vaultBlobRestore: [
+    {
+      key: Uint8Array;
+      keyEpoch: number;
+      blobId: string;
+      chunks: Uint8Array[];
+      wanted: string[];
+    },
+    VaultBlobRestoreResult,
+  ];
 }
 
 export type RpcType = keyof ClientDbRpc;
@@ -451,15 +473,20 @@ const handlers: Handlers = {
   },
   vaultFileHashes: m => db!.vaultFileHashes(m.driveSubject),
   vaultBlobPresent: m => db!.vaultBlobPresent(m.hash),
-  vaultBlobOpen: m => db!.vaultBlobOpen(m.hash),
-  vaultBlobChunk: m => db!.vaultBlobChunk(m.hash, m.index),
-  vaultBlobProof: m => db!.vaultBlobProof(m.hash, m.ranges),
+  vaultBlobOpen: m => db!.vaultBlobOpen(m.hash, m.key, m.keyEpoch),
+  vaultBlobChunk: m => db!.vaultBlobChunk(m.hash, m.key, m.keyEpoch, m.index),
   vaultBlobClose: () => db!.vaultBlobClose(),
   vaultBlobRestore: async m => {
-    const stored = await db!.vaultBlobRestore(m.hash, m.chunks);
+    const result: VaultBlobRestoreResult = await db!.vaultBlobRestore(
+      m.key,
+      m.keyEpoch,
+      m.blobId,
+      m.chunks,
+      m.wanted,
+    );
 
     // Same reasoning as `vaultImport`: a restore may be followed by a reload.
-    if (stored) {
+    if (result.status === 'restored') {
       try {
         db!.flush();
       } catch (e) {
@@ -468,7 +495,7 @@ const handlers: Handlers = {
       }
     }
 
-    return stored;
+    return result;
   },
   getVersionVectorsForDrive: m => db!.getVersionVectorsForDrive(m.drive),
   // Search entries are about three quarters of a pulled resource's index

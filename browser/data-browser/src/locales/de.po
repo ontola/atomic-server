@@ -13525,10 +13525,6 @@ msgid "Report a bug or suggest an improvement. Your message and optional email g
 msgstr "Melde einen Fehler oder schlage eine Verbesserung vor. Deine Nachricht und optionale E-Mail werden über Sentry an das Atomic-Team gesendet, zusammen mit technischen Angaben zu deiner Einrichtung (App-Version, Serveradresse und -status). Bitte lasse private Inhalte aus deinem Arbeitsbereich weg."
 
 #: src/components/Vault/VaultPanel.tsx
-msgid "Backs up your data and files. Your data is encrypted so only you can read it. Files are not."
-msgstr "Sichert deine Daten und Dateien. Deine Daten sind verschlüsselt, sodass nur du sie lesen kannst. Dateien nicht."
-
-#: src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
 msgstr[0] "# Backup-Objekt konnte nicht gelesen werden"
@@ -13551,7 +13547,10 @@ msgstr[1] "# Dateien konnten nicht gelesen werden"
 msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
 msgstr "Wiederhergestellt, aber nicht alles: {0}. Lade die Seite neu, um das Wiederhergestellte zu sehen."
 
-#. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
-msgid "Files are included. Each file is stored once, shared with every backup that holds the same file, so files are not end-to-end encrypted and {0} can read them. Every backup counts the full size of each of its files toward its own storage."
-msgstr "Dateien sind enthalten. Jede Datei wird nur einmal gespeichert und mit jedem Backup geteilt, das dieselbe Datei enthält. Dateien sind daher nicht Ende-zu-Ende-verschlüsselt und {0} kann sie lesen. Jedes Backup zählt die volle Größe aller seiner Dateien auf seinen eigenen Speicher."
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Verschlüsselte Sicherung deiner Daten und Dateien. Nur du kannst sie lesen."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Dateien sind enthalten. Sie werden auf diesem Gerät verschlüsselt wie alles andere und zählen zum Cloud-Vault-Speicher dieser Sicherung."

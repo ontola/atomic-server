@@ -10,10 +10,11 @@ import {
 /**
  * File bytes through the hosted client, against a mocked control plane.
  *
- * Chunking, hashing and the proof answers are Rust (`atomic_lib::vault::sync`,
- * tested there). These cover what only TypeScript does: which requests go out
- * in which order, what a claim, a 412 or a failed PUT leads to, which hashes
- * `retain-blobs` is told are live, and how a restore counts what it found.
+ * Hashing, chunking, sealing and opening are Rust (`atomic_lib::vault::sync`,
+ * tested there, including the two-vault and corruption cases). These cover
+ * what only TypeScript does: which requests go out in which order, that only
+ * sealed bytes are uploaded, which ids `retain-blobs` is told are live and
+ * when, and how a restore counts what it found.
  */
 
 const PSEUDONYM = 'testpseudonym';
@@ -21,9 +22,14 @@ const DEVICE = '03'.repeat(32);
 const HASH_A = 'aa'.repeat(32);
 const HASH_B = 'bb'.repeat(32);
 const CHUNK = 4;
+const OVERHEAD = 46;
+const SEALED = 0x5e;
 
-const key = (hash: string, n: number) =>
-  `vault-blobs/${hash}/${String(n).padStart(6, '0')}`;
+/** What the vault calls a file: unrelated to its plain hash. */
+const idOf = (hash: string) => `1d${hash.slice(2)}`;
+
+const key = (id: string, n: number) =>
+  `vault/${PSEUDONYM}/blobs/${id}/${String(n).padStart(6, '0')}`;
 
 const PASS = {
   driveSubject: 'did:ad:drive',
@@ -59,50 +65,78 @@ function fakeDb(
     vaultCommitSegment: vi.fn(),
     vaultFileHashes: vi.fn(async () => referenced),
     vaultBlobPresent: vi.fn(async (hash: string) => local.has(hash)),
-    vaultBlobOpen: vi.fn(async (hash: string): Promise<VaultBlobPlan> => {
-      opened.push(hash);
-      open = hash;
-      const bytes = local.get(hash);
+    vaultBlobOpen: vi.fn(
+      async (
+        hash: string,
+        _key: Uint8Array,
+        _epoch: number,
+      ): Promise<VaultBlobPlan> => {
+        opened.push(hash);
+        open = hash;
+        const bytes = local.get(hash);
 
-      if (!bytes) return { status: 'missing', size: 0, chunks: [] };
+        if (!bytes)
+          return { status: 'missing', size: 0, blobId: '', chunks: [] };
 
-      return {
-        status: 'ready',
-        size: bytes.length,
-        chunks: Array.from(
-          { length: Math.ceil(bytes.length / CHUNK) },
-          (_, i) => ({
-            index: i,
-            offset: i * CHUNK,
-            length: Math.min(CHUNK, bytes.length - i * CHUNK),
-          }),
-        ),
-      };
-    }),
-    vaultBlobChunk: vi.fn(async (hash: string, i: number) => {
-      expect(open).toBe(hash);
+        return {
+          status: 'ready',
+          size: bytes.length,
+          blobId: idOf(hash),
+          chunks: Array.from(
+            { length: Math.ceil(bytes.length / CHUNK) },
+            (_, i) => {
+              const length = Math.min(CHUNK, bytes.length - i * CHUNK);
 
-      return local.get(hash)!.slice(i * CHUNK, (i + 1) * CHUNK);
-    }),
-    vaultBlobProof: vi.fn(
-      async (hash: string, ranges: { chunkIndex: number }[]) => {
+              return {
+                index: i,
+                offset: i * CHUNK,
+                length,
+                sealedLength: length + OVERHEAD,
+              };
+            },
+          ),
+        };
+      },
+    ),
+    vaultBlobChunk: vi.fn(
+      async (hash: string, _key: Uint8Array, _epoch: number, i: number) => {
         expect(open).toBe(hash);
+        const plain = local.get(hash)!.slice(i * CHUNK, (i + 1) * CHUNK);
 
-        return ranges.map(r => `proof-${hash.slice(0, 2)}-${r.chunkIndex}`);
+        return new Uint8Array(plain.length + OVERHEAD).fill(SEALED);
       },
     ),
     vaultBlobClose: vi.fn(async () => {
       open = null;
     }),
-    vaultBlobRestore: vi.fn(async (hash: string, chunks: Uint8Array[]) => {
-      // The real check is the BLAKE3 in Rust; here a chunk of 0xff is "corrupt".
-      if (chunks.some(c => c[0] === 0xff)) return false;
+    // The real work (decrypt, plain BLAKE3, match to a wanted hash) is Rust. A
+    // chunk starting with 0xff stands for one that does not open.
+    vaultBlobRestore: vi.fn(
+      async (
+        _key: Uint8Array,
+        _epoch: number,
+        blobId: string,
+        chunks: Uint8Array[],
+        wanted: string[],
+      ) => {
+        if (chunks.some(c => c[0] === 0xff)) {
+          return { status: 'unreadable' as const };
+        }
 
-      restored.set(hash, chunks);
-      local.set(hash, new Uint8Array(0));
+        const hash = [HASH_A, HASH_B, 'cc'.repeat(32)].find(
+          h => idOf(h) === blobId,
+        );
 
-      return true;
-    }),
+        if (!hash || !wanted.includes(hash)) {
+          return { status: 'unreferenced' as const };
+        }
+
+        restored.set(hash, chunks);
+        local.set(hash, new Uint8Array(0));
+
+        return { status: 'restored' as const, hash };
+      },
+    ),
   } satisfies VaultCapableDb & VaultBlobDb;
 
   return Object.assign(db, { opened, restored });
@@ -118,8 +152,6 @@ type Portal = {
     size_bytes: number;
     content_hash?: string;
   }[];
-  /** What the next upload-urls says for a hash. */
-  challenge: Record<string, boolean>;
   putStatus: number;
   downloads: Record<string, Uint8Array | number>;
   retain: string[][];
@@ -129,7 +161,6 @@ function portal(overrides: Partial<Portal> = {}): Portal {
   const state: Portal = {
     calls: [],
     objects: [],
-    challenge: {},
     putStatus: 200,
     downloads: {},
     retain: [],
@@ -155,37 +186,31 @@ function portal(overrides: Partial<Portal> = {}): Portal {
           chunk_index: number;
           size_bytes: number;
         }[];
-        const hashes = [...new Set(objects.map(o => o.content_hash))];
 
         return json({
-          uploads: objects
-            .filter(o => !state.challenge[o.content_hash])
-            .map(o => ({
-              object_id: `id-${o.content_hash.slice(0, 2)}-${o.chunk_index}`,
-              object_key: key(o.content_hash, o.chunk_index),
-              url: `https://s3.test/${key(o.content_hash, o.chunk_index)}`,
+          uploads: objects.map(o => {
+            const object_key = key(o.content_hash, o.chunk_index);
+            const existing = state.objects.find(
+              e => e.object_key === object_key,
+            );
+
+            return {
+              object_id:
+                existing?.object_id ??
+                `id-${o.content_hash.slice(0, 2)}-${o.chunk_index}`,
+              object_key,
+              url: existing ? '' : `https://s3.test/${object_key}`,
               method: 'PUT',
               headers: [['content-length', String(o.size_bytes)]],
               size_bytes: o.size_bytes,
-              already_stored: false,
-            })),
-          blob_proofs: hashes
-            .filter(h => state.challenge[h])
-            .map(h => ({
-              content_hash: h,
-              token: `token-${h.slice(0, 2)}`,
-              expires_at: 1,
-              ranges: [{ chunk_index: 0, offset: 1, length: 2 }],
-            })),
+              already_stored: Boolean(existing),
+            };
+          }),
         });
       }
 
       if (url.endsWith('/confirm-upload')) {
-        return json({
-          confirmed: body.confirmations.length,
-          claimed_blobs: body.blob_proofs.length,
-          used_bytes: 0,
-        });
+        return json({ confirmed: body.confirmations.length, used_bytes: 0 });
       }
 
       if (url.endsWith('/retain-blobs')) {
@@ -242,6 +267,16 @@ function portal(overrides: Partial<Portal> = {}): Portal {
 const urls = (p: Portal, suffix: string) =>
   p.calls.filter(c => c.url.endsWith(suffix));
 
+/** A `localStorage` that survives between passes within one test. */
+function stubStorage() {
+  const data = new Map<string, string>();
+
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => data.get(k) ?? null,
+    setItem: (k: string, v: string) => void data.set(k, v),
+  });
+}
+
 beforeEach(() => {
   vi.stubEnv('VITE_MANAGED_PORTAL_URL', 'https://control.test');
 });
@@ -252,8 +287,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const stored = (hash: string, n: number) => ({
+  object_id: `x${hash.slice(0, 2)}${n}`,
+  object_key: key(idOf(hash), n),
+  kind: 'blob',
+  size_bytes: CHUNK + OVERHEAD,
+  content_hash: idOf(hash),
+});
+
 describe('backing up file bytes', () => {
-  it('uploads each chunk create-only, confirms them together, then retains the live set', async () => {
+  it('uploads sealed chunks under the per-vault id and confirms them together', async () => {
     const db = fakeDb({ [HASH_A]: new Uint8Array(10).fill(1) });
     const p = portal();
 
@@ -261,150 +304,157 @@ describe('backing up file bytes', () => {
 
     expect(outcome).toMatchObject({
       status: 'nothing-to-do',
-      blobs: { uploaded: 1, claimed: 0, bytesUploaded: 10 },
+      blobs: { uploaded: 1, bytesUploaded: 10 + 3 * OVERHEAD },
     });
+    expect(db.vaultBlobOpen).toHaveBeenCalledWith(HASH_A, PASS.driveKey, 1);
 
     const upload = urls(p, '/upload-urls')[0].body as {
       objects: Record<string, unknown>[];
     };
+    // The control plane is told the id (never the plain hash) and the sealed
+    // size; no chunk count, no proof.
     expect(upload.objects).toEqual(
       [0, 1, 2].map(i => ({
         kind: 'blob',
-        size_bytes: i === 2 ? 2 : 4,
+        size_bytes: (i === 2 ? 2 : 4) + OVERHEAD,
         key_epoch: 1,
-        content_hash: HASH_A,
+        content_hash: idOf(HASH_A),
         chunk_index: i,
-        chunk_count: 3,
       })),
     );
+    expect(JSON.stringify(p.calls)).not.toContain(HASH_A);
 
     const puts = p.calls.filter(c => c.method === 'PUT');
     expect(puts.map(c => c.url)).toEqual(
-      [0, 1, 2].map(i => `https://s3.test/${key(HASH_A, i)}`),
+      [0, 1, 2].map(i => `https://s3.test/${key(idOf(HASH_A), i)}`),
     );
-    expect(puts[0].headers).toEqual({ 'if-none-match': '*' });
+
+    // Ciphertext only: every body is the sealed chunk, never the plaintext.
+    for (const put of puts) {
+      expect(put.headers).toEqual({});
+      expect((put.body as Uint8Array)[0]).toBe(SEALED);
+    }
 
     const confirms = urls(p, '/confirm-upload');
     expect(confirms).toHaveLength(1);
-    expect(
-      (confirms[0].body as { confirmations: unknown[] }).confirmations,
-    ).toEqual(
-      [0, 1, 2].map(i => ({
-        object_id: `id-aa-${i}`,
-        size_bytes: i === 2 ? 2 : 4,
-        content_hash: HASH_A,
+    expect(confirms[0].body).toEqual({
+      confirmations: [0, 1, 2].map(i => ({
+        object_id: `id-1d-${i}`,
+        size_bytes: (i === 2 ? 2 : 4) + OVERHEAD,
+        content_hash: idOf(HASH_A),
       })),
-    );
+    });
+    expect(db.vaultBlobClose).toHaveBeenCalled();
+  });
 
-    // Confirmed before the live set is published, and the live set is last.
+  it('never publishes a live set during an ordinary backup', async () => {
+    const db = fakeDb({ [HASH_A]: new Uint8Array(4) });
+    const p = portal();
+
+    const outcome = await backupDrive({ db, ...PASS });
+
+    expect(outcome.blobs).toMatchObject({ uploaded: 1, retained: false });
+    expect(urls(p, '/retain-blobs')).toHaveLength(0);
+  });
+
+  it('publishes the live ids, last, when an explicit compress asks for it', async () => {
+    const db = fakeDb({
+      [HASH_A]: new Uint8Array(4),
+      [HASH_B]: new Uint8Array(4),
+    });
+    const p = portal();
+
+    const outcome = await backupDrive({ db, ...PASS, retainBlobs: true });
+
+    expect(outcome.blobs).toMatchObject({ uploaded: 2, retained: true });
     expect(p.calls.at(-1)!.url).toMatch(/\/retain-blobs$/);
-    expect(p.retain).toEqual([[HASH_A]]);
-    expect(db.vaultBlobClose).toHaveBeenCalled();
+    expect(p.retain).toEqual([[idOf(HASH_A), idOf(HASH_B)]]);
   });
 
-  it('does not read, upload or confirm a file this vault already references', async () => {
-    const db = fakeDb({ [HASH_A]: new Uint8Array(10) });
-    const p = portal({
-      objects: [0, 1, 2].map(i => ({
-        object_id: `x${i}`,
-        object_key: key(HASH_A, i),
-        kind: 'blob',
-        size_bytes: 4,
-        content_hash: HASH_A,
-      })),
-    });
+  it('does not publish a live set when this device lacks a referenced file', async () => {
+    // B is referenced but neither on this device nor known: its id is unknown,
+    // so leaving it out of the set could start the delete clock on a file
+    // another device uses.
+    const db = fakeDb({ [HASH_A]: new Uint8Array(4) }, [HASH_A, HASH_B]);
+    const p = portal();
 
-    const outcome = await backupDrive({ db, ...PASS });
-
-    expect(outcome.blobs).toMatchObject({ alreadyStored: 1, uploaded: 0 });
-    expect(db.vaultBlobOpen).not.toHaveBeenCalled();
-    expect(urls(p, '/upload-urls')).toHaveLength(0);
-    expect(p.retain).toEqual([[HASH_A]]);
-  });
-
-  it('claims a file another vault stored by answering the challenge from its own copy', async () => {
-    const db = fakeDb({ [HASH_A]: new Uint8Array(10).fill(1) });
-    const p = portal({ challenge: { [HASH_A]: true } });
-
-    const outcome = await backupDrive({ db, ...PASS });
+    const outcome = await backupDrive({ db, ...PASS, retainBlobs: true });
 
     expect(outcome.blobs).toMatchObject({
-      claimed: 1,
-      uploaded: 0,
-      bytesUploaded: 0,
-    });
-    expect(p.calls.filter(c => c.method === 'PUT')).toHaveLength(0);
-    expect(db.vaultBlobProof).toHaveBeenCalledWith(HASH_A, [
-      { chunkIndex: 0, offset: 1, length: 2 },
-    ]);
-    expect(urls(p, '/confirm-upload')[0].body).toEqual({
-      confirmations: [],
-      blob_proofs: [
-        { content_hash: HASH_A, token: 'token-aa', hashes: ['proof-aa-0'] },
-      ],
-    });
-    expect(p.retain).toEqual([[HASH_A]]);
-  });
-
-  it('treats 412 as "bytes already there" and still confirms', async () => {
-    const db = fakeDb({ [HASH_A]: new Uint8Array(4) });
-    const p = portal({ putStatus: 412 });
-
-    const outcome = await backupDrive({ db, ...PASS });
-
-    expect(outcome.blobs).toMatchObject({ uploaded: 1 });
-    expect(urls(p, '/confirm-upload')).toHaveLength(1);
-  });
-
-  it('fails without publishing a live set when a PUT is rejected', async () => {
-    const db = fakeDb({ [HASH_A]: new Uint8Array(4) });
-    const p = portal({ putStatus: 500 });
-
-    await expect(backupDrive({ db, ...PASS })).rejects.toThrow(
-      'Vault file upload failed (500)',
-    );
-
-    expect(urls(p, '/confirm-upload')).toHaveLength(0);
-    expect(p.retain).toHaveLength(0);
-    // Still released, so the next file read starts clean.
-    expect(db.vaultBlobClose).toHaveBeenCalled();
-  });
-
-  it('counts files this device lacks, and keeps only referenced ones live', async () => {
-    // B is referenced by a File resource but not on this device, and the vault
-    // has no copy either. A is not on this device but the vault holds it.
-    const db = fakeDb({}, [HASH_A, HASH_B]);
-    const p = portal({
-      objects: [
-        {
-          object_id: 'a0',
-          object_key: key(HASH_A, 0),
-          kind: 'blob',
-          size_bytes: 4,
-          content_hash: HASH_A,
-        },
-      ],
-    });
-
-    const outcome = await backupDrive({ db, ...PASS });
-
-    expect(outcome.blobs).toMatchObject({
-      alreadyStored: 1,
+      uploaded: 1,
       missing: 1,
-      uploaded: 0,
+      retained: false,
     });
-    // Dropping A here would remove this vault's reference to bytes only the
-    // vault still has.
-    expect(p.retain).toEqual([[HASH_A]]);
+    expect(urls(p, '/retain-blobs')).toHaveLength(0);
   });
 
   it('publishes an empty live set once every file is gone, so references drop', async () => {
     const db = fakeDb({}, []);
     const p = portal();
 
-    await backupDrive({ db, ...PASS });
+    await backupDrive({ db, ...PASS, retainBlobs: true });
 
     expect(p.retain).toEqual([[]]);
+  });
+
+  it('does not read, upload or confirm a file this vault already holds', async () => {
+    const db = fakeDb({ [HASH_A]: new Uint8Array(10) });
+    const p = portal({ objects: [0, 1, 2].map(i => stored(HASH_A, i)) });
+
+    const outcome = await backupDrive({ db, ...PASS });
+
+    // The id needs the bytes, so the file is read once to learn it...
+    expect(db.vaultBlobOpen).toHaveBeenCalledTimes(1);
+    expect(outcome.blobs).toMatchObject({ alreadyStored: 1, uploaded: 0 });
+    expect(p.calls.filter(c => c.method === 'PUT')).toHaveLength(0);
+    expect(urls(p, '/confirm-upload')).toHaveLength(0);
+  });
+
+  it('remembers ids so a later pass does not read files again', async () => {
+    stubStorage();
+    const db = fakeDb({ [HASH_A]: new Uint8Array(10).fill(1) });
+    const p = portal();
+
+    await backupDrive({ db, ...PASS });
+    // The vault now lists what the first pass uploaded.
+    p.objects = [0, 1, 2].map(i => stored(HASH_A, i));
+    db.vaultBlobOpen.mockClear();
+    const second = await backupDrive({ db, ...PASS, retainBlobs: true });
+
+    expect(db.vaultBlobOpen).not.toHaveBeenCalled();
+    expect(second.blobs).toMatchObject({ alreadyStored: 1, uploaded: 0 });
+    // Known without the bytes, so this device can still publish a full set.
+    expect(p.retain).toEqual([[idOf(HASH_A)]]);
+  });
+
+  it('sends only the chunks the vault does not hold yet', async () => {
+    const db = fakeDb({ [HASH_A]: new Uint8Array(10).fill(1) });
+    const p = portal({ objects: [stored(HASH_A, 0)] });
+
+    const outcome = await backupDrive({ db, ...PASS });
+
+    expect(outcome.blobs).toMatchObject({ uploaded: 1 });
+    expect(p.calls.filter(c => c.method === 'PUT').map(c => c.url)).toEqual(
+      [1, 2].map(i => `https://s3.test/${key(idOf(HASH_A), i)}`),
+    );
+    expect(
+      (urls(p, '/confirm-upload')[0].body as { confirmations: unknown[] })
+        .confirmations,
+    ).toHaveLength(2);
+  });
+
+  it('fails when a PUT is rejected and confirms nothing', async () => {
+    const db = fakeDb({ [HASH_A]: new Uint8Array(4) });
+    const p = portal({ putStatus: 500 });
+
+    await expect(
+      backupDrive({ db, ...PASS, retainBlobs: true }),
+    ).rejects.toThrow('Vault file upload failed (500)');
+
+    expect(urls(p, '/confirm-upload')).toHaveLength(0);
+    expect(p.retain).toHaveLength(0);
+    // Still released, so the next file read starts clean.
+    expect(db.vaultBlobClose).toHaveBeenCalled();
   });
 
   it('batches files so one upload-urls call never exceeds 16 objects, and a file is never split', async () => {
@@ -430,7 +480,6 @@ describe('backing up file bytes', () => {
         ).size,
     );
     expect(sizes).toEqual([2, 2]);
-    expect(p.retain[0]).toHaveLength(4);
   });
 
   it('reports files too large for a vault and leaves them out of the live set', async () => {
@@ -438,11 +487,12 @@ describe('backing up file bytes', () => {
     db.vaultBlobOpen.mockResolvedValueOnce({
       status: 'tooLarge',
       size: 1e12,
+      blobId: '',
       chunks: [],
     });
     const p = portal();
 
-    const outcome = await backupDrive({ db, ...PASS });
+    const outcome = await backupDrive({ db, ...PASS, retainBlobs: true });
 
     expect(outcome.blobs).toMatchObject({ tooLarge: 1, uploaded: 0 });
     expect(p.retain).toEqual([[]]);
@@ -465,9 +515,9 @@ describe('backing up file bytes', () => {
     );
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    await expect(backupDrive({ db, ...PASS })).resolves.toMatchObject({
-      blobs: { uploaded: 1 },
-    });
+    await expect(
+      backupDrive({ db, ...PASS, retainBlobs: true }),
+    ).resolves.toMatchObject({ blobs: { uploaded: 1, retained: false } });
   });
 
   it('leaves a db without file support alone', async () => {
@@ -487,51 +537,53 @@ describe('backing up file bytes', () => {
 
 describe('restoring file bytes', () => {
   const objects = (hash: string, n: number) =>
-    Array.from({ length: n }, (_, i) => ({
-      object_id: `${hash.slice(0, 2)}${i}`,
-      object_key: key(hash, i),
-      kind: 'blob',
-      size_bytes: 4,
-      content_hash: hash,
-    }));
+    Array.from({ length: n }, (_, i) => stored(hash, i));
   const history = {
     object_id: 'seg',
     object_key: `vault/${PSEUDONYM}/lanes/${DEVICE}/seg-000001.pack`,
     kind: 'pack',
     size_bytes: 8,
   };
+  const restoreArgs = {
+    driveSubject: 'did:ad:drive',
+    drivePseudonym: PSEUDONYM,
+    devicePubkey: DEVICE,
+    driveKey: new Uint8Array(32).fill(7),
+  };
 
-  it('hands only sealed history to the importer, then restores each missing file', async () => {
+  it('hands only sealed history to the importer, then opens each stored file and matches it by hash', async () => {
     const db = fakeDb({}, [HASH_A]);
     db.vaultBlobPresent.mockResolvedValue(false);
     const p = portal({
-      objects: [history, ...objects(HASH_A, 2)],
+      objects: [history, ...objects(HASH_A, 2), ...objects(HASH_B, 1)],
       downloads: {
         [history.object_key]: new Uint8Array(8),
-        [key(HASH_A, 0)]: new Uint8Array(4).fill(1),
-        [key(HASH_A, 1)]: new Uint8Array(2).fill(2),
+        [key(idOf(HASH_A), 0)]: new Uint8Array(4).fill(1),
+        [key(idOf(HASH_A), 1)]: new Uint8Array(2).fill(2),
+        [key(idOf(HASH_B), 0)]: new Uint8Array(4).fill(3),
       },
     });
 
-    const outcome = await restoreDrive({
-      db,
-      driveSubject: 'did:ad:drive',
-      drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
-      driveKey: new Uint8Array(32),
-    });
+    const outcome = await restoreDrive({ db, ...restoreArgs });
 
-    const imported = db.vaultImport.mock.calls[0][4] as { objectKey: string }[];
+    const imported = (db.vaultImport.mock.calls[0] as unknown[])[4] as {
+      objectKey: string;
+    }[];
     expect(imported.map(o => o.objectKey)).toEqual([history.object_key]);
-    expect(db.vaultBlobRestore).toHaveBeenCalledWith(HASH_A, [
-      new Uint8Array(4).fill(1),
-      new Uint8Array(2).fill(2),
-    ]);
+    expect(db.vaultBlobRestore).toHaveBeenCalledWith(
+      restoreArgs.driveKey,
+      1,
+      idOf(HASH_A),
+      [new Uint8Array(4).fill(1), new Uint8Array(2).fill(2)],
+      [HASH_A],
+    );
     expect(outcome).toMatchObject({
       resourcesRestored: 2,
       blobs: { restored: 1, present: 0, missing: 0, unreadable: 0 },
     });
-    expect(p.calls.some(c => c.url.includes(key(HASH_B, 0)))).toBe(false);
+    // Everything wanted is back, so the rest of the vault is not downloaded.
+    expect(p.calls.some(c => c.url.includes(idOf(HASH_B)))).toBe(false);
+    expect(db.restored.get(HASH_A)).toHaveLength(2);
   });
 
   it('reports present, missing and unreadable files instead of hiding them', async () => {
@@ -547,40 +599,46 @@ describe('restoring file bytes', () => {
       objects: [history, ...objects(hashC, 1), ...objects(hashD, 1)],
       downloads: {
         [history.object_key]: new Uint8Array(8),
-        // C downloads but fails the hash check; D's chunk is gone from storage.
-        [key(hashC, 0)]: new Uint8Array(4).fill(0xff),
-        [key(hashD, 0)]: 404,
+        // C downloads but does not open; D's chunk is gone from storage.
+        [key(idOf(hashC), 0)]: new Uint8Array(4).fill(0xff),
+        [key(idOf(hashD), 0)]: 404,
       },
     });
 
-    const outcome = await restoreDrive({
-      db,
-      driveSubject: 'did:ad:drive',
-      drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
-      driveKey: new Uint8Array(32),
-    });
+    const outcome = await restoreDrive({ db, ...restoreArgs });
 
-    // A is on this device, B was never uploaded, C and D cannot be read.
+    // A is on this device, B was never uploaded, C and D cannot be read: three
+    // wanted files are still absent, two of which are explained as unreadable.
     expect(outcome.blobs).toEqual({
       restored: 0,
       present: 1,
       missing: 1,
       unreadable: 2,
     });
-    expect(db.vaultBlobRestore).toHaveBeenCalledTimes(1);
   });
 
-  it('does not restore files from a backup file or snapshot source', async () => {
+  it('counts a stored file with a gap in its chunks as unreadable without downloading it', async () => {
+    const db = fakeDb({}, [HASH_A]);
+    db.vaultBlobPresent.mockResolvedValue(false);
+    const p = portal({
+      objects: [history, stored(HASH_A, 0), stored(HASH_A, 2)],
+      downloads: { [history.object_key]: new Uint8Array(8) },
+    });
+
+    const outcome = await restoreDrive({ db, ...restoreArgs });
+
+    expect(outcome.blobs).toMatchObject({ restored: 0, unreadable: 1 });
+    expect(db.vaultBlobRestore).not.toHaveBeenCalled();
+    expect(p.calls.some(c => c.url.includes(idOf(HASH_A)))).toBe(false);
+  });
+
+  it('does not restore files from a backup file source', async () => {
     const db = fakeDb({}, [HASH_A]);
     const p = portal();
 
     const outcome = await restoreDrive({
       db,
-      driveSubject: 'did:ad:drive',
-      drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
-      driveKey: new Uint8Array(32),
+      ...restoreArgs,
       source: async () => [
         { objectKey: history.object_key, sealed: new Uint8Array(8) },
       ],

@@ -13522,10 +13522,6 @@ msgid "Report a bug or suggest an improvement. Your message and optional email g
 msgstr "Signalez un bug ou suggérez une amélioration. Votre message et votre e-mail facultatif sont transmis à l’équipe Atomic via Sentry, avec des détails techniques sur votre configuration (version de l’application, adresse et état du serveur). Veuillez ne pas inclure de contenu privé de votre espace de travail."
 
 #: src/components/Vault/VaultPanel.tsx
-msgid "Backs up your data and files. Your data is encrypted so only you can read it. Files are not."
-msgstr "Sauvegarde vos données et vos fichiers. Vos données sont chiffrées : vous seul pouvez les lire. Les fichiers ne le sont pas."
-
-#: src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
 msgstr[0] "# objet de sauvegarde n’a pas pu être lu"
@@ -13548,7 +13544,10 @@ msgstr[1] "# fichiers n’ont pas pu être lus"
 msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
 msgstr "Restauré, mais pas tout : {0}. Rechargez la page pour voir ce qui a été restauré."
 
-#. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
-msgid "Files are included. Each file is stored once, shared with every backup that holds the same file, so files are not end-to-end encrypted and {0} can read them. Every backup counts the full size of each of its files toward its own storage."
-msgstr "Les fichiers sont inclus. Chaque fichier est stocké une seule fois et partagé avec toutes les sauvegardes qui contiennent le même fichier ; les fichiers ne sont donc pas chiffrés de bout en bout et {0} peut les lire. Chaque sauvegarde compte la taille complète de tous ses fichiers dans son propre stockage."
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Sauvegarde chiffrée de vos données et de vos fichiers. Vous seul pouvez la lire."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Les fichiers sont inclus. Ils sont chiffrés sur cet appareil comme tout le reste et comptent dans le stockage Cloud Vault de cette sauvegarde."

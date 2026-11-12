@@ -47,6 +47,7 @@ import type {
   RpcRes,
   RpcType,
   VaultBlobPlan,
+  VaultBlobRestoreResult,
   VaultExportResult,
   VaultImportSummary,
   WorkerRequest,
@@ -1302,33 +1303,50 @@ export class ClientDbWorker {
   }
 
   /**
-   * Load one local file, verified against its hash, and get its chunk layout.
-   * The worker keeps that one file until `vaultBlobClose` or the next open.
+   * Load one local file, verified against its hash, derive its id in this
+   * vault and get its chunk layout. The worker keeps that one file until
+   * `vaultBlobClose` or the next open.
    */
-  vaultBlobOpen(hash: string): Promise<VaultBlobPlan> {
-    return this.call('vaultBlobOpen', { hash });
-  }
-
-  /** One chunk of the file opened with {@link vaultBlobOpen}. */
-  vaultBlobChunk(hash: string, index: number): Promise<Uint8Array> {
-    return this.call('vaultBlobChunk', { hash, index });
-  }
-
-  /** Answer a proof-of-possession challenge for the opened file. */
-  vaultBlobProof(
+  vaultBlobOpen(
     hash: string,
-    ranges: { chunkIndex: number; offset: number; length: number }[],
-  ): Promise<string[]> {
-    return this.call('vaultBlobProof', { hash, ranges });
+    key: Uint8Array,
+    keyEpoch: number,
+  ): Promise<VaultBlobPlan> {
+    return this.call('vaultBlobOpen', { hash, key, keyEpoch });
+  }
+
+  /** One chunk of the file opened with {@link vaultBlobOpen}, sealed. */
+  vaultBlobChunk(
+    hash: string,
+    key: Uint8Array,
+    keyEpoch: number,
+    index: number,
+  ): Promise<Uint8Array> {
+    return this.call('vaultBlobChunk', { hash, key, keyEpoch, index });
   }
 
   vaultBlobClose(): Promise<void> {
-    return this.call('vaultBlobClose', {});
+    return this.call('vaultBlobClose');
   }
 
-  /** Store a downloaded file from its chunks; `false` when they fail the hash. */
-  vaultBlobRestore(hash: string, chunks: Uint8Array[]): Promise<boolean> {
-    return this.call('vaultBlobRestore', { hash, chunks });
+  /**
+   * Open one stored file from its sealed chunks and store it if one of the
+   * `wanted` hashes (plain BLAKE3) names it.
+   */
+  vaultBlobRestore(
+    key: Uint8Array,
+    keyEpoch: number,
+    blobId: string,
+    chunks: Uint8Array[],
+    wanted: string[],
+  ): Promise<VaultBlobRestoreResult> {
+    return this.call('vaultBlobRestore', {
+      key,
+      keyEpoch,
+      blobId,
+      chunks,
+      wanted,
+    });
   }
 
   get isReady(): boolean {

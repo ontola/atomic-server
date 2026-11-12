@@ -847,7 +847,14 @@ pub async fn import_vault_batch(
     let mut summary = RestoreSummary::default();
 
     // Sorted by the store contract, so segments replay in the order written.
-    let keys = vault.list(prefix)?;
+    // File chunks live under the same drive prefix but are not history; they
+    // are restored separately (`import_vault_blobs`), and opening them here
+    // would decrypt every file only to skip it.
+    let keys: Vec<String> = vault
+        .list(prefix)?
+        .into_iter()
+        .filter(|key| parse_blob_key(key).is_none())
+        .collect();
 
     // Read the anchor first — not to apply it first, but because its own
     // coverage and observed maps are what decide the order everything else is
@@ -991,31 +998,59 @@ pub async fn import_vault_batch(
 
 // ── File contents ───────────────────────────────────────────────────────────
 //
-// Packs carry File *resources*. File *bytes* are not in packs and are not
-// sealed with the drive key: they live once, under their plain BLAKE3 hash (the
-// hash the blob store and `File.internalId` already use), in a store shared by
-// every vault. Each vault still counts the full size of every file it
-// references toward its own quota, and the control plane deletes a physical
-// object only when no vault references it. See `planning/vault-file-blobs.md`.
+// Packs carry File *resources*. File *bytes* are sealed like everything else:
+// each chunk is an envelope of kind `Blob`, encrypted under the drive key's
+// blob subkey. A file is addressed by `DriveVaultKey::blob_id`, a keyed hash of
+// its plaintext, so the same bytes are stored once *within* a vault and two
+// vaults holding identical bytes produce unrelated ids. Nothing in the bucket
+// is readable without the drive key, and nothing links two vaults. See
+// `planning/vault-file-blobs.md`.
 
 /// Largest slice of a file stored as one object. Well under the control
 /// plane's 64 MiB per-object ceiling.
 pub const BLOB_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 
-/// Where the shared, hash-addressed file objects live. Deliberately outside
-/// `vault/<pseudonym>/`: a drive prefix listing (restore, reconcile, drive
-/// removal) must never see or delete an object another vault also points at.
-pub const BLOB_PREFIX: &str = "vault-blobs/";
+/// One `upload-urls` call carries at most 64 objects, and a file's chunks go in
+/// one call, so a file is at most this many chunks.
+pub const BLOB_MAX_CHUNKS: usize = 64;
 
-/// The object key for one chunk of a file, by lower-case hex BLAKE3 hash.
-pub fn blob_chunk_key(hash_hex: &str, chunk: u32) -> String {
-    format!("{BLOB_PREFIX}{hash_hex}/{chunk:06}")
+/// Largest plaintext chunk. A sealed chunk is [`BLOB_SEAL_OVERHEAD`] bytes
+/// larger and must stay under the control plane's 64 MiB object ceiling.
+pub const BLOB_MAX_CHUNK_BYTES: usize = 63 * 1024 * 1024;
+
+/// What sealing adds to a chunk: header (6) + XChaCha20 nonce (24) + Poly1305
+/// tag (16). The control plane is told the sealed size, so JS needs it before
+/// the chunk is sealed. A test pins this to `envelope::seal`.
+pub const BLOB_SEAL_OVERHEAD: usize = 46;
+
+/// Where a drive's file objects live. Inside the drive prefix, so removing a
+/// drive's vault removes its files, and per vault, so nothing is shared.
+pub fn blob_prefix(drive_pseudonym: &str) -> String {
+    format!("vault/{drive_pseudonym}/blobs/")
 }
 
-/// The control plane caps one blob at this many chunks (all requested in one
-/// `upload-urls` call) and one chunk at [`BLOB_MAX_CHUNK_BYTES`].
-pub const BLOB_MAX_CHUNKS: usize = 64;
-pub const BLOB_MAX_CHUNK_BYTES: usize = 64 * 1024 * 1024;
+/// The object key for one sealed chunk of a file, by keyed-hash id (hex).
+pub fn blob_object_key(drive_pseudonym: &str, id_hex: &str, chunk: u32) -> String {
+    format!("{}{id_hex}/{chunk:06}", blob_prefix(drive_pseudonym))
+}
+
+/// The keyed id and chunk number in a blob object key, if it is one.
+pub fn parse_blob_key(object_key: &str) -> Option<(String, u32)> {
+    let rest = object_key.split("/blobs/").nth(1)?;
+    let (id, chunk) = rest.split_once('/')?;
+    if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some((id.to_ascii_lowercase(), chunk.parse().ok()?))
+}
+
+/// The storage id of a file's bytes in this vault: keyed BLAKE3, lower-case hex.
+pub fn blob_id_hex(key: &DriveVaultKey, plaintext: &[u8]) -> String {
+    key.blob_id(plaintext)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
 
 /// One slice of a file, as stored: `bytes[offset..offset + length]` is chunk
 /// `index`.
@@ -1026,23 +1061,11 @@ pub struct BlobChunk {
     pub length: u64,
 }
 
-/// A challenge range from the control plane: `length` bytes at `offset`
-/// *within* chunk `chunk_index`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BlobProofRange {
-    pub chunk_index: u32,
-    pub offset: u64,
-    pub length: u64,
-}
-
 /// How a file of `len` bytes is cut into chunks, or `None` for an empty file
 /// or one too large to store (over `BLOB_MAX_CHUNKS * BLOB_MAX_CHUNK_BYTES`).
 ///
-/// A pure function of the length, so every device cuts the same file the same
-/// way: the control plane stores a blob once and a second vault claiming it
-/// must declare the identical layout. Chunks are [`BLOB_CHUNK_BYTES`] until
-/// that would need more than [`BLOB_MAX_CHUNKS`], then the chunk size grows in
-/// whole MiB.
+/// Chunks are [`BLOB_CHUNK_BYTES`] until that would need more than
+/// [`BLOB_MAX_CHUNKS`], then the chunk size grows in whole MiB.
 pub fn blob_chunks(len: u64) -> Option<Vec<BlobChunk>> {
     const MIB: u64 = 1024 * 1024;
     if len == 0 {
@@ -1066,41 +1089,35 @@ pub fn blob_chunks(len: u64) -> Option<Vec<BlobChunk>> {
     )
 }
 
-/// BLAKE3 (lower-case hex) of each challenged range of `bytes`, in order: the
-/// answer to the control plane's proof of possession for a blob it already
-/// holds.
-pub fn blob_proof_hashes(bytes: &[u8], ranges: &[BlobProofRange]) -> AtomicResult<Vec<String>> {
-    let chunks = blob_chunks(bytes.len() as u64).ok_or("file cannot be stored in a vault")?;
-    ranges
-        .iter()
-        .map(|range| {
-            let chunk = chunks
-                .get(range.chunk_index as usize)
-                .ok_or("proof range names a chunk this file does not have")?;
-            let end = range.offset.checked_add(range.length);
-            if end.is_none_or(|end| end > chunk.length) {
-                return Err("proof range is outside its chunk".into());
-            }
-            let start = (chunk.offset + range.offset) as usize;
-            Ok(blake3::hash(&bytes[start..start + range.length as usize])
-                .to_hex()
-                .to_string())
-        })
-        .collect()
+/// Seal one plaintext chunk of a file.
+pub fn seal_blob_chunk(key: &DriveVaultKey, plaintext: &[u8]) -> AtomicResult<Vec<u8>> {
+    envelope::seal(key, ObjectKind::Blob, plaintext)
 }
 
-/// Join downloaded chunks (in chunk order) and verify them against the hash
-/// the File resource names. Anything else is corrupt or substituted.
-pub fn assemble_blob(hash_hex: &str, chunks: &[&[u8]]) -> AtomicResult<Vec<u8>> {
-    let hash = blake3::Hash::from_hex(hash_hex).map_err(|e| e.to_string())?;
-    let mut bytes = Vec::with_capacity(chunks.iter().map(|c| c.len()).sum());
-    for chunk in chunks {
-        bytes.extend_from_slice(chunk);
+/// Open a file's sealed chunks (in chunk order) and return its bytes and their
+/// plain BLAKE3 hash (lower-case hex).
+///
+/// Fails when a chunk does not open (wrong key, corrupt, not a blob), or when
+/// the joined bytes do not produce `id_hex`: chunks swapped between files,
+/// reordered or cut short never pass as the file they claim to be.
+pub fn open_blob(
+    key: &DriveVaultKey,
+    id_hex: &str,
+    sealed_chunks: &[&[u8]],
+) -> AtomicResult<(Vec<u8>, String)> {
+    let mut bytes = Vec::new();
+    for sealed in sealed_chunks {
+        let (header, plaintext) = envelope::open(key, sealed)?;
+        if header.kind != ObjectKind::Blob {
+            return Err("vault object is not a file chunk".into());
+        }
+        bytes.extend_from_slice(&plaintext);
     }
-    if bytes.is_empty() || blake3::hash(&bytes) != hash {
-        return Err("file bytes do not match their hash".into());
+    if bytes.is_empty() || blob_id_hex(key, &bytes) != id_hex.to_ascii_lowercase() {
+        return Err("file bytes do not match their vault id".into());
     }
-    Ok(bytes)
+    let plain = blake3::hash(&bytes).to_hex().to_string();
+    Ok((bytes, plain))
 }
 
 /// The local bytes of a File, only if they hash to `hash_hex` and are not
@@ -1116,19 +1133,17 @@ pub async fn read_verified_blob(store: &Db, hash_hex: &str) -> AtomicResult<Opti
 /// Outcome of uploading a drive's files.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BlobBackupSummary {
-    /// Distinct hashes written this pass.
+    /// Distinct files written this pass.
     pub blobs_uploaded: usize,
-    /// Distinct hashes already in the shared store, not written again.
+    /// Distinct files already in this vault, not written again.
     pub blobs_already_stored: usize,
-    /// Referenced hashes whose bytes this device does not have (or that do not
-    /// match their hash). They cannot be backed up and are not live.
+    /// Referenced files whose bytes this device does not have (or that do not
+    /// match their hash). They cannot be backed up from here.
     pub blobs_missing: usize,
-    /// Larger than a vault can store (see [`blob_chunks`]); not live.
+    /// Larger than a vault can store (see [`blob_chunks`]).
     pub blobs_too_large: usize,
+    /// Sealed bytes written.
     pub bytes_uploaded: u64,
-    /// Every distinct hash the drive's File resources reference: the live set
-    /// for the control plane's `retain-blobs`.
-    pub live_hashes: Vec<String>,
 }
 
 /// Outcome of restoring a drive's files.
@@ -1137,10 +1152,45 @@ pub struct BlobRestoreSummary {
     pub blobs_restored: usize,
     /// Already in the local blob store, nothing to fetch.
     pub blobs_present: usize,
-    /// Referenced by a File resource but absent from the vault.
+    /// Referenced by a File resource but not found in the vault.
     pub blobs_missing: usize,
-    /// Found, but chunks were missing or the bytes did not match the hash.
+    /// Stored files that could not be opened or did not add up (wrong key,
+    /// corrupt, a chunk gone). Nothing from them is written.
     pub blobs_unreadable: usize,
+}
+
+/// What became of one stored file during a restore.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlobGroupOutcome {
+    /// Opened, matched a wanted file and was stored.
+    Restored(String),
+    /// Opened fine but no File resource in the drive references it (a deleted
+    /// file still in the vault).
+    Unreferenced,
+    /// Did not open, or did not reassemble into the file its id claims.
+    Unreadable,
+}
+
+/// Open one stored file and, if a wanted File resource references it, put it
+/// in the blob store. `wanted` holds plain BLAKE3 hashes (lower-case hex), the
+/// `File.internalId` values: the match is made by computing the hash of the
+/// decrypted bytes, since the vault id says nothing about it.
+pub async fn restore_blob_group(
+    store: &Db,
+    key: &DriveVaultKey,
+    id_hex: &str,
+    sealed_chunks: &[&[u8]],
+    wanted: &HashSet<String>,
+) -> AtomicResult<BlobGroupOutcome> {
+    let Ok((bytes, plain)) = open_blob(key, id_hex, sealed_chunks) else {
+        return Ok(BlobGroupOutcome::Unreadable);
+    };
+    if !wanted.contains(&plain) {
+        return Ok(BlobGroupOutcome::Unreferenced);
+    }
+    let hash = blake3::Hash::from_hex(&plain).map_err(|e| e.to_string())?;
+    store.put_blob(hash.as_bytes(), &bytes).await?;
+    Ok(BlobGroupOutcome::Restored(plain))
 }
 
 /// Distinct `File.internalId` hashes (lower-case hex BLAKE3) referenced by
@@ -1165,24 +1215,22 @@ pub async fn drive_file_hashes(store: &Db, drive: &Subject) -> Vec<String> {
     hashes.into_iter().collect()
 }
 
-/// Upload the bytes of every File in `drive` that the vault does not hold yet.
+/// Upload the sealed bytes of every File in `drive` that this vault does not
+/// hold yet.
 ///
-/// Each distinct hash is written once, however many File resources point at
-/// it. Existing objects are found by listing, so a second device or a second
-/// pass never re-uploads.
+/// Each distinct file is written once, however many File resources point at
+/// it: the id is the keyed hash of its bytes, so identical files collapse to
+/// one object set. Existing objects are found by listing, so a second pass or
+/// a second device never re-uploads.
 pub async fn export_vault_blobs(
     store: &Db,
     drive: &Subject,
+    key: &DriveVaultKey,
+    drive_pseudonym: &str,
     vault: &dyn VaultObjectStore,
 ) -> AtomicResult<BlobBackupSummary> {
     let mut summary = BlobBackupSummary::default();
     for hash_hex in drive_file_hashes(store, drive).await {
-        let first = blob_chunk_key(&hash_hex, 0);
-        if !vault.list(&first)?.is_empty() {
-            summary.blobs_already_stored += 1;
-            summary.live_hashes.push(hash_hex);
-            continue;
-        }
         let Some(bytes) = read_verified_blob(store, &hash_hex).await? else {
             summary.blobs_missing += 1;
             continue;
@@ -1191,69 +1239,94 @@ pub async fn export_vault_blobs(
             summary.blobs_too_large += 1;
             continue;
         };
+        let id = blob_id_hex(key, &bytes);
+        if !vault
+            .list(&blob_object_key(drive_pseudonym, &id, 0))?
+            .is_empty()
+        {
+            summary.blobs_already_stored += 1;
+            continue;
+        }
         for chunk in chunks {
             let start = chunk.offset as usize;
-            vault.put(
-                &blob_chunk_key(&hash_hex, chunk.index),
-                &bytes[start..start + chunk.length as usize],
-            )?;
+            let sealed = seal_blob_chunk(key, &bytes[start..start + chunk.length as usize])?;
+            summary.bytes_uploaded += sealed.len() as u64;
+            vault.put(&blob_object_key(drive_pseudonym, &id, chunk.index), &sealed)?;
         }
         summary.blobs_uploaded += 1;
-        summary.bytes_uploaded += bytes.len() as u64;
-        summary.live_hashes.push(hash_hex);
     }
     Ok(summary)
 }
 
 /// Fetch the bytes of every File in `drive` that this store lacks.
 ///
-/// Run after the resources are restored. A blob is stored only after its
-/// bytes hash to the id the File resource names, so a corrupt or substituted
-/// object is reported rather than silently trusted.
+/// Run after the resources are restored. Stored files are opened, reassembled
+/// per keyed id and matched to File resources by their plain BLAKE3 hash; a
+/// file is stored only when it hashes to the `File.internalId` that names it.
 pub async fn import_vault_blobs(
     store: &Db,
     drive: &Subject,
+    key: &DriveVaultKey,
+    drive_pseudonym: &str,
     vault: &dyn VaultObjectStore,
 ) -> AtomicResult<BlobRestoreSummary> {
     let mut summary = BlobRestoreSummary::default();
+    let mut wanted = HashSet::new();
     for hash_hex in drive_file_hashes(store, drive).await {
         let hash = blake3::Hash::from_hex(&hash_hex).map_err(|e| e.to_string())?;
         if store.has_blob(hash.as_bytes()).await? {
             summary.blobs_present += 1;
-            continue;
+        } else {
+            wanted.insert(hash_hex);
         }
-        let keys = vault.list(&format!("{BLOB_PREFIX}{hash_hex}/"))?;
-        if keys.is_empty() {
-            summary.blobs_missing += 1;
+    }
+
+    // Listing is sorted, so one file's chunks are adjacent and in order.
+    let mut groups: Vec<(String, Vec<(u32, String)>)> = Vec::new();
+    for object_key in vault.list(&blob_prefix(drive_pseudonym))? {
+        let Some((id, chunk)) = parse_blob_key(&object_key) else {
             continue;
+        };
+        match groups.last_mut() {
+            Some((last, chunks)) if *last == id => chunks.push((chunk, object_key)),
+            _ => groups.push((id, vec![(chunk, object_key)])),
         }
-        let mut parts = Vec::with_capacity(keys.len());
+    }
+
+    for (id, chunks) in groups {
+        if wanted.is_empty() {
+            break;
+        }
+        // Chunks must be 0.. without a gap, or the file is short.
+        let mut parts = Vec::with_capacity(chunks.len());
         let mut complete = true;
-        for (n, key) in keys.iter().enumerate() {
-            // Chunks must be 000000.. without a gap, or the file is short.
-            if *key != blob_chunk_key(&hash_hex, n as u32) {
-                complete = false;
-                break;
-            }
-            match vault.get(key) {
-                Ok(chunk) => parts.push(chunk),
-                Err(_) => {
+        for (n, (chunk, object_key)) in chunks.iter().enumerate() {
+            match (*chunk == n as u32).then(|| vault.get(object_key)) {
+                Some(Ok(sealed)) => parts.push(sealed),
+                _ => {
                     complete = false;
                     break;
                 }
             }
         }
         let refs: Vec<&[u8]> = parts.iter().map(|p| p.as_slice()).collect();
-        let Some(bytes) = complete
-            .then(|| assemble_blob(&hash_hex, &refs).ok())
-            .flatten()
-        else {
-            summary.blobs_unreadable += 1;
-            continue;
+        let outcome = if complete {
+            restore_blob_group(store, key, &id, &refs, &wanted).await?
+        } else {
+            BlobGroupOutcome::Unreadable
         };
-        store.put_blob(hash.as_bytes(), &bytes).await?;
-        summary.blobs_restored += 1;
+        match outcome {
+            BlobGroupOutcome::Restored(hash) => {
+                wanted.remove(&hash);
+                summary.blobs_restored += 1;
+            }
+            BlobGroupOutcome::Unreferenced => {}
+            BlobGroupOutcome::Unreadable => summary.blobs_unreadable += 1,
+        }
     }
+    // A file that failed to open is one wanted file we know about; do not
+    // count it twice.
+    summary.blobs_missing = wanted.len().saturating_sub(summary.blobs_unreadable);
     Ok(summary)
 }
 
@@ -2983,11 +3056,31 @@ mod tests {
     }
 
     fn blob_keys(vault: &MemoryVaultStore) -> Vec<String> {
-        vault.list(BLOB_PREFIX).unwrap()
+        vault.list(&blob_prefix(PSEUDONYM)).unwrap()
     }
 
-    /// The layout is a pure function of the length: two devices must declare
-    /// the same chunks or the control plane refuses a second vault's claim.
+    async fn export_blobs(
+        store: &Db,
+        drive: &Subject,
+        key: &DriveVaultKey,
+        vault: &MemoryVaultStore,
+    ) -> BlobBackupSummary {
+        export_vault_blobs(store, drive, key, PSEUDONYM, vault)
+            .await
+            .unwrap()
+    }
+
+    async fn import_blobs(
+        store: &Db,
+        drive: &Subject,
+        key: &DriveVaultKey,
+        vault: &MemoryVaultStore,
+    ) -> BlobRestoreSummary {
+        import_vault_blobs(store, drive, key, PSEUDONYM, vault)
+            .await
+            .unwrap()
+    }
+
     #[test]
     fn blob_chunks_are_a_pure_function_of_length() {
         assert!(blob_chunks(0).is_none());
@@ -3000,77 +3093,56 @@ mod tests {
                 length: 5
             }]
         );
-
         let mib = 1024 * 1024u64;
         let two = blob_chunks(8 * mib + 1).unwrap();
         assert_eq!(two.len(), 2);
         assert_eq!((two[1].offset, two[1].length), (8 * mib, 1));
 
-        // Past 64 chunks of 8 MiB the chunk size grows, count stays <= 64.
-        let big = 64 * 8 * mib + 1;
+        // Past 64 chunks the chunk size grows instead of the count.
+        let big = 8 * mib * 64 + 1;
         let chunks = blob_chunks(big).unwrap();
         assert!(chunks.len() <= BLOB_MAX_CHUNKS);
         assert_eq!(chunks.iter().map(|c| c.length).sum::<u64>(), big);
-        assert!(chunks
-            .windows(2)
-            .all(|w| w[0].offset + w[0].length == w[1].offset));
-        assert!(chunks
-            .iter()
-            .all(|c| c.length <= BLOB_MAX_CHUNK_BYTES as u64));
 
         assert!(blob_chunks(BLOB_MAX_CHUNKS as u64 * BLOB_MAX_CHUNK_BYTES as u64 + 1).is_none());
     }
 
     #[test]
-    fn proof_hashes_cover_the_challenged_ranges_only() {
-        let bytes: Vec<u8> = (0..BLOB_CHUNK_BYTES + 100)
-            .map(|i| (i % 251) as u8)
-            .collect();
-        let ranges = [
-            BlobProofRange {
-                chunk_index: 0,
-                offset: 10,
-                length: 20,
-            },
-            BlobProofRange {
-                chunk_index: 1,
-                offset: 5,
-                length: 50,
-            },
-        ];
-        let hashes = blob_proof_hashes(&bytes, &ranges).unwrap();
-        assert_eq!(hashes[0], blake3::hash(&bytes[10..30]).to_hex().to_string());
-        let second = BLOB_CHUNK_BYTES + 5;
-        assert_eq!(
-            hashes[1],
-            blake3::hash(&bytes[second..second + 50])
-                .to_hex()
-                .to_string()
-        );
-
-        let outside = [BlobProofRange {
-            chunk_index: 1,
-            offset: 90,
-            length: 20,
-        }];
-        assert!(blob_proof_hashes(&bytes, &outside).is_err());
-        let no_chunk = [BlobProofRange {
-            chunk_index: 2,
-            offset: 0,
-            length: 1,
-        }];
-        assert!(blob_proof_hashes(&bytes, &no_chunk).is_err());
+    fn the_seal_overhead_constant_matches_the_envelope() {
+        let sealed = seal_blob_chunk(&key(), b"twelve bytes").unwrap();
+        assert_eq!(sealed.len(), 12 + BLOB_SEAL_OVERHEAD);
     }
 
     #[test]
-    fn assemble_blob_rejects_wrong_bytes() {
-        let hash = blake3::hash(b"hello world").to_hex().to_string();
-        assert_eq!(
-            assemble_blob(&hash, &[b"hello ", b"world"]).unwrap(),
-            b"hello world"
+    fn blob_keys_round_trip_and_stay_in_the_drive_prefix() {
+        let id = blob_id_hex(&key(), b"x");
+        let object_key = blob_object_key(PSEUDONYM, &id, 3);
+        assert!(object_key.starts_with(&drive_prefix(PSEUDONYM)));
+        assert_eq!(object_key, format!("vault/{PSEUDONYM}/blobs/{id}/000003"));
+        assert_eq!(parse_blob_key(&object_key), Some((id, 3)));
+        assert_eq!(parse_blob_key(&segment_key(PSEUDONYM, DEVICE, 1)), None);
+    }
+
+    #[test]
+    fn open_blob_rejects_swapped_reordered_or_short_chunks() {
+        let key = key();
+        let a = vec![1u8; 100];
+        let b = vec![2u8; 100];
+        let id_a = blob_id_hex(&key, &[a.clone(), b.clone()].concat());
+        let (sa, sb) = (
+            seal_blob_chunk(&key, &a).unwrap(),
+            seal_blob_chunk(&key, &b).unwrap(),
         );
-        assert!(assemble_blob(&hash, &[b"hello ", b"w0rld"]).is_err());
-        assert!(assemble_blob(&hash, &[b"hello "]).is_err());
+        let (bytes, plain) = open_blob(&key, &id_a, &[&sa, &sb]).unwrap();
+        assert_eq!(bytes.len(), 200);
+        assert_eq!(plain, blake3::hash(&bytes).to_hex().to_string());
+        assert!(open_blob(&key, &id_a, &[&sb, &sa]).is_err());
+        assert!(open_blob(&key, &id_a, &[&sa]).is_err());
+        let other = DriveVaultKey::from_bytes([9u8; 32], 1);
+        assert!(open_blob(&other, &id_a, &[&sa, &sb]).is_err());
+        // A pack-kind object is not a file chunk.
+        let pack_like = envelope::seal(&key, ObjectKind::Pack, &a).unwrap();
+        assert!(open_blob(&key, &blob_id_hex(&key, &a), &[&pack_like]).is_err());
     }
 
     #[tokio::test]
@@ -3089,20 +3161,23 @@ mod tests {
         backup(&source, &drive_subject, &key, &vault, DEVICE)
             .await
             .unwrap();
-        let up = export_vault_blobs(&source, &drive_subject, &vault)
-            .await
-            .unwrap();
+        let up = export_blobs(&source, &drive_subject, &key, &vault).await;
         assert_eq!((up.blobs_uploaded, up.blobs_missing), (1, 0));
         assert_eq!(blob_keys(&vault).len(), 2, "two chunks");
+
+        // Sealed: no stored object contains plaintext.
+        for object_key in blob_keys(&vault) {
+            let stored = vault.get(&object_key).unwrap();
+            assert!(!stored.windows(64).any(|w| w == &contents[1000..1064]));
+        }
 
         let target = Db::init_temp("vault_blob_restored").await.unwrap();
         let result = restore(&target, &key, &vault).await;
         assert_eq!(result.objects_unreadable, 0);
+        assert_eq!(result.objects_skipped, 0);
         let hash = blake3::hash(&contents);
         assert!(target.get_blob(hash.as_bytes()).await.unwrap().is_none());
-        let done = import_vault_blobs(&target, &drive_subject, &vault)
-            .await
-            .unwrap();
+        let done = import_blobs(&target, &drive_subject, &key, &vault).await;
         assert_eq!(done.blobs_restored, 1);
         assert_eq!(
             target.get_blob(hash.as_bytes()).await.unwrap().unwrap(),
@@ -3111,8 +3186,10 @@ mod tests {
         assert!(target.get_resource(&file).await.is_ok());
     }
 
+    /// The same bytes under two File resources are one blob in the vault, and a
+    /// second pass uploads nothing.
     #[tokio::test]
-    async fn identical_files_upload_one_blob_once() {
+    async fn the_same_file_twice_in_one_vault_uploads_one_blob() {
         let source = Db::init_temp("vault_blob_dedupe").await.unwrap();
         let (_, drive) = source.setup("alice").await.unwrap();
         let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
@@ -3120,17 +3197,15 @@ mod tests {
         add_file(&source, &drive, "b.txt", b"same bytes").await;
         add_file(&source, &drive, "c.txt", b"other bytes").await;
 
+        let key = key();
         let vault = MemoryVaultStore::new();
-        let first = export_vault_blobs(&source, &drive_subject, &vault)
-            .await
-            .unwrap();
+        let first = export_blobs(&source, &drive_subject, &key, &vault).await;
         assert_eq!(first.blobs_uploaded, 2);
-        assert_eq!(first.live_hashes.len(), 2);
         assert_eq!(blob_keys(&vault).len(), 2);
-        let second = export_vault_blobs(&source, &drive_subject, &vault)
-            .await
-            .unwrap();
+        let second = export_blobs(&source, &drive_subject, &key, &vault).await;
         assert_eq!((second.blobs_uploaded, second.blobs_already_stored), (0, 2));
+        assert_eq!(second.bytes_uploaded, 0);
+        assert_eq!(blob_keys(&vault).len(), 2);
     }
 
     #[tokio::test]
@@ -3140,90 +3215,112 @@ mod tests {
         let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
         add_file(&source, &drive, "a.txt", b"will go missing").await;
         add_file(&source, &drive, "b.txt", b"will be corrupted").await;
+        add_file(&source, &drive, "c.txt", b"stays fine").await;
         let vault = MemoryVaultStore::new();
         let key = key();
         backup(&source, &drive_subject, &key, &vault, DEVICE)
             .await
             .unwrap();
-        export_vault_blobs(&source, &drive_subject, &vault)
-            .await
-            .unwrap();
+        export_blobs(&source, &drive_subject, &key, &vault).await;
 
-        let missing = blake3::hash(b"will go missing").to_hex().to_string();
-        let corrupt = blake3::hash(b"will be corrupted").to_hex().to_string();
+        let missing = blob_id_hex(&key, b"will go missing");
+        let corrupt = blob_id_hex(&key, b"will be corrupted");
         let copy = MemoryVaultStore::new();
         for k in vault.list("").unwrap() {
-            if k.starts_with(&format!("{BLOB_PREFIX}{missing}/")) {
+            if k.contains(&format!("/blobs/{missing}/")) {
                 continue;
             }
             let mut bytes = vault.get(&k).unwrap();
-            if k.starts_with(&format!("{BLOB_PREFIX}{corrupt}/")) {
-                bytes[0] ^= 1;
+            if k.contains(&format!("/blobs/{corrupt}/")) {
+                let last = bytes.len() - 1;
+                bytes[last] ^= 1;
             }
             copy.put(&k, &bytes).unwrap();
         }
 
         let target = Db::init_temp("vault_blob_missing_dst").await.unwrap();
         restore(&target, &key, &copy).await;
-        let done = import_vault_blobs(&target, &drive_subject, &copy)
-            .await
-            .unwrap();
+        let done = import_blobs(&target, &drive_subject, &key, &copy).await;
         assert_eq!(
             (
                 done.blobs_restored,
                 done.blobs_missing,
                 done.blobs_unreadable
             ),
-            (0, 1, 1)
+            (1, 1, 1)
         );
         assert!(!target
             .has_blob(blake3::hash(b"will be corrupted").as_bytes())
             .await
             .unwrap());
+        assert!(target
+            .has_blob(blake3::hash(b"stays fine").as_bytes())
+            .await
+            .unwrap());
     }
 
-    /// Two vaults share one hash-addressed store: B's restore does not depend on
-    /// A's copy, and A deleting the file (resource gone, live set without it)
-    /// leaves the shared object because B still lists it.
+    /// Two vaults with identical bytes share nothing: the ids are unrelated,
+    /// each restores from its own objects, and one vault's objects are
+    /// unreadable with the other's key.
     #[tokio::test]
-    async fn a_file_shared_by_two_drives_survives_one_deleting_it() {
-        let shared = MemoryVaultStore::new();
+    async fn two_vaults_with_identical_bytes_are_unrelated() {
         let a = Db::init_temp("vault_blob_a").await.unwrap();
         let (_, a_drive) = a.setup("alice").await.unwrap();
         let a_subject = Subject::from_raw(&a_drive, a.get_base_domain().as_deref());
         let b = Db::init_temp("vault_blob_b").await.unwrap();
         let (_, b_drive) = b.setup("bob").await.unwrap();
         let b_subject = Subject::from_raw(&b_drive, b.get_base_domain().as_deref());
-
-        let z = add_file(&a, &a_drive, "z.bin", b"identical bytes").await;
+        add_file(&a, &a_drive, "z.bin", b"identical bytes").await;
         add_file(&b, &b_drive, "z.bin", b"identical bytes").await;
-        export_vault_blobs(&a, &a_subject, &shared).await.unwrap();
-        let again = export_vault_blobs(&b, &b_subject, &shared).await.unwrap();
-        assert_eq!(again.blobs_already_stored, 1, "stored once, never twice");
-        assert_eq!(blob_keys(&shared).len(), 1);
 
-        a.remove_resource(&z).await.unwrap();
-        assert!(drive_file_hashes(&a, &a_subject).await.is_empty());
-        // The control plane drops a vault's reference, not the object, while
-        // another vault still references it (see atomic-saas refcounting).
-        let hash = blake3::hash(b"identical bytes");
-        let live_b = drive_file_hashes(&b, &b_subject).await;
-        assert_eq!(live_b, vec![hash.to_hex().to_string()]);
+        let (key_a, key_b) = (
+            DriveVaultKey::from_bytes([1u8; 32], 1),
+            DriveVaultKey::from_bytes([2u8; 32], 1),
+        );
+        let (vault_a, vault_b) = (MemoryVaultStore::new(), MemoryVaultStore::new());
+        backup(&a, &a_subject, &key_a, &vault_a, DEVICE)
+            .await
+            .unwrap();
+        backup(&b, &b_subject, &key_b, &vault_b, DEVICE)
+            .await
+            .unwrap();
+        assert_eq!(
+            export_blobs(&a, &a_subject, &key_a, &vault_a)
+                .await
+                .blobs_uploaded,
+            1
+        );
+        // B uploads its own copy: nothing of A's vault is consulted or reused.
+        assert_eq!(
+            export_blobs(&b, &b_subject, &key_b, &vault_b)
+                .await
+                .blobs_uploaded,
+            1
+        );
+        assert_ne!(blob_keys(&vault_a), blob_keys(&vault_b), "unrelated ids");
+        assert_ne!(
+            vault_a.get(&blob_keys(&vault_a)[0]).unwrap(),
+            vault_b.get(&blob_keys(&vault_b)[0]).unwrap()
+        );
 
+        // A's objects do not open with B's key.
+        let wrong = Db::init_temp("vault_blob_wrong_key").await.unwrap();
+        restore(&wrong, &key_a, &vault_a).await;
+        let denied = import_blobs(&wrong, &a_subject, &key_b, &vault_a).await;
+        assert_eq!((denied.blobs_restored, denied.blobs_unreadable), (0, 1));
+
+        // Wiping A's vault does not affect B's restore.
+        drop(vault_a);
         let fresh = Db::init_temp("vault_blob_b_fresh").await.unwrap();
-        let b_files = {
-            // Restore B's resources, then its bytes, from B's own vault.
-            let key = key();
-            let vault = MemoryVaultStore::new();
-            backup(&b, &b_subject, &key, &vault, DEVICE).await.unwrap();
-            restore(&fresh, &key, &vault).await;
-            import_vault_blobs(&fresh, &b_subject, &shared)
+        restore(&fresh, &key_b, &vault_b).await;
+        let done = import_blobs(&fresh, &b_subject, &key_b, &vault_b).await;
+        assert_eq!(done.blobs_restored, 1);
+        assert_eq!(
+            fresh
+                .get_blob(blake3::hash(b"identical bytes").as_bytes())
                 .await
                 .unwrap()
-        };
-        assert_eq!(b_files.blobs_restored, 1);
-        assert_eq!(
-            fresh.get_blob(hash.as_bytes()).await.unwrap().unwrap(),
+                .unwrap(),
             b"identical bytes"
         );
     }

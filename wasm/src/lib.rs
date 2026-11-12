@@ -15,9 +15,10 @@ use atomic_lib::{
     vault::secret_envelope::{NewWrapper, SecretEnvelope, Unlock},
     vault::store::{MemoryVaultStore, VaultObjectStore},
     vault::sync::{
-        assemble_blob, blob_chunks, blob_proof_hashes, commit_lane_state, drive_file_hashes,
-        drive_prefix, export_vault_segment, import_vault_batch, read_verified_blob, BlobProofRange,
-        CheckpointPolicy, HistoryKeep, SegmentKind,
+        blob_chunks, blob_id_hex, commit_lane_state, drive_file_hashes, drive_prefix,
+        export_vault_segment, import_vault_batch, read_verified_blob, restore_blob_group,
+        seal_blob_chunk, BlobGroupOutcome, CheckpointPolicy, HistoryKeep, SegmentKind,
+        BLOB_SEAL_OVERHEAD,
     },
     Db, Resource, Subject, Value,
 };
@@ -1341,7 +1342,10 @@ struct VaultObjectInput {
 struct VaultBlobChunkInfo {
     index: u32,
     offset: u64,
+    /// Plaintext bytes in this chunk.
     length: u64,
+    /// Bytes once sealed: what the control plane is told and charged.
+    sealed_length: u64,
 }
 
 /// What `vaultBlobOpen` found.
@@ -1352,15 +1356,10 @@ struct VaultBlobPlan {
     /// `tooLarge`.
     status: &'static str,
     size: u64,
+    /// The file's id in this vault: keyed BLAKE3 of its bytes, hex. Empty
+    /// unless `ready`.
+    blob_id: String,
     chunks: Vec<VaultBlobChunkInfo>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct VaultBlobProofRange {
-    chunk_index: u32,
-    offset: u64,
-    length: u64,
 }
 
 #[derive(Serialize)]
@@ -1751,10 +1750,10 @@ impl ClientDb {
     }
 }
 
-// File bytes. Packs carry File *resources*; the bytes live once under their
-// plain BLAKE3 hash, outside the drive key (`planning/vault-file-blobs.md`).
-// Chunking, proof hashing and hash verification are `atomic_lib::vault::sync`;
-// JS only moves chunks over the network.
+// File bytes. Packs carry File *resources*; the bytes are sealed chunk by chunk
+// under the drive key and stored per vault, addressed by a keyed hash
+// (`planning/vault-file-blobs.md`). Hashing, chunking, sealing and opening are
+// `atomic_lib::vault::sync`; JS only moves sealed chunks over the network.
 #[wasm_bindgen]
 impl ClientDb {
     /// Distinct `File.internalId` hashes (lower-case hex) the drive's File
@@ -1774,38 +1773,47 @@ impl ClientDb {
         self.db().has_blob(hash.as_bytes()).await.map_err(to_js_err)
     }
 
-    /// Load one local file, verify it hashes to `hash_hex`, and say how it is
-    /// cut into chunks. Keeps the file for `vaultBlobChunk` / `vaultBlobProof`
-    /// until `vaultBlobClose` or the next open.
+    /// Load one local file, verify it hashes to `hash_hex`, derive its id in
+    /// this vault and say how it is cut into chunks. Keeps the file for
+    /// `vaultBlobChunk` until `vaultBlobClose` or the next open.
     ///
     /// Memory: the browser store returns a file as one value, so this holds one
     /// whole file in WASM memory (never more than one). Chunks handed to JS are
-    /// copies of at most 64 MiB, normally 8 MiB.
+    /// sealed copies of at most 64 MiB, normally 8 MiB.
     #[wasm_bindgen(js_name = "vaultBlobOpen")]
-    pub async fn vault_blob_open(&self, hash_hex: &str) -> Result<JsValue, JsError> {
+    pub async fn vault_blob_open(
+        &self,
+        hash_hex: &str,
+        key_bytes: &[u8],
+        key_epoch: u32,
+    ) -> Result<JsValue, JsError> {
+        let key = drive_key(key_bytes, key_epoch)?;
         *self.blob_cache.borrow_mut() = None;
-        let status = |status, size, chunks| VaultBlobPlan {
+        let status = |status, size, blob_id, chunks| VaultBlobPlan {
             status,
             size,
+            blob_id,
             chunks,
         };
         let plan = match read_verified_blob(self.db(), hash_hex)
             .await
             .map_err(to_js_err)?
         {
-            None => status("missing", 0, vec![]),
+            None => status("missing", 0, String::new(), vec![]),
             Some(bytes) => match blob_chunks(bytes.len() as u64) {
-                None => status("tooLarge", bytes.len() as u64, vec![]),
+                None => status("tooLarge", bytes.len() as u64, String::new(), vec![]),
                 Some(chunks) => {
                     let plan = status(
                         "ready",
                         bytes.len() as u64,
+                        blob_id_hex(&key, &bytes),
                         chunks
                             .iter()
                             .map(|c| VaultBlobChunkInfo {
                                 index: c.index,
                                 offset: c.offset,
                                 length: c.length,
+                                sealed_length: c.length + BLOB_SEAL_OVERHEAD as u64,
                             })
                             .collect(),
                     );
@@ -1826,39 +1834,24 @@ impl ClientDb {
         }
     }
 
-    /// Chunk `index` of the file opened with `vaultBlobOpen`.
+    /// Chunk `index` of the file opened with `vaultBlobOpen`, sealed under the
+    /// drive key and ready to upload.
     #[wasm_bindgen(js_name = "vaultBlobChunk")]
-    pub fn vault_blob_chunk(&self, hash_hex: &str, index: u32) -> Result<Vec<u8>, JsError> {
+    pub fn vault_blob_chunk(
+        &self,
+        hash_hex: &str,
+        key_bytes: &[u8],
+        key_epoch: u32,
+        index: u32,
+    ) -> Result<Vec<u8>, JsError> {
+        let key = drive_key(key_bytes, key_epoch)?;
         let bytes = self.open_blob(hash_hex)?;
         let chunk = blob_chunks(bytes.len() as u64)
             .and_then(|chunks| chunks.get(index as usize).copied())
             .ok_or_else(|| JsError::new("this file has no such chunk"))?;
         let start = chunk.offset as usize;
 
-        Ok(bytes[start..start + chunk.length as usize].to_vec())
-    }
-
-    /// Answer the control plane's proof-of-possession challenge for the file
-    /// opened with `vaultBlobOpen`: the BLAKE3 hex of each range, in order.
-    #[wasm_bindgen(js_name = "vaultBlobProof")]
-    pub fn vault_blob_proof(
-        &self,
-        hash_hex: &str,
-        ranges: JsValue,
-    ) -> Result<Vec<String>, JsError> {
-        let bytes = self.open_blob(hash_hex)?;
-        let ranges: Vec<VaultBlobProofRange> =
-            serde_wasm_bindgen::from_value(ranges).map_err(to_js_err)?;
-        let ranges: Vec<BlobProofRange> = ranges
-            .into_iter()
-            .map(|r| BlobProofRange {
-                chunk_index: r.chunk_index,
-                offset: r.offset,
-                length: r.length,
-            })
-            .collect();
-
-        blob_proof_hashes(&bytes, &ranges).map_err(to_js_err)
+        seal_blob_chunk(&key, &bytes[start..start + chunk.length as usize]).map_err(to_js_err)
     }
 
     /// Release the file held by `vaultBlobOpen`.
@@ -1867,27 +1860,51 @@ impl ClientDb {
         *self.blob_cache.borrow_mut() = None;
     }
 
-    /// Store a file downloaded from the vault, given its chunks in order.
-    /// Stored only if the joined bytes hash to `hash_hex`. Returns `true` when
-    /// stored, `false` when the chunks do not match the hash (corrupt or
-    /// substituted); nothing is written then.
+    /// Open one stored file from its sealed chunks (in order) and store it if a
+    /// File resource wants it. `wanted` is the plain BLAKE3 hashes still
+    /// missing locally. Returns `restored` (stored, with `hash`),
+    /// `unreferenced` (opened, but no wanted File names it) or `unreadable`
+    /// (did not open or did not match its id); nothing is written for the last
+    /// two.
     #[wasm_bindgen(js_name = "vaultBlobRestore")]
     pub async fn vault_blob_restore(
         &self,
-        hash_hex: &str,
+        key_bytes: &[u8],
+        key_epoch: u32,
+        blob_id: &str,
         chunks: JsValue,
-    ) -> Result<bool, JsError> {
-        let hash = blake3::Hash::from_hex(hash_hex).map_err(to_js_err)?;
+        wanted: Vec<String>,
+    ) -> Result<JsValue, JsError> {
+        let key = drive_key(key_bytes, key_epoch)?;
         let chunks: Vec<Vec<u8>> = serde_wasm_bindgen::from_value(chunks).map_err(to_js_err)?;
         let refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
-        let Ok(bytes) = assemble_blob(hash_hex, &refs) else {
-            return Ok(false);
-        };
-        self.db()
-            .put_blob(hash.as_bytes(), &bytes)
+        let wanted: std::collections::HashSet<String> =
+            wanted.into_iter().map(|h| h.to_ascii_lowercase()).collect();
+        let outcome = restore_blob_group(self.db(), &key, blob_id, &refs, &wanted)
             .await
             .map_err(to_js_err)?;
+        let result = match outcome {
+            BlobGroupOutcome::Restored(hash) => VaultBlobRestoreResult {
+                status: "restored",
+                hash: Some(hash),
+            },
+            BlobGroupOutcome::Unreferenced => VaultBlobRestoreResult {
+                status: "unreferenced",
+                hash: None,
+            },
+            BlobGroupOutcome::Unreadable => VaultBlobRestoreResult {
+                status: "unreadable",
+                hash: None,
+            },
+        };
 
-        Ok(true)
+        serde_wasm_bindgen::to_value(&result).map_err(to_js_err)
     }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultBlobRestoreResult {
+    status: &'static str,
+    hash: Option<String>,
 }

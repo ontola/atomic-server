@@ -2,7 +2,7 @@
 
 > **Status:** v1 implemented in `lib/src/vault/` (2026-08-04). Phase 2 landed
 > 2026-09-05: incremental per-lane cursors and checkpoints, described below.
-> Compression, blob chunking and per-object signatures remain.
+> Compression and per-object signatures remain.
 >
 > Phase 2 changed two things a third-party implementation must know about:
 > **pack format 2** (a lane pack may be a delta, so it is no longer
@@ -20,9 +20,7 @@ is in this file and in `lib/src/vault/`.
 Encrypted, append-only backup of a drive's CRDT history, stored as opaque
 objects. The party holding the objects can see how many objects exist, how big
 they are, when they arrived and which device lane they belong to. It cannot see
-subjects, property values, resource contents or resource counts. File bytes are
-the exception: they are stored once, unsealed, under their plain BLAKE3 hash and
-shared by every vault, so the operator can read them (see below).
+subjects, property values, resource contents, resource counts, or file bytes.
 
 Clients encrypt locally and talk to object storage directly via presigned URLs.
 The hosted control plane brokers those URLs, quota and checkpoint publication;
@@ -164,13 +162,13 @@ vault/<drive-pseudonym>/
   lanes/<device-pubkey>/seg-000001.pack   ← append-only per device
   checkpoints/ckpt-000001.loro            ← self-sufficient anchor
   indexes/ckpt-000001.idx                 ← not yet written
+  blobs/<keyed-hash>/<chunk:06>           ← sealed file chunks (kind Blob)
 ```
 
-File bytes are NOT under the drive prefix and NOT sealed. They live once in a
-store shared by all vaults, at `vault-blobs/<blake3-hex>/<chunk:06>` (plain
-BLAKE3, the same hash as `File.internalId` and the server blob store). See
-`planning/vault-file-blobs.md`. The `blob id` keyed hash and `Blob` envelope
-kind above are unused by this design.
+File chunks are sealed like everything else and addressed by the keyed `blob id`
+hash of the file's plaintext, so the same file is stored once per vault and two
+vaults holding identical bytes share nothing. See
+`planning/vault-file-blobs.md`.
 
 The drive pseudonym is a salted hash of the drive DID, computed by the control
 plane; a self-hosted vault may use any stable string.
@@ -327,8 +325,9 @@ matters most.
   (`export_vault_blobs` / `import_vault_blobs`, WASM `vaultBlob*`, browser
   `backupBlobs` / `restoreDriveBlobs`), but the browser file store hands out a
   file as one value, so one whole file is held in WASM memory at a time (JS
-  holds one 8 MiB chunk). Files over 4 GiB (64 chunks of 64 MiB) are skipped.
-  A backup file downloaded from the vault holds sealed history only.
+  holds one sealed 8 MiB chunk). Files over about 4 GiB (64 chunks of 63 MiB)
+  are skipped. A backup file downloaded from the vault holds sealed history
+  only.
 - **Per-object signatures.** Integrity today comes from the AEAD tag, which
   proves the object was sealed by someone holding the drive key. Signing
   objects with the agent key is a planned addition for provenance across

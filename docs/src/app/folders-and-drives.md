@@ -23,14 +23,14 @@ Drag things in the sidebar to move them, or use the move option in a resource's 
 Cloud Vault backs up a drive to the cloud so you can restore it on a new device.
 Your documents, tables and other resources are encrypted on your device first, so only you can read them.
 
-Files (uploads, images, attachments) are included, but they are handled differently.
-Each file is stored once, under a hash of its contents, and shared by every backup that holds the same file.
-That means files are **not end-to-end encrypted**: the service operator can read them, and can tell whether a backup holds a file it already knows.
-Every backup counts the full size of each of its files toward its own storage, even when another backup stored the same file first.
-When you delete a file, its bytes are removed from the cloud once no backup refers to it any more, after a short window in which a deletion can still be undone.
+Files (uploads, images, attachments) are included and are encrypted on your device the same way, so only you can read them.
+A file that appears several times in one backup is stored once.
+Files count toward the storage of the backup that holds them.
+Two backups that happen to hold the same file store it separately, and nothing in the cloud links them.
+When you use *Compress now*, files that no longer exist in your drive are removed from the cloud after a short window in which a deletion can still be undone.
 
 If a file is not on the device that runs the backup, it cannot be backed up from there.
-A restore says how many files it could not bring back.
+A restore, including a restore to an earlier snapshot, says how many files it could not bring back.
 A backup file downloaded from Cloud Vault contains the encrypted history only, not the files.
 
 ## What is special about it

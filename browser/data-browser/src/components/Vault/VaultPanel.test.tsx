@@ -114,14 +114,16 @@ it('restores from a picked file and clears the input', async () => {
   expect(vault.restoreFromFile).toHaveBeenCalledWith(file);
 });
 
-it('says files are included, stored once and not end-to-end encrypted', () => {
+it('says files are included, encrypted on the device and counted per backup', () => {
   show(1000, false);
 
   const note = screen.getByTestId('vault-files-note').textContent ?? '';
   expect(note).toContain('Files are included');
-  expect(note).toContain('stored once');
-  expect(note).toContain('not end-to-end encrypted');
-  expect(note).toContain('full size of each of its files');
+  expect(note).toContain('encrypted on this device like everything else');
+  expect(note).toContain("count toward this backup's Cloud Vault storage");
+  // The old, shared-store wording must not come back.
+  expect(note).not.toContain('not end-to-end encrypted');
+  expect(note).not.toContain('can read');
 });
 
 it('does not reload over a restore that left files behind', async () => {

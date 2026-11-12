@@ -13520,10 +13520,6 @@ msgid "Report a bug or suggest an improvement. Your message and optional email g
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
 
 #: src/components/Vault/VaultPanel.tsx
-msgid "Backs up your data and files. Your data is encrypted so only you can read it. Files are not."
-msgstr "Mencadangkan data dan berkas Anda. Data Anda dienkripsi sehingga hanya Anda yang dapat membacanya. Berkas tidak."
-
-#: src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
 msgstr[0] "# objek cadangan tidak dapat dibaca"
@@ -13543,7 +13539,10 @@ msgstr[0] "# berkas tidak dapat dibaca"
 msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
 msgstr "Dipulihkan, tetapi tidak semuanya: {0}. Muat ulang halaman untuk melihat apa yang dipulihkan."
 
-#. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
-msgid "Files are included. Each file is stored once, shared with every backup that holds the same file, so files are not end-to-end encrypted and {0} can read them. Every backup counts the full size of each of its files toward its own storage."
-msgstr "Berkas disertakan. Setiap berkas disimpan satu kali dan dibagikan ke setiap cadangan yang memiliki berkas yang sama, sehingga berkas tidak dienkripsi end-to-end dan {0} dapat membacanya. Setiap cadangan menghitung ukuran penuh semua berkasnya terhadap penyimpanannya sendiri."
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Cadangan terenkripsi untuk data dan berkas Anda. Hanya Anda yang dapat membacanya."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Berkas disertakan. Berkas dienkripsi di perangkat ini seperti yang lainnya dan dihitung ke dalam penyimpanan Cloud Vault cadangan ini."

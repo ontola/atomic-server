@@ -13528,10 +13528,6 @@ msgid "Report a bug or suggest an improvement. Your message and optional email g
 msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team, samen met technische gegevens over je opstelling (app-versie, serveradres en status). Vermeld geen privé-inhoud uit je werkruimte."
 
 #: src/components/Vault/VaultPanel.tsx
-msgid "Backs up your data and files. Your data is encrypted so only you can read it. Files are not."
-msgstr "Maakt een back-up van je gegevens en bestanden. Je gegevens zijn versleuteld, zodat alleen jij ze kunt lezen. Bestanden niet."
-
-#: src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
 msgstr[0] "# back-upobject kon niet worden gelezen"
@@ -13554,7 +13550,10 @@ msgstr[1] "# bestanden konden niet worden gelezen"
 msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
 msgstr "Hersteld, maar niet alles: {0}. Laad de pagina opnieuw om te zien wat is hersteld."
 
-#. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
-msgid "Files are included. Each file is stored once, shared with every backup that holds the same file, so files are not end-to-end encrypted and {0} can read them. Every backup counts the full size of each of its files toward its own storage."
-msgstr "Bestanden zijn inbegrepen. Elk bestand wordt één keer opgeslagen en gedeeld met elke back-up die hetzelfde bestand bevat. Bestanden zijn daarom niet end-to-end versleuteld en {0} kan ze lezen. Elke back-up telt de volledige grootte van al zijn bestanden mee voor zijn eigen opslag."
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Versleutelde back-up van je gegevens en bestanden. Alleen jij kunt deze lezen."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Bestanden zijn inbegrepen. Ze worden op dit apparaat versleuteld, net als al het andere, en tellen mee voor de Cloud Vault-opslag van deze back-up."
