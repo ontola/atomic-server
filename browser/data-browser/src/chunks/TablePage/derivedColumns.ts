@@ -1,6 +1,5 @@
 import {
   Datatype,
-  type Expression,
   type JSONValue,
   type Property,
   type Resource,
@@ -91,19 +90,11 @@ export function inferValueKind(
       : undefined;
 }
 
-/** The store's form of a column, so a total or a filter can be computed over it. */
-export function toExpression(spec: DerivedColumnSpec): Expression | undefined {
-  return spec.formula.trim() === ''
-    ? undefined
-    : { kind: 'formula', formula: spec.formula, vars: spec.vars };
-}
-
-/** Whether the formula reads the clock, so its value (and a query on it) moves. */
-export function dependsOnNow(
-  spec: Pick<DerivedColumnSpec, 'formula'>,
-): boolean {
-  return /\b(now|daysUntilAnniversary)\s*\(/.test(spec.formula);
-}
+export {
+  tableDerivedExpression as toExpression,
+  tableDerivedDependsOnNow as dependsOnNow,
+} from '@tomic/table';
+import { tableDerivedExpression as toExpression } from '@tomic/table';
 
 /**
  * True while a cell's value ticks on its own every second: a running duration.

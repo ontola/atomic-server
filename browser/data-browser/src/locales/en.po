@@ -4877,6 +4877,7 @@ msgstr "Stop the running entry when another starts"
 
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Timer/useTimerColumns.tsx
+#: src/chunks/TablePage/useTableData.ts
 msgid "Duration"
 msgstr "Duration"
 
@@ -13424,6 +13425,7 @@ msgstr "Could not save view changes: {0}"
 msgid "Retry view save"
 msgstr "Retry view save"
 
+#: src/chunks/TablePage/useTableData.ts
 #: src/chunks/TablePage/useTableView.ts
 msgid "Saved view configuration is invalid."
 msgstr "Saved view configuration is invalid."

@@ -55,6 +55,10 @@ async function setup({
     [dataBrowser.properties.viewSortBy, Datatype.ATOMIC_URL],
     [dataBrowser.properties.viewDashboard, Datatype.ATOMIC_URL],
     [dataBrowser.properties.viewSortDesc, Datatype.BOOLEAN],
+    [dataBrowser.properties.viewGroupBy, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.viewEndProp, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.viewDerivedColumns, Datatype.JSON],
+    [dataBrowser.properties.viewAggregates, Datatype.JSON],
   ]) {
     const property = await store.newResource({ subject, noParent: true });
     await property.set(core.properties.datatype, type, false);
@@ -738,4 +742,69 @@ it('persists newer edits after the page unmounts during an in-flight save', asyn
   expect(state.view.get(dataBrowser.properties.viewFilters)).toEqual([
     { property, operator: 'eq', value: 'newer' },
   ]);
+});
+
+it('blocks the actual query when a valued filter names a removed computed column', async () => {
+  const state = await setup();
+  await act(async () => {
+    await state.view.set(
+      dataBrowser.properties.viewFilters,
+      [{ derived: 'removed', operator: 'gt', value: '2' }],
+      false,
+    );
+  });
+  const data = renderHook(() => useTableData(state.table), {
+    wrapper: state.wrapper,
+  });
+  await waitFor(() =>
+    expect(data.result.current.viewError).toBe(
+      'Saved view configuration is invalid.',
+    ),
+  );
+  expect(data.result.current.query.scope.rowClass).toBeUndefined();
+  expect(data.result.current.ready).toBe(false);
+});
+
+it('resolves implicit timer duration identically for actual row filters and totals', async () => {
+  const state = await setup();
+  await act(async () => {
+    await state.view.set(dataBrowser.properties.viewKind, 'timer', false);
+    await state.view.set(
+      dataBrowser.properties.viewGroupBy,
+      'https://example.com/start',
+      false,
+    );
+    await state.view.set(
+      dataBrowser.properties.viewEndProp,
+      'https://example.com/end',
+      false,
+    );
+    await state.view.set(
+      dataBrowser.properties.viewFilters,
+      [{ derived: 'duration', operator: 'gt', value: '2' }],
+      false,
+    );
+    await state.view.set(
+      dataBrowser.properties.viewAggregates,
+      [{ id: 'total', derived: 'duration', function: 'sum' }],
+      false,
+    );
+  });
+  const data = renderHook(() => useTableData(state.table), {
+    wrapper: state.wrapper,
+  });
+  await waitFor(() => expect(data.result.current.viewReady).toBe(true));
+  const query = data.result.current.query;
+  expect(query.expressionFilters[0].value).toBe(7_200_000);
+  expect(query.aggregation?.aggregates[0].expression).toEqual(
+    query.expressionFilters[0].expression,
+  );
+  expect(
+    state.view.get(dataBrowser.properties.viewDerivedColumns),
+  ).toBeUndefined();
+  await act(async () => {
+    await state.view.set(dataBrowser.properties.viewDerivedColumns, [], false);
+  });
+  await waitFor(() => expect(data.result.current.viewReady).toBe(false));
+  expect(data.result.current.query.scope.rowClass).toBeUndefined();
 });

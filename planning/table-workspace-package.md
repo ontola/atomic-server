@@ -338,3 +338,21 @@ failed-save navigation and newer edits during an unmounted save.
 This does not move the remaining renderer/configuration UI into the package or
 supply backend revision transactions. Native explicit Save/Discard adoption is
 next; the full TablePage gate and subsequent catalog work remain open.
+
+## Shared view query compilation
+
+ELFA's explicit Save/Discard draft adoption shipped in database-apps #105.
+Version 2 native records now save stable query Property IDs (#107); active legacy
+v1 queries need an explicit column choice rather than guessing historical
+bindings. Persisted-wallet restart remains a separate integration question (#106):
+fresh in-session SDK read-back is not restart evidence.
+
+The shared query compiler now resolves computed filter/statistic references and
+builds one request for actual Atomic TablePage rows and collection-wide totals.
+Previously, an unresolved computed filter was silently dropped; it now makes the
+query unavailable. Implicit timer duration uses the same shared expression for
+the grid, filters and totals, while an explicit empty derived list still wins.
+Numeric conversion failures and unsupported computed operators also stop the
+request. Schema/type checks and backend query capabilities remain adapter work.
+Standalone dashboard-block queries still need migration. Full page orchestration,
+configuration controls and built-in renderers remain open before catalog work.
