@@ -1,5 +1,13 @@
 // @wc-ignore-file
-import { core, urls, useCurrentAgent, useResources } from '@tomic/react';
+import { useMemo } from 'react';
+import {
+  core,
+  urls,
+  useCurrentAgent,
+  useResources,
+  useStore,
+} from '@tomic/react';
+import { lazyDriveSubjects } from '@helpers/lazyDriveSubjects';
 import { canonicalizeScheme } from '@tomic/lib';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useDriveChats } from '@components/SideBar/AIPanel';
@@ -105,7 +113,22 @@ export function useOnboardingProgress(driveName?: string) {
   );
   const base = { savedDrives, privateDrive, welcomeDrive } as OnboardingInput;
   const projects = projectDrives(base);
-  const resources = useResources(projects);
+  const store = useStore();
+  // Never fetch saved drives just to look for other members: legacy ones on
+  // servers that no longer serve them fail on every render. Local drives and
+  // drives already in memory are checked.
+  const projectsKey = projects.join('\n');
+  const fetchable = useMemo(
+    () =>
+      lazyDriveSubjects(projects, {
+        opened: false,
+        isLocal: s => store.isLocalOnlyDrive(s),
+        isLoaded: s => store.resources.has(store.normalizeSubject(s)),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectsKey, store],
+  );
+  const resources = useResources(fetchable);
   const others = [...resources.values()].some(r =>
     [r.get(core.properties.read), r.get(core.properties.write)]
       .flat()
