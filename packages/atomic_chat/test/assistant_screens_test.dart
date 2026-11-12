@@ -899,7 +899,8 @@ void main() {
       expect(y('Messages'), lessThan(y('Favorites')));
       expect(y('Favorites'), lessThan(y('AI chats')));
       expect(find.text('Starred'), findsOneWidget);
-      expect(find.text('Folder'), findsOneWidget);
+      // A favorite shows no type subtitle.
+      expect(find.text('Folder'), findsNothing);
 
       ResourceView.serverFactory = () async => throw 'no server in a test';
       await tester.tap(find.text('Alice, Bob'));
