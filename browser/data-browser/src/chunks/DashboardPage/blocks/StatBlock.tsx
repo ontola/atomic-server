@@ -39,11 +39,17 @@ export function StatBlock({ block, config }: BlockProps): JSX.Element {
     ? query.derivedColumns.find(c => c.id === spec.derived)
     : undefined;
 
-  const value = outcome?.value;
+  const value = query.ready ? outcome?.value : undefined;
 
   return (
     <BlockShell block={block} label={config.label} center>
-      {spec ? (
+      {query.error ? (
+        <Unconfigured role='alert'>{query.error}</Unconfigured>
+      ) : query.ready && spec && !aggregation ? (
+        <Unconfigured role='alert'>
+          The configured measurement is unavailable.
+        </Unconfigured>
+      ) : spec ? (
         <>
           <Value>
             {formatAggregateValue(

@@ -1,108 +1,102 @@
 import {
   core,
-  dataBrowser,
   unknownSubject,
-  useResource,
+  useResourceSnapshot,
   useString,
-  useValue,
   type ExpressionFilter,
   type PropVal,
 } from '@tomic/react';
-import { useMemo } from 'react';
 import {
-  parseDerivedColumnSpecs,
-  type DerivedColumnSpec,
-} from '../TablePage/derivedColumns';
-import {
-  quantizedNow,
-  splitFilters,
-  type TableFilter,
-} from '../TablePage/tableFiltering';
+  compileTableViewQuery,
+  readTableViewConfiguration,
+  timerDurationColumn,
+  tableQueryNow,
+} from '@tomic/table';
+import type { DerivedColumnSpec } from '../TablePage/derivedColumns';
+import { useAtomicViewConfiguration } from '../TablePage/atomicViewConfiguration';
 
 export interface BlockQuery {
-  /** The `parent = <table>` constraint every block query starts from. */
   property: string;
   value: string;
-  /** Indexed constraints: the class, the view's filters, the block's own. */
   filters: PropVal[];
-  /** Constraints the store has to evaluate per row. */
   expressionFilters: ExpressionFilter[];
-  /** The view's computed columns, for a statistic that names one. */
   derivedColumns: DerivedColumnSpec[];
-  /** True once the source's classtype is known — before that the query would
-   *  ask about `unknownSubject`. */
   ready: boolean;
+  error?: string;
+  now?: number;
 }
 
-function parseFilters(value: unknown): TableFilter[] {
-  return Array.isArray(value) ? (value as TableFilter[]) : [];
-}
-
-/**
- * The constraints a block's numbers cover.
- *
- * A block borrows its view's configuration rather than restating it: point a
- * stat block at the "Low stock" view and it counts exactly the rows that view
- * lists, filters and computed columns included. `block-query` then ANDs
- * whatever else the block narrows by on top, so "low stock **in this room**" is
- * config rather than a second view.
- */
+/** A block borrows its owned view's predicates and ANDs its own constraints.
+ * Both use the actual TablePage compiler; unresolved valued constraints never
+ * become an unfiltered count or chart. The block chooses its own statistic. */
 export function useBlockQuery(
   sourceSubject: string | undefined,
   viewSubject: string | undefined,
   blockQuery: unknown,
 ): BlockQuery {
-  const source = useResource(sourceSubject ?? unknownSubject);
-  const view = useResource(viewSubject ?? unknownSubject);
-
-  const [classSubject] = useString(source, core.properties.classtype);
-  const [storedFilters] = useValue(view, dataBrowser.properties.viewFilters);
-  const [storedDerived] = useValue(
-    view,
-    dataBrowser.properties.viewDerivedColumns,
-  );
-
-  // Serialized deps throughout: parsing JSON hands back a fresh array every
-  // render, and these reach a query's identity.
-  const derivedKey = JSON.stringify(storedDerived ?? null);
-  const viewFiltersKey = JSON.stringify(storedFilters ?? null);
-  const blockFiltersKey = JSON.stringify(blockQuery ?? null);
-
-  const derivedColumns = useMemo(
-    () => parseDerivedColumnSpecs(JSON.parse(derivedKey)),
-    [derivedKey],
-  );
-
-  const { filters, expressionFilters } = useMemo(() => {
-    const combined = [
-      ...parseFilters(JSON.parse(viewFiltersKey)),
-      ...parseFilters(JSON.parse(blockFiltersKey)),
-    ];
-
-    // Quantized, like the table's: this value is part of the query's identity,
-    // so a raw `Date.now()` would re-run it on every render.
-    const split = splitFilters(combined, derivedColumns, quantizedNow());
-
-    return {
-      filters: split.propVals,
-      expressionFilters: split.expressionFilters,
-    };
-  }, [viewFiltersKey, blockFiltersKey, derivedColumns]);
-
+  const source = useResourceSnapshot(sourceSubject ?? unknownSubject);
+  const view = useResourceSnapshot(viewSubject ?? unknownSubject);
+  const [classSubject] = useString(source.resource, core.properties.classtype);
+  const stored = useAtomicViewConfiguration(view.resource);
+  const config = viewSubject
+    ? stored.config
+    : readTableViewConfiguration({}).config;
+  const block = readTableViewConfiguration({
+    filters: blockQuery ?? undefined,
+  });
+  const foreign =
+    !!viewSubject && !view.loading && stored.owner !== sourceSubject;
+  const malformed =
+    (viewSubject && stored.issues.length) || block.issues.length;
+  const defaultDerivedColumns =
+    config.kind === 'timer' && config.groupBy && config.endProp
+      ? [timerDurationColumn(config.groupBy, config.endProp, 'Duration')]
+      : [];
   const hasClass = !!classSubject && classSubject !== unknownSubject;
-
-  // Rows only: without this a block would count the table's own View resources
-  // alongside its rows.
-  const classFilter: PropVal[] = hasClass
-    ? [{ property: core.properties.isA, value: classSubject }]
-    : [];
+  const ready =
+    !!sourceSubject &&
+    !source.loading &&
+    hasClass &&
+    (!viewSubject || !view.loading) &&
+    !foreign &&
+    !malformed;
+  const now = tableQueryNow();
+  const compiled = compileTableViewQuery(
+    {
+      ...config,
+      filters: [...config.filters, ...block.config.filters],
+      aggregates: [],
+      groupByColumn: undefined,
+    },
+    {
+      scope: {
+        table: sourceSubject ?? '',
+        rowClass: ready ? classSubject : undefined,
+      },
+      pageSize: 30,
+      now,
+      defaultDerivedColumns,
+    },
+  );
+  const error = foreign
+    ? 'Saved view is unavailable in this table.'
+    : malformed || compiled.issues.length
+      ? 'Saved view configuration is invalid.'
+      : undefined;
 
   return {
     property: core.properties.parent,
     value: sourceSubject ?? '',
-    filters: [...classFilter, ...filters],
-    expressionFilters,
-    derivedColumns,
-    ready: !!sourceSubject && hasClass,
+    filters: [
+      ...(hasClass
+        ? [{ property: core.properties.isA, value: classSubject }]
+        : []),
+      ...compiled.query.filters,
+    ],
+    expressionFilters: compiled.query.expressionFilters,
+    derivedColumns: compiled.derivedColumns,
+    ready: ready && !compiled.issues.length,
+    error,
+    now,
   };
 }
