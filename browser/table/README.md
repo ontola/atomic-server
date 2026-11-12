@@ -173,3 +173,14 @@ provides the same raw-text/commit editor used by Atomic and native hosts; format
 of currency/percentages remains in the host display adapter. Numeric schema bounds
 may be fractional even for integer-valued columns; integral bounds are a separate
 control policy used for lengths, not inferred from the numeric column datatype.
+
+
+`createTableViewWriteQueue` serializes captured metadata operations within a table.
+A failure retains that operation and subsequent edits until explicit Retry. It
+exposes stable busy/pending/error snapshots; enqueue/retry promises settle after
+the current drain attempt, so hosts must inspect the snapshot for failures.
+Adapters must make retrying the same intent safe and retain prepared creation
+identities across partial attachment failures. This queue does not make multiple
+backend documents transactional or replace native explicit Save/Discard policy.
+Atomic configuration setters and debounced filter/sort saves use it; saved-view
+CRUD and the full configuration/session model remain separate adapter work.

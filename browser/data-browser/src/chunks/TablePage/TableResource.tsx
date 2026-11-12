@@ -14,6 +14,7 @@ import {
 } from '@tomic/react';
 import type { CellIndex } from '@chunks/TableEditor';
 import toast from 'react-hot-toast';
+import { ViewSaveError } from './ViewSaveError';
 import { styled } from 'styled-components';
 import { AppFrame } from '@chunks/AppPage/AppFrame';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
@@ -151,6 +152,9 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     tableClass,
     viewReady,
     viewError,
+    viewSaving,
+    viewSaveError,
+    retryViewSave,
     sorting,
     setSortBy,
     filters,
@@ -1533,6 +1537,11 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
       <TablePresenceContext value={presenceValue}>
         <TableCalendarRowContext value={calendarRow}>
           {viewError && <p role='alert'>{viewError}</p>}
+          <ViewSaveError
+            message={viewSaveError}
+            saving={viewSaving}
+            retry={retryViewSave}
+          />
           {!embedded && (
             <TableViewTabs
               rowClass={tableClass.subject}
