@@ -989,6 +989,163 @@ pub async fn import_vault_batch(
     Ok(summary)
 }
 
+// ── File contents ───────────────────────────────────────────────────────────
+//
+// Packs carry File *resources*. File *bytes* are not in packs and are not
+// sealed with the drive key: they live once, under their plain BLAKE3 hash (the
+// hash the blob store and `File.internalId` already use), in a store shared by
+// every vault. Each vault still counts the full size of every file it
+// references toward its own quota, and the control plane deletes a physical
+// object only when no vault references it. See `planning/vault-file-blobs.md`.
+
+/// Largest slice of a file stored as one object. Well under the control
+/// plane's 64 MiB per-object ceiling.
+pub const BLOB_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+
+/// Where the shared, hash-addressed file objects live. Deliberately outside
+/// `vault/<pseudonym>/`: a drive prefix listing (restore, reconcile, drive
+/// removal) must never see or delete an object another vault also points at.
+pub const BLOB_PREFIX: &str = "vault-blobs/";
+
+/// The object key for one chunk of a file, by lower-case hex BLAKE3 hash.
+pub fn blob_chunk_key(hash_hex: &str, chunk: u32) -> String {
+    format!("{BLOB_PREFIX}{hash_hex}/{chunk:06}")
+}
+
+/// Outcome of uploading a drive's files.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BlobBackupSummary {
+    /// Distinct hashes written this pass.
+    pub blobs_uploaded: usize,
+    /// Distinct hashes already in the shared store, not written again.
+    pub blobs_already_stored: usize,
+    /// Referenced hashes whose bytes this device does not have (or that do not
+    /// match their hash). They cannot be backed up and are not live.
+    pub blobs_missing: usize,
+    pub bytes_uploaded: u64,
+    /// Every distinct hash the drive's File resources reference: the live set
+    /// for the control plane's `retain-blobs`.
+    pub live_hashes: Vec<String>,
+}
+
+/// Outcome of restoring a drive's files.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BlobRestoreSummary {
+    pub blobs_restored: usize,
+    /// Already in the local blob store, nothing to fetch.
+    pub blobs_present: usize,
+    /// Referenced by a File resource but absent from the vault.
+    pub blobs_missing: usize,
+    /// Found, but chunks were missing or the bytes did not match the hash.
+    pub blobs_unreadable: usize,
+}
+
+/// Distinct `File.internalId` hashes (lower-case hex BLAKE3) referenced by
+/// File resources under `drive`.
+pub async fn drive_file_hashes(store: &Db, drive: &Subject) -> Vec<String> {
+    let mut hashes = std::collections::BTreeSet::new();
+    for subject_str in crate::sync::engine::collect_drive_subjects(store, drive).await {
+        let subject = Subject::from_raw(&subject_str, store.get_base_domain().as_deref());
+        let Ok(resource) = store.get_resource(&subject).await else {
+            continue;
+        };
+        if resource.get(crate::urls::BLOB).is_err() {
+            continue;
+        }
+        if let Ok(id) = resource.get(crate::urls::INTERNAL_ID) {
+            let id = id.to_string().to_ascii_lowercase();
+            if blake3::Hash::from_hex(&id).is_ok() {
+                hashes.insert(id);
+            }
+        }
+    }
+    hashes.into_iter().collect()
+}
+
+/// Upload the bytes of every File in `drive` that the vault does not hold yet.
+///
+/// Each distinct hash is written once, however many File resources point at
+/// it. Existing objects are found by listing, so a second device or a second
+/// pass never re-uploads.
+pub async fn export_vault_blobs(
+    store: &Db,
+    drive: &Subject,
+    vault: &dyn VaultObjectStore,
+) -> AtomicResult<BlobBackupSummary> {
+    let mut summary = BlobBackupSummary::default();
+    for hash_hex in drive_file_hashes(store, drive).await {
+        let first = blob_chunk_key(&hash_hex, 0);
+        if !vault.list(&first)?.is_empty() {
+            summary.blobs_already_stored += 1;
+            summary.live_hashes.push(hash_hex);
+            continue;
+        }
+        let hash = blake3::Hash::from_hex(&hash_hex).map_err(|e| e.to_string())?;
+        let bytes = match store.get_blob(hash.as_bytes()).await? {
+            Some(bytes) if blake3::hash(&bytes) == hash && !bytes.is_empty() => bytes,
+            _ => {
+                summary.blobs_missing += 1;
+                continue;
+            }
+        };
+        for (n, chunk) in bytes.chunks(BLOB_CHUNK_BYTES).enumerate() {
+            vault.put(&blob_chunk_key(&hash_hex, n as u32), chunk)?;
+        }
+        summary.blobs_uploaded += 1;
+        summary.bytes_uploaded += bytes.len() as u64;
+        summary.live_hashes.push(hash_hex);
+    }
+    Ok(summary)
+}
+
+/// Fetch the bytes of every File in `drive` that this store lacks.
+///
+/// Run after the resources are restored. A blob is stored only after its
+/// bytes hash to the id the File resource names, so a corrupt or substituted
+/// object is reported rather than silently trusted.
+pub async fn import_vault_blobs(
+    store: &Db,
+    drive: &Subject,
+    vault: &dyn VaultObjectStore,
+) -> AtomicResult<BlobRestoreSummary> {
+    let mut summary = BlobRestoreSummary::default();
+    for hash_hex in drive_file_hashes(store, drive).await {
+        let hash = blake3::Hash::from_hex(&hash_hex).map_err(|e| e.to_string())?;
+        if store.has_blob(hash.as_bytes()).await? {
+            summary.blobs_present += 1;
+            continue;
+        }
+        let keys = vault.list(&format!("{BLOB_PREFIX}{hash_hex}/"))?;
+        if keys.is_empty() {
+            summary.blobs_missing += 1;
+            continue;
+        }
+        let mut bytes = Vec::new();
+        let mut complete = true;
+        for (n, key) in keys.iter().enumerate() {
+            // Chunks must be 000000.. without a gap, or the file is short.
+            if *key != blob_chunk_key(&hash_hex, n as u32) {
+                complete = false;
+                break;
+            }
+            match vault.get(key) {
+                Ok(chunk) => bytes.extend_from_slice(&chunk),
+                Err(_) => {
+                    complete = false;
+                    break;
+                }
+            }
+        }
+        if !complete || blake3::hash(&bytes) != hash {
+            summary.blobs_unreadable += 1;
+            continue;
+        }
+        store.put_blob(hash.as_bytes(), &bytes).await?;
+        summary.blobs_restored += 1;
+    }
+    Ok(summary)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2682,5 +2839,194 @@ mod tests {
         }
         restore(&target, &key, &only).await;
         assert_eq!(name_of(&target, &note).await, "two");
+    }
+
+    /// A File resource under `drive` whose bytes are in `store`'s blob store.
+    async fn add_file(store: &Db, drive: &str, name: &str, contents: &[u8]) -> Subject {
+        use crate::{urls, Value};
+        let hash_hex = blake3::hash(contents).to_hex().to_string();
+        store
+            .put_blob(blake3::hash(contents).as_bytes(), contents)
+            .await
+            .unwrap();
+        let file = store
+            .create_resource(
+                urls::FILE,
+                drive,
+                name,
+                Some(vec![
+                    (urls::FILENAME, Value::String(name.into())),
+                    (urls::FILESIZE, Value::Integer(contents.len() as i64)),
+                    (urls::INTERNAL_ID, Value::String(hash_hex.clone())),
+                    (
+                        urls::BLOB,
+                        Value::AtomicUrl(
+                            crate::identifiers::blob_subject(&hash_hex).as_str().into(),
+                        ),
+                    ),
+                ]),
+            )
+            .await
+            .unwrap();
+        Subject::from_raw(&file, store.get_base_domain().as_deref())
+    }
+
+    fn blob_keys(vault: &MemoryVaultStore) -> Vec<String> {
+        vault.list(BLOB_PREFIX).unwrap()
+    }
+
+    #[tokio::test]
+    async fn vault_restores_uploaded_file_bytes() {
+        let source = Db::init_temp("vault_blob_source").await.unwrap();
+        let (_, drive) = source.setup("alice").await.unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        // Larger than one chunk, so reassembly is exercised.
+        let contents: Vec<u8> = (0..BLOB_CHUNK_BYTES + 1234)
+            .map(|i| (i % 251) as u8)
+            .collect();
+        let file = add_file(&source, &drive, "big.bin", &contents).await;
+
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        backup(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        let up = export_vault_blobs(&source, &drive_subject, &vault)
+            .await
+            .unwrap();
+        assert_eq!((up.blobs_uploaded, up.blobs_missing), (1, 0));
+        assert_eq!(blob_keys(&vault).len(), 2, "two chunks");
+
+        let target = Db::init_temp("vault_blob_restored").await.unwrap();
+        let result = restore(&target, &key, &vault).await;
+        assert_eq!(result.objects_unreadable, 0);
+        let hash = blake3::hash(&contents);
+        assert!(target.get_blob(hash.as_bytes()).await.unwrap().is_none());
+        let done = import_vault_blobs(&target, &drive_subject, &vault)
+            .await
+            .unwrap();
+        assert_eq!(done.blobs_restored, 1);
+        assert_eq!(
+            target.get_blob(hash.as_bytes()).await.unwrap().unwrap(),
+            contents
+        );
+        assert!(target.get_resource(&file).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn identical_files_upload_one_blob_once() {
+        let source = Db::init_temp("vault_blob_dedupe").await.unwrap();
+        let (_, drive) = source.setup("alice").await.unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        add_file(&source, &drive, "a.txt", b"same bytes").await;
+        add_file(&source, &drive, "b.txt", b"same bytes").await;
+        add_file(&source, &drive, "c.txt", b"other bytes").await;
+
+        let vault = MemoryVaultStore::new();
+        let first = export_vault_blobs(&source, &drive_subject, &vault)
+            .await
+            .unwrap();
+        assert_eq!(first.blobs_uploaded, 2);
+        assert_eq!(first.live_hashes.len(), 2);
+        assert_eq!(blob_keys(&vault).len(), 2);
+        let second = export_vault_blobs(&source, &drive_subject, &vault)
+            .await
+            .unwrap();
+        assert_eq!((second.blobs_uploaded, second.blobs_already_stored), (0, 2));
+    }
+
+    #[tokio::test]
+    async fn missing_or_corrupt_blob_is_reported_on_restore() {
+        let source = Db::init_temp("vault_blob_missing_src").await.unwrap();
+        let (_, drive) = source.setup("alice").await.unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        add_file(&source, &drive, "a.txt", b"will go missing").await;
+        add_file(&source, &drive, "b.txt", b"will be corrupted").await;
+        let vault = MemoryVaultStore::new();
+        let key = key();
+        backup(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        export_vault_blobs(&source, &drive_subject, &vault)
+            .await
+            .unwrap();
+
+        let missing = blake3::hash(b"will go missing").to_hex().to_string();
+        let corrupt = blake3::hash(b"will be corrupted").to_hex().to_string();
+        let copy = MemoryVaultStore::new();
+        for k in vault.list("").unwrap() {
+            if k.starts_with(&format!("{BLOB_PREFIX}{missing}/")) {
+                continue;
+            }
+            let mut bytes = vault.get(&k).unwrap();
+            if k.starts_with(&format!("{BLOB_PREFIX}{corrupt}/")) {
+                bytes[0] ^= 1;
+            }
+            copy.put(&k, &bytes).unwrap();
+        }
+
+        let target = Db::init_temp("vault_blob_missing_dst").await.unwrap();
+        restore(&target, &key, &copy).await;
+        let done = import_vault_blobs(&target, &drive_subject, &copy)
+            .await
+            .unwrap();
+        assert_eq!(
+            (
+                done.blobs_restored,
+                done.blobs_missing,
+                done.blobs_unreadable
+            ),
+            (0, 1, 1)
+        );
+        assert!(!target
+            .has_blob(blake3::hash(b"will be corrupted").as_bytes())
+            .await
+            .unwrap());
+    }
+
+    /// Two vaults share one hash-addressed store: B's restore does not depend on
+    /// A's copy, and A deleting the file (resource gone, live set without it)
+    /// leaves the shared object because B still lists it.
+    #[tokio::test]
+    async fn a_file_shared_by_two_drives_survives_one_deleting_it() {
+        let shared = MemoryVaultStore::new();
+        let a = Db::init_temp("vault_blob_a").await.unwrap();
+        let (_, a_drive) = a.setup("alice").await.unwrap();
+        let a_subject = Subject::from_raw(&a_drive, a.get_base_domain().as_deref());
+        let b = Db::init_temp("vault_blob_b").await.unwrap();
+        let (_, b_drive) = b.setup("bob").await.unwrap();
+        let b_subject = Subject::from_raw(&b_drive, b.get_base_domain().as_deref());
+
+        let z = add_file(&a, &a_drive, "z.bin", b"identical bytes").await;
+        add_file(&b, &b_drive, "z.bin", b"identical bytes").await;
+        export_vault_blobs(&a, &a_subject, &shared).await.unwrap();
+        let again = export_vault_blobs(&b, &b_subject, &shared).await.unwrap();
+        assert_eq!(again.blobs_already_stored, 1, "stored once, never twice");
+        assert_eq!(blob_keys(&shared).len(), 1);
+
+        a.remove_resource(&z).await.unwrap();
+        assert!(drive_file_hashes(&a, &a_subject).await.is_empty());
+        // The control plane drops a vault's reference, not the object, while
+        // another vault still references it (see atomic-saas refcounting).
+        let hash = blake3::hash(b"identical bytes");
+        let live_b = drive_file_hashes(&b, &b_subject).await;
+        assert_eq!(live_b, vec![hash.to_hex().to_string()]);
+
+        let fresh = Db::init_temp("vault_blob_b_fresh").await.unwrap();
+        let b_files = {
+            // Restore B's resources, then its bytes, from B's own vault.
+            let key = key();
+            let vault = MemoryVaultStore::new();
+            backup(&b, &b_subject, &key, &vault, DEVICE).await.unwrap();
+            restore(&fresh, &key, &vault).await;
+            import_vault_blobs(&fresh, &b_subject, &shared)
+                .await
+                .unwrap()
+        };
+        assert_eq!(b_files.blobs_restored, 1);
+        assert_eq!(
+            fresh.get_blob(hash.as_bytes()).await.unwrap().unwrap(),
+            b"identical bytes"
+        );
     }
 }

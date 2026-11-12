@@ -162,8 +162,13 @@ vault/<drive-pseudonym>/
   lanes/<device-pubkey>/seg-000001.pack   ← append-only per device
   checkpoints/ckpt-000001.loro            ← self-sufficient anchor
   indexes/ckpt-000001.idx                 ← not yet written
-  blobs/<keyed-hash>/<chunk>              ← not yet written
 ```
+
+File bytes are NOT under the drive prefix and NOT sealed. They live once in a
+store shared by all vaults, at `vault-blobs/<blake3-hex>/<chunk:06>` (plain
+BLAKE3, the same hash as `File.internalId` and the server blob store). See
+`planning/vault-file-blobs.md`. The `blob id` keyed hash and `Blob` envelope
+kind above are unused by this design.
 
 The drive pseudonym is a salted hash of the drive DID, computed by the control
 plane; a self-hosted vault may use any stable string.
@@ -315,8 +320,10 @@ matters most.
 
 ## What this does not do yet
 
-- **Indexes and blob chunking.** The `kind` byte already reserves their values;
-  nothing writes them.
+- **Indexes.** The `kind` byte already reserves the value; nothing writes them.
+- **File bytes through the hosted client.** `lib` can back up and restore them
+  (`export_vault_blobs` / `import_vault_blobs`); the control plane, WASM
+  bindings and browser client are not wired yet (`planning/vault-file-blobs.md`).
 - **Per-object signatures.** Integrity today comes from the AEAD tag, which
   proves the object was sealed by someone holding the drive key. Signing
   objects with the agent key is a planned addition for provenance across
