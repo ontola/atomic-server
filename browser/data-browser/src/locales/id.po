@@ -11115,9 +11115,8 @@ msgstr "Tingkatkan ke Cloud Server"
 msgid "Sealed on your device, so we cannot read it"
 msgstr "Disegel di perangkat Anda, sehingga kami tidak dapat membacanya"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Restore this workspace on any device"
-msgstr "Pulihkan ruang kerja ini di perangkat apa pun"
+#~ msgid "Restore this workspace on any device"
+#~ msgstr "Pulihkan ruang kerja ini di perangkat apa pun"
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Free with an account"
@@ -13522,3 +13521,11 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restore workspace data on any device"
+msgstr "Pulihkan data ruang kerja di perangkat apa pun"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backups include file names and sizes. Uploaded file contents are excluded."
+msgstr "Cadangan mencakup nama dan ukuran berkas. Isi berkas yang diunggah tidak disertakan."

@@ -1863,8 +1863,14 @@ bucket; SaaS representative CI supplies MinIO. `server/src/tests.rs` checks
 remote multipart upload/download and image renditions, asserting Tree::Blobs
 stays empty. Standalone local storage still runs through the original tests.
 
-Not covered here: live Hetzner rollout, arbitrary large-file memory limits,
-or encrypted Vault attachment recovery.
+Not covered here: live Hetzner rollout and arbitrary large-file memory limits.
+
+### Cloud Vault file restore
+
+`lib/src/vault/sync.rs::vault_restores_uploaded_file_metadata_but_leaves_blob_absent`
+stores file bytes and a File resource in a source drive, backs up the drive,
+and restores into a fresh database. The filename, size, and blob reference
+return, while the file contents are absent from the restored database.
 
 ### Blob garbage collection
 
