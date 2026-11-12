@@ -154,3 +154,12 @@ export {
   type TableDraftCommitResult,
 } from './schema/draftCommit.js';
 export { useTableDraftCommit } from './schema/useTableDraftCommit.js';
+export {
+  selectTableView,
+  tableViewReferences,
+  assertTableViewTarget,
+  assertTableViewOrder,
+  assertTableViewOwner,
+  type TableViewSelection,
+} from './views/viewScope.js';
+export { createTableViewInitializer } from './views/viewInitializer.js';

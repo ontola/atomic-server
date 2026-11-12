@@ -69,7 +69,7 @@ export function useTableData(
   const query: TableQuery = {
     scope: {
       table: resource.subject,
-      rowClass: classSubject,
+      rowClass: tableView.viewReady ? classSubject : undefined,
       // Deep links query the table's drive rather than the active workspace.
       drive: getTableDrive(store, resource),
     },
