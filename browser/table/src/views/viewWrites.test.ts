@@ -98,3 +98,21 @@ it('retries failed preparation without losing other successful checkpoints', asy
   expect(two).toHaveBeenCalledTimes(2);
   expect(queue.getSnapshot().pending).toBe(0);
 });
+
+it('retains a failed table queue across navigation until its captured operation succeeds', async () => {
+  const { createTableViewWriteQueues } = await import('./viewWrites.js');
+  const queues = createTableViewWriteQueues();
+  const a = queues.get('table-a');
+  const write = vi
+    .fn()
+    .mockRejectedValueOnce(Error('offline'))
+    .mockResolvedValue(undefined);
+  await a.enqueue(write);
+  queues.release('table-a');
+  expect(queues.get('table-b')).not.toBe(a);
+  expect(queues.get('table-a')).toBe(a);
+  await queues.get('table-a').retry();
+  expect(write).toHaveBeenCalledTimes(2);
+  queues.release('table-a');
+  expect(queues.get('table-a')).not.toBe(a);
+});

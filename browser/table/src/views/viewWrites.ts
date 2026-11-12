@@ -116,3 +116,29 @@ export function createTableViewWriteQueue(scope: string) {
     },
   };
 }
+
+/** A page's queues survive table navigation while failed/pending operations need
+ * an explicit retry. Releasing a pristine queue does not retain an idle cache. */
+export function createTableViewWriteQueues() {
+  const queues = new Map<
+    string,
+    ReturnType<typeof createTableViewWriteQueue>
+  >();
+
+  return {
+    get(scope: string) {
+      let queue = queues.get(scope);
+
+      if (!queue) {
+        queue = createTableViewWriteQueue(scope);
+        queues.set(scope, queue);
+      }
+
+      return queue;
+    },
+    release(scope: string) {
+      const state = queues.get(scope)?.getSnapshot();
+      if (state && !state.busy && !state.pending) queues.delete(scope);
+    },
+  };
+}

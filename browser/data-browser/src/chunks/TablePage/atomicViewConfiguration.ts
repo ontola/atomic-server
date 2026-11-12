@@ -1,5 +1,6 @@
 import {
   core,
+  commits,
   dataBrowser,
   ResourceEvents,
   type Resource,
@@ -111,4 +112,39 @@ export async function writeAtomicTableViewConfiguration(
     if (value === undefined) view.remove(property);
     else await view.set(property, value as never, key === 'quickAdd');
   }
+}
+
+export interface AtomicViewFilterDraft {
+  filters: import('@tomic/table').TableFilter[];
+  sorting: import('@tomic/table').TableSorting;
+}
+export function atomicViewFilterSource(config: TableViewConfiguration) {
+  const prop =
+    config.sortBy === commits.properties.createdAt
+      ? dataBrowser.properties.sortOrder
+      : config.sortBy;
+  const value: AtomicViewFilterDraft = {
+    filters: config.filters,
+    sorting: prop
+      ? { prop, sortDesc: config.sortDesc }
+      : { prop: dataBrowser.properties.sortOrder, sortDesc: false },
+  };
+
+  return { value, revision: JSON.stringify(value) };
+}
+export function rebaseAtomicViewFilters(
+  current: AtomicViewFilterDraft,
+  submitted: AtomicViewFilterDraft,
+  confirmed: AtomicViewFilterDraft,
+): AtomicViewFilterDraft {
+  return {
+    filters:
+      JSON.stringify(current.filters) !== JSON.stringify(submitted.filters)
+        ? current.filters
+        : confirmed.filters,
+    sorting:
+      JSON.stringify(current.sorting) !== JSON.stringify(submitted.sorting)
+        ? current.sorting
+        : confirmed.sorting,
+  };
 }

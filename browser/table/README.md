@@ -207,3 +207,17 @@ Schema references and implicit renderer defaults resolve separately in the sessi
 Atomic has one reactive metadata binding for reads, typed patches and raw config
 copies; backend property IDs and JSON datatype-tagging remain there. This model
 and those codecs do not complete the shared saved-view session or the full page.
+
+`createTableViewDraftSession` keeps per-view edits and their original source
+revision across navigation. Pristine views read live metadata directly; adapters
+can detect incoming conflicts without overwriting dirty work. Save tokens capture
+submitted values, retain explicit retry identity and clear only the submitted
+version. Editable in-flight sessions supply a rebase policy for subsequent edits.
+Prepared implicit views can alias and then move the same draft to their confirmed
+identity. Persistence, revision enforcement and navigation remain adapter work.
+
+Atomic filter/sort autosave uses this session with ordered retained writes. Leaving
+a view flushes its draft; newer edits drain after an in-flight save even if the
+page unmounts. Failed writes require explicit Retry. Per-table queue registries
+retain pending/failed work when navigating away and returning. Other built-in
+configuration controls and the complete page orchestration still need extraction.

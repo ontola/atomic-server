@@ -165,6 +165,7 @@ export {
 export { createTableViewInitializer } from './views/viewInitializer.js';
 export {
   createTableViewWriteQueue,
+  createTableViewWriteQueues,
   type TableViewWriteState,
   type TableViewWriteContext,
 } from './views/viewWrites.js';
@@ -197,3 +198,10 @@ export {
   type TableViewConfigurationInput,
   type TableViewConfigurationIssue,
 } from './views/configuration.js';
+export {
+  createTableViewDraftSession,
+  type TableViewSource,
+  type TableViewDraft,
+  type TableViewSave,
+  type TableViewDraftSessionState,
+} from './views/viewDraftSession.js';

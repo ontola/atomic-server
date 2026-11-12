@@ -1,5 +1,4 @@
 import {
-  commits,
   core,
   dataBrowser,
   JSONValue,
@@ -15,7 +14,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useReducer,
   useRef,
   useState,
   useSyncExternalStore,
@@ -23,7 +21,8 @@ import {
 import {
   type TableViewWriteContext,
   useTableNavigation,
-  createTableViewWriteQueue,
+  createTableViewWriteQueues,
+  createTableViewDraftSession,
   createTableViewInitializer,
   selectTableView,
   tableViewReferences,
@@ -31,8 +30,11 @@ import {
   assertTableViewOrder,
   assertTableViewOwner,
 } from '@tomic/table';
+import { enqueueAtomicViewFilters } from './atomicViewFilterWriter';
 import {
-  readAtomicTableViewConfiguration,
+  atomicViewFilterSource,
+  rebaseAtomicViewFilters,
+  type AtomicViewFilterDraft,
   useAtomicViewConfiguration,
   writeAtomicTableViewConfiguration,
   copyAtomicTableViewConfiguration,
@@ -234,16 +236,9 @@ export interface UseTableViewResult {
  * View-backed table state. Filters + sort live on the table's default View
  * resource (`view-filters` JSON, `view-sort-by`/`view-sort-desc`) so they
  * persist across reloads. Local React state is the live source for instant UI;
- * it's hydrated once from the View and then debounce-persisted back. The View
- * is lazily created on the first change (writers only) — until then a table
+ * its scoped draft is debounce-persisted back. Pristine state follows the View.
+ * A View is lazily created on the first change (writers only) — until then a table
  * behaves exactly as before.
- */
-/**
- * Parse a stored JSON value into a value-stable result: it only changes when
- * the stored shape does. Parsing hands back a fresh array/object every render,
- * so keying the memo on the serialized form stops downstream consumers (grid
- * context, collection queries, rendered bars) from re-rendering or re-querying
- * on every render of the table.
  */
 export function useTableView(
   table: Resource,
@@ -262,9 +257,23 @@ export function useTableView(
 ): UseTableViewResult {
   const store = useStore();
   const canWrite = useCanWrite(table);
-  const writes = useMemo(
-    () => createTableViewWriteQueue(table.subject),
-    [table.subject],
+  const [writeQueues] = useState(createTableViewWriteQueues);
+  const writes = writeQueues.get(table.subject);
+  useEffect(
+    () => () => writeQueues.release(table.subject),
+    [writeQueues, table.subject],
+  );
+  const [filterSession] = useState(() =>
+    createTableViewDraftSession<AtomicViewFilterDraft>({
+      allowEditsWhileSaving: true,
+      concurrentScopes: true,
+      rebase: rebaseAtomicViewFilters,
+    }),
+  );
+  const filterDrafts = useSyncExternalStore(
+    filterSession.subscribe,
+    filterSession.getSnapshot,
+    filterSession.getSnapshot,
   );
   const writeState = useSyncExternalStore(
     writes.subscribe,
@@ -309,7 +318,7 @@ export function useTableView(
       : configuration.issues.length
         ? 'Saved view configuration is invalid.'
         : undefined;
-  const metadataReady =
+  const viewReady =
     (selection.status === 'implicit' ||
       (selection.status === 'selected' && !viewLoading && ownerMatches)) &&
     !configuration.issues.length;
@@ -329,9 +338,6 @@ export function useTableView(
 
   const {
     name: viewName,
-    filters: storedFilters,
-    sortBy: storedSortBy,
-    sortDesc: storedSortDesc,
     columns: storedColumns,
     kind: storedKind,
     dashboard: viewDashboard,
@@ -349,103 +355,20 @@ export function useTableView(
     groupGranularity: storedGroupGranularity,
   } = configuration.config;
 
-  const [filters, setFilters] = useState<TableFilter[]>([]);
-  const [sorting, dispatchSort] = useReducer(sortReducer, DEFAULT_SORT);
   const viewScope = JSON.stringify([table.subject, activeView ?? null]);
-  const [hydratedFor, setHydratedFor] = useState<string | null>(null);
-  const viewReady = metadataReady && hydratedFor === viewScope;
-
-  // --- Hydrate from the active View; re-hydrates whenever it changes. ---
-  // Tracks which view's config the local state currently mirrors.
-  const hydratedForRef = useRef<string | null>(null);
-  const hydratedTableRef = useRef<string | null>(null);
-  const lastPersistedRef = useRef<string>('');
-  /** True while lazily creating the View that will hold local state. */
-  const [creatingViewTable, setCreatingViewTable] = useState<string | null>(
-    null,
+  const filterSource = useMemo(
+    () => atomicViewFilterSource(configuration.config),
+    [configuration.config],
   );
-
-  useEffect(() => {
-    const key = viewScope;
-
-    if (hydratedForRef.current === key) {
-      return;
-    }
-
-    // Mid-creation of the View that is about to hold local state — see
-    // `ensureView`. Reading it now would hydrate from a View whose config
-    // hasn't been written yet and wipe the change that caused the creation.
-    if (creatingViewTable === table.subject) {
-      return;
-    }
-
-    hydratedTableRef.current = table.subject;
-
-    // No View yet — start from defaults. Seed `lastPersistedRef` with the
-    // empty baseline so merely opening the table does NOT eagerly create a
-    // View; only a real filter/sort change does.
-    if (!activeView) {
-      setFilters([]);
-      dispatchSort({
-        type: 'hydrate',
-        prop: DEFAULT_SORT.prop,
-        sortDesc: DEFAULT_SORT.sortDesc,
-      });
-      lastPersistedRef.current = JSON.stringify({
-        filters: [],
-        sort: DEFAULT_SORT,
-      });
-      hydratedForRef.current = key;
-      setHydratedFor(key);
-
-      return;
-    }
-
-    // Read the selected Resource synchronously. Readiness is its captured
-    // loading state, never an optional display name. Queries remain gated until
-    // both filters and sort have been hydrated for this table/view scope.
-    if (viewLoading) return;
-
-    const stored = readAtomicTableViewConfiguration(view).config;
-    const rawSortBy = stored.sortBy;
-    const rawSortDesc = stored.sortDesc;
-    const initialFilters = stored.filters;
-    // Views saved before `sortOrder` became the default persisted `createdAt`
-    // as their sort. That was the old default — not a user choice (createdAt
-    // isn't a column) — and `sortOrder` sorts identically via its createdAt
-    // fallback, so normalize. Keeps positional row insertion working on old
-    // tables.
-    const normalizedSortBy =
-      rawSortBy === commits.properties.createdAt
-        ? DEFAULT_SORT.prop
-        : rawSortBy;
-    const initialSort: TableSorting = normalizedSortBy
-      ? { prop: normalizedSortBy, sortDesc: !!rawSortDesc }
-      : DEFAULT_SORT;
-
-    setFilters(initialFilters);
-    dispatchSort({
-      type: 'hydrate',
-      prop: initialSort.prop,
-      sortDesc: initialSort.sortDesc,
-    });
-    lastPersistedRef.current = JSON.stringify({
-      filters: initialFilters,
-      sort: initialSort,
-    });
-    hydratedForRef.current = key;
-    setHydratedFor(key);
-  }, [
-    activeView,
-    viewScope,
-    table.subject,
-    viewLoading,
-    view,
-    storedFilters,
-    storedSortBy,
-    storedSortDesc,
-    creatingViewTable,
-  ]);
+  const workingFilters = filterSession.read(viewScope, filterSource);
+  const { filters, sorting } = workingFilters.value;
+  const filterDraft = filterDrafts.drafts.get(viewScope);
+  const editFilters = useCallback(
+    (change: (value: AtomicViewFilterDraft) => AtomicViewFilterDraft) => {
+      filterSession.edit(viewScope, filterSource, change);
+    },
+    [filterSession, viewScope, filterSource],
+  );
 
   // --- View creation / linking. ---
   /**
@@ -503,17 +426,17 @@ export function useTableView(
         { table: created.get(core.properties.parent) as string },
       );
 
-      if (prepared && hydratedTableRef.current === table.subject) {
-        const createdScope = JSON.stringify([table.subject, created.subject]);
-        hydratedForRef.current = createdScope;
-        setHydratedFor(createdScope);
-      }
-
       if (intent)
         await intent.checkpoint('view:saved:' + created.subject, () =>
           created.save(),
         );
       else await created.save();
+
+      if (prepared)
+        filterSession.alias(
+          viewScope,
+          JSON.stringify([table.subject, created.subject]),
+        );
 
       const attach = async () => {
         assertTableViewOwner(
@@ -542,7 +465,7 @@ export function useTableView(
 
       return created;
     },
-    [store, table],
+    [store, table, filterSession, viewScope],
   );
 
   const createViewResource = useCallback(
@@ -695,48 +618,22 @@ export function useTableView(
       return selected;
     }
 
-    // Creating the View flips `activeView` from undefined to its subject, which
-    // trips the hydrate effect below — and it reads the View BEFORE the caller
-    // has written the config that prompted the creation, hydrating local state
-    // back to empty and dropping the change. This View exists precisely to hold
-    // what's already in local state, so hydration must not run for it at all.
-    //
-    // The flag is raised synchronously, before the first await: the re-render
-    // can land midway through `createViewResource`, so marking it hydrated
-    // afterwards is already too late. Without this, adding the first filter to
-    // a table silently lost it whenever the re-render won that race.
-    setCreatingViewTable(table.subject);
-
+    // Preparation aliases the working draft before attachment exposes the new
+    // identity. Once attached, the implicit scope stops owning that draft.
     return viewInitializer
       .ensure(() =>
         createViewResource('Default View', DEFAULT_VIEW_KIND, {
           prepared: preparedDefault,
         }),
       )
-      .then(
-        created => {
-          if (hydratedTableRef.current === table.subject) {
-            const createdScope = JSON.stringify([
-              table.subject,
-              created.subject,
-            ]);
-            hydratedForRef.current = createdScope;
-            setHydratedFor(createdScope);
-          }
+      .then(created => {
+        filterSession.move(
+          viewScope,
+          JSON.stringify([table.subject, created.subject]),
+        );
 
-          setCreatingViewTable(current =>
-            current === table.subject ? null : current,
-          );
-
-          return created;
-        },
-        error => {
-          setCreatingViewTable(current =>
-            current === table.subject ? null : current,
-          );
-          throw error;
-        },
-      );
+        return created;
+      });
   }, [
     activeView,
     store,
@@ -744,99 +641,132 @@ export function useTableView(
     viewReady,
     viewInitializer,
     preparedDefault,
-    table.subject,
-  ]);
-
-  useEffect(() => {
-    if (!viewReady || hydratedForRef.current !== viewScope || !canWrite) {
-      return;
-    }
-
-    const snapshot = JSON.stringify({ filters, sort: sorting });
-
-    if (snapshot === lastPersistedRef.current) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      void writes.enqueue(async () => {
-        const v = await ensureView();
-
-        if (!v) {
-          return;
-        }
-
-        await writeAtomicTableViewConfiguration(v, {
-          filters,
-          sortBy: sorting.prop,
-          sortDesc: sorting.sortDesc,
-        });
-        await v.save();
-        if (
-          hydratedForRef.current === JSON.stringify([table.subject, v.subject])
-        )
-          lastPersistedRef.current = snapshot;
-      });
-    }, 600);
-
-    return () => clearTimeout(timer);
-  }, [
-    filters,
-    sorting,
-    canWrite,
-    ensureView,
-    viewReady,
-    writes,
+    filterSession,
     viewScope,
     table.subject,
   ]);
 
+  const flushFilters = useCallback(() => {
+    if (!viewReady || !canWrite || writeState.error) return;
+    const draft = filterSession.getSnapshot().drafts.get(viewScope);
+    if (!draft || filterSession.read(viewScope, filterSource).saving) return;
+
+    if (
+      !writeState.busy &&
+      JSON.stringify(draft.value) === JSON.stringify(filterSource.value)
+    ) {
+      filterSession.discard(viewScope);
+
+      return;
+    }
+
+    enqueueAtomicViewFilters({
+      session: filterSession,
+      writes,
+      scope: viewScope,
+      source: filterSource,
+      table,
+      ensureView,
+    });
+  }, [
+    viewReady,
+    canWrite,
+    writeState.error,
+    writeState.busy,
+    filterSession,
+    viewScope,
+    filterSource,
+    writes,
+    table,
+    ensureView,
+  ]);
+  useEffect(() => {
+    if (!filterDraft || workingFilters.saving || writeState.error) return;
+    const timer = setTimeout(flushFilters, 600);
+
+    return () => clearTimeout(timer);
+  }, [filterDraft, workingFilters.saving, writeState.error, flushFilters]);
+
+  // Leaving a view flushes its latest scoped draft, rather than cancelling the
+  // debounce and losing the edit. The callback registry is updated in effects,
+  // so cleanup retains the old view's backend target after a new render.
+  const filterFlushes = useRef(new Map<string, () => void>());
+  useEffect(() => {
+    filterFlushes.current.set(viewScope, flushFilters);
+  }, [viewScope, flushFilters]);
+  useEffect(
+    () => () => {
+      filterFlushes.current.get(viewScope)?.();
+      filterFlushes.current.delete(viewScope);
+    },
+    [viewScope],
+  );
+
   // --- Filter mutators (same shape as the old `useTableFilters`). ---
   // Keyed by `filterKey`: a property subject, or `derived:<id>` for a constraint
   // on a computed column. One key keeps every setter working for both kinds.
-  const addFilter = useCallback((key: string) => {
-    setFilters(prev =>
-      prev.some(f => filterKey(f) === key)
-        ? prev
-        : [
-            ...prev,
-            {
-              ...parseFilterKey(key),
-              // A computed column's value is a number, so the useful default is
-              // a comparison rather than equality.
-              operator: key.startsWith('derived:')
-                ? ('gte' as FilterOperator)
-                : ('eq' as FilterOperator),
-              value: '',
-            },
-          ],
-    );
-  }, []);
-
-  const setFilterValue = useCallback((key: string, value: string) => {
-    setFilters(prev =>
-      prev.map(f => (filterKey(f) === key ? { ...f, value } : f)),
-    );
-  }, []);
-
+  const addFilter = useCallback(
+    (key: string) => {
+      editFilters(value => ({
+        ...value,
+        filters: value.filters.some(filter => filterKey(filter) === key)
+          ? value.filters
+          : [
+              ...value.filters,
+              {
+                ...parseFilterKey(key),
+                operator: key.startsWith('derived:') ? 'gte' : 'eq',
+                value: '',
+              },
+            ],
+      }));
+    },
+    [editFilters],
+  );
+  const setFilterValue = useCallback(
+    (key: string, text: string) => {
+      editFilters(value => ({
+        ...value,
+        filters: value.filters.map(filter =>
+          filterKey(filter) === key ? { ...filter, value: text } : filter,
+        ),
+      }));
+    },
+    [editFilters],
+  );
   const setFilterOperator = useCallback(
     (key: string, operator: FilterOperator) => {
-      setFilters(prev =>
-        prev.map(f => (filterKey(f) === key ? { ...f, operator } : f)),
-      );
+      editFilters(value => ({
+        ...value,
+        filters: value.filters.map(filter =>
+          filterKey(filter) === key ? { ...filter, operator } : filter,
+        ),
+      }));
     },
-    [],
+    [editFilters],
   );
-
-  const removeFilter = useCallback((key: string) => {
-    setFilters(prev => prev.filter(f => filterKey(f) !== key));
-  }, []);
-
-  const clearFilters = useCallback(() => setFilters([]), []);
-
-  const setSortBy = useCallback((property: string) => {
-    dispatchSort({ type: 'cycle', property });
-  }, []);
+  const removeFilter = useCallback(
+    (key: string) => {
+      editFilters(value => ({
+        ...value,
+        filters: value.filters.filter(filter => filterKey(filter) !== key),
+      }));
+    },
+    [editFilters],
+  );
+  const clearFilters = useCallback(
+    () => editFilters(value => ({ ...value, filters: [] })),
+    [editFilters],
+  );
+  const setSortBy = useCallback(
+    (property: string) => {
+      editFilters(value => ({
+        ...value,
+        sorting: sortReducer(value.sorting, { type: 'cycle', property }),
+      }));
+    },
+    [editFilters],
+  );
 
   // --- Column order/visibility + name. Persisted immediately (discrete
   // actions), lazy-creating the View like the filter/sort path. ---
@@ -1154,9 +1084,10 @@ export function useTableView(
         if (liveViewParam.current === subject) goToView(next[0], true);
 
         await target.destroy();
+        filterSession.discard(JSON.stringify([table.subject, subject]));
       });
     },
-    [views, table, store, readViewTypes, goToView, writes],
+    [views, table, store, readViewTypes, goToView, writes, filterSession],
   );
 
   const reorderViews = useCallback(
@@ -1175,7 +1106,7 @@ export function useTableView(
   return {
     viewReady,
     viewSaving: writeState.busy,
-    viewSaveError: writeState.error?.message,
+    viewSaveError: writeState.error?.message ?? workingFilters.error?.message,
     retryViewSave: () => {
       void writes.retry();
     },
