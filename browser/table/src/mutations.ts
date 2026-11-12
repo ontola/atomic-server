@@ -54,7 +54,8 @@ export interface TableMutationBackend<Handle> {
     changes: Readonly<Record<string, unknown>>,
   ) => Promise<void>;
   release?: (current: TableMutationRead<Handle>) => void;
-  equals?: (left: unknown, right: unknown) => boolean;
+  /** Compare values using the declared type of this stable property identity. */
+  equals?: (left: unknown, right: unknown, propertyId: string) => boolean;
 }
 
 export class TableMutationError extends Error {
@@ -184,7 +185,7 @@ export async function executeTableRowMutation<Handle>(
       if (
         command.baseline &&
         (!Object.hasOwn(command.baseline, key) ||
-          !equals(values[key], command.baseline[key]))
+          !equals(values[key], command.baseline[key], key))
       )
         throw new TableMutationError(
           'conflict',
@@ -211,7 +212,7 @@ export async function executeTableRowMutation<Handle>(
           ? confirmed === undefined
           : confirmed !== undefined &&
             sameTableMutationTarget(command.target, confirmed.target) &&
-            keys.every(key => equals(confirmed.values[key], changes[key]));
+            keys.every(key => equals(confirmed.values[key], changes[key], key));
       if (!valid)
         throw new TableMutationError(
           'confirmation',
