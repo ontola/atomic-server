@@ -7,6 +7,7 @@ import {
   useString,
 } from '@tomic/react';
 import { Suspense, lazy, useEffect, type JSX } from 'react';
+import { PropertyChoiceField } from '@tomic/table';
 import { RadioGroup, RadioInput } from '@components/forms/RadioInput';
 import { FormGroupHeading } from './FormGroupHeading';
 import { DecimalPlacesInput } from './Inputs/DecimalPlacesInput';
@@ -20,6 +21,7 @@ const CurrencyPicker = lazy(
 
 export const NumberPropertyForm = ({
   resource,
+  existingProperty,
 }: PropertyCategoryFormProps): JSX.Element => {
   const [numberFormatting, setNumberFormatting] = useString(
     resource,
@@ -33,12 +35,10 @@ export const NumberPropertyForm = ({
 
   const [_, setDataType] = useString(resource, core.properties.datatype);
 
-  const handleNumberFormatChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    setNumberFormatting(e.target.value);
+  const handleNumberFormatChange = async (value: string) => {
+    setNumberFormatting(value);
 
-    if (e.target.value === numberFormats.currency) {
+    if (value === numberFormats.currency) {
       await resource.addClasses(dataBrowser.classes.currencyProperty);
       await setDataType(Datatype.FLOAT);
     } else {
@@ -50,8 +50,9 @@ export const NumberPropertyForm = ({
   useEffect(() => {
     resource.addClasses(dataBrowser.classes.formattedNumber);
 
-    // If decimal places is not set yet we assume it is a new property and should default to float.
-    if (decimalPlaces === undefined) {
+    // A missing display precision does not change an existing property identity.
+    // Only new number drafts default to float.
+    if (!existingProperty && decimalPlaces === undefined) {
       resource.set(core.properties.datatype, Datatype.FLOAT);
     }
 
@@ -63,32 +64,18 @@ export const NumberPropertyForm = ({
   return (
     <Suspense fallback={<div>loading...</div>}>
       <FormGroupHeading>Number Format</FormGroupHeading>
-      <RadioGroup>
-        <RadioInput
-          name='number-format'
-          value={numberFormats.number}
-          checked={numberFormatting === numberFormats.number}
-          onChange={handleNumberFormatChange}
-        >
-          Number
-        </RadioInput>
-        <RadioInput
-          name='number-format'
-          value={numberFormats.percentage}
-          checked={numberFormatting === numberFormats.percentage}
-          onChange={handleNumberFormatChange}
-        >
-          Percentage
-        </RadioInput>
-        <RadioInput
-          name='number-format'
-          value={numberFormats.currency}
-          checked={numberFormatting === numberFormats.currency}
-          onChange={handleNumberFormatChange}
-        >
-          Currency
-        </RadioInput>
-      </RadioGroup>
+      <PropertyChoiceField
+        label='Number format'
+        value={numberFormatting ?? numberFormats.number}
+        onChange={handleNumberFormatChange}
+        Radio={RadioInput}
+        Group={RadioGroup}
+        options={[
+          { value: numberFormats.number, label: 'Number' },
+          { value: numberFormats.percentage, label: 'Percentage' },
+          { value: numberFormats.currency, label: 'Currency' },
+        ]}
+      />
       {/* Follows the chosen format, not the class: adding the class is async and
        *  does not re-render, so a new column never got its currency picker. */}
       {numberFormatting === numberFormats.currency ? (

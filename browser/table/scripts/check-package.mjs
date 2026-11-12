@@ -44,7 +44,7 @@ try {
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver, getComputedStyle: dom.window.getComputedStyle, requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout, IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
     globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
-    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell, executeTableRowMutation, executeTableRowCreation, createTableHistory, useTableHistoryState, PropertyNameField, PropertyRangeField } from '@tomic/table';
+    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell, executeTableRowMutation, executeTableRowCreation, createTableHistory, useTableHistoryState, PropertyNameField, PropertyRangeField, PropertyChoiceField, FloatCell } from '@tomic/table';
     assert.equal(typeof ValueCell, 'function');
     assert.equal(parseInteger('42'), 42);
     assert.equal(typeof IntegerCell.Edit, 'function');
@@ -58,7 +58,8 @@ try {
     const fixture = React.createElement(TableHostProvider, { value: {} }, grid,
       React.createElement(ViewTabList, {}, React.createElement(ViewTab, { name: 'All rows', active: true, onRename: () => {}, onEditingChange: () => {} })),
       React.createElement(PropertyNameField, { value: 'Column', onChange: () => {} }),
-      React.createElement(PropertyRangeField, { minValue: 0, onChange: () => {} }));
+      React.createElement(PropertyRangeField, { minValue: 0, onChange: () => {} }),
+      React.createElement(PropertyChoiceField, { mode: 'select', label: 'Type', value: 'custom:v2', options: [], onChange: () => {} }));
     await act(async () => root.render(React.createElement(StyleSheetManager, { shouldForwardProp: (prop, target) => typeof target !== 'string' || isPropValid(prop) }, fixture)));
     assert.match(document.getElementById('app').innerHTML, /role="grid"/);
     assert.match(document.getElementById('app').innerHTML, /role="tab"/);
@@ -85,6 +86,8 @@ try {
     assert.equal(persisted, true);
     assert.equal(document.querySelector('[aria-label="Column name"]').value, 'Column');
     assert.equal(document.querySelector('[aria-label="Minimum"]').value, '0');
+    assert.equal(document.querySelector('[aria-label="Type"]').value, 'custom:v2');
+    assert.equal(typeof FloatCell.Edit, 'function');
     const history = createTableHistory();
     history.recordBatch(['create', 'edit']);
     const undone = [];

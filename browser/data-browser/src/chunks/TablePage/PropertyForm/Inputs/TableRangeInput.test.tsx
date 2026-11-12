@@ -110,8 +110,8 @@ it('preserves fractional float constraints on the unsaved Atomic draft', async (
   await waitFor(() => expect(draft.get(dataBrowser.properties.min)).toBe(1.5));
   expect(save).not.toHaveBeenCalled();
 });
-it('blocks fractional integer constraints and keeps the raw input for correction', async () => {
-  const { draft, validity } = await setup(Datatype.INTEGER);
+it('blocks fractional text-length constraints and keeps the raw input for correction', async () => {
+  const { draft, validity } = await setup(Datatype.STRING);
   const input = screen.getByRole('textbox', { name: 'Minimum' });
   fireEvent.change(input, { target: { value: '1.5' } });
   expect((input as HTMLInputElement).value).toBe('1.5');
@@ -149,4 +149,13 @@ it('does not confirm a property dialog via Enter/form submission while constrain
   await waitFor(() => expect(validity).toHaveBeenLastCalledWith(true));
   fireEvent.submit(form);
   expect(submit).toHaveBeenCalledOnce();
+});
+
+it('keeps fractional numeric bounds for integer columns under JSON Schema semantics', async () => {
+  const { draft, validity } = await setup(Datatype.INTEGER);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Minimum' }), {
+    target: { value: '1.5' },
+  });
+  await waitFor(() => expect(draft.get(dataBrowser.properties.min)).toBe(1.5));
+  expect(validity).toHaveBeenLastCalledWith(true);
 });

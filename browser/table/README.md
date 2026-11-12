@@ -164,3 +164,12 @@ bounds. It retains raw invalid input, publishes only valid finite values, suppor
 integer/nonnegative rules and equal inclusive limits, and reports validity to the
 host form. `parsePropertyRange` returns stable error codes; hosts can localize the
 control's messages. Remount the field when changing draft/schema revision.
+
+
+`PropertyChoiceField` renders controlled radio/dropdown choices by stable value,
+blocks disabled/unknown new selections, and preserves unsupported saved bindings
+without substituting a default. Host radio/group styling is optional. `FloatCell`
+provides the same raw-text/commit editor used by Atomic and native hosts; formatting
+of currency/percentages remains in the host display adapter. Numeric schema bounds
+may be fractional even for integer-valued columns; integral bounds are a separate
+control policy used for lengths, not inferred from the numeric column datatype.
