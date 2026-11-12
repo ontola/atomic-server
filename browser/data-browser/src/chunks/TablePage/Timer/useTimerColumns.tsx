@@ -1,4 +1,4 @@
-import type { IndexedTableRows } from '@tomic/table';
+import { timerDurationColumn, type IndexedTableRows } from '@tomic/table';
 import {
   JSONValue,
   Property,
@@ -249,14 +249,7 @@ export function useTimerColumns(
         },
       ],
       derivedColumns: [
-        {
-          id: 'duration',
-          label: 'Duration',
-          formula: 'coalesce(end, now()) - start',
-          vars: { start: startSubject, end: endSubject },
-          valueKind: 'duration' as const,
-          width: 130,
-        },
+        timerDurationColumn(startSubject, endSubject, 'Duration'),
       ],
       status,
       startProp,

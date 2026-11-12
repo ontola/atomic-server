@@ -20,6 +20,7 @@ import {
 } from 'react';
 import {
   type TableViewWriteContext,
+  type TableViewConfiguration,
   useTableNavigation,
   createTableViewWriteQueues,
   createTableViewDraftSession,
@@ -103,6 +104,7 @@ function sortReducer(state: TableSorting, action: SortAction): TableSorting {
 }
 
 export interface UseTableViewResult {
+  viewConfiguration: TableViewConfiguration;
   viewReady: boolean;
   viewSaving: boolean;
   viewSaveError?: string;
@@ -1104,6 +1106,12 @@ export function useTableView(
   );
 
   return {
+    viewConfiguration: {
+      ...configuration.config,
+      filters,
+      sortBy: sorting.prop,
+      sortDesc: sorting.sortDesc,
+    },
     viewReady,
     viewSaving: writeState.busy,
     viewSaveError: writeState.error?.message ?? workingFilters.error?.message,

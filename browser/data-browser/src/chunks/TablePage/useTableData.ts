@@ -8,11 +8,13 @@ import {
   useSubject,
 } from '@tomic/react';
 import { useTableView, UseTableViewResult } from './useTableView';
-import { toAggregation } from './tableAggregates';
 import { getTableDrive } from './tableDrive';
-import { quantizedNow, splitFilters } from './tableFiltering';
 import { useAtomicTableQuery } from './useAtomicTableQuery';
-import type { TableQuery } from '@tomic/table';
+import {
+  compileTableViewQuery,
+  timerDurationColumn,
+  type TableQuery,
+} from '@tomic/table';
 
 const PAGE_SIZE = 30;
 
@@ -40,45 +42,32 @@ export function useTableData(
   embedded = false,
 ): UseTableDataResult {
   const tableView = useTableView(resource, viewOverride, embedded);
-  const { filters, sorting } = tableView;
   const store = useStore();
 
   const [classSubject] = useSubject(resource, core.properties.classtype);
   const tableClass = useResource(classSubject);
 
-  // Only constraints with an actual value narrow the query; an in-progress
-  // filter (empty value) stays visible as a chip but doesn't blank the table.
-  // A constraint on a computed column can't be indexed, so it travels separately
-  // and the store evaluates it over the rows the index narrows to.
-  const { propVals: userFilters, expressionFilters } = splitFilters(
-    filters,
-    tableView.viewDerivedColumns,
-    quantizedNow(),
-  );
-
-  // The view's statistics ride along with the query, so the store computes them
-  // over every matching row (filters included, paging excluded) instead of the
-  // client adding up the page it happens to have.
-  const aggregation = toAggregation(
-    tableView.viewAggregates,
-    tableView.viewGroupByColumn,
-    tableView.viewGroupGranularity,
-    tableView.viewDerivedColumns,
-  );
-
-  const query: TableQuery = {
+  const defaultDerivedColumns =
+    tableView.viewKind === 'timer' &&
+    tableView.viewGroupBy &&
+    tableView.viewEndProp
+      ? [
+          timerDurationColumn(
+            tableView.viewGroupBy,
+            tableView.viewEndProp,
+            'Duration',
+          ),
+        ]
+      : [];
+  const { query, issues } = compileTableViewQuery(tableView.viewConfiguration, {
     scope: {
       table: resource.subject,
       rowClass: tableView.viewReady ? classSubject : undefined,
-      // Deep links query the table's drive rather than the active workspace.
       drive: getTableDrive(store, resource),
     },
-    filters: userFilters,
-    expressionFilters,
-    sort: { property: sorting.prop, descending: sorting.sortDesc },
-    aggregation,
     pageSize: PAGE_SIZE,
-  };
+    defaultDerivedColumns,
+  });
   const rows = useAtomicTableQuery(
     query,
     resource.subject.startsWith('http')
@@ -91,5 +80,9 @@ export function useTableData(
     tableClass,
     query,
     ...rows,
+    viewReady: tableView.viewReady && !issues.length,
+    viewError:
+      tableView.viewError ??
+      (issues.length ? 'Saved view configuration is invalid.' : undefined),
   };
 }
