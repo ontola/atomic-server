@@ -44,7 +44,7 @@ try {
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver, getComputedStyle: dom.window.getComputedStyle, requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout, IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
     globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
-    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell, executeTableRowMutation, executeTableRowCreation, createTableHistory, useTableHistoryState, PropertyNameField, PropertyRangeField, PropertyChoiceField, FloatCell, createTableDraftCommit, useTableDraftCommit, selectTableView, createTableViewInitializer } from '@tomic/table';
+    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell, executeTableRowMutation, executeTableRowCreation, createTableHistory, useTableHistoryState, PropertyNameField, PropertyRangeField, PropertyChoiceField, FloatCell, createTableDraftCommit, useTableDraftCommit, selectTableView, createTableViewInitializer, createTableViewWriteQueue } from '@tomic/table';
     assert.equal(typeof ValueCell, 'function');
     assert.equal(parseInteger('42'), 42);
     assert.equal(typeof IntegerCell.Edit, 'function');
@@ -89,6 +89,9 @@ try {
     assert.equal(document.querySelector('[aria-label="Type"]').value, 'custom:v2');
     assert.equal(typeof FloatCell.Edit, 'function');
     assert.deepEqual(selectTableView({ views: ['owned'], requested: 'foreign' }), { status: 'missing', subject: 'foreign' });
+    const viewWrites = createTableViewWriteQueue('table:one');
+    await viewWrites.enqueue(async () => {});
+    assert.equal(viewWrites.getSnapshot().pending, 0);
     const viewInitializer = createTableViewInitializer('table:one');
     assert.equal(await viewInitializer.ensure(async () => 'view:one'), 'view:one');
     assert.equal(await viewInitializer.ensure(async () => 'wrong-extra-view'), 'view:one');

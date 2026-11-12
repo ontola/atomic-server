@@ -51,6 +51,9 @@ async function setup({
     [dataBrowser.properties.tableViews, Datatype.RESOURCEARRAY],
     [dataBrowser.properties.tableDefaultView, Datatype.ATOMIC_URL],
     [dataBrowser.properties.viewKind, Datatype.STRING],
+    [dataBrowser.properties.viewFilters, Datatype.JSON],
+    [dataBrowser.properties.viewSortBy, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.viewSortDesc, Datatype.BOOLEAN],
   ]) {
     const property = await store.newResource({ subject, noParent: true });
     await property.set(core.properties.datatype, type, false);
@@ -194,4 +197,106 @@ it('materializes one implicit view for concurrent first column/config changes', 
   expect(state.view.get(dataBrowser.properties.viewColumns)).toEqual([
     'https://example.com/property',
   ]);
+});
+
+it('retains failed configuration writes and serializes later changes behind explicit retry', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  state.viewSave.mockRejectedValueOnce(Error('offline'));
+  act(() => state.result.current.renameView('Retained name'));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('offline'),
+  );
+  act(() =>
+    state.result.current.setViewColumns(['https://example.com/property']),
+  );
+  expect(state.viewSave).toHaveBeenCalledTimes(1);
+  expect(state.view.get(dataBrowser.properties.viewColumns)).toBeUndefined();
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  await waitFor(() => expect(state.viewSave).toHaveBeenCalledTimes(3));
+  expect(state.view.get(core.properties.name)).toBe('Retained name');
+  expect(state.view.get(dataBrowser.properties.viewColumns)).toEqual([
+    'https://example.com/property',
+  ]);
+});
+
+it('retries a failed implicit-view attachment using the same prepared resource', async () => {
+  const state = await setup({ implicit: true });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const create = vi
+    .spyOn(state.store, 'newResource')
+    .mockResolvedValueOnce(state.view);
+  state.save.mockRejectedValueOnce(Error('attachment failed'));
+  act(() => state.result.current.renameView('Retained default'));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('attachment failed'),
+  );
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.view.get(core.properties.name)).toBe('Retained default'),
+  );
+  expect(create).toHaveBeenCalledOnce();
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([
+    state.view.subject,
+  ]);
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+});
+
+it('rechecks view ownership when retrying a retained configuration write', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  state.viewSave.mockRejectedValueOnce(Error('offline'));
+  act(() => state.result.current.renameView('Retained name'));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('offline'),
+  );
+  await act(async () => {
+    await state.view.set(
+      core.properties.parent,
+      'https://example.com/other-table',
+      false,
+    );
+  });
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).not.toBe('offline'),
+  );
+  expect(state.result.current.viewSaveError).toBeTruthy();
+  expect(state.viewSave).toHaveBeenCalledTimes(1);
+});
+
+it('retains filter edits made while an implicit-view attachment is paused', async () => {
+  const state = await setup({ implicit: true });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  vi.spyOn(state.store, 'newResource').mockResolvedValueOnce(state.view);
+  state.save.mockRejectedValueOnce(Error('attachment failed'));
+  const property = 'https://example.com/property';
+  act(() => {
+    state.result.current.addFilter(property);
+  });
+  act(() => {
+    state.result.current.setFilterValue(property, 'first');
+  });
+  await waitFor(
+    () => expect(state.result.current.viewSaveError).toBe('attachment failed'),
+    { timeout: 3000 },
+  );
+  expect(state.result.current.filters[0].value).toBe('first');
+  act(() => state.result.current.setFilterValue(property, 'latest'));
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 700));
+  });
+  act(() => state.result.current.retryViewSave());
+  await waitFor(
+    () =>
+      expect(state.view.get(dataBrowser.properties.viewFilters)).toEqual([
+        { property, operator: 'eq', value: 'latest' },
+      ]),
+    { timeout: 3000 },
+  );
 });

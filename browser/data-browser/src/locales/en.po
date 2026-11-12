@@ -13414,3 +13414,12 @@ msgstr "Column definition saved. Retry to finish adding it to the table."
 #: src/chunks/TablePage/useTableView.ts
 msgid "Saved view is unavailable in this table."
 msgstr "Saved view is unavailable in this table."
+
+#. 0: message
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Could not save view changes: {0}"
+msgstr "Could not save view changes: {0}"
+
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Retry view save"
+msgstr "Retry view save"

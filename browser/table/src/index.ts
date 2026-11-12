@@ -163,3 +163,7 @@ export {
   type TableViewSelection,
 } from './views/viewScope.js';
 export { createTableViewInitializer } from './views/viewInitializer.js';
+export {
+  createTableViewWriteQueue,
+  type TableViewWriteState,
+} from './views/viewWrites.js';

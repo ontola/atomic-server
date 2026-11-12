@@ -13401,3 +13401,12 @@ msgstr ""
 #: src/chunks/TablePage/useTableView.ts
 msgid "Saved view is unavailable in this table."
 msgstr ""
+
+#. 0: message
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Could not save view changes: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Retry view save"
+msgstr ""

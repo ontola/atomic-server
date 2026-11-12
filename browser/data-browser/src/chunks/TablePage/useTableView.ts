@@ -20,9 +20,11 @@ import {
   useReducer,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 import {
   useTableNavigation,
+  createTableViewWriteQueue,
   createTableViewInitializer,
   selectTableView,
   tableViewReferences,
@@ -88,6 +90,9 @@ function sortReducer(state: TableSorting, action: SortAction): TableSorting {
 
 export interface UseTableViewResult {
   viewReady: boolean;
+  viewSaving: boolean;
+  viewSaveError?: string;
+  retryViewSave: () => void;
   viewError?: string;
   filters: TableFilter[];
   /** Adds an empty filter for a target (`filterKey`: a property subject, or
@@ -252,6 +257,15 @@ export function useTableView(
 ): UseTableViewResult {
   const store = useStore();
   const canWrite = useCanWrite(table);
+  const writes = useMemo(
+    () => createTableViewWriteQueue(table.subject),
+    [table.subject],
+  );
+  const writeState = useSyncExternalStore(
+    writes.subscribe,
+    writes.getSnapshot,
+    writes.getSnapshot,
+  );
 
   const [defaultViewSubject] = useString(
     table,
@@ -493,12 +507,16 @@ export function useTableView(
     async (
       propVals: Record<string, string>,
       makeDefault: boolean,
+      prepared?: ReturnType<typeof createTableViewInitializer<Resource>>,
     ): Promise<Resource> => {
-      const created = await store.newResource({
-        parent: table.subject,
-        isA: dataBrowser.classes.view,
-        propVals,
-      });
+      const prepare = () =>
+        store.newResource({
+          parent: table.subject,
+          isA: dataBrowser.classes.view,
+          propVals,
+        });
+      const created = await (prepared ? prepared.ensure(prepare) : prepare());
+      if (prepared) hydratedForRef.current = created.subject;
       await created.save();
       await table.push(
         dataBrowser.properties.tableViews,
@@ -524,6 +542,7 @@ export function useTableView(
     async (
       name: string,
       kind: ViewKind | string = DEFAULT_VIEW_KIND,
+      prepared?: ReturnType<typeof createTableViewInitializer<Resource>>,
     ): Promise<Resource> => {
       let isFirst = views.length === 0 && !defaultViewSubject;
 
@@ -555,7 +574,7 @@ export function useTableView(
         propVals[dataBrowser.properties.viewDashboard] = dashboard.subject;
       }
 
-      return saveNewView(propVals, isFirst);
+      return saveNewView(propVals, isFirst, prepared);
     },
     [
       views.length,
@@ -652,11 +671,25 @@ export function useTableView(
     [table.subject, activeView],
   );
 
+  const preparedDefault = useMemo(
+    () =>
+      createTableViewInitializer<Resource>(
+        JSON.stringify([table.subject, activeView]),
+      ),
+    [table.subject, activeView],
+  );
+
   const ensureView = useCallback(async (): Promise<Resource | undefined> => {
     if (!viewReady) return undefined;
 
     if (activeView) {
-      return store.getResourceLoading(activeView);
+      const selected = await store.getResource(activeView);
+      assertTableViewOwner(
+        { table: table.subject },
+        { table: selected.get(core.properties.parent) as string },
+      );
+
+      return selected;
     }
 
     // Creating the View flips `activeView` from undefined to its subject, which
@@ -672,7 +705,9 @@ export function useTableView(
     creatingViewRef.current = true;
 
     return viewInitializer
-      .ensure(() => createViewResource('Default View'))
+      .ensure(() =>
+        createViewResource('Default View', DEFAULT_VIEW_KIND, preparedDefault),
+      )
       .then(
         created => {
           hydratedForRef.current = created.subject;
@@ -685,7 +720,15 @@ export function useTableView(
           throw error;
         },
       );
-  }, [activeView, store, createViewResource, viewReady, viewInitializer]);
+  }, [
+    activeView,
+    store,
+    createViewResource,
+    viewReady,
+    viewInitializer,
+    preparedDefault,
+    table.subject,
+  ]);
 
   useEffect(() => {
     if (
@@ -703,7 +746,7 @@ export function useTableView(
     }
 
     const timer = setTimeout(() => {
-      void (async () => {
+      void writes.enqueue(async () => {
         const v = await ensureView();
 
         if (!v) {
@@ -720,16 +763,22 @@ export function useTableView(
           false,
         );
         await v.save();
-        lastPersistedRef.current = snapshot;
-      })().catch(error => {
-        // Never swallow this: a filter or sort that fails to persist is silently
-        // lost on the next reload, and the user has no way to know.
-        console.error('Could not persist the view configuration:', error);
+        if (hydratedForRef.current === v.subject)
+          lastPersistedRef.current = snapshot;
       });
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [filters, sorting, canWrite, ensureView, store, activeView, viewReady]);
+  }, [
+    filters,
+    sorting,
+    canWrite,
+    ensureView,
+    store,
+    activeView,
+    viewReady,
+    writes,
+  ]);
 
   // --- Filter mutators (same shape as the old `useTableFilters`). ---
   // Keyed by `filterKey`: a property subject, or `derived:<id>` for a constraint
@@ -782,11 +831,11 @@ export function useTableView(
   // actions), lazy-creating the View like the filter/sort path. ---
   /**
    * Run `write` against the active View (lazy-creating it) and save. Fire and
-   * forget: a failure leaves the local state as the user last saw it.
+   * forget: failed operations remain queued for an explicit retry.
    */
   const withView = useCallback(
     (write: (view: Resource) => void | Promise<void>) => {
-      void (async () => {
+      void writes.enqueue(async () => {
         const v = await ensureView();
 
         if (!v) {
@@ -795,9 +844,9 @@ export function useTableView(
 
         await write(v);
         await v.save();
-      })().catch(() => undefined);
+      });
     },
-    [ensureView],
+    [ensureView, writes],
   );
 
   const setViewColumns = useCallback(
@@ -1103,6 +1152,11 @@ export function useTableView(
 
   return {
     viewReady,
+    viewSaving: writeState.busy,
+    viewSaveError: writeState.error?.message,
+    retryViewSave: () => {
+      void writes.retry();
+    },
     viewError,
     filters,
     addFilter,

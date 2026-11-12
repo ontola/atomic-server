@@ -255,3 +255,23 @@ schema commit-controller adoption. Native adoption of saved-view scope/creation
 policies is in progress. Its explicit Save policy and Atomic's immediate-save
 policy remain distinct. These primitives do not complete configuration-model,
 saved-view persistence/transaction or full-page orchestration extraction.
+
+
+## Configuration-write lifecycle increment
+
+Native [#103](https://git.elfaconsortium.eu/ELFA/database-apps/pulls/103) merged
+shared view selection/initialization policies. Missing/unavailable metadata opens
+no native row query. Exact new-view retries freshly confirm the same stored ID
+without another write; altered payloads and wrong collections still fail. All 26
+native browser cases, 454 unit tests, types and the target build passed.
+
+Atomic configuration setters and debounced filter/sort saves now use a shared
+per-table write queue. Saves run in order; a failure retains the operation and
+later edits, and the actual TableResource offers an explicit retry. Implicit-view
+creation checkpoints its prepared Resource before attachment, so retry cannot
+allocate a duplicate default. Retried configuration writes recheck record ownership;
+a late save cannot replace the active view's hydration baseline.
+
+Saved-view CRUD transactions, complete configuration/session extraction and full
+TablePage orchestration remain open. The queue does not claim cross-document
+atomicity or a full page port. Catalog work still follows that full-page gate.
