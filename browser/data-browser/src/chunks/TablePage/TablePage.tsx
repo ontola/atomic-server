@@ -115,6 +115,7 @@ function TablePageContent({ resource }: ResourcePageProps): JSX.Element {
       {editColumn && (
         <EditPropertyDialog
           resource={column}
+          tableClassSubject={classSubject}
           showDialog
           bindShow={visible => {
             if (!visible)

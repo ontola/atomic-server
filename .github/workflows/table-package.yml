@@ -64,7 +64,7 @@ jobs:
         run: pnpm --filter @tomic/data-browser typecheck
       - name: Test table host adapters and saved-view tabs
         working-directory: browser/data-browser
-        run: pnpm exec vitest run src/chunks/TablePage/AtomicTableNavigation.test.tsx src/chunks/TablePage/TableViewTabs.test.tsx src/chunks/TablePage/atomicTableQuery.test.ts src/chunks/TablePage/useAtomicTableQuery.test.tsx src/chunks/TablePage/QuickFilterField.test.tsx src/chunks/TablePage/TableCell.test.tsx src/chunks/TablePage/atomicClearMutation.test.ts src/chunks/TablePage/atomicCreateRow.test.ts src/chunks/TablePage/quickAdd.test.ts src/chunks/TablePage/helpers/useTableHistory.test.ts src/chunks/TablePage/PropertyForm/TextPropertyForm.test.tsx src/chunks/TablePage/PropertyForm/NumberPropertyForm.test.tsx src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.test.tsx
+        run: pnpm exec vitest run src/chunks/TablePage/AtomicTableNavigation.test.tsx src/chunks/TablePage/TableViewTabs.test.tsx src/chunks/TablePage/atomicTableQuery.test.ts src/chunks/TablePage/useAtomicTableQuery.test.tsx src/chunks/TablePage/QuickFilterField.test.tsx src/chunks/TablePage/TableCell.test.tsx src/chunks/TablePage/atomicClearMutation.test.ts src/chunks/TablePage/atomicCreateRow.test.ts src/chunks/TablePage/quickAdd.test.ts src/chunks/TablePage/helpers/useTableHistory.test.ts src/chunks/TablePage/PropertyForm/PropertyDialogCommit.test.tsx src/chunks/TablePage/PropertyForm/TextPropertyForm.test.tsx src/chunks/TablePage/PropertyForm/NumberPropertyForm.test.tsx src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.test.tsx
   package:
     name: Build, test and install packed table
     runs-on: ubuntu-latest

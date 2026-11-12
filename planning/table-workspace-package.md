@@ -210,3 +210,32 @@ passed on the merged tree. These remain preflights, not cross-document atomicity
   Schema semantics. Only length bounds require whole numbers; never floor bounds.
 - [ ] Remaining category controls, property dialog lifecycle, shared saved-view
   lifecycle and actual TablePage/TableResource orchestration remain open.
+
+## Scoped native queries and property commit lifecycle
+
+- Native [database-apps #100](https://git.elfaconsortium.eu/ELFA/database-apps/pulls/100)
+  consumes the shared `TableQuery` and genuine `WindowedTableRows` contracts.
+  Public ORM equality/order/paging and live membership remain backend operations;
+  unsupported expressions, aggregates, optional sort keys and datatype unions
+  fail explicitly. Integer writes now preserve their declared RDF type and
+  `16777217` exactly. No existing data is migrated.
+- Native [#101](https://git.elfaconsortium.eu/ELFA/database-apps/pulls/101) adds
+  explicit double bindings for new columns, with precise filters, conflict/undo
+  checks and a guard against metadata-only retyping of existing literals.
+  Date/duration writes remain read-only because the pinned native writer rejects
+  those declared RDF types; see native #91.
+- The shared property/schema commit controller now prevents duplicate submits,
+  preserves host working drafts after failed saves, and suppresses stale UI
+  completion callbacks after a scope change. It can checkpoint an opaque prepared
+  identity, so a failed class attachment retries the same created property.
+- Atomic new/edit-column dialogs consume this policy and await the host save
+  before closing. New columns defer attachment until their definition is saved;
+  partial attachment failures retain the identity and lock the definition while
+  retrying. Async draft preparation is scoped to its property/class/category.
+  The page-level edit dialog receives the actual table class explicitly.
+- Native schema-editor adoption of the commit controller is the next integration.
+  Property categories, backend metadata transactions/version preflight, saved-view
+  lifecycle and actual TablePage/TableResource orchestration remain open. This
+  controller is not a claim of full property-form or full-page extraction, nor
+  an atomic rollback of writes already accepted by a backend. Catalog evolution
+  still follows the full-page gate.
