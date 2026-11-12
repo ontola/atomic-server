@@ -210,3 +210,45 @@ it('clears several split languages without changing other languages or source da
     clearTableFields(values, [{ id: 'property:label' }, { id: field }]),
   ).toEqual({ 'property:label': undefined, [field]: undefined });
 });
+
+it('passes stable property identities to typed baseline and read-back comparisons', async () => {
+  const { backend, command } = setup();
+  const equals = vi.fn((left: unknown, right: unknown, id: string) => {
+    if (id === field && typeof left === 'number' && typeof right === 'number')
+      return Math.fround(left) === Math.fround(right);
+
+    return Object.is(left, right);
+  });
+  backend.equals = equals;
+  backend.write = vi.fn(async () => {
+    backend.read = vi.fn(async () => ({
+      target,
+      handle: 1,
+      values: { [field]: 1.2345679 },
+    }));
+  });
+  await executeTableRowMutation(
+    { ...command, kind: 'update', changes: { [field]: 1.23456789 } },
+    backend,
+  );
+  expect(equals).toHaveBeenCalledWith(1, 1, field);
+  expect(equals).toHaveBeenCalledWith(1.2345679, 1.23456789, field);
+  await expect(
+    executeTableRowMutation(
+      {
+        ...command,
+        kind: 'update',
+        baseline: { 'property:optional': 16777217 },
+        changes: { 'property:optional': 0 },
+      },
+      {
+        ...backend,
+        read: async () => ({
+          target,
+          handle: 1,
+          values: { 'property:optional': 16777216 },
+        }),
+      },
+    ),
+  ).rejects.toMatchObject({ code: 'conflict' });
+});

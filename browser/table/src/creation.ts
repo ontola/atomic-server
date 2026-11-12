@@ -23,7 +23,8 @@ export interface TableCreationBackend<Handle> {
     target: TableMutationTarget,
   ) => Promise<TableMutationRead<Handle> | undefined>;
   release?: (row: TableMutationRead<Handle>) => void;
-  equals?: (left: unknown, right: unknown) => boolean;
+  /** Compare values using the declared type of this stable property identity. */
+  equals?: (left: unknown, right: unknown, propertyId: string) => boolean;
 }
 
 /** Persist one prepared row and confirm its identity, scope and initial values.
@@ -76,7 +77,7 @@ export async function executeTableRowCreation<Handle>(
         !confirmed ||
         !sameTableMutationTarget(target, confirmed.target) ||
         Object.entries(expected).some(
-          ([id, value]) => !equals(value, confirmed.values[id]),
+          ([id, value]) => !equals(value, confirmed.values[id], id),
         )
       )
         throw new TableMutationError(
