@@ -145,10 +145,12 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
 }) => {
   const store = useStore();
   const titleId = useId();
-  const canWrite = useCanWrite(resource);
+  const canWriteResource = useCanWrite(resource);
 
   const {
     tableClass,
+    viewReady,
+    viewError,
     sorting,
     setSortBy,
     filters,
@@ -202,6 +204,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     queryExpressionFilters,
     query,
   } = useTableData(resource, viewSubject, embedded);
+  const canWrite = canWriteResource && viewReady;
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
     tableClass,
@@ -1529,6 +1532,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     <TablePageContext value={tablePageContext}>
       <TablePresenceContext value={presenceValue}>
         <TableCalendarRowContext value={calendarRow}>
+          {viewError && <p role='alert'>{viewError}</p>}
           {!embedded && (
             <TableViewTabs
               rowClass={tableClass.subject}
@@ -1549,7 +1553,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
               hideColumn={hideColumn}
               lockedColumns={lockedColumns}
               lockedReason={lockedReason}
-              canWrite={canWrite}
+              canWrite={canWriteResource}
               quickAdd={viewQuickAdd}
               setQuickAdd={setViewQuickAdd}
               quickFilter={

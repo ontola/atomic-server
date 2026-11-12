@@ -239,3 +239,19 @@ passed on the merged tree. These remain preflights, not cross-document atomicity
   controller is not a claim of full property-form or full-page extraction, nor
   an atomic rollback of writes already accepted by a backend. Catalog evolution
   still follows the full-page gate.
+
+## Saved-view scope and initialization increment
+
+The package now owns view-reference normalization, explicit selection readiness,
+record-owner and reorder validation, plus single-flight implicit-view initialization.
+Atomic consumes these policies from `useTableView`: foreign URLs do not fall back
+to default filters, row queries remain gated until the selected metadata is ready
+and owned, and view mutations cannot target another table's record. Legacy
+default-only configurations retain their default tab. Concurrent first filter/
+column changes share one materialized default view.
+
+Native [#102](https://git.elfaconsortium.eu/ELFA/database-apps/pulls/102) completed
+schema commit-controller adoption. Native adoption of saved-view scope/creation
+policies is in progress. Its explicit Save policy and Atomic's immediate-save
+policy remain distinct. These primitives do not complete configuration-model,
+saved-view persistence/transaction or full-page orchestration extraction.

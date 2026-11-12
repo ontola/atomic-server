@@ -21,7 +21,15 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useTableNavigation } from '@tomic/table';
+import {
+  useTableNavigation,
+  createTableViewInitializer,
+  selectTableView,
+  tableViewReferences,
+  assertTableViewTarget,
+  assertTableViewOrder,
+  assertTableViewOwner,
+} from '@tomic/table';
 import {
   filterKey,
   parseFilterKey,
@@ -79,6 +87,8 @@ function sortReducer(state: TableSorting, action: SortAction): TableSorting {
 }
 
 export interface UseTableViewResult {
+  viewReady: boolean;
+  viewError?: string;
   filters: TableFilter[];
   /** Adds an empty filter for a target (`filterKey`: a property subject, or
    *  `derived:<id>` for a computed column). No-op if one already exists. */
@@ -247,7 +257,11 @@ export function useTableView(
     table,
     dataBrowser.properties.tableDefaultView,
   );
-  const [views] = useArray(table, dataBrowser.properties.tableViews);
+  const [storedViews] = useArray(table, dataBrowser.properties.tableViews);
+  const views = useMemo(
+    () => tableViewReferences(storedViews, defaultViewSubject),
+    [storedViews, defaultViewSubject],
+  );
 
   // The active view lives in the URL (`?view=`), so a tab is linkable, survives
   // a reload, and lands in browser history — back/forward moves between views
@@ -255,13 +269,25 @@ export function useTableView(
   // first one) once they load.
   const { location, navigate } = useTableNavigation();
   const activeViewParam = location.view;
+  const selection = selectTableView({
+    views,
+    defaultView: defaultViewSubject,
+    requested: embedded ? undefined : activeViewParam,
+    override: viewOverride,
+    loading: table.loading,
+  });
   const activeView =
-    viewOverride ??
-    (embedded ? undefined : activeViewParam) ??
-    defaultViewSubject ??
-    views[0] ??
-    undefined;
+    selection.status === 'selected' ? selection.subject : undefined;
   const view = useResource(activeView ?? unknownSubject);
+  const ownerMatches = view.get(core.properties.parent) === table.subject;
+  const viewError =
+    selection.status === 'missing' ||
+    (selection.status === 'selected' && !view.loading && !ownerMatches)
+      ? 'Saved view is unavailable in this table.'
+      : undefined;
+  const viewReady =
+    selection.status === 'implicit' ||
+    (selection.status === 'selected' && !view.loading && ownerMatches);
 
   // The `?view=` the URL carries *now*, rather than as of the render that a
   // long-running action started in. Creating or duplicating a view writes to the
@@ -618,7 +644,17 @@ export function useTableView(
   );
 
   // --- Persist (debounced) whenever the local config changes post-hydration. ---
+  const viewInitializer = useMemo(
+    () =>
+      createTableViewInitializer<Resource>(
+        JSON.stringify([table.subject, activeView]),
+      ),
+    [table.subject, activeView],
+  );
+
   const ensureView = useCallback(async (): Promise<Resource | undefined> => {
+    if (!viewReady) return undefined;
+
     if (activeView) {
       return store.getResourceLoading(activeView);
     }
@@ -635,18 +671,28 @@ export function useTableView(
     // a table silently lost it whenever the re-render won that race.
     creatingViewRef.current = true;
 
-    try {
-      const created = await createViewResource('Default View');
-      hydratedForRef.current = created.subject;
+    return viewInitializer
+      .ensure(() => createViewResource('Default View'))
+      .then(
+        created => {
+          hydratedForRef.current = created.subject;
+          creatingViewRef.current = false;
 
-      return created;
-    } finally {
-      creatingViewRef.current = false;
-    }
-  }, [activeView, store, createViewResource]);
+          return created;
+        },
+        error => {
+          creatingViewRef.current = false;
+          throw error;
+        },
+      );
+  }, [activeView, store, createViewResource, viewReady, viewInitializer]);
 
   useEffect(() => {
-    if (hydratedForRef.current !== (activeView ?? '__none__') || !canWrite) {
+    if (
+      !viewReady ||
+      hydratedForRef.current !== (activeView ?? '__none__') ||
+      !canWrite
+    ) {
       return;
     }
 
@@ -683,7 +729,7 @@ export function useTableView(
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [filters, sorting, canWrite, ensureView, store, activeView]);
+  }, [filters, sorting, canWrite, ensureView, store, activeView, viewReady]);
 
   // --- Filter mutators (same shape as the old `useTableFilters`). ---
   // Keyed by `filterKey`: a property subject, or `derived:<id>` for a constraint
@@ -877,19 +923,22 @@ export function useTableView(
 
   const setViewKind = useCallback(
     (subject: string, kind: ViewKind | string, label?: string) => {
-      const typesBySubject = readViewTypes();
-
-      // Changing the only view of a type makes that type unreachable — for
-      // the last table view, the rows' own layout. Add a view instead and
-      // leave this one as it is (#1806).
-      if (!canChangeViewType(subject, typesBySubject)) {
-        createView(kind, label);
-
-        return;
-      }
-
+      if (!views.includes(subject)) return;
       void (async () => {
-        const v = store.getResourceLoading(subject);
+        const v = await store.getResource(subject);
+        assertTableViewOwner(
+          { table: table.subject },
+          { table: v.get(core.properties.parent) as string },
+        );
+        const typesBySubject = readViewTypes();
+
+        // Keep another view of the old type before changing it in place.
+        if (!canChangeViewType(subject, typesBySubject)) {
+          createView(kind, label);
+
+          return;
+        }
+
         const fromType = typesBySubject.get(subject)!;
         const fromApp = appViewOf(fromType);
         const newName = nameAfterTypeChange(
@@ -925,14 +974,19 @@ export function useTableView(
         await v.save();
       })().catch(() => undefined);
     },
-    [store, table, createDashboardResource, createView, readViewTypes],
+    [store, table, createDashboardResource, createView, readViewTypes, views],
   );
 
   const duplicateView = useCallback(
     (subject: string) => {
       void (async () => {
         const from = liveViewParam.current;
-        const src = store.getResourceLoading(subject);
+        assertTableViewTarget(subject, views);
+        const src = await store.getResource(subject);
+        assertTableViewOwner(
+          { table: table.subject },
+          { table: src.get(core.properties.parent) as string },
+        );
         const srcName = (src.get(core.properties.name) as string) ?? 'View';
 
         // Copy the source config; only include props that are actually set so
@@ -983,18 +1037,26 @@ export function useTableView(
         goToCreatedView(created.subject, from);
       })().catch(() => undefined);
     },
-    [store, table, goToCreatedView],
+    [store, table, goToCreatedView, views],
   );
 
   const deleteView = useCallback(
     (subject: string) => {
       // The last table view stays while other views exist: without it the
       // rows' own layout is gone (#1806). The tab menu disables this too.
-      if (!canDeleteView(subject, readViewTypes())) {
+      if (
+        !views.includes(subject) ||
+        !canDeleteView(subject, readViewTypes())
+      ) {
         return;
       }
 
       void (async () => {
+        const target = await store.getResource(subject);
+        assertTableViewOwner(
+          { table: table.subject },
+          { table: target.get(core.properties.parent) as string },
+        );
         const next = (views as string[]).filter(v => v !== subject);
         await table.set(dataBrowser.properties.tableViews, next, false);
 
@@ -1014,23 +1076,34 @@ export function useTableView(
           goToView(next[0], true);
         }
 
-        await store.getResourceLoading(subject).destroy();
+        await target.destroy();
       })().catch(() => undefined);
     },
-    [views, table, defaultViewSubject, activeView, store, readViewTypes],
+    [
+      views,
+      table,
+      defaultViewSubject,
+      activeView,
+      store,
+      readViewTypes,
+      goToView,
+    ],
   );
 
   const reorderViews = useCallback(
     (next: string[]) => {
       void (async () => {
+        assertTableViewOrder(views, next);
         await table.set(dataBrowser.properties.tableViews, next, false);
         await table.save();
       })().catch(() => undefined);
     },
-    [table],
+    [table, views],
   );
 
   return {
+    viewReady,
+    viewError,
     filters,
     addFilter,
     setFilterValue,

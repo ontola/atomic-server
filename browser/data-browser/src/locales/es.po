@@ -13397,3 +13397,7 @@ msgstr ""
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Column definition saved. Retry to finish adding it to the table."
 msgstr ""
+
+#: src/chunks/TablePage/useTableView.ts
+msgid "Saved view is unavailable in this table."
+msgstr ""
