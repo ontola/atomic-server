@@ -293,3 +293,33 @@ These are scoped client lifecycle guarantees under Atomic's existing save/outbox
 semantics. They do not supply cross-document transactions, automatic rollback or
 backend compare-and-swap. Complete configuration/session modeling and actual
 TablePage/TableResource extraction still remain, followed by catalog evolution.
+
+
+## Complete stored-view model and Atomic metadata binding
+
+The package now owns the model/codecs for all stored built-in view settings,
+including legacy derived formulas, actions, quick-add, statistics and column order.
+Atomic reads, patches and copies these settings through one backend property map.
+A single local/remote subscription keeps parsed arrays stable across unrelated
+metadata changes and also observes local parent changes before save.
+
+Malformed query-bearing shapes make the view unavailable rather than falling back
+to an unfiltered query. Unavailable metadata mounts no renderer or app frame.
+Absent derived-column configuration still differs from an explicitly empty list;
+query reference resolution against renderer defaults/schema remains session work.
+The closed action/legacy-generator codecs also reject inherited object names.
+
+A real TablePage check uses an invented local-only drive and the actual client
+WASM: it creates a table, observes invalid configuration, repairs metadata and
+reloads the page successfully. JSON quick-add metadata, false timer settings and
+explicit empty derived columns also survive reload. Desktop/mobile screenshots
+stay outside Git.
+The original formula/aggregate regressions run against the real Rust/WASM engine.
+Owned legacy views without names now hydrate by captured loading status rather
+than name presence. Readiness waits for the correct table/view filter and sort
+state; late implicit-view preparation cannot retarget another table session.
+Per-view dirty drafts, incoming-config conflicts and the complete saved-view
+session controller remain host work. Native v1 query adapter adoption is in
+progress; its legacy hidden-column/width
+storage policy is retained. Full session/orchestration extraction and renderer/UI
+parity remain open, before any catalog evolution.

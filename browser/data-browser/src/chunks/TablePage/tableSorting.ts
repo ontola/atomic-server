@@ -1,9 +1,6 @@
 import { dataBrowser } from '@tomic/react';
 
-export interface TableSorting {
-  prop: string;
-  sortDesc: boolean;
-}
+export type { TableSorting } from '@tomic/table';
 
 /**
  * Default row order: `sortOrder`, the fractional sibling-order key. The server

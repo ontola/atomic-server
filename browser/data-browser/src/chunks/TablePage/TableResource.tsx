@@ -1583,7 +1583,8 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
               derivedColumns={derivedSpecs}
             />
           )}
-          {quickFilter.active &&
+          {!viewError &&
+            quickFilter.active &&
             !quickFilter.loading &&
             quickFilter.matches.length === 0 && (
               <NoMatches role='status'>
@@ -1602,7 +1603,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
               onRowCreated={notifyEntryCreated}
             />
           )}
-          {appView !== undefined ? (
+          {viewError ? null : appView !== undefined ? (
             // An app rendering this table's rows. It sits beside the Table tab
             // rather than in place of it: adding a way to look at rows never
             // takes one away, and the table is always one tab over.

@@ -195,3 +195,15 @@ and reordering now use this lifecycle too. Navigation retains the initiating
 intent, so a delayed retry does not override a later tab choice. Backend
 transactions, authorization, conflict resolution and offline acceptance semantics
 remain the adapter's responsibility.
+
+
+`TableViewConfiguration` describes the saved bindings used by TablePage's built-in
+views: filters/sort, columns/order/languages, grouping, timer settings, dashboard,
+derived columns, statistics, row actions and quick-add. Shared codecs retain legacy
+formula generators and distinguish an absent derived-column list from an explicit
+empty list. Reading performs no persistence or migration. The reader reports
+invalid query-bearing shapes; adapters must gate their query on these issues.
+Schema references and implicit renderer defaults resolve separately in the session.
+Atomic has one reactive metadata binding for reads, typed patches and raw config
+copies; backend property IDs and JSON datatype-tagging remain there. This model
+and those codecs do not complete the shared saved-view session or the full page.

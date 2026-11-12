@@ -1,4 +1,3 @@
-import type { JSONValue } from '@tomic/react';
 import { reorderArray } from '@chunks/TableEditor';
 import type { TableColumn } from './useTableColumns';
 
@@ -13,15 +12,7 @@ export function orderKey(column: TableColumn): string {
 }
 
 /** Reads a stored order, ignoring anything that isn't a list of keys. */
-export function parseColumnOrder(value: JSONValue | undefined): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return (value as unknown[]).filter(
-    (key): key is string => typeof key === 'string',
-  );
-}
+export { parseColumnOrder } from '@tomic/table';
 
 /**
  * Puts columns in the view's configured order.
