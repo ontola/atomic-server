@@ -174,3 +174,23 @@ necessary only before a future registry release, independently of this port.
 - [ ] Native creation/deletion undo is blocked on authorized complete-subject
   snapshots/conditional restoration; ELFA/database-apps#91 records why shaped
   snapshots cannot restore all deleted predicates safely.
+
+
+### Shared schema range controls
+
+- [x] Shared raw numeric/length range field and full-text parser; retains invalid
+  input, supports fractional numeric bounds and equal inclusive bounds, and
+  validates maximum-only integer bounds without flooring invalid decimals.
+- [x] Atomic range forms keep changes on the unsaved draft and report shared
+  validation to the dialog; existing host styling and localization are retained.
+- [x] Native port exposes the same control for class-level numeric/length rules,
+  blocks invalid schema submission, and explicitly discards raw constraint drafts.
+- [ ] Remaining category controls, schema lifecycle/dialogs and full page
+  orchestration remain unextracted. Catalog evolution has not started.
+
+
+Next native schema guard hardening: class identity is not a schema revision.
+Thread the accepted schema fingerprint and a live readiness/revision getter into
+native mutation/creation backends, so an in-flight command fails preflight if a
+new schema is loading or activated before the write. Keep confirmed partial
+success explicit; this still cannot make separate schema/row documents atomic.

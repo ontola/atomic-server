@@ -157,3 +157,10 @@ rollback. Native saved-cell undo uses the saved values as conflict baselines thr
 between property drafts. `nameTableProperty` preserves an existing property's
 shortname when changing its display label; only a new draft derives a provisional
 shortname. Category controls and schema activation remain adapter work.
+
+
+`PropertyRangeField` is an unsaved schema-draft control for numeric or text-length
+bounds. It retains raw invalid input, publishes only valid finite values, supports
+integer/nonnegative rules and equal inclusive limits, and reports validity to the
+host form. `parsePropertyRange` returns stable error codes; hosts can localize the
+control's messages. Remount the field when changing draft/schema revision.
