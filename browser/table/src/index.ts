@@ -148,3 +148,9 @@ export {
 } from './schema/PropertyChoiceField.js';
 
 export { FloatCell } from './chunks/TablePage/EditorCells/FloatCell.js';
+export {
+  createTableDraftCommit,
+  type TableDraftCommitState,
+  type TableDraftCommitResult,
+} from './schema/draftCommit.js';
+export { useTableDraftCommit } from './schema/useTableDraftCommit.js';

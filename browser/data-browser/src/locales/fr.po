@@ -933,6 +933,7 @@ msgstr "Créer un compte et accepter"
 msgid "I already have an account"
 msgstr "J'ai déjà un compte"
 
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/File/ConvertToDocumentButton.tsx
@@ -11708,7 +11709,7 @@ msgstr ""
 msgid "Could not change datatype: {0}"
 msgstr ""
 
-#. 0: (err as Error).message
+#. 0: result.error.message
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Failed to save column: {0}"
 msgstr ""
@@ -13391,4 +13392,8 @@ msgstr ""
 
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Number format"
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Column definition saved. Retry to finish adding it to the table."
 msgstr ""

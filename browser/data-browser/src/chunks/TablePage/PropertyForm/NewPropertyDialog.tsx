@@ -8,7 +8,14 @@ import {
   server,
   useStore,
 } from '@tomic/react';
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useState,
+  type JSX,
+} from 'react';
+import { useTableDraftCommit } from '@tomic/table';
 import { stringToSlug } from '@helpers/stringToSlug';
 import { PropertyFormCategory } from './categories';
 import {
@@ -17,6 +24,7 @@ import {
 } from '@helpers/propertyIdentity';
 import {
   createPropertyOnClass,
+  attachPropertiesToClass,
   createSelectPropertyOnClass,
   type TagSeed,
 } from '../Kanban/createSelectProperty';
@@ -154,10 +162,20 @@ export function NewPropertyDialog({
   const store = useStore();
   // Form state only. The draft is never saved: the content-addressed property
   // is created on confirm, once its shortname and datatype are final.
-  const [propertyResource, setPropertyResource] = useState<Resource | null>(
-    null,
-  );
+  const draftScope = JSON.stringify([
+    tableClassResource.subject,
+    selectedCategory,
+  ]);
+  const [prepared, setPropertyResource] = useState<{
+    scope: string;
+    resource: Resource;
+  } | null>(null);
+  const propertyResource =
+    prepared?.scope === draftScope ? prepared.resource : null;
   const [valid, setValid] = useState(true);
+  const { busy, error, runPrepared, hasPrepared } = useTableDraftCommit(
+    JSON.stringify([draftScope, showDialog]),
+  );
 
   const createProperty = useCallback(
     async (draft: Resource) => {
@@ -165,7 +183,7 @@ export function NewPropertyDialog({
       const shortname = stringToSlug(name.trim()) || 'column';
       const datatype = draft.get(core.properties.datatype) as Datatype;
       // A new column is always a new property: never reuse another column's.
-      const naming = { name, shortname, reuse: false };
+      const naming = { name, shortname, reuse: false, deferAttach: true };
 
       if (selectedCategory === 'select') {
         const max = draft.get(dataBrowser.properties.max) as number | undefined;
@@ -201,16 +219,36 @@ export function NewPropertyDialog({
     [store, tableClassResource, selectedCategory],
   );
 
-  const onSuccess = useCallback(async () => {
-    if (!propertyResource) {
-      return;
-    }
+  const [dialogProps, show, hide] = useDialog({ bindShow });
 
-    const subject = await createProperty(propertyResource);
-    onCreated?.(subject);
-  }, [propertyResource, createProperty, onCreated]);
+  const prepareDraft = useEffectEvent(async (isCancelled: () => boolean) => {
+    // The draft sits under the same parent the property will get.
+    const tableClassParent = await store.getResource(
+      tableClassResource.props.parent,
+    );
+    const parentSubject = tableClassParent.hasClasses(core.classes.ontology)
+      ? tableClassParent.subject
+      : tableClassResource.subject;
 
-  const [dialogProps, show, hide] = useDialog({ bindShow, onSuccess });
+    const name = 'column';
+    const { isA, propVals } = getCategoryGenesisPropVals(
+      selectedCategory as PropertyFormCategory,
+    );
+
+    const draft = await createPropertyDraft(store, parentSubject, {
+      isA,
+      propVals: {
+        [core.properties.name]: name,
+        [core.properties.description]: '',
+        ...(propVals as Record<string, JSONValue>),
+      },
+    });
+
+    if (isCancelled()) return;
+    setPropertyResource({ scope: draftScope, resource: draft });
+    // show() is called in a separate effect after propertyResource is set,
+    // so the Dialog is already in the DOM when show() runs.
+  });
 
   useEffect(() => {
     if (!showDialog) {
@@ -219,51 +257,61 @@ export function NewPropertyDialog({
       return;
     }
 
-    const init = async () => {
-      // The draft sits under the same parent the property will get.
-      const tableClassParent = await store.getResource(
-        tableClassResource.props.parent,
-      );
-      const parentSubject = tableClassParent.hasClasses(core.classes.ontology)
-        ? tableClassParent.subject
-        : tableClassResource.subject;
+    let cancelled = false;
+    void prepareDraft(() => cancelled).catch(console.error);
 
-      const name = 'column';
-      const { isA, propVals } = getCategoryGenesisPropVals(
-        selectedCategory as PropertyFormCategory,
-      );
-
-      const draft = await createPropertyDraft(store, parentSubject, {
-        isA,
-        propVals: {
-          [core.properties.name]: name,
-          [core.properties.description]: '',
-          ...(propVals as Record<string, JSONValue>),
-        },
-      });
-
-      setPropertyResource(draft);
-      // show() is called in a separate effect after propertyResource is set,
-      // so the Dialog is already in the DOM when show() runs.
+    return () => {
+      cancelled = true;
     };
+  }, [showDialog, draftScope]);
 
-    init().catch(console.error);
-  }, [showDialog]);
+  const showEditor = useEffectEvent(() => show());
 
   // Open dialog after propertyResource is set and Dialog is mounted.
   useEffect(() => {
     if (propertyResource && showDialog) {
-      show();
+      showEditor();
     }
-  }, [propertyResource]);
+  }, [propertyResource, showDialog]);
 
-  const handleCreateClick = useCallback(() => {
-    hide(true);
-  }, [hide]);
+  const handleCreateClick = useCallback(async () => {
+    if (!propertyResource) return;
+    const result = await runPrepared(
+      propertyResource,
+      createProperty,
+      async subject => {
+        await attachPropertiesToClass(store, tableClassResource, [subject]);
+
+        return subject;
+      },
+      valid,
+    );
+
+    if (result.status === 'saved') {
+      hide(true);
+      onCreated?.(result.value);
+    }
+  }, [
+    runPrepared,
+    propertyResource,
+    createProperty,
+    valid,
+    hide,
+    onCreated,
+    store,
+    tableClassResource,
+  ]);
+
+  const definitionSaved = !!propertyResource && hasPrepared(propertyResource);
 
   return (
     <FormValidationContextProvider onValidationChange={setValid}>
-      <Dialog {...dialogProps}>
+      <Dialog
+        {...dialogProps}
+        onClose={success => {
+          if (!busy) hide(success);
+        }}
+      >
         <DialogTitle>
           <h1>
             New{' '}
@@ -274,18 +322,34 @@ export function NewPropertyDialog({
           </h1>
         </DialogTitle>
         <DialogContent>
-          {propertyResource && (
-            <PropertyForm
-              resource={propertyResource}
-              category={selectedCategory as PropertyFormCategory}
-              onSubmit={handleCreateClick}
-              autoFocusName
-            />
+          {error && <div role='alert'>{error.message}</div>}
+          {definitionSaved && error && (
+            <p>
+              Column definition saved. Retry to finish adding it to the table.
+            </p>
           )}
+          <div inert={busy || definitionSaved}>
+            {propertyResource && (
+              <PropertyForm
+                resource={propertyResource}
+                category={selectedCategory as PropertyFormCategory}
+                onSubmit={() => {
+                  void handleCreateClick();
+                }}
+                autoFocusName
+              />
+            )}
+          </div>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCreateClick} disabled={!valid}>
-            Create
+          <Button
+            onClick={() => {
+              void handleCreateClick();
+            }}
+            disabled={!valid || busy || !propertyResource}
+            aria-busy={busy}
+          >
+            {definitionSaved ? 'Retry' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
