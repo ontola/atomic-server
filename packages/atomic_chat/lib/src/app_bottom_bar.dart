@@ -33,9 +33,9 @@ const _listDrives = 3;
 
 /// The one row at the bottom of the app, within the thumb's reach, the same on
 /// every page and never moving with them: home (the atomic.place mark), search, new (a list), the user (agent,
-/// sync, account and settings) and, on a phone, last the "more" menu of
-/// the resource the page on top shows. Back is the system back and the swipe from the left
-/// edge.
+/// sync, account and settings). The "more" menu of the resource on top is
+/// in the page's own header, next to its breadcrumbs. Back is the system back
+/// and the swipe from the left edge.
 ///
 /// The button of the page on top is shown as the current one (in the main
 /// colour) and does nothing; a page of the bar is never opened twice (see
@@ -49,8 +49,7 @@ const _listDrives = 3;
 /// On a tablet ([ShellLayout.split]) the bar is the foot of the sidebar (the
 /// list pane). Home and Search show what the sidebar holds (Home on the home
 /// closes the detail page), the others open in the detail pane; Close sidebar
-/// comes last: five equal slots. The resource's "more"
-/// menu is not in the bar there; the resource's pane shows it.
+/// comes last: five equal slots.
 class AppBottomBar extends StatelessWidget {
   final AssistantApi api;
   final ShellController shell;
@@ -107,7 +106,6 @@ class AppBottomBar extends StatelessWidget {
                       shell.driveSwitcher
                     ]),
                     builder: (context, _) {
-                      final onMore = shell.topMenu;
                       final top = shell.topKind;
                       final onUser = _actions.onUser;
                       final list = shell.list.value;
@@ -137,23 +135,6 @@ class AppBottomBar extends StatelessWidget {
                               ? () => shell.showList(ShellPage.home)
                               : (shell.atHome ? null : shell.goHome))
                           : (homeCurrent ? null : shell.goHome);
-                      // On a phone the bar's last button; next to the pages the
-                      // resource shows it in its own pane (see ResourceView).
-                      final more = onMore == null || split
-                          ? null
-                          : Builder(
-                              key: const ValueKey('more'),
-                              builder: (button) => IconButton(
-                                tooltip: 'More',
-                                onPressed: () {
-                                  final box =
-                                      button.findRenderObject() as RenderBox;
-                                  onMore(box.localToGlobal(Offset.zero) &
-                                      box.size);
-                                },
-                                icon: const Icon(Icons.more_vert),
-                              ),
-                            );
                       final buttons = <Widget>[
                         _Current(
                           current: homeCurrent,
@@ -218,7 +199,7 @@ class AppBottomBar extends StatelessWidget {
                             activity: activity,
                             current: top == ShellPage.profile,
                             // Next to the pages every slot is the same.
-                            wide: roomy && !split && more == null,
+                            wide: roomy && !split,
                             onPressed: onUser,
                             onViewProfile: _actions.viewProfile,
                             onFeedback: () => showFeedbackDialog(context,
@@ -233,16 +214,10 @@ class AppBottomBar extends StatelessWidget {
                             onPressed: () => shell.setListCollapsed(true),
                             icon: const Icon(Icons.menu_open),
                           )
-                        else if (more != null)
-                          // The only button that changes with the page: it
-                          // takes a slot of its own only while the page has
-                          // one, and the others share the rest equally.
-                          more,
                       ];
                       // Equal slots across the row: next to the pages five (the
                       // four pages and Close sidebar, which fit the sidebar's
-                      // narrowest width too), on a phone four, and five while
-                      // the page on top has a "more" menu.
+                      // narrowest width too), on a phone four.
                       return Row(children: [
                         for (final b in buttons)
                           Expanded(child: Center(child: b)),

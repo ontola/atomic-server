@@ -183,7 +183,7 @@ void main() {
           centers(tester, ['Home', 'Search', 'New', 'Profile']), width, 4);
     });
 
-    testWidgets('a More button is a fifth equal slot, the others shift',
+    testWidgets('a page\'s menu is not in the bar: still four slots',
         (tester) async {
       phone(tester);
       await tester.pumpWidget(_shell(_BarApi()));
@@ -191,11 +191,11 @@ void main() {
       final route = _controller(tester).top!;
       _controller(tester).registerMenu(route, (_) {});
       await tester.pumpAndSettle();
-      final width = tester.getSize(find.byType(AppBottomBar)).width;
-      expectEqualSlots(
-          centers(tester, ['Home', 'Search', 'New', 'Profile', 'More']),
-          width,
-          5);
+      final bar = find.byType(AppBottomBar);
+      expect(find.descendant(of: bar, matching: find.byTooltip('More')),
+          findsNothing);
+      expectEqualSlots(centers(tester, ['Home', 'Search', 'New', 'Profile']),
+          tester.getSize(bar).width, 4);
     });
   });
 

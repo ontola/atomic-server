@@ -145,10 +145,14 @@ void main() {
     expect(find.byType(ResourceView), findsOneWidget);
     expect(find.text('Notes'), findsNothing);
     expect(tester.getSize(find.byType(ResourceView)).width, _phone.width);
-    // The bar's last button is the resource's menu.
+    // The resource's menu is in its header, not in the bar.
     expect(
         find.descendant(
             of: find.byType(AppBottomBar), matching: find.byTooltip('More')),
+        findsNothing);
+    expect(
+        find.descendant(
+            of: find.byType(ResourceView), matching: find.byTooltip('More')),
         findsOneWidget);
     await _done(tester);
   });
