@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:atomic_flutter/atomic_flutter.dart' show AppColorsExt, HoldFan;
+import 'package:atomic_flutter/atomic_flutter.dart' show AppColorsExt, HoldFan, AtomicSpinner;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -1701,7 +1701,7 @@ class _NothingOpen extends StatelessWidget {
                 if (feed == null)
                   const Padding(
                     padding: EdgeInsets.all(32),
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(child: AtomicSpinner()),
                   )
                 else if (feed.entries.isEmpty)
                   Padding(

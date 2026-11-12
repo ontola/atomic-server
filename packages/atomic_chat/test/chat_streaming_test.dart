@@ -72,7 +72,7 @@ void main() {
     await tester.pump();
     controller.add('lo');
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(AtomicSpinner), findsNothing);
 
     await tester.tap(find.byKey(const Key('chat-stop')));
     await tester.pumpAndSettle();
@@ -94,11 +94,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await _type(tester, 'Hi');
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(AtomicSpinner), findsOneWidget);
     await tester.tap(find.byKey(const Key('chat-stop')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(AtomicSpinner), findsNothing);
     expect(api.added.map((a) => a.$2), ['user']);
     expect(find.byType(TextField), findsOneWidget);
   });

@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../atomic_spinner.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -188,7 +190,7 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
                   const SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2)),
+                      child: AtomicSpinner()),
                   const SizedBox(width: 8),
                   Text('Waiting for approval…',
                       style: theme.textTheme.bodySmall),

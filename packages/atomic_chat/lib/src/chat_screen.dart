@@ -1,4 +1,4 @@
-import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText, ClickCursor;
+import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText, ClickCursor, AtomicSpinner;
 import 'package:atomic_flutter/atomic_flutter.dart'
     show AppColors, AppColorsExt, Perf;
 import 'package:flutter/material.dart';
@@ -1768,7 +1768,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         child: ErrorText('$_loadError', color: c.alert),
       );
     }
-    if (!_loaded) return const Center(child: CircularProgressIndicator());
+    if (!_loaded) return const Center(child: AtomicSpinner());
     final shown = [
       ..._messages,
       if (_partial != null)
@@ -1803,7 +1803,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     child: SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))),
+                        child: AtomicSpinner())),
               );
             }
             _keeper.built(i);
@@ -1893,7 +1893,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return const SizedBox(
         width: 16,
         height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2),
+        child: AtomicSpinner(),
       );
     }
     final titles = toolTitles(m.parts);
@@ -1976,7 +1976,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         child: SizedBox(
           width: 14,
           height: 14,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: AtomicSpinner(),
         ),
       ));
     }
@@ -2733,10 +2733,7 @@ class _MicButtonState extends State<_MicButton>
             const SizedBox(
               width: 22,
               height: 22,
-              child: CircularProgressIndicator(
-                key: Key('mic-transcribing'),
-                strokeWidth: 2.5,
-              ),
+              child: AtomicSpinner(key: Key('mic-transcribing')),
             )
           else
             Tooltip(

@@ -143,7 +143,7 @@ class _AiUsageScreenState extends State<AiUsageScreen> {
             if (_loading && credits == null)
               const Padding(
                 padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: shared.AtomicSpinner()),
               ),
             if (_error != null)
               Padding(
