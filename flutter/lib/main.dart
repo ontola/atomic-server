@@ -33,6 +33,7 @@ import 'atomic/atomic_client.dart';
 import 'atomic/get_started.dart';
 import 'atomic/peer_sync_host.dart';
 import 'atomic/session.dart';
+import 'atomic/store_changes.dart';
 import 'atomic/store_location.dart';
 import 'atomic/sync_notice_policy.dart';
 
@@ -121,6 +122,10 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
   int _syncFailures = 0;
   Timer? _syncRetry;
   Timer? _storeTick;
+  final _storeChanges = StoreChanges(
+    poll: () => AtomicClient.pollDbEvent(timeoutMs: 30000),
+    onChanged: AtomicClient.notifyResourcesChanged,
+  );
 
   @override
   void initState() {
@@ -180,6 +185,7 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _storeTick?.cancel();
+    _storeChanges.stop();
     _eventPoller?.cancel();
     _syncRetry?.cancel();
     _toasts.dispose();
@@ -227,6 +233,9 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
     if (_listening) return;
     _listening = true;
     _eventPoller?.cancel();
+    // What the server's sync session (and anything else) changed in the
+    // store, by subject: open pages follow it live.
+    _storeChanges.start();
     // Reactive loop: blocks in Rust until an event arrives
     Future(() async {
       while (mounted) {
