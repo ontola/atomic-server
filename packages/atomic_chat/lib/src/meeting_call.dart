@@ -56,23 +56,42 @@ class MeetingCall extends ChangeNotifier {
   /// The whole screen instead of the small tile.
   bool get expanded => _expanded;
 
+  Rect? _dock;
+  Object? _dockOwner;
+
+  /// Where the meeting's own screen shows the call (above its chat), in
+  /// global coordinates; null: the floating tile. Never while [expanded].
+  Rect? get dock => _expanded ? null : _dock;
+
+  /// The meeting's screen, [owner], holds the call at [rect] (null: lets it
+  /// go, back to the tile). Only the owner that docked it can let it go, so
+  /// a screen leaving does not undock the one that just took it.
+  void setDock(Object owner, Rect? rect) {
+    if (rect == null && _dockOwner != owner) return;
+    if (_dockOwner == owner && _dock == rect) return;
+    _dockOwner = rect == null ? null : owner;
+    _dock = rect;
+    notifyListeners();
+  }
+
   /// Why the page could not be loaded; the call is over then.
   Object? get error => _error;
 
-  /// Starts the call of [meeting] (showing it expanded), or shows it when it
-  /// is already on. Another meeting's call is ended first. [scheme] is the
-  /// app's `light` or `dark`, for the page's first paint. Completes when the
-  /// page is loading.
-  Future<void> start(String meeting, {String scheme = 'light'}) async {
+  /// Starts the call of [meeting] (showing it [expanded], else as the tile or
+  /// where a screen docks it), or shows it when it is already on. Another
+  /// meeting's call is ended first. [scheme] is the app's `light` or `dark`,
+  /// for the page's first paint. Completes when the page is loading.
+  Future<void> start(String meeting,
+      {String scheme = 'light', bool expanded = true}) async {
     if (meeting.isEmpty) return;
     if (_meeting == meeting) {
-      expand();
+      if (expanded) expand();
       return;
     }
     if (active) leave();
     final generation = ++_generation;
     _meeting = meeting;
-    _expanded = true;
+    _expanded = expanded;
     _error = null;
     notifyListeners();
     try {
@@ -121,6 +140,8 @@ class MeetingCall extends ChangeNotifier {
     _page = null;
     _meeting = null;
     _expanded = false;
+    _dock = null;
+    _dockOwner = null;
     notifyListeners();
     page?.release();
   }

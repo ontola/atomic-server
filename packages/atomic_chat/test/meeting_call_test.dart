@@ -294,6 +294,55 @@ void main() {
       await tester.pump(const Duration(seconds: 6));
     });
 
+    testWidgets(
+        'a meeting opens natively: its chat, and the call above it once joined',
+        (tester) async {
+      final api = FakeApi();
+      await tester.pumpWidget(app(AppShell(
+        api: api,
+        drive: 'did:ad:drive',
+        warmPool: (_) => null,
+        home: ChatsScreen(drive: 'did:ad:drive', api: api),
+      )));
+      await tester.pumpAndSettle();
+      controller(tester).navigatorKey.currentState!.push(MaterialPageRoute(
+          builder: (_) => openResourceView(
+              api: api,
+              drive: 'did:ad:drive',
+              subject: 'did:ad:meeting',
+              title: 'Standup',
+              classUrl: meetingClass)));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatRoomScreen), findsOneWidget);
+      expect(find.byType(ResourceView), findsNothing);
+      expect(find.text('the call page'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('meeting-join-call')));
+      await tester.pumpAndSettle();
+      final call = controller(tester).call!;
+      expect(call.meeting, 'did:ad:meeting');
+      expect(call.expanded, isFalse);
+      expect(find.byKey(const Key('meeting-join-call')), findsNothing);
+      // Docked: the screen's width, under the bar, above the chat.
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+      final rect = tester.getRect(find.byKey(const ValueKey('meeting-call')));
+      expect(rect.width, screen.width);
+      expect(rect.top, greaterThanOrEqualTo(
+          tester.getRect(find.byType(AppTopBar).last).bottom - 1));
+      expect(find.byKey(const ValueKey('meeting-call-tile')), findsNothing);
+      expect(find.byKey(const ValueKey('meeting-call-expand')), findsOneWidget);
+
+      // Left: the call goes on as the tile.
+      controller(tester).navigatorKey.currentState!.pop();
+      await tester.pumpAndSettle();
+      expect(call.active, isTrue);
+      expect(find.byKey(const ValueKey('meeting-call-tile')), findsOneWidget);
+      expect(tester.getSize(find.byKey(const ValueKey('meeting-call'))).width,
+          lessThan(screen.width));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 6));
+    });
+
     testWidgets('the call survives the page being left', (tester) async {
       await tester.pumpWidget(shell(FakeApi()));
       await tester.pumpAndSettle();
