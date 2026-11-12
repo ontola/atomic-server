@@ -27,3 +27,12 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 flutter:
   uses-material-design: true
+  # Font Awesome Free 6 (fontawesome.com; icons CC BY 4.0, fonts SIL OFL 1.1),
+  # subset to the class icons the web app's sidebar shows (`ClassIcons`).
+  fonts:
+    - family: FaSolid
+      fonts:
+        - asset: fonts/fa-solid-subset.ttf
+    - family: FaBrands
+      fonts:
+        - asset: fonts/fa-brands-subset.ttf
