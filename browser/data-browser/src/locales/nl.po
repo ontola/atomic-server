@@ -11118,9 +11118,8 @@ msgstr "Upgraden naar Cloud Server"
 msgid "Sealed on your device, so we cannot read it"
 msgstr "Versleuteld op je apparaat, zodat wij het niet kunnen lezen"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Restore this workspace on any device"
-msgstr "Deze werkruimte herstellen op elk apparaat"
+#~ msgid "Restore this workspace on any device"
+#~ msgstr "Deze werkruimte herstellen op elk apparaat"
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Free with an account"
@@ -13530,3 +13529,11 @@ msgstr "Met Melding verzenden deel je de gecontroleerde chattekst, foutmeldingen
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team, samen met technische gegevens over je opstelling (app-versie, serveradres en status). Vermeld geen privé-inhoud uit je werkruimte."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restore workspace data on any device"
+msgstr "Gegevens van je werkruimte herstellen op elk apparaat"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backups include file names and sizes. Uploaded file contents are excluded."
+msgstr "Back-ups bevatten bestandsnamen en -groottes. De inhoud van geüploade bestanden wordt niet meegenomen."

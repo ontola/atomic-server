@@ -155,12 +155,13 @@ export function VaultPanel({
         tagline={tagline}
         points={[
           'Sealed on your device, so we cannot read it',
-          'Restore this workspace on any device',
+          'Restore workspace data on any device',
           'Free with an account',
         ]}
         status={
           error ? { tone: 'error', text: <ErrorText>{error}</ErrorText> } : null
         }
+        notice='Backups include file names and sizes. Uploaded file contents are excluded.'
         actions={
           <Button
             data-testid='vault-enable'

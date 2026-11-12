@@ -11112,9 +11112,8 @@ msgstr "Mejorar al servidor en la nube"
 msgid "Sealed on your device, so we cannot read it"
 msgstr "Sellado en tu dispositivo para que no podamos leerlo"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Restore this workspace on any device"
-msgstr "Restaura este espacio de trabajo en cualquier dispositivo"
+#~ msgid "Restore this workspace on any device"
+#~ msgstr "Restaura este espacio de trabajo en cualquier dispositivo"
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Free with an account"
@@ -13524,3 +13523,11 @@ msgstr "Al pulsar Enviar informe compartes con el equipo de Atomic, mediante Sen
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Informa de un error o sugiere una mejora. Tu mensaje y tu correo opcional se envían al equipo de Atomic mediante Sentry, junto con detalles técnicos de tu configuración (versión de la app, dirección y estado del servidor). No incluyas contenido privado del espacio de trabajo."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restore workspace data on any device"
+msgstr "Restaura los datos del espacio de trabajo en cualquier dispositivo"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backups include file names and sizes. Uploaded file contents are excluded."
+msgstr "Las copias de seguridad incluyen los nombres y tamaños de los archivos. El contenido de los archivos subidos queda excluido."

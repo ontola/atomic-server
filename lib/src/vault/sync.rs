@@ -1394,6 +1394,68 @@ mod tests {
         assert_eq!(after, before, "restored drive must match the original");
     }
 
+    #[tokio::test]
+    async fn vault_restores_uploaded_file_metadata_but_leaves_blob_absent() {
+        use crate::{urls, Value};
+
+        let source = Db::init_temp("vault_file_source").await.unwrap();
+        let (_, drive) = source.setup("alice").await.unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let filename = "attachment.bin";
+        let contents = b"\x00\xffVault attachment fixture";
+        let hash = blake3::hash(contents);
+        let hash_hex = hash.to_hex().to_string();
+        let blob = crate::identifiers::blob_subject(&hash_hex);
+
+        // Local uploads store the contents by hash and create a separate File
+        // resource under the drive with a reference to that hash.
+        source.put_blob(hash.as_bytes(), contents).await.unwrap();
+        let file = source
+            .create_resource(
+                urls::FILE,
+                &drive,
+                filename,
+                Some(vec![
+                    (urls::FILENAME, Value::String(filename.into())),
+                    (urls::FILESIZE, Value::Integer(contents.len() as i64)),
+                    (
+                        urls::MIMETYPE,
+                        Value::String("application/octet-stream".into()),
+                    ),
+                    (urls::INTERNAL_ID, Value::String(hash_hex)),
+                    (urls::BLOB, Value::AtomicUrl(blob.as_str().into())),
+                ]),
+            )
+            .await
+            .unwrap();
+        let file_subject = Subject::from_raw(&file, source.get_base_domain().as_deref());
+        assert_eq!(
+            source.get_blob(hash.as_bytes()).await.unwrap().as_deref(),
+            Some(contents.as_slice())
+        );
+
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        backup(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .expect("a drive with an uploaded file must produce a backup");
+
+        let target = Db::init_temp("vault_file_restored").await.unwrap();
+        let result = restore(&target, &key, &vault).await;
+        assert_eq!(result.objects_unreadable, 0);
+        let restored = target.get_resource(&file_subject).await.unwrap();
+        assert_eq!(restored.get(urls::FILENAME).unwrap().to_string(), filename);
+        assert!(matches!(
+            restored.get(urls::FILESIZE).unwrap(),
+            Value::Integer(size) if *size == contents.len() as i64
+        ));
+        assert_eq!(restored.get(urls::BLOB).unwrap().to_string(), blob);
+        assert!(
+            target.get_blob(hash.as_bytes()).await.unwrap().is_none(),
+            "the restored file entry has no local contents when Vault is its only source"
+        );
+    }
+
     /// The person comes back with the account, not just the files.
     ///
     /// An agent resource is nobody's child, so the drive walk never sees it;

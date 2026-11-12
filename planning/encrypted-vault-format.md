@@ -22,6 +22,11 @@ objects. The party holding the objects can see how many objects exist, how big
 they are, when they arrived and which device lane they belong to. It cannot see
 subjects, property values, resource contents, resource counts, or file bytes.
 
+Vault packs carry File resource metadata, including filenames and blob references.
+**Uploaded file contents are excluded from Cloud Vault backups.** A Vault restore
+can recover the File resource. Downloading the file requires a separate copy of
+its bytes.
+
 Clients encrypt locally and talk to object storage directly via presigned URLs.
 The hosted control plane brokers those URLs, quota and checkpoint publication;
 object bytes never pass through it.

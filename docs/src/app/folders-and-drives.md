@@ -11,6 +11,13 @@ Drive settings let you manage who has access, and what is installed.
 
 ![The drive switcher and the sidebar tree](../assets/app/drives.png)
 
+## Cloud Vault backups
+
+Cloud Vault provides encrypted backups of drive resources and their edit history.
+Backups include details of uploaded files, such as names and sizes.
+**Uploaded file contents are excluded from Cloud Vault backups.**
+Keep a separate copy of files you need to recover.
+
 ## Folders
 
 Press *+* and choose *Folder*.
