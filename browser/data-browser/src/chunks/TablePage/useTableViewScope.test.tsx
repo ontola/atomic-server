@@ -53,6 +53,7 @@ async function setup({
     [dataBrowser.properties.viewKind, Datatype.STRING],
     [dataBrowser.properties.viewFilters, Datatype.JSON],
     [dataBrowser.properties.viewSortBy, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.viewDashboard, Datatype.ATOMIC_URL],
     [dataBrowser.properties.viewSortDesc, Datatype.BOOLEAN],
   ]) {
     const property = await store.newResource({ subject, noParent: true });
@@ -88,10 +89,11 @@ async function setup({
   const save = vi.spyOn(table, 'save').mockResolvedValue('persisted');
   const viewSave = vi.spyOn(view, 'save').mockResolvedValue('persisted');
   const destroy = vi.spyOn(view, 'destroy').mockResolvedValue(undefined);
+  const navigate = vi.fn();
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <StoreContext.Provider value={store}>
       <TableNavigationProvider
-        value={{ location: { view: requested }, navigate: vi.fn() }}
+        value={{ location: { view: requested }, navigate }}
       >
         {children}
       </TableNavigationProvider>
@@ -99,7 +101,17 @@ async function setup({
   );
   const hook = renderHook(() => useTableView(table), { wrapper });
 
-  return { ...hook, table, view, store, save, viewSave, destroy, wrapper };
+  return {
+    ...hook,
+    table,
+    view,
+    store,
+    save,
+    viewSave,
+    destroy,
+    wrapper,
+    navigate,
+  };
 }
 
 it('does not resolve a foreign URL view to the default or fetch its config', async () => {
@@ -299,4 +311,150 @@ it('retains filter edits made while an implicit-view attachment is paused', asyn
       ]),
     { timeout: 3000 },
   );
+});
+
+it('retries explicit view creation without preparing or saving another definition', async () => {
+  const state = await setup({ implicit: true });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const create = vi
+    .spyOn(state.store, 'newResource')
+    .mockResolvedValueOnce(state.view);
+  state.save.mockRejectedValueOnce(Error('attach failed'));
+  act(() => state.result.current.createView('table', 'New view'));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('attach failed'),
+  );
+  act(() => state.result.current.setActiveView(state.view.subject));
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  await waitFor(() => expect(state.save).toHaveBeenCalledTimes(2));
+  expect(create).toHaveBeenCalledOnce();
+  expect(state.viewSave).toHaveBeenCalledOnce();
+  expect(state.navigate).toHaveBeenCalledTimes(1);
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([
+    state.view.subject,
+  ]);
+});
+
+it('retains a prepared copy after attachment fails', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  await state.view.set(
+    dataBrowser.properties.viewDashboard,
+    'https://example.com/dashboard',
+    false,
+  );
+  const copy = await state.store.newResource({
+    subject: 'https://example.com/copy',
+    noParent: true,
+  });
+  await copy.set(core.properties.parent, state.table.subject, false);
+  const copySave = vi.spyOn(copy, 'save').mockResolvedValue('persisted');
+  const create = vi
+    .spyOn(state.store, 'newResource')
+    .mockResolvedValueOnce(copy);
+  state.save.mockRejectedValueOnce(Error('copy attachment failed'));
+  act(() => state.result.current.duplicateView(state.view.subject));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('copy attachment failed'),
+  );
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  await waitFor(() => expect(state.save).toHaveBeenCalledTimes(2));
+  expect(create).toHaveBeenCalledOnce();
+  expect(
+    create.mock.calls[0][0]?.propVals?.[dataBrowser.properties.viewDashboard],
+  ).toBe('https://example.com/dashboard');
+  expect(copySave).toHaveBeenCalledOnce();
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([
+    state.view.subject,
+    copy.subject,
+  ]);
+});
+
+it('retries destroy after confirmed detachment without overwriting subsequently added tabs', async () => {
+  const state = await setup({ requested: 'https://example.com/view' });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  state.destroy.mockRejectedValueOnce(Error('destroy denied'));
+  act(() => state.result.current.deleteView(state.view.subject));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('destroy denied'),
+  );
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([]);
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableViews,
+      ['https://example.com/later-view'],
+      false,
+    );
+  });
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  expect(state.destroy).toHaveBeenCalledTimes(2);
+  expect(state.save).toHaveBeenCalledOnce();
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([
+    'https://example.com/later-view',
+  ]);
+});
+
+it('retains an in-place type-change decision when saving its optimistic metadata fails', async () => {
+  const state = await setup();
+  const other = await state.store.newResource({
+    subject: 'https://example.com/other-view',
+    noParent: true,
+  });
+  await other.set(core.properties.parent, state.table.subject, false);
+  await other.set(dataBrowser.properties.viewKind, 'table', false);
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableViews,
+      [state.view.subject, other.subject],
+      false,
+    );
+  });
+  await waitFor(() => expect(state.result.current.views).toHaveLength(2));
+  const create = vi.spyOn(state.store, 'newResource');
+  state.viewSave.mockRejectedValueOnce(Error('type save failed'));
+  act(() => state.result.current.setViewKind(state.view.subject, 'calendar'));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('type save failed'),
+  );
+  expect(state.view.get(dataBrowser.properties.viewKind)).toBe('calendar');
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  expect(state.viewSave).toHaveBeenCalledTimes(2);
+  expect(create).not.toHaveBeenCalled();
+});
+
+it('does not count a foreign linked record as a replacement for the last Table view', async () => {
+  const state = await setup();
+  const foreign = await state.store.newResource({
+    subject: 'https://example.com/foreign-linked-view',
+    noParent: true,
+  });
+  await foreign.set(
+    core.properties.parent,
+    'https://example.com/other-table',
+    false,
+  );
+  await foreign.set(dataBrowser.properties.viewKind, 'table', false);
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableViews,
+      [state.view.subject, foreign.subject],
+      false,
+    );
+  });
+  await waitFor(() => expect(state.result.current.views).toHaveLength(2));
+  act(() => state.result.current.deleteView(state.view.subject));
+  expect(state.save).not.toHaveBeenCalled();
+  expect(state.destroy).not.toHaveBeenCalled();
 });

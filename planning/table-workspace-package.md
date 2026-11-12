@@ -275,3 +275,21 @@ a late save cannot replace the active view's hydration baseline.
 Saved-view CRUD transactions, complete configuration/session extraction and full
 TablePage orchestration remain open. The queue does not claim cross-document
 atomicity or a full page port. Catalog work still follows that full-page gate.
+
+
+## Saved-view command checkpoint increment
+
+The shared queue now supplies per-intent checkpoints for prepared identities and
+successful phases. Atomic create/copy, renderer changes, deletion and reorder use
+the same retained-error path as configuration writes. Copies and explicitly created
+views reuse a prepared Resource after failed attachment. A failed in-place type
+save retains its original change-versus-add decision. A destroy retry resumes
+after confirmed detachment, preserving tabs added afterward. Reorder validates
+fresh membership, and creation/duplication capture navigation at the initiating
+intent rather than at retry. Foreign/unloaded records cannot stand in for the
+last owned Table renderer.
+
+These are scoped client lifecycle guarantees under Atomic's existing save/outbox
+semantics. They do not supply cross-document transactions, automatic rollback or
+backend compare-and-swap. Complete configuration/session modeling and actual
+TablePage/TableResource extraction still remain, followed by catalog evolution.

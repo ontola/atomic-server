@@ -23,6 +23,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import {
+  type TableViewWriteContext,
   useTableNavigation,
   createTableViewWriteQueue,
   createTableViewInitializer,
@@ -64,6 +65,21 @@ import {
   nameAfterTypeChange,
   viewTypeKey,
 } from './viewTypeChoice';
+
+interface ViewCreationOptions {
+  prepared?: ReturnType<typeof createTableViewInitializer<Resource>>;
+  intent?: TableViewWriteContext;
+}
+
+function readViewReferences(table: Resource): string[] {
+  const views = table.get(dataBrowser.properties.tableViews);
+  const defaultView = table.get(dataBrowser.properties.tableDefaultView);
+
+  return tableViewReferences(
+    Array.isArray(views) ? (views as string[]) : [],
+    typeof defaultView === 'string' ? defaultView : undefined,
+  );
+}
 
 const DEFAULT_SORT: TableSorting = { prop: DEFAULT_SORT_PROP, sortDesc: false };
 
@@ -489,13 +505,23 @@ export function useTableView(
    * it. Empty on creation: the page itself is the editor.
    */
   const createDashboardResource = useCallback(
-    async (name: string): Promise<Resource> => {
-      const dashboard = await store.newResource({
-        parent: table.subject,
-        isA: dataBrowser.classes.dashboard,
-        propVals: { [core.properties.name]: name },
-      });
-      await dashboard.save();
+    async (name: string, intent?: TableViewWriteContext): Promise<Resource> => {
+      const prepare = () =>
+        store.newResource({
+          parent: table.subject,
+          isA: dataBrowser.classes.dashboard,
+          propVals: { [core.properties.name]: name },
+        });
+      const dashboard = await (intent
+        ? intent.checkpoint('dashboard:prepared', prepare)
+        : prepare());
+      assertTableViewOwner(
+        { table: table.subject },
+        { table: dashboard.get(core.properties.parent) as string },
+      );
+      if (intent)
+        await intent.checkpoint('dashboard:saved', () => dashboard.save());
+      else await dashboard.save();
 
       return dashboard;
     },
@@ -507,7 +533,7 @@ export function useTableView(
     async (
       propVals: Record<string, string>,
       makeDefault: boolean,
-      prepared?: ReturnType<typeof createTableViewInitializer<Resource>>,
+      { prepared, intent }: ViewCreationOptions = {},
     ): Promise<Resource> => {
       const prepare = () =>
         store.newResource({
@@ -515,23 +541,49 @@ export function useTableView(
           isA: dataBrowser.classes.view,
           propVals,
         });
-      const created = await (prepared ? prepared.ensure(prepare) : prepare());
-      if (prepared) hydratedForRef.current = created.subject;
-      await created.save();
-      await table.push(
-        dataBrowser.properties.tableViews,
-        [created.subject],
-        true,
+      const created = await (prepared
+        ? prepared.ensure(prepare)
+        : intent
+          ? intent.checkpoint(
+              'view:prepared:' + propVals[dataBrowser.properties.viewKind],
+              prepare,
+            )
+          : prepare());
+      assertTableViewOwner(
+        { table: table.subject },
+        { table: created.get(core.properties.parent) as string },
       );
-
-      if (makeDefault) {
-        await table.set(
-          dataBrowser.properties.tableDefaultView,
-          created.subject,
+      if (prepared) hydratedForRef.current = created.subject;
+      if (intent)
+        await intent.checkpoint('view:saved:' + created.subject, () =>
+          created.save(),
         );
-      }
+      else await created.save();
 
-      await table.save();
+      const attach = async () => {
+        assertTableViewOwner(
+          { table: table.subject },
+          { table: created.get(core.properties.parent) as string },
+        );
+        await table.push(
+          dataBrowser.properties.tableViews,
+          [created.subject],
+          true,
+        );
+
+        if (makeDefault) {
+          await table.set(
+            dataBrowser.properties.tableDefaultView,
+            created.subject,
+          );
+        }
+
+        await table.save();
+      };
+
+      if (intent)
+        await intent.checkpoint('view:attached:' + created.subject, attach);
+      else await attach();
 
       return created;
     },
@@ -542,9 +594,9 @@ export function useTableView(
     async (
       name: string,
       kind: ViewKind | string = DEFAULT_VIEW_KIND,
-      prepared?: ReturnType<typeof createTableViewInitializer<Resource>>,
+      options: ViewCreationOptions = {},
     ): Promise<Resource> => {
-      let isFirst = views.length === 0 && !defaultViewSubject;
+      let isFirst = readViewReferences(table).length === 0;
 
       if (kind === 'dashboard' && isFirst) {
         // The first saved view replaces the implicit "Default View" tab and
@@ -557,6 +609,7 @@ export function useTableView(
             [dataBrowser.properties.viewKind]: DEFAULT_VIEW_KIND,
           },
           true,
+          options,
         );
         isFirst = false;
       }
@@ -570,19 +623,14 @@ export function useTableView(
         const tableName = (table.get(core.properties.name) as string) ?? '';
         const dashboard = await createDashboardResource(
           tableName ? `${tableName} dashboard` : name,
+          options.intent,
         );
         propVals[dataBrowser.properties.viewDashboard] = dashboard.subject;
       }
 
-      return saveNewView(propVals, isFirst, prepared);
+      return saveNewView(propVals, isFirst, options);
     },
-    [
-      views.length,
-      defaultViewSubject,
-      table,
-      createDashboardResource,
-      saveNewView,
-    ],
+    [table, createDashboardResource, saveNewView],
   );
 
   /**
@@ -630,9 +678,8 @@ export function useTableView(
 
   const createView = useCallback(
     (kind: ViewKind | string = DEFAULT_VIEW_KIND, label?: string) => {
-      void (async () => {
-        const from = liveViewParam.current;
-
+      const from = liveViewParam.current;
+      void writes.enqueue(async intent => {
         // A table with no saved views shows one implicit Table tab, and that
         // tab disappears the moment a real view exists. So adding a Calendar,
         // a Kanban or an app to a fresh table would take the table away — the
@@ -641,12 +688,12 @@ export function useTableView(
         if (
           kind !== DEFAULT_VIEW_KIND &&
           kind !== 'dashboard' &&
-          views.length === 0 &&
-          !defaultViewSubject
+          readViewReferences(table).length === 0
         ) {
           await createViewResource(
             VIEW_KIND_LABELS[DEFAULT_VIEW_KIND],
             DEFAULT_VIEW_KIND,
+            { intent },
           );
         }
 
@@ -655,11 +702,12 @@ export function useTableView(
         const created = await createViewResource(
           label ?? VIEW_KIND_LABELS[kind as ViewKind],
           kind,
+          { intent },
         );
         goToCreatedView(created.subject, from);
-      })().catch(() => undefined);
+      });
     },
-    [createViewResource, views.length, defaultViewSubject, goToCreatedView],
+    [createViewResource, table, goToCreatedView, writes],
   );
 
   // --- Persist (debounced) whenever the local config changes post-hydration. ---
@@ -706,7 +754,9 @@ export function useTableView(
 
     return viewInitializer
       .ensure(() =>
-        createViewResource('Default View', DEFAULT_VIEW_KIND, preparedDefault),
+        createViewResource('Default View', DEFAULT_VIEW_KIND, {
+          prepared: preparedDefault,
+        }),
       )
       .then(
         created => {
@@ -958,44 +1008,63 @@ export function useTableView(
   const readViewTypes = useCallback(
     (): Map<string, string> =>
       new Map(
-        (views as string[]).map(s => [
-          s,
-          viewTypeKey(
-            store.getResourceLoading(s).get(dataBrowser.properties.viewKind) as
-              | string
-              | undefined,
-          ),
-        ]),
+        readViewReferences(table).map((s): [string, string] => {
+          const target = store.getResourceLoading(s);
+
+          return [
+            s,
+            target.get(core.properties.parent) === table.subject
+              ? viewTypeKey(
+                  target.get(dataBrowser.properties.viewKind) as
+                    | string
+                    | undefined,
+                )
+              : 'unavailable:' + s,
+          ];
+        }),
       ),
-    [views, store],
+    [table, store],
   );
 
   const setViewKind = useCallback(
     (subject: string, kind: ViewKind | string, label?: string) => {
       if (!views.includes(subject)) return;
-      void (async () => {
+      const from = liveViewParam.current;
+      void writes.enqueue(async intent => {
         const v = await store.getResource(subject);
         assertTableViewOwner(
           { table: table.subject },
           { table: v.get(core.properties.parent) as string },
         );
-        const typesBySubject = readViewTypes();
+        assertTableViewTarget(subject, [...readViewTypes().keys()]);
+        const decision = await intent.checkpoint('type:decision', async () => {
+          const typesBySubject = readViewTypes();
+          const fromType = typesBySubject.get(subject)!;
+          const fromApp = appViewOf(fromType);
 
-        // Keep another view of the old type before changing it in place.
-        if (!canChangeViewType(subject, typesBySubject)) {
-          createView(kind, label);
+          return {
+            change: canChangeViewType(subject, typesBySubject),
+            newName: nameAfterTypeChange(
+              v.get(core.properties.name) as string | undefined,
+              fromType,
+              label ?? VIEW_KIND_LABELS[normalizeViewKind(kind)],
+              fromApp ? store.getResourceLoading(fromApp).title : undefined,
+            ),
+          };
+        });
+
+        if (!decision.change) {
+          const created = await createViewResource(
+            label ?? VIEW_KIND_LABELS[normalizeViewKind(kind)],
+            kind,
+            { intent },
+          );
+          goToCreatedView(created.subject, from);
 
           return;
         }
 
-        const fromType = typesBySubject.get(subject)!;
-        const fromApp = appViewOf(fromType);
-        const newName = nameAfterTypeChange(
-          v.get(core.properties.name) as string | undefined,
-          fromType,
-          label ?? VIEW_KIND_LABELS[normalizeViewKind(kind)],
-          fromApp ? store.getResourceLoading(fromApp).title : undefined,
-        );
+        const newName = decision.newName;
 
         await v.set(dataBrowser.properties.viewKind, kind, false);
 
@@ -1012,6 +1081,7 @@ export function useTableView(
           const tableName = (table.get(core.properties.name) as string) ?? '';
           const dashboard = await createDashboardResource(
             tableName ? `${tableName} dashboard` : 'Dashboard',
+            intent,
           );
           await v.set(
             dataBrowser.properties.viewDashboard,
@@ -1021,16 +1091,25 @@ export function useTableView(
         }
 
         await v.save();
-      })().catch(() => undefined);
+      });
     },
-    [store, table, createDashboardResource, createView, readViewTypes, views],
+    [
+      store,
+      table,
+      createDashboardResource,
+      createViewResource,
+      readViewTypes,
+      views,
+      writes,
+      goToCreatedView,
+    ],
   );
 
   const duplicateView = useCallback(
     (subject: string) => {
-      void (async () => {
-        const from = liveViewParam.current;
-        assertTableViewTarget(subject, views);
+      const from = liveViewParam.current;
+      void writes.enqueue(async intent => {
+        assertTableViewTarget(subject, [...readViewTypes().keys()]);
         const src = await store.getResource(subject);
         assertTableViewOwner(
           { table: table.subject },
@@ -1053,6 +1132,7 @@ export function useTableView(
           dataBrowser.properties.viewSortDesc,
           dataBrowser.properties.viewColumns,
           dataBrowser.properties.viewGroupBy,
+          dataBrowser.properties.viewDashboard,
           dataBrowser.properties.viewEndProp,
           dataBrowser.properties.viewTimerExclusive,
           dataBrowser.properties.viewSplitLanguages,
@@ -1071,22 +1151,34 @@ export function useTableView(
           }
         }
 
-        const created = await store.newResource({
-          parent: table.subject,
-          isA: dataBrowser.classes.view,
-          propVals,
-        });
-        await created.save();
-        await table.push(
-          dataBrowser.properties.tableViews,
-          [created.subject],
-          true,
+        const created = await intent.checkpoint('copy:prepared', () =>
+          store.newResource({
+            parent: table.subject,
+            isA: dataBrowser.classes.view,
+            propVals,
+          }),
         );
-        await table.save();
+        assertTableViewOwner(
+          { table: table.subject },
+          { table: created.get(core.properties.parent) as string },
+        );
+        await intent.checkpoint('copy:saved', () => created.save());
+        await intent.checkpoint('copy:attached', async () => {
+          assertTableViewOwner(
+            { table: table.subject },
+            { table: created.get(core.properties.parent) as string },
+          );
+          await table.push(
+            dataBrowser.properties.tableViews,
+            [created.subject],
+            true,
+          );
+          await table.save();
+        });
         goToCreatedView(created.subject, from);
-      })().catch(() => undefined);
+      });
     },
-    [store, table, goToCreatedView, views],
+    [store, table, goToCreatedView, readViewTypes, writes],
   );
 
   const deleteView = useCallback(
@@ -1100,54 +1192,53 @@ export function useTableView(
         return;
       }
 
-      void (async () => {
-        const target = await store.getResource(subject);
+      void writes.enqueue(async intent => {
+        const target = await intent.checkpoint('delete:target', () =>
+          store.getResource(subject),
+        );
         assertTableViewOwner(
           { table: table.subject },
           { table: target.get(core.properties.parent) as string },
         );
-        const next = (views as string[]).filter(v => v !== subject);
-        await table.set(dataBrowser.properties.tableViews, next, false);
+        const next = await intent.checkpoint('delete:detached', async () => {
+          const current = readViewTypes();
+          if (current.has(subject) && !canDeleteView(subject, current))
+            throw Error('Keep a Table view available.');
+          const remaining = [...current.keys()].filter(v => v !== subject);
+          await table.set(dataBrowser.properties.tableViews, remaining, false);
 
-        // The default view must not dangle at a deleted subject.
-        if (defaultViewSubject === subject) {
-          await table.set(
-            dataBrowser.properties.tableDefaultView,
-            next[0] ?? '',
-            false,
-          );
-        }
+          if (table.get(dataBrowser.properties.tableDefaultView) === subject) {
+            await table.set(
+              dataBrowser.properties.tableDefaultView,
+              remaining[0] ?? '',
+              false,
+            );
+          }
 
-        await table.save();
+          await table.save();
 
-        // Switch off the deleted tab before destroying it.
-        if (activeView === subject) {
-          goToView(next[0], true);
-        }
+          return remaining;
+        });
+        // A retry must not take navigation away from a later tab choice.
+        if (liveViewParam.current === subject) goToView(next[0], true);
 
         await target.destroy();
-      })().catch(() => undefined);
+      });
     },
-    [
-      views,
-      table,
-      defaultViewSubject,
-      activeView,
-      store,
-      readViewTypes,
-      goToView,
-    ],
+    [views, table, store, readViewTypes, goToView, writes],
   );
 
   const reorderViews = useCallback(
     (next: string[]) => {
-      void (async () => {
-        assertTableViewOrder(views, next);
-        await table.set(dataBrowser.properties.tableViews, next, false);
+      const order = [...next];
+      void writes.enqueue(async () => {
+        const current = readViewReferences(table);
+        assertTableViewOrder(current, order);
+        await table.set(dataBrowser.properties.tableViews, order, false);
         await table.save();
-      })().catch(() => undefined);
+      });
     },
-    [table, views],
+    [table, writes],
   );
 
   return {
