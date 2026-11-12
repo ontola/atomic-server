@@ -590,3 +590,152 @@ it('keeps a late implicit-view creation from changing another table session', as
   expect(hook.result.current.filters).toEqual([]);
   expect(other.get(dataBrowser.properties.tableViews)).toBeUndefined();
 });
+
+it('adopts incoming pristine filters without creating a draft or saving them again', async () => {
+  const state = await setup();
+  const filters = [
+    {
+      property: 'https://example.com/property',
+      operator: 'eq',
+      value: 'incoming',
+    },
+  ];
+  await act(async () => {
+    await state.view.set(dataBrowser.properties.viewFilters, filters, false);
+  });
+  await waitFor(() => expect(state.result.current.filters).toEqual(filters));
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 650));
+  });
+  expect(state.viewSave).not.toHaveBeenCalled();
+});
+
+it('retains each view draft when switching before its debounce finishes', async () => {
+  const state = await setup();
+  const other = await state.store.newResource({
+    subject: 'https://example.com/other-view',
+    noParent: true,
+  });
+  await other.set(core.properties.parent, state.table.subject, false);
+  await other.set(core.properties.name, 'Other view', false);
+  await other.set(dataBrowser.properties.viewKind, 'table', false);
+  vi.spyOn(other, 'save').mockResolvedValue('persisted');
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableViews,
+      [state.view.subject, other.subject],
+      false,
+    );
+  });
+  const property = 'https://example.com/property';
+  act(() => {
+    state.result.current.addFilter(property);
+  });
+  act(() => {
+    state.result.current.setFilterValue(property, 'first view');
+  });
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableDefaultView,
+      other.subject,
+      false,
+    );
+  });
+  await waitFor(() =>
+    expect(state.result.current.activeView).toBe(other.subject),
+  );
+  expect(state.result.current.filters).toEqual([]);
+  act(() => {
+    state.result.current.addFilter(property);
+  });
+  act(() => {
+    state.result.current.setFilterValue(property, 'second view');
+  });
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableDefaultView,
+      state.view.subject,
+      false,
+    );
+  });
+  await waitFor(() =>
+    expect(state.result.current.activeView).toBe(state.view.subject),
+  );
+  expect(state.result.current.filters[0].value).toBe('first view');
+  await waitFor(() =>
+    expect(other.get(dataBrowser.properties.viewFilters)).toEqual([
+      { property, operator: 'eq', value: 'second view' },
+    ]),
+  );
+});
+
+it('keeps the captured failed save available after leaving and returning to its table', async () => {
+  const state = await setup();
+  state.unmount();
+  const other = await state.store.newResource({
+    subject: 'https://example.com/second-table',
+    noParent: true,
+  });
+  const otherView = await state.store.newResource({
+    subject: 'https://example.com/second-view',
+    noParent: true,
+  });
+  await otherView.set(core.properties.parent, other.subject, false);
+  await otherView.set(core.properties.name, 'Other table view', false);
+  await otherView.set(dataBrowser.properties.viewKind, 'table', false);
+  await other.set(
+    dataBrowser.properties.tableViews,
+    [otherView.subject],
+    false,
+  );
+  const hook = renderHook(({ table }) => useTableView(table), {
+    initialProps: { table: state.table },
+    wrapper: state.wrapper,
+  });
+  state.viewSave.mockRejectedValueOnce(Error('offline'));
+  act(() => hook.result.current.renameView('Retained first table name'));
+  await waitFor(() =>
+    expect(hook.result.current.viewSaveError).toBe('offline'),
+  );
+  hook.rerender({ table: other });
+  await waitFor(() =>
+    expect(hook.result.current.activeView).toBe(otherView.subject),
+  );
+  expect(hook.result.current.viewSaveError).toBeUndefined();
+  hook.rerender({ table: state.table });
+  await waitFor(() =>
+    expect(hook.result.current.viewSaveError).toBe('offline'),
+  );
+  act(() => hook.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(hook.result.current.viewSaveError).toBeUndefined(),
+  );
+  expect(state.viewSave).toHaveBeenCalledTimes(2);
+  expect(otherView.get(core.properties.name)).toBe('Other table view');
+});
+
+it('persists newer edits after the page unmounts during an in-flight save', async () => {
+  const state = await setup();
+  let complete!: (value: 'persisted') => void;
+  state.viewSave.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        complete = resolve;
+      }),
+  );
+  const property = 'https://example.com/property';
+  act(() => {
+    state.result.current.addFilter(property);
+    state.result.current.setFilterValue(property, 'first');
+  });
+  await waitFor(() => expect(complete).toBeTypeOf('function'));
+  act(() => state.result.current.setFilterValue(property, 'newer'));
+  state.unmount();
+  await act(async () => {
+    complete('persisted');
+  });
+  await waitFor(() => expect(state.viewSave).toHaveBeenCalledTimes(2));
+  expect(state.view.get(dataBrowser.properties.viewFilters)).toEqual([
+    { property, operator: 'eq', value: 'newer' },
+  ]);
+});

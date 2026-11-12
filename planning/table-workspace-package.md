@@ -323,3 +323,18 @@ session controller remain host work. Native v1 query adapter adoption is in
 progress; its legacy hidden-column/width
 storage policy is retained. Full session/orchestration extraction and renderer/UI
 parity remain open, before any catalog evolution.
+
+## Scoped saved-view drafts
+
+The shared draft session now owns live pristine reads, retained per-view baselines,
+conflict detection, immutable save submissions and explicit retry tokens. Implicit
+view preparation aliases/moves the same draft rather than reinitializing it.
+Atomic filter/sort autosave adopts this controller: changing tabs flushes pending
+work, and newer edits drain after an in-flight save even after unmount. Failed
+operations remain paused until explicit Retry; returning to a table retains its
+queue. Tests cover incoming pristine metadata, navigation before debounce,
+failed-save navigation and newer edits during an unmounted save.
+
+This does not move the remaining renderer/configuration UI into the package or
+supply backend revision transactions. Native explicit Save/Discard adoption is
+next; the full TablePage gate and subsequent catalog work remain open.
