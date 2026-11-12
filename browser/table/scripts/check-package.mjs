@@ -44,7 +44,7 @@ try {
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver, getComputedStyle: dom.window.getComputedStyle, requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout, IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
     globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
-    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode } from '@tomic/table';
+    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList } from '@tomic/table';
     assert.equal(parseInteger('42'), 42);
     assert.equal(typeof IntegerCell.Edit, 'function');
     assert.notEqual(CursorMode.Edit, CursorMode.Visual);
@@ -54,8 +54,10 @@ try {
       children: () => React.createElement('span'),
     });
     const root = createRoot(document.getElementById('app'));
-    await act(async () => root.render(React.createElement(StyleSheetManager, { shouldForwardProp: (prop, target) => typeof target !== 'string' || isPropValid(prop) }, React.createElement(TableHostProvider, { value: {} }, grid))));
+    await act(async () => root.render(React.createElement(StyleSheetManager, { shouldForwardProp: (prop, target) => typeof target !== 'string' || isPropValid(prop) }, React.createElement(TableHostProvider, { value: {} }, grid, React.createElement(ViewTabList, {}, React.createElement(ViewTab, { name: 'All rows', active: true, onRename: () => {}, onEditingChange: () => {} }))))));
     assert.match(document.getElementById('app').innerHTML, /role="grid"/);
+    assert.match(document.getElementById('app').innerHTML, /role="tab"/);
+    assert.match(document.getElementById('app').textContent, /All rows/);
     await act(async () => root.unmount());
     dom.window.close();
   `,
@@ -64,7 +66,7 @@ try {
   writeFileSync(
     join(consumer, 'consumer.tsx'),
     `
-    import { FancyTable, Cell, IntegerCell, type FancyTableProps } from '@tomic/table';
+    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, type FancyTableProps } from '@tomic/table';
     const props: FancyTableProps<{ id: string }> = {
       columns: [{ id: 'name' }], itemCount: 1, columnToKey: column => column.id,
       labelledBy: 'title', HeadingComponent: ({ column }) => <span>{column.id}</span>,
@@ -75,7 +77,8 @@ try {
     const editor = <IntegerCell.Edit value={1} property="count" onChange={value => void value} />;
     // @ts-expect-error The public declarations must reject an invalid row count.
     const invalid: FancyTableProps<string>['itemCount'] = 'one';
-    void [grid, editor, invalid];
+    const views = <ViewTabList><ViewTab name="All rows" active onRename={name => void name} onEditingChange={editing => void editing} /></ViewTabList>;
+    void [grid, editor, invalid, views];
   `,
   );
   writeFileSync(

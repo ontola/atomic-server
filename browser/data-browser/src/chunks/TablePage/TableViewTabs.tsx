@@ -7,7 +7,13 @@ import {
   useTitle,
 } from '@tomic/react';
 import { useContext, useMemo, useState, type JSX } from 'react';
-import { css, styled } from 'styled-components';
+import { styled } from 'styled-components';
+import {
+  ViewTab as SharedViewTab,
+  ViewTabsBar as Bar,
+  ViewTabList as Tabs,
+  ViewTabActions as Actions,
+} from '@tomic/table';
 import { ghostButtonStyles } from '@components/Button';
 import {
   DndContext,
@@ -44,7 +50,6 @@ import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
 } from '@components/ConfirmationDialog';
-import { InputStyled } from '@components/forms/InputStyles';
 import { useStore } from '@tomic/react';
 import { TablePageContext } from './tablePageContext';
 import {
@@ -476,7 +481,6 @@ function ViewTab({
   const ViewKindIcon = VIEW_KIND_ICONS[currentKind];
 
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
   // The implicit tab of a table with no saved views has nothing to reorder.
   const sortable = useSortable({
     id: subject ?? 'implicit',
@@ -489,7 +493,6 @@ function ViewTab({
   const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   const startRename = () => {
-    setDraft(name);
     setEditing(true);
   };
 
@@ -604,36 +607,16 @@ function ViewTab({
       ]
     : [];
 
-  if (editing) {
-    return (
-      <TabInput
-        autoFocus
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => {
-          const trimmed = draft.trim();
-
-          if (trimmed && trimmed !== name) {
-            onRename(trimmed);
-          }
-
-          setEditing(false);
-        }}
-        onKeyDown={e => {
-          if (e.key === 'Enter') {
-            (e.target as HTMLInputElement).blur();
-          } else if (e.key === 'Escape') {
-            setDraft(name);
-            setEditing(false);
-          }
-        }}
-      />
-    );
-  }
-
   return (
     <>
-      <Tab
+      <SharedViewTab
+        name={name}
+        icon={<ViewKindIcon />}
+        active={active}
+        editing={editing}
+        renameLabel='Rename view'
+        onRename={onRename}
+        onEditingChange={setEditing}
         ref={sortable.setNodeRef}
         style={{
           transform: CSS.Translate.toString(sortable.transform),
@@ -642,9 +625,6 @@ function ViewTab({
         }}
         {...sortable.attributes}
         {...sortable.listeners}
-        role='tab'
-        aria-selected={active}
-        $active={active}
         onClick={e => {
           // Clicking the already-active tab opens its menu; otherwise select.
           if (active && hasMenu) {
@@ -654,11 +634,7 @@ function ViewTab({
           }
         }}
         onContextMenu={openMenuAt}
-        type='button'
-      >
-        <ViewKindIcon />
-        {name}
-      </Tab>
+      />
       {menuPoint && (
         <DropdownMenu
           items={menuItems}
@@ -792,63 +768,12 @@ function ColumnsMenu({
   );
 }
 
-const Bar = styled.div`
-  min-width: 0;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding-block: 0.25rem;
-`;
-
-const Tabs = styled.div`
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
-  > * {
-    flex-shrink: 0;
-  }
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-`;
-
-const Actions = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-`;
-
 const IconBtn = styled.button`
   ${ghostButtonStyles}
   justify-content: center;
   height: 1.85rem;
   width: 1.85rem;
   padding: 0;
-`;
-
-const Tab = styled.button<{ $active: boolean }>`
-  ${ghostButtonStyles}
-  height: 1.85rem;
-  white-space: nowrap;
-  font-size: inherit;
-  ${p =>
-    p.$active &&
-    css`
-      background-color: ${p.theme.colors.bg1};
-      color: ${p.theme.colors.text};
-      font-weight: bold;
-    `}
-`;
-
-const TabInput = styled(InputStyled)`
-  height: 1.85rem;
-  width: 10rem;
-  font-weight: bold;
 `;
 
 /** Keeps unchecked rows aligned with the checked ones. */

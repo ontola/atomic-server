@@ -64,3 +64,10 @@ export type {
 export type { JSONValue } from './value.js';
 
 export { TableHeadingWrapper } from './chunks/TableEditor/TableHeading.js';
+export {
+  ViewTab,
+  ViewTabsBar,
+  ViewTabList,
+  ViewTabActions,
+  type ViewTabProps,
+} from './views/ViewTabs.js';
