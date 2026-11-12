@@ -141,3 +141,13 @@ checks a supplied schema revision before preparation and again before writing.
 The host owns creation field/default/permission policy and confirmation strength.
 A failed confirmation may follow a successful write; there is no automatic retry
 or rollback. Deferred grid drafts remain separate until ready to persist.
+
+
+`createTableHistory` owns a session-local undo stack and exposes stable snapshots
+through `useTableHistoryState`. Hosts capture immutable command values and provide
+undo writes. Consecutive single edits can coalesce; explicit batches stay separate
+and undo in reverse dependency order. Confirmed undo steps are removed immediately;
+on failure, the failed and unattempted steps remain for an explicit retry. Recording
+and clearing are blocked while undo is running. There is no redo or transactional
+rollback. Native saved-cell undo uses the saved values as conflict baselines through
+`executeTableRowMutation`; Atomic retains its existing restoration/save policies.

@@ -6,6 +6,7 @@ import {
   type AtomicValue,
 } from '@tomic/react';
 import { useCallback, useState } from 'react';
+import { createTableHistory } from '@tomic/table';
 
 enum HistoryItemType {
   ValueChange,
@@ -59,7 +60,7 @@ export function createValueChangedHistoryItem(
     type: HistoryItemType.ValueChange,
     subject: resource.subject,
     property,
-    previousValue: resource.get(property),
+    previousValue: structuredClone(resource.get(property)),
   };
 }
 
@@ -78,7 +79,7 @@ export function createResourceDeletedHistoryItem(
   return {
     type: HistoryItemType.ResourceDeleted,
     subject: resource.subject,
-    propVals: resource.getEntries(),
+    propVals: structuredClone(resource.getEntries()),
   };
 }
 
@@ -111,7 +112,10 @@ async function undoResourceDeleted(item: ResourceDeletedItem, store: Store) {
   return true;
 }
 
-async function undoItem(item: HistoryItem, store: Store) {
+export async function undoAtomicTableHistoryItem(
+  item: HistoryItem,
+  store: Store,
+) {
   switch (item.type) {
     case HistoryItemType.ValueChange:
       return undoValueChange(item, store);
@@ -137,73 +141,37 @@ const shouldMergeItem = (
   return matchingValueChangeItem || matchingResourceCreatedItem;
 };
 
-function addSingleItem(item: HistoryItem, stack: HistoryStack) {
-  const lastItem = stack[stack.length - 1];
-
-  if (lastItem && isValueChangeItem(item) && shouldMergeItem(item, lastItem)) {
-    // If the last item is the same except for value we don't record the new value. This is to prevent recording values every keystroke.
-    return stack;
-  }
-
-  return [...stack, item];
-}
-
-function addBatch(items: HistoryItemBatch, stack: HistoryStack) {
-  return [...stack, items];
+export function createAtomicTableHistory() {
+  return createTableHistory<HistoryItem>({
+    capture: item => structuredClone(item),
+    merge: (previous, next) =>
+      isValueChangeItem(next) && shouldMergeItem(next, previous)
+        ? previous
+        : undefined,
+  });
 }
 
 export function useTableHistory(invalidateTable: () => void) {
   const store = useStore();
-  const [stack, setStack] = useState<HistoryStack>([]);
+  const [history] = useState(createAtomicTableHistory);
 
   const addItemsToHistoryStack: AddItemToHistoryStack = useCallback(
-    (item: HistoryItem | HistoryItemBatch) => {
-      setStack(prev => {
-        if (Array.isArray(item)) {
-          return addBatch(item, prev);
-        }
-
-        return addSingleItem(item, prev);
-      });
+    item => {
+      if (Array.isArray(item)) history.recordBatch(item);
+      else history.record(item);
     },
-    [],
+    [history],
   );
 
-  const undoLastItem = useCallback(async () => {
-    const lastItem = stack[stack.length - 1];
-    let shouldInvalidate = false;
+  const undoLastItem = useCallback(
+    () =>
+      history.undo(async item => {
+        const collectionUpdated = await undoAtomicTableHistoryItem(item, store);
+        // Invalidate even if a later item in this batch fails.
+        if (collectionUpdated) invalidateTable();
+      }),
+    [history, store, invalidateTable],
+  );
 
-    if (!lastItem) {
-      return;
-    }
-
-    if (Array.isArray(lastItem)) {
-      // TODO: Check if the array only consists of value changes and if so use Promise.all
-
-      for (const item of lastItem) {
-        const collectionUpdated = await undoItem(item, store);
-
-        if (collectionUpdated) {
-          shouldInvalidate = true;
-        }
-      }
-    } else {
-      const collectionUpdated = await undoItem(lastItem, store);
-
-      if (collectionUpdated) {
-        shouldInvalidate = true;
-      }
-    }
-
-    setStack(prev => prev.slice(0, prev.length - 1));
-
-    if (shouldInvalidate) {
-      invalidateTable();
-    }
-  }, [stack, store, invalidateTable]);
-
-  return {
-    addItemsToHistoryStack,
-    undoLastItem,
-  };
+  return { addItemsToHistoryStack, undoLastItem };
 }
