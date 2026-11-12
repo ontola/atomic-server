@@ -6,12 +6,10 @@ import {
   Resource,
   unknownSubject,
   useArray,
-  useBoolean,
   useCanWrite,
-  useResource,
+  useResourceSnapshot,
   useStore,
   useString,
-  useValue,
 } from '@tomic/react';
 import {
   useCallback,
@@ -34,23 +32,21 @@ import {
   assertTableViewOwner,
 } from '@tomic/table';
 import {
+  readAtomicTableViewConfiguration,
+  useAtomicViewConfiguration,
+  writeAtomicTableViewConfiguration,
+  copyAtomicTableViewConfiguration,
+} from './atomicViewConfiguration';
+import {
   filterKey,
   parseFilterKey,
   type FilterOperator,
   type TableFilter,
 } from './tableFiltering';
-import {
-  parseDerivedColumnSpecs,
-  type DerivedColumnSpec,
-} from './derivedColumns';
-import { parseColumnOrder } from './columnOrder';
-import {
-  parseAggregates,
-  type GroupGranularity,
-  type TableAggregate,
-} from './tableAggregates';
-import { parseRowActions, type RowActionSpec } from './rowActions';
-import { parseQuickAdd, type QuickAddSpec } from './quickAdd';
+import { type DerivedColumnSpec } from './derivedColumns';
+import { type GroupGranularity, type TableAggregate } from './tableAggregates';
+import { type RowActionSpec } from './rowActions';
+import { type QuickAddSpec } from './quickAdd';
 import { TableSorting, DEFAULT_SORT_PROP } from './tableSorting';
 import {
   ViewKind,
@@ -249,13 +245,6 @@ export interface UseTableViewResult {
  * context, collection queries, rendered bars) from re-rendering or re-querying
  * on every render of the table.
  */
-function useStableParsed<P, T>(stored: unknown, parse: (raw: P) => T): T {
-  const key = JSON.stringify(stored ?? null);
-
-  // `parse` is a module-level function at every call site, so it is stable.
-  return useMemo(() => parse(JSON.parse(key) as P), [key, parse]);
-}
-
 export function useTableView(
   table: Resource,
   /**
@@ -308,16 +297,22 @@ export function useTableView(
   });
   const activeView =
     selection.status === 'selected' ? selection.subject : undefined;
-  const view = useResource(activeView ?? unknownSubject);
-  const ownerMatches = view.get(core.properties.parent) === table.subject;
+  const viewSnapshot = useResourceSnapshot(activeView ?? unknownSubject);
+  const view = viewSnapshot.resource;
+  const viewLoading = viewSnapshot.loading;
+  const configuration = useAtomicViewConfiguration(view);
+  const ownerMatches = configuration.owner === table.subject;
   const viewError =
     selection.status === 'missing' ||
-    (selection.status === 'selected' && !view.loading && !ownerMatches)
+    (selection.status === 'selected' && !viewLoading && !ownerMatches)
       ? 'Saved view is unavailable in this table.'
-      : undefined;
-  const viewReady =
-    selection.status === 'implicit' ||
-    (selection.status === 'selected' && !view.loading && ownerMatches);
+      : configuration.issues.length
+        ? 'Saved view configuration is invalid.'
+        : undefined;
+  const metadataReady =
+    (selection.status === 'implicit' ||
+      (selection.status === 'selected' && !viewLoading && ownerMatches)) &&
+    !configuration.issues.length;
 
   // The `?view=` the URL carries *now*, rather than as of the render that a
   // long-running action started in. Creating or duplicating a view writes to the
@@ -332,91 +327,46 @@ export function useTableView(
     liveViewParam.current = activeViewParam;
   }, [activeViewParam]);
 
-  // Reactive reads of the View's persisted config.
-  const [viewName] = useString(view, core.properties.name);
-  const [storedFilters] = useValue(view, dataBrowser.properties.viewFilters);
-  const [storedSortBy] = useString(view, dataBrowser.properties.viewSortBy);
-  const [storedSortDesc] = useBoolean(
-    view,
-    dataBrowser.properties.viewSortDesc,
-  );
-  const [storedColumns] = useArray(view, dataBrowser.properties.viewColumns);
-  const [storedKind] = useString(view, dataBrowser.properties.viewKind);
-  const [viewDashboard] = useString(view, dataBrowser.properties.viewDashboard);
-  const [viewGroupBy] = useString(view, dataBrowser.properties.viewGroupBy);
-  const [viewEndProp] = useString(view, dataBrowser.properties.viewEndProp);
-  // Preserve absence here: unlike useBoolean's false fallback, an unset
-  // timer-exclusive value means on.
-  const [storedTimerExclusive] = useValue(
-    view,
-    dataBrowser.properties.viewTimerExclusive,
-  );
-  const [storedSplitLanguages] = useArray(
-    view,
-    dataBrowser.properties.viewSplitLanguages,
-  );
-  const [storedDerivedColumns] = useValue(
-    view,
-    dataBrowser.properties.viewDerivedColumns,
-  );
-  const [storedColumnOrder] = useValue(
-    view,
-    dataBrowser.properties.viewColumnOrder,
-  );
-  const [storedAggregates] = useValue(
-    view,
-    dataBrowser.properties.viewAggregates,
-  );
-  const [storedRowActions] = useValue(
-    view,
-    dataBrowser.properties.viewRowActions,
-  );
-  const [storedQuickAdd] = useValue(view, dataBrowser.properties.viewQuickAdd);
-  const [storedGroupByColumn] = useString(
-    view,
-    dataBrowser.properties.viewGroupByColumn,
-  );
-  const [storedGroupGranularity] = useString(
-    view,
-    dataBrowser.properties.viewGroupGranularity,
-  );
-
-  // Parsing JSON hands back a fresh array every render, and this one reaches the
-  // grid's context — so key it on the stored shape instead. Without it every
-  // render of the table re-renders every cell.
-  const viewDerivedColumns = useStableParsed(
-    storedDerivedColumns,
-    parseDerivedColumnSpecs,
-  );
-
-  // Value-stable for the same reason as the derived columns: this one is a
-  // dependency of the rendered column list.
-  const viewColumnOrder = useStableParsed(storedColumnOrder, parseColumnOrder);
-
-  // Same reason: this feeds the collection query, and a fresh array every render
-  // would rebuild the collection (and re-query) on every render.
-  const viewAggregates = useStableParsed(storedAggregates, parseAggregates);
-
-  // Same reason as the aggregates: this reaches the rendered column list, and a
-  // fresh array every render would remount every action button.
-  const viewRowActions = useStableParsed(storedRowActions, parseRowActions);
-
-  // Serialized dep, like the rest of the JSON config: this reaches the rendered
-  // bar, and a fresh object every render would remount it.
-  const viewQuickAdd = useStableParsed(storedQuickAdd, parseQuickAdd);
+  const {
+    name: viewName,
+    filters: storedFilters,
+    sortBy: storedSortBy,
+    sortDesc: storedSortDesc,
+    columns: storedColumns,
+    kind: storedKind,
+    dashboard: viewDashboard,
+    groupBy: viewGroupBy,
+    endProp: viewEndProp,
+    timerExclusive: storedTimerExclusive,
+    splitLanguages: storedSplitLanguages,
+    derivedColumns: viewDerivedColumns,
+    derivedColumnsSet,
+    columnOrder: viewColumnOrder,
+    aggregates: viewAggregates,
+    rowActions: viewRowActions,
+    quickAdd: viewQuickAdd,
+    groupByColumn: storedGroupByColumn,
+    groupGranularity: storedGroupGranularity,
+  } = configuration.config;
 
   const [filters, setFilters] = useState<TableFilter[]>([]);
   const [sorting, dispatchSort] = useReducer(sortReducer, DEFAULT_SORT);
+  const viewScope = JSON.stringify([table.subject, activeView ?? null]);
+  const [hydratedFor, setHydratedFor] = useState<string | null>(null);
+  const viewReady = metadataReady && hydratedFor === viewScope;
 
   // --- Hydrate from the active View; re-hydrates whenever it changes. ---
   // Tracks which view's config the local state currently mirrors.
   const hydratedForRef = useRef<string | null>(null);
+  const hydratedTableRef = useRef<string | null>(null);
   const lastPersistedRef = useRef<string>('');
   /** True while lazily creating the View that will hold local state. */
-  const creatingViewRef = useRef(false);
+  const [creatingViewTable, setCreatingViewTable] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
-    const key = activeView ?? '__none__';
+    const key = viewScope;
 
     if (hydratedForRef.current === key) {
       return;
@@ -425,9 +375,11 @@ export function useTableView(
     // Mid-creation of the View that is about to hold local state — see
     // `ensureView`. Reading it now would hydrate from a View whose config
     // hasn't been written yet and wipe the change that caused the creation.
-    if (creatingViewRef.current) {
+    if (creatingViewTable === table.subject) {
       return;
     }
+
+    hydratedTableRef.current = table.subject;
 
     // No View yet — start from defaults. Seed `lastPersistedRef` with the
     // empty baseline so merely opening the table does NOT eagerly create a
@@ -444,34 +396,20 @@ export function useTableView(
         sort: DEFAULT_SORT,
       });
       hydratedForRef.current = key;
+      setHydratedFor(key);
 
       return;
     }
 
-    // Read straight from the resource, not the `useValue`/`useString` hook
-    // results: those update a render LATE when the active view switches, so a
-    // switch-back would hydrate from the previous view's (stale) values and
-    // then lock out the correct re-hydration. `view.get` reflects the resource
-    // synchronously, and resources load atomically (so a present `name` means
-    // every prop is loaded). The hook results stay in the dep array to re-run
-    // this effect once the view's data arrives.
-    const loadedName = view.get(core.properties.name);
+    // Read the selected Resource synchronously. Readiness is its captured
+    // loading state, never an optional display name. Queries remain gated until
+    // both filters and sort have been hydrated for this table/view scope.
+    if (viewLoading) return;
 
-    if (loadedName === undefined) {
-      return;
-    }
-
-    const rawFilters = view.get(dataBrowser.properties.viewFilters);
-    const rawSortBy = view.get(dataBrowser.properties.viewSortBy) as
-      | string
-      | undefined;
-    const rawSortDesc = view.get(dataBrowser.properties.viewSortDesc) as
-      | boolean
-      | undefined;
-
-    const initialFilters = Array.isArray(rawFilters)
-      ? (rawFilters as unknown as TableFilter[])
-      : [];
+    const stored = readAtomicTableViewConfiguration(view).config;
+    const rawSortBy = stored.sortBy;
+    const rawSortDesc = stored.sortDesc;
+    const initialFilters = stored.filters;
     // Views saved before `sortOrder` became the default persisted `createdAt`
     // as their sort. That was the old default — not a user choice (createdAt
     // isn't a column) — and `sortOrder` sorts identically via its createdAt
@@ -496,7 +434,18 @@ export function useTableView(
       sort: initialSort,
     });
     hydratedForRef.current = key;
-  }, [activeView, viewName, storedFilters, storedSortBy, storedSortDesc]);
+    setHydratedFor(key);
+  }, [
+    activeView,
+    viewScope,
+    table.subject,
+    viewLoading,
+    view,
+    storedFilters,
+    storedSortBy,
+    storedSortDesc,
+    creatingViewTable,
+  ]);
 
   // --- View creation / linking. ---
   /**
@@ -553,7 +502,13 @@ export function useTableView(
         { table: table.subject },
         { table: created.get(core.properties.parent) as string },
       );
-      if (prepared) hydratedForRef.current = created.subject;
+
+      if (prepared && hydratedTableRef.current === table.subject) {
+        const createdScope = JSON.stringify([table.subject, created.subject]);
+        hydratedForRef.current = createdScope;
+        setHydratedFor(createdScope);
+      }
+
       if (intent)
         await intent.checkpoint('view:saved:' + created.subject, () =>
           created.save(),
@@ -750,7 +705,7 @@ export function useTableView(
     // can land midway through `createViewResource`, so marking it hydrated
     // afterwards is already too late. Without this, adding the first filter to
     // a table silently lost it whenever the re-render won that race.
-    creatingViewRef.current = true;
+    setCreatingViewTable(table.subject);
 
     return viewInitializer
       .ensure(() =>
@@ -760,13 +715,25 @@ export function useTableView(
       )
       .then(
         created => {
-          hydratedForRef.current = created.subject;
-          creatingViewRef.current = false;
+          if (hydratedTableRef.current === table.subject) {
+            const createdScope = JSON.stringify([
+              table.subject,
+              created.subject,
+            ]);
+            hydratedForRef.current = createdScope;
+            setHydratedFor(createdScope);
+          }
+
+          setCreatingViewTable(current =>
+            current === table.subject ? null : current,
+          );
 
           return created;
         },
         error => {
-          creatingViewRef.current = false;
+          setCreatingViewTable(current =>
+            current === table.subject ? null : current,
+          );
           throw error;
         },
       );
@@ -781,11 +748,7 @@ export function useTableView(
   ]);
 
   useEffect(() => {
-    if (
-      !viewReady ||
-      hydratedForRef.current !== (activeView ?? '__none__') ||
-      !canWrite
-    ) {
+    if (!viewReady || hydratedForRef.current !== viewScope || !canWrite) {
       return;
     }
 
@@ -803,17 +766,15 @@ export function useTableView(
           return;
         }
 
-        // `false` = skip the client-side property fetch; the server validates
-        // the commit against its (locally-seeded) property definitions.
-        await v.set(dataBrowser.properties.viewFilters, filters, false);
-        await v.set(dataBrowser.properties.viewSortBy, sorting.prop, false);
-        await v.set(
-          dataBrowser.properties.viewSortDesc,
-          sorting.sortDesc,
-          false,
-        );
+        await writeAtomicTableViewConfiguration(v, {
+          filters,
+          sortBy: sorting.prop,
+          sortDesc: sorting.sortDesc,
+        });
         await v.save();
-        if (hydratedForRef.current === v.subject)
+        if (
+          hydratedForRef.current === JSON.stringify([table.subject, v.subject])
+        )
           lastPersistedRef.current = snapshot;
       });
     }, 600);
@@ -824,10 +785,10 @@ export function useTableView(
     sorting,
     canWrite,
     ensureView,
-    store,
-    activeView,
     viewReady,
     writes,
+    viewScope,
+    table.subject,
   ]);
 
   // --- Filter mutators (same shape as the old `useTableFilters`). ---
@@ -901,31 +862,36 @@ export function useTableView(
 
   const setViewColumns = useCallback(
     (columns: string[]) =>
-      withView(v => v.set(dataBrowser.properties.viewColumns, columns, false)),
+      withView(v => writeAtomicTableViewConfiguration(v, { columns: columns })),
     [withView],
   );
 
   const renameView = useCallback(
-    (name: string) => withView(v => v.set(core.properties.name, name, false)),
+    (name: string) =>
+      withView(v => writeAtomicTableViewConfiguration(v, { name: name })),
     [withView],
   );
 
   const setViewGroupBy = useCallback(
     (property: string) =>
-      withView(v => v.set(dataBrowser.properties.viewGroupBy, property, false)),
+      withView(v =>
+        writeAtomicTableViewConfiguration(v, { groupBy: property }),
+      ),
     [withView],
   );
 
   const setViewEndProp = useCallback(
     (property: string) =>
-      withView(v => v.set(dataBrowser.properties.viewEndProp, property, false)),
+      withView(v =>
+        writeAtomicTableViewConfiguration(v, { endProp: property }),
+      ),
     [withView],
   );
 
   const setViewTimerExclusive = useCallback(
     (exclusive: boolean) =>
       withView(v =>
-        v.set(dataBrowser.properties.viewTimerExclusive, exclusive, false),
+        writeAtomicTableViewConfiguration(v, { timerExclusive: exclusive }),
       ),
     [withView],
   );
@@ -933,11 +899,9 @@ export function useTableView(
   const setViewSplitLanguages = useCallback(
     (splitProperties: string[]) =>
       withView(v =>
-        v.set(
-          dataBrowser.properties.viewSplitLanguages,
-          splitProperties,
-          false,
-        ),
+        writeAtomicTableViewConfiguration(v, {
+          splitLanguages: splitProperties,
+        }),
       ),
     [withView],
   );
@@ -945,7 +909,7 @@ export function useTableView(
   const setViewDerivedColumns = useCallback(
     (specs: DerivedColumnSpec[]) =>
       withView(v =>
-        v.set(dataBrowser.properties.viewDerivedColumns, specs, false),
+        writeAtomicTableViewConfiguration(v, { derivedColumns: specs }),
       ),
     [withView],
   );
@@ -953,7 +917,7 @@ export function useTableView(
   const setViewColumnOrder = useCallback(
     (order: string[]) =>
       withView(v =>
-        v.set(dataBrowser.properties.viewColumnOrder, order, false),
+        writeAtomicTableViewConfiguration(v, { columnOrder: order }),
       ),
     [withView],
   );
@@ -961,7 +925,7 @@ export function useTableView(
   const setViewAggregates = useCallback(
     (aggregates: TableAggregate[]) =>
       withView(v =>
-        v.set(dataBrowser.properties.viewAggregates, aggregates, false),
+        writeAtomicTableViewConfiguration(v, { aggregates: aggregates }),
       ),
     [withView],
   );
@@ -969,29 +933,21 @@ export function useTableView(
   const setViewRowActions = useCallback(
     (actions: RowActionSpec[]) =>
       withView(v =>
-        v.set(dataBrowser.properties.viewRowActions, actions, false),
+        writeAtomicTableViewConfiguration(v, { rowActions: actions }),
       ),
     [withView],
   );
 
   const setViewQuickAdd = useCallback(
     (spec: QuickAddSpec | undefined) =>
-      withView(async v => {
-        if (spec === undefined) {
-          v.remove(dataBrowser.properties.viewQuickAdd);
-        } else {
-          // Validated (no `false`): the property fetch is what records the JSON
-          // datatype tag, without which a plain object is stored as a string.
-          await v.set(dataBrowser.properties.viewQuickAdd, spec as never);
-        }
-      }),
+      withView(v => writeAtomicTableViewConfiguration(v, { quickAdd: spec })),
     [withView],
   );
 
   const setViewGroupByColumn = useCallback(
     (property: string) =>
       withView(v =>
-        v.set(dataBrowser.properties.viewGroupByColumn, property, false),
+        writeAtomicTableViewConfiguration(v, { groupByColumn: property }),
       ),
     [withView],
   );
@@ -999,7 +955,7 @@ export function useTableView(
   const setViewGroupGranularity = useCallback(
     (granularity: GroupGranularity) =>
       withView(v =>
-        v.set(dataBrowser.properties.viewGroupGranularity, granularity, false),
+        writeAtomicTableViewConfiguration(v, { groupGranularity: granularity }),
       ),
     [withView],
   );
@@ -1066,10 +1022,10 @@ export function useTableView(
 
         const newName = decision.newName;
 
-        await v.set(dataBrowser.properties.viewKind, kind, false);
+        await writeAtomicTableViewConfiguration(v, { kind });
 
         if (newName !== undefined) {
-          await v.set(core.properties.name, newName, false);
+          await writeAtomicTableViewConfiguration(v, { name: newName });
         }
 
         // Switching an existing tab to a dashboard needs one to show; keep
@@ -1083,11 +1039,9 @@ export function useTableView(
             tableName ? `${tableName} dashboard` : 'Dashboard',
             intent,
           );
-          await v.set(
-            dataBrowser.properties.viewDashboard,
-            dashboard.subject,
-            false,
-          );
+          await writeAtomicTableViewConfiguration(v, {
+            dashboard: dashboard.subject,
+          });
         }
 
         await v.save();
@@ -1126,30 +1080,7 @@ export function useTableView(
             DEFAULT_VIEW_KIND,
         };
 
-        for (const prop of [
-          dataBrowser.properties.viewFilters,
-          dataBrowser.properties.viewSortBy,
-          dataBrowser.properties.viewSortDesc,
-          dataBrowser.properties.viewColumns,
-          dataBrowser.properties.viewGroupBy,
-          dataBrowser.properties.viewDashboard,
-          dataBrowser.properties.viewEndProp,
-          dataBrowser.properties.viewTimerExclusive,
-          dataBrowser.properties.viewSplitLanguages,
-          dataBrowser.properties.viewDerivedColumns,
-          dataBrowser.properties.viewColumnOrder,
-          dataBrowser.properties.viewAggregates,
-          dataBrowser.properties.viewRowActions,
-          dataBrowser.properties.viewQuickAdd,
-          dataBrowser.properties.viewGroupByColumn,
-          dataBrowser.properties.viewGroupGranularity,
-        ]) {
-          const value = src.get(prop);
-
-          if (value !== undefined) {
-            propVals[prop] = value as JSONValue;
-          }
-        }
+        Object.assign(propVals, copyAtomicTableViewConfiguration(src));
 
         const created = await intent.checkpoint('copy:prepared', () =>
           store.newResource({
@@ -1287,7 +1218,7 @@ export function useTableView(
       : [],
     setViewSplitLanguages,
     viewDerivedColumns,
-    viewDerivedColumnsSet: Array.isArray(storedDerivedColumns),
+    viewDerivedColumnsSet: derivedColumnsSet,
     setViewDerivedColumns,
     viewColumnOrder,
     setViewColumnOrder,

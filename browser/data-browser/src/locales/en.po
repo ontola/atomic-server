@@ -13423,3 +13423,7 @@ msgstr "Could not save view changes: {0}"
 #: src/chunks/TablePage/ViewSaveError.tsx
 msgid "Retry view save"
 msgstr "Retry view save"
+
+#: src/chunks/TablePage/useTableView.ts
+msgid "Saved view configuration is invalid."
+msgstr "Saved view configuration is invalid."

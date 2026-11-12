@@ -20,23 +20,14 @@ import { localCalendarDate } from '@helpers/dates/calendarDate';
  * and "Yes/No" set a value, a grocery list toggles, and an inventory counts up
  * and down. Nothing in the catalogue needed a fifth *per-row* verb.
  */
-export type RowActionKind = 'setNow' | 'setValue' | 'toggle' | 'increment';
+import { type RowActionKind, type RowActionSpec } from '@tomic/table';
 
-/** One configured action, stored on the View in `view-row-actions`. */
-export interface RowActionSpec {
-  /** Stable identity within the view — part of the grid column key. */
-  id: string;
-  /** The button's label, and its column heading. */
-  label: string;
-  kind: RowActionKind;
-  /** The property this action writes. */
-  property: string;
-  /**
-   * What to write, for the verbs that need it: the literal for `setValue` (a tag
-   * subject for a select column), the step for `increment`.
-   */
-  value?: string | number;
-}
+export {
+  ROW_ACTION_KINDS,
+  parseRowActions,
+  type RowActionKind,
+  type RowActionSpec,
+} from '@tomic/table';
 
 /** What a verb needs from its configuration, so the dialog can build its form. */
 interface RowActionGenerator {
@@ -164,15 +155,6 @@ export const ROW_ACTION_GENERATORS: Record<RowActionKind, RowActionGenerator> =
     },
   };
 
-export const ROW_ACTION_KINDS: RowActionKind[] = [
-  'setNow',
-  'setValue',
-  'toggle',
-  'increment',
-];
-
-/** The column key an action occupies, in the same `<kind>:<id>` convention
- *  `derived:` uses for the columns that aren't properties. */
 export function rowActionKey(id: string): string {
   return `action:${id}`;
 }
@@ -192,46 +174,6 @@ export function isRowActionComplete(spec: RowActionSpec): boolean {
   }
 
   return true;
-}
-
-function isSpec(value: unknown): value is RowActionSpec {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const spec = value as Record<string, unknown>;
-
-  return (
-    typeof spec.id === 'string' &&
-    typeof spec.label === 'string' &&
-    typeof spec.kind === 'string' &&
-    spec.kind in ROW_ACTION_GENERATORS &&
-    typeof spec.property === 'string'
-  );
-}
-
-/**
- * Reads the View's stored actions. Anything malformed is dropped rather than
- * thrown on: a person or an LLM writes this, and one bad entry must not take the
- * table down.
- */
-export function parseRowActions(value: JSONValue | undefined): RowActionSpec[] {
-  const parsed =
-    typeof value === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(value) as JSONValue;
-          } catch {
-            return undefined;
-          }
-        })()
-      : value;
-
-  if (!Array.isArray(parsed)) {
-    return [];
-  }
-
-  return (parsed as unknown[]).filter(isSpec);
 }
 
 /**
