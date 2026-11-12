@@ -113,3 +113,64 @@ it('restores from a picked file and clears the input', async () => {
   await waitFor(() => expect(onRestored).toHaveBeenCalled());
   expect(vault.restoreFromFile).toHaveBeenCalledWith(file);
 });
+
+it('says files are included, encrypted on the device and counted per backup', () => {
+  show(1000, false);
+
+  const note = screen.getByTestId('vault-files-note').textContent ?? '';
+  expect(note).toContain('Files are included');
+  expect(note).toContain('encrypted on this device like everything else');
+  expect(note).toContain("count toward this backup's Cloud Vault storage");
+  // The old, shared-store wording must not come back.
+  expect(note).not.toContain('not end-to-end encrypted');
+  expect(note).not.toContain('can read');
+});
+
+it('does not reload over a restore that left files behind', async () => {
+  const vault = vaultWith(1000);
+  vault.restore = vi.fn(async () => ({
+    packsRead: 1,
+    resourcesRestored: 3,
+    tombstonesApplied: 0,
+    objectsSkipped: 0,
+    objectsUnreadable: 0,
+    blobs: { restored: 1, present: 0, missing: 2, unreadable: 1 },
+  }));
+  const onRestored = vi.fn();
+  render(
+    <ThemeProvider theme={theme}>
+      <VaultPanel vault={vault} onRestored={onRestored} />
+    </ThemeProvider>,
+  );
+
+  fireEvent.click(screen.getByTestId('vault-restore'));
+
+  await waitFor(() =>
+    expect(screen.getByTestId('vault-notice').textContent).toContain(
+      '2 files are not in the backup, 1 file could not be read',
+    ),
+  );
+  expect(onRestored).not.toHaveBeenCalled();
+});
+
+it('reloads after a restore that brought everything back', async () => {
+  const vault = vaultWith(1000);
+  vault.restore = vi.fn(async () => ({
+    packsRead: 1,
+    resourcesRestored: 3,
+    tombstonesApplied: 0,
+    objectsSkipped: 0,
+    objectsUnreadable: 0,
+    blobs: { restored: 2, present: 1, missing: 0, unreadable: 0 },
+  }));
+  const onRestored = vi.fn();
+  render(
+    <ThemeProvider theme={theme}>
+      <VaultPanel vault={vault} onRestored={onRestored} />
+    </ThemeProvider>,
+  );
+
+  fireEvent.click(screen.getByTestId('vault-restore'));
+
+  await waitFor(() => expect(onRestored).toHaveBeenCalled());
+});

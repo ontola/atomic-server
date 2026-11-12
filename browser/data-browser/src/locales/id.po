@@ -11095,10 +11095,6 @@ msgstr "Dicadangkan {0}"
 msgid "Backed up to {0}"
 msgstr "Dicadangkan ke {0}"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Cadangan terenkripsi data Anda. Hanya Anda yang dapat membacanya."
-
 #: src/routes/SyncRoute.tsx
 msgid "Manage plan"
 msgstr "Kelola paket"
@@ -13522,3 +13518,31 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# objek cadangan tidak dapat dibaca"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# berkas tidak ada di cadangan"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# berkas tidak dapat dibaca"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Dipulihkan, tetapi tidak semuanya: {0}. Muat ulang halaman untuk melihat apa yang dipulihkan."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Cadangan terenkripsi untuk data dan berkas Anda. Hanya Anda yang dapat membacanya."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Berkas disertakan. Berkas dienkripsi di perangkat ini seperti yang lainnya dan dihitung ke dalam penyimpanan Cloud Vault cadangan ini."

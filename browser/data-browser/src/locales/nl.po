@@ -11098,10 +11098,6 @@ msgstr "Back-up gemaakt {0}"
 msgid "Backed up to {0}"
 msgstr "Back-up gemaakt naar {0}"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Versleutelde back-up van je gegevens. Alleen jij kunt deze lezen."
-
 #: src/routes/SyncRoute.tsx
 msgid "Manage plan"
 msgstr "Abonnement beheren"
@@ -13530,3 +13526,34 @@ msgstr "Met Melding verzenden deel je de gecontroleerde chattekst, foutmeldingen
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team, samen met technische gegevens over je opstelling (app-versie, serveradres en status). Vermeld geen privé-inhoud uit je werkruimte."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# back-upobject kon niet worden gelezen"
+msgstr[1] "# back-upobjecten konden niet worden gelezen"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# bestand staat niet in de back-up"
+msgstr[1] "# bestanden staan niet in de back-up"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# bestand kon niet worden gelezen"
+msgstr[1] "# bestanden konden niet worden gelezen"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Hersteld, maar niet alles: {0}. Laad de pagina opnieuw om te zien wat is hersteld."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Versleutelde back-up van je gegevens en bestanden. Alleen jij kunt deze lezen."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Bestanden zijn inbegrepen. Ze worden op dit apparaat versleuteld, net als al het andere, en tellen mee voor de Cloud Vault-opslag van deze back-up."

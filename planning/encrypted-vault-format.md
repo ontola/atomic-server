@@ -2,7 +2,7 @@
 
 > **Status:** v1 implemented in `lib/src/vault/` (2026-08-04). Phase 2 landed
 > 2026-09-05: incremental per-lane cursors and checkpoints, described below.
-> Compression, blob chunking and per-object signatures remain.
+> Compression and per-object signatures remain.
 >
 > Phase 2 changed two things a third-party implementation must know about:
 > **pack format 2** (a lane pack may be a delta, so it is no longer
@@ -162,8 +162,13 @@ vault/<drive-pseudonym>/
   lanes/<device-pubkey>/seg-000001.pack   ← append-only per device
   checkpoints/ckpt-000001.loro            ← self-sufficient anchor
   indexes/ckpt-000001.idx                 ← not yet written
-  blobs/<keyed-hash>/<chunk>              ← not yet written
+  blobs/<keyed-hash>/<chunk:06>           ← sealed file chunks (kind Blob)
 ```
+
+File chunks are sealed like everything else and addressed by the keyed `blob id`
+hash of the file's plaintext, so the same file is stored once per vault and two
+vaults holding identical bytes share nothing. See
+`planning/vault-file-blobs.md`.
 
 The drive pseudonym is a salted hash of the drive DID, computed by the control
 plane; a self-hosted vault may use any stable string.
@@ -315,8 +320,14 @@ matters most.
 
 ## What this does not do yet
 
-- **Indexes and blob chunking.** The `kind` byte already reserves their values;
-  nothing writes them.
+- **Indexes.** The `kind` byte already reserves the value; nothing writes them.
+- **Streaming file bytes.** The hosted client backs up and restores files
+  (`export_vault_blobs` / `import_vault_blobs`, WASM `vaultBlob*`, browser
+  `backupBlobs` / `restoreDriveBlobs`), but the browser file store hands out a
+  file as one value, so one whole file is held in WASM memory at a time (JS
+  holds one sealed 8 MiB chunk). Files over about 4 GiB (64 chunks of 63 MiB)
+  are skipped. A backup file downloaded from the vault holds sealed history
+  only.
 - **Per-object signatures.** Integrity today comes from the AEAD tag, which
   proves the object was sealed by someone holding the drive key. Signing
   objects with the agent key is a planned addition for provenance across

@@ -1863,8 +1863,44 @@ bucket; SaaS representative CI supplies MinIO. `server/src/tests.rs` checks
 remote multipart upload/download and image renditions, asserting Tree::Blobs
 stays empty. Standalone local storage still runs through the original tests.
 
-Not covered here: live Hetzner rollout, arbitrary large-file memory limits,
-or encrypted Vault attachment recovery.
+Not covered here: live Hetzner rollout and arbitrary large-file memory limits.
+
+### Cloud Vault file contents
+
+Files are sealed per vault (`planning/vault-file-blobs.md`).
+`lib/src/vault/sync.rs` tests: `vault_restores_uploaded_file_bytes` (multi-chunk
+file comes back, stored objects contain no plaintext, the importer skips file
+chunks), `the_same_file_twice_in_one_vault_uploads_one_blob` (and a second pass
+uploads nothing), `two_vaults_with_identical_bytes_are_unrelated` (different
+ids and ciphertext, one vault's key cannot open the other's, wiping one does not
+affect the other's restore), `missing_or_corrupt_blob_is_reported_on_restore`,
+`open_blob_rejects_swapped_reordered_or_short_chunks`,
+`the_seal_overhead_constant_matches_the_envelope`,
+`blob_keys_round_trip_and_stay_in_the_drive_prefix`,
+`blob_chunks_are_a_pure_function_of_length`.
+
+`helpers/managed/vaultBlobs.test.ts` runs `backupDrive` / `restoreDrive`
+against a mocked control plane: only sealed chunks are PUT, under the keyed id
+and with the sealed size (the plain hash never appears in a request); chunks are
+confirmed together; an ordinary backup never calls `retain-blobs`; an explicit
+compress publishes the live ids last, and skips it when a referenced file is
+missing on the device; an empty live set is published; a file the vault already
+holds is not sent, only missing chunks are; the id cache avoids re-reading files;
+a rejected PUT confirms nothing; a file's chunks are never split across
+`upload-urls` calls; a failed `retain-blobs` does not fail the backup; the
+importer is never handed file chunks; restore matches stored files to wanted
+hashes, stops downloading once everything wanted is back, and reports present /
+missing / unreadable (does not open, gap in chunks, chunk gone from storage);
+backup-file restores skip files. `helpers/managed/vaultRestore.test.ts`
+(`also brings back the file bytes the snapshot references`) and
+`components/Vault/VaultRestoreDialog.test.tsx` cover the snapshot picker path:
+picking a snapshot restores the file bytes its resources name and reports
+files left behind. The atomic-saas side (quota per enrollment, `already_stored`,
+`retain-blobs` delete clock) is covered in that repo.
+
+Not covered: the WASM bindings themselves (`vaultBlob*` run only in a browser
+build, and no Playwright spec uploads a file to a real control plane), the
+worker RPC pass-through, and files larger than memory.
 
 ### Blob garbage collection
 

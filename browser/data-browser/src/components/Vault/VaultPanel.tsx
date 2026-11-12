@@ -14,6 +14,7 @@ import { VaultRestoreDialog } from './VaultRestoreDialog';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import {
   getVaultUsage,
+  type RestoreOutcome,
   type VaultSnapshotUsage,
 } from '../../helpers/managed/vault';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
@@ -49,7 +50,8 @@ export function VaultPanel({
   const fileInput = useRef<HTMLInputElement>(null);
   // What Cloud Vault is: the same sentence in every state. Declared in here,
   // not at module level, so the translation extractor sees it.
-  const tagline = 'Encrypted backup of your data. Only you can read it.';
+  const tagline =
+    'Encrypted backup of your data and files. Only you can read it.';
   const on = status.state === 'on';
   const standing: ServiceStanding | null = on
     ? included
@@ -57,10 +59,45 @@ export function VaultPanel({
       : 'current'
     : null;
 
+  // What a restore could not bring back, or null when it brought back all of
+  // it. A restore that skips things must never read as a clean one.
+  function restoreProblem(outcome: RestoreOutcome): string | null {
+    const parts = [
+      outcome.objectsUnreadable > 0 &&
+        plural(outcome.objectsUnreadable, [
+          '# backup object could not be read',
+          '# backup objects could not be read',
+        ]),
+      (outcome.blobs?.missing ?? 0) > 0 &&
+        plural(outcome.blobs!.missing, [
+          '# file is not in the backup',
+          '# files are not in the backup',
+        ]),
+      (outcome.blobs?.unreadable ?? 0) > 0 &&
+        plural(outcome.blobs!.unreadable, [
+          '# file could not be read',
+          '# files could not be read',
+        ]),
+    ].filter(Boolean);
+
+    if (parts.length === 0) return null;
+
+    return `Restored, but not everything: ${parts.join(', ')}. Reload the page to see what was restored.`;
+  }
+
   async function handleRestore(snapshotId?: string) {
+    setNotice(null);
     const outcome = await vault.restore(snapshotId);
 
-    if (outcome) onRestored?.();
+    if (!outcome) return;
+
+    const problem = restoreProblem(outcome);
+
+    // The restore itself worked and the page has to reload to show it, which
+    // would wipe the sentence about what could not be restored. Say that
+    // first, and let the person reload.
+    if (problem) setNotice(problem);
+    else onRestored?.();
   }
 
   // Which snapshots exist decides what Restore asks. A control plane that does
@@ -92,7 +129,12 @@ export function VaultPanel({
     setNotice(null);
     const outcome = await vault.restoreFromFile(file);
 
-    if (outcome) onRestored?.();
+    if (!outcome) return;
+
+    const problem = restoreProblem(outcome);
+
+    if (problem) setNotice(problem);
+    else onRestored?.();
   }
 
   // Still settling, or cannot say. Neither is "off": an enable button when we
@@ -250,6 +292,11 @@ export function VaultPanel({
               backedUp
               facts={[objects]}
             />
+            <IncludedNote data-testid='vault-files-note'>
+              Files are included. They are encrypted on this device like
+              everything else, and count toward this backup's Cloud Vault
+              storage.
+            </IncludedNote>
             {!showQuota && (
               <IncludedNote data-testid='vault-included-note'>
                 This backup is part of your Cloud Server plan.

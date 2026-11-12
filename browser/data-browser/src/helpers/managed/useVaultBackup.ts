@@ -419,6 +419,9 @@ export function useVaultBackup({
               refreshDriveKey: () => refreshKey(drivePseudonym),
               forceCheckpoint: true,
               currentStateOnly,
+              // The one place the file live set is published: compressing is
+              // the explicit request to reclaim what nothing references.
+              retainBlobs: true,
             }),
         });
         await refresh();
@@ -473,6 +476,7 @@ export function useVaultBackup({
 
           return await restoreDrive({
             db: db!,
+            driveSubject: driveSubject ?? undefined,
             drivePseudonym: status.enrollment.drive_pseudonym,
             // This device's lane, so the import can record which *other* lanes it
             // now provably holds. That is what lets a checkpoint published from

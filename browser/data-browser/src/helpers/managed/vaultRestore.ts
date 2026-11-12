@@ -10,6 +10,8 @@ import {
 import {
   readVaultSnapshot,
   restoreDrive,
+  restoreDriveBlobs,
+  type BlobRestoreOutcome,
   type RestoreOutcome,
   type ScratchVaultDb,
   type VaultCapableDb,
@@ -130,9 +132,44 @@ export function newTopLevelSubjects(
   });
 }
 
+const BLOB_PROP = 'https://atomicdata.dev/properties/blob';
+const INTERNAL_ID_PROP = 'https://atomicdata.dev/properties/internalId';
+
+/**
+ * The files a snapshot's File resources reference: plain BLAKE3 hashes from
+ * `internalId`. The snapshot, not the drive as it is now, decides which file
+ * bytes a restore to it needs.
+ */
+export function snapshotFileHashes(states: Iterable<Uint8Array>): string[] {
+  const hashes = new Set<string>();
+
+  for (const bytes of states) {
+    const doc = new LoroDoc();
+
+    doc.import(bytes);
+    const properties = doc.getMap('properties').toJSON() as Record<
+      string,
+      unknown
+    >;
+    const id = properties[INTERNAL_ID_PROP];
+
+    if (
+      properties[BLOB_PROP] !== undefined &&
+      typeof id === 'string' &&
+      /^[0-9a-fA-F]{64}$/.test(id)
+    ) {
+      hashes.add(id.toLowerCase());
+    }
+  }
+
+  return [...hashes];
+}
+
 export type SnapshotRestoreOutcome = RestoreOutcome & {
   /** Resources whose state was rewritten to the snapshot's. */
   reverted: number;
+  /** File bytes of the snapshot's files. Absent when the db cannot store files. */
+  blobs?: BlobRestoreOutcome;
 };
 
 /**
@@ -275,6 +312,18 @@ export async function restoreDriveToSnapshot({
       failures.push(`${subject}: ${(e as Error).message}`);
     }
   }
+
+  // The snapshot's resources name its files; their bytes come from the vault.
+  // Done before reporting failures so a partial restore still brings back the
+  // files it can.
+  outcome.blobs = await restoreDriveBlobs({
+    db,
+    driveSubject: drive,
+    drivePseudonym,
+    driveKey,
+    keyEpoch,
+    hashes: snapshotFileHashes(snapshots.values()),
+  });
 
   onProgress?.(1);
 
