@@ -151,3 +151,9 @@ on failure, the failed and unattempted steps remain for an explicit retry. Recor
 and clearing are blocked while undo is running. There is no redo or transactional
 rollback. Native saved-cell undo uses the saved values as conflict baselines through
 `executeTableRowMutation`; Atomic retains its existing restoration/save policies.
+
+
+`PropertyNameField` shares controlled input, autofocus and validation presentation
+between property drafts. `nameTableProperty` preserves an existing property's
+shortname when changing its display label; only a new draft derives a provisional
+shortname. Category controls and schema activation remain adapter work.
