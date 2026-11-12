@@ -1012,6 +1012,107 @@ pub fn blob_chunk_key(hash_hex: &str, chunk: u32) -> String {
     format!("{BLOB_PREFIX}{hash_hex}/{chunk:06}")
 }
 
+/// The control plane caps one blob at this many chunks (all requested in one
+/// `upload-urls` call) and one chunk at [`BLOB_MAX_CHUNK_BYTES`].
+pub const BLOB_MAX_CHUNKS: usize = 64;
+pub const BLOB_MAX_CHUNK_BYTES: usize = 64 * 1024 * 1024;
+
+/// One slice of a file, as stored: `bytes[offset..offset + length]` is chunk
+/// `index`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlobChunk {
+    pub index: u32,
+    pub offset: u64,
+    pub length: u64,
+}
+
+/// A challenge range from the control plane: `length` bytes at `offset`
+/// *within* chunk `chunk_index`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlobProofRange {
+    pub chunk_index: u32,
+    pub offset: u64,
+    pub length: u64,
+}
+
+/// How a file of `len` bytes is cut into chunks, or `None` for an empty file
+/// or one too large to store (over `BLOB_MAX_CHUNKS * BLOB_MAX_CHUNK_BYTES`).
+///
+/// A pure function of the length, so every device cuts the same file the same
+/// way: the control plane stores a blob once and a second vault claiming it
+/// must declare the identical layout. Chunks are [`BLOB_CHUNK_BYTES`] until
+/// that would need more than [`BLOB_MAX_CHUNKS`], then the chunk size grows in
+/// whole MiB.
+pub fn blob_chunks(len: u64) -> Option<Vec<BlobChunk>> {
+    const MIB: u64 = 1024 * 1024;
+    if len == 0 {
+        return None;
+    }
+    let mut size = BLOB_CHUNK_BYTES as u64;
+    if len.div_ceil(size) > BLOB_MAX_CHUNKS as u64 {
+        size = len.div_ceil(BLOB_MAX_CHUNKS as u64).div_ceil(MIB) * MIB;
+    }
+    if size > BLOB_MAX_CHUNK_BYTES as u64 {
+        return None;
+    }
+    Some(
+        (0..len.div_ceil(size))
+            .map(|i| BlobChunk {
+                index: i as u32,
+                offset: i * size,
+                length: size.min(len - i * size),
+            })
+            .collect(),
+    )
+}
+
+/// BLAKE3 (lower-case hex) of each challenged range of `bytes`, in order: the
+/// answer to the control plane's proof of possession for a blob it already
+/// holds.
+pub fn blob_proof_hashes(bytes: &[u8], ranges: &[BlobProofRange]) -> AtomicResult<Vec<String>> {
+    let chunks = blob_chunks(bytes.len() as u64).ok_or("file cannot be stored in a vault")?;
+    ranges
+        .iter()
+        .map(|range| {
+            let chunk = chunks
+                .get(range.chunk_index as usize)
+                .ok_or("proof range names a chunk this file does not have")?;
+            let end = range.offset.checked_add(range.length);
+            if end.is_none_or(|end| end > chunk.length) {
+                return Err("proof range is outside its chunk".into());
+            }
+            let start = (chunk.offset + range.offset) as usize;
+            Ok(blake3::hash(&bytes[start..start + range.length as usize])
+                .to_hex()
+                .to_string())
+        })
+        .collect()
+}
+
+/// Join downloaded chunks (in chunk order) and verify them against the hash
+/// the File resource names. Anything else is corrupt or substituted.
+pub fn assemble_blob(hash_hex: &str, chunks: &[&[u8]]) -> AtomicResult<Vec<u8>> {
+    let hash = blake3::Hash::from_hex(hash_hex).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::with_capacity(chunks.iter().map(|c| c.len()).sum());
+    for chunk in chunks {
+        bytes.extend_from_slice(chunk);
+    }
+    if bytes.is_empty() || blake3::hash(&bytes) != hash {
+        return Err("file bytes do not match their hash".into());
+    }
+    Ok(bytes)
+}
+
+/// The local bytes of a File, only if they hash to `hash_hex` and are not
+/// empty. `None` means this device cannot back that file up.
+pub async fn read_verified_blob(store: &Db, hash_hex: &str) -> AtomicResult<Option<Vec<u8>>> {
+    let hash = blake3::Hash::from_hex(hash_hex).map_err(|e| e.to_string())?;
+    Ok(match store.get_blob(hash.as_bytes()).await? {
+        Some(bytes) if !bytes.is_empty() && blake3::hash(&bytes) == hash => Some(bytes),
+        _ => None,
+    })
+}
+
 /// Outcome of uploading a drive's files.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BlobBackupSummary {
@@ -1022,6 +1123,8 @@ pub struct BlobBackupSummary {
     /// Referenced hashes whose bytes this device does not have (or that do not
     /// match their hash). They cannot be backed up and are not live.
     pub blobs_missing: usize,
+    /// Larger than a vault can store (see [`blob_chunks`]); not live.
+    pub blobs_too_large: usize,
     pub bytes_uploaded: u64,
     /// Every distinct hash the drive's File resources reference: the live set
     /// for the control plane's `retain-blobs`.
@@ -1080,16 +1183,20 @@ pub async fn export_vault_blobs(
             summary.live_hashes.push(hash_hex);
             continue;
         }
-        let hash = blake3::Hash::from_hex(&hash_hex).map_err(|e| e.to_string())?;
-        let bytes = match store.get_blob(hash.as_bytes()).await? {
-            Some(bytes) if blake3::hash(&bytes) == hash && !bytes.is_empty() => bytes,
-            _ => {
-                summary.blobs_missing += 1;
-                continue;
-            }
+        let Some(bytes) = read_verified_blob(store, &hash_hex).await? else {
+            summary.blobs_missing += 1;
+            continue;
         };
-        for (n, chunk) in bytes.chunks(BLOB_CHUNK_BYTES).enumerate() {
-            vault.put(&blob_chunk_key(&hash_hex, n as u32), chunk)?;
+        let Some(chunks) = blob_chunks(bytes.len() as u64) else {
+            summary.blobs_too_large += 1;
+            continue;
+        };
+        for chunk in chunks {
+            let start = chunk.offset as usize;
+            vault.put(
+                &blob_chunk_key(&hash_hex, chunk.index),
+                &bytes[start..start + chunk.length as usize],
+            )?;
         }
         summary.blobs_uploaded += 1;
         summary.bytes_uploaded += bytes.len() as u64;
@@ -1120,7 +1227,7 @@ pub async fn import_vault_blobs(
             summary.blobs_missing += 1;
             continue;
         }
-        let mut bytes = Vec::new();
+        let mut parts = Vec::with_capacity(keys.len());
         let mut complete = true;
         for (n, key) in keys.iter().enumerate() {
             // Chunks must be 000000.. without a gap, or the file is short.
@@ -1129,17 +1236,21 @@ pub async fn import_vault_blobs(
                 break;
             }
             match vault.get(key) {
-                Ok(chunk) => bytes.extend_from_slice(&chunk),
+                Ok(chunk) => parts.push(chunk),
                 Err(_) => {
                     complete = false;
                     break;
                 }
             }
         }
-        if !complete || blake3::hash(&bytes) != hash {
+        let refs: Vec<&[u8]> = parts.iter().map(|p| p.as_slice()).collect();
+        let Some(bytes) = complete
+            .then(|| assemble_blob(&hash_hex, &refs).ok())
+            .flatten()
+        else {
             summary.blobs_unreadable += 1;
             continue;
-        }
+        };
         store.put_blob(hash.as_bytes(), &bytes).await?;
         summary.blobs_restored += 1;
     }
@@ -2873,6 +2984,93 @@ mod tests {
 
     fn blob_keys(vault: &MemoryVaultStore) -> Vec<String> {
         vault.list(BLOB_PREFIX).unwrap()
+    }
+
+    /// The layout is a pure function of the length: two devices must declare
+    /// the same chunks or the control plane refuses a second vault's claim.
+    #[test]
+    fn blob_chunks_are_a_pure_function_of_length() {
+        assert!(blob_chunks(0).is_none());
+        let one = blob_chunks(5).unwrap();
+        assert_eq!(
+            one,
+            vec![BlobChunk {
+                index: 0,
+                offset: 0,
+                length: 5
+            }]
+        );
+
+        let mib = 1024 * 1024u64;
+        let two = blob_chunks(8 * mib + 1).unwrap();
+        assert_eq!(two.len(), 2);
+        assert_eq!((two[1].offset, two[1].length), (8 * mib, 1));
+
+        // Past 64 chunks of 8 MiB the chunk size grows, count stays <= 64.
+        let big = 64 * 8 * mib + 1;
+        let chunks = blob_chunks(big).unwrap();
+        assert!(chunks.len() <= BLOB_MAX_CHUNKS);
+        assert_eq!(chunks.iter().map(|c| c.length).sum::<u64>(), big);
+        assert!(chunks
+            .windows(2)
+            .all(|w| w[0].offset + w[0].length == w[1].offset));
+        assert!(chunks
+            .iter()
+            .all(|c| c.length <= BLOB_MAX_CHUNK_BYTES as u64));
+
+        assert!(blob_chunks(BLOB_MAX_CHUNKS as u64 * BLOB_MAX_CHUNK_BYTES as u64 + 1).is_none());
+    }
+
+    #[test]
+    fn proof_hashes_cover_the_challenged_ranges_only() {
+        let bytes: Vec<u8> = (0..BLOB_CHUNK_BYTES + 100)
+            .map(|i| (i % 251) as u8)
+            .collect();
+        let ranges = [
+            BlobProofRange {
+                chunk_index: 0,
+                offset: 10,
+                length: 20,
+            },
+            BlobProofRange {
+                chunk_index: 1,
+                offset: 5,
+                length: 50,
+            },
+        ];
+        let hashes = blob_proof_hashes(&bytes, &ranges).unwrap();
+        assert_eq!(hashes[0], blake3::hash(&bytes[10..30]).to_hex().to_string());
+        let second = BLOB_CHUNK_BYTES + 5;
+        assert_eq!(
+            hashes[1],
+            blake3::hash(&bytes[second..second + 50])
+                .to_hex()
+                .to_string()
+        );
+
+        let outside = [BlobProofRange {
+            chunk_index: 1,
+            offset: 90,
+            length: 20,
+        }];
+        assert!(blob_proof_hashes(&bytes, &outside).is_err());
+        let no_chunk = [BlobProofRange {
+            chunk_index: 2,
+            offset: 0,
+            length: 1,
+        }];
+        assert!(blob_proof_hashes(&bytes, &no_chunk).is_err());
+    }
+
+    #[test]
+    fn assemble_blob_rejects_wrong_bytes() {
+        let hash = blake3::hash(b"hello world").to_hex().to_string();
+        assert_eq!(
+            assemble_blob(&hash, &[b"hello ", b"world"]).unwrap(),
+            b"hello world"
+        );
+        assert!(assemble_blob(&hash, &[b"hello ", b"w0rld"]).is_err());
+        assert!(assemble_blob(&hash, &[b"hello "]).is_err());
     }
 
     #[tokio::test]

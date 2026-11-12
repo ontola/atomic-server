@@ -1870,9 +1870,27 @@ Not covered here: live Hetzner rollout and arbitrary large-file memory limits.
 `lib/src/vault/sync.rs` tests: `vault_restores_uploaded_file_bytes` (multi-chunk
 file comes back, hash verified), `identical_files_upload_one_blob_once`,
 `missing_or_corrupt_blob_is_reported_on_restore`,
-`a_file_shared_by_two_drives_survives_one_deleting_it`. Not covered: the
-control plane (shared hash-addressed store, per-vault quota, refcounted delete),
-WASM/browser transport and `retain-blobs` wiring; see `planning/vault-file-blobs.md`.
+`a_file_shared_by_two_drives_survives_one_deleting_it`,
+`blob_chunks_are_a_pure_function_of_length` (the layout two devices must agree
+on), `proof_hashes_cover_the_challenged_ranges_only`,
+`assemble_blob_rejects_wrong_bytes`.
+
+`helpers/managed/vaultBlobs.test.ts` runs `backupDrive` / `restoreDrive`
+against a mocked control plane: create-only chunk PUTs confirmed together then
+`retain-blobs` last; a file this vault already references is not read or sent;
+a claim answers the proof challenge with no PUT; 412 still confirms; a rejected
+PUT confirms nothing and publishes no live set; files only the vault holds stay
+live; an empty live set is published; a file's chunks are never split across
+`upload-urls` calls; a failed `retain-blobs` does not fail the backup; the
+importer is never handed file chunks; restore reports present / missing /
+unreadable (hash mismatch, chunk gone from storage); backup-file and snapshot
+restores skip files. The atomic-saas side (quota per reference, refcounted
+delete, proof checks) is covered in that repo.
+
+Not covered: the WASM bindings themselves (`vaultBlob*` run only in a browser
+build, and no Playwright spec uploads a file to a real control plane), the
+worker RPC pass-through, VaultPanel's "not everything restored" notice, and
+files larger than memory.
 
 ### Blob garbage collection
 

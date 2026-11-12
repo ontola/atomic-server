@@ -46,6 +46,7 @@ import type {
   RpcReq,
   RpcRes,
   RpcType,
+  VaultBlobPlan,
   VaultExportResult,
   VaultImportSummary,
   WorkerRequest,
@@ -1288,6 +1289,46 @@ export class ClientDbWorker {
       devicePubkey,
       segment,
     });
+  }
+
+  /** Hashes of the files this drive's File resources reference. */
+  vaultFileHashes(driveSubject: string): Promise<string[]> {
+    return this.call('vaultFileHashes', { driveSubject });
+  }
+
+  /** Whether this device holds the bytes for a file hash. */
+  vaultBlobPresent(hash: string): Promise<boolean> {
+    return this.call('vaultBlobPresent', { hash });
+  }
+
+  /**
+   * Load one local file, verified against its hash, and get its chunk layout.
+   * The worker keeps that one file until `vaultBlobClose` or the next open.
+   */
+  vaultBlobOpen(hash: string): Promise<VaultBlobPlan> {
+    return this.call('vaultBlobOpen', { hash });
+  }
+
+  /** One chunk of the file opened with {@link vaultBlobOpen}. */
+  vaultBlobChunk(hash: string, index: number): Promise<Uint8Array> {
+    return this.call('vaultBlobChunk', { hash, index });
+  }
+
+  /** Answer a proof-of-possession challenge for the opened file. */
+  vaultBlobProof(
+    hash: string,
+    ranges: { chunkIndex: number; offset: number; length: number }[],
+  ): Promise<string[]> {
+    return this.call('vaultBlobProof', { hash, ranges });
+  }
+
+  vaultBlobClose(): Promise<void> {
+    return this.call('vaultBlobClose', {});
+  }
+
+  /** Store a downloaded file from its chunks; `false` when they fail the hash. */
+  vaultBlobRestore(hash: string, chunks: Uint8Array[]): Promise<boolean> {
+    return this.call('vaultBlobRestore', { hash, chunks });
   }
 
   get isReady(): boolean {

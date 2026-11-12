@@ -20,7 +20,9 @@ is in this file and in `lib/src/vault/`.
 Encrypted, append-only backup of a drive's CRDT history, stored as opaque
 objects. The party holding the objects can see how many objects exist, how big
 they are, when they arrived and which device lane they belong to. It cannot see
-subjects, property values, resource contents, resource counts, or file bytes.
+subjects, property values, resource contents or resource counts. File bytes are
+the exception: they are stored once, unsealed, under their plain BLAKE3 hash and
+shared by every vault, so the operator can read them (see below).
 
 Clients encrypt locally and talk to object storage directly via presigned URLs.
 The hosted control plane brokers those URLs, quota and checkpoint publication;
@@ -321,9 +323,12 @@ matters most.
 ## What this does not do yet
 
 - **Indexes.** The `kind` byte already reserves the value; nothing writes them.
-- **File bytes through the hosted client.** `lib` can back up and restore them
-  (`export_vault_blobs` / `import_vault_blobs`); the control plane, WASM
-  bindings and browser client are not wired yet (`planning/vault-file-blobs.md`).
+- **Streaming file bytes.** The hosted client backs up and restores files
+  (`export_vault_blobs` / `import_vault_blobs`, WASM `vaultBlob*`, browser
+  `backupBlobs` / `restoreDriveBlobs`), but the browser file store hands out a
+  file as one value, so one whole file is held in WASM memory at a time (JS
+  holds one 8 MiB chunk). Files over 4 GiB (64 chunks of 64 MiB) are skipped.
+  A backup file downloaded from the vault holds sealed history only.
 - **Per-object signatures.** Integrity today comes from the AEAD tag, which
   proves the object was sealed by someone holding the drive key. Signing
   objects with the agent key is a planned addition for provenance across

@@ -22,21 +22,31 @@ Goal: files count toward Vault storage and restore with the drive. Decided:
   `internalId`, stores; reports missing and unreadable.
 - Tests incl. the A/B scenario at client level.
 
-## Left (not wired, so UI/docs still must NOT claim files are included)
+## Done (wired end to end)
 
-1. atomic-saas: global blob key; per-enrollment reference record per hash
-   (quota); `already_stored` when the hash exists, still recording the
-   reference; delete object only at refcount 0; reconcile/drive-removal/
-   `retain_blobs` must ignore the shared prefix or be refcount aware. Test:
-   A and B reference Z, A retains without it, object stays, B downloads it.
-2. WASM: expose plan/chunks/commit per file (avoid whole-drive staging); the
-   browser `backupDrive` uploads blob chunks and calls `retain-blobs`.
-3. Restore in the browser: `import_vault_blobs` equivalent over downloaded
-   chunks; surface missing/unreadable like `objects_unreadable`.
-4. Then: remove "file contents excluded" wording (none on develop yet), and
-   state in VaultPanel + `docs/src/app/folders-and-drives.md` that files are
-   included, stored once and count toward storage; `pnpm clean-translations`.
-5. Memory: `get_blob` reads whole files; stream for large files.
+- atomic-saas: global blob key, per-vault reference record, proof-of-possession
+  claims, create-only PUT with hash verification on confirm, `retain-blobs`,
+  refcounted delete.
+- WASM `ClientDb.vaultFileHashes`, `vaultBlobOpen/Chunk/Proof/Close`,
+  `vaultBlobPresent`, `vaultBlobRestore`: chunk layout (`blob_chunks`, a pure
+  function of the length, up to 64 chunks of 8 to 64 MiB), proof hashes and
+  hash-verified assembly are `lib/src/vault/sync.rs`, not TypeScript.
+- Browser (`helpers/managed/vault.ts`): `backupDrive` runs `backupBlobs` after
+  the history pass (and when the history had nothing new), `restoreDrive` runs
+  `restoreDriveBlobs` for the cloud source and reports restored / present /
+  missing / unreadable. VaultPanel and the docs say files are included, stored
+  once, not end-to-end encrypted, and counted per vault.
+
+## Left
+
+1. Memory: the browser store (redb in OPFS) returns a file as one value, so one
+   whole file sits in WASM memory while it is uploaded or restored (restore also
+   holds its chunks in JS). A ranged read in the blob store would remove that.
+2. A restore from a downloaded backup file or a snapshot does not carry files.
+3. `retain-blobs` runs with whatever File resources this device holds. A device
+   that has not synced the whole drive yet would start the undelete clock on
+   files it simply does not know about; a later pass from a complete device
+   clears it.
 
 ## Security questions
 

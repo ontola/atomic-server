@@ -11095,10 +11095,6 @@ msgstr "Dicadangkan {0}"
 msgid "Backed up to {0}"
 msgstr "Dicadangkan ke {0}"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Cadangan terenkripsi data Anda. Hanya Anda yang dapat membacanya."
-
 #: src/routes/SyncRoute.tsx
 msgid "Manage plan"
 msgstr "Kelola paket"
@@ -13522,3 +13518,32 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backs up your data and files. Your data is encrypted so only you can read it. Files are not."
+msgstr "Mencadangkan data dan berkas Anda. Data Anda dienkripsi sehingga hanya Anda yang dapat membacanya. Berkas tidak."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# objek cadangan tidak dapat dibaca"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# berkas tidak ada di cadangan"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# berkas tidak dapat dibaca"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Dipulihkan, tetapi tidak semuanya: {0}. Muat ulang halaman untuk melihat apa yang dipulihkan."
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. Each file is stored once, shared with every backup that holds the same file, so files are not end-to-end encrypted and {0} can read them. Every backup counts the full size of each of its files toward its own storage."
+msgstr "Berkas disertakan. Setiap berkas disimpan satu kali dan dibagikan ke setiap cadangan yang memiliki berkas yang sama, sehingga berkas tidak dienkripsi end-to-end dan {0} dapat membacanya. Setiap cadangan menghitung ukuran penuh semua berkasnya terhadap penyimpanannya sendiri."

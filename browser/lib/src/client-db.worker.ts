@@ -31,6 +31,14 @@ export interface VaultExportResult {
   coverage: Record<string, number>;
 }
 
+/** How a local file would be uploaded; see `vaultBlobOpen` in `wasm/`. */
+export interface VaultBlobPlan {
+  /** `missing` also covers bytes that do not match their hash. */
+  status: 'ready' | 'missing' | 'tooLarge';
+  size: number;
+  chunks: { index: number; offset: number; length: number }[];
+}
+
 export interface VaultImportSummary {
   packsRead: number;
   resourcesRestored: number;
@@ -168,6 +176,21 @@ export interface ClientDbRpc {
     { drivePseudonym: string; devicePubkey: string; segment: number },
     void,
   ];
+  // File bytes (`planning/vault-file-blobs.md`): chunking, proof hashing and
+  // hash verification are Rust; the main thread only moves chunks.
+  vaultFileHashes: [{ driveSubject: string }, string[]];
+  vaultBlobPresent: [{ hash: string }, boolean];
+  vaultBlobOpen: [{ hash: string }, VaultBlobPlan];
+  vaultBlobChunk: [{ hash: string; index: number }, Uint8Array];
+  vaultBlobProof: [
+    {
+      hash: string;
+      ranges: { chunkIndex: number; offset: number; length: number }[];
+    },
+    string[],
+  ];
+  vaultBlobClose: [object, void];
+  vaultBlobRestore: [{ hash: string; chunks: Uint8Array[] }, boolean];
 }
 
 export type RpcType = keyof ClientDbRpc;
@@ -425,6 +448,27 @@ const handlers: Handlers = {
   vaultCommitSegment: m => {
     db!.vaultCommitSegment(m.drivePseudonym, m.devicePubkey, m.segment);
     flushNow();
+  },
+  vaultFileHashes: m => db!.vaultFileHashes(m.driveSubject),
+  vaultBlobPresent: m => db!.vaultBlobPresent(m.hash),
+  vaultBlobOpen: m => db!.vaultBlobOpen(m.hash),
+  vaultBlobChunk: m => db!.vaultBlobChunk(m.hash, m.index),
+  vaultBlobProof: m => db!.vaultBlobProof(m.hash, m.ranges),
+  vaultBlobClose: () => db!.vaultBlobClose(),
+  vaultBlobRestore: async m => {
+    const stored = await db!.vaultBlobRestore(m.hash, m.chunks);
+
+    // Same reasoning as `vaultImport`: a restore may be followed by a reload.
+    if (stored) {
+      try {
+        db!.flush();
+      } catch (e) {
+        dirty = true;
+        console.error('[ClientDb] flush after vault blob restore failed:', e);
+      }
+    }
+
+    return stored;
   },
   getVersionVectorsForDrive: m => db!.getVersionVectorsForDrive(m.drive),
   // Search entries are about three quarters of a pulled resource's index

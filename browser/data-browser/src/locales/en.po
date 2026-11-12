@@ -11098,10 +11098,6 @@ msgstr "Backed up {0}"
 msgid "Backed up to {0}"
 msgstr "Backed up to {0}"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Encrypted backup of your data. Only you can read it."
-
 #: src/routes/SyncRoute.tsx
 msgid "Manage plan"
 msgstr "Manage plan"
@@ -13530,3 +13526,35 @@ msgstr "Pressing Send report shares the reviewed chat text, error messages, and 
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backs up your data and files. Your data is encrypted so only you can read it. Files are not."
+msgstr "Backs up your data and files. Your data is encrypted so only you can read it. Files are not."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# backup object could not be read"
+msgstr[1] "# backup objects could not be read"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# file is not in the backup"
+msgstr[1] "# files are not in the backup"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# file could not be read"
+msgstr[1] "# files could not be read"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Restored, but not everything: {0}. Reload the page to see what was restored."
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. Each file is stored once, shared with every backup that holds the same file, so files are not end-to-end encrypted and {0} can read them. Every backup counts the full size of each of its files toward its own storage."
+msgstr "Files are included. Each file is stored once, shared with every backup that holds the same file, so files are not end-to-end encrypted and {0} can read them. Every backup counts the full size of each of its files toward its own storage."

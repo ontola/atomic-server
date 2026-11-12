@@ -426,7 +426,11 @@ export async function fetchVaultBackupFile(
   drivePseudonym: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<VaultFileBuild | null> {
-  const objects = await listVaultObjects(drivePseudonym);
+  // The file holds sealed history only. File bytes are shared and unsealed,
+  // and are fetched from the cloud vault on a restore from the account.
+  const objects = (await listVaultObjects(drivePseudonym)).filter(
+    o => o.kind !== 'blob',
+  );
 
   if (objects.length === 0) return null;
 
