@@ -143,4 +143,18 @@ necessary only before a future registry release, independently of this port.
   writes through the public ORM and confirms with an independent bounded read.
 - [ ] Deferred grid drafts, paste, calendar/timer creation and insert-below still
   need migration; this increment does not claim all creation paths or TablePage.
-- [ ] Undo and schema form extraction remain follow-up work.
+- [ ] Schema form extraction and remaining creation paths remain follow-up work.
+
+
+### Shared undo increment
+
+- [x] Session-local history controller: captured commands, single-edit coalescing,
+  reverse batches, synchronous in-flight guard and confirmed per-item progress.
+- [x] Atomic history hook uses the shared controller; storage restore/destroy
+  stays in its adapter, with deep snapshots of old values and deleted rows.
+- [x] ELFA saves record reverse commands only for confirmed rows, including partial
+  Save success. Undo uses stable fields and saved-value conflict baselines through
+  the public ORM adapter; pending drafts block undo.
+- [ ] Native creation/deletion undo, durable history and redo are not implemented.
+  Native history resets on collection/schema change or reload. Schema forms and
+  the rest of TablePage orchestration remain separate work.

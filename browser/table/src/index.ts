@@ -120,3 +120,11 @@ export {
   type TableRowCreation,
   type TableCreationBackend,
 } from './creation.js';
+
+export {
+  createTableHistory,
+  useTableHistoryState,
+  type TableHistory,
+  type TableHistoryOptions,
+  type TableHistoryState,
+} from './history.js';
