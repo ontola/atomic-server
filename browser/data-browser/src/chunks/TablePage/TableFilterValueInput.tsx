@@ -1,10 +1,13 @@
 import { Datatype, Property, server } from '@tomic/react';
 import { type JSX } from 'react';
+import {
+  TableFilterValueInput as SharedFilterValueInput,
+  type TableFilterValueKind,
+} from '@tomic/table';
 import { ResourceSelector } from '@components/forms/ResourceSelector';
 import { BasicSelect } from '@components/forms/BasicSelect';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { TagOption } from './RowActionDialog';
-import { canonicalJson } from './canonicalJson';
 
 interface TableFilterValueInputProps {
   property: Property;
@@ -12,105 +15,73 @@ interface TableFilterValueInputProps {
   onChange: (value: string) => void;
   autoFocus?: boolean;
 }
+const FilterTagOption = ({ value }: { value: string }) => (
+  <TagOption subject={value} />
+);
 
-/**
- * Datatype-aware editor for a single filter value. References and resource
- * arrays use the resource search box; everything else gets a fitting plain
- * input. The value is always serialised to a string (matching the query
- * param + `contains_value`'s string comparison).
- */
+/** Atomic supplies datatype IDs, tag labels, resource search and form styling.
+ * The actual typed filter UI and blur policy live in the shared page package. */
 export function TableFilterValueInput({
   property,
   value,
   onChange,
   autoFocus,
 }: TableFilterValueInputProps): JSX.Element {
+  const messages = {
+    any: /* @wc-include */ 'Any',
+    true: /* @wc-include */ 'True',
+    false: /* @wc-include */ 'False',
+    pickOption: /* @wc-include */ 'Pick an option…',
+    value: /* @wc-include */ 'Value…',
+  };
+
   const datatype = property.datatype;
-
-  // A select column only holds its own options, so offer exactly those rather
-  // than a search over every tag in the drive.
-  if (property.allowsOnly?.length) {
-    return (
-      <BasicSelect
-        value={value}
-        autoFocus={autoFocus}
-        onChange={e => onChange(e.target.value)}
-      >
-        <option value=''>Pick an option…</option>
-        {property.allowsOnly.map(tag => (
-          <TagOption key={tag} subject={tag} />
-        ))}
-      </BasicSelect>
-    );
-  }
-
-  if (datatype === Datatype.ATOMIC_URL || datatype === Datatype.RESOURCEARRAY) {
-    return (
-      <ResourceSelector
-        value={value || undefined}
-        isA={
-          property.classType === server.classes.file
-            ? undefined
-            : property.classType
-        }
-        hideCreateOption
-        autoFocus={autoFocus}
-        setSubject={subject => onChange(subject ?? '')}
-      />
-    );
-  }
-
-  if (datatype === Datatype.BOOLEAN) {
-    return (
-      <BasicSelect
-        value={value}
-        autoFocus={autoFocus}
-        onChange={e => onChange(e.target.value)}
-      >
-        <option value=''>Any</option>
-        <option value='true'>True</option>
-        <option value='false'>False</option>
-      </BasicSelect>
-    );
-  }
-
-  const inputType =
-    datatype === Datatype.INTEGER || datatype === Datatype.FLOAT
-      ? 'number'
-      : datatype === Datatype.DATE
-        ? 'date'
-        : 'text';
+  const reference =
+    datatype === Datatype.ATOMIC_URL || datatype === Datatype.RESOURCEARRAY;
+  const kind: TableFilterValueKind = reference
+    ? 'reference'
+    : datatype === Datatype.BOOLEAN
+      ? 'boolean'
+      : datatype === Datatype.INTEGER || datatype === Datatype.FLOAT
+        ? 'number'
+        : datatype === Datatype.DATE
+          ? 'date'
+          : datatype === Datatype.JSON
+            ? 'json'
+            : 'text';
 
   return (
-    <InputWrapper>
-      <InputStyled
-        type={inputType}
-        value={value}
-        autoFocus={autoFocus}
-        placeholder='Value…'
-        onChange={e => onChange(e.target.value)}
-        onBlur={() => {
-          // A JSON value is indexed with its keys sorted and no whitespace, so
-          // `{"b":2,"a":1}` would match nothing though a row stores exactly that.
-          if (datatype === Datatype.JSON && value !== '') {
-            const canonical = canonicalJson(value);
-
-            if (canonical !== undefined && canonical !== value) {
-              onChange(canonical);
-            }
-          }
-
-          // The index compares the text of a stored number, so "2.5e-5" and
-          // "0.00002500" would match nothing though they equal a stored 0.000025.
-          if (inputType === 'number' && value !== '') {
-            const number = Number(value);
-
-            if (Number.isFinite(number) && String(number) !== value) {
-              onChange(String(number));
-            }
-          }
-        }}
-      />
-    </InputWrapper>
+    <SharedFilterValueInput
+      kind={kind}
+      value={value}
+      onChange={onChange}
+      autoFocus={autoFocus}
+      label='Filter value'
+      normalizeNumbers
+      messages={messages}
+      choices={property.allowsOnly}
+      Option={FilterTagOption}
+      Input={InputStyled}
+      Select={BasicSelect}
+      Wrapper={InputWrapper}
+      referenceInput={
+        reference
+          ? state => (
+              <ResourceSelector
+                value={state.value || undefined}
+                isA={
+                  property.classType === server.classes.file
+                    ? undefined
+                    : property.classType
+                }
+                hideCreateOption
+                autoFocus={state.autoFocus}
+                disabled={state.disabled}
+                setSubject={subject => state.onChange(subject ?? '')}
+              />
+            )
+          : undefined
+      }
+    />
   );
 }

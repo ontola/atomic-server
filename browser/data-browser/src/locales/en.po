@@ -3172,10 +3172,6 @@ msgstr "Export to CSV"
 msgid "Untitled view"
 msgstr "Untitled view"
 
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Any"
-msgstr "Any"
-
 #: src/chunks/PluginRuns/IntegrationActions.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "True"
@@ -3185,10 +3181,6 @@ msgstr "True"
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "False"
 msgstr "False"
-
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Value…"
-msgstr "Value…"
 
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Remove filter"
@@ -13438,3 +13430,15 @@ msgstr "Saved view configuration is invalid."
 #: src/chunks/DashboardPage/blocks/StatBlock.tsx
 msgid "The configured measurement is unavailable."
 msgstr "The configured measurement is unavailable."
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Filter value"
+msgstr "Filter value"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Any"
+msgstr "Any"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Value…"
+msgstr "Value…"

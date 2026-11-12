@@ -217,3 +217,9 @@ export {
   TABLE_QUERY_NOW_QUANTUM_MS,
   type TableViewQueryIssue,
 } from './views/viewQuery.js';
+export {
+  TableFilterValueInput,
+  canonicalTableFilterJson,
+  type TableFilterValueInputProps,
+  type TableFilterValueKind,
+} from './filters/FilterValueInput.js';
