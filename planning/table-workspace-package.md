@@ -1,8 +1,9 @@
 # Table workspace package
 
 Status: full TablePage extraction is the decided target (11 November 2026).
-Only grid/editors and saved-view tab presentation are implemented in the current
-package; the full page and catalog evolution remain open.
+The package now shares grid/editors, saved-view tabs, navigation/query/row
+contracts, row mutation/creation execution and session-local undo. Column form
+extraction is in progress; the full page and catalog evolution remain open.
 Execution tracker: [#2484](https://github.com/ontola/atomic-server/issues/2484).
 
 ## Sequence
@@ -158,3 +159,18 @@ necessary only before a future registry release, independently of this port.
 - [ ] Native creation/deletion undo, durable history and redo are not implemented.
   Native history resets on collection/schema change or reload. Schema forms and
   the rest of TablePage orchestration remain separate work.
+
+
+### Schema form increment
+
+- [x] Shared controlled property-name field, focus/validation presentation and
+  identity-preserving rename policy, used by Atomic and the native schema editor.
+- [x] Native port label renames preserve property shortname, ID and RDF predicate;
+  newly created columns still receive provisional names before identity minting.
+- [x] Text format changes remain on the unsaved Atomic property draft; the category
+  control no longer persists a temporary property before dialog confirmation.
+- [ ] Category controls, dialog lifecycle and schema activation are still host-bound.
+  A shared name field does not complete the schema forms or full TablePage gate.
+- [ ] Native creation/deletion undo is blocked on authorized complete-subject
+  snapshots/conditional restoration; ELFA/database-apps#91 records why shaped
+  snapshots cannot restore all deleted predicates safely.

@@ -128,3 +128,9 @@ export {
   type TableHistoryOptions,
   type TableHistoryState,
 } from './history.js';
+
+export {
+  PropertyNameField,
+  nameTableProperty,
+  type PropertyNameFieldProps,
+} from './schema/PropertyNameField.js';

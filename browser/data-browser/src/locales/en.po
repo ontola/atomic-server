@@ -3717,11 +3717,6 @@ msgstr ""
 msgid "There was an error in the editor, please refresh the page to continue.{0} <0>Refresh</0>"
 msgstr "There was an error in the editor, please refresh the page to continue.{0} <0>Refresh</0>"
 
-#. 0: propertyLabel; 1: rowIndex + 1
-#: src/chunks/TablePage/TableCell.tsx
-msgid "{0}, row {1}"
-msgstr "{0}, row {1}"
-
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Are you sure you want to delete the <0/> view? This only removes the view, not the rows."
 msgstr "Are you sure you want to delete the <0/> view? This only removes the view, not the rows."
@@ -13380,3 +13375,7 @@ msgstr "Give it a name, then fill it with a starter"
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Rename view"
 msgstr "Rename view"
+
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr "Column name"

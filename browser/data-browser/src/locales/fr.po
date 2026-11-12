@@ -3711,11 +3711,6 @@ msgstr "Contexte additionnel. Référencez-les dans votre contenu principal pour
 msgid "There was an error in the editor, please refresh the page to continue.{0} <0>Refresh</0>"
 msgstr "Une erreur s'est produite dans l'éditeur, veuillez rafraîchir la page pour continuer.{0} <0>Rafraîchir</0>"
 
-#. 0: propertyLabel; 1: rowIndex + 1
-#: src/chunks/TablePage/TableCell.tsx
-msgid "{0}, row {1}"
-msgstr ""
-
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Are you sure you want to delete the <0/> view? This only removes the view, not the rows."
 msgstr ""
@@ -13366,4 +13361,8 @@ msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Rename view"
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
 msgstr ""

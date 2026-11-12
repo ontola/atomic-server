@@ -18,7 +18,6 @@ export const TextPropertyForm = ({
     setTextFormat(e.target.value as Datatype);
 
     await resource.set(core.properties.datatype, e.target.value, false);
-    await resource.save();
   };
 
   return (
