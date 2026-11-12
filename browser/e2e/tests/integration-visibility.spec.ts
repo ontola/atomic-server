@@ -56,9 +56,9 @@ test('experimental plugins default off, behind an unlock, and the preference sur
   await page.goto(new URL('/app/apps', page.url()).href);
   // Entries that need API plugins have nothing that can run them until the
   // host proxies their calls (#1624), so no toggle is offered for them.
-  const apiToggle = page.getByRole('checkbox', { name: 'Show API plugins' });
+  const apiToggle = page.getByRole('checkbox', { name: 'Show API apps' });
   const experimentalToggle = page.getByRole('checkbox', {
-    name: 'Show experimental plugins',
+    name: 'Show experimental apps',
   });
   // Plugins are handed out in user-testing sessions: an ordinary user sees
   // that the feature is new, and no toggle.
@@ -111,13 +111,13 @@ test('experimental plugins default off, behind an unlock, and the preference sur
   expect(catalogRequests.length).toBeGreaterThan(0);
 
   await page.goto(new URL('/app/settings', page.url()).href);
-  await page.getByPlaceholder('Search settings...').fill('plugins');
+  await page.getByPlaceholder('Search settings...').fill('marketplaces');
   const settingsExperimental = page.getByRole('checkbox', {
-    name: 'Show experimental plugins',
+    name: 'Show experimental apps',
   });
   await expect(settingsExperimental).toBeChecked();
   await expect(
-    page.getByRole('checkbox', { name: 'Show API plugins' }),
+    page.getByRole('checkbox', { name: 'Show API apps' }),
   ).toHaveCount(0);
   // Turning it off does not take the switch away from whoever flipped it.
 
@@ -130,7 +130,7 @@ test('experimental plugins default off, behind an unlock, and the preference sur
   });
   await expect(visibility.getByRole('alert')).toHaveCount(0);
   await page.reload();
-  await page.getByPlaceholder('Search settings...').fill('plugins');
+  await page.getByPlaceholder('Search settings...').fill('marketplaces');
   await expect(settingsExperimental).not.toBeChecked();
 
   await page.goto(new URL('/app/apps', page.url()).href);
@@ -152,19 +152,17 @@ test('existing connections remain visible while both discovery categories are hi
   const SCHEMA_CREATED = { timeout: 30_000 };
   await createFromCatalog(page, 'Plugin');
   await expect(
-    page
-      .getByRole('main')
-      .getByRole('heading', { name: 'New plugin', level: 1 }),
+    page.getByRole('main').getByRole('heading', { name: 'New app', level: 1 }),
   ).toBeVisible(SCHEMA_CREATED);
   await page.goto(new URL('/app/apps', page.url()).href);
   await expect(
     page
       .getByRole('region', { name: 'Your integrations' })
-      .getByRole('link', { name: 'New plugin', exact: true }),
+      .getByRole('link', { name: 'New app', exact: true }),
   ).toBeVisible();
   // Ordinary users are not offered the experimental toggle at all.
   await expect(
-    page.getByRole('checkbox', { name: 'Show experimental plugins' }),
+    page.getByRole('checkbox', { name: 'Show experimental apps' }),
   ).toHaveCount(0);
 });
 
@@ -174,12 +172,12 @@ test('visibility toggles are hidden when the catalog enables nothing behind them
   // An enabled entry that needs API plugins still has nothing to run it.
   await enableCatalogEntries(page, ['fixture-api']);
   await page.goto(new URL('/app/apps', page.url()).href);
-  await expect(page.getByText('No plugins to show here.')).toBeVisible();
+  await expect(page.getByText('No apps to show here.')).toBeVisible();
   await expect(
-    page.getByRole('checkbox', { name: 'Show API plugins' }),
+    page.getByRole('checkbox', { name: 'Show API apps' }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('checkbox', { name: 'Show experimental plugins' }),
+    page.getByRole('checkbox', { name: 'Show experimental apps' }),
   ).toHaveCount(0);
 });
 
@@ -187,9 +185,9 @@ test('a user who is not unlocked has no experimental toggle in Settings', async 
   page,
 }) => {
   await page.goto(new URL('/app/settings', page.url()).href);
-  await page.getByPlaceholder('Search settings...').fill('plugins');
-  await expect(page.getByLabel('Plugin catalog URL')).toBeVisible();
+  await page.getByPlaceholder('Search settings...').fill('marketplaces');
+  await expect(page.getByLabel('Add marketplace URL')).toBeVisible();
   await expect(
-    page.getByRole('checkbox', { name: 'Show experimental plugins' }),
+    page.getByRole('checkbox', { name: 'Show experimental apps' }),
   ).toHaveCount(0);
 });

@@ -7,16 +7,16 @@ export function integrationVisibilitySchema(): SchemaSpec {
     properties: [
       {
         shortname: 'show-api-plugins',
-        name: 'Show API plugins',
+        name: 'Show API apps',
         description:
-          'Offer API plugins in integration discovery. Defaults to false.',
+          'Offer API apps in integration discovery. Defaults to false.',
         datatype: Datatype.BOOLEAN,
       },
       {
         shortname: 'show-experimental-plugins',
-        name: 'Show experimental plugins',
+        name: 'Show experimental apps',
         description:
-          'Offer experimental catalog plugins and community listings in integration discovery. Defaults to false.',
+          'Offer experimental catalog apps and community listings in integration discovery. Defaults to false.',
         datatype: Datatype.BOOLEAN,
       },
     ],

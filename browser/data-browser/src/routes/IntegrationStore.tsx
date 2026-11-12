@@ -340,8 +340,8 @@ function IntegrationStore(): React.JSX.Element {
               <NewBadge>New</NewBadge>
               <span>
                 {showExperimentalPlugins
-                  ? 'This is a new feature. You are seeing experimental plugins to try out.'
-                  : 'This is a new feature. Plugins will show up here soon for you to try out.'}
+                  ? 'This is a new feature. You are seeing experimental apps to try out.'
+                  : 'This is a new feature. Apps will show up here soon for you to try out.'}
               </span>
             </NewFeatureNote>
           </Header>
@@ -412,7 +412,7 @@ function IntegrationStore(): React.JSX.Element {
                   setVisibility('show-experimental-plugins', value)
                 }
               />
-              Show experimental plugins
+              Show experimental apps
             </CheckboxLabel>
           )}
           {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
@@ -429,7 +429,7 @@ function IntegrationStore(): React.JSX.Element {
           <Column gap='0.75rem'>
             {visible && visible.length > 0 && (
               <>
-                <h2>Community plugins</h2>
+                <h2>Community apps</h2>
                 <p>
                   Published releases. Open one to review what it can do before
                   installing it into this drive, or create a draft to adapt its
@@ -594,7 +594,7 @@ function DiscoverEmptyState({ searching }: { searching: boolean }) {
     <p>
       {searching
         ? 'No integrations match your search.'
-        : 'No plugins to show here.'}
+        : 'No apps to show here.'}
     </p>
   );
 }

@@ -289,7 +289,7 @@ export function PluginPage({
                 {source === undefined ? (
                   <Muted>Loading…</Muted>
                 ) : source === '' ? (
-                  <Muted>This plugin has no source yet.</Muted>
+                  <Muted>This app has no source yet.</Muted>
                 ) : (
                   <HighlightedCodeBlock code={source} language='typescript' />
                 )}

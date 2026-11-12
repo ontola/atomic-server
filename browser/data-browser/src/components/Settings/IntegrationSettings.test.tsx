@@ -35,21 +35,20 @@ const renderSettings = () =>
 
 const proxyInput = () =>
   screen.getByLabelText('Integration proxy URL') as HTMLInputElement;
-const catalogInput = () =>
-  screen.getByLabelText('Plugin catalog URL') as HTMLInputElement;
 const resetButtons = () => screen.queryAllByRole('button', { name: 'Reset' });
+const listed = () =>
+  screen.queryAllByRole('listitem').map(li => li.textContent);
 
-it('shows only Save buttons, and no Reset while values are the defaults', () => {
+it('shows no Reset while values are the defaults', () => {
   renderSettings();
 
   expect(proxyInput().value).toBe(defaultIntegrationProxy);
-  expect(catalogInput().value).toBe(defaultPluginCatalogUrl);
-  expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(2);
+  expect(listed()).toEqual([`${defaultPluginCatalogUrl}Remove`]);
+  expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(1);
   expect(resetButtons()).toHaveLength(0);
-  expect(screen.queryByText('Reset to default')).toBeNull();
 });
 
-it('shows an inline Reset once the value differs, and resets it', () => {
+it('shows an inline Reset once the proxy differs, and resets it', () => {
   renderSettings();
 
   fireEvent.change(proxyInput(), {
@@ -62,18 +61,28 @@ it('shows an inline Reset once the value differs, and resets it', () => {
   expect(resetButtons()).toHaveLength(0);
 });
 
-it('resets a saved value back to the default', () => {
-  localStorage.setItem(
-    'plugin-catalog-url',
-    'https://catalog.example.com/catalog.json',
-  );
+it('adds and removes marketplaces, and resets the list to the default', () => {
   renderSettings();
 
-  expect(catalogInput().value).toBe('https://catalog.example.com/catalog.json');
+  fireEvent.change(screen.getByLabelText('Add marketplace URL'), {
+    target: { value: 'https://catalog.example.com/catalog.json' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+  expect(listed()).toHaveLength(2);
   expect(resetButtons()).toHaveLength(1);
 
   fireEvent.click(resetButtons()[0]);
-  expect(localStorage.getItem('plugin-catalog-url')).toBeNull();
-  expect(catalogInput().value).toBe(defaultPluginCatalogUrl);
+  expect(localStorage.getItem('marketplaces')).toBeNull();
+  expect(listed()).toEqual([`${defaultPluginCatalogUrl}Remove`]);
   expect(resetButtons()).toHaveLength(0);
+});
+
+it('lets the default be removed', () => {
+  renderSettings();
+
+  fireEvent.click(
+    screen.getByRole('button', { name: `Remove ${defaultPluginCatalogUrl}` }),
+  );
+  expect(listed()).toEqual([]);
+  expect(resetButtons()).toHaveLength(1);
 });

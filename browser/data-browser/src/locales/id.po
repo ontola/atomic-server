@@ -1002,10 +1002,6 @@ msgid "Default Ontology"
 msgstr "Ontologi bawaan"
 
 #: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Plugins"
-msgstr "Plugin"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Remove tag"
 msgstr "Hapus tag"
 
@@ -1267,10 +1263,6 @@ msgid "Keyboard shortcuts"
 msgstr "Pintasan keyboard"
 
 #: src/views/Installation/InstallationPage.tsx
-msgid "Plugin Description"
-msgstr "Deskripsi plugin"
-
-#: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Uninstall"
 msgstr "Copot pemasangan"
@@ -1358,7 +1350,6 @@ msgstr "Teks alternatif"
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/EditLanguagesDialog.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
@@ -1965,10 +1956,6 @@ msgstr "tidak ada pratinjau..."
 msgid "Could not load preview 😞"
 msgstr "Tidak dapat memuat pratinjau 😞"
 
-#: src/views/Drive/PluginList.tsx
-msgid "No plugins installed"
-msgstr "Tidak ada plugin yang diinstal"
-
 #: src/components/ResourceUsage/UsageCard.tsx
 #: src/views/Card/CollectionCard.tsx
 msgid "No resources"
@@ -2274,14 +2261,6 @@ msgstr "Permintaan baca"
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Write Request"
 msgstr "Permintaan tulis"
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid "Allow all reads done by this plugin"
-msgstr "Izinkan semua pembacaan oleh plugin ini"
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid "Allow all writes done by this plugin"
-msgstr "Izinkan semua penulisan oleh plugin ini"
 
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
@@ -6106,10 +6085,6 @@ msgstr "Sembunyikan templat di halaman sumber daya baru"
 msgid "Enable keyboard drag & drop in sidebar"
 msgstr "Aktifkan seret & lepas dengan keyboard di bilah samping"
 
-#: src/chunks/Plugins/NewPluginButton.tsx
-msgid "Upload Plugin"
-msgstr "Unggah plugin"
-
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Reading"
 msgstr "Membaca"
@@ -6565,15 +6540,6 @@ msgstr "Memuat pengaturan AI…"
 msgid "Run"
 msgstr "Jalankan"
 
-#: src/actions/resourceActions.tsx
-msgid "Run this plugin and review what it proposes before anything is written."
-msgstr "Jalankan plugin ini dan tinjau usulannya sebelum apa pun ditulis."
-
-#. 0: e.message
-#: src/chunks/PluginRuns/RunPluginDialog.tsx
-msgid "Could not run this plugin: {0}"
-msgstr "Tidak dapat menjalankan plugin ini: {0}"
-
 #. 0: result.message
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "Could not apply: {0}"
@@ -6594,16 +6560,8 @@ msgid "Apply {0} changes"
 msgstr "Terapkan {0} perubahan"
 
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
-msgid "This plugin ran too long and was stopped. Nothing was planned."
-msgstr "Plugin ini berjalan terlalu lama dan dihentikan. Tidak ada yang direncanakan."
-
-#: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "This run proposes no changes."
 msgstr "Eksekusi ini tidak mengusulkan perubahan."
-
-#: src/chunks/PluginRuns/PluginRunHistory.tsx
-msgid "This plugin has not run yet."
-msgstr "Plugin ini belum dijalankan."
 
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 msgid "Runs"
@@ -6645,23 +6603,9 @@ msgstr "Belum masuk"
 msgid "Source"
 msgstr "Sumber"
 
-#: src/chunks/PluginRuns/PluginPage.tsx
-msgid "This plugin has no source yet."
-msgstr "Plugin ini belum memiliki sumber."
-
-#. 0: describeUse(secret)
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "No longer asked for by this plugin — {0}"
-msgstr "Tidak lagi diminta oleh plugin ini — {0}"
-
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "<0/> Revoke"
 msgstr "<0/> Cabut"
-
-#. 0: ' '
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "Sent only to <0/>. The plugin uses it as{0} <1/> and never sees the value."
-msgstr "Hanya dikirim ke <0/>. Plugin menggunakannya sebagai{0} <1/> dan tidak pernah melihat nilainya."
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
@@ -6727,10 +6671,6 @@ msgstr "Setiap {0} detik"
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Allowed by {0}. Every write is still checked against what that account may change."
 msgstr "Diizinkan oleh {0}. Setiap penulisan tetap diperiksa berdasarkan hal yang boleh diubah oleh akun tersebut."
-
-#: src/chunks/PluginRuns/PluginSchedule.tsx
-msgid "Available once you have run this plugin and applied its changes at least once."
-msgstr "Tersedia setelah Anda menjalankan plugin ini dan menerapkan perubahannya setidaknya sekali."
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Apply background runs without asking me"
@@ -7241,10 +7181,6 @@ msgstr "Eksekusi otomatisasi yang menggunakan tindakan ini"
 #: src/chunks/PluginRuns/ActionHistoryCleanup.tsx
 msgid "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished or been explicitly abandoned at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
 msgstr "Hapus payload tindakan lama sambil mempertahankan ID, hasil, dan bukti pemulihan. Hasil yang selesai harus berusia setidaknya 30 hari. Hasil otomatisasi juga mensyaratkan setiap eksekusi yang menggunakannya telah selesai atau secara eksplisit ditinggalkan setidaknya 30 hari lalu. Eksekusi yang belum selesai, penggunaan yang tidak terlacak, penulisan yang tidak pasti atau gagal, serta bukti dengan tanggal penyelesaian tidak diketahui tetap disimpan."
-
-#: src/routes/IntegrationStore.tsx
-msgid "Community plugins"
-msgstr "Plugin komunitas"
 
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
@@ -7923,10 +7859,6 @@ msgstr "Juga berubah pada sumber asli sejak fork ini dibuat:"
 msgid "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 msgstr "Aktifkan animasi transisi halaman (eksperimental, diketahui bermasalah di luar Chromium pada desktop)"
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Show experimental plugins"
-msgstr "Tampilkan plugin eksperimental"
-
 #: src/routes/IntegrationStore.tsx
 msgid "Published releases. Open one to review what it can do before installing it into this drive, or create a draft to adapt its code."
 msgstr "Rilis yang diterbitkan. Buka salah satunya untuk meninjau kemampuannya sebelum menginstalnya ke drive ini, atau buat draf untuk menyesuaikan kodenya."
@@ -7980,29 +7912,12 @@ msgid "No capabilities were granted."
 msgstr "Tidak ada kapabilitas yang diberikan."
 
 #: src/views/Installation/InstallationPage.tsx
-#: src/views/Installation/InstallationPage.tsx
-msgid "Plugin agent"
-msgstr "Agen plugin"
-
-#: src/views/Installation/InstallationPage.tsx
 msgid "Permissions"
 msgstr "Izin"
 
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoke installation"
 msgstr "Cabut instalasi"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Uninstall plugin"
-msgstr "Copot plugin"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Revoking uninstalls the plugin and retires its agent. The Installation record stays, so you can see what was installed; installing again needs a new Installation."
-msgstr "Pencabutan mencopot plugin dan menonaktifkan agennya. Catatan Instalasi tetap ada agar Anda dapat melihat apa yang pernah diinstal; penginstalan ulang memerlukan Instalasi baru."
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Are you sure you want to uninstall this plugin? This removes the Installation record."
-msgstr "Yakin ingin mencopot plugin ini? Ini menghapus catatan Instalasi."
 
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "No"
@@ -8347,10 +8262,6 @@ msgstr "Ruang kerja ini tidak dapat dibaca di perangkat ini. Coba buka lagi."
 #: src/routes/IntegrationStore.tsx
 msgid "No integrations match your search."
 msgstr "Tidak ada integrasi yang cocok dengan pencarian Anda."
-
-#: src/routes/IntegrationStore.tsx
-msgid "No plugins to show here."
-msgstr "Tidak ada plugin untuk ditampilkan di sini."
 
 #. 0: ' '
 #: src/helpers/privateHomeNudge.tsx
@@ -8711,11 +8622,6 @@ msgstr "Penyiapan membuat tabel {0} untuk pengimpor ini. Belum ada yang diimpor.
 msgid "File to import"
 msgstr "File untuk diimpor"
 
-#. 0: ' '; 1: formatBytes(maxBytes(accepts))
-#: src/chunks/PluginRuns/FileImport.tsx
-msgid "The file is read by this plugin on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
-msgstr "File dibaca oleh plugin ini di AtomicServer Anda, hingga{0} {1}. Tinjau perubahan yang diusulkan sebelum apa pun disimpan."
-
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Open imported data"
 msgstr "Buka data yang diimpor"
@@ -8766,20 +8672,6 @@ msgstr "Aplikasi drive"
 msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 msgstr "Aplikasi yang berjalan dalam bingkainya sendiri pada drive ini dan menyimpan barisnya dalam tabel tersendiri. Masing-masing adalah versi yang diterbitkan; penginstalan memeriksa kodenya terhadap katalog sebelum apa pun disimpan."
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
-msgstr "Server integration-proxy yang menjadi perantara panggilan plugin API. Pengaturan ini disimpan di browser ini."
-
-#: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Plugin catalog URL"
-msgstr "URL katalog plugin"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Discover integrations from this catalog.json. This setting is saved in this browser."
-msgstr "Temukan integrasi dari catalog.json ini. Pengaturan ini disimpan di browser ini."
-
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Masukkan URL HTTPS atau URL HTTP localhost yang mengarah ke file catalog.json."
@@ -8892,14 +8784,6 @@ msgstr "Tidak ada yang terbuka."
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
 msgstr "Tidak ada yang ditutup."
-
-#: src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental plugins to try out."
-msgstr "Ini adalah fitur baru. Anda melihat plugin eksperimental untuk dicoba."
-
-#: src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Plugins will show up here soon for you to try out."
-msgstr "Ini adalah fitur baru. Plugin akan segera muncul di sini untuk Anda coba."
 
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
 msgid "Some recurring meetings could not be displayed"
@@ -11219,10 +11103,6 @@ msgstr "Penggunaan"
 msgid "Loading integrations…"
 msgstr "Memuat integrasi…"
 
-#: src/routes/IntegrationStore.tsx
-msgid "<0/> Show experimental plugins"
-msgstr "<0/> Tampilkan plugin eksperimental"
-
 #: src/routes/SyncRoute.tsx
 msgid "No other devices yet — your data is safe on this one."
 msgstr "Belum ada perangkat lain — data Anda aman di perangkat ini."
@@ -11302,19 +11182,10 @@ msgstr "<0/> Jalankan"
 msgid "The last background run failed: {0}"
 msgstr "Eksekusi latar belakang terakhir gagal: {0}"
 
-#. 0: ' '; 1: ' '
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "This plugin asks for no credentials. To use one, have it declare what it needs —{0} <0/>{1} — or reference <1/> in a header and a slot will appear here."
-msgstr "Plugin ini tidak meminta kredensial. Untuk menggunakannya, minta plugin mendeklarasikan kebutuhannya —{0} <0/>{1} — atau rujuk <1/> dalam header, dan slot akan muncul di sini."
-
 #. 0: ' '
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Used as <0/>, sent only to{0} <1/>. Undeclared, so this was read from the URLs it requests."
 msgstr "Digunakan sebagai <0/>, hanya dikirim ke{0} <1/>. Tidak dideklarasikan, jadi ini dibaca dari URL yang dimintanya."
-
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "Used as <0/>. This plugin requests several origins — pick the one this credential belongs to."
-msgstr "Digunakan sebagai <0/>. Plugin ini meminta beberapa origin — pilih origin milik kredensial ini."
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Used as <0/>. Its URLs are built at run time, so say which origin it may be sent to."
@@ -13099,6 +12970,7 @@ msgstr "Waktu habis saat mengambil {0}"
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/IntegrationStore.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Apps"
 msgstr "Aplikasi"
 
@@ -13152,10 +13024,6 @@ msgstr "<0/> Hapus"
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Marketplaces"
 msgstr "Marketplace"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
-msgstr "Aplikasi dari katalog ini ditawarkan bersama katalog di atas. Saat dua katalog memiliki aplikasi dengan nama yang sama, katalog yang terdaftar lebih dahulu diprioritaskan. Pengaturan ini disimpan di browser ini."
 
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Add marketplace URL"
@@ -13522,3 +13390,121 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Show experimental apps"
+msgstr "Tampilkan aplikasi eksperimental"
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "The integration-proxy server that integrations call through. This setting is saved in this browser."
+msgstr "Server proxy integrasi yang dilewati panggilan integrasi. Pengaturan ini disimpan di browser ini."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Apps are offered from these catalogs, in this order. When two have an app with the same name, the one listed first wins. Saved in this browser."
+msgstr "Aplikasi ditawarkan dari katalog-katalog ini, sesuai urutan ini. Jika dua katalog memiliki aplikasi dengan nama yang sama, yang tercantum lebih dulu yang dipakai. Disimpan di browser ini."
+
+#: src/routes/IntegrationStore.tsx
+msgid "Community apps"
+msgstr "Aplikasi komunitas"
+
+#: src/actions/resourceActions.tsx
+msgid "Run this app and review what it proposes before anything is written."
+msgstr "Jalankan aplikasi ini dan tinjau apa yang diusulkannya sebelum ada yang ditulis."
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. You are seeing experimental apps to try out."
+msgstr "Ini adalah fitur baru. Anda melihat aplikasi eksperimental untuk dicoba."
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. Apps will show up here soon for you to try out."
+msgstr "Ini adalah fitur baru. Aplikasi akan segera muncul di sini untuk Anda coba."
+
+#: src/routes/IntegrationStore.tsx
+msgid "<0/> Show experimental apps"
+msgstr "<0/> Tampilkan aplikasi eksperimental"
+
+#: src/routes/IntegrationStore.tsx
+msgid "No apps to show here."
+msgstr "Tidak ada aplikasi untuk ditampilkan di sini."
+
+#. 0: ' '; 1: formatBytes(maxBytes(accepts))
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "The file is read by this app on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
+msgstr "File dibaca oleh aplikasi ini di AtomicServer Anda, hingga{0} {1}. Tinjau perubahan yang diusulkan sebelum ada yang disimpan."
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "This app has no source yet."
+msgstr "Aplikasi ini belum memiliki sumber."
+
+#: src/chunks/PluginRuns/PluginRunHistory.tsx
+msgid "This app has not run yet."
+msgstr "Aplikasi ini belum dijalankan."
+
+#. 0: ' '; 1: ' '
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "This app asks for no credentials. To use one, have it declare what it needs —{0} <0/>{1} — or reference <1/> in a header and a slot will appear here."
+msgstr "Aplikasi ini tidak meminta kredensial. Untuk memakainya, minta aplikasi menyatakan apa yang dibutuhkan:{0} <0/>{1}, atau rujuk <1/> di sebuah header dan slot akan muncul di sini."
+
+#. 0: describeUse(secret)
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "No longer asked for by this app — {0}"
+msgstr "Tidak lagi diminta oleh aplikasi ini: {0}"
+
+#. 0: ' '
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Sent only to <0/>. The app uses it as{0} <1/> and never sees the value."
+msgstr "Hanya dikirim ke <0/>. Aplikasi memakainya sebagai{0} <1/> dan tidak pernah melihat nilainya."
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Used as <0/>. This app requests several origins — pick the one this credential belongs to."
+msgstr "Dipakai sebagai <0/>. Aplikasi ini meminta beberapa origin: pilih origin tempat kredensial ini berada."
+
+#. 0: e.message
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Could not run this app: {0}"
+msgstr "Tidak dapat menjalankan aplikasi ini: {0}"
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "This app ran too long and was stopped. Nothing was planned."
+msgstr "Aplikasi ini berjalan terlalu lama dan dihentikan. Tidak ada yang direncanakan."
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Available once you have run this app and applied its changes at least once."
+msgstr "Tersedia setelah Anda menjalankan aplikasi ini dan menerapkan perubahannya setidaknya sekali."
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Upload App"
+msgstr "Unggah aplikasi"
+
+#: src/views/Drive/PluginList.tsx
+msgid "No apps installed"
+msgstr "Belum ada aplikasi terpasang"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "App Description"
+msgstr "Deskripsi aplikasi"
+
+#: src/views/Installation/InstallationPage.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "App agent"
+msgstr "Agen aplikasi"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Uninstall app"
+msgstr "Copot aplikasi"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Revoking uninstalls the app and retires its agent. The Installation record stays, so you can see what was installed; installing again needs a new Installation."
+msgstr "Pencabutan akan mencopot aplikasi dan menonaktifkan agennya. Catatan Installation tetap ada, sehingga Anda dapat melihat apa yang pernah terpasang; untuk memasang lagi diperlukan Installation baru."
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Are you sure you want to uninstall this app? This removes the Installation record."
+msgstr "Yakin ingin mencopot aplikasi ini? Ini akan menghapus catatan Installation."
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all reads done by this app"
+msgstr "Izinkan semua pembacaan oleh aplikasi ini"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all writes done by this app"
+msgstr "Izinkan semua penulisan oleh aplikasi ini"

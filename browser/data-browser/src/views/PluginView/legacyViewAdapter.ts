@@ -119,7 +119,7 @@ export class LegacyViewAdapter {
         const target = await this.store.getResource(subject);
 
         if (target.hasClasses(server.classes.plugin))
-          throw new Error('Plugin cannot edit plugin resources');
+          throw new Error('App cannot edit app resources');
 
         await this.ensureWrite(subject);
       },
@@ -245,7 +245,7 @@ export class LegacyViewAdapter {
     switch (request.op) {
       case 'apply':
         if (makesPlugin(args.intents))
-          throw new Error('Plugin cannot create plugin resources');
+          throw new Error('App cannot create app resources');
 
         post({ result: await this.changes.apply(args.intents) });
 
@@ -267,7 +267,7 @@ export class LegacyViewAdapter {
           : [];
 
         if (isA.includes(server.classes.plugin))
-          throw new Error('Plugin cannot create plugin resources');
+          throw new Error('App cannot create app resources');
 
         const resource = await this.store.newResource({
           parent,
@@ -300,7 +300,7 @@ export class LegacyViewAdapter {
               };
 
         if (this.commitChangesPlugin(commit, resource))
-          throw new Error('Plugin cannot edit plugin resources');
+          throw new Error('App cannot edit app resources');
 
         await this.ensureWrite(subject);
 
@@ -360,7 +360,7 @@ export class LegacyViewAdapter {
     if (await this.mayWrite(subject)) return;
 
     if (!(await this.requestWritePermission(subject)))
-      throw new Error('Plugin does not have access to this resource.');
+      throw new Error('App does not have access to this resource.');
   }
 
   private async handleMessage(message: Request): Promise<void> {
@@ -412,7 +412,7 @@ export class LegacyViewAdapter {
         this.sendError(
           message,
           'unauthorized',
-          /* @wc-ignore */ 'Plugin does not have access to this resource.',
+          /* @wc-ignore */ 'App does not have access to this resource.',
         );
 
         return;
@@ -453,7 +453,7 @@ export class LegacyViewAdapter {
       this.sendError(
         message,
         'unauthorized',
-        /* @wc-ignore */ 'Plugin cannot edit plugin resources',
+        /* @wc-ignore */ 'App cannot edit app resources',
       );
 
       return;
@@ -466,7 +466,7 @@ export class LegacyViewAdapter {
         this.sendError(
           message,
           'unauthorized',
-          /* @wc-ignore */ 'Plugin does not have access to this resource.',
+          /* @wc-ignore */ 'App does not have access to this resource.',
         );
 
         return;

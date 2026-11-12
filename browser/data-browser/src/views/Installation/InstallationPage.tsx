@@ -53,7 +53,7 @@ import {
 } from '@chunks/Plugins/InstallationReviewDialog';
 
 const UPDATE_VERB = {
-  title: 'Update plugin',
+  title: 'Update app',
   confirm: 'Update',
   busy: 'Updating…',
 };
@@ -178,7 +178,7 @@ export const InstallationPage: React.FC<
     // plugin is refused there. Saying so here is the clearer error.
     if (p.review.name !== name || p.review.namespace !== namespace) {
       throw new Error(
-        `That package is ${p.review.namespace}/${p.review.name}, not ${title}. A plugin's name and namespace cannot change.`,
+        `That package is ${p.review.namespace}/${p.review.name}, not ${title}. An app's name and namespace cannot change.`,
       );
     }
 
@@ -270,7 +270,7 @@ export const InstallationPage: React.FC<
             </Row>
           )}
           {description && (
-            <DescriptionWrapper aria-label='Plugin Description'>
+            <DescriptionWrapper aria-label='App Description'>
               <Markdown text={description} />
             </DescriptionWrapper>
           )}
@@ -309,8 +309,8 @@ export const InstallationPage: React.FC<
           )}
         </Column>
         {pluginAgent && (
-          <Column as='section' aria-label='Plugin agent'>
-            <h3>Plugin agent</h3>
+          <Column as='section' aria-label='App agent'>
+            <h3>App agent</h3>
             <ResourceInline subject={pluginAgent} />
           </Column>
         )}
@@ -382,12 +382,12 @@ export const InstallationPage: React.FC<
         onConfirm={() => changeStatus('revoked')}
         onCancel={() => setConfirm(undefined)}
       >
-        Revoking uninstalls the plugin and retires its agent. The Installation
+        Revoking uninstalls the app and retires its agent. The Installation
         record stays, so you can see what was installed; installing again needs
         a new Installation.
       </ConfirmationDialog>
       <ConfirmationDialog
-        title='Uninstall plugin'
+        title='Uninstall app'
         show={confirm === 'uninstall'}
         theme={ConfirmationDialogTheme.Alert}
         confirmLabel='Uninstall'
@@ -400,7 +400,7 @@ export const InstallationPage: React.FC<
         }}
         onCancel={() => setConfirm(undefined)}
       >
-        Are you sure you want to uninstall this plugin? This removes the
+        Are you sure you want to uninstall this app? This removes the
         Installation record.
       </ConfirmationDialog>
     </ContainerNarrow>

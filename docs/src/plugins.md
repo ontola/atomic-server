@@ -1,4 +1,4 @@
-# Atomic Plugins
+# Atomic Apps
 
 Atomic Plugins are applications that can run inside of an Atomic Server.
 They enhance the functionality of an Atomic Server by extending one or more classes.
