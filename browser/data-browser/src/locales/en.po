@@ -4875,6 +4875,7 @@ msgstr "One at a time"
 msgid "Stop the running entry when another starts"
 msgstr "Stop the running entry when another starts"
 
+#: src/chunks/DashboardPage/useBlockQuery.ts
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Timer/useTimerColumns.tsx
 #: src/chunks/TablePage/useTableData.ts
@@ -6495,6 +6496,7 @@ msgstr "Start blank"
 msgid "Use {0} template"
 msgstr "Use {0} template"
 
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
@@ -13412,6 +13414,7 @@ msgstr "Number format"
 msgid "Column definition saved. Retry to finish adding it to the table."
 msgstr "Column definition saved. Retry to finish adding it to the table."
 
+#: src/chunks/DashboardPage/useBlockQuery.ts
 #: src/chunks/TablePage/useTableView.ts
 msgid "Saved view is unavailable in this table."
 msgstr "Saved view is unavailable in this table."
@@ -13425,7 +13428,13 @@ msgstr "Could not save view changes: {0}"
 msgid "Retry view save"
 msgstr "Retry view save"
 
+#: src/chunks/DashboardPage/useBlockQuery.ts
 #: src/chunks/TablePage/useTableData.ts
 #: src/chunks/TablePage/useTableView.ts
 msgid "Saved view configuration is invalid."
 msgstr "Saved view configuration is invalid."
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+#: src/chunks/DashboardPage/blocks/StatBlock.tsx
+msgid "The configured measurement is unavailable."
+msgstr "The configured measurement is unavailable."

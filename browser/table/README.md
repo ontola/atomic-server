@@ -234,5 +234,6 @@ an explicit empty list, and `timerDurationColumn` supplies the same implicit
 start/end expression to the timer grid, its filters and its totals. Clock values
 are quantized once and timezone offsets travel with the request. Atomic
 TablePage uses this compiler and reuses its aggregation for the totals query.
-Other dashboard-block queries remain separate host adapters; this increment does
-not complete their migration or the full page/renderer port.
+Atomic dashboard stat/chart blocks also use this compiler for borrowed view
+filters and their own measures. Their host adapters retain ownership/loading
+checks and explicit unavailable states. The full page/renderer port remains open.

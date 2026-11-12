@@ -356,3 +356,21 @@ Numeric conversion failures and unsupported computed operators also stop the
 request. Schema/type checks and backend query capabilities remain adapter work.
 Standalone dashboard-block queries still need migration. Full page orchestration,
 configuration controls and built-in renderers remain open before catalog work.
+
+
+## Dashboard stat/chart query adoption
+
+Actual dashboard blocks now borrow an owned view through the same reactive
+metadata binding and shared query compiler as TablePage. Block conditions are
+ANDed with view conditions; malformed or unresolved valued filters and foreign
+views stop aggregation instead of widening it. Implicit timer defaults also
+resolve through the common model. Block measures use the same aggregation
+compiler, retain the initiating query clock, preserve row-count semantics and
+omit the table-footer count measure from chart series.
+
+Stat/chart UI distinguishes unavailable configuration from empty data and hides
+previous results during loading. Hook/measure regressions join the dedicated
+TablePage CI lane. An actual local-drive dashboard renders a count/chart, blocks
+both on invalid/foreign metadata, and recovers after repair; screenshots stay
+outside Git. Full dashboard renderer extraction and native aggregation support
+remain open, with the full TablePage gate still preceding catalog discovery.
