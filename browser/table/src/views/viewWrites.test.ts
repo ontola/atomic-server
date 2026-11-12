@@ -61,3 +61,40 @@ it('does not let a throwing UI observer turn a completed write into a retry', as
   expect(write).toHaveBeenCalledTimes(1);
   expect(queue.getSnapshot().pending).toBe(0);
 });
+
+it('checkpoints a prepared identity and confirmed phases across an attachment retry', async () => {
+  const queue = createTableViewWriteQueue('table');
+  const prepare = vi.fn(async () => ({ id: 'view-one' }));
+  const persist = vi.fn(async (_view: { id: string }) => {});
+  const attach = vi
+    .fn()
+    .mockRejectedValueOnce(Error('attach failed'))
+    .mockResolvedValue(undefined);
+  await queue.enqueue(async intent => {
+    const view = await intent.checkpoint('prepared', prepare);
+    await intent.checkpoint('persisted', () => persist(view));
+    await attach(view);
+  });
+  await queue.retry();
+  expect(prepare).toHaveBeenCalledOnce();
+  expect(persist).toHaveBeenCalledOnce();
+  expect(attach).toHaveBeenCalledTimes(2);
+  expect(attach.mock.calls[0][0]).toBe(attach.mock.calls[1][0]);
+});
+
+it('retries failed preparation without losing other successful checkpoints', async () => {
+  const queue = createTableViewWriteQueue('table');
+  const one = vi.fn(async () => 'one');
+  const two = vi
+    .fn()
+    .mockRejectedValueOnce(Error('prepare failed'))
+    .mockResolvedValue('two');
+  await queue.enqueue(async intent => {
+    await intent.checkpoint('one', one);
+    await intent.checkpoint('two', two);
+  });
+  await queue.retry();
+  expect(one).toHaveBeenCalledOnce();
+  expect(two).toHaveBeenCalledTimes(2);
+  expect(queue.getSnapshot().pending).toBe(0);
+});

@@ -182,5 +182,16 @@ the current drain attempt, so hosts must inspect the snapshot for failures.
 Adapters must make retrying the same intent safe and retain prepared creation
 identities across partial attachment failures. This queue does not make multiple
 backend documents transactional or replace native explicit Save/Discard policy.
-Atomic configuration setters and debounced filter/sort saves use it; saved-view
-CRUD and the full configuration/session model remain separate adapter work.
+Atomic configuration setters and debounced filter/sort saves use it. The full
+configuration/session model and backend CRUD transactions remain adapter work.
+
+
+A queued operation receives a `TableViewWriteContext`. Its named `checkpoint`
+retains successful phase results across explicit retries of that same operation;
+failed phases can run again. Use unique keys for stable inputs/result types.
+Checkpoint a prepared identity and confirmed persistence/attachment stages, never
+permission or ownership checks. Atomic view creation/copy/type changes/deletion
+and reordering now use this lifecycle too. Navigation retains the initiating
+intent, so a delayed retry does not override a later tab choice. Backend
+transactions, authorization, conflict resolution and offline acceptance semantics
+remain the adapter's responsibility.

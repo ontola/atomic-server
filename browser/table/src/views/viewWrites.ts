@@ -1,3 +1,11 @@
+export interface TableViewWriteContext {
+  /** Keep a successful preparation/phase result across retries of this intent.
+   * Keys must identify one result type and one immutable input within the job.
+   * Failed preparations clear their own checkpoint; accepted writes are not
+   * rolled back. Never use this to cache permission/ownership preflights. */
+  checkpoint<T>(key: string, prepare: () => Promise<T>): Promise<T>;
+}
+
 export interface TableViewWriteState {
   readonly scope: string;
   readonly busy: boolean;
@@ -10,7 +18,10 @@ export interface TableViewWriteState {
  * captured payload and cannot turn a failed save into an implicit retry.
  * The adapter owns transactions and idempotent persistence of the same intent. */
 export function createTableViewWriteQueue(scope: string) {
-  const writes: (() => Promise<void>)[] = [];
+  const writes: {
+    run: (context: TableViewWriteContext) => Promise<void>;
+    context: TableViewWriteContext;
+  }[] = [];
   const listeners = new Set<() => void>();
   let state: TableViewWriteState = { scope, busy: false, pending: 0 };
   let running: Promise<void> | undefined;
@@ -39,7 +50,7 @@ export function createTableViewWriteQueue(scope: string) {
       .then(async () => {
         while (writes.length) {
           try {
-            await writes[0]();
+            await writes[0].run(writes[0].context);
             writes.shift();
             publish(true);
           } catch (failure) {
@@ -73,8 +84,27 @@ export function createTableViewWriteQueue(scope: string) {
         listeners.delete(listener);
       };
     },
-    enqueue: (write: () => Promise<void>) => {
-      writes.push(write);
+    enqueue: (write: (context: TableViewWriteContext) => Promise<void>) => {
+      const checkpoints = new Map<string, Promise<unknown>>();
+      const context: TableViewWriteContext = {
+        checkpoint<T>(key: string, prepare: () => Promise<T>): Promise<T> {
+          let value = checkpoints.get(key);
+
+          if (!value) {
+            const pending = Promise.resolve()
+              .then(prepare)
+              .catch(error => {
+                if (checkpoints.get(key) === pending) checkpoints.delete(key);
+                throw error;
+              });
+            value = pending;
+            checkpoints.set(key, pending);
+          }
+
+          return value as Promise<T>;
+        },
+      };
+      writes.push({ run: write, context });
       publish(state.busy, state.error);
 
       return drain();

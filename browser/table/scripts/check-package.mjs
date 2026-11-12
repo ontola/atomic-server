@@ -90,7 +90,9 @@ try {
     assert.equal(typeof FloatCell.Edit, 'function');
     assert.deepEqual(selectTableView({ views: ['owned'], requested: 'foreign' }), { status: 'missing', subject: 'foreign' });
     const viewWrites = createTableViewWriteQueue('table:one');
-    await viewWrites.enqueue(async () => {});
+    await viewWrites.enqueue(async intent => {
+      assert.equal(await intent.checkpoint('prepared', async () => 'one'), 'one');
+    });
     assert.equal(viewWrites.getSnapshot().pending, 0);
     const viewInitializer = createTableViewInitializer('table:one');
     assert.equal(await viewInitializer.ensure(async () => 'view:one'), 'view:one');

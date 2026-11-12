@@ -166,4 +166,5 @@ export { createTableViewInitializer } from './views/viewInitializer.js';
 export {
   createTableViewWriteQueue,
   type TableViewWriteState,
+  type TableViewWriteContext,
 } from './views/viewWrites.js';
