@@ -3172,10 +3172,6 @@ msgstr "Exportar a CSV"
 msgid "Untitled view"
 msgstr "Vista sin título"
 
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Any"
-msgstr "Cualquiera"
-
 #: src/chunks/PluginRuns/IntegrationActions.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "True"
@@ -3185,10 +3181,6 @@ msgstr "Verdadero"
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "False"
 msgstr "Falso"
-
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Value…"
-msgstr "Valor…"
 
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Remove filter"
@@ -13425,3 +13417,15 @@ msgstr ""
 #: src/chunks/DashboardPage/blocks/StatBlock.tsx
 msgid "The configured measurement is unavailable."
 msgstr ""
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Filter value"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Any"
+msgstr "Cualquiera"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Value…"
+msgstr "Valor…"

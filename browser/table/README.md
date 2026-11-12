@@ -237,3 +237,13 @@ TablePage uses this compiler and reuses its aggregation for the totals query.
 Atomic dashboard stat/chart blocks also use this compiler for borrowed view
 filters and their own measures. Their host adapters retain ownership/loading
 checks and explicit unavailable states. The full page/renderer port remains open.
+
+`TableFilterValueInput` is the actual typed filter-value control used by Atomic's
+filter popovers. It keeps string query values, false/zero, unknown stored choices
+and incomplete numeric text. Text numeric inputs use a decimal keyboard hint,
+so the browser cannot turn an incomplete value such as `1e` into an empty filter.
+JSON canonicalization runs only on complete JSON; numeric canonicalization is an
+explicit backend policy and defaults off. Native adapters retain their typed
+parser and exactness checks. Hosts supply labels/style primitives, tag labels and
+a resource-picker leaf; the shared control owns the actual value UI and change/
+blur behavior. This does not yet extract the entire filter-chip/menu/page shell.

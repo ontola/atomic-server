@@ -374,3 +374,17 @@ TablePage CI lane. An actual local-drive dashboard renders a count/chart, blocks
 both on invalid/foreign metadata, and recovers after repair; screenshots stay
 outside Git. Full dashboard renderer extraction and native aggregation support
 remain open, with the full TablePage gate still preceding catalog discovery.
+
+## Shared typed filter-value control
+
+The actual Atomic filter popup now delegates value UI to the shared package:
+text, numeric text, dates, booleans, declared choices and canonical JSON. Atomic
+retains datatype IDs, reference search, tag labels and style primitives. Incomplete
+numeric strings remain intact instead of the browser clearing number inputs;
+unknown choices and false values remain visible. Numeric string normalization is
+an opt-in backend policy, while typed backend parsing/range checks remain there.
+Existing translated picker labels are explicitly retained during extraction.
+
+ELFA adoption is in progress with its public ORM query parser; the entire filter
+bar/chip/menu and remaining page/renderer orchestration still need extraction.
+Catalog discovery continues to follow the full-page gate.

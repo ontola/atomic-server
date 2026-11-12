@@ -3172,10 +3172,6 @@ msgstr ""
 msgid "Untitled view"
 msgstr ""
 
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Any"
-msgstr ""
-
 #: src/chunks/PluginRuns/IntegrationActions.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "True"
@@ -3184,10 +3180,6 @@ msgstr ""
 #: src/chunks/PluginRuns/IntegrationActions.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "False"
-msgstr ""
-
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Value…"
 msgstr ""
 
 #: src/chunks/TablePage/TableFilterChip.tsx
@@ -13424,4 +13416,16 @@ msgstr ""
 #: src/chunks/DashboardPage/blocks/ChartBlock.tsx
 #: src/chunks/DashboardPage/blocks/StatBlock.tsx
 msgid "The configured measurement is unavailable."
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Filter value"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Any"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Value…"
 msgstr ""
