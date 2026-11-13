@@ -2,6 +2,14 @@
 
 See [architectural decisions](builtin-syncables-apps.md). **These are conceptual wireframes**; the first implementation should reuse Atomic Server's existing Apps, TablePage, tabs, dialog and iframe-host patterns.
 
+## Navigation placement — aligns with Joep's accepted marketplace direction
+
+**Do not add a permanent Apps entry to the drive sidebar tree.** The current sidebar is a resource tree, and the existing **account menu at its bottom** already contains **Apps** (routes to `/app/apps`). `planning/app-marketplace.md` (Joep, accepted 2026-10-28) prefers contextual discovery: an Apps group in Cmd+K, Open with on relevant resources, new-workspace suggestions and assistant search; the Apps page is the secondary discovery destination. These contextual features are planned, not all already shipped.
+
+After installation, **GitHub appears in the sidebar as an ordinary platform table under My Drive**, never as a globally pinned shortcut. The New button remains normal resource creation; it does not redirect to Apps.
+
+The standalone clickable prototype starts on My Drive, simulates the existing account-menu Apps entry and the planned Cmd+K Apps result, and then shows the installed GitHub resource in the normal drive tree.
+
 ## 0. Apps / Discover integrations
 
 ```text
