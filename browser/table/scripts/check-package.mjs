@@ -131,7 +131,7 @@ try {
   writeFileSync(
     join(consumer, 'consumer.tsx'),
     `
-    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type TableQuery, type IndexedTableRows, type WindowedTableRows, ValueCell, StringCell, type TableRowMutation, type FancyTableProps } from '@tomic/table';
+    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type TableQuery, type IndexedTableRows, type WindowedTableRows, ValueCell, StringCell, type TableRowMutation, type FancyTableProps, TableColumnRemovalDialog } from '@tomic/table';
     const props: FancyTableProps<{ id: string }> = {
       columns: [{ id: 'name' }], itemCount: 1, columnToKey: column => column.id,
       labelledBy: 'title', HeadingComponent: ({ column }) => <span>{column.id}</span>,
@@ -139,6 +139,8 @@ try {
       children: ({ index }) => <Cell rowIndex={index} columnIndex={1}>A value</Cell>,
     };
     const grid = <FancyTable {...props} />;
+    const removal = <TableColumnRemovalDialog scope="class/property" canRemove canDeleteDefinition={false}
+      onConfirm={async deleteDefinition => { const explicit: boolean = deleteDefinition; void explicit; }} onClose={() => {}} />;
     const editor = <IntegerCell.Edit value={1} property="count" onChange={value => void value} />;
     // @ts-expect-error The public declarations must reject an invalid row count.
     const invalid: FancyTableProps<string>['itemCount'] = 'one';

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
-import { useContext, type ReactNode } from 'react';
+import { useContext, useState } from 'react';
 import { beforeAll, afterEach, expect, it, vi } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -23,15 +23,11 @@ import {
 import { buildTheme } from '../../styling';
 import { TablePageContext } from './tablePageContext';
 import { TableHeadingMenu } from './TableHeadingMenu';
-const { toastError, confirmation } = vi.hoisted(() => ({
-  toastError: vi.fn(),
-  confirmation: { pending: undefined as Promise<unknown> | undefined },
-}));
+import { AtomicColumnRemovalDialog } from './AtomicColumnRemovalDialog';
 vi.mock('@tomic/react', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/react')>()),
   useCanWrite: () => true,
 }));
-vi.mock('react-hot-toast', () => ({ default: { error: toastError } }));
 vi.mock('../../hooks/useNavigateWithTransition', () => ({
   useNavigateWithTransition: () => vi.fn(),
 }));
@@ -62,34 +58,15 @@ vi.mock('@components/Dropdown', () => ({
     </>
   ),
 }));
-vi.mock('@components/ConfirmationDialog', () => ({
-  ConfirmationDialogTheme: { Alert: 'alert' },
-  ConfirmationDialog: ({
-    show,
-    children,
-    onConfirm,
-    bindShow,
-  }: {
-    show: boolean;
-    children: ReactNode;
-    onConfirm: () => Promise<unknown>;
-    bindShow: (show: boolean) => void;
-  }) =>
-    show ? (
-      <div role='dialog'>
-        {children}
-        <button
-          onClick={() => {
-            bindShow(false);
-            confirmation.pending = onConfirm();
-          }}
-        >
-          Confirm removal
-        </button>
-      </div>
-    ) : null,
-}));
 beforeAll(async () => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute('open', '');
+  };
+
+  HTMLDialogElement.prototype.close = function () {
+    this.removeAttribute('open');
+  };
+
   const web = await import('loro-crdt/web');
   await web.default({
     module_or_path: await readFile(
@@ -101,10 +78,13 @@ beforeAll(async () => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  confirmation.pending = undefined;
 });
 
-async function fixture(external = false, failure = false) {
+async function fixture(
+  external = false,
+  failure = false,
+  currentOwner?: string,
+) {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
 
   for (const [subject, datatype] of [
@@ -140,12 +120,25 @@ async function fixture(external = false, failure = false) {
 
   function Page() {
     const defaults = useContext(TablePageContext);
+    const [show, setShow] = useState(false);
 
     return (
       <TablePageContext.Provider
-        value={{ ...defaults, tableClassSubject: cls.subject }}
+        value={{
+          ...defaults,
+          tableClassSubject: cls.subject,
+          requestColumnRemoval: () => setShow(true),
+        }}
       >
-        <TableHeadingMenu resource={resource} />
+        {!show && <TableHeadingMenu resource={resource} />}
+        {show && (
+          <AtomicColumnRemovalDialog
+            owner={cls.subject}
+            property={resource.subject}
+            currentOwner={currentOwner ?? cls.subject}
+            onClose={() => setShow(false)}
+          />
+        )}
       </TablePageContext.Provider>
     );
   }
@@ -165,13 +158,12 @@ async function fixture(external = false, failure = false) {
 
 it('honors unchecked deletion even for a property owned by this class', async () => {
   const state = await fixture();
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' }));
-  expect(confirmation.pending).toBeInstanceOf(Promise);
-  await confirmation.pending;
+  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
   await waitFor(() => expect(state.save).toHaveBeenCalledOnce());
   expect(state.cls.getArray(core.properties.requires)).not.toContain(
     state.resource.subject,
   );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(state.destroy).not.toHaveBeenCalled();
 });
 it('deletes an owned definition only after explicit selection and successful schema save', async () => {
@@ -179,9 +171,7 @@ it('deletes an owned definition only after explicit selection and successful sch
   fireEvent.click(
     screen.getByRole('checkbox', { name: 'Delete property and its children' }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' }));
-  expect(confirmation.pending).toBeInstanceOf(Promise);
-  await confirmation.pending;
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
   await waitFor(() => expect(state.destroy).toHaveBeenCalledOnce());
   expect(state.save.mock.invocationCallOrder[0]).toBeLessThan(
     state.destroy.mock.invocationCallOrder[0],
@@ -196,13 +186,45 @@ it('keeps external definitions unavailable for deletion and does not destroy aft
       }) as HTMLInputElement
     ).disabled,
   ).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' }));
-  expect(confirmation.pending).toBeInstanceOf(Promise);
-  await confirmation.pending;
-  await waitFor(() =>
-    expect(toastError).toHaveBeenCalledWith(
-      'Failed to remove column: schema save failed',
-    ),
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+  await screen.findByText('schema save failed');
+  expect(screen.getByRole('dialog')).toBeDefined();
   expect(state.destroy).not.toHaveBeenCalled();
+});
+
+it('keeps the page-owned dialog pending after its heading unmounts and closes only after confirmation', async () => {
+  const state = await fixture();
+  let finish!: (value: 'persisted') => void;
+  state.save.mockImplementation(
+    () =>
+      new Promise<'persisted'>(resolve => {
+        finish = resolve;
+      }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+  await waitFor(() => expect(state.save).toHaveBeenCalledOnce());
+  expect(screen.getByRole('dialog').getAttribute('aria-busy')).toBe('true');
+  expect(
+    (screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(state.destroy).not.toHaveBeenCalled();
+  finish('persisted');
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(state.destroy).not.toHaveBeenCalled();
+});
+
+it('does not retarget a captured removal intent to another row class', async () => {
+  const state = await fixture(
+    false,
+    false,
+    'https://example.com/another-class',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+  expect(state.save).not.toHaveBeenCalled();
+  expect(state.destroy).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert').textContent).toContain('unavailable');
+  expect(state.cls.getArray(core.properties.requires)).toContain(
+    state.resource.subject,
+  );
 });

@@ -1,34 +1,17 @@
-import {
-  Resource,
-  properties,
-  useCanWrite,
-  useResource,
-  useString,
-  core,
-} from '@tomic/react';
-import { useCallback, useContext, useState, type JSX, type Ref } from 'react';
+import { Resource, useCanWrite, useResource } from '@tomic/react';
+import { useContext, useState, type JSX, type Ref } from 'react';
 import { DropdownMenu } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { AutoOpenTrigger } from '@components/Dropdown/AutoOpenTrigger';
 import { FaEllipsisVertical } from 'react-icons/fa6';
-import toast from 'react-hot-toast';
 import {
-  executeTableColumnRemoval,
   TablePropertyMenu,
   type TablePropertyMenuHandle,
   type TablePropertyMenuPresentation,
 } from '@tomic/table';
 import { EditPropertyDialog } from './PropertyForm/EditPropertyDialog';
 import { TablePageContext } from './tablePageContext';
-import {
-  ConfirmationDialog,
-  ConfirmationDialogTheme,
-} from '@components/ConfirmationDialog';
-import { ResourceInline } from '@views/ResourceInline';
-import { ResourceUsage } from '@components/ResourceUsage';
 import { constructOpenURL } from '../../helpers/navigation';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
-import { Column } from '@components/Row';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
 export type { TablePropertyMenuHandle as TableHeadingMenuHandle } from '@tomic/table';
@@ -40,80 +23,17 @@ interface TableHeadingMenuProps {
 
 const Trigger = buildDefaultTrigger(<FaEllipsisVertical />, 'Edit column');
 
-const useIsExternalProperty = (property: Resource) => {
-  const { tableClassSubject } = useContext(TablePageContext);
-  const [parent] = useString(property, properties.parent);
-
-  return parent !== tableClassSubject;
-};
-
 export function TableHeadingMenu({
   resource,
   ref,
 }: TableHeadingMenuProps): JSX.Element {
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog_internal] = useState(false);
-  const [fullDelete, setFullDelete] = useState(false);
-  const setShowDeleteDialog = useCallback((show: boolean) => {
-    setShowDeleteDialog_internal(show);
-
-    if (!show) {
-      setFullDelete(false);
-    }
-  }, []);
-
-  const { tableClassSubject, addFilter, hideColumn } =
+  const { tableClassSubject, addFilter, hideColumn, requestColumnRemoval } =
     useContext(TablePageContext);
   const tableClassResource = useResource(tableClassSubject);
   const canWriteClass = useCanWrite(tableClassResource);
   const canWriteProperty = useCanWrite(resource);
   const navigate = useNavigateWithTransition();
-
-  const isExternalProperty = useIsExternalProperty(resource);
-
-  const removeProperty = useCallback(async () => {
-    const recommends = tableClassResource.getArray(
-      core.properties.recommends,
-    ) as string[];
-    const requires = tableClassResource.getArray(
-      core.properties.requires,
-    ) as string[];
-
-    await tableClassResource.set(
-      core.properties.recommends,
-      recommends.filter(r => r !== resource.subject),
-    );
-
-    await tableClassResource.set(
-      core.properties.requires,
-      requires.filter(r => r !== resource.subject),
-    );
-
-    await tableClassResource.save();
-  }, [tableClassResource, resource]);
-
-  const canDeleteDefinition = !isExternalProperty && canWriteProperty;
-  const onConfirm = useCallback(() => {
-    return executeTableColumnRemoval(
-      {
-        deleteDefinition: fullDelete,
-        canRemove: canWriteClass,
-        canDeleteDefinition,
-      },
-      {
-        removeFromSchema: removeProperty,
-        deleteDefinition: () => resource.destroy(),
-      },
-    ).catch(error => {
-      toast.error(`Failed to remove column: ${error.message}`);
-    });
-  }, [
-    fullDelete,
-    canWriteClass,
-    canDeleteDefinition,
-    removeProperty,
-    resource,
-  ]);
 
   return (
     <>
@@ -133,7 +53,7 @@ export function TableHeadingMenu({
             disabled: !canWriteProperty,
           },
           remove: {
-            run: () => setShowDeleteDialog(true),
+            run: () => requestColumnRemoval(resource.subject),
             disabled: !canWriteClass,
           },
         }}
@@ -152,32 +72,6 @@ export function TableHeadingMenu({
         showDialog={showEditDialog}
         bindShow={setShowEditDialog}
       />
-      <ConfirmationDialog
-        title={fullDelete ? 'Delete property' : 'Remove column'}
-        confirmLabel={fullDelete ? 'Delete' : 'Remove'}
-        show={showDeleteDialog}
-        bindShow={setShowDeleteDialog}
-        theme={ConfirmationDialogTheme.Alert}
-        onConfirm={onConfirm}
-      >
-        <Column>
-          <p>
-            Remove <ResourceInline subject={resource.subject} /> from{' '}
-            <ResourceInline subject={tableClassSubject} />
-          </p>
-          <ResourceUsage resource={resource} />
-          <CheckboxLabel>
-            <Checkbox
-              checked={fullDelete}
-              disabled={!canDeleteDefinition && !fullDelete}
-              onChange={checked => {
-                if (!checked || canDeleteDefinition) setFullDelete(checked);
-              }}
-            />
-            Delete property and its children
-          </CheckboxLabel>
-        </Column>
-      </ConfirmationDialog>
     </>
   );
 }
