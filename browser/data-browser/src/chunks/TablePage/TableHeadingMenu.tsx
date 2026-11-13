@@ -1,5 +1,5 @@
 import { Resource, useCanWrite, useResource } from '@tomic/react';
-import { useContext, useState, type JSX, type Ref } from 'react';
+import { useContext, type JSX, type Ref } from 'react';
 import { DropdownMenu } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { AutoOpenTrigger } from '@components/Dropdown/AutoOpenTrigger';
@@ -9,7 +9,6 @@ import {
   type TablePropertyMenuHandle,
   type TablePropertyMenuPresentation,
 } from '@tomic/table';
-import { EditPropertyDialog } from './PropertyForm/EditPropertyDialog';
 import { TablePageContext } from './tablePageContext';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
@@ -27,9 +26,13 @@ export function TableHeadingMenu({
   resource,
   ref,
 }: TableHeadingMenuProps): JSX.Element {
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const { tableClassSubject, addFilter, hideColumn, requestColumnRemoval } =
-    useContext(TablePageContext);
+  const {
+    tableClassSubject,
+    addFilter,
+    hideColumn,
+    requestColumnRemoval,
+    requestColumnEdit,
+  } = useContext(TablePageContext);
   const tableClassResource = useResource(tableClassSubject);
   const canWriteClass = useCanWrite(tableClassResource);
   const canWriteProperty = useCanWrite(resource);
@@ -49,7 +52,7 @@ export function TableHeadingMenu({
           filter: { run: () => addFilter(resource.subject) },
           hide: { run: () => hideColumn(resource.subject) },
           edit: {
-            run: () => setShowEditDialog(true),
+            run: () => requestColumnEdit(resource.subject),
             disabled: !canWriteProperty,
           },
           remove: {
@@ -66,11 +69,6 @@ export function TableHeadingMenu({
           editUnavailable: 'Edit unavailable',
           remove: 'Remove',
         }}
-      />
-      <EditPropertyDialog
-        resource={resource}
-        showDialog={showEditDialog}
-        bindShow={setShowEditDialog}
       />
     </>
   );

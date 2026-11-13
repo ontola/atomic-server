@@ -291,3 +291,10 @@ export {
   type TablePropertyFieldsModel,
   type TablePropertyCheckboxProps,
 } from './schema/PropertyForm.js';
+export {
+  TablePropertyDialog,
+  type TablePropertyDialogProps,
+  type TablePropertyEditorProps,
+  type TablePropertyDialogPresentation,
+  type TablePropertyDialogAction,
+} from './schema/PropertyDialog.js';
