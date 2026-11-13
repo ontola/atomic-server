@@ -103,3 +103,49 @@ it('requests a fixed-date value when switching from now', async () => {
   fireEvent.change(mode, { target: { value: 'date' } });
   expect(change).toHaveBeenCalledExactlyOnceWith('');
 });
+it('allows repairing a stored unsupported operator even when the backend supports only equality', async () => {
+  const change = vi.fn();
+  render(
+    <TableFilterChip
+      {...base}
+      operators={[{ value: 'eq', label: 'is' }]}
+      filter={{ property: 'title', operator: 'contains', value: 'a' }}
+      operatorLabel='contains'
+      onOperatorChange={change}
+    />,
+  );
+  fireEvent.click(screen.getByTestId('filter-chip'));
+  const select = await screen.findByRole('combobox', {
+    name: 'Filter operator',
+  });
+  expect((select as HTMLSelectElement).value).toBe('contains');
+  fireEvent.change(select, { target: { value: 'eq' } });
+  expect(change).toHaveBeenCalledExactlyOnceWith('eq');
+});
+it('locks an already-open popup during a backend operation', async () => {
+  const remove = vi.fn(),
+    change = vi.fn();
+  const props = {
+    ...base,
+    filter: { property: 'amount', operator: 'eq' as const, value: '' },
+    onRemove: remove,
+    onValueChange: change,
+  };
+  const view = render(
+    <TableFilterChip {...props} valueInputProps={{ kind: 'number' }} />,
+  );
+  await screen.findByRole('dialog');
+  view.rerender(
+    <TableFilterChip
+      {...props}
+      disabled
+      valueInputProps={{ kind: 'number' }}
+    />,
+  );
+  expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole('combobox') as HTMLSelectElement).disabled).toBe(
+    true,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Remove filter' }));
+  expect(remove).not.toHaveBeenCalled();
+});

@@ -3182,6 +3182,7 @@ msgstr "Verdadero"
 msgid "False"
 msgstr "Falso"
 
+#: src/chunks/TablePage/TableFilterBar.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Remove filter"
 msgstr "Quitar filtro"
@@ -8960,10 +8961,12 @@ msgid "Find a column…"
 msgstr ""
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
 msgid "Find a column to filter by"
 msgstr ""
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
 msgid "No column matches"
 msgstr ""
 
@@ -13431,10 +13434,15 @@ msgstr "Cualquiera"
 msgid "Value…"
 msgstr "Valor…"
 
-#: src/chunks/TablePage/TableFilterChip.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
 msgid "Unavailable column"
 msgstr ""
 
+#: src/chunks/TablePage/TableFilterBar.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "This column is unavailable."
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+msgid "Add filter"
 msgstr ""
