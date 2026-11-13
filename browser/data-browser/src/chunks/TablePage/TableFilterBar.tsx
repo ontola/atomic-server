@@ -86,12 +86,6 @@ export function TableFilterBar({
           ? columnBySubject.get(filter.property)
           : undefined;
 
-        // A filter whose column is gone (a computed column that was
-        // removed) renders nothing rather than an unlabelled chip.
-        if (!column && !derived) {
-          return null;
-        }
-
         return (
           <TableFilterChip
             key={key}
