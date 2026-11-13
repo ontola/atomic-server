@@ -1,3 +1,6 @@
+import { QuickAddDialog } from './QuickAddDialog';
+import { writeAtomicQuickAddConfiguration } from './atomicQuickAddConfiguration';
+import type { QuickAddSpec } from './quickAdd';
 import { RowActionDialog } from './RowActionDialog';
 import { DerivedColumnDialog } from './DerivedColumnDialog';
 import { writeAtomicConfiguredColumn } from './atomicConfiguredColumn';
@@ -211,7 +214,6 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     viewRowActions,
     setViewRowActions,
     viewQuickAdd,
-    setViewQuickAdd,
     queryFilters,
     queryExpressionFilters,
     query,
@@ -1360,6 +1362,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     properties: Property[];
   } & (
     | { kind: 'action'; original?: RowActionSpec }
+    | { kind: 'quick-add'; original?: QuickAddSpec }
     | {
         kind: 'computed';
         original?: DerivedColumnSpec;
@@ -1374,6 +1377,20 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     ]),
   );
   const [configuredColumn, setConfiguredColumn] = useState<ConfiguredRequest>();
+
+  const requestQuickAddEdit = () => {
+    if (!canWrite) return;
+    setConfiguredColumn({
+      kind: 'quick-add',
+      original: viewQuickAdd ? structuredClone(viewQuickAdd) : undefined,
+      table: resource.subject,
+      owner: tableClass.subject,
+      scope: requestedViewScope,
+      definitions,
+      properties: [...allColumns],
+    });
+  };
+
   const requestRowActionEdit = useCallback(
     (spec?: RowActionSpec) => {
       if (!canWrite) return;
@@ -1728,7 +1745,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
               lockedReason={lockedReason}
               canWrite={canWriteResource}
               quickAdd={viewQuickAdd}
-              setQuickAdd={setViewQuickAdd}
+              requestQuickAddEdit={requestQuickAddEdit}
               quickFilter={
                 showsRows
                   ? { value: quickFilterText, onChange: setQuickFilterText }
@@ -1890,6 +1907,46 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
                 />
               )}
             </>
+          )}
+          {configuredColumn?.kind === 'quick-add' && (
+            <QuickAddDialog
+              open
+              classProperties={configuredColumn.properties}
+              editing={configuredColumn.original}
+              scope={JSON.stringify([
+                configuredColumn.scope,
+                configuredColumn.owner,
+                configuredColumn.kind,
+              ])}
+              canSave={configuredCanSave}
+              bindShow={show => {
+                if (!show)
+                  setConfiguredColumn(current =>
+                    current === configuredColumn ? undefined : current,
+                  );
+              }}
+              onSave={candidate => {
+                if (!configuredCanSave)
+                  throw Error(
+                    'The selected view or column definitions changed.',
+                  );
+                const desired = candidate
+                  ? structuredClone(candidate)
+                  : undefined;
+
+                return enqueueViewWrite((view, intent) =>
+                  writeAtomicQuickAddConfiguration(
+                    store,
+                    configuredColumn.table,
+                    configuredColumn.owner,
+                    view,
+                    configuredColumn.original,
+                    desired,
+                    intent,
+                  ),
+                );
+              }}
+            />
           )}
           {configuredColumn?.kind === 'action' && (
             <RowActionDialog

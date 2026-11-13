@@ -943,6 +943,7 @@ msgstr "I already have an account"
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/views/ErrorPage.tsx
@@ -3162,9 +3163,6 @@ msgstr "Hide in this view"
 msgid "Remove <0/> from{0} <1/>"
 msgstr "Remove <0/> from{0} <1/>"
 
-#~ msgid "<0/> Delete property and its children"
-#~ msgstr "<0/> Delete property and its children"
-
 #: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Delete property"
 msgstr "Delete property"
@@ -3325,9 +3323,6 @@ msgstr "Currency"
 msgid "Range"
 msgstr "Range"
 
-#~ msgid "New{0} {1}{2} Column"
-#~ msgstr "New{0} {1}{2} Column"
-
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Invalid Name"
 msgstr "Invalid Name"
@@ -3339,9 +3334,6 @@ msgstr "New Column"
 #: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "Resource type:"
 msgstr "Resource type:"
-
-#~ msgid "<0/> Allow multiple values"
-#~ msgstr "<0/> Allow multiple values"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
@@ -3400,9 +3392,6 @@ msgstr "Long"
 #: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Relative"
 msgstr "Relative"
-
-#~ msgid "Value must be between 0 and 20."
-#~ msgstr "Value must be between 0 and 20."
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Decimal Places"
@@ -4088,6 +4077,7 @@ msgstr "Open workspace"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/Vault/VaultStorage.tsx
@@ -13471,9 +13461,6 @@ msgstr "This column is unavailable."
 msgid "Add filter"
 msgstr "Add filter"
 
-#~ msgid "Failed to remove column: {0}"
-#~ msgstr "Failed to remove column: {0}"
-
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Edit column"
 msgstr "Edit column"
@@ -13537,14 +13524,13 @@ msgid "Enter a finite number."
 msgstr "Enter a finite number."
 
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "The view or column definitions changed. Close this editor and reopen it."
 msgstr "The view or column definitions changed. Close this editor and reopen it."
 
-#~ msgid "This view change is queued. Retry finishes the same change. Closing keeps a pending save."
-#~ msgstr "This view change is queued. Retry finishes the same change. Closing keeps a pending save."
-
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "Retry to finish saving this change. Closing leaves any partially applied save pending."
 msgstr "Retry to finish saving this change. Closing leaves any partially applied save pending."

@@ -335,3 +335,50 @@ it('notifies creation once after success and labels checkpointed retries explici
   expect(close).toHaveBeenCalledOnce();
   expect(save).toHaveBeenCalledTimes(2);
 });
+it('removes an invalid draft through the same retained retry lifecycle without switching to Save', async () => {
+  const draft = makeDraft('');
+  const close = vi.fn();
+  const save = vi.fn();
+  const remove = vi.fn(async () => {
+    draft.name.set('locked', 'true');
+    if (remove.mock.calls.length === 1) throw Error('Remove save failed');
+  });
+  render(
+    <TablePropertyDialog
+      open
+      scope='remove'
+      title='Edit button'
+      prepare={() => draft}
+      Editor={Editor}
+      save={save}
+      remove={remove}
+      isDraftLocked={value => value.name.has('locked')}
+      onClose={close}
+      messages={{ saveLocked: 'Retry' }}
+    />,
+  );
+  await screen.findByRole('textbox');
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Remove' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  expect(
+    (screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+  await screen.findByText('Remove save failed');
+  expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Retry' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  expect(remove).toHaveBeenCalledTimes(2);
+  expect(save).not.toHaveBeenCalled();
+});

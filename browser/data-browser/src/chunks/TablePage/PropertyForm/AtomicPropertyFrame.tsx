@@ -17,7 +17,11 @@ export function AtomicPropertyFrame({
   canClose,
   onCancel,
   saveTestId,
-}: TablePropertyDialogPresentation & { saveTestId?: string }) {
+  removeTestId,
+}: TablePropertyDialogPresentation & {
+  saveTestId?: string;
+  removeTestId?: string;
+}) {
   const [dialogProps, show] = useDialog();
   useEffect(() => {
     show();
@@ -33,8 +37,14 @@ export function AtomicPropertyFrame({
         {actions.map(action => (
           <Button
             key={action.key}
-            data-testid={action.key === 'save' ? saveTestId : undefined}
-            subtle={action.key === 'cancel'}
+            data-testid={
+              action.key === 'save'
+                ? saveTestId
+                : action.key === 'remove'
+                  ? removeTestId
+                  : undefined
+            }
+            subtle={action.key === 'cancel' || action.key === 'remove'}
             disabled={action.disabled}
             onClick={action.run}
           >
