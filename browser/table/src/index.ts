@@ -318,3 +318,10 @@ export {
   type TableQuickAddState,
   type TableQuickAddRequest,
 } from './quickAddQueue.js';
+
+export {
+  TableRowActionFields,
+  type TableRowActionFieldsProps,
+  type TableRowActionTarget,
+  type TableRowActionKind,
+} from './RowActionFields.js';
