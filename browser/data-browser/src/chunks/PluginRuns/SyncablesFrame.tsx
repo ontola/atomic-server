@@ -133,23 +133,52 @@ export function SyncablesFrame({
           return true;
         }
 
-        // The same read-only Atomic API and signed proxy transport that
-        // AppFrame supplies. Block generic writes, apply, undo and exports:
-        // only the host-verified syncables commands above may mutate data.
+        // This view needs only the signed proxy transport. Do not expose the
+        // ordinary app's get/query/create/save/apply calls: a compromised
+        // iframe must not inherit the person's general Atomic drive access.
+        // Further scope proxy requests to this view's provider and selected
+        // connection, not just the configured proxy origin.
         if (
-          [
-            'app',
-            'data',
-            'get',
-            'getMany',
-            'query',
-            'search',
-            'context',
-            'proxyCapability',
-            'proxyFetch',
-            'proxyConnections',
-          ].includes(data.op)
+          ['proxyCapability', 'proxyFetch', 'proxyConnections'].includes(data.op)
         ) {
+          const context = (await syncablesHostRequest(
+            store,
+            drive,
+            table,
+            { op: 'syncablesContext' },
+            proxy,
+          )) as {
+            platform: string;
+            connectionId?: string;
+          };
+          if (
+            data.op === 'proxyConnections' ||
+            data.op === 'proxyCapability'
+          ) {
+            if (data.platform !== context.platform)
+              throw new Error('This view cannot access another provider');
+            if (
+              context.connectionId &&
+              data.op === 'proxyCapability' &&
+              data.connectionId !== context.connectionId
+            ) throw new Error('This view cannot access another connection');
+          }
+          if (data.op === 'proxyFetch') {
+            const url =
+              typeof data.url === 'string'
+                ? new URL(data.url)
+                : undefined;
+            const segments = url?.pathname.split('/').filter(Boolean);
+            if (
+              !segments ||
+              segments[0] !== 'proxy' ||
+              segments[2] !== context.platform ||
+              (context.connectionId &&
+                decodeURIComponent(segments[1] ?? '') !== context.connectionId)
+            ) throw new Error('Proxy request is outside this view source');
+            if (data.method !== 'GET')
+              throw new Error('Built-in Syncables is read-only');
+          }
           const user = store.getAgent();
           const proxyHost = user?.subject
             ? proxy.host(async () => user.subject!)
