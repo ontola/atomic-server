@@ -283,7 +283,7 @@ function AddViewMenu({
 }): JSX.Element {
   const items = useMemo(
     (): DropdownItem[] => [
-      ...VIEW_KINDS.map(kind => {
+      ...VIEW_KINDS.filter(kind => kind !== 'syncables').map(kind => {
         const Icon = VIEW_KIND_ICONS[kind];
 
         return {
@@ -581,7 +581,7 @@ function ViewTab({
                 header: true,
                 onClick: () => undefined,
               },
-              ...VIEW_KINDS.filter(kind => kind !== ownType).map(kind => {
+              ...VIEW_KINDS.filter(kind => kind !== ownType && kind !== 'syncables').map(kind => {
                 const Icon = VIEW_KIND_ICONS[kind];
 
                 return {
