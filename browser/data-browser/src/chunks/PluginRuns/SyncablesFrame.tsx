@@ -151,8 +151,8 @@ export function SyncablesFrame({
           ].includes(data.op)
         ) {
           const user = store.getAgent();
-          const proxyHost = user
-            ? proxy.host(async () => user.subject)
+          const proxyHost = user?.subject
+            ? proxy.host(async () => user.subject!)
             : undefined;
           return handleRequest(
             store,
@@ -206,7 +206,7 @@ export function SyncablesFrame({
 
   const connect = async () => {
     const user = store.getAgent();
-    if (!user) throw new Error('Sign in to connect GitHub');
+    if (!user?.subject) throw new Error('Sign in to connect GitHub');
     const target = await proxy.start(
       {
         drive,
@@ -225,7 +225,7 @@ export function SyncablesFrame({
 
   const useExisting = async (connection: ProxyConnection) => {
     const user = store.getAgent();
-    if (!user) throw new Error('Sign in to use GitHub');
+    if (!user?.subject) throw new Error('Sign in to use GitHub');
     await proxy.delegate(
       connection.connection_id,
       user.subject,
