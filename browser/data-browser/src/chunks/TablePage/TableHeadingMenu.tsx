@@ -27,6 +27,8 @@ import {
   FaFilter,
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
+import toast from 'react-hot-toast';
+import { executeTableColumnRemoval } from '@tomic/table';
 import { EditPropertyDialog } from './PropertyForm/EditPropertyDialog';
 import { TablePageContext } from './tablePageContext';
 import {
@@ -119,19 +121,28 @@ export function TableHeadingMenu({
     await tableClassResource.save();
   }, [tableClassResource, resource]);
 
-  const deleteProperty = useCallback(async () => {
-    await removeProperty();
-
-    resource.destroy();
-  }, [removeProperty, resource]);
-
+  const canDeleteDefinition = !isExternalProperty && canWriteProperty;
   const onConfirm = useCallback(() => {
-    if (isExternalProperty) {
-      removeProperty();
-    } else {
-      deleteProperty();
-    }
-  }, [deleteProperty, removeProperty, isExternalProperty]);
+    return executeTableColumnRemoval(
+      {
+        deleteDefinition: fullDelete,
+        canRemove: canWriteClass,
+        canDeleteDefinition,
+      },
+      {
+        removeFromSchema: removeProperty,
+        deleteDefinition: () => resource.destroy(),
+      },
+    ).catch(error => {
+      toast.error(`Failed to remove column: ${error.message}`);
+    });
+  }, [
+    fullDelete,
+    canWriteClass,
+    canDeleteDefinition,
+    removeProperty,
+    resource,
+  ]);
 
   const items = useMemo(
     (): DropdownItem[] => [
@@ -212,7 +223,13 @@ export function TableHeadingMenu({
           </p>
           <ResourceUsage resource={resource} />
           <CheckboxLabel>
-            <Checkbox checked={fullDelete} onChange={setFullDelete} />
+            <Checkbox
+              checked={fullDelete}
+              disabled={!canDeleteDefinition && !fullDelete}
+              onChange={checked => {
+                if (!checked || canDeleteDefinition) setFullDelete(checked);
+              }}
+            />
             Delete property and its children
           </CheckboxLabel>
         </Column>

@@ -254,3 +254,9 @@ export {
   type TableColumnsMenuPresentation,
   type TableColumnVisibility,
 } from './views/ColumnsMenu.js';
+
+export {
+  executeTableColumnRemoval,
+  type TableColumnRemoval,
+  type TableColumnRemovalBackend,
+} from './schema/columnRemoval.js';

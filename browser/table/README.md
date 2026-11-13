@@ -287,3 +287,10 @@ selector works without a host menu; Atomic retains its dropdown primitive.
 Backends retain persistence and visibility representation (ELFA's hidden-column
 policy does not become a whitelist). Property/schema command menus remain
 under extraction.
+
+`executeTableColumnRemoval` separates schema detachment from explicit property
+definition deletion. Both capabilities are checked before writing; definition
+deletion runs only after confirmed detachment and its promise is awaited.
+Backend identity/permission checks still apply, and the two writes are not a
+cross-resource transaction. Atomic's checkbox now supplies the actual deletion
+intent instead of inferring it from ownership.
