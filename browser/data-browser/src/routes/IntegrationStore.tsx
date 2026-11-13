@@ -1,5 +1,6 @@
 import { usePluginClass } from '../chunks/PluginRuns/runScript';
 import { NewAutomation } from '../chunks/PluginRuns/NewAutomation';
+import { ProxyCatalogApps } from '../chunks/PluginRuns/ProxyCatalogApps';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
 import {
   CatalogApps,
@@ -415,7 +416,12 @@ function IntegrationStore(): React.JSX.Element {
               Show experimental plugins
             </CheckboxLabel>
           )}
-          {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
+          {nothingToDiscover && !showExperimentalPlugins && (
+            <DiscoverEmptyState searching={!!query} />
+          )}
+          {drive && showExperimentalPlugins && (
+            <ProxyCatalogApps drive={drive} query={query} />
+          )}
           {drive && (
             <CatalogApps
               entries={catalogEntries}
