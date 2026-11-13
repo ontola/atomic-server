@@ -123,6 +123,7 @@ msgstr "AI Agents"
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
@@ -934,6 +935,7 @@ msgstr "Create account and accept"
 msgid "I already have an account"
 msgstr "I already have an account"
 
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
@@ -11720,7 +11722,7 @@ msgstr "A property can't be moved to another parent."
 msgid "Could not change datatype: {0}"
 msgstr "Could not change datatype: {0}"
 
-#. 0: result.error.message
+#. 0: error.message
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Failed to save column: {0}"
 msgstr "Failed to save column: {0}"
@@ -13490,3 +13492,15 @@ msgstr "Enter a whole number between 0 and 20, or leave empty."
 #: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "Allow multiple values"
 msgstr "Allow multiple values"
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "Preparing column…"
+msgstr "Preparing column…"
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "Column editing is unavailable. Check access and the selected table."
+msgstr "Column editing is unavailable. Check access and the selected table."
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "This draft is locked after a partial save. Retry to finish saving."
+msgstr "This draft is locked after a partial save. Retry to finish saving."

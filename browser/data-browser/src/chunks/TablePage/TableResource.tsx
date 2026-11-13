@@ -61,6 +61,7 @@ import { CellSelectionMenu } from './CellSelectionMenu';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS } from './tableViewKinds';
+import { AtomicColumnEditDialog } from './AtomicColumnEditDialog';
 import { AtomicColumnRemovalDialog } from './AtomicColumnRemovalDialog';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { RowCommentButton } from './RowCommentButton';
@@ -1296,6 +1297,17 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     [tableClass.subject],
   );
 
+  const [columnEdit, setColumnEdit] = useState<{
+    owner: string;
+    property: string;
+  }>();
+  const requestColumnEdit = useCallback(
+    (property: string) => {
+      setColumnEdit({ owner: tableClass.subject, property });
+    },
+    [tableClass.subject],
+  );
+
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
       selectedRows,
@@ -1313,6 +1325,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
       removeFilter,
       hideColumn,
       requestColumnRemoval,
+      requestColumnEdit,
       showColumn,
       splitLanguageSubjects: viewSplitLanguages,
       toggleSplitLanguages,
@@ -1355,6 +1368,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
       removeFilter,
       hideColumn,
       requestColumnRemoval,
+      requestColumnEdit,
       showColumn,
       viewSplitLanguages,
       toggleSplitLanguages,
@@ -1731,6 +1745,18 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
                 />
               )}
             </>
+          )}
+          {columnEdit && (
+            <AtomicColumnEditDialog
+              owner={columnEdit.owner}
+              property={columnEdit.property}
+              currentOwner={tableClass.subject}
+              onClose={() =>
+                setColumnEdit(current =>
+                  current === columnEdit ? undefined : current,
+                )
+              }
+            />
           )}
           {columnRemoval && (
             <AtomicColumnRemovalDialog

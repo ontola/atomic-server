@@ -22,6 +22,7 @@ interface PropertyFormProps {
   category?: PropertyFormCategory;
   existingProperty?: boolean;
   autoFocusName?: boolean;
+  disabled?: boolean;
 }
 
 const PropertyNameInput = forwardRef<
@@ -39,6 +40,7 @@ export function PropertyForm({
   existingProperty,
   category,
   autoFocusName,
+  disabled,
 }: PropertyFormProps): JSX.Element {
   const { validations } = useContext(FormValidationContext);
   const {
@@ -110,6 +112,7 @@ export function PropertyForm({
   return (
     <TablePropertyForm
       onSubmit={onSubmit}
+      disabled={disabled}
       valid={!Object.values(validations).some(error => error !== undefined)}
       name={{
         Input: PropertyNameInput,

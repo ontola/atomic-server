@@ -542,3 +542,21 @@ mutations, class constraints and tag services. Resource/class, currency and tag
 widgets remain backend leaves. Creation/edit dialog lifecycle and persistence
 are still host code, and are the next integration boundary. This does not mark
 complete TablePage/page-renderer consumption or the catalog-discovery gate done.
+
+
+### Page-owned shared property editor
+
+`TablePropertyDialog` now owns actual edit-dialog preparation, validation/save
+lifecycle, failures, pending dismissal and scope handling. Atomic adapts its
+existing modal primitives and metadata services and mounts the editor above
+column headings. Replacing a property can no longer unmount the pending editor.
+
+Atomic datatype replacement checkpoints the materialized property and frozen
+constraint snapshot. A failed attachment keeps that intent locked for retry;
+reference targets are retained so pending writes still flush when optimistic
+lists already contain the new ID. Definition, references and constraints remain
+separate writes. Existing supported lens policy is retained; this does not
+promise conversion between every datatype or cross-resource atomicity.
+
+The new-column dialog, Native targeted editing, complete page/renderer adoption
+and the catalog-discovery gate remain open. No restart durability is claimed.

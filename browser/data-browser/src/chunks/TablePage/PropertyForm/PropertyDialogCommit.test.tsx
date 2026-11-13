@@ -48,13 +48,25 @@ vi.mock('./columnConstraints', () => ({
 vi.mock('./categories', () => ({ getCategoryFromResource: () => 'text' }));
 vi.mock(
   '@components/forms/formValidation/FormValidationContextProvider',
-  () => ({
-    FormValidationContextProvider: ({
-      children,
-    }: {
-      children: React.ReactNode;
-    }) => children,
-  }),
+  async () => {
+    const { useEffect } = await import('react');
+
+    return {
+      FormValidationContextProvider: ({
+        children,
+        onValidationChange,
+      }: {
+        children: React.ReactNode;
+        onValidationChange?: (valid: boolean) => void;
+      }) => {
+        useEffect(() => {
+          onValidationChange?.(true);
+        }, [onValidationChange]);
+
+        return children;
+      },
+    };
+  },
 );
 vi.mock('@components/Button', () => ({
   Button: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => (

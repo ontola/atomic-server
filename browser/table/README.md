@@ -331,3 +331,13 @@ read-only dispatch. Atomic adapters retain metadata hooks, draft mutation and
 initialization policy. Resource/class, currency and tag widgets remain backend
 leaves; range, precision and date choices can use the shared controls above.
 The enclosing property dialog still owns asynchronous persistence and scope.
+
+
+`TablePropertyDialog` owns preparation, validation-gated saves, retained errors,
+busy/dismissal guards and stale-scope suppression for an opaque backend draft.
+Preparation can be cancelled and is reused across Strict Mode effect replay.
+Mount it above headers that schema edits can unmount. `Editor` binds the backend
+draft to the shared property form; `Frame` adapts modal primitives. A backend can
+report a checkpointed identity with `isDraftLocked`, retaining read-only fields
+while explicit retry remains available. Persistence, authorization, immutable
+identity and retry/idempotence guarantees remain backend responsibilities.
