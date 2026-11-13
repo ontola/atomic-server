@@ -45,6 +45,42 @@ export interface SyncableNodeInput {
 export const syncableHierarchySchema = (): SchemaSpec => ({
   properties: [
     {
+      shortname: 'syncable-mirror-status',
+      name: 'Mirror status',
+      description: 'Last acknowledged synchronization and pause state.',
+      datatype: Datatype.JSON,
+    },
+    {
+      shortname: 'syncable-issue-number',
+      name: 'GitHub issue number',
+      description: 'Stable issue number within its repository.',
+      datatype: Datatype.INTEGER,
+    },
+    {
+      shortname: 'syncable-issue-state',
+      name: 'Issue state',
+      description: 'Open or closed at last successful read.',
+      datatype: Datatype.STRING,
+    },
+    {
+      shortname: 'syncable-issue-updated',
+      name: 'Updated at',
+      description: 'Last GitHub update timestamp.',
+      datatype: Datatype.TIMESTAMP,
+    },
+    {
+      shortname: 'syncable-issue-link',
+      name: 'Issue URL',
+      description: 'Canonical GitHub issue link.',
+      datatype: Datatype.URI,
+    },
+    {
+      shortname: 'syncable-issue-body',
+      name: 'Issue body',
+      description: 'GitHub issue description in Markdown.',
+      datatype: Datatype.MARKDOWN,
+    },
+    {
       shortname: 'syncable-source-config',
       name: 'Syncable source configuration',
       description: 'Non-secret source bindings and selected collection parameters.',
@@ -98,7 +134,13 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
       shortname: 'syncable-record',
       name: 'Syncable record',
       description: 'A record mirrored from a selected remote collection.',
-      recommends: [],
+      recommends: [
+        'syncable-issue-number',
+        'syncable-issue-state',
+        'syncable-issue-updated',
+        'syncable-issue-link',
+        'syncable-issue-body',
+      ],
     },
   ],
 });
