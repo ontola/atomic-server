@@ -464,3 +464,19 @@ guards. Actual local-drive browser checks hide a property, verify persistence
 after reload and restore it. The shared component compiles cleanly; the same
 seven sortable-tab ref diagnostics remain in the host. Full property/schema
 menus and page/renderer orchestration remain open before catalog discovery.
+
+## Column removal intent correction
+
+ELFA's column menu shipped in #113 with all 34 native port browser cases, types
+and production build passing. Reviewing the next property-menu seam exposed an
+existing Atomic bug: an internally owned definition was destroyed regardless
+of the unchecked delete checkbox. The actual menu now uses explicit intent and
+separate detach/delete capabilities through `executeTableColumnRemoval`. It
+awaits detachment before definition deletion and surfaces backend failures.
+External definitions are unavailable for deletion from this menu. Package and
+actual metadata/menu adapter regressions cover unchecked/checked intent, ordering,
+permission rejection and failed detachment; the actual local-drive page confirms
+unchecked removal preserves the definition. The existing confirmation closes
+before backend completion; retaining an asynchronous removal dialog and full
+property/schema menu UI remain follow-up work. No cross-resource atomicity is
+claimed.

@@ -13461,3 +13461,8 @@ msgstr "This column is unavailable."
 #: src/chunks/TablePage/TableFilterBar.tsx
 msgid "Add filter"
 msgstr "Add filter"
+
+#. 0: error.message
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Failed to remove column: {0}"
+msgstr "Failed to remove column: {0}"
