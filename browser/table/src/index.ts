@@ -246,3 +246,11 @@ export {
   TablePropertyHeading,
   type TablePropertyHeadingProps,
 } from './PropertyHeading.js';
+
+export {
+  TableColumnsMenu,
+  type TableColumnsMenuProps,
+  type TableColumnsMenuItem,
+  type TableColumnsMenuPresentation,
+  type TableColumnVisibility,
+} from './views/ColumnsMenu.js';

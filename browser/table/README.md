@@ -280,3 +280,10 @@ exhausted menus, excludes active and hidden targets, and guards busy selection.
 The default searchable selector needs no backend menu; Atomic adapts its existing
 column dropdown and drive-search action. This is actual toolbar selection UI,
 not an additional row-query path.
+
+`TableColumnsMenu` owns visibility check marks, renderer-required locks, a host
+minimum-visible policy and guarded stable-ID toggles. Its default checkbox
+selector works without a host menu; Atomic retains its dropdown primitive.
+Backends retain persistence and visibility representation (ELFA's hidden-column
+policy does not become a whitelist). Property/schema command menus remain
+under extraction.
