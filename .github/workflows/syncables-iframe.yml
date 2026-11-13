@@ -8,6 +8,7 @@ on:
       - 'browser/data-browser/src/chunks/PluginRuns/syncable*'
       - 'browser/data-browser/src/chunks/PluginRuns/SyncablesFrame.tsx'
       - 'browser/data-browser/src/chunks/TablePage/**'
+      - 'browser/e2e/tests/syncables-github.spec.ts'
       - 'server/src/handlers/builtin_syncables.js'
       - 'server/src/handlers/plugin_ui.rs'
       - 'server/src/routes.rs'
@@ -41,6 +42,9 @@ jobs:
       - name: Typecheck Data Browser
         working-directory: browser
         run: pnpm --filter @tomic/data-browser typecheck
+      - name: Typecheck Playwright E2E specs
+        working-directory: browser
+        run: pnpm --filter @tomic/e2e typecheck
       - name: Test built-in Syncables unit specs
         working-directory: browser
         run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncableHierarchy.test.ts src/chunks/PluginRuns/syncablesHost.test.ts src/chunks/PluginRuns/SyncablesFrame.test.ts src/chunks/PluginRuns/syncablesProxyScope.test.ts src/chunks/PluginRuns/proxyCatalog.test.ts
