@@ -273,3 +273,10 @@ grid: required marker, sort indicator/name command, hover drag affordance and
 full-height context-menu target. Backends provide the property label/type icon,
 sort capability, language selector and command-menu leaves. Configured computed/
 action/virtual headings and full property menus remain host UI for now.
+
+`TableFilterMenu` adds the first filter as well as subsequent filters through
+the same stable-target candidate policy as the active bar. It disables empty/
+exhausted menus, excludes active and hidden targets, and guards busy selection.
+The default searchable selector needs no backend menu; Atomic adapts its existing
+column dropdown and drive-search action. This is actual toolbar selection UI,
+not an additional row-query path.

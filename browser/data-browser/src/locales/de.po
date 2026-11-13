@@ -3138,6 +3138,7 @@ msgstr ""
 
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Filter"
 msgstr ""
 
@@ -8962,11 +8963,13 @@ msgstr ""
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
 #: src/chunks/TablePage/TableFilterBar.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Find a column to filter by"
 msgstr ""
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
 #: src/chunks/TablePage/TableFilterBar.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "No column matches"
 msgstr ""
 

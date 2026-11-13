@@ -233,8 +233,14 @@ export {
   TableFilterBar,
   type TableFilterBarProps,
   type TableFilterTarget,
-  type TableFilterAddMenuProps,
 } from './filters/FilterBar.js';
+export {
+  TableFilterMenu,
+  availableTableFilterTargets,
+  type TableFilterMenuProps,
+  type TableFilterCandidate,
+  type TableFilterAddMenuProps,
+} from './filters/FilterMenu.js';
 
 export {
   TablePropertyHeading,

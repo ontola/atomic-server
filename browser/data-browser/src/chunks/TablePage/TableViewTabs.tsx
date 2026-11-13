@@ -13,6 +13,8 @@ import {
   ViewTabsBar as Bar,
   ViewTabList as Tabs,
   ViewTabActions as Actions,
+  TableFilterMenu as SharedFilterMenu,
+  type TableFilterAddMenuProps,
 } from '@tomic/table';
 import { ghostButtonStyles } from '@components/Button';
 import {
@@ -58,7 +60,7 @@ import {
   type DriveApp,
 } from '@chunks/AppPage/useDriveApps';
 import type { DerivedColumnSpec } from './derivedColumns';
-import { derivedFilterKey, filterKey } from './tableFiltering';
+import { derivedFilterKey } from './tableFiltering';
 import { usePropertyTitles } from './helpers/usePropertyTitles';
 import { ColumnFilterDropdown } from './ColumnFilterDropdown';
 import {
@@ -369,7 +371,39 @@ const SelectionCount = styled.span`
 
 const FilterTrigger = buildDefaultTrigger(<FaFilter />, 'Filter');
 
-/** Dropdown that adds a filter for one of the table's columns. */
+function AtomicFilterMenu({
+  items,
+  disabled,
+  description,
+}: TableFilterAddMenuProps): JSX.Element {
+  if (disabled)
+    return (
+      <IconBtn disabled title='Filter' type='button'>
+        <FaFilter />
+      </IconBtn>
+    );
+
+  return (
+    <ColumnFilterDropdown
+      Trigger={FilterTrigger}
+      items={[
+        {
+          id: 'filter-header',
+          label: description ?? '',
+          header: true,
+          onClick: () => undefined,
+        },
+        ...items.map(item => ({
+          id: item.key,
+          label: item.label,
+          onClick: item.onSelect,
+        })),
+      ]}
+    />
+  );
+}
+
+/** Atomic labels and dropdown primitive for the shared filter selector. */
 function FilterMenu({
   columns,
   derivedColumns,
@@ -379,52 +413,31 @@ function FilterMenu({
 }): JSX.Element {
   const { filters, addFilter } = useContext(TablePageContext);
   const titles = usePropertyTitles(columns);
+  const targets = [
+    ...columns.map(column => ({
+      key: column.subject,
+      label: titles.get(column.subject)!,
+    })),
+    ...derivedColumns.map(spec => ({
+      key: derivedFilterKey(spec.id),
+      label: spec.label,
+    })),
+  ];
 
-  const items = useMemo((): DropdownItem[] => {
-    const taken = new Set(filters.map(filterKey));
-    const available = columns.filter(c => !taken.has(c.subject));
-    // A computed column narrows rows too — the store evaluates it per row, so
-    // "logged more than an hour" or "due" is a filter like any other.
-    const availableDerived = derivedColumns.filter(
-      spec => !taken.has(derivedFilterKey(spec.id)),
-    );
-
-    if (available.length === 0 && availableDerived.length === 0) {
-      return [];
-    }
-
-    return [
-      {
-        id: 'filter-header',
-        label: 'Filter rows by a column',
-        header: true,
-        onClick: () => undefined,
-      },
-      ...available.map(c => ({
-        id: c.subject,
-        label: titles.get(c.subject)!,
-        onClick: () => addFilter(c.subject),
-      })),
-      ...availableDerived.map(spec => ({
-        id: derivedFilterKey(spec.id),
-        label: spec.label,
-        onClick: () => addFilter(derivedFilterKey(spec.id)),
-      })),
-    ];
-  }, [columns, derivedColumns, filters, addFilter, titles]);
-
-  // `DropdownMenu` with an empty item list recurses forever in its
-  // index-finder, so render a disabled button when there's nothing to filter
-  // (columns still loading, or every column already filtered).
-  if (items.length === 0) {
-    return (
-      <IconBtn disabled title='Filter' type='button'>
-        <FaFilter />
-      </IconBtn>
-    );
-  }
-
-  return <ColumnFilterDropdown Trigger={FilterTrigger} items={items} />;
+  return (
+    <SharedFilterMenu
+      filters={filters}
+      targets={targets}
+      onAdd={addFilter}
+      Menu={AtomicFilterMenu}
+      messages={{
+        label: 'Filter',
+        search: 'Find a column to filter by',
+        noMatch: 'No column matches',
+        description: 'Filter rows by a column',
+      }}
+    />
+  );
 }
 
 function ViewTab({
