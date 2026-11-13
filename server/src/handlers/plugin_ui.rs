@@ -316,6 +316,45 @@ if (window.parent) window.parent.postMessage({{ type: '__atomic_plugin_ready' }}
     )
 }
 
+/// Built-in Syncables uses the same isolated plugin shell and host bridge as
+/// ordinary apps, but its JavaScript is part of this Atomic Server release.
+/// No executable service catalog data is loaded or evaluated.
+///
+/// This route serves only immutable first-party assets. The iframe remains
+/// sandboxed and null-origin, with `connect-src 'none'`; provider access is
+/// mediated by the host's scoped integration-proxy transport.
+#[derive(serde::Deserialize)]
+pub struct BuiltinSyncablesQuery {
+    pub format: String,
+}
+
+pub async fn handle_builtin_syncables_ui(
+    query: web::Query<BuiltinSyncablesQuery>,
+) -> AtomicServerResult<HttpResponse> {
+    match query.format.as_str() {
+        "html" => {
+            let nonce = plugin_nonce();
+            let html = render_drive_plugin_ui_html_with("format=html", false, &nonce, true)
+                .replace("/plugin-ui?format=", "/builtin-syncables-ui?format=");
+            Ok(HttpResponse::Ok()
+                .content_type("text/html; charset=utf-8")
+                .insert_header(("Content-Security-Policy", frame_csp(&nonce)))
+                .body(html))
+        }
+        "client" => Ok(HttpResponse::Ok()
+            .content_type("application/javascript")
+            .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"))
+            .body(include_str!("../../assets_tmp/view-client.js"))),
+        "js" => Ok(HttpResponse::Ok()
+            .content_type("application/javascript")
+            .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"))
+            .body(include_str!("builtin_syncables.js"))),
+        _ => Err(AtomicServerError::bad_request(
+            "Unknown built-in Syncables iframe asset",
+        )),
+    }
+}
+
 /// Retrieves the UI js script for the plugin.
 /// It exepcts two query parameters: drive and plugin (namespace.name)
 #[tracing::instrument(skip(appstate, req))]
