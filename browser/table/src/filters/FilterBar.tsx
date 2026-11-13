@@ -1,7 +1,12 @@
-import { useState, type ComponentType } from 'react';
+import { type ComponentType } from 'react';
 import { styled } from 'styled-components';
 import { filterKey, type TableFilter } from '../views/configuration.js';
 import { TableFilterChip, type TableFilterChipProps } from './FilterChip.js';
+import {
+  availableTableFilterTargets,
+  DefaultTableFilterMenu,
+  type TableFilterAddMenuProps,
+} from './FilterMenu.js';
 
 export interface TableFilterTarget {
   /** Same stable identity used by filterKey, including derived: for expressions. */
@@ -18,12 +23,6 @@ export interface TableFilterTarget {
   };
   /** Hidden columns still resolve existing chips without appearing in Add. */
   addable?: boolean;
-}
-export interface TableFilterAddMenuProps {
-  items: readonly { key: string; label: string; onSelect: () => void }[];
-  label: string;
-  searchLabel: string;
-  noMatch: string;
 }
 export interface TableFilterBarProps {
   filters: readonly TableFilter[];
@@ -48,6 +47,8 @@ export interface TableFilterBarProps {
   }>;
 }
 
+const rawOperatorLabel = (operator: TableFilter['operator']) => operator;
+
 /** The actual active-filter row. Backend descriptors supply labels/types and
  * reference leaves; chip editing, missing targets and Add candidates stay here. */
 export function TableFilterBar({
@@ -58,8 +59,8 @@ export function TableFilterBar({
   onValueChange,
   onOperatorChange,
   onRemove,
-  operatorLabel = operator => operator,
-  AddMenu = DefaultAddMenu,
+  operatorLabel = rawOperatorLabel,
+  AddMenu = DefaultTableFilterMenu,
   messages,
 }: TableFilterBarProps) {
   if (!filters.length) return null;
@@ -74,14 +75,11 @@ export function TableFilterBar({
     ...messages,
   };
   const byKey = new Map(targets.map(target => [target.key, target]));
-  const taken = new Set(filters.map(filterKey));
-  const items = [...byKey.values()]
-    .filter(target => target.addable !== false && !taken.has(target.key))
-    .map(target => ({
-      key: target.key,
-      label: target.chip.label,
-      onSelect: () => onAdd(target.key),
-    }));
+  const items = availableTableFilterTargets(filters, targets).map(target => ({
+    key: target.key,
+    label: target.chip.label,
+    onSelect: () => onAdd(target.key),
+  }));
 
   return (
     <Bar role='toolbar' aria-label={text.toolbar}>
@@ -117,49 +115,6 @@ export function TableFilterBar({
         />
       )}
     </Bar>
-  );
-}
-
-function DefaultAddMenu({
-  items,
-  label,
-  searchLabel,
-  noMatch,
-}: TableFilterAddMenuProps) {
-  const [search, setSearch] = useState('');
-  const matches = items.filter(item =>
-    item.label.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
-  );
-
-  return (
-    <details
-      onToggle={event => {
-        if (!event.currentTarget.open) setSearch('');
-      }}
-    >
-      <summary>{label}</summary>
-      <input
-        type='search'
-        aria-label={searchLabel}
-        value={search}
-        onChange={event => setSearch(event.target.value)}
-      />
-      {!matches.length && <p role='status'>{noMatch}</p>}
-      {matches.map(item => (
-        <button
-          key={item.key}
-          type='button'
-          onClick={event => {
-            item.onSelect();
-            const menu = event.currentTarget.closest('details');
-            if (menu) menu.open = false;
-            setSearch('');
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
-    </details>
   );
 }
 

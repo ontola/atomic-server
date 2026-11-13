@@ -434,3 +434,18 @@ dispatch. Actual local-drive browser checks verify ascending/descending numeric
 ordering and the retained backend context menu. ELFA adoption follows its full
 configuration increment (#110); complete configured headings, schema/menu and
 page/renderer orchestration remain open before catalog discovery.
+
+## Shared first-filter selector
+
+ELFA's full saved configuration and active-filter bar shipped in #110; shared
+property-heading sorting shipped in #111. The actual Atomic toolbar now uses
+`TableFilterMenu` with the same target-exclusion policy as the active bar. It
+adds filters before any active chip exists, disables exhausted/empty menus and
+guards selection during backend operations. A default searchable control works
+without a host menu; Atomic retains its dropdown primitive and drive search.
+Package tests cover first selection, exhausted menus and busy guards. Actual
+local-drive browser checks add numeric and text filters through the toolbar,
+verify active-field exclusion and preserve both across reload. Shared selector
+and bar compile cleanly; the pre-existing seven sortable-tab ref diagnostics
+remain unchanged. Full column menus, schema controls and page/renderer
+orchestration remain open before catalog discovery.
