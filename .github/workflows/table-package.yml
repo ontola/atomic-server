@@ -3,6 +3,12 @@ name: Table package
 on:
   pull_request:
     paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'lib/**'
+      - 'wasm/**'
+      - 'tools/cargo-bin/**'
       - 'browser/table/**'
       - 'browser/data-browser/**'
       - 'browser/form-renderer/**'
@@ -19,6 +25,12 @@ on:
   push:
     branches: [develop]
     paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'lib/**'
+      - 'wasm/**'
+      - 'tools/cargo-bin/**'
       - 'browser/table/**'
       - 'browser/data-browser/**'
       - 'browser/form-renderer/**'
@@ -60,6 +72,11 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build JavaScript host dependencies
         run: pnpm --filter @tomic/lib --filter @tomic/react --filter @tomic/form-renderer --filter @tomic/edit-mode --filter @tomic/plugin --filter @tomic/service-ui -r build
+      - uses: dtolnay/rust-toolchain@1.98.1
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build real formula evaluator for adapter tests
+        run: pnpm --filter @tomic/data-browser build:wasm
       - name: Check Atomic host types
         run: pnpm --filter @tomic/data-browser typecheck
       - name: Test table host adapters and saved-view tabs
