@@ -116,3 +116,129 @@ it('retains a failed table queue across navigation until its captured operation 
   queues.release('table-a');
   expect(queues.get('table-a')).not.toBe(a);
 });
+
+it('confirms one tracked write before a later unrelated write finishes', async () => {
+  const queue = createTableViewWriteQueue('table');
+  let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>(resolve => {
+    entered = resolve;
+  });
+  const first = queue.enqueueTracked(async () => {});
+  const second = queue.enqueueTracked(async () => {
+    entered();
+    await new Promise<void>(resolve => {
+      release = resolve;
+    });
+  });
+  await started;
+  await first.wait();
+  expect(first.getSnapshot()).toEqual({ status: 'saved' });
+  expect(queue.getSnapshot()).toMatchObject({ busy: true, pending: 1 });
+  release();
+  await second.wait();
+});
+it('retains a tracked failed intent and its preparation across an explicit retry', async () => {
+  const queue = createTableViewWriteQueue('table');
+  const prepare = vi.fn(async () => ({ id: 'stable' }));
+  const persist = vi
+    .fn()
+    .mockRejectedValueOnce(Error('offline'))
+    .mockResolvedValue(undefined);
+  const receipt = queue.enqueueTracked(async context => {
+    const value = await context.checkpoint('identity', prepare);
+    await persist(value);
+  });
+  await expect(receipt.wait()).rejects.toThrow('offline');
+  expect(receipt.getSnapshot()).toMatchObject({
+    status: 'failed',
+    error: { message: 'offline' },
+  });
+  await receipt.retry();
+  await receipt.retry();
+  expect(prepare).toHaveBeenCalledOnce();
+  expect(persist).toHaveBeenCalledTimes(2);
+  expect(persist.mock.calls[0][0]).toBe(persist.mock.calls[1][0]);
+});
+it('does not retry an earlier failed operation on behalf of a blocked tracked write', async () => {
+  const queue = createTableViewWriteQueue('table');
+  const earlier = vi
+    .fn()
+    .mockRejectedValueOnce(Error('earlier offline'))
+    .mockResolvedValue(undefined);
+  const later = vi.fn(async () => {});
+  await queue.enqueue(earlier);
+  const receipt = queue.enqueueTracked(later);
+  await expect(receipt.wait()).rejects.toThrow('earlier view save');
+  await expect(receipt.retry()).rejects.toThrow('earlier view save');
+  expect(earlier).toHaveBeenCalledOnce();
+  expect(later).not.toHaveBeenCalled();
+  await queue.retry();
+  await receipt.wait();
+  expect(earlier).toHaveBeenCalledTimes(2);
+  expect(later).toHaveBeenCalledOnce();
+});
+it('does not attribute a later failure to a tracked operation that already saved', async () => {
+  const queue = createTableViewWriteQueue('table');
+  const saved = vi.fn(async () => {});
+  const first = queue.enqueueTracked(saved);
+  const second = queue.enqueueTracked(async () => {
+    throw Error('later offline');
+  });
+  const failed = expect(second.wait()).rejects.toThrow('later offline');
+  await first.wait();
+  await failed;
+  await first.retry();
+  expect(saved).toHaveBeenCalledOnce();
+  expect(queue.getSnapshot().error?.message).toBe('later offline');
+});
+
+it('abandons a blocked, unstarted write without retrying the earlier failure', async () => {
+  const queue = createTableViewWriteQueue('table');
+  const earlier = vi.fn(async () => {
+    throw Error('offline');
+  });
+  await queue.enqueue(earlier);
+  const later = vi.fn(async () => {}),
+    receipt = queue.enqueueTracked(later);
+  expect(receipt.abandon()).toBe(true);
+  await expect(receipt.wait()).rejects.toThrow('abandoned');
+  expect(earlier).toHaveBeenCalledOnce();
+  expect(later).not.toHaveBeenCalled();
+  expect(queue.getSnapshot()).toMatchObject({
+    pending: 1,
+    error: { message: 'offline' },
+  });
+});
+it('abandons an adapter-confirmed preflight failure and unblocks later work', async () => {
+  const queue = createTableViewWriteQueue('table');
+  const receipt = queue.enqueueTracked(
+    async () => {
+      throw Error('target changed');
+    },
+    { canAbandon: () => true },
+  );
+  await expect(receipt.wait()).rejects.toThrow('target changed');
+  const later = vi.fn(async () => {});
+  await queue.enqueue(later);
+  expect(receipt.abandon()).toBe(true);
+  await queue.retry();
+  expect(later).toHaveBeenCalledOnce();
+  expect(queue.getSnapshot()).toMatchObject({ pending: 0 });
+});
+it('cannot abandon a running or potentially partially applied save', async () => {
+  const queue = createTableViewWriteQueue('table');
+  let release!: () => void;
+  const receipt = queue.enqueueTracked(async () => {
+    await new Promise<void>(resolve => {
+      release = resolve;
+    });
+    throw Error('save uncertain');
+  });
+  await Promise.resolve();
+  expect(receipt.abandon()).toBe(false);
+  release();
+  await expect(receipt.wait()).rejects.toThrow('save uncertain');
+  expect(receipt.abandon()).toBe(false);
+  expect(queue.getSnapshot().pending).toBe(1);
+});

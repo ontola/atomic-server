@@ -370,3 +370,13 @@ identity/width. Adapters supply compatible column metadata and the evaluator's
 readiness/validator. Only an explicit `null` validation result enables saving;
 an unavailable validator stays blocked. Evaluation and row-value conversion stay
 in the backend adapter.
+
+
+Configured action/computed editors use the same page-mounted `TablePropertyDialog`
+lifecycle. `enqueueTracked` returns a per-intent view-write receipt: dialogs wait
+for their own save, retain one accepted identity across retries and cannot retry
+an earlier unrelated failure. A receipt can abandon an unstarted operation, or a
+failed operation whose adapter proves no mutation began. Closing a partially
+applied operation leaves it pending for explicit retry; it is not a rollback.
+Atomic adapters validate current metadata and merge only the edited entry,
+preserving unrelated entries and implicit timer Duration defaults.

@@ -25,7 +25,10 @@ function Editor({
   onValidationChange,
 }: TablePropertyEditorProps<Draft>) {
   const [name, setName] = useState(() => draft.name.get('value')!);
-  useEffect(() => onValidationChange(!!name), [name, onValidationChange]);
+  useEffect(
+    () => onValidationChange(!!name && !disabled),
+    [name, disabled, onValidationChange],
+  );
 
   return (
     <form

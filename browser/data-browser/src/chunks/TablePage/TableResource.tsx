@@ -1,3 +1,7 @@
+import { RowActionDialog } from './RowActionDialog';
+import { DerivedColumnDialog } from './DerivedColumnDialog';
+import { writeAtomicConfiguredColumn } from './atomicConfiguredColumn';
+import { useTableNavigation } from '@tomic/table';
 import {
   core,
   dataBrowser,
@@ -158,6 +162,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     viewSaving,
     viewSaveError,
     retryViewSave,
+    enqueueViewWrite,
     sorting,
     setSortBy,
     filters,
@@ -212,6 +217,11 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     query,
   } = useTableData(resource, viewSubject, embedded);
   const canWrite = canWriteResource && viewReady;
+  const { location: configuredLocation } = useTableNavigation();
+  const requestedViewScope = JSON.stringify([
+    resource.subject,
+    embedded ? (viewSubject ?? null) : (configuredLocation.view ?? null),
+  ]);
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
     tableClass,
@@ -1342,6 +1352,100 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     };
   }, [tableClass.subject, resource.subject, activeView, showColumn]);
 
+  type ConfiguredRequest = {
+    table: string;
+    owner: string;
+    scope: string;
+    definitions: string;
+    properties: Property[];
+  } & (
+    | { kind: 'action'; original?: RowActionSpec }
+    | {
+        kind: 'computed';
+        original?: DerivedColumnSpec;
+        implicit?: { specs: DerivedColumnSpec[]; signature: string };
+      }
+  );
+  const definitions = JSON.stringify(
+    allColumns.map(property => [
+      property.subject,
+      property.datatype,
+      property.allowsOnly,
+    ]),
+  );
+  const [configuredColumn, setConfiguredColumn] = useState<ConfiguredRequest>();
+  const requestRowActionEdit = useCallback(
+    (spec?: RowActionSpec) => {
+      if (!canWrite) return;
+      setConfiguredColumn({
+        kind: 'action',
+        original: spec ? structuredClone(spec) : undefined,
+        table: resource.subject,
+        owner: tableClass.subject,
+        scope: requestedViewScope,
+        definitions,
+        properties: [...allColumns],
+      });
+    },
+    [
+      canWrite,
+      resource.subject,
+      tableClass.subject,
+      requestedViewScope,
+      definitions,
+      allColumns,
+    ],
+  );
+  const implicitSignature = JSON.stringify([
+    viewKind,
+    viewGroupBy ?? null,
+    viewEndProp ?? null,
+  ]);
+  const requestDerivedColumnEdit = useCallback(
+    (spec?: DerivedColumnSpec) => {
+      if (!canWrite) return;
+      setConfiguredColumn({
+        kind: 'computed',
+        original: spec ? structuredClone(spec) : undefined,
+        ...(!viewDerivedColumnsSet && isTimer
+          ? {
+              implicit: {
+                specs: structuredClone(derivedSpecs),
+                signature: implicitSignature,
+              },
+            }
+          : {}),
+        table: resource.subject,
+        owner: tableClass.subject,
+        scope: requestedViewScope,
+        definitions,
+        properties: [...allColumns],
+      });
+    },
+    [
+      canWrite,
+      resource.subject,
+      tableClass.subject,
+      requestedViewScope,
+      definitions,
+      allColumns,
+      viewDerivedColumnsSet,
+      isTimer,
+      derivedSpecs,
+      implicitSignature,
+    ],
+  );
+  const configuredCanSave =
+    !!configuredColumn &&
+    canWrite &&
+    configuredColumn.table === resource.subject &&
+    configuredColumn.owner === tableClass.subject &&
+    configuredColumn.scope === requestedViewScope &&
+    configuredColumn.definitions === definitions &&
+    (configuredColumn.kind !== 'computed' ||
+      !configuredColumn.implicit ||
+      configuredColumn.implicit.signature === implicitSignature);
+
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
       selectedRows,
@@ -1361,6 +1465,8 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
       requestColumnRemoval,
       requestColumnEdit,
       requestColumnCreation,
+      requestRowActionEdit,
+      requestDerivedColumnEdit,
       showColumn,
       splitLanguageSubjects: viewSplitLanguages,
       toggleSplitLanguages,
@@ -1405,6 +1511,8 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
       requestColumnRemoval,
       requestColumnEdit,
       requestColumnCreation,
+      requestRowActionEdit,
+      requestDerivedColumnEdit,
       showColumn,
       viewSplitLanguages,
       toggleSplitLanguages,
@@ -1782,6 +1890,91 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
                 />
               )}
             </>
+          )}
+          {configuredColumn?.kind === 'action' && (
+            <RowActionDialog
+              open
+              classProperties={configuredColumn.properties}
+              editing={configuredColumn.original}
+              scope={JSON.stringify([
+                configuredColumn.scope,
+                configuredColumn.owner,
+                configuredColumn.kind,
+                configuredColumn.original?.id ?? null,
+              ])}
+              canSave={configuredCanSave}
+              bindShow={show => {
+                if (!show)
+                  setConfiguredColumn(current =>
+                    current === configuredColumn ? undefined : current,
+                  );
+              }}
+              onSave={candidate => {
+                if (!configuredCanSave)
+                  throw Error(
+                    'The selected view or column definitions changed.',
+                  );
+                const edit = structuredClone({
+                  kind: 'action' as const,
+                  candidate,
+                  original: configuredColumn.original,
+                });
+
+                return enqueueViewWrite((view, intent) =>
+                  writeAtomicConfiguredColumn(
+                    store,
+                    configuredColumn.table,
+                    configuredColumn.owner,
+                    view,
+                    edit,
+                    intent,
+                  ),
+                );
+              }}
+            />
+          )}
+          {configuredColumn?.kind === 'computed' && (
+            <DerivedColumnDialog
+              open
+              classProperties={configuredColumn.properties}
+              editing={configuredColumn.original}
+              scope={JSON.stringify([
+                configuredColumn.scope,
+                configuredColumn.owner,
+                configuredColumn.kind,
+                configuredColumn.original?.id ?? null,
+              ])}
+              canSave={configuredCanSave}
+              bindShow={show => {
+                if (!show)
+                  setConfiguredColumn(current =>
+                    current === configuredColumn ? undefined : current,
+                  );
+              }}
+              onSave={candidate => {
+                if (!configuredCanSave)
+                  throw Error(
+                    'The selected view or column definitions changed.',
+                  );
+                const edit = structuredClone({
+                  kind: 'computed' as const,
+                  candidate,
+                  original: configuredColumn.original,
+                  implicit: configuredColumn.implicit,
+                });
+
+                return enqueueViewWrite((view, intent) =>
+                  writeAtomicConfiguredColumn(
+                    store,
+                    configuredColumn.table,
+                    configuredColumn.owner,
+                    view,
+                    edit,
+                    intent,
+                  ),
+                );
+              }}
+            />
           )}
           {columnCreation && (
             <AtomicColumnCreationDialog

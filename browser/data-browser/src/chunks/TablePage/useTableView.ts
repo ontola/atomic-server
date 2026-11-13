@@ -1,3 +1,4 @@
+import type { AtomicViewWriteContext } from './atomicViewWrite';
 import {
   core,
   dataBrowser,
@@ -20,6 +21,7 @@ import {
 } from 'react';
 import {
   type TableViewWriteContext,
+  type TableViewWriteReceipt,
   type TableViewConfiguration,
   useTableNavigation,
   createTableViewWriteQueues,
@@ -105,6 +107,9 @@ function sortReducer(state: TableSorting, action: SortAction): TableSorting {
 
 export interface UseTableViewResult {
   viewConfiguration: TableViewConfiguration;
+  enqueueViewWrite: (
+    write: (view: Resource, intent: AtomicViewWriteContext) => Promise<void>,
+  ) => TableViewWriteReceipt;
   viewReady: boolean;
   viewSaving: boolean;
   viewSaveError?: string;
@@ -776,6 +781,33 @@ export function useTableView(
    * Run `write` against the active View (lazy-creating it) and save. Fire and
    * forget: failed operations remain queued for an explicit retry.
    */
+  const enqueueViewWrite = useCallback(
+    (
+      write: (view: Resource, intent: AtomicViewWriteContext) => Promise<void>,
+    ) => {
+      let mutated = false;
+
+      return writes.enqueueTracked(
+        async intent => {
+          // Implicit-view creation may persist before the requested patch starts.
+          if (!activeView) mutated = true;
+          const selected = await ensureView();
+          if (!selected) throw Error('The selected view is unavailable.');
+          await write(selected, {
+            ...intent,
+            beforeMutation: () => {
+              mutated = true;
+            },
+          });
+          mutated = true;
+          await selected.save();
+        },
+        { canAbandon: () => !mutated },
+      );
+    },
+    [writes, ensureView, activeView],
+  );
+
   const withView = useCallback(
     (write: (view: Resource) => void | Promise<void>) => {
       void writes.enqueue(async () => {
@@ -1113,6 +1145,7 @@ export function useTableView(
       sortDesc: sorting.sortDesc,
     },
     viewReady,
+    enqueueViewWrite,
     viewSaving: writeState.busy,
     viewSaveError: writeState.error?.message ?? workingFilters.error?.message,
     retryViewSave: () => {
