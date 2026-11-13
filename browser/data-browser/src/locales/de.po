@@ -698,10 +698,6 @@ msgstr "Ontologien"
 msgid "App"
 msgstr "App"
 
-#: src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
-
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
 msgstr "Dieser AtomicLink hat weder `subject` noch `path` oder `href` erhalten."
@@ -3733,11 +3729,6 @@ msgstr "Möchtest du die Ansicht <0/> wirklich löschen? Dadurch wird nur die An
 msgid "{0} copy"
 msgstr "{0} Kopie"
 
-#. 0: p; 1: theme.animation.duration
-#: src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
-
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
 msgstr "OpenRouter bietet eine einheitliche API mit Zugriff auf Hunderte KI-Modelle aller großen Anbieter und kümmert sich automatisch um Ausweichmodelle und die kostengünstigsten Optionen."
@@ -5375,9 +5366,6 @@ msgstr "Code wird angefordert …"
 msgid "Android"
 msgstr "Android"
 
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
 #: src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -11901,7 +11889,6 @@ msgstr "Code oder Serveradresse"
 msgid "Add a device"
 msgstr "Gerät hinzufügen"
 
-#: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Wird geladen"

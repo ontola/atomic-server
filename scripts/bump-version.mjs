@@ -58,6 +58,7 @@ const JS_PACKAGE_FILES = [
   'browser/cli/package.json',
   'browser/create-template/package.json',
   'browser/data-browser/package.json',
+  'browser/ui/package.json',
   'browser/edit-mode/package.json',
   'browser/e2e/package.json',
 ];

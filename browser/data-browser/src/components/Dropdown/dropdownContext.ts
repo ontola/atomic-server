@@ -1,7 +1,1 @@
-import { createContext } from 'react';
-
-export const DropdownPortalContext = createContext<
-  React.RefObject<HTMLDivElement | null>
->({
-  current: null,
-});
+export * from '@tomic/ui/components/Dropdown/dropdownContext';

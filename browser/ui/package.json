@@ -1,0 +1,49 @@
+{
+  "name": "@tomic/ui",
+  "version": "0.41.0-beta.8",
+  "private": true,
+  "description": "Shared Atomic UI primitives and overlays",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "source": "src/index.ts",
+  "peerDependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "styled-components": "^6.1.0"
+  },
+  "dependencies": {
+    "@radix-ui/react-popover": "^1.1.15",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "csstype": "^3.2.3",
+    "polished": "^4.3.1",
+    "react-hotkeys-hook": "^5.3.2",
+    "react-icons": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^6.0.3",
+    "esbuild": ">=0.28.1 <0.29.0"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint -c ../.oxlintrc.json . && oxfmt -c ../.oxfmtrc.json --check ./src",
+    "format": "oxfmt -c ../.oxfmtrc.json ./src"
+  }
+}

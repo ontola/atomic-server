@@ -698,10 +698,6 @@ msgstr "Ontologi"
 msgid "App"
 msgstr "Aplikasi"
 
-#: src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
-
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
 msgstr "Tidak ada `subject`, `path`, atau `href` yang diteruskan ke AtomicLink ini."
@@ -3734,11 +3730,6 @@ msgstr "Yakin ingin menghapus tampilan <0/>? Ini hanya menghapus tampilannya, bu
 msgid "{0} copy"
 msgstr "Salinan {0}"
 
-#. 0: p; 1: theme.animation.duration
-#: src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
-
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
 msgstr "OpenRouter menyediakan API terpadu yang memberi Anda akses ke ratusan model AI dari semua penyedia utama, sambil menangani peralihan cadangan secara otomatis dan memilih opsi paling hemat biaya."
@@ -5376,9 +5367,6 @@ msgstr "Mendapatkan kode…"
 msgid "Android"
 msgstr "Android"
 
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
 #: src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -11901,7 +11889,6 @@ msgstr "Kode atau alamat server"
 msgid "Add a device"
 msgstr "Tambahkan perangkat"
 
-#: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Memuat"
