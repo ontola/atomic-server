@@ -1652,6 +1652,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
            *  will be rejected is worse than none. */}
           {viewQuickAdd && canWrite && (
             <QuickAddBar
+              scope={JSON.stringify([resource.subject, activeView])}
               spec={viewQuickAdd}
               tableSubject={resource.subject}
               tableClass={tableClass}
