@@ -136,6 +136,10 @@ export default defineConfig(({ mode }) => {
       dedupe: ['prosemirror-view', 'prosemirror-state', 'prosemirror-model'],
       alias: [
         {
+          find: '@tomic/table',
+          replacement: path.resolve(__dirname, '../table/src/index.ts'),
+        },
+        {
           find: '@tomic/ui',
           replacement: path.resolve(__dirname, '../ui/src'),
         },

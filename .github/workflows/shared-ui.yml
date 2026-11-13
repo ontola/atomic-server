@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'browser/ui/**'
+      - 'browser/utils/**'
+      - 'browser/lib/src/EventManager.ts'
+      - 'browser/lib/src/calendar-date.ts'
+      - 'browser/lib/tsup.config.ts'
       - 'browser/data-browser/src/components/**'
       - 'browser/data-browser/src/hooks/**'
       - 'browser/data-browser/src/globalCssVars.ts'
@@ -25,6 +29,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: browser/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+        working-directory: browser
+      - run: pnpm --filter @tomic/utils build && pnpm --filter @tomic/utils test
         working-directory: browser
       - run: pnpm --filter @tomic/ui lint && pnpm --filter @tomic/ui typecheck
         working-directory: browser

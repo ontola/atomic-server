@@ -3203,10 +3203,6 @@ msgstr "Tampilan bawaan"
 msgid "Row is incomplete or has invalid data"
 msgstr "Baris tidak lengkap atau berisi data tidak valid"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Open resource"
-msgstr "Buka sumber daya"
-
 #: src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
 msgstr "Hak akses tidak cukup untuk melihat sumber daya"
@@ -3794,11 +3790,6 @@ msgstr "Coba muat ulang halaman. Jika terus terjadi, tab lain dari aplikasi ini 
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0}/M input tokens"
 msgstr "{0}/juta token input"
-
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
 
 #. 0: subject
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
@@ -6519,10 +6510,6 @@ msgstr "Tidak ada yang cocok. Coba pencarian lain atau minta AI membuatnya."
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "Tanya AI"
-
-#: src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Memuat"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -12843,10 +12830,6 @@ msgstr "Tambahkan komentar"
 msgid "Open the comments for this resource"
 msgstr "Buka komentar untuk sumber daya ini"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Row menu"
-msgstr "Menu baris"
-
 #: src/views/Drive/DriveHome.tsx
 msgid "Commented"
 msgstr "Dikomentari"
@@ -13418,10 +13401,6 @@ msgstr "Tambahkan filter"
 msgid "Edit column"
 msgstr "Sunting kolom"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Tambahkan tampilan"
-
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
 msgstr "Tamu"
@@ -13509,3 +13488,15 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Menu baris"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Buka sumber daya"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Tambahkan tampilan"

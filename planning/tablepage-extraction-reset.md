@@ -14,8 +14,11 @@ Overall tracker: [#2484](https://github.com/ontola/atomic-server/issues/2484).
 - [x] Move basic controls, scrolling/resizing helpers, menus, dialogs, popovers
   and their shared contexts into `@tomic/ui`. Keep Atomic boot-splash, welcome
   feedback and routing in thin wrappers. Remove replaced host implementations.
-- [ ] Make the table package consume these implementations and delete its
+- [x] Make the table package consume these implementations and delete its
   utility copies. Application-wide UI must not depend on the table package.
+  EventManager and civil-calendar helpers have one dependency-free source in
+  the private `@tomic/utils` build package. SDK/UI distributions include their
+  compiled code and declarations, preserving SDK package independence.
 - [ ] Extract the complete TablePage, its orchestration, built-in renderers and
   controls. Individual shared widgets are preparation, not completion.
 - [ ] Reuse existing field/record, upload, Markdown, collaboration and page
@@ -33,6 +36,10 @@ Overall tracker: [#2484](https://github.com/ontola/atomic-server/issues/2484).
 Use a pinned submodule; npm publication is not required. Keep independent CI.
 Catalog-based custom-view and lens discovery follows complete page adoption.
 
+The saved-tab presentation seam is omitted from the clean branch: move the
+complete existing TableViewTabs with TablePage instead of introducing a partial
+widget boundary. Its inactive-rename fix is preserved separately in #2534.
+
 ## Deferred functionality
 
 Preserve the previous implementation through `c2b7c72` as reference. Reassess each
@@ -48,6 +55,8 @@ code does not commit us to retaining every abstraction.
   separate existing codecs/query composition from changed readiness semantics.
 - [ ] Changed deletion and dialog lifetime/error handling
   (#2516, #2518, #2523, #2524, #2526).
+- [ ] Optional host-owned raw text drafts across editor remounts; keep the
+  existing local editor state in the extraction.
 - [ ] Changed numeric draft validation and value conversion
   (#2519 and mixed field-extraction PRs #2500, #2528, #2531).
 - [ ] Scoped quick-add queues and row-selection state (#2527, #2533).

@@ -1094,6 +1094,8 @@ export class AtomicServer {
         browser.file('data-browser/package.json'),
       )
       .withFile('/repo/browser/ui/package.json', browser.file('ui/package.json'))
+      .withFile('/repo/browser/utils/package.json', browser.file('utils/package.json'))
+      .withFile('/repo/browser/table/package.json', browser.file('table/package.json'))
       .withFile(
         '/repo/browser/lib/package.json',
         browser.file('lib/package.json'),
@@ -1154,6 +1156,7 @@ export class AtomicServer {
     // integration tests, except @tomic/mcp: hosted-mcp.integration.test.ts
     // imports its bridge from `../../mcp/src`.
     const withSource = installed
+      .withDirectory('/repo/browser/utils', browser.directory('utils'))
       .withDirectory('/repo/browser/lib', browser.directory('lib'))
       .withDirectory('/repo/browser/mcp', browser.directory('mcp'));
 
@@ -1162,6 +1165,8 @@ export class AtomicServer {
         permissions: 0o755,
       })
       .withDirectory('/repo/wasm/pkg', wasmPkg)
+      .withWorkdir('/repo/browser/utils')
+      .withExec(['pnpm', 'run', 'build'])
       .withWorkdir('/repo/browser/lib')
       .withExec(['pnpm', 'run', 'test:integration'])
       .stdout();
@@ -1358,6 +1363,8 @@ export class AtomicServer {
         browser.file('data-browser/package.json'),
       )
       .withFile('/app/ui/package.json', browser.file('ui/package.json'))
+      .withFile('/app/utils/package.json', browser.file('utils/package.json'))
+      .withFile('/app/table/package.json', browser.file('table/package.json'))
       .withFile('/app/lib/package.json', browser.file('lib/package.json'))
       .withFile('/app/react/package.json', browser.file('react/package.json'))
       .withFile('/app/svelte/package.json', browser.file('svelte/package.json'))

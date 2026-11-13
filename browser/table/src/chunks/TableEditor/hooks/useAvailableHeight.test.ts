@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { useAvailableHeight } from './useAvailableHeight';
+import { useAvailableHeight } from './useAvailableHeight.js';
 
 const lifecycle = vi.hoisted(() => ({
   cleanup: undefined as (() => void) | undefined,

@@ -15,4 +15,6 @@ observe the same stack. Atomic-specific boot-splash, welcome-feedback and router
 integrations stay in its thin wrappers.
 
 This package is consumed through the workspace or a pinned Git submodule. It is
-private; no registry publication is needed. `pnpm build` emits ESM and declarations.
+private; no registry publication is needed. From `browser`, run
+`pnpm --filter @tomic/ui... build` to build its helper inputs and emit ESM and
+declarations.
