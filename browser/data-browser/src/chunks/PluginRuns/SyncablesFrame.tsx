@@ -22,6 +22,7 @@ import {
   type HostRequest,
 } from '@chunks/AppPage/hostStore';
 import { ConnectDialog } from '@chunks/AppPage/ConnectDialog';
+import { assertSyncablesProxyRead } from './syncablesProxyScope';
 import {
   syncablesHostRequest,
   type BuiltinSyncablesRequest,
@@ -197,6 +198,9 @@ export function SyncablesFrame({
             platform: string;
             proxyOrigin: string;
             connectionId?: string;
+            kind: string;
+            ownerLogin?: string;
+            repoName?: string;
           };
           if (context.proxyOrigin !== origin)
             throw new Error('The source proxy differs from the current proxy setting');
@@ -212,22 +216,8 @@ export function SyncablesFrame({
               data.connectionId !== context.connectionId
             ) throw new Error('This view cannot access another connection');
           }
-          if (data.op === 'proxyFetch') {
-            const url =
-              typeof data.url === 'string'
-                ? new URL(data.url)
-                : undefined;
-            const segments = url?.pathname.split('/').filter(Boolean);
-            if (
-              !segments ||
-              segments[0] !== 'proxy' ||
-              segments[2] !== context.platform ||
-              (context.connectionId &&
-                decodeURIComponent(segments[1] ?? '') !== context.connectionId)
-            ) throw new Error('Proxy request is outside this view source');
-            if (data.method !== 'GET')
-              throw new Error('Built-in Syncables is read-only');
-          }
+          if (data.op === 'proxyFetch')
+            assertSyncablesProxyRead(context, data);
           const user = store.getAgent();
           const proxyHost = user?.subject
             ? proxy.host(async () => user.subject!)
