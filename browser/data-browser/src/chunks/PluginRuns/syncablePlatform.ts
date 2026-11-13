@@ -5,6 +5,7 @@
  * Source connections and sandboxed view mounting are deliberately separate:
  * creating a table must never silently authorize an external service.
  */
+import { ensureSyncablesTableViews } from './syncablesViews';
 import {
   core,
   dataBrowser,
@@ -144,6 +145,7 @@ export async function ensureSyncablePlatform(
   const existing = await findSyncablePlatform(store, input);
   const schema = await ensureSchema(store, drive, syncablePlatformSchema());
   if (existing) {
+    await ensureSyncablesTableViews(store, existing);
     await indexSyncablePlatform(
       store,
       drive,
@@ -171,6 +173,7 @@ export async function ensureSyncablePlatform(
     // If a concurrent install won the same localId, reuse the winner.
     const winner = await store.findByLocalId(drive, drive, localId);
     if (winner) {
+      await ensureSyncablesTableViews(store, winner.subject);
       await indexSyncablePlatform(
         store,
         drive,
@@ -183,6 +186,7 @@ export async function ensureSyncablePlatform(
     throw error;
   }
 
+  await ensureSyncablesTableViews(store, table.subject);
   await indexSyncablePlatform(
     store,
     drive,
