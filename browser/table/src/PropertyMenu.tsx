@@ -141,13 +141,23 @@ export function TablePropertyMenu({
   );
 }
 
-function DefaultPropertyMenu({
+export interface TableCommandMenuPresentation {
+  label: string;
+  items: readonly (Omit<TablePropertyMenuItem, 'key'> & { key: string })[];
+  disabled: boolean;
+  point?: { x: number; y: number };
+  onContextClose: () => void;
+  triggerIcon?: ReactNode;
+}
+
+export function DefaultPropertyMenu({
   label,
   items,
   disabled,
   point,
   onContextClose,
-}: TablePropertyMenuPresentation) {
+  triggerIcon,
+}: TableCommandMenuPresentation) {
   const [open, setOpen] = useState(false);
   const selectedAction = useRef(false);
   const descriptionId = useId();
@@ -207,7 +217,7 @@ function DefaultPropertyMenu({
           aria-label={label}
           aria-haspopup='menu'
         >
-          <FaEllipsisVertical />
+          {triggerIcon ?? <FaEllipsisVertical />}
         </Trigger>
       </Popover.Trigger>
       <Popover.Portal>

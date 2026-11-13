@@ -4925,6 +4925,7 @@ msgstr ""
 
 #: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Add column"
 msgstr ""
 

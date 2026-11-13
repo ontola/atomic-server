@@ -298,3 +298,12 @@ export {
   type TablePropertyDialogPresentation,
   type TablePropertyDialogAction,
 } from './schema/PropertyDialog.js';
+
+export {
+  TableNewColumnMenu,
+  type TableNewColumnKind,
+  type TableNewColumnAction,
+  type TableNewColumnItem,
+  type TableNewColumnMenuPresentation,
+  type TableNewColumnMenuProps,
+} from './NewColumnMenu.js';
