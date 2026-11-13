@@ -168,7 +168,8 @@ export function TableFilterChip({
           <Hint>{text.unavailable}</Hint>
         ) : (
           <>
-            {operators.length > 1 && (
+            {(operators.length > 1 ||
+              !operators.some(option => option.value === filter.operator)) && (
               <SelectComponent
                 aria-label={text.operator}
                 value={filter.operator}

@@ -246,7 +246,7 @@ JSON canonicalization runs only on complete JSON; numeric canonicalization is an
 explicit backend policy and defaults off. Native adapters retain their typed
 parser and exactness checks. Hosts supply labels/style primitives, tag labels and
 a resource-picker leaf; the shared control owns the actual value UI and change/
-blur behavior. This does not yet extract the entire filter-chip/menu/page shell.
+blur behavior. The value adapter is also used by the shared chip and active-filter bar.
 
 `TableFilterChip` now owns the real chip, popup state, operator selector,
 computed numeric/date modes and removal action. Its default popup uses Radix;
@@ -258,5 +258,12 @@ content is labelled by its column header.
 Unavailable targets retain a removable chip instead of disappearing. Atomic's
 filter bar uses this recovery path, so removing a missing computed constraint
 restores the scoped query without editing raw metadata. Backend-specific value
-and reference adapters retain their responsibilities; the full filter-menu/page
+and reference adapters retain their responsibilities; the full page
 orchestration and renderer port remain open.
+
+`TableFilterBar` owns the active chip row and Add-filter candidates. Stable
+backend target descriptors provide typed value/reference leaves and labels;
+hidden targets keep existing chips without appearing in Add. Missing targets
+remain removable. The default searchable Add control needs no host menu, while
+Atomic retains its existing dropdown primitive and drive-search action. This
+shares filter UI, not the remaining full-page/renderer orchestration.
