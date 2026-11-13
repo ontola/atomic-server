@@ -363,3 +363,10 @@ validation, identity and persistence policy.
 tag choices, target/literal resets, raw finite-decimal validation and stable local
 action identity. Adapters provide compatibility and subscribed option elements;
 execution and dialog lifecycle remain backend/host responsibilities.
+
+`TableDerivedColumnFields` owns computed-column name/formula fields, examples,
+identifier binding and suggestions, display-kind inference, and retained local
+identity/width. Adapters supply compatible column metadata and the evaluator's
+readiness/validator. Only an explicit `null` validation result enables saving;
+an unavailable validator stays blocked. Evaluation and row-value conversion stay
+in the backend adapter.

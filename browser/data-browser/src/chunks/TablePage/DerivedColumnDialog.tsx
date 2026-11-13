@@ -1,5 +1,14 @@
-import { useEffect, useState, type JSX } from 'react';
-import { styled } from 'styled-components';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type InputHTMLAttributes,
+  type JSX,
+} from 'react';
+import {
+  TableDerivedColumnFields,
+  type TableQuickAddButtonProps,
+} from '@tomic/table';
 import { Datatype, useResource, useTitle, type Property } from '@tomic/react';
 import {
   Dialog,
@@ -9,13 +18,9 @@ import {
   useDialog,
 } from '@components/Dialog';
 import { Button } from '@components/Button';
-import Field from '@components/forms/Field';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { stringToSlug } from '@helpers/stringToSlug';
 import {
-  bindFormula,
-  columnSlugs,
-  inferValueKind,
   isFormulaProperty,
   type DerivedColumnSpec,
   type DerivedValueKind,
@@ -43,12 +48,20 @@ export function DerivedColumnDialog({
   editing,
   onSave,
 }: DerivedColumnDialogProps): JSX.Element {
-  const [label, setLabel] = useState('');
-  const [formula, setFormula] = useState('');
-  const [valueKind, setValueKind] = useState<DerivedValueKind>();
-  const [dialogProps, show, hide] = useDialog({ bindShow });
+  const [state, setState] = useState<{
+    draft: DerivedColumnSpec;
+    valid: boolean;
+  }>();
+  const clear = useCallback(() => setState(undefined), []);
+  const [dialogProps, show, hide, isOpen] = useDialog({
+    bindShow,
+    onCancel: clear,
+    onSuccess: clear,
+  });
   const ready = useFormulaReady();
-  /** Clicking one fills in the name and the formula; the column names are placeholders to edit. */
+  useEffect(() => {
+    if (open) show();
+  }, [open, show]);
   const examples: Array<{
     title: string;
     formula: string;
@@ -82,58 +95,7 @@ export function DerivedColumnDialog({
     },
   ];
 
-  const slugs = columnSlugs(
-    classProperties
-      .filter(isFormulaProperty)
-      .map(property => [property.shortname, property.subject]),
-  );
-
-  // Reset to the spec being edited (or a fresh one) every time it opens, so a
-  // cancelled edit doesn't leak into the next one.
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setLabel(editing?.label ?? '');
-    // A column stored with generated names (`v0`) is shown by its columns' slugs.
-    const slugOf = Object.fromEntries(
-      Object.entries(slugs).map(([slug, subject]) => [subject, slug]),
-    );
-    setFormula(
-      (editing?.formula ?? '').replace(
-        /\b[A-Za-z_]\w*\b/g,
-        name => slugOf[editing?.vars[name] ?? ''] ?? name,
-      ),
-    );
-    setValueKind(editing?.valueKind);
-    show();
-  }, [open]);
-
-  const { vars, unknown } = bindFormula(formula, slugs);
-  const [[missing, suggestion] = []] = unknown;
-  const readsInstants = Object.values(vars).every(subject =>
-    [Datatype.TIMESTAMP, Datatype.DATE].includes(
-      classProperties.find(p => p.subject === subject)?.datatype as Datatype,
-    ),
-  );
-  const shownAs =
-    inferValueKind(formula, readsInstants && Object.keys(vars).length > 0) ??
-    valueKind;
-
-  const problem = missing
-    ? `There is no column "${missing}".${suggestion ? ` Did you mean "${suggestion}"?` : ''}`
-    : formula.trim() && validateFormula({ kind: 'formula', formula, vars });
-  const valid =
-    ready && formula.trim() !== '' && label.trim() !== '' && problem === null;
-
-  // Nothing in the DOM while closed. Every derived column's heading mounts one
-  // of these, and each renders a form — so a closed one must not be there at
-  // all. `open` only flips false once the close animation has finished
-  // (`bindShow`), so this doesn't cut it short.
-  if (!open) {
-    return <></>;
-  }
+  if (!open) return <></>;
 
   return (
     <Dialog {...dialogProps}>
@@ -141,69 +103,50 @@ export function DerivedColumnDialog({
         <h1>{editing ? 'Edit computed column' : 'New computed column'}</h1>
       </DialogTitle>
       <DialogContent>
-        <Field label='Name'>
-          <InputWrapper>
-            <InputStyled
-              value={label}
-              data-testid='derived-label'
-              placeholder='Duration'
-              onChange={e => setLabel(e.currentTarget.value)}
-            />
-          </InputWrapper>
-        </Field>
-        <Field
-          label='Formula'
-          helper={`Combine columns with + - * / and functions: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Dates are milliseconds, a missing value leaves the cell empty, and 1/2 is 0 (write 1.0/2). Columns you can use: ${
-            Object.keys(slugs).join(', ') || 'none yet'
-          }.`}
-          helperAlwaysVisible
-          error={problem ? new Error(problem) : undefined}
-        >
-          <InputWrapper>
-            <InputStyled
-              value={formula}
-              data-testid='derived-formula'
-              placeholder='coalesce(end, now()) - start'
-              spellCheck={false}
-              onChange={e => setFormula(e.currentTarget.value)}
-            />
-          </InputWrapper>
-        </Field>
-        <Examples>
-          {examples.map(example => (
-            <Button
-              key={example.title}
-              subtle
-              type='button'
-              data-testid='derived-example'
-              onClick={() => {
-                setFormula(example.formula);
-                setValueKind(example.valueKind);
-                setLabel(current => current || example.title);
-              }}
-            >
-              {example.title}
-            </Button>
-          ))}
-        </Examples>
+        {isOpen && (
+          <TableDerivedColumnFields
+            initial={editing}
+            ready={ready}
+            validate={validateFormula}
+            examples={examples}
+            columns={classProperties
+              .filter(isFormulaProperty)
+              .map(property => ({
+                key: property.subject,
+                label: property.shortname,
+                instant: [Datatype.TIMESTAMP, Datatype.DATE].includes(
+                  property.datatype,
+                ),
+              }))}
+            Input={FormulaInput}
+            ExampleButton={ExampleButton}
+            helper={identifiers =>
+              `Combine columns with + - * / and functions: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Dates are milliseconds, a missing value leaves the cell empty, and 1/2 is 0 (write 1.0/2). Columns you can use: ${identifiers.join(', ') || 'none yet'}.`
+            }
+            messages={{
+              name: 'Name',
+              formula: 'Formula',
+              namePlaceholder: 'Duration',
+              formulaPlaceholder: 'coalesce(end, now()) - start',
+              unknown: (missing, suggestion) =>
+                `There is no column "${missing}".${suggestion ? ` Did you mean "${suggestion}"?` : ''}`,
+            }}
+            onChange={(draft, valid) => setState({ draft, valid })}
+          />
+        )}
       </DialogContent>
       <DialogActions>
         <Button subtle onClick={() => hide()}>
           Cancel
         </Button>
         <Button
-          disabled={!valid}
+          disabled={!state?.valid}
           data-testid='derived-save'
           onClick={() => {
+            if (!state?.valid) return;
             onSave({
-              // An edited column keeps its id, so its stored width and position
-              // survive.
-              id: editing?.id ?? stringToSlug(label),
-              label: label.trim(),
-              formula,
-              vars,
-              ...(editing?.width ? { width: editing.width } : {}),
-              ...(shownAs ? { valueKind: shownAs } : {}),
+              ...state.draft,
+              id: state.draft.id || stringToSlug(state.draft.label),
             });
             hide();
           }}
@@ -213,6 +156,18 @@ export function DerivedColumnDialog({
       </DialogActions>
     </Dialog>
   );
+}
+
+function FormulaInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <InputWrapper>
+      <InputStyled {...props} />
+    </InputWrapper>
+  );
+}
+
+function ExampleButton(props: TableQuickAddButtonProps) {
+  return <Button {...props} subtle />;
 }
 
 /** Labels a column by its human title, the way the column menus do. */
@@ -228,9 +183,3 @@ export function PropertyOption({
     <option value={property.subject}>{title || property.shortname}</option>
   );
 }
-
-const Examples = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-`;
