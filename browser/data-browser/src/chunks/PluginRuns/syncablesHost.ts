@@ -33,6 +33,8 @@ export interface BuiltinSyncablesRequest {
   imported?: unknown;
   incomplete?: unknown;
   message?: unknown;
+  owners?: unknown;
+  repos?: unknown;
 }
 
 interface Context {
@@ -291,6 +293,65 @@ export async function syncablesHostRequest(
       config: { connectionId },
     });
     return { subject: organizations };
+  }
+
+  if (request.op === 'syncablesDiscoverOwners') {
+    if (context.kind !== 'organizations') throw new Error('Expected Organizations table');
+    const owners = request.owners;
+    if (!Array.isArray(owners) || owners.length > 100)
+      throw new Error('Organization discovery batch exceeds 100');
+    const connectionId = requiredText(context.connectionId, 'Connection ID');
+    await assertConnection(proxy, context.platform, connectionId);
+    for (const item of owners) {
+      if (!item || typeof item !== 'object' || Array.isArray(item))
+        throw new Error('Invalid owner namespace');
+      const row = item as Record<string, unknown>;
+      const ownerId = numericId(row.id, 'owner ID');
+      const ownerLogin = identifier(row.login, 'owner login');
+      if (row.type !== 'organization' && row.type !== 'personal')
+        throw new Error('Invalid owner kind');
+      await ensureSyncableNode(store, {
+        drive,
+        parent: table,
+        proxyOrigin: context.proxyOrigin,
+        platform: context.platform,
+        kind: 'owner',
+        remoteId: 'github-owner:' + ownerId,
+        name: ownerLogin,
+        ownerKind: row.type,
+        config: { connectionId, ownerId, ownerLogin },
+      });
+    }
+    return { count: owners.length };
+  }
+
+  if (request.op === 'syncablesDiscoverRepos') {
+    if (context.kind !== 'repositories') throw new Error('Expected Repositories table');
+    const repos = request.repos;
+    if (!Array.isArray(repos) || repos.length > 100)
+      throw new Error('Repository discovery batch exceeds 100');
+    const connectionId = requiredText(context.connectionId, 'Connection ID');
+    const ownerId = numericId(context.ownerId, 'owner ID');
+    const ownerLogin = identifier(context.ownerLogin, 'owner login');
+    await assertConnection(proxy, context.platform, connectionId);
+    for (const item of repos) {
+      if (!item || typeof item !== 'object' || Array.isArray(item))
+        throw new Error('Invalid repository record');
+      const row = item as Record<string, unknown>;
+      const repoId = numericId(row.id, 'repository ID');
+      const repoName = identifier(row.name, 'repository name');
+      await ensureSyncableNode(store, {
+        drive,
+        parent: table,
+        proxyOrigin: context.proxyOrigin,
+        platform: context.platform,
+        kind: 'repository',
+        remoteId: 'github-repo:' + repoId,
+        name: repoName,
+        config: { connectionId, ownerId, ownerLogin, repoId, repoName },
+      });
+    }
+    return { count: repos.length };
   }
 
   if (request.op === 'syncablesOpenOwner') {
