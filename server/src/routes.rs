@@ -257,6 +257,7 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
     #[cfg(feature = "wasm-plugins")]
     {
         app.service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui));
+        app.service(web::resource("/builtin-syncables-ui").route(web::get().to(handlers::plugin_ui::handle_builtin_syncables_ui)));
         json_routes!(app;
             "/plugin-release-pin" => handlers::plugin_release::pin,
             "/plugin-external-read" => handlers::plugin_external::read,
