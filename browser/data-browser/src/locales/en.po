@@ -125,6 +125,7 @@ msgstr "AI Agents"
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/Website/WebsitePage.tsx
@@ -936,6 +937,7 @@ msgid "I already have an account"
 msgstr "I already have an account"
 
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
@@ -3317,10 +3319,8 @@ msgstr "Currency"
 msgid "Range"
 msgstr "Range"
 
-#. 0: ' '; 1: selectedCategory ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1) \\: ''; 2: ' '
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
-msgid "New{0} {1}{2} Column"
-msgstr "New{0} {1}{2} Column"
+#~ msgid "New{0} {1}{2} Column"
+#~ msgstr "New{0} {1}{2} Column"
 
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Invalid Name"
@@ -13494,6 +13494,7 @@ msgid "Allow multiple values"
 msgstr "Allow multiple values"
 
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Preparing column…"
 msgstr "Preparing column…"
 
@@ -13504,3 +13505,12 @@ msgstr "Column editing is unavailable. Check access and the selected table."
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "This draft is locked after a partial save. Retry to finish saving."
 msgstr "This draft is locked after a partial save. Retry to finish saving."
+
+#. 0: kind
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "New {0} Column"
+msgstr "New {0} Column"
+
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Column creation is unavailable. Check access and the selected table."
+msgstr "Column creation is unavailable. Check access and the selected table."

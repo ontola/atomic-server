@@ -10,7 +10,6 @@ import {
 } from 'react-icons/fa6';
 import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
-import { NewPropertyDialog } from './PropertyForm/NewPropertyDialog';
 import { TablePageContext } from './tablePageContext';
 import { ExternalPropertyDialog } from './PropertyForm/ExternalPropertyDialog';
 import { DerivedColumnDialog } from './DerivedColumnDialog';
@@ -30,14 +29,13 @@ const RelationIcon = dataTypeIconMap.get(Datatype.ATOMIC_URL)!;
 const LocalizedTextIcon = dataTypeIconMap.get(Datatype.LOCALIZEDTEXT)!;
 
 export const NewColumnButton: React.FC = () => {
-  const [showDialog, setShowDialog] = useState(false);
   const [showExternalDialog, setShowExternalDialog] = useState(false);
   const [showDerivedDialog, setShowDerivedDialog] = useState(false);
   const [showActionDialog, setShowActionDialog] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>();
 
   const {
     tableClassSubject,
+    requestColumnCreation,
     showColumn,
     classProperties,
     addDerivedColumn,
@@ -49,10 +47,9 @@ export const NewColumnButton: React.FC = () => {
 
   const openDialog = useCallback(
     (category: string) => () => {
-      setSelectedCategory(category);
-      setShowDialog(true);
+      requestColumnCreation(category);
     },
-    [],
+    [requestColumnCreation],
   );
 
   const items = useMemo((): DropdownItem[] => {
@@ -132,7 +129,7 @@ export const NewColumnButton: React.FC = () => {
         icon: <FaHashtag />,
       },
     ];
-  }, []);
+  }, [openDialog]);
 
   if (!canWrite) {
     return null;
@@ -141,15 +138,6 @@ export const NewColumnButton: React.FC = () => {
   return (
     <>
       <DropdownMenu Trigger={NewColumnTrigger} items={items} />
-      <NewPropertyDialog
-        showDialog={showDialog}
-        tableClassResource={tableClassResource}
-        selectedCategory={selectedCategory}
-        bindShow={setShowDialog}
-        // A view with an explicit column list treats anything absent from it as
-        // hidden, so without this a column you just made never appears.
-        onCreated={showColumn}
-      />
       <ExternalPropertyDialog
         open={showExternalDialog}
         tableClassResource={tableClassResource}

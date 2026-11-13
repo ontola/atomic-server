@@ -3,19 +3,11 @@ import toast from 'react-hot-toast';
 import {
   TablePropertyDialog,
   type TablePropertyEditorProps,
-  type TablePropertyDialogPresentation,
 } from '@tomic/table';
-import { useContext, useEffect, type JSX } from 'react';
+import { useContext, type JSX } from 'react';
 import { PropertyForm } from './PropertyForm';
 import { FormValidationContextProvider } from '@components/forms/formValidation/FormValidationContextProvider';
-import {
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  useDialog,
-} from '@components/Dialog';
-import { Button } from '@components/Button';
+import { AtomicPropertyFrame } from './AtomicPropertyFrame';
 import { TablePageContext } from '../tablePageContext';
 import {
   prepareAtomicPropertyDraft,
@@ -90,40 +82,5 @@ function AtomicPropertyEditor({
         onSubmit={onSubmit}
       />
     </FormValidationContextProvider>
-  );
-}
-
-function AtomicPropertyFrame({
-  title,
-  children,
-  actions,
-  busy,
-  canClose,
-  onCancel,
-}: TablePropertyDialogPresentation) {
-  const [dialogProps, show] = useDialog();
-  useEffect(() => {
-    show();
-  }, [show]);
-
-  return (
-    <Dialog {...dialogProps} onClose={onCancel} disableLightDismiss={!canClose}>
-      <DialogTitle>
-        <h1>{title}</h1>
-      </DialogTitle>
-      <DialogContent aria-busy={busy}>{children}</DialogContent>
-      <DialogActions>
-        {actions.map(action => (
-          <Button
-            key={action.key}
-            subtle={action.key === 'cancel'}
-            disabled={action.disabled}
-            onClick={action.run}
-          >
-            {action.label}
-          </Button>
-        ))}
-      </DialogActions>
-    </Dialog>
   );
 }

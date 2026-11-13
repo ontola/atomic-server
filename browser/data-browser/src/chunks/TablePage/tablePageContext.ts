@@ -44,6 +44,7 @@ export interface TablePageContextType {
   /** Removal is owned above headers so optimistic schema changes cannot close it. */
   requestColumnRemoval: (property: string) => void;
   requestColumnEdit: (property: string) => void;
+  requestColumnCreation: (category: string) => void;
   /**
    * Adds a property to the active view's visible columns. Needed after creating
    * one: `view-columns` treats anything it doesn't list as hidden, so a brand
@@ -143,6 +144,7 @@ export const TablePageContext = createContext<TablePageContextType>({
   hideColumn: () => undefined,
   requestColumnRemoval: () => undefined,
   requestColumnEdit: () => undefined,
+  requestColumnCreation: () => undefined,
   showColumn: () => undefined,
   splitLanguageSubjects: [],
   toggleSplitLanguages: () => undefined,

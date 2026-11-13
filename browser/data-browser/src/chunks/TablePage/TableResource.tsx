@@ -45,6 +45,7 @@ import { useTableData } from '@chunks/TablePage/useTableData';
 import { AtomicTableNavigation } from './AtomicTableNavigation';
 import {
   useId,
+  useLayoutEffect,
   useState,
   useCallback,
   useEffect,
@@ -61,6 +62,7 @@ import { CellSelectionMenu } from './CellSelectionMenu';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS } from './tableViewKinds';
+import { AtomicColumnCreationDialog } from './AtomicColumnCreationDialog';
 import { AtomicColumnEditDialog } from './AtomicColumnEditDialog';
 import { AtomicColumnRemovalDialog } from './AtomicColumnRemovalDialog';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
@@ -1308,6 +1310,38 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     [tableClass.subject],
   );
 
+  const [columnCreation, setColumnCreation] = useState<{
+    owner: string;
+    table: string;
+    view?: string;
+    category: string;
+  }>();
+  const requestColumnCreation = useCallback(
+    (category: string) => {
+      setColumnCreation({
+        owner: tableClass.subject,
+        table: resource.subject,
+        view: activeView,
+        category,
+      });
+    },
+    [tableClass.subject, resource.subject, activeView],
+  );
+  const creationScope = useRef({
+    owner: tableClass.subject,
+    table: resource.subject,
+    view: activeView,
+    showColumn,
+  });
+  useLayoutEffect(() => {
+    creationScope.current = {
+      owner: tableClass.subject,
+      table: resource.subject,
+      view: activeView,
+      showColumn,
+    };
+  }, [tableClass.subject, resource.subject, activeView, showColumn]);
+
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
       selectedRows,
@@ -1326,6 +1360,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
       hideColumn,
       requestColumnRemoval,
       requestColumnEdit,
+      requestColumnCreation,
       showColumn,
       splitLanguageSubjects: viewSplitLanguages,
       toggleSplitLanguages,
@@ -1369,6 +1404,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
       hideColumn,
       requestColumnRemoval,
       requestColumnEdit,
+      requestColumnCreation,
       showColumn,
       viewSplitLanguages,
       toggleSplitLanguages,
@@ -1745,6 +1781,37 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
                 />
               )}
             </>
+          )}
+          {columnCreation && (
+            <AtomicColumnCreationDialog
+              owner={columnCreation.owner}
+              category={columnCreation.category}
+              scope={JSON.stringify([
+                columnCreation.table,
+                columnCreation.view ?? null,
+                columnCreation.owner,
+                columnCreation.category,
+              ])}
+              canSave={
+                columnCreation.owner === tableClass.subject &&
+                columnCreation.table === resource.subject &&
+                columnCreation.view === activeView
+              }
+              onClose={() =>
+                setColumnCreation(current =>
+                  current === columnCreation ? undefined : current,
+                )
+              }
+              onCreated={subject => {
+                const current = creationScope.current;
+                if (
+                  current.owner === columnCreation.owner &&
+                  current.table === columnCreation.table &&
+                  current.view === columnCreation.view
+                )
+                  current.showColumn(subject);
+              }}
+            />
           )}
           {columnEdit && (
             <AtomicColumnEditDialog

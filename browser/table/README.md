@@ -341,3 +341,11 @@ draft to the shared property form; `Frame` adapts modal primitives. A backend ca
 report a checkpointed identity with `isDraftLocked`, retaining read-only fields
 while explicit retry remains available. Persistence, authorization, immutable
 identity and retry/idempotence guarantees remain backend responsibilities.
+
+
+`TablePropertyDialog` also supports new-column creation. A backend draft may
+checkpoint a created definition before attachment; locked fields and a custom
+retry label retain that identity. `onSaved` is a completion notification for the
+current successful scope, not part of the backend transaction. Callers own any
+scoped visibility update. Preparation, definition creation and attachment remain
+backend services rather than hidden UI writes.

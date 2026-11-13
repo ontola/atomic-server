@@ -143,7 +143,7 @@ try {
       children: ({ index }) => <Cell rowIndex={index} columnIndex={1}>A value</Cell>,
     };
     const grid = <FancyTable {...props} />;
-    const propertyDialog = <TablePropertyDialog open scope="class/property" title="Edit" prepare={() => ({name: 'Column'})} save={async draft => { const value: string = draft.name; void value; }} Editor={({draft}) => <span>{draft.name}</span>} onClose={() => {}} />;
+    const propertyDialog = <TablePropertyDialog open scope="class/property" title="Edit" prepare={() => ({name: 'Column'})} save={async draft => { const value: string = draft.name; void value; }} Editor={({draft}) => <span>{draft.name}</span>} onSaved={draft => { const value: string = draft.name; void value; }} messages={{saveLocked: 'Retry'}} onClose={() => {}} />;
     const propertyForm = <TablePropertyForm name={{value: 'Column', onChange: value => void value}} onSubmit={() => {}}><TablePropertyFields model={{kind: 'none'}} /></TablePropertyForm>;
     const precision = <PropertyPrecisionField value={0} onChange={value => { const typed: number | undefined = value; void typed; }} />;
     const dateFormat = <PropertyDateFormatField value="custom:date" options={[]} onChange={value => { const typed: string = value; void typed; }} />;
