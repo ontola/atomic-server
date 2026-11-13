@@ -388,3 +388,23 @@ Existing translated picker labels are explicitly retained during extraction.
 ELFA adoption is in progress with its public ORM query parser; the entire filter
 bar/chip/menu and remaining page/renderer orchestration still need extraction.
 Catalog discovery continues to follow the full-page gate.
+
+## Shared filter chip and unavailable-target recovery
+
+ELFA's typed filter adoption shipped in #109 with 28 real-SDK browser cases,
+including retained invalid numeric text, zero row queries for invalid integer
+filters and a persisted false value under its stable Property ID.
+
+The actual Atomic filter chip now uses shared popup/edit/remove orchestration,
+operator selection and computed numeric/date modes. Backend adapters retain
+resource labels, reference search, datatype mapping and existing host style/
+control-lock primitives. The package includes a default Radix popup and explicit
+header labelling. Unsupported operators stay visible, and invalid numeric `now`
+text remains editable.
+
+A missing computed target no longer makes its filter disappear from the bar.
+The retained unavailable chip offers removal; the normal scoped draft/write
+controller performs that metadata change. Tests cover the package control and
+actual Atomic page-context removal path in the dedicated CI lane. This recovery
+is for unresolved targets; malformed stored configuration and the remaining
+full-page/schema/renderer services still need extraction.

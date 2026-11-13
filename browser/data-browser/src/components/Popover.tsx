@@ -19,6 +19,7 @@ import { floatingSurface, floatingSurfaceAppear } from './floatingSurface';
 
 export interface PopoverProps {
   Trigger: ReactNode;
+  labelledBy?: string;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,6 +44,7 @@ export function Popover({
   onOpenChange,
   Trigger,
   side = 'bottom',
+  labelledBy,
   onOpenAutoFocus,
   onCloseAutoFocus,
   updatePositionStrategy = 'optimized',
@@ -76,6 +78,7 @@ export function Popover({
       {Trigger}
       <RadixPopover.Portal container={container}>
         <Content
+          aria-labelledby={labelledBy}
           onOpenAutoFocus={onOpenAutoFocus}
           onCloseAutoFocus={onCloseAutoFocus}
           collisionPadding={10}

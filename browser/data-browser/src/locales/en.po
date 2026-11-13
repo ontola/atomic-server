@@ -13431,6 +13431,7 @@ msgstr "Saved view configuration is invalid."
 msgid "The configured measurement is unavailable."
 msgstr "The configured measurement is unavailable."
 
+#: src/chunks/TablePage/TableFilterChip.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Filter value"
 msgstr "Filter value"
@@ -13442,3 +13443,11 @@ msgstr "Any"
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Value…"
 msgstr "Value…"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Unavailable column"
+msgstr "Unavailable column"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "This column is unavailable."
+msgstr "This column is unavailable."
