@@ -96,9 +96,9 @@ export function QuickAddDialog({
         </Button>
         <Button
           data-testid='quick-add-config-save'
-          disabled={!isQuickAddDraftComplete(draft)}
+          disabled={!isQuickAddDraftComplete(draft, classProperties)}
           onClick={() => {
-            onSave(specFromDraft(draft));
+            onSave(specFromDraft(draft, classProperties));
             hide();
           }}
         >
