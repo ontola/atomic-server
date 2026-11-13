@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
+import { FaGithub, FaCalendarDays, FaNoteSticky, FaTableCells } from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
 import { Button } from '@components/Button';
 import { Card } from '@components/Card';
@@ -120,7 +121,7 @@ export function ProxyCatalogApps({
         drive,
         proxyOrigin: catalog.origin,
         platform,
-        name: platformDisplayName(platform),
+        name: platform === 'github-issues' ? 'GitHub' : catalog.entries.find(item => item.id === platform)?.name ?? platformDisplayName(platform),
       });
       setExisting(previous => ({ ...previous, [platform]: subject }));
       navigate(constructOpenURL(subject));
@@ -148,7 +149,11 @@ export function ProxyCatalogApps({
         {visible.length === 0 && <p>No matching services.</p>}
         <Grid>
           {visible.map(platform => {
-            const name = platformDisplayName(platform);
+            const entry = catalog.entries.find(item => item.id === platform);
+            const name =
+              platform === 'github-issues'
+                ? 'GitHub'
+                : entry?.name ?? platformDisplayName(platform);
             const subject = existing[platform];
 
             return (
@@ -156,13 +161,21 @@ export function ProxyCatalogApps({
                 <Column gap='1rem'>
                   <Row center justify='space-between'>
                     <Avatar aria-hidden>
-                      {platform === 'github-issues' ? '◈' : '🔗'}
+                      {platform === 'github-issues' ? (
+                        <FaGithub />
+                      ) : platform.includes('calendar') ? (
+                        <FaCalendarDays />
+                      ) : platform.includes('keep') ? (
+                        <FaNoteSticky />
+                      ) : (
+                        <FaTableCells />
+                      )}
                     </Avatar>
                     <small>Integration proxy</small>
                   </Row>
                   <div>
                     <h3>{name}</h3>
-                    <Description>{platform}</Description>
+                    <Description>{entry?.description || platform}</Description>
                   </div>
                   <Row>
                     <Button
