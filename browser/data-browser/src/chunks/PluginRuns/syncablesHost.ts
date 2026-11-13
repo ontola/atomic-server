@@ -207,9 +207,12 @@ async function importIssues(
     const link = requiredText(issue.htmlUrl, 'Issue URL', 4096);
     if (!/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/issues\/[0-9]+$/.test(link))
       throw new Error('Invalid GitHub issue URL');
-    const body = issue.body === null || issue.body === undefined
-      ? ''
-      : requiredText(issue.body, 'Issue body', 200000);
+    const body =
+      issue.body === null || issue.body === undefined
+        ? ''
+        : typeof issue.body === 'string' && issue.body.length <= 200000
+          ? issue.body
+          : (() => { throw new Error('Invalid issue body'); })();
 
     const propVals = {
       [core.properties.name]: title,
