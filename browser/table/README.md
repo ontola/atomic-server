@@ -311,3 +311,13 @@ successful confirmation. Changing scope resets the intent and suppresses stale
 completion callbacks. Backend services still own live authorization, schema
 identity, idempotence and any transaction guarantees; detachment and definition
 deletion are separate writes.
+
+
+`PropertyPrecisionField` retains the raw display-precision draft and only emits
+whole numbers from 0 through 20 or an explicit unset. Invalid text never emits a
+precision change; hosts own any associated datatype/default policy. Remount it
+when changing the property/draft. `PropertyDateFormatField` owns radio choices,
+locale-prepared examples, isolated group identities and disabled/unknown-format
+handling. The host supplies format IDs and example strings from its formatter.
+Neither field writes metadata or substitutes a supported value for an unknown
+stored format.
