@@ -194,10 +194,10 @@ it('keeps external definitions unavailable for deletion and does not destroy aft
 
 it('keeps the page-owned dialog pending after its heading unmounts and closes only after confirmation', async () => {
   const state = await fixture();
-  let finish!: (value: string) => void;
+  let finish!: (value: 'persisted') => void;
   state.save.mockImplementation(
     () =>
-      new Promise<string>(resolve => {
+      new Promise<'persisted'>(resolve => {
         finish = resolve;
       }),
   );
