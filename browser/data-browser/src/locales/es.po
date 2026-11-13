@@ -3332,9 +3332,8 @@ msgstr "Nueva columna"
 msgid "Resource type:"
 msgstr "Tipo de recurso:"
 
-#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
-msgid "<0/> Allow multiple values"
-msgstr "<0/> Permitir múltiples valores"
+#~ msgid "<0/> Allow multiple values"
+#~ msgstr "<0/> Permitir múltiples valores"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
@@ -13473,4 +13472,8 @@ msgstr ""
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Enter a whole number between 0 and 20, or leave empty."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
+msgid "Allow multiple values"
 msgstr ""

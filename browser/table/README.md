@@ -321,3 +321,13 @@ locale-prepared examples, isolated group identities and disabled/unknown-format
 handling. The host supplies format IDs and example strings from its formatter.
 Neither field writes metadata or substitutes a supported value for an unknown
 stored format.
+
+
+`TablePropertyForm` owns the real name/submission layout and validation/disabled
+submit guard. `TablePropertyFields` renders the text, number, date, relation and
+select category layout from typed models. Number formatting chooses currency
+versus precision from the current format value, and date/relation toggles guard
+read-only dispatch. Atomic adapters retain metadata hooks, draft mutation and
+initialization policy. Resource/class, currency and tag widgets remain backend
+leaves; range, precision and date choices can use the shared controls above.
+The enclosing property dialog still owns asynchronous persistence and scope.

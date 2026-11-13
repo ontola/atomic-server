@@ -44,7 +44,7 @@ try {
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver, getComputedStyle: dom.window.getComputedStyle, requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout, IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
     globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
-    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell, executeTableRowMutation, executeTableRowCreation, createTableHistory, useTableHistoryState, PropertyNameField, PropertyRangeField, PropertyChoiceField, PropertyPrecisionField, PropertyDateFormatField, FloatCell, createTableDraftCommit, useTableDraftCommit, selectTableView, createTableViewInitializer, createTableViewWriteQueue, readTableViewConfiguration } from '@tomic/table';
+    import { FancyTable, TableHostProvider, IntegerCell, parseInteger, CursorMode, ViewTab, ViewTabList, TableNavigationProvider, useTableNavigation, tableQueryIssues, tableRowList, readTableRow, tableRowCount, ValueCell, executeTableRowMutation, executeTableRowCreation, createTableHistory, useTableHistoryState, PropertyNameField, PropertyRangeField, PropertyChoiceField, PropertyPrecisionField, PropertyDateFormatField, TablePropertyForm, TablePropertyFields, FloatCell, createTableDraftCommit, useTableDraftCommit, selectTableView, createTableViewInitializer, createTableViewWriteQueue, readTableViewConfiguration } from '@tomic/table';
     assert.equal(typeof ValueCell, 'function');
     assert.equal(parseInteger('42'), 42);
     assert.equal(typeof IntegerCell.Edit, 'function');
@@ -61,7 +61,8 @@ try {
       React.createElement(PropertyRangeField, { minValue: 0, onChange: () => {} }),
       React.createElement(PropertyChoiceField, { mode: 'select', label: 'Type', value: 'custom:v2', options: [], onChange: () => {} }),
       React.createElement(PropertyPrecisionField, { value: 2, onChange: () => {} }),
-      React.createElement(PropertyDateFormatField, { value: 'custom:date', options: [], onChange: () => {} }));
+      React.createElement(PropertyDateFormatField, { value: 'custom:date', options: [], onChange: () => {} }),
+      React.createElement(TablePropertyForm, { name: {value: 'Edited column', onChange: () => {}}, onSubmit: () => {} }, React.createElement(TablePropertyFields, { model: {kind: 'unknown'} })));
     await act(async () => root.render(React.createElement(StyleSheetManager, { shouldForwardProp: (prop, target) => typeof target !== 'string' || isPropValid(prop) }, fixture)));
     assert.match(document.getElementById('app').innerHTML, /role="grid"/);
     assert.match(document.getElementById('app').innerHTML, /role="tab"/);
@@ -133,7 +134,7 @@ try {
   writeFileSync(
     join(consumer, 'consumer.tsx'),
     `
-    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type TableQuery, type IndexedTableRows, type WindowedTableRows, ValueCell, StringCell, type TableRowMutation, type FancyTableProps, TableColumnRemovalDialog, PropertyPrecisionField, PropertyDateFormatField } from '@tomic/table';
+    import { FancyTable, Cell, IntegerCell, ViewTab, ViewTabList, TableNavigationProvider, type TableNavigation, type TableQuery, type IndexedTableRows, type WindowedTableRows, ValueCell, StringCell, type TableRowMutation, type FancyTableProps, TableColumnRemovalDialog, PropertyPrecisionField, PropertyDateFormatField, TablePropertyForm, TablePropertyFields } from '@tomic/table';
     const props: FancyTableProps<{ id: string }> = {
       columns: [{ id: 'name' }], itemCount: 1, columnToKey: column => column.id,
       labelledBy: 'title', HeadingComponent: ({ column }) => <span>{column.id}</span>,
@@ -141,6 +142,7 @@ try {
       children: ({ index }) => <Cell rowIndex={index} columnIndex={1}>A value</Cell>,
     };
     const grid = <FancyTable {...props} />;
+    const propertyForm = <TablePropertyForm name={{value: 'Column', onChange: value => void value}} onSubmit={() => {}}><TablePropertyFields model={{kind: 'none'}} /></TablePropertyForm>;
     const precision = <PropertyPrecisionField value={0} onChange={value => { const typed: number | undefined = value; void typed; }} />;
     const dateFormat = <PropertyDateFormatField value="custom:date" options={[]} onChange={value => { const typed: string = value; void typed; }} />;
     const removal = <TableColumnRemovalDialog scope="class/property" canRemove canDeleteDefinition={false}

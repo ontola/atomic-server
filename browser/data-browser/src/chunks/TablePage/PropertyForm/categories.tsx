@@ -1,3 +1,4 @@
+import { TablePropertyFields } from '@tomic/table';
 import { Core, dataBrowser, Datatype, Resource, urls } from '@tomic/react';
 import { CheckboxPropertyForm } from './CheckboxPropertyForm';
 import { DatePropertyForm } from './DatePropertyForm';
@@ -93,7 +94,12 @@ export const getCategoryFromResource = (
 };
 
 const NoCategorySelected = () => {
-  return <span>No Type selected</span>;
+  return (
+    <TablePropertyFields
+      model={{ kind: 'unknown' }}
+      messages={{ noType: 'No Type selected' }}
+    />
+  );
 };
 
 export const categoryFormFactory = buildComponentFactory(

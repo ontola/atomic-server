@@ -283,3 +283,11 @@ export {
   type PropertyDateFormatFieldProps,
   type PropertyDateFormatOption,
 } from './schema/PropertyDateFormatField.js';
+export {
+  TablePropertyForm,
+  TablePropertyFields,
+  type TablePropertyFormProps,
+  type TablePropertyFieldsProps,
+  type TablePropertyFieldsModel,
+  type TablePropertyCheckboxProps,
+} from './schema/PropertyForm.js';

@@ -8,8 +8,7 @@ import {
   type InputHTMLAttributes,
   type JSX,
 } from 'react';
-import { styled } from 'styled-components';
-import { PropertyNameField, nameTableProperty } from '@tomic/table';
+import { TablePropertyForm, nameTableProperty } from '@tomic/table';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import { useValidation } from '@components/forms/formValidation/useValidation';
 import { FormValidationContext } from '@components/forms/formValidation/FormValidationContextProvider';
@@ -89,15 +88,6 @@ export function PropertyForm({
     [name, shortname, setName, setShortName, existingProperty],
   );
 
-  const handleSubmit: React.FormEventHandler<HTMLFormElement> = useCallback(
-    e => {
-      e.preventDefault();
-      if (Object.values(validations).some(error => error !== undefined)) return;
-      onSubmit();
-    },
-    [onSubmit, validations],
-  );
-
   // Clear validation error if name is already set (pre-filled or existing property).
   useEffect(() => {
     if (
@@ -118,33 +108,22 @@ export function PropertyForm({
   const CategoryForm = categoryFormFactory(category);
 
   return (
-    <Form onSubmit={handleSubmit}>
-      <div>
-        <PropertyNameField
-          Input={PropertyNameInput}
-          Error={ErrorChip}
-          value={name ?? ''}
-          onChange={handleNameChange}
-          autoFocus={autoFocusName}
-          label='Column name'
-          placeholder='New Column'
-          onBlur={setNameTouched}
-          error={nameError}
-        />
-      </div>
+    <TablePropertyForm
+      onSubmit={onSubmit}
+      valid={!Object.values(validations).some(error => error !== undefined)}
+      name={{
+        Input: PropertyNameInput,
+        Error: ErrorChip,
+        value: name ?? '',
+        onChange: handleNameChange,
+        autoFocus: autoFocusName,
+        label: 'Column name',
+        placeholder: 'New Column',
+        onBlur: setNameTouched,
+        error: nameError,
+      }}
+    >
       <CategoryForm resource={resource} existingProperty={existingProperty} />
-      {/* Needed for inputs to submit on enter */}
-      <HiddenSubmitButton type='submit' />
-    </Form>
+    </TablePropertyForm>
   );
 }
-
-const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-`;
-
-const HiddenSubmitButton = styled.button`
-  display: none;
-`;
