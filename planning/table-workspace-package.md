@@ -603,3 +603,26 @@ verification pass. The browser fixture rejects class attachment once, retries
 the same selection and independently reads exactly one persisted class reference
 from the WASM database. Screenshots remain outside Git in
 `/workspace/artifacts/table-external-property`.
+
+### Quick-add control extraction
+
+Move the actual quick-add input/button and serial queue to `TableQuickAddBar`.
+Atomic table and dashboard adapters supply their existing primitives, translated
+labels and `createQuickAddRow` backend. Explicit view/block scopes isolate local
+input and completion callbacks. Accepted requests retain their backend binding
+while finishing; they are not redirected after navigation. Failure text retains
+the submitted value and no automatic retry can create another row.
+
+Package tests cover serial Enter submissions, preserving text typed during a save,
+failed values, scope changes and reentrant queue subscriptions. Backend identity,
+row defaults and save policy remain in the existing Atomic creation adapter.
+Native quick-add adoption and full page/renderer orchestration remain unfinished.
+
+Quick-add validation: 183 package tests, 149 Atomic adapter tests, package/host
+typechecks, clean packed-consumer installation and real SDK desktop/mobile
+browser verification pass. The browser holds the first save open, queues a second
+Enter submission and independently reads both stored values in order, with at
+most one save active and newly typed text preserved. Changed new control and
+adapters have clean compiler checks; TableResource retains its existing rule
+suppression diagnostic. Screenshots remain outside Git in
+`/workspace/artifacts/table-quick-add`.
