@@ -255,7 +255,7 @@ export async function syncablesHostRequest(
   request: BuiltinSyncablesRequest,
   proxy: ProxyConnections,
 ): Promise<unknown> {
-  if (!store.getAgent())
+  if (!store.getAgent()?.subject)
     throw new Error('Sign in to use connected services');
   const context = await contextOf(store, drive, table);
   if (context.proxyOrigin !== getIntegrationProxy())
@@ -271,7 +271,7 @@ export async function syncablesHostRequest(
     await assertConnection(proxy, context.platform, connectionId);
     // The user chose this source; explicitly delegate it to their own
     // host identity so an isolated frame can receive short-lived capabilities.
-    await proxy.delegate(connectionId, store.getAgent()!.subject, 'Atomic Syncables');
+    await proxy.delegate(connectionId, store.getAgent()!.subject!, 'Atomic Syncables');
     const account = await ensureSyncableNode(store, {
       drive,
       parent: table,
