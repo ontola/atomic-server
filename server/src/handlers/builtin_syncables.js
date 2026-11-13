@@ -301,6 +301,7 @@ async function renderMirror() {
 }
 
 async function syncIssues() {
+  try {
   const status = await call('syncablesMirrorStatus');
   if (status.paused) throw new Error('Resume this mirror before syncing.');
   const connectionId = current.connectionId;
@@ -334,6 +335,12 @@ async function syncIssues() {
   }
   await call('syncablesRecordSuccess', { imported, incomplete: more });
   await renderMirror();
+  } catch (error) {
+    await call('syncablesRecordFailure', {
+      message: String(error?.message ?? error).slice(0, 1024),
+    }).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function view({ root: viewRoot, store }) {
