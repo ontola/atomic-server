@@ -1093,6 +1093,7 @@ export class AtomicServer {
         '/repo/browser/data-browser/package.json',
         browser.file('data-browser/package.json'),
       )
+      .withFile('/repo/browser/ui/package.json', browser.file('ui/package.json'))
       .withFile(
         '/repo/browser/lib/package.json',
         browser.file('lib/package.json'),
@@ -1356,6 +1357,7 @@ export class AtomicServer {
         '/app/data-browser/package.json',
         browser.file('data-browser/package.json'),
       )
+      .withFile('/app/ui/package.json', browser.file('ui/package.json'))
       .withFile('/app/lib/package.json', browser.file('lib/package.json'))
       .withFile('/app/react/package.json', browser.file('react/package.json'))
       .withFile('/app/svelte/package.json', browser.file('svelte/package.json'))

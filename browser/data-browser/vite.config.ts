@@ -135,6 +135,10 @@ export default defineConfig(({ mode }) => {
       // Deduping forces a single shared instance so the `instanceof` holds.
       dedupe: ['prosemirror-view', 'prosemirror-state', 'prosemirror-model'],
       alias: [
+        {
+          find: '@tomic/ui',
+          replacement: path.resolve(__dirname, '../ui/src'),
+        },
         // Force EVERY `loro-crdt` import (our `enableLoro`, plus
         // `loro-prosemirror` used by the editor) onto the `web` build.
         // The default entry resolves via the `module` field to the
@@ -349,9 +353,7 @@ export default defineConfig(({ mode }) => {
       // `node_modules`, so the compiler sees its hooks. Tests compile just
       // that package, so a hook the compiler would cache wrongly fails here.
       ...oxcReactCompiler(
-        isVitest
-          ? { only: /\/browser\/react\/src\// }
-          : { compile: true },
+        isVitest ? { only: /\/browser\/react\/src\// } : { compile: true },
       ),
       react(),
       !isVitest &&

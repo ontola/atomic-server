@@ -1,0 +1,38 @@
+name: Shared UI
+
+on:
+  pull_request:
+    paths:
+      - 'browser/ui/**'
+      - 'browser/data-browser/src/components/**'
+      - 'browser/data-browser/src/hooks/**'
+      - 'browser/data-browser/src/globalCssVars.ts'
+      - 'browser/pnpm-lock.yaml'
+      - '.github/workflows/shared-ui.yml'
+  workflow_dispatch:
+
+jobs:
+  shared-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: browser/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: browser
+      - run: pnpm --filter @tomic/ui lint && pnpm --filter @tomic/ui typecheck
+        working-directory: browser
+      - run: pnpm --filter '@tomic/data-browser^...' build
+        working-directory: browser
+      - run: pnpm --filter @tomic/data-browser typecheck
+        working-directory: browser
+      - run: pnpm exec vitest run src/components/sharedUI.test.tsx src/components/Spinner.test.tsx src/components/Dialog/DialogGlobalContextProvider.test.tsx src/components/Dropdown/positionMenu.test.tsx src/components/Dropdown/DefaultTrigger.test.tsx src/hooks/useResizable.test.tsx src/hooks/useBackToClose.test.tsx src/chunks/TablePage/ExpandedRowDialog.test.tsx src/chunks/TablePage/ColumnFilterDropdown.test.tsx --maxWorkers=2
+        working-directory: browser/data-browser
+      - run: pnpm pack --pack-destination /tmp/ui-package && node scripts/check-package.mjs /tmp/ui-package/tomic-ui-*.tgz
+        working-directory: browser/ui
