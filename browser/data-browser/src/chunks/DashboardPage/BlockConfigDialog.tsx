@@ -45,6 +45,7 @@ import {
   QuickAddFields,
   draftFromSpec,
   specFromDraft,
+  isQuickAddDraftComplete,
   type QuickAddDraft,
 } from '../TablePage/QuickAddFields';
 import { parseQuickAdd } from '../TablePage/quickAdd';
@@ -175,7 +176,12 @@ export function BlockConfigDialog({
     fn !== 'count' &&
     target === '';
 
+  const quickAddIncomplete =
+    blockKind === 'create' &&
+    !isQuickAddDraftComplete(quickAdd, classProperties);
+
   const save = async () => {
+    if (quickAddIncomplete) return;
     await block.set(core.properties.name, name, false);
 
     if (blockKind === 'text') {
@@ -208,7 +214,7 @@ export function BlockConfigDialog({
       // form — one capability, one representation.
       await block.set(
         dataBrowser.properties.blockQuickAdd,
-        specFromDraft(quickAdd) as unknown as never,
+        specFromDraft(quickAdd, classProperties) as unknown as never,
       );
     }
 
@@ -405,7 +411,7 @@ export function BlockConfigDialog({
         </Button>
         <Button
           data-testid='block-save'
-          disabled={measureIncomplete}
+          disabled={measureIncomplete || quickAddIncomplete}
           title={
             measureIncomplete
               ? `Pick a column for the ${fn} to measure`

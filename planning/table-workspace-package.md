@@ -696,3 +696,22 @@ The adapter lane builds the real Rust/WASM evaluator before formula tests and
 tracks its Rust inputs. CI on the preceding computed-fields branch exposed the
 missing build (local bundles had masked it); formula validation remains backed
 by the real evaluator rather than a mock.
+
+
+### Shared create-button configuration fields
+
+- [x] Move the actual quick-add configuration fields and raw draft conversion
+  into the package; table and dashboard callers supply metadata and controls.
+- [x] Reject missing/incompatible targets and unfinished or non-finite numeric
+  presets before either caller saves. Accept zero without empty-string coercion.
+- [x] Retain additional stored presets and explain that this editor edits only
+  the first preset.
+- [ ] Move this configuration's dialog lifecycle and scoped persistence out of
+  disposable saved tabs; full page/session and renderer adoption remain open.
+
+Validation: 199 package tests, package/host typechecks and packed consumer pass.
+The actual SDK browser check blocks `-`, accepts numeric zero and independently
+reads the stored view preset. Desktop/mobile screenshots remain outside Git in
+`/workspace/artifacts/table-quick-add-fields`. Existing compiler suppressions in
+QuickAddDialog and BlockConfigDialog remain; the new shared fields and Atomic
+metadata adapter compile cleanly.
