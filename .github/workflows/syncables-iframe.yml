@@ -35,6 +35,9 @@ jobs:
       - name: Install workspace dependencies
         working-directory: browser
         run: pnpm install --frozen-lockfile
+      - name: Build Data Browser workspace dependencies
+        working-directory: browser
+        run: pnpm -r --filter '@tomic/data-browser^...' build
       - name: Typecheck Data Browser
         working-directory: browser
         run: pnpm --filter @tomic/data-browser typecheck
