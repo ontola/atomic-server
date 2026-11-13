@@ -48,7 +48,7 @@ export function SyncablesFrame({
   );
   const navigate = useNavigateWithTransition();
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const bridgeRef = useRef<FrameBridge>();
+  const bridgeRef = useRef<FrameBridge | undefined>(undefined);
   const stylesheet = useCreateThemeVars();
   const colorScheme = useFrameColorScheme();
   const [error, setError] = useState('');
