@@ -27,6 +27,51 @@ import {
   type BuiltinSyncablesRequest,
 } from './syncablesHost';
 
+/** Operations only the built-in Syncables frame may send. */
+const SYNCABLES_OPERATIONS = new Set([
+  'syncablesContext',
+  'syncablesOpenAccount',
+  'syncablesDiscoverOwners',
+  'syncablesOpenOwner',
+  'syncablesDiscoverRepos',
+  'syncablesCreateMirror',
+  'syncablesMirrorStatus',
+  'syncablesSetPaused',
+  'syncablesImportIssues',
+  'syncablesRecordSuccess',
+  'syncablesRecordFailure',
+]);
+
+/**
+ * The public view protocol intentionally does not advertise privileged
+ * Syncables actions. Recognize them at this *one* first-party frame boundary,
+ * then give them the same canonical reply/session encoding as ordinary view
+ * requests. Every operation still has its own host-side scope check.
+ */
+export function isBuiltinSyncablesRequest(
+  wire: unknown,
+): wire is {
+  type: 'atomic.view.request';
+  version: 1;
+  id: string;
+  op: string;
+  args: Record<string, unknown>;
+} {
+  if (!wire || typeof wire !== 'object') return false;
+  const data = wire as Record<string, unknown>;
+  return (
+    data.type === 'atomic.view.request' &&
+    data.version === 1 &&
+    typeof data.id === 'string' &&
+    /^syncables:[1-9][0-9]*$/.test(data.id) &&
+    typeof data.op === 'string' &&
+    SYNCABLES_OPERATIONS.has(data.op) &&
+    !!data.args &&
+    typeof data.args === 'object' &&
+    !Array.isArray(data.args)
+  );
+}
+
 /**
  * The first-party Syncables module is served from Atomic Server, but remains
  * in the same null-origin, CSP-sandboxed iframe as third-party app views.
@@ -72,7 +117,8 @@ export function SyncablesFrame({
     if (!frame || !src) return;
 
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
-      const canonical = isViewRequest(wire);
+      const canonical =
+        isViewRequest(wire) || isBuiltinSyncablesRequest(wire);
       const data = canonical
         ? { ...wire.args, __atomic: true, id: wire.id, op: wire.op }
         : wire;
@@ -111,7 +157,7 @@ export function SyncablesFrame({
       }
 
       const work = async (): Promise<unknown> => {
-        if (data.op.startsWith('syncables'))
+        if (SYNCABLES_OPERATIONS.has(data.op))
           return syncablesHostRequest(
             store,
             drive,
