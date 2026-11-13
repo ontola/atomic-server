@@ -480,3 +480,17 @@ unchecked removal preserves the definition. The existing confirmation closes
 before backend completion; retaining an asynchronous removal dialog and full
 property/schema menu UI remain follow-up work. No cross-resource atomicity is
 claimed.
+
+## Shared property action menu
+
+The actual Atomic property menu now uses `TablePropertyMenu` for command labels/
+icons, capability guards and imperative context opening. Its default popup
+supports keyboard navigation without invoking grid shortcuts and avoids stealing
+focus from a newly opened filter/editor. Atomic retains its dropdown primitive
+and schema-dialog services. Package checks cover enabled/disabled dispatch,
+context opening and keyboard focus. The existing actual heading/menu adapter
+regressions and local-drive sorting/removal checks continue passing. Native
+Filter/Hide adoption is in progress; property viewing and targeted edit/remove
+dialog services remain unavailable there and are explicitly disabled. Full
+property/schema forms, asynchronous removal confirmation and page/renderer
+orchestration remain open before catalog discovery.
