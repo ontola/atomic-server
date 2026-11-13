@@ -8,7 +8,7 @@ import { Card } from '@components/Card';
 import { Column, Row } from '@components/Row';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { platformLocalId, ensureSyncablePlatform } from './syncablePlatform';
+import { findSyncablePlatform, ensureSyncablePlatform } from './syncablePlatform';
 import { useProxyCatalog } from './proxyCatalog';
 
 /** Display names only. Source IDs are always the proxy's own canonical IDs. */
@@ -71,9 +71,12 @@ export function ProxyCatalogApps({
     setLoading(true);
     void Promise.all(
       catalog.platforms.map(async platform => {
-        const localId = platformLocalId(catalog.origin, platform);
-        const found = await store.findByLocalId(drive, drive, localId);
-        return [platform, found?.subject] as const;
+        const subject = await findSyncablePlatform(store, {
+          drive,
+          proxyOrigin: catalog.origin,
+          platform,
+        });
+        return [platform, subject] as const;
       }),
     )
       .then(found => {
