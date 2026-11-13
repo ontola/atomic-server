@@ -149,8 +149,11 @@ export function SyncablesFrame({
             proxy,
           )) as {
             platform: string;
+            proxyOrigin: string;
             connectionId?: string;
           };
+          if (context.proxyOrigin !== origin)
+            throw new Error('The source proxy differs from the current proxy setting');
           if (
             data.op === 'proxyConnections' ||
             data.op === 'proxyCapability'
