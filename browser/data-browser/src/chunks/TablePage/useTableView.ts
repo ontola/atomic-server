@@ -133,7 +133,7 @@ export interface UseTableViewResult {
   setViewColumns: (columns: string[]) => void;
   /** The active View's name ('Default View' until renamed / created). */
   viewName: string;
-  renameView: (name: string) => void;
+  renameView: (name: string, subject?: string) => void;
   /** All saved View subjects of the table, in order (the tabs). */
   views: string[];
   /** The active View subject (undefined until one exists). */
@@ -831,9 +831,27 @@ export function useTableView(
   );
 
   const renameView = useCallback(
-    (name: string) =>
-      withView(v => writeAtomicTableViewConfiguration(v, { name: name })),
-    [withView],
+    (name: string, subject?: string) => {
+      if (!subject) {
+        withView(v => writeAtomicTableViewConfiguration(v, { name }));
+
+        return;
+      }
+
+      if (!canWrite || !name.trim()) return;
+      void writes.enqueue(async () => {
+        assertTableViewTarget(subject, readViewReferences(table));
+        const target = await store.getResource(subject);
+        assertTableViewOwner(
+          { table: table.subject },
+          { table: target.get(core.properties.parent) as string },
+        );
+        assertTableViewTarget(subject, readViewReferences(table));
+        await writeAtomicTableViewConfiguration(target, { name: name.trim() });
+        await target.save();
+      });
+    },
+    [withView, canWrite, writes, table, store],
   );
 
   const setViewGroupBy = useCallback(
