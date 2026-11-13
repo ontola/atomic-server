@@ -943,6 +943,7 @@ msgstr ""
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/views/ErrorPage.tsx
@@ -3162,9 +3163,6 @@ msgstr ""
 msgid "Remove <0/> from{0} <1/>"
 msgstr ""
 
-#~ msgid "<0/> Delete property and its children"
-#~ msgstr ""
-
 #: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Delete property"
 msgstr ""
@@ -3325,9 +3323,6 @@ msgstr ""
 msgid "Range"
 msgstr ""
 
-#~ msgid "New{0} {1}{2} Column"
-#~ msgstr ""
-
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Invalid Name"
 msgstr ""
@@ -3339,9 +3334,6 @@ msgstr ""
 #: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "Resource type:"
 msgstr ""
-
-#~ msgid "<0/> Allow multiple values"
-#~ msgstr ""
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
@@ -3400,9 +3392,6 @@ msgstr ""
 #: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Relative"
 msgstr ""
-
-#~ msgid "Value must be between 0 and 20."
-#~ msgstr ""
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Decimal Places"
@@ -4082,6 +4071,7 @@ msgstr ""
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/Vault/VaultStorage.tsx
@@ -13458,9 +13448,6 @@ msgstr ""
 msgid "Add filter"
 msgstr ""
 
-#~ msgid "Failed to remove column: {0}"
-#~ msgstr ""
-
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Edit column"
 msgstr ""
@@ -13524,14 +13511,13 @@ msgid "Enter a finite number."
 msgstr ""
 
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "The view or column definitions changed. Close this editor and reopen it."
 msgstr ""
 
-#~ msgid "This view change is queued. Retry finishes the same change. Closing keeps a pending save."
-#~ msgstr ""
-
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "Retry to finish saving this change. Closing leaves any partially applied save pending."
 msgstr ""

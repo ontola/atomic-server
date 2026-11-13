@@ -20,7 +20,7 @@ export interface TablePropertyEditorProps<Prepared extends object> {
   onValidationChange: (valid: boolean) => void;
 }
 export interface TablePropertyDialogAction {
-  key: 'cancel' | 'save' | 'retry';
+  key: 'cancel' | 'save' | 'retry' | 'remove';
   label: string;
   disabled: boolean;
   run: () => void;
@@ -40,6 +40,8 @@ export interface TablePropertyDialogProps<Prepared extends object> {
   canSave?: boolean;
   prepare: () => Prepared | Promise<Prepared>;
   save: (draft: Prepared) => Promise<void>;
+  /** Removal uses the same retained failure lifecycle without requiring valid form fields. */
+  remove?: (draft: Prepared) => Promise<void>;
   /** A backend may checkpoint a materialized identity during a partial save. */
   isDraftLocked?: (draft: Prepared) => boolean;
   Editor: ComponentType<TablePropertyEditorProps<Prepared>>;
@@ -57,6 +59,7 @@ export interface TablePropertyDialogProps<Prepared extends object> {
     saveLocked: string;
     cancel: string;
     cancelLocked: string;
+    remove: string;
     unavailable: string;
     locked: string;
   }>;
@@ -77,6 +80,7 @@ function PropertyIntent<Prepared extends object>({
   canSave = true,
   prepare,
   save,
+  remove,
   isDraftLocked,
   Editor,
   Frame = DefaultPropertyFrame,
@@ -97,6 +101,7 @@ function PropertyIntent<Prepared extends object>({
   const [preparing, setPreparing] = useState(true);
   const [valid, setValid] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [operation, setOperation] = useState<'save' | 'remove'>('save');
   const [closed, setClosed] = useState(false);
   const mounted = useRef(false);
   const closedRef = useRef(false);
@@ -107,6 +112,7 @@ function PropertyIntent<Prepared extends object>({
     save: 'Save',
     saveLocked: 'Save',
     cancel: 'Cancel',
+    remove: 'Remove',
     unavailable:
       'Column editing is unavailable. Check access and the selected table.',
     locked:
@@ -179,11 +185,15 @@ function PropertyIntent<Prepared extends object>({
     close();
   };
 
-  const submit = async () => {
+  const submit = async (
+    requested: 'save' | 'remove' = locked ? operation : 'save',
+  ) => {
     if (!prepared || closedRef.current) return;
+    if (requested === 'remove' && !remove) return;
+    setOperation(requested);
     const result = await controller.run(
-      () => save(prepared),
-      (valid || locked) && canSave && !preparing,
+      () => (requested === 'remove' ? remove!(prepared) : save(prepared)),
+      (requested === 'remove' || valid || locked) && canSave && !preparing,
     );
     if (!mounted.current || closedRef.current || result.status === 'stale')
       return;
@@ -210,6 +220,18 @@ function PropertyIntent<Prepared extends object>({
 
   if (closed) return null;
   const actions: TablePropertyDialogAction[] = [
+    ...(remove && !locked
+      ? [
+          {
+            key: 'remove' as const,
+            label: text.remove,
+            disabled: state.busy || preparing || !prepared || !canSave,
+            run: () => {
+              void submit('remove');
+            },
+          },
+        ]
+      : []),
     {
       key: 'cancel',
       label: locked ? (messages?.cancelLocked ?? text.cancel) : text.cancel,

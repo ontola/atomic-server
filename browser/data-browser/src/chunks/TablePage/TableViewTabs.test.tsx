@@ -111,7 +111,7 @@ function Harness({
             lockedReason=''
             canWrite
             quickAdd={undefined}
-            setQuickAdd={() => undefined}
+            requestQuickAddEdit={() => undefined}
           />
           <div ref={portal} />
         </DropdownPortalContext.Provider>

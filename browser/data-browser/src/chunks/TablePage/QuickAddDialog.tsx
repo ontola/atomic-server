@@ -1,14 +1,12 @@
 import type { Property } from '@tomic/react';
-import { useEffect, useState, type JSX } from 'react';
-import { styled } from 'styled-components';
+import { useEffect, useState } from 'react';
 import {
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  useDialog,
-} from '@components/Dialog';
-import { Button } from '@components/Button';
+  TablePropertyDialog,
+  type TablePropertyEditorProps,
+  type TablePropertyDialogPresentation,
+  type TableViewWriteReceipt,
+} from '@tomic/table';
+import { AtomicPropertyFrame } from './PropertyForm/AtomicPropertyFrame';
 import {
   QuickAddFields,
   draftFromSpec,
@@ -17,106 +15,116 @@ import {
   type QuickAddDraft,
 } from './QuickAddFields';
 import type { QuickAddSpec } from './quickAdd';
-
+interface Draft {
+  initial: QuickAddDraft;
+  properties: Property[];
+  values: Map<string, QuickAddSpec>;
+  receipt?: TableViewWriteReceipt;
+}
 interface Props {
   open: boolean;
   bindShow: (show: boolean) => void;
   classProperties: Property[];
-  /** The spec being edited, if the view already has one. */
   editing?: QuickAddSpec;
-  onSave: (spec: QuickAddSpec | undefined) => void;
+  onSave: (spec: QuickAddSpec | undefined) => TableViewWriteReceipt;
+  scope: string;
+  canSave: boolean;
 }
 
-/**
- * Configures a view's create button. The fields themselves are shared with the
- * dashboard block that stores the identical shape — one capability, one form.
- */
+/** Page-owned create-button configuration, retained until its own view write succeeds. */
 export function QuickAddDialog({
   open,
   bindShow,
   classProperties,
   editing,
   onSave,
-}: Props): JSX.Element {
-  const [dialogProps, show, hide, isOpen] = useDialog({ bindShow });
-  const [draft, setDraft] = useState<QuickAddDraft>(() =>
-    draftFromSpec(undefined),
-  );
-
-  useEffect(() => {
-    if (open) {
-      show();
-    }
-  }, [open, show]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    setDraft(draftFromSpec(editing));
-    // Only on open: re-syncing while the dialog is up would overwrite what is
-    // being typed every time a commit lands.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
+  scope,
+  canSave,
+}: Props) {
   return (
-    <Dialog {...dialogProps}>
-      <DialogTitle>
-        <h2>{editing ? 'Edit the add button' : 'Add a create button'}</h2>
-      </DialogTitle>
-      <DialogContent>
-        <Fields>
-          <Intro>
-            It sits above the rows and creates one. Everything else about the
-            row is edited in the table.
-          </Intro>
-          <QuickAddFields
-            draft={draft}
-            onChange={setDraft}
-            classProperties={classProperties}
-          />
-        </Fields>
-      </DialogContent>
-      <DialogActions>
-        {editing && (
-          <Button
-            subtle
-            data-testid='quick-add-config-remove'
-            onClick={() => {
-              onSave(undefined);
-              hide();
-            }}
-          >
-            Remove
-          </Button>
-        )}
-        <Button subtle onClick={() => hide()}>
-          Cancel
-        </Button>
-        <Button
-          data-testid='quick-add-config-save'
-          disabled={!isQuickAddDraftComplete(draft, classProperties)}
-          onClick={() => {
-            onSave(specFromDraft(draft, classProperties));
-            hide();
-          }}
-        >
-          Save
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <TablePropertyDialog<Draft>
+      open={open}
+      scope={scope}
+      canSave={canSave}
+      title={editing ? 'Edit the add button' : 'Add a create button'}
+      Frame={QuickAddFrame}
+      Editor={QuickAddEditor}
+      prepare={() => ({
+        initial: draftFromSpec(editing),
+        properties: [...classProperties],
+        values: new Map(),
+      })}
+      save={draft => commitQuickAdd(draft, false, onSave)}
+      remove={
+        editing ? draft => commitQuickAdd(draft, true, onSave) : undefined
+      }
+      isDraftLocked={draft => !!draft.receipt}
+      onClose={() => bindShow(false)}
+      onDismiss={draft => {
+        draft?.receipt?.abandon();
+      }}
+      messages={{
+        save: 'Save',
+        saveLocked: 'Retry',
+        remove: 'Remove',
+        cancel: 'Cancel',
+        cancelLocked: 'Close',
+        unavailable:
+          'The view or column definitions changed. Close this editor and reopen it.',
+        locked:
+          'Retry to finish saving this change. Closing leaves any partially applied save pending.',
+      }}
+    />
   );
 }
 
-const Fields = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${p => p.theme.size(2)};
-`;
+function QuickAddEditor({
+  draft,
+  disabled,
+  onValidationChange,
+}: TablePropertyEditorProps<Draft>) {
+  const [value, setValue] = useState(draft.initial);
+  const valid = isQuickAddDraftComplete(value, draft.properties);
+  useEffect(() => {
+    if (valid)
+      draft.values.set('candidate', specFromDraft(value, draft.properties));
+    else draft.values.delete('candidate');
+    onValidationChange(valid && !disabled);
+  }, [value, valid, disabled, draft, onValidationChange]);
 
-const Intro = styled.p`
-  margin: 0;
-  font-size: 0.85rem;
-  color: ${p => p.theme.colors.textLight};
-`;
+  return (
+    <fieldset disabled={disabled} style={{ border: 0, padding: 0, margin: 0 }}>
+      <p>
+        It sits above the rows and creates one. Everything else about the row is
+        edited in the table.
+      </p>
+      <QuickAddFields
+        draft={value}
+        onChange={setValue}
+        classProperties={draft.properties}
+      />
+    </fieldset>
+  );
+}
+
+function QuickAddFrame(props: TablePropertyDialogPresentation) {
+  return (
+    <AtomicPropertyFrame
+      {...props}
+      saveTestId='quick-add-config-save'
+      removeTestId='quick-add-config-remove'
+    />
+  );
+}
+
+async function commitQuickAdd(
+  draft: Draft,
+  removing: boolean,
+  onSave: Props['onSave'],
+) {
+  const candidate = draft.values.get('candidate');
+  if (!removing && !candidate && !draft.receipt)
+    throw Error('Complete the create-button configuration before saving.');
+  draft.receipt ??= onSave(removing ? undefined : structuredClone(candidate!));
+  await draft.receipt.retry();
+}

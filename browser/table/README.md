@@ -388,3 +388,11 @@ text fields, preset kinds/targets and translated metadata options. Numeric prese
 retain incomplete text, reject non-finite values and accept zero. Additional stored
 presets are retained with an explicit note while this form edits the first preset.
 Dialog lifecycle and persistence remain host-bound for this configuration.
+
+
+The shared property-dialog lifecycle can also remove a configured item, including
+when its fields are invalid. Removal uses the same busy/scope/error guards and
+retains its operation for explicit retry. Atomic create-button configuration now
+uses this lifecycle at page scope with tracked saves/removals. Its metadata adapter
+revalidates bindings and rejects a conflicting create-button edit while preserving
+unrelated view settings.

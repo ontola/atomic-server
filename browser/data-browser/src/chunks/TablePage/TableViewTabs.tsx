@@ -76,7 +76,6 @@ import {
   canDeleteView,
   viewTypeKey,
 } from './viewTypeChoice';
-import { QuickAddDialog } from './QuickAddDialog';
 import type { QuickAddSpec } from './quickAdd';
 import { QuickFilterField } from './QuickFilterField';
 
@@ -118,8 +117,8 @@ interface TableViewTabsProps {
   canWrite: boolean;
   /** The active view's create button, if it has one. */
   quickAdd: QuickAddSpec | undefined;
-  /** Persist the active view's create button (undefined removes it). */
-  setQuickAdd: (spec: QuickAddSpec | undefined) => void;
+  /** Open the page-owned editor for the active view's create button. */
+  requestQuickAddEdit: () => void;
   /**
    * The quick filter over the rows the view shows. Absent for views that show
    * no rows (a dashboard, an app).
@@ -153,7 +152,7 @@ export function TableViewTabs({
   lockedReason,
   canWrite,
   quickAdd,
-  setQuickAdd,
+  requestQuickAddEdit,
   quickFilter,
 }: TableViewTabsProps): JSX.Element {
   // A table with no saved views yet still shows one implicit "Default View" tab.
@@ -212,9 +211,8 @@ export function TableViewTabs({
                 refreshApps={driveApps.refresh}
                 duplicateView={duplicateView}
                 deleteView={deleteView}
-                classProperties={allColumns}
                 quickAdd={quickAdd}
-                setQuickAdd={setQuickAdd}
+                requestQuickAddEdit={requestQuickAddEdit}
               />
             ))}
             {canWrite && (
@@ -456,9 +454,8 @@ function ViewTab({
   refreshApps,
   duplicateView,
   deleteView,
-  classProperties,
   quickAdd,
-  setQuickAdd,
+  requestQuickAddEdit,
 }: {
   subject: string | undefined;
   active: boolean;
@@ -482,9 +479,8 @@ function ViewTab({
   refreshApps: () => void;
   duplicateView: (subject: string) => void;
   deleteView: (subject: string) => void;
-  classProperties: Property[];
   quickAdd: QuickAddSpec | undefined;
-  setQuickAdd: (spec: QuickAddSpec | undefined) => void;
+  requestQuickAddEdit: () => void;
 }): JSX.Element {
   const resource = useResource(subject ?? 'unknown-subject');
   const [title] = useTitle(resource);
@@ -504,7 +500,6 @@ function ViewTab({
   // already-active tab). `undefined` = closed.
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
   const [showDelete, setShowDelete] = useState(false);
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   const startRename = () => {
     setEditing(true);
@@ -546,7 +541,7 @@ function ViewTab({
             : 'The last table view stays, so the rows can always be seen as a table.',
           onClick: () => setShowDelete(true),
         },
-        // Only on the active tab: `setQuickAdd` writes to the active view, so
+        // Only on the active tab: the page captures its current view, so
         // offering it elsewhere would edit a view the user is not looking at.
         ...(active
           ? [
@@ -557,7 +552,7 @@ function ViewTab({
                 helper:
                   'A button above the rows that creates one — "Log a feed", "Add item".',
                 icon: <FaPlus />,
-                onClick: () => setShowQuickAdd(true),
+                onClick: requestQuickAddEdit,
               },
             ]
           : []),
@@ -655,15 +650,6 @@ function ViewTab({
           Trigger={AutoOpenTrigger}
           anchorPoint={menuPoint}
           bindActive={a => (a ? refreshApps() : setMenuPoint(undefined))}
-        />
-      )}
-      {showQuickAdd && (
-        <QuickAddDialog
-          open
-          bindShow={setShowQuickAdd}
-          classProperties={classProperties}
-          editing={quickAdd}
-          onSave={setQuickAdd}
         />
       )}
       {subject && (

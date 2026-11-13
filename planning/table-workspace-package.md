@@ -715,3 +715,29 @@ reads the stored view preset. Desktop/mobile screenshots remain outside Git in
 `/workspace/artifacts/table-quick-add-fields`. Existing compiler suppressions in
 QuickAddDialog and BlockConfigDialog remain; the new shared fields and Atomic
 metadata adapter compile cleanly.
+
+
+### Page-owned create-button dialog
+
+- [x] Move the actual create-button dialog out of saved tabs into TableResource.
+- [x] Reuse the shared preparation/save/error lifecycle and per-intent write
+  receipts, including removal of an invalid configuration. Retried removal stays
+  removal, and an optimistic metadata change cannot unmount its editor.
+- [x] Capture view, class and property definitions, validate current bindings,
+  reject peer configuration conflicts and preserve unrelated view metadata.
+- [x] Retain stale drafts and block both Save and Remove after navigation.
+- [ ] Complete remaining page/session and renderer adoption before discovery.
+
+Native create-button configuration is merged in database-apps #119, pinning
+upstream #2531: Apply changes edits the view draft and Save view persists it.
+Its 475 unit/integration and 46 real-SDK browser tests, typecheck and production
+build pass; open drafts survive navigation and incoming schema revisions.
+
+Atomic validation: 200 package tests and 180 adapter tests pass. Package/host
+typechecks and packed external consumer pass. Actual SDK checks independently
+read stored zero/removal outcomes, retry a failed removal, retain a peer edit
+and safely abandon its unwritten conflict, and freeze the editor after view
+navigation. Screenshots remain outside Git in
+`/workspace/artifacts/table-quick-add-dialog`. QuickAddDialog now compiles without
+its old suppression; the existing TableResource suppression and TableViewTabs
+ref diagnostics remain. No rollback or cross-document CAS is claimed.
