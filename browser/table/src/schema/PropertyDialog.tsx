@@ -45,6 +45,8 @@ export interface TablePropertyDialogProps<Prepared extends object> {
   Editor: ComponentType<TablePropertyEditorProps<Prepared>>;
   Frame?: ComponentType<TablePropertyDialogPresentation>;
   onClose: () => void;
+  /** Explicit dismissal; never called for a successful save. */
+  onDismiss?: (draft: Prepared | undefined) => void;
   /** Completion notification; called only for the current, successfully saved scope. */
   onSaved?: (draft: Prepared) => void;
   onError?: (error: Error) => void;
@@ -54,6 +56,7 @@ export interface TablePropertyDialogProps<Prepared extends object> {
     save: string;
     saveLocked: string;
     cancel: string;
+    cancelLocked: string;
     unavailable: string;
     locked: string;
   }>;
@@ -78,6 +81,7 @@ function PropertyIntent<Prepared extends object>({
   Editor,
   Frame = DefaultPropertyFrame,
   onClose,
+  onDismiss,
   onSaved,
   onError,
   messages,
@@ -164,14 +168,22 @@ function PropertyIntent<Prepared extends object>({
   };
 
   const cancel = () => {
-    if (!prepared || !controller.getSnapshot().busy) close();
+    if (closedRef.current || controller.getSnapshot().busy) return;
+
+    try {
+      onDismiss?.(prepared);
+    } catch {
+      /* Dismissal observers cannot trap the editor. */
+    }
+
+    close();
   };
 
   const submit = async () => {
     if (!prepared || closedRef.current) return;
     const result = await controller.run(
       () => save(prepared),
-      valid && canSave && !preparing,
+      (valid || locked) && canSave && !preparing,
     );
     if (!mounted.current || closedRef.current || result.status === 'stale')
       return;
@@ -198,7 +210,12 @@ function PropertyIntent<Prepared extends object>({
 
   if (closed) return null;
   const actions: TablePropertyDialogAction[] = [
-    { key: 'cancel', label: text.cancel, disabled: state.busy, run: cancel },
+    {
+      key: 'cancel',
+      label: locked ? (messages?.cancelLocked ?? text.cancel) : text.cancel,
+      disabled: state.busy,
+      run: cancel,
+    },
     !prepared && preparationError
       ? {
           key: 'retry',
@@ -215,7 +232,12 @@ function PropertyIntent<Prepared extends object>({
       : {
           key: 'save',
           label: locked ? text.saveLocked : text.save,
-          disabled: state.busy || preparing || !prepared || !valid || !canSave,
+          disabled:
+            state.busy ||
+            preparing ||
+            !prepared ||
+            (!valid && !locked) ||
+            !canSave,
           run: () => {
             void submit();
           },

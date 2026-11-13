@@ -1,20 +1,17 @@
+import type { TablePropertyDialogPresentation } from '@tomic/table';
 import { core, useResource, useString, type Property } from '@tomic/react';
+import type { InputHTMLAttributes, JSX } from 'react';
 import {
-  useCallback,
-  useEffect,
-  useState,
-  type InputHTMLAttributes,
-  type JSX,
-} from 'react';
-import { TableRowActionFields } from '@tomic/table';
+  TableRowActionFields,
+  TablePropertyDialog,
+  type TablePropertyEditorProps,
+  type TableViewWriteReceipt,
+} from '@tomic/table';
+import { AtomicPropertyFrame } from './PropertyForm/AtomicPropertyFrame';
 import {
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  useDialog,
-} from '@components/Dialog';
-import { Button } from '@components/Button';
+  type ConfiguredColumnDialogDraft,
+  saveConfiguredColumnDraft,
+} from './configuredColumnDialog';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { PropertyOption } from './DerivedColumnDialog';
 import {
@@ -31,7 +28,9 @@ interface Props {
   classProperties: Property[];
   /** Set when editing; absent when adding. */
   editing?: RowActionSpec;
-  onSave: (spec: RowActionSpec) => void;
+  onSave: (spec: RowActionSpec) => TableViewWriteReceipt;
+  scope: string;
+  canSave?: boolean;
 }
 
 /**
@@ -45,20 +44,49 @@ export function RowActionDialog({
   classProperties,
   editing,
   onSave,
+  scope,
+  canSave = true,
 }: Props): JSX.Element {
-  const [state, setState] = useState<{
-    draft: RowActionSpec;
-    valid: boolean;
-  }>();
-  const clear = useCallback(() => setState(undefined), []);
-  const [dialogProps, show, hide, isOpen] = useDialog({
-    bindShow,
-    onCancel: clear,
-    onSuccess: clear,
-  });
-  useEffect(() => {
-    if (open) show();
-  }, [open, show]);
+  return (
+    <TablePropertyDialog<ConfiguredColumnDialogDraft<RowActionSpec>>
+      open={open}
+      scope={scope}
+      canSave={canSave}
+      title={editing ? 'Edit action' : 'Add an action'}
+      Frame={RowActionFrame}
+      Editor={AtomicRowActionEditor}
+      prepare={() => ({
+        initial: editing ? structuredClone(editing) : undefined,
+        properties: [...classProperties],
+        values: new Map(),
+      })}
+      save={draft => saveConfiguredColumnDraft(draft, onSave)}
+      isDraftLocked={draft => !!draft.receipt}
+      onClose={() => bindShow(false)}
+      onDismiss={draft => {
+        draft?.receipt?.abandon();
+      }}
+      messages={{
+        save: 'Save',
+        saveLocked: 'Retry',
+        cancel: 'Cancel',
+        cancelLocked: 'Close',
+        retry: 'Retry',
+        unavailable:
+          'The view or column definitions changed. Close this editor and reopen it.',
+        locked:
+          'Retry to finish saving this change. Closing leaves any partially applied save pending.',
+      }}
+    />
+  );
+}
+
+function AtomicRowActionEditor({
+  draft,
+  disabled,
+  onValidationChange,
+}: TablePropertyEditorProps<ConfiguredColumnDialogDraft<RowActionSpec>>) {
+  const classProperties = draft.properties;
   const kinds = ROW_ACTION_KINDS.map(kind => ({
     kind,
     title: ROW_ACTION_GENERATORS[kind].title,
@@ -76,47 +104,25 @@ export function RowActionDialog({
   }));
 
   return (
-    <Dialog {...dialogProps}>
-      <DialogTitle>
-        <h2>{editing ? 'Edit action' : 'Add an action'}</h2>
-      </DialogTitle>
-      <DialogContent>
-        {isOpen && (
-          <TableRowActionFields
-            initial={editing}
-            kinds={kinds}
-            Input={ActionInput}
-            onChange={(draft, valid) => setState({ draft, valid })}
-            messages={{
-              kind: 'Does what',
-              property: 'To column',
-              pickProperty: 'Pick a column…',
-              pickOption: 'Pick an option…',
-              label: 'Button says',
-              noTargets:
-                'This table has no column of the right kind for that yet.',
-              invalidNumber: 'Enter a finite number.',
-            }}
-          />
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button subtle onClick={() => hide()}>
-          Cancel
-        </Button>
-        <Button
-          data-testid='action-config-save'
-          disabled={!state?.valid}
-          onClick={() => {
-            if (!state?.valid) return;
-            onSave(state.draft);
-            hide();
-          }}
-        >
-          Save
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <TableRowActionFields
+      initial={draft.initial}
+      kinds={kinds}
+      Input={ActionInput}
+      disabled={disabled}
+      messages={{
+        kind: 'Does what',
+        property: 'To column',
+        pickProperty: 'Pick a column…',
+        pickOption: 'Pick an option…',
+        label: 'Button says',
+        noTargets: 'This table has no column of the right kind for that yet.',
+        invalidNumber: 'Enter a finite number.',
+      }}
+      onChange={(candidate, valid) => {
+        draft.values.set('candidate', candidate);
+        onValidationChange(valid);
+      }}
+    />
   );
 }
 
@@ -134,4 +140,8 @@ function ActionInput(props: InputHTMLAttributes<HTMLInputElement>) {
       <InputStyled {...props} />
     </InputWrapper>
   );
+}
+
+function RowActionFrame(props: TablePropertyDialogPresentation) {
+  return <AtomicPropertyFrame {...props} saveTestId='action-config-save' />;
 }

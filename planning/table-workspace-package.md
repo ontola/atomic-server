@@ -670,3 +670,29 @@ compiler checks pass. Actual SDK desktop/mobile verification retains invalid
 syntax, suggests the known Rate column, independently reads the saved formula
 and Property binding, and renders `4` for stored Rate `2` with `rate * 2.0`.
 Screenshots remain outside Git in `/workspace/artifacts/table-computed-fields`.
+
+
+### Page-owned configured-column dialogs and write receipts
+
+- [x] Mount action/computed editors at page scope, outside disposable headings.
+- [x] Reuse the shared preparation/save/error lifecycle with captured view and
+  property definitions; retain and disable stale drafts after navigation.
+- [x] Await a tracked queued metadata write, preserve accepted identity on retry,
+  reject conflicting edits and preserve unrelated metadata. Materialize implicit
+  timer Duration when adding/editing computed columns.
+- [x] Allow safe dismissal of proven-unwritten failures without leaving a blocked
+  queue. Keep uncertain or partially applied operations pending; no rollback or
+  cross-document CAS claim.
+- [ ] Complete remaining page/session and renderer adoption before catalog/view
+  and lens discovery. Native configured actions/computed queries remain gated.
+
+Validation: 196 package tests, 180 Atomic adapter tests, package/host typechecks and packed external consumer
+pass. Actual SDK browser checks cover failed-save retry, unrelated metadata,
+view navigation, implicit-view promotion, timer defaults and safe abandonment
+of a preflight failure. Screenshots are outside Git in
+`/workspace/artifacts/table-configured-dialogs`.
+
+The adapter lane builds the real Rust/WASM evaluator before formula tests and
+tracks its Rust inputs. CI on the preceding computed-fields branch exposed the
+missing build (local bundles had masked it); formula validation remains backed
+by the real evaluator rather than a mock.

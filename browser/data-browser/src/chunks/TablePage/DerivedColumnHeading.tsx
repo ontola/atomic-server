@@ -4,7 +4,6 @@ import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import type { DraggableAttributes } from '@dnd-kit/core';
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { TablePageContext } from './tablePageContext';
-import { DerivedColumnDialog } from './DerivedColumnDialog';
 import type { DerivedColumnSpec } from './derivedColumns';
 import { ColumnSpecHeading } from './ColumnSpecHeading';
 
@@ -29,7 +28,7 @@ export function DerivedColumnHeading({
   dragListeners?: SyntheticListenerMap;
   dragAttributes?: DraggableAttributes;
 }): JSX.Element {
-  const { classProperties, updateDerivedColumn, removeDerivedColumn } =
+  const { requestDerivedColumnEdit, removeDerivedColumn } =
     useContext(TablePageContext);
 
   return (
@@ -48,15 +47,7 @@ export function DerivedColumnHeading({
         </p>
       }
       onRemove={() => removeDerivedColumn(spec.id)}
-      renderEditDialog={({ bindShow }) => (
-        <DerivedColumnDialog
-          open
-          bindShow={bindShow}
-          classProperties={classProperties}
-          editing={spec}
-          onSave={updateDerivedColumn}
-        />
-      )}
+      onEdit={() => requestDerivedColumnEdit(spec)}
     />
   );
 }

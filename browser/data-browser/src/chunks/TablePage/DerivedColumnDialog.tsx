@@ -1,25 +1,20 @@
+import type { TablePropertyDialogPresentation } from '@tomic/table';
+import { Button } from '@components/Button';
+import { AtomicPropertyFrame } from './PropertyForm/AtomicPropertyFrame';
 import {
-  useCallback,
-  useEffect,
-  useState,
-  type InputHTMLAttributes,
-  type JSX,
-} from 'react';
+  type ConfiguredColumnDialogDraft,
+  saveConfiguredColumnDraft,
+} from './configuredColumnDialog';
+import type { InputHTMLAttributes, JSX } from 'react';
 import {
   TableDerivedColumnFields,
+  TablePropertyDialog,
+  type TablePropertyEditorProps,
+  type TableViewWriteReceipt,
   type TableQuickAddButtonProps,
 } from '@tomic/table';
 import { Datatype, useResource, useTitle, type Property } from '@tomic/react';
-import {
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  useDialog,
-} from '@components/Dialog';
-import { Button } from '@components/Button';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { stringToSlug } from '@helpers/stringToSlug';
 import {
   isFormulaProperty,
   type DerivedColumnSpec,
@@ -34,7 +29,9 @@ interface DerivedColumnDialogProps {
   classProperties: Property[];
   /** The spec being edited. Absent = creating a new column. */
   editing?: DerivedColumnSpec;
-  onSave: (spec: DerivedColumnSpec) => void;
+  onSave: (spec: DerivedColumnSpec) => TableViewWriteReceipt;
+  scope: string;
+  canSave?: boolean;
 }
 
 /**
@@ -47,21 +44,50 @@ export function DerivedColumnDialog({
   classProperties,
   editing,
   onSave,
+  scope,
+  canSave = true,
 }: DerivedColumnDialogProps): JSX.Element {
-  const [state, setState] = useState<{
-    draft: DerivedColumnSpec;
-    valid: boolean;
-  }>();
-  const clear = useCallback(() => setState(undefined), []);
-  const [dialogProps, show, hide, isOpen] = useDialog({
-    bindShow,
-    onCancel: clear,
-    onSuccess: clear,
-  });
+  return (
+    <TablePropertyDialog<ConfiguredColumnDialogDraft<DerivedColumnSpec>>
+      open={open}
+      scope={scope}
+      canSave={canSave}
+      title={editing ? 'Edit computed column' : 'New computed column'}
+      Frame={ComputedFrame}
+      Editor={AtomicDerivedColumnEditor}
+      prepare={() => ({
+        initial: editing ? structuredClone(editing) : undefined,
+        properties: [...classProperties],
+        values: new Map(),
+      })}
+      save={draft => saveConfiguredColumnDraft(draft, onSave)}
+      isDraftLocked={draft => !!draft.receipt}
+      onClose={() => bindShow(false)}
+      onDismiss={draft => {
+        draft?.receipt?.abandon();
+      }}
+      messages={{
+        save: editing ? 'Save' : 'Add column',
+        saveLocked: 'Retry',
+        cancel: 'Cancel',
+        cancelLocked: 'Close',
+        retry: 'Retry',
+        unavailable:
+          'The view or column definitions changed. Close this editor and reopen it.',
+        locked:
+          'Retry to finish saving this change. Closing leaves any partially applied save pending.',
+      }}
+    />
+  );
+}
+
+function AtomicDerivedColumnEditor({
+  draft,
+  disabled,
+  onValidationChange,
+}: TablePropertyEditorProps<ConfiguredColumnDialogDraft<DerivedColumnSpec>>) {
+  const classProperties = draft.properties;
   const ready = useFormulaReady();
-  useEffect(() => {
-    if (open) show();
-  }, [open, show]);
   const examples: Array<{
     title: string;
     formula: string;
@@ -95,66 +121,38 @@ export function DerivedColumnDialog({
     },
   ];
 
-  if (!open) return <></>;
-
   return (
-    <Dialog {...dialogProps}>
-      <DialogTitle>
-        <h1>{editing ? 'Edit computed column' : 'New computed column'}</h1>
-      </DialogTitle>
-      <DialogContent>
-        {isOpen && (
-          <TableDerivedColumnFields
-            initial={editing}
-            ready={ready}
-            validate={validateFormula}
-            examples={examples}
-            columns={classProperties
-              .filter(isFormulaProperty)
-              .map(property => ({
-                key: property.subject,
-                label: property.shortname,
-                instant: [Datatype.TIMESTAMP, Datatype.DATE].includes(
-                  property.datatype,
-                ),
-              }))}
-            Input={FormulaInput}
-            ExampleButton={ExampleButton}
-            helper={identifiers =>
-              `Combine columns with + - * / and functions: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Dates are milliseconds, a missing value leaves the cell empty, and 1/2 is 0 (write 1.0/2). Columns you can use: ${identifiers.join(', ') || 'none yet'}.`
-            }
-            messages={{
-              name: 'Name',
-              formula: 'Formula',
-              namePlaceholder: 'Duration',
-              formulaPlaceholder: 'coalesce(end, now()) - start',
-              unknown: (missing, suggestion) =>
-                `There is no column "${missing}".${suggestion ? ` Did you mean "${suggestion}"?` : ''}`,
-            }}
-            onChange={(draft, valid) => setState({ draft, valid })}
-          />
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button subtle onClick={() => hide()}>
-          Cancel
-        </Button>
-        <Button
-          disabled={!state?.valid}
-          data-testid='derived-save'
-          onClick={() => {
-            if (!state?.valid) return;
-            onSave({
-              ...state.draft,
-              id: state.draft.id || stringToSlug(state.draft.label),
-            });
-            hide();
-          }}
-        >
-          {editing ? 'Save' : 'Add column'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <TableDerivedColumnFields
+      initial={draft.initial}
+      disabled={disabled}
+      ready={ready}
+      validate={validateFormula}
+      examples={examples}
+      columns={classProperties.filter(isFormulaProperty).map(property => ({
+        key: property.subject,
+        label: property.shortname,
+        instant: [Datatype.TIMESTAMP, Datatype.DATE].includes(
+          property.datatype,
+        ),
+      }))}
+      Input={FormulaInput}
+      ExampleButton={ExampleButton}
+      helper={identifiers =>
+        `Combine columns with + - * / and functions: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Dates are milliseconds, a missing value leaves the cell empty, and 1/2 is 0 (write 1.0/2). Columns you can use: ${identifiers.join(', ') || 'none yet'}.`
+      }
+      messages={{
+        name: 'Name',
+        formula: 'Formula',
+        namePlaceholder: 'Duration',
+        formulaPlaceholder: 'coalesce(end, now()) - start',
+        unknown: (missing, suggestion) =>
+          `There is no column "${missing}".${suggestion ? ` Did you mean "${suggestion}"?` : ''}`,
+      }}
+      onChange={(candidate, valid) => {
+        draft.values.set('candidate', candidate);
+        onValidationChange(valid);
+      }}
+    />
   );
 }
 
@@ -182,4 +180,8 @@ export function PropertyOption({
   return (
     <option value={property.subject}>{title || property.shortname}</option>
   );
+}
+
+function ComputedFrame(props: TablePropertyDialogPresentation) {
+  return <AtomicPropertyFrame {...props} saveTestId='derived-save' />;
 }

@@ -24,12 +24,7 @@ export interface ColumnSpecHeadingProps {
   /** The body of the remove confirmation. */
   removeBody: ReactNode;
   onRemove: () => void;
-  /**
-   * Renders the edit dialog. Called only while the dialog is open, so a table
-   * with three such columns does not keep three closed dialogs in the DOM,
-   * whose fields answer to the same test ids and labels as the open one.
-   */
-  renderEditDialog: (props: { bindShow: (show: boolean) => void }) => ReactNode;
+  onEdit: () => void;
 }
 
 /**
@@ -48,9 +43,8 @@ export function ColumnSpecHeading({
   removeTitle,
   removeBody,
   onRemove,
-  renderEditDialog,
+  onEdit,
 }: ColumnSpecHeadingProps): JSX.Element {
-  const [showEdit, setShowEdit] = useState(false);
   const [showRemove, setShowRemove] = useState(false);
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
 
@@ -59,7 +53,7 @@ export function ColumnSpecHeading({
       id: 'edit',
       label: 'Edit',
       icon: <FaPencil />,
-      onClick: () => setShowEdit(true),
+      onClick: onEdit,
     },
     {
       id: 'remove',
@@ -102,7 +96,6 @@ export function ColumnSpecHeading({
           bindActive={active => !active && setMenuPoint(undefined)}
         />
       )}
-      {showEdit && renderEditDialog({ bindShow: setShowEdit })}
       <ConfirmationDialog
         title={removeTitle}
         confirmLabel='Remove'

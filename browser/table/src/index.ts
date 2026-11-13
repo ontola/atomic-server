@@ -340,3 +340,8 @@ export {
   type TableFormulaColumn,
   type TableFormulaExample,
 } from './DerivedColumnFields.js';
+
+export {
+  type TableViewWriteReceipt,
+  type TableViewWriteReceiptState,
+} from './views/viewWrites.js';

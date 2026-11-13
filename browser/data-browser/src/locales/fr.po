@@ -936,11 +936,15 @@ msgstr "Créer un compte et accepter"
 msgid "I already have an account"
 msgstr "J'ai déjà un compte"
 
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/File/ConvertToDocumentButton.tsx
@@ -4076,7 +4080,9 @@ msgstr ""
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
@@ -13515,4 +13521,17 @@ msgstr ""
 
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "Enter a finite number."
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "The view or column definitions changed. Close this editor and reopen it."
+msgstr ""
+
+#~ msgid "This view change is queued. Retry finishes the same change. Closing keeps a pending save."
+#~ msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Retry to finish saving this change. Closing leaves any partially applied save pending."
 msgstr ""
