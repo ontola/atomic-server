@@ -290,3 +290,45 @@ it('finishes StrictMode preparation once and can save the prepared draft', async
   expect(prepare).toHaveBeenCalledOnce();
   expect(save).toHaveBeenCalledOnce();
 });
+
+it('notifies creation once after success and labels checkpointed retries explicitly', async () => {
+  let created = false;
+  const value = makeDraft();
+  const saved = vi.fn(),
+    close = vi.fn();
+  const save = vi
+    .fn()
+    .mockImplementationOnce(async () => {
+      created = true;
+      throw Error('Attach failed');
+    })
+    .mockResolvedValueOnce(undefined);
+  render(
+    <TablePropertyDialog
+      open
+      scope='creation'
+      title='New column'
+      prepare={() => value}
+      save={save}
+      isDraftLocked={() => created}
+      Editor={Editor}
+      onClose={close}
+      onSaved={saved}
+      messages={{ save: 'Create', saveLocked: 'Retry' }}
+    />,
+  );
+  await screen.findByRole('textbox');
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+  await screen.findByText('Attach failed');
+  expect(saved).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() => expect(saved).toHaveBeenCalledExactlyOnceWith(value));
+  expect(close).toHaveBeenCalledOnce();
+  expect(save).toHaveBeenCalledTimes(2);
+});

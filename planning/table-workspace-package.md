@@ -560,3 +560,21 @@ promise conversion between every datatype or cross-resource atomicity.
 
 The new-column dialog, Native targeted editing, complete page/renderer adoption
 and the catalog-discovery gate remain open. No restart durability is claimed.
+
+
+### Shared new-column dialog and request scope
+
+Atomic NewPropertyDialog now uses the shared property dialog/form lifecycle.
+Metadata genesis, select-tag seeds, definition creation and class attachment live
+in Atomic services. The created subject is retained across attachment failures;
+retries attach that same definition instead of minting another one.
+
+New-column requests are held above grid headers and retain table, active view,
+row class and category. Navigation disables an idle captured draft instead of
+retargeting it. Completion updates column visibility only when the captured
+scope is still active, using the latest scoped visibility callback. An already
+running backend operation may finish for its captured owner; this does not imply
+rollback or a cross-resource transaction.
+
+Native column creation, the add-column selector, computed/action/external-property
+dialogs and full page/renderer orchestration remain subsequent extraction work.

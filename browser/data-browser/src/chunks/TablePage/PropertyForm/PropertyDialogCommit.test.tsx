@@ -139,7 +139,7 @@ vi.mock('@components/Dialog', async () => {
       return show ? (
         <div role='dialog'>
           {children}
-          <button onClick={() => onClose(false)}>Cancel</button>
+          <button onClick={() => onClose(false)}>Close dialog</button>
         </div>
       ) : null;
     },
@@ -258,6 +258,12 @@ it('keeps failed new-column input and prevents duplicate or cancelled in-flight 
   );
   const input = await screen.findByRole('textbox', { name: 'Column name' });
   fireEvent.change(input, { target: { value: 'New retained name' } });
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Create' }));
   await screen.findByRole('alert');
   expect(
@@ -271,6 +277,12 @@ it('keeps failed new-column input and prevents duplicate or cancelled in-flight 
       new Promise<string>(resolve => {
         complete = resolve;
       }),
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Create' }));
   expect(
@@ -331,6 +343,12 @@ it('ignores a late new-property draft after switching table class', async () => 
     (screen.getByRole('textbox', { name: 'Column name' }) as HTMLInputElement)
       .value,
   ).toBe('New class draft');
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Create' }));
   await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce());
   expect(mocks.create.mock.calls[0][1]).toBe(other);
@@ -351,6 +369,12 @@ it('retries only attachment after the property definition was already saved', as
   );
   const input = await screen.findByRole('textbox', { name: 'Column name' });
   fireEvent.change(input, { target: { value: 'Prepared column' } });
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Create' }));
   await screen.findByText(
     'Column definition saved. Retry to finish adding it to the table.',

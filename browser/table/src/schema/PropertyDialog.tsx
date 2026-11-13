@@ -45,11 +45,14 @@ export interface TablePropertyDialogProps<Prepared extends object> {
   Editor: ComponentType<TablePropertyEditorProps<Prepared>>;
   Frame?: ComponentType<TablePropertyDialogPresentation>;
   onClose: () => void;
+  /** Completion notification; called only for the current, successfully saved scope. */
+  onSaved?: (draft: Prepared) => void;
   onError?: (error: Error) => void;
   messages?: Partial<{
     preparing: string;
     retry: string;
     save: string;
+    saveLocked: string;
     cancel: string;
     unavailable: string;
     locked: string;
@@ -75,6 +78,7 @@ function PropertyIntent<Prepared extends object>({
   Editor,
   Frame = DefaultPropertyFrame,
   onClose,
+  onSaved,
   onError,
   messages,
 }: TablePropertyDialogProps<Prepared>) {
@@ -97,6 +101,7 @@ function PropertyIntent<Prepared extends object>({
     preparing: 'Preparing column…',
     retry: 'Retry',
     save: 'Save',
+    saveLocked: 'Save',
     cancel: 'Cancel',
     unavailable:
       'Column editing is unavailable. Check access and the selected table.',
@@ -171,7 +176,16 @@ function PropertyIntent<Prepared extends object>({
     if (!mounted.current || closedRef.current || result.status === 'stale')
       return;
     setLocked(!!isDraftLocked?.(prepared));
-    if (result.status === 'saved') close();
+
+    if (result.status === 'saved') {
+      close();
+
+      try {
+        onSaved?.(prepared);
+      } catch {
+        /* Completion observers cannot change a saved backend outcome. */
+      }
+    }
 
     if (result.status === 'failed') {
       try {
@@ -200,7 +214,7 @@ function PropertyIntent<Prepared extends object>({
         }
       : {
           key: 'save',
-          label: text.save,
+          label: locked ? text.saveLocked : text.save,
           disabled: state.busy || preparing || !prepared || !valid || !canSave,
           run: () => {
             void submit();
