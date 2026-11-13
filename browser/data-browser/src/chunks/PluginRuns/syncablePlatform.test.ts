@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { core, dataBrowser } from '@tomic/lib';
 import { fakeSchemaStore } from '../../../../lib/src/test-schema-store.js';
-import { ensureSyncablePlatform, platformLocalId } from './syncablePlatform';
+import {
+  ensureSyncablePlatform,
+  findSyncablePlatform,
+  platformLocalId,
+} from './syncablePlatform';
 
 describe('platformLocalId', () => {
   it('is scoped to the configured proxy and stable across display names', () => {
@@ -45,6 +49,23 @@ describe('ensureSyncablePlatform', () => {
     expect(props?.[core.properties.localId]).toBe(
       platformLocalId(options.proxyOrigin, options.platform),
     );
+  });
+
+  it('still recognizes a table after the user moves it', async () => {
+    const { store } = fakeSchemaStore();
+    const input = {
+      drive: 'drive',
+      proxyOrigin: 'https://proxy.example',
+      platform: 'github-issues',
+      name: 'GitHub',
+    };
+    const first = await ensureSyncablePlatform(store, input);
+    const table = await store.getResource(first);
+    await table.set(core.properties.parent, 'other-folder');
+    await table.save();
+
+    expect(await findSyncablePlatform(store, input)).toBe(first);
+    expect(await ensureSyncablePlatform(store, input)).toBe(first);
   });
 
   it('keeps installations from different proxy origins distinct', async () => {
