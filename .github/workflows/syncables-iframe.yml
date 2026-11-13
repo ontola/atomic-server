@@ -1,0 +1,52 @@
+name: Built-in Syncables iframe validation
+
+on:
+  pull_request:
+    paths:
+      - 'browser/data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx'
+      - 'browser/data-browser/src/chunks/PluginRuns/proxyCatalog*'
+      - 'browser/data-browser/src/chunks/PluginRuns/syncable*'
+      - 'browser/data-browser/src/chunks/PluginRuns/SyncablesFrame.tsx'
+      - 'browser/data-browser/src/chunks/TablePage/**'
+      - 'browser/e2e/tests/syncables-github.spec.ts'
+      - 'server/src/handlers/builtin_syncables.js'
+      - 'server/src/handlers/plugin_ui.rs'
+      - 'server/src/routes.rs'
+      - '.github/workflows/syncables-iframe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: browser/package.json
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+          cache-dependency-path: browser/pnpm-lock.yaml
+      - name: Install workspace dependencies
+        working-directory: browser
+        run: pnpm install --frozen-lockfile
+      - name: Build Data Browser workspace dependencies
+        working-directory: browser
+        run: pnpm -r --filter '@tomic/data-browser^...' build
+      - name: Typecheck Data Browser
+        working-directory: browser
+        run: pnpm --filter @tomic/data-browser typecheck
+      - name: Typecheck Playwright E2E specs
+        working-directory: browser
+        run: pnpm --filter @tomic/e2e typecheck
+      - name: Test built-in Syncables unit specs
+        working-directory: browser
+        run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncableHierarchy.test.ts src/chunks/PluginRuns/syncablesHost.test.ts src/chunks/PluginRuns/SyncablesFrame.test.ts src/chunks/PluginRuns/syncablesProxyScope.test.ts src/chunks/PluginRuns/proxyCatalog.test.ts
+      - name: Validate sandbox module JavaScript syntax
+        run: node --check server/src/handlers/builtin_syncables.js
