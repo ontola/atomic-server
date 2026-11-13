@@ -10,6 +10,7 @@ import {
   dataBrowser,
   Datatype,
   ensureSchema,
+  findSchema,
   type SchemaSpec,
   type SchemaStore,
 } from '@tomic/lib';
@@ -17,6 +18,12 @@ import {
 /** Stored on the table, so its identity survives renaming and moving. */
 export const syncablePlatformSchema = (): SchemaSpec => ({
   properties: [
+    {
+      shortname: 'syncable-platform-index',
+      name: 'Connected platform tables',
+      description: 'Drive-owned lookup of platform identity to Atomic table, independent of parent path.',
+      datatype: Datatype.JSON,
+    },
     {
       shortname: 'syncable-platform-id',
       name: 'Syncable platform ID',
@@ -58,6 +65,60 @@ export function platformLocalId(proxyOrigin: string, platform: string): string {
 
 export interface PlatformProvisioner extends SchemaStore {}
 
+/** Read-only lookup, including a platform table moved elsewhere in the drive. */
+export async function findSyncablePlatform(
+  store: PlatformProvisioner,
+  input: { drive: string; proxyOrigin: string; platform: string },
+): Promise<string | undefined> {
+  const { drive, proxyOrigin, platform } = input;
+  const localId = platformLocalId(proxyOrigin, platform);
+  const schema = await findSchema(store, drive, syncablePlatformSchema()).catch(
+    () => undefined,
+  );
+  const indexProperty = schema?.properties?.['syncable-platform-index'];
+  const platformProperty = schema?.properties?.['syncable-platform-id'];
+  const proxyProperty = schema?.properties?.['syncable-proxy-origin'];
+
+  if (indexProperty && platformProperty && proxyProperty) {
+    const root = await store.getResource(drive);
+    const map = root.get(indexProperty);
+    if (map && typeof map === 'object' && !Array.isArray(map)) {
+      const subject = (map as Record<string, unknown>)[localId];
+      if (typeof subject === 'string') {
+        const target = await store.getResource(subject);
+        if (
+          target.get(platformProperty) === platform &&
+          target.get(proxyProperty) === proxyOrigin
+        ) {
+          return subject;
+        }
+      }
+    }
+  }
+
+  // Compatibility with tables provisioned before the drive index existed.
+  const original = await store.findByLocalId(drive, drive, localId);
+  return original?.subject;
+}
+
+async function indexSyncablePlatform(
+  store: PlatformProvisioner,
+  drive: string,
+  property: string,
+  localId: string,
+  subject: string,
+): Promise<void> {
+  const root = await store.getResource(drive);
+  const current = root.get(property);
+  const map =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? (current as Record<string, unknown>)
+      : {};
+  await root.set(property, { ...map, [localId]: subject });
+  await root.save();
+}
+
+
 /**
  * Return an existing platform table or create it at the current drive root.
  * Reopening an installed provider must not create a second table.
@@ -78,8 +139,8 @@ export async function ensureSyncablePlatform(
   const { drive, proxyOrigin, platform, name } = input;
   const localId = platformLocalId(proxyOrigin, platform);
 
-  const existing = await store.findByLocalId(drive, drive, localId);
-  if (existing) return existing.subject;
+  const existing = await findSyncablePlatform(store, input);
+  if (existing) return existing;
 
   const schema = await ensureSchema(store, drive, syncablePlatformSchema());
   const table = await store.newResource({
@@ -96,6 +157,13 @@ export async function ensureSyncablePlatform(
 
   try {
     await table.save();
+    await indexSyncablePlatform(
+      store,
+      drive,
+      schema.properties['syncable-platform-index'],
+      localId,
+      table.subject,
+    );
     return table.subject;
   } catch (error) {
     // If a concurrent install won the same localId, reuse the winner.
