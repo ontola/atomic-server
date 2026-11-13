@@ -691,3 +691,8 @@ pass. Actual SDK browser checks cover failed-save retry, unrelated metadata,
 view navigation, implicit-view promotion, timer defaults and safe abandonment
 of a preflight failure. Screenshots are outside Git in
 `/workspace/artifacts/table-configured-dialogs`.
+
+The adapter lane builds the real Rust/WASM evaluator before formula tests and
+tracks its Rust inputs. CI on the preceding computed-fields branch exposed the
+missing build (local bundles had masked it); formula validation remains backed
+by the real evaluator rather than a mock.
