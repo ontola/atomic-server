@@ -1,7 +1,6 @@
 import {
   Core,
   Datatype,
-  Resource,
   core,
   unknownSubject,
   useCanWrite,
@@ -13,45 +12,21 @@ import { ColumnLanguageChip } from './ColumnLanguageChip';
 import { DerivedColumnHeading } from './DerivedColumnHeading';
 import { RowActionHeading } from './RowActionHeading';
 
-import {
-  FaAngleDown,
-  FaAngleUp,
-  FaAtom,
-  FaGripVertical,
-} from 'react-icons/fa6';
+import { FaAtom, FaGripVertical } from 'react-icons/fa6';
+import { TablePropertyHeading } from '@tomic/table';
 import { styled } from 'styled-components';
 import { columnLabel } from './helpers/columnLabel';
 import { TableHeadingMenu, TableHeadingMenuHandle } from './TableHeadingMenu';
 import { TablePageContext } from './tablePageContext';
-import { IconType } from 'react-icons';
-import { TableSorting } from './tableSorting';
-import { useContext, useRef, useState, type JSX } from 'react';
+import { useContext, useRef, type JSX } from 'react';
 import { TableHeadingComponent } from '@chunks/TableEditor/TableHeader';
 import { dataTypeIconMap } from '../../helpers/iconMap';
-
-function getIcon(
-  propResource: Resource,
-  sorting: TableSorting,
-  hoverOrFocus: boolean,
-  dataType: Datatype,
-): IconType {
-  if (sorting.prop === propResource.subject) {
-    return sorting.sortDesc ? FaAngleDown : FaAngleUp;
-  }
-
-  if (hoverOrFocus) {
-    return FaGripVertical;
-  }
-
-  return dataTypeIconMap.get(dataType) ?? FaAtom;
-}
 
 export const TableHeading: TableHeadingComponent<TableColumn> = ({
   column,
   dragListeners,
   dragAttributes,
 }): JSX.Element => {
-  const [hoverOrFocus, setHoverOrFocus] = useState(false);
   const menuRef = useRef<TableHeadingMenuHandle>(null);
 
   // Virtual columns have no property behind them, so `unknownSubject` keeps
@@ -70,12 +45,8 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
   const isRequired =
     !!property && (tableClass.props.requires ?? []).includes(property.subject);
 
-  const Icon = getIcon(
-    propResource,
-    sorting,
-    hoverOrFocus,
-    property?.datatype ?? Datatype.STRING,
-  );
+  const Icon =
+    dataTypeIconMap.get(property?.datatype ?? Datatype.STRING) ?? FaAtom;
   const isSorted = sorting.prop === propResource.subject;
 
   // A configured computed column — its label plus a menu to edit or remove the
@@ -131,24 +102,20 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
 
   return (
     <>
-      <Wrapper
-        onMouseEnter={() => setHoverOrFocus(true)}
-        onMouseLeave={() => setHoverOrFocus(false)}
-        onFocus={() => setHoverOrFocus(true)}
-        onBlur={() => setHoverOrFocus(false)}
-        onContextMenu={e => menuRef.current?.openAt(e)}
+      <TablePropertyHeading
+        label={columnLabel(name, property.shortname)}
+        required={isRequired}
+        sorted={
+          isSorted ? (sorting.sortDesc ? 'descending' : 'ascending') : undefined
+        }
+        onSort={() => setSortBy(propResource.subject)}
+        sortDescription={`Sort by ${text}`}
+        dragLabel='Drag column'
+        icon={<Icon />}
+        dragListeners={dragListeners}
+        dragAttributes={dragAttributes}
+        onContextMenu={event => menuRef.current?.openAt(event)}
       >
-        <DragIconButton {...dragListeners} {...dragAttributes}>
-          <Icon title='Drag column' />
-        </DragIconButton>
-        <NameButton
-          onClick={() => setSortBy(propResource.subject)}
-          bold={isSorted}
-          title={text}
-          aria-description={`Sort by ${text}`}
-        >
-          {text}
-        </NameButton>
         {property.datatype === Datatype.LOCALIZEDTEXT && (
           <ColumnLanguageChip
             propertySubject={property.subject}
@@ -156,7 +123,7 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
           />
         )}
         <TableHeadingMenu ref={menuRef} resource={propResource} />
-      </Wrapper>
+      </TablePropertyHeading>
     </>
   );
 };
@@ -178,32 +145,6 @@ const VirtualLabel = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-`;
-
-const Wrapper = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  /* Fill the full header-cell height so a right-click anywhere on the header
-   * (not just the vertically-centred text) opens the column menu — the cell is
-   * taller than this content, leaving dead strips above/below otherwise. */
-  align-self: stretch;
-`;
-
-interface NameButtonProps {
-  bold?: boolean;
-}
-
-const NameButton = styled.button<NameButtonProps>`
-  background: none;
-  border: none;
-  color: currentColor;
-  cursor: pointer;
-  font-weight: ${p => (p.bold ? 'bold' : 'normal')};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0;
 `;
 
 const DragIconButton = styled.button`

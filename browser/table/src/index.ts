@@ -235,3 +235,8 @@ export {
   type TableFilterTarget,
   type TableFilterAddMenuProps,
 } from './filters/FilterBar.js';
+
+export {
+  TablePropertyHeading,
+  type TablePropertyHeadingProps,
+} from './PropertyHeading.js';

@@ -267,3 +267,9 @@ hidden targets keep existing chips without appearing in Add. Missing targets
 remain removable. The default searchable Add control needs no host menu, while
 Atomic retains its existing dropdown primitive and drive-search action. This
 shares filter UI, not the remaining full-page/renderer orchestration.
+
+`TablePropertyHeading` is the actual stored-column heading used by Atomic's
+grid: required marker, sort indicator/name command, hover drag affordance and
+full-height context-menu target. Backends provide the property label/type icon,
+sort capability, language selector and command-menu leaves. Configured computed/
+action/virtual headings and full property menus remain host UI for now.
