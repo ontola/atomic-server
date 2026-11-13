@@ -13525,3 +13525,7 @@ msgstr "Property attachment is unavailable. Check access and the selected table.
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 msgid "Attachment started. Retry to finish adding this property to the table."
 msgstr "Attachment started. Retry to finish adding this property to the table."
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Enter a finite number."
+msgstr "Enter a finite number."
