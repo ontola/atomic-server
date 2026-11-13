@@ -270,3 +270,7 @@ export {
   type TablePropertyCommand,
   type TablePropertyAction,
 } from './PropertyMenu.js';
+export {
+  TableColumnRemovalDialog,
+  type TableColumnRemovalDialogProps,
+} from './schema/ColumnRemovalDialog.js';

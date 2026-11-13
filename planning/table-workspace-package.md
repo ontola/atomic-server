@@ -494,3 +494,19 @@ Filter/Hide adoption is in progress; property viewing and targeted edit/remove
 dialog services remain unavailable there and are explicitly disabled. Full
 property/schema forms, asynchronous removal confirmation and page/renderer
 orchestration remain open before catalog discovery.
+
+
+### Page-owned asynchronous removal confirmation
+
+`TableColumnRemovalDialog` now owns the actual confirmation UI, delete selection,
+busy lock and retained error state. Atomic opens it through the page context and
+mounts its metadata/services adapter beside other page dialogs, outside column
+headings. Optimistic schema detachment can unmount a heading while its dialog
+continues to report the backend outcome. The captured row-class/property scope
+cannot retarget to a different active row class. Definition deletion still needs
+explicit selection and capability, after a successful schema save.
+
+This supersedes the earlier note about confirmation closing before completion.
+It does not make schema detachment and definition deletion atomic, provide
+rollback, or complete property forms and page/renderer extraction. Native targeted
+Edit/Remove services remain disabled pending their own implementation.

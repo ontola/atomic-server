@@ -301,3 +301,13 @@ keyboard navigation, isolates grid hotkeys and leaves focus to a newly opened
 editor after selection. Atomic adapts its dropdown primitive; backend callbacks
 provide navigation and schema-dialog services. Missing actions remain disabled.
 This does not yet extract the property editing/removal dialogs themselves.
+
+
+`TableColumnRemovalDialog` is the shared asynchronous confirmation UI. Mount it
+at page level with a captured owner/property `scope`, outside headings that can
+unmount after optimistic schema updates. It retains failures and explicit delete
+selection, locks controls and dismissal during a write, and closes only after
+successful confirmation. Changing scope resets the intent and suppresses stale
+completion callbacks. Backend services still own live authorization, schema
+identity, idempotence and any transaction guarantees; detachment and definition
+deletion are separate writes.

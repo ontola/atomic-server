@@ -61,6 +61,7 @@ import { CellSelectionMenu } from './CellSelectionMenu';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS } from './tableViewKinds';
+import { AtomicColumnRemovalDialog } from './AtomicColumnRemovalDialog';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { RowCommentButton } from './RowCommentButton';
 import { KanbanView } from './Kanban/KanbanView';
@@ -1284,6 +1285,17 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
     [canWrite, collection, memberCount, newRowSubjects],
   );
 
+  const [columnRemoval, setColumnRemoval] = useState<{
+    owner: string;
+    property: string;
+  }>();
+  const requestColumnRemoval = useCallback(
+    (property: string) => {
+      setColumnRemoval({ owner: tableClass.subject, property });
+    },
+    [tableClass.subject],
+  );
+
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
       selectedRows,
@@ -1300,6 +1312,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
       setFilterOperator,
       removeFilter,
       hideColumn,
+      requestColumnRemoval,
       showColumn,
       splitLanguageSubjects: viewSplitLanguages,
       toggleSplitLanguages,
@@ -1341,6 +1354,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
       setFilterOperator,
       removeFilter,
       hideColumn,
+      requestColumnRemoval,
       showColumn,
       viewSplitLanguages,
       toggleSplitLanguages,
@@ -1717,6 +1731,18 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
                 />
               )}
             </>
+          )}
+          {columnRemoval && (
+            <AtomicColumnRemovalDialog
+              owner={columnRemoval.owner}
+              property={columnRemoval.property}
+              currentOwner={tableClass.subject}
+              onClose={() =>
+                setColumnRemoval(current =>
+                  current === columnRemoval ? undefined : current,
+                )
+              }
+            />
           )}
           <ExpandedRowDialog
             subject={expandedRowSubject ?? unknownSubject}
