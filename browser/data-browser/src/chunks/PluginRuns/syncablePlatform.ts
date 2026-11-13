@@ -110,10 +110,12 @@ async function indexSyncablePlatform(
 ): Promise<void> {
   const root = await store.getResource(drive);
   const current = root.get(property);
-  const map =
-    current && typeof current === 'object' && !Array.isArray(current)
-      ? (current as Record<string, unknown>)
-      : {};
+  const map: Record<string, string> = {};
+  if (current && typeof current === 'object' && !Array.isArray(current)) {
+    for (const [key, value] of Object.entries(current)) {
+      if (typeof value === 'string') map[key] = value;
+    }
+  }
   await root.set(property, { ...map, [localId]: subject });
   await root.save();
 }
@@ -140,9 +142,17 @@ export async function ensureSyncablePlatform(
   const localId = platformLocalId(proxyOrigin, platform);
 
   const existing = await findSyncablePlatform(store, input);
-  if (existing) return existing;
-
   const schema = await ensureSchema(store, drive, syncablePlatformSchema());
+  if (existing) {
+    await indexSyncablePlatform(
+      store,
+      drive,
+      schema.properties['syncable-platform-index'],
+      localId,
+      existing,
+    );
+    return existing;
+  }
   const table = await store.newResource({
     parent: drive,
     isA: [dataBrowser.classes.table],
@@ -157,18 +167,28 @@ export async function ensureSyncablePlatform(
 
   try {
     await table.save();
-    await indexSyncablePlatform(
-      store,
-      drive,
-      schema.properties['syncable-platform-index'],
-      localId,
-      table.subject,
-    );
-    return table.subject;
   } catch (error) {
     // If a concurrent install won the same localId, reuse the winner.
     const winner = await store.findByLocalId(drive, drive, localId);
-    if (winner) return winner.subject;
+    if (winner) {
+      await indexSyncablePlatform(
+        store,
+        drive,
+        schema.properties['syncable-platform-index'],
+        localId,
+        winner.subject,
+      );
+      return winner.subject;
+    }
     throw error;
   }
+
+  await indexSyncablePlatform(
+    store,
+    drive,
+    schema.properties['syncable-platform-index'],
+    localId,
+    table.subject,
+  );
+  return table.subject;
 }
