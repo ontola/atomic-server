@@ -101,8 +101,8 @@ export function TableFilterChip({
   const [open, setOpen] = useState(filter.value === '');
   const titleId = useId();
   const text = { ...defaults, ...messages };
-  const SelectComponent = Select ?? 'select';
-  const InputComponent = Input ?? 'input';
+  const SelectComponent = Select ?? DefaultSelect;
+  const InputComponent = Input ?? DefaultInput;
 
   const changeOpen = (next: boolean) => {
     setOpen(next);
@@ -234,6 +234,8 @@ export function TableFilterChip({
               })
             ) : (
               <TableFilterValueInput
+                Input={InputComponent}
+                Select={SelectComponent}
                 {...(valueInputProps ?? { kind: 'text' })}
                 disabled={disabled || valueInputProps?.disabled}
                 label={valueInputProps?.label ?? text.value}
@@ -277,6 +279,9 @@ function DefaultPopover({
 }
 
 const Content = styled(RadixPopover.Content)`
+  font:
+    0.875rem/1.5 system-ui,
+    sans-serif;
   border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
   border-radius: ${p => tableTheme(p.theme).radius};
   background: ${p => tableTheme(p.theme).colors.bg};
@@ -322,8 +327,8 @@ const ChipValue = styled.span`
 const Inner = styled.div`
   display: flex;
   flex-direction: column;
-  padding: ${p => tableTheme(p.theme).size()};
-  gap: ${p => tableTheme(p.theme).size()};
+  padding: max(0.75rem, ${p => tableTheme(p.theme).size()});
+  gap: max(0.5rem, ${p => tableTheme(p.theme).size()});
   min-width: 18rem;
   max-width: calc(100vw - 2rem);
   box-sizing: border-box;
@@ -363,4 +368,27 @@ const Suffix = styled.span`
   color: ${p => tableTheme(p.theme).colors.textLight};
   font-size: 0.85rem;
   white-space: nowrap;
+`;
+
+const DefaultInput = styled.input`
+  font: inherit;
+  color: inherit;
+  background: ${p => tableTheme(p.theme).colors.bg};
+  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
+  border-radius: ${p => tableTheme(p.theme).radius};
+  min-height: 2.25rem;
+  padding: 0.35rem 0.6rem;
+  min-width: 0;
+  width: 100%;
+`;
+const DefaultSelect = styled.select`
+  font: inherit;
+  color: inherit;
+  background: ${p => tableTheme(p.theme).colors.bg};
+  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
+  border-radius: ${p => tableTheme(p.theme).radius};
+  min-height: 2.25rem;
+  padding: 0.35rem 0.6rem;
+  min-width: 0;
+  width: 100%;
 `;
