@@ -526,3 +526,19 @@ These are property-form controls, not a claim that the complete property form,
 creation/edit dialogs or TablePage orchestration have finished extraction. Native
 format metadata services and unsupported category controls still need explicit
 capability handling when the complete form is adopted.
+
+
+### Shared property form and category layout
+
+The actual Atomic PropertyForm now uses `TablePropertyForm` for the name field,
+form submission guard and field layout. Text, number, date, relation and select
+adapters now render `TablePropertyFields` from typed models. The shared UI owns
+category headings, format switching, time/multiple toggles and option layout;
+the currency/precision branch follows the current format without waiting for
+asynchronous metadata class updates. Unknown categories remain explicit.
+
+Atomic retains its Resource hooks, metadata defaulting, permissions, draft
+mutations, class constraints and tag services. Resource/class, currency and tag
+widgets remain backend leaves. Creation/edit dialog lifecycle and persistence
+are still host code, and are the next integration boundary. This does not mark
+complete TablePage/page-renderer consumption or the catalog-discovery gate done.

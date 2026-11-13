@@ -7,7 +7,7 @@ import {
   useString,
 } from '@tomic/react';
 import { Suspense, lazy, useEffect, type JSX } from 'react';
-import { PropertyChoiceField } from '@tomic/table';
+import { TablePropertyFields } from '@tomic/table';
 import { RadioGroup, RadioInput } from '@components/forms/RadioInput';
 import { FormGroupHeading } from './FormGroupHeading';
 import { DecimalPlacesInput } from './Inputs/DecimalPlacesInput';
@@ -63,31 +63,34 @@ export const NumberPropertyForm = ({
 
   return (
     <Suspense fallback={<div>loading...</div>}>
-      <FormGroupHeading>Number Format</FormGroupHeading>
-      <PropertyChoiceField
-        label='Number format'
-        value={numberFormatting ?? numberFormats.number}
-        onChange={handleNumberFormatChange}
-        Radio={RadioInput}
-        Group={RadioGroup}
-        options={[
-          { value: numberFormats.number, label: 'Number' },
-          { value: numberFormats.percentage, label: 'Percentage' },
-          { value: numberFormats.currency, label: 'Currency' },
-        ]}
-      />
-      {/* Follows the chosen format, not the class: adding the class is async and
-       *  does not re-render, so a new column never got its currency picker. */}
-      {numberFormatting === numberFormats.currency ? (
-        <CurrencyPicker resource={resource} />
-      ) : (
-        <DecimalPlacesInput resource={resource} />
-      )}
-      <FormGroupHeading>Range</FormGroupHeading>
-      <TableRangeInput
-        resource={resource}
-        minProp={dataBrowser.properties.min}
-        maxProp={dataBrowser.properties.max}
+      <TablePropertyFields
+        Heading={FormGroupHeading}
+        messages={{ numberFormat: 'Number Format', range: 'Range' }}
+        model={{
+          kind: 'number',
+          format: {
+            label: 'Number format',
+            value: numberFormatting ?? numberFormats.number,
+            onChange: handleNumberFormatChange,
+            Radio: RadioInput,
+            Group: RadioGroup,
+            options: [
+              { value: numberFormats.number, label: 'Number' },
+              { value: numberFormats.percentage, label: 'Percentage' },
+              { value: numberFormats.currency, label: 'Currency' },
+            ],
+          },
+          currencyFormat: numberFormats.currency,
+          currency: <CurrencyPicker resource={resource} />,
+          precision: <DecimalPlacesInput resource={resource} />,
+          range: (
+            <TableRangeInput
+              resource={resource}
+              minProp={dataBrowser.properties.min}
+              maxProp={dataBrowser.properties.max}
+            />
+          ),
+        }}
       />
     </Suspense>
   );

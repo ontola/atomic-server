@@ -11,7 +11,7 @@ import {
   useStore,
 } from '@tomic/react';
 import { useCallback, useContext, useEffect, type JSX } from 'react';
-import { Row } from '@components/Row';
+import { TablePropertyFields } from '@tomic/table';
 import { PropertyCategoryFormProps } from './PropertyCategoryFormProps';
 import { CreateTagRow, EditableTag } from '@components/Tag';
 import { isContentAddressed } from '@helpers/propertyIdentity';
@@ -130,13 +130,16 @@ export function SelectPropertyForm({
   }, []);
 
   return (
-    <>
-      <Row wrapItems>
-        {options.map(tag => (
+    <TablePropertyFields
+      model={{
+        kind: 'select',
+        options: options.map(tag => (
           <EditableTag subject={tag} key={tag} onDelete={handleDeleteTag} />
-        ))}
-      </Row>
-      <CreateTagRow parent={resource.subject} onNewTag={handleNewTag} />
-    </>
+        )),
+        createOption: (
+          <CreateTagRow parent={resource.subject} onNewTag={handleNewTag} />
+        ),
+      }}
+    />
   );
 }
