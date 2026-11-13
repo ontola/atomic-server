@@ -13453,3 +13453,7 @@ msgstr ""
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Failed to remove column: {0}"
 msgstr ""
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Edit column"
+msgstr ""

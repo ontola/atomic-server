@@ -6,29 +6,18 @@ import {
   useString,
   core,
 } from '@tomic/react';
-import {
-  useCallback,
-  useContext,
-  useImperativeHandle,
-  useMemo,
-  useState,
-  type JSX,
-  type Ref,
-} from 'react';
-import { DropdownMenu, DropdownItem } from '@components/Dropdown';
+import { useCallback, useContext, useState, type JSX, type Ref } from 'react';
+import { DropdownMenu } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { AutoOpenTrigger } from '@components/Dropdown/AutoOpenTrigger';
-import {
-  FaPencil,
-  FaEllipsisVertical,
-  FaEye,
-  FaEyeSlash,
-  FaXmark,
-  FaFilter,
-} from 'react-icons/fa6';
-import { styled } from 'styled-components';
+import { FaEllipsisVertical } from 'react-icons/fa6';
 import toast from 'react-hot-toast';
-import { executeTableColumnRemoval } from '@tomic/table';
+import {
+  executeTableColumnRemoval,
+  TablePropertyMenu,
+  type TablePropertyMenuHandle,
+  type TablePropertyMenuPresentation,
+} from '@tomic/table';
 import { EditPropertyDialog } from './PropertyForm/EditPropertyDialog';
 import { TablePageContext } from './tablePageContext';
 import {
@@ -42,14 +31,11 @@ import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { Column } from '@components/Row';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
-/** Imperative handle so the header can open this menu on right-click. */
-export interface TableHeadingMenuHandle {
-  openAt: (event: React.MouseEvent) => void;
-}
+export type { TablePropertyMenuHandle as TableHeadingMenuHandle } from '@tomic/table';
 
 interface TableHeadingMenuProps {
   resource: Resource;
-  ref?: Ref<TableHeadingMenuHandle>;
+  ref?: Ref<TablePropertyMenuHandle>;
 }
 
 const Trigger = buildDefaultTrigger(<FaEllipsisVertical />, 'Edit column');
@@ -68,21 +54,6 @@ export function TableHeadingMenu({
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog_internal] = useState(false);
   const [fullDelete, setFullDelete] = useState(false);
-  // Cursor point of a right-click-opened menu (undefined = closed). Shares its
-  // `items` and dialogs with the kebab-triggered menu below.
-  const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      openAt: (event: React.MouseEvent) => {
-        event.preventDefault();
-        setMenuPoint({ x: event.clientX, y: event.clientY });
-      },
-    }),
-    [],
-  );
-
   const setShowDeleteDialog = useCallback((show: boolean) => {
     setShowDeleteDialog_internal(show);
 
@@ -144,65 +115,38 @@ export function TableHeadingMenu({
     resource,
   ]);
 
-  const items = useMemo(
-    (): DropdownItem[] => [
-      {
-        id: 'view',
-        label: 'View',
-        onClick: () => {
-          navigate(constructOpenURL(resource.subject));
-        },
-        icon: <FaEye />,
-      },
-      {
-        id: 'filter',
-        label: 'Filter',
-        onClick: () => addFilter(resource.subject),
-        icon: <FaFilter />,
-      },
-      {
-        id: 'hide',
-        label: 'Hide in this view',
-        onClick: () => hideColumn(resource.subject),
-        icon: <FaEyeSlash />,
-      },
-      {
-        id: 'edit',
-        label: canWriteProperty ? 'Edit' : 'Edit unavailable',
-        onClick: () => setShowEditDialog(true),
-        icon: <FaPencil />,
-        disabled: !canWriteProperty,
-      },
-      {
-        id: 'remove',
-        label: 'Remove',
-        onClick: () => setShowDeleteDialog(true),
-        icon: <FaXmark />,
-        disabled: !canWriteClass,
-      },
-    ],
-    [
-      addFilter,
-      hideColumn,
-      canWriteClass,
-      canWriteProperty,
-      navigate,
-      resource.subject,
-      setShowDeleteDialog,
-    ],
-  );
-
   return (
-    <Wrapper>
-      <DropdownMenu Trigger={Trigger} items={items} />
-      {menuPoint && (
-        <DropdownMenu
-          Trigger={AutoOpenTrigger}
-          items={items}
-          anchorPoint={menuPoint}
-          bindActive={active => !active && setMenuPoint(undefined)}
-        />
-      )}
+    <>
+      <TablePropertyMenu
+        ref={ref}
+        Menu={AtomicPropertyMenu}
+        actions={{
+          view: {
+            run: () => {
+              navigate(constructOpenURL(resource.subject));
+            },
+          },
+          filter: { run: () => addFilter(resource.subject) },
+          hide: { run: () => hideColumn(resource.subject) },
+          edit: {
+            run: () => setShowEditDialog(true),
+            disabled: !canWriteProperty,
+          },
+          remove: {
+            run: () => setShowDeleteDialog(true),
+            disabled: !canWriteClass,
+          },
+        }}
+        messages={{
+          label: 'Edit column',
+          view: 'View',
+          filter: 'Filter',
+          hide: 'Hide in this view',
+          edit: 'Edit',
+          editUnavailable: 'Edit unavailable',
+          remove: 'Remove',
+        }}
+      />
       <EditPropertyDialog
         resource={resource}
         showDialog={showEditDialog}
@@ -234,14 +178,37 @@ export function TableHeadingMenu({
           </CheckboxLabel>
         </Column>
       </ConfirmationDialog>
-    </Wrapper>
+    </>
   );
 }
 
-const Wrapper = styled.div`
-  margin-left: auto;
+function AtomicPropertyMenu({
+  items,
+  point,
+  onContextClose,
+}: TablePropertyMenuPresentation): JSX.Element {
+  const commands = items.map(item => ({
+    id: item.key,
+    label: item.label,
+    icon: item.icon,
+    disabled: item.disabled,
+    helper: item.reason,
+    onClick: item.run,
+  }));
 
-  & > button {
-    color: ${p => p.theme.colors.textLight};
-  }
-`;
+  return (
+    <>
+      <DropdownMenu Trigger={Trigger} items={commands} />
+      {point && (
+        <DropdownMenu
+          Trigger={AutoOpenTrigger}
+          items={commands}
+          anchorPoint={point}
+          bindActive={active => {
+            if (!active) onContextClose();
+          }}
+        />
+      )}
+    </>
+  );
+}

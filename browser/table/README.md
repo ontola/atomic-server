@@ -294,3 +294,10 @@ deletion runs only after confirmed detachment and its promise is awaited.
 Backend identity/permission checks still apply, and the two writes are not a
 cross-resource transaction. Atomic's checkbox now supplies the actual deletion
 intent instead of inferring it from ownership.
+
+`TablePropertyMenu` owns actual View/Filter/Hide/Edit/Remove action presentation,
+capability guards and heading context opening. The default popup supports
+keyboard navigation, isolates grid hotkeys and leaves focus to a newly opened
+editor after selection. Atomic adapts its dropdown primitive; backend callbacks
+provide navigation and schema-dialog services. Missing actions remain disabled.
+This does not yet extract the property editing/removal dialogs themselves.

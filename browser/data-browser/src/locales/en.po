@@ -13466,3 +13466,7 @@ msgstr "Add filter"
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Failed to remove column: {0}"
 msgstr "Failed to remove column: {0}"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Edit column"
+msgstr "Edit column"

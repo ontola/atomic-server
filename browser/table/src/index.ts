@@ -260,3 +260,13 @@ export {
   type TableColumnRemoval,
   type TableColumnRemovalBackend,
 } from './schema/columnRemoval.js';
+
+export {
+  TablePropertyMenu,
+  type TablePropertyMenuProps,
+  type TablePropertyMenuHandle,
+  type TablePropertyMenuPresentation,
+  type TablePropertyMenuItem,
+  type TablePropertyCommand,
+  type TablePropertyAction,
+} from './PropertyMenu.js';
