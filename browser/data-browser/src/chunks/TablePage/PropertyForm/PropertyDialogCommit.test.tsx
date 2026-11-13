@@ -200,6 +200,16 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+async function saveReadyEditor() {
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+}
+
 it('retains an existing property draft on failure and saves constraints in the supplied table class', async () => {
   const original = stubResource('https://example.com/property');
   original.save.mockRejectedValueOnce(Error('Backend unavailable'));
@@ -214,7 +224,7 @@ it('retains an existing property draft on failure and saves constraints in the s
   );
   const input = await screen.findByRole('textbox', { name: 'Column name' });
   fireEvent.change(input, { target: { value: 'Retained name' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await saveReadyEditor();
   await screen.findByRole('alert');
   expect(screen.getByRole('alert').textContent).toBe('Backend unavailable');
   expect(
@@ -222,7 +232,7 @@ it('retains an existing property draft on failure and saves constraints in the s
       .value,
   ).toBe('Retained name');
   expect(bindShow).not.toHaveBeenCalledWith(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await saveReadyEditor();
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(original.save).toHaveBeenCalledTimes(2);
   expect(mocks.constraint).toHaveBeenCalledWith(
@@ -402,7 +412,7 @@ it('ignores a late edit draft after navigating to another property', async () =>
     (screen.getByRole('textbox', { name: 'Column name' }) as HTMLInputElement)
       .value,
   ).toBe('Other property draft');
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await saveReadyEditor();
   await waitFor(() => expect(other.save).toHaveBeenCalledOnce());
   expect(original.save).not.toHaveBeenCalled();
 });
@@ -427,7 +437,7 @@ it('does not close the current property editor when an earlier scope finishes sa
     />,
   );
   await screen.findByRole('textbox', { name: 'Column name' });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await saveReadyEditor();
   await waitFor(() => expect(original.save).toHaveBeenCalledOnce());
   view.rerender(
     <EditPropertyDialog
