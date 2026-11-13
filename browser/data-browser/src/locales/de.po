@@ -13529,3 +13529,7 @@ msgstr ""
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Additional stored presets are retained. This form edits the first preset."
 msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "This table is read-only."
+msgstr ""

@@ -1,3 +1,4 @@
+import { useTableRowSelection } from '@tomic/table';
 import { QuickAddDialog } from './QuickAddDialog';
 import { writeAtomicQuickAddConfiguration } from './atomicQuickAddConfiguration';
 import type { QuickAddSpec } from './quickAdd';
@@ -1149,34 +1150,10 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
   // sorting changes which rows are visible, so the ticks would point at rows
   // the person can no longer see: they only count for the query they were made
   // under.
-  const [selection, setSelection] = useState<{
-    queryKey: string;
-    rows: ReadonlySet<string>;
-  }>({ queryKey, rows: new Set() });
-  const selectedRows = useMemo<ReadonlySet<string>>(
-    () => (selection.queryKey === queryKey ? selection.rows : new Set()),
-    [selection, queryKey],
-  );
-
-  const toggleRowSelected = useCallback(
-    (subject: string) => {
-      setSelection(prev => {
-        const next = new Set(prev.queryKey === queryKey ? prev.rows : []);
-
-        if (!next.delete(subject)) {
-          next.add(subject);
-        }
-
-        return { queryKey, rows: next };
-      });
-    },
-    [queryKey],
-  );
-
-  const clearRowSelection = useCallback(
-    () => setSelection({ queryKey, rows: new Set() }),
-    [queryKey],
-  );
+  const { selectedRows, toggleRowSelected, clearRowSelection } =
+    useTableRowSelection(
+      JSON.stringify([resource.subject, tableClass.subject, queryKey]),
+    );
 
   const deleteRowSubjects = useCallback(
     async (subjects: string[]) => {

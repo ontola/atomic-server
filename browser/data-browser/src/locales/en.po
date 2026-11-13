@@ -13542,3 +13542,7 @@ msgstr "Choose a compatible column and a valid preset value."
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Additional stored presets are retained. This form edits the first preset."
 msgstr "Additional stored presets are retained. This form edits the first preset."
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "This table is read-only."
+msgstr "This table is read-only."
