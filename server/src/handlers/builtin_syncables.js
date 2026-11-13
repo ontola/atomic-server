@@ -230,6 +230,15 @@ async function renderOrganizations() {
   const connectionId = current.connectionId;
   await loadRepositories(connectionId);
   const owners = ownerGroups();
+  for (let i = 0; i < owners.length; i += 100) {
+    await call('syncablesDiscoverOwners', {
+      owners: owners.slice(i, i + 100).map(owner => ({
+        id: validateId(owner.id),
+        login: owner.login,
+        type: owner.type,
+      })),
+    });
+  }
   renderBase('Organizations', owners.length + ' owner namespaces found');
   if (state.incomplete) root.append(el('div', 'More than 1,000 repositories: discovery is incomplete, and no absent items will be deleted.', 'note'));
   table(['Owner namespace', 'Kind', 'Repositories', 'Action'], owners.map(owner => [
@@ -253,6 +262,14 @@ async function renderRepositories() {
   root.append(el('div', 'Loading repository list…', 'muted'));
   const repos = await loadRepositories(current.connectionId);
   const selected = repos.filter(r => String(r.owner.id) === current.ownerId);
+  for (let i = 0; i < selected.length; i += 100) {
+    await call('syncablesDiscoverRepos', {
+      repos: selected.slice(i, i + 100).map(repo => ({
+        id: validateId(repo.id),
+        name: repo.name,
+      })),
+    });
+  }
   const bar = renderBase('Repositories', current.ownerLogin + ' · ' + selected.length + ' visible repositories');
   bar.append(button('↻ Refresh list', renderRepositories, true));
   if (state.incomplete) root.append(el('div', 'Repository listing is incomplete; only the visible choices are shown.', 'note'));
