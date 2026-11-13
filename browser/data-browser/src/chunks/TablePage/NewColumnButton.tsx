@@ -1,5 +1,9 @@
+import {
+  TableNewColumnMenu,
+  type TableNewColumnMenuPresentation,
+} from '@tomic/table';
 import { Datatype, useCanWrite, useResource } from '@tomic/react';
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useContext, useState } from 'react';
 import {
   FaBolt,
   FaCalculator,
@@ -8,7 +12,7 @@ import {
   FaHashtag,
   FaPlus,
 } from 'react-icons/fa6';
-import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
+import { DIVIDER, DropdownMenu } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { TablePageContext } from './tablePageContext';
 import { ExternalPropertyDialog } from './PropertyForm/ExternalPropertyDialog';
@@ -45,99 +49,58 @@ export const NewColumnButton: React.FC = () => {
 
   const canWrite = useCanWrite(tableClassResource);
 
-  const openDialog = useCallback(
-    (category: string) => () => {
-      requestColumnCreation(category);
-    },
-    [requestColumnCreation],
-  );
-
-  const items = useMemo((): DropdownItem[] => {
-    return [
-      {
-        id: 'text',
-        label: 'Text',
-        onClick: openDialog('text'),
-        icon: <TextIcon />,
-      },
-      {
-        id: 'number',
-        label: 'Number',
-        onClick: openDialog('number'),
-        icon: <NumberIcon />,
-      },
-      {
-        id: 'date',
-        label: 'Date',
-        onClick: openDialog('date'),
-        icon: <DateIcon />,
-      },
-      {
-        id: 'checkbox',
-        label: 'Checkbox',
-        onClick: openDialog('checkbox'),
-        icon: <CheckboxIcon />,
-      },
-      {
-        id: 'select',
-        label: 'Select',
-        onClick: openDialog('select'),
-        icon: <SelectIcon />,
-      },
-      {
-        id: 'file',
-        label: 'File',
-        onClick: openDialog('file'),
-        icon: <FileIcon />,
-      },
-      {
-        id: 'json',
-        label: 'JSON',
-        onClick: openDialog('json'),
-        icon: <FaCode />,
-      },
-      {
-        id: 'localizedText',
-        label: 'Localized Text',
-        onClick: openDialog('localizedText'),
-        icon: <LocalizedTextIcon />,
-      },
-      {
-        id: 'relation',
-        label: 'Relation',
-        onClick: openDialog('relation'),
-        icon: <RelationIcon />,
-      },
-      DIVIDER,
-      {
-        id: 'computed',
-        label: 'Computed',
-        onClick: () => setShowDerivedDialog(true),
-        icon: <FaCalculator />,
-      },
-      {
-        id: 'action',
-        label: 'Action',
-        helper: 'A button on every row: "Watered", "Mark done", "+1".',
-        onClick: () => setShowActionDialog(true),
-        icon: <FaBolt />,
-      },
-      {
-        id: 'external',
-        label: 'External Property',
-        onClick: () => setShowExternalDialog(true),
-        icon: <FaHashtag />,
-      },
-    ];
-  }, [openDialog]);
-
   if (!canWrite) {
     return null;
   }
 
   return (
     <>
-      <DropdownMenu Trigger={NewColumnTrigger} items={items} />
+      <TableNewColumnMenu
+        Menu={AtomicNewColumnMenu}
+        messages={{
+          label: 'Add column',
+          text: 'Text',
+          number: 'Number',
+          date: 'Date',
+          checkbox: 'Checkbox',
+          select: 'Select',
+          file: 'File',
+          json: 'JSON',
+          localizedText: 'Localized Text',
+          relation: 'Relation',
+          computed: 'Computed',
+          action: 'Action',
+          external: 'External Property',
+        }}
+        actions={{
+          text: { run: () => requestColumnCreation('text') },
+          number: { run: () => requestColumnCreation('number') },
+          date: { run: () => requestColumnCreation('date') },
+          checkbox: { run: () => requestColumnCreation('checkbox') },
+          select: { run: () => requestColumnCreation('select') },
+          file: { run: () => requestColumnCreation('file') },
+          json: { run: () => requestColumnCreation('json') },
+          localizedText: { run: () => requestColumnCreation('localizedText') },
+          relation: { run: () => requestColumnCreation('relation') },
+          computed: { run: () => setShowDerivedDialog(true) },
+          action: { run: () => setShowActionDialog(true) },
+          external: { run: () => setShowExternalDialog(true) },
+        }}
+        icons={{
+          text: <TextIcon />,
+          number: <NumberIcon />,
+          date: <DateIcon />,
+          checkbox: <CheckboxIcon />,
+          select: <SelectIcon />,
+          file: <FileIcon />,
+          json: <FaCode />,
+          localizedText: <LocalizedTextIcon />,
+          relation: <RelationIcon />,
+          computed: <FaCalculator />,
+          action: <FaBolt />,
+          external: <FaHashtag />,
+        }}
+      />
       <ExternalPropertyDialog
         open={showExternalDialog}
         tableClassResource={tableClassResource}
@@ -166,3 +129,25 @@ export const NewColumnButton: React.FC = () => {
     </>
   );
 };
+
+function AtomicNewColumnMenu({ items }: TableNewColumnMenuPresentation) {
+  const commands = items.map(item => ({
+    id: item.key,
+    label: item.label,
+    icon: item.icon,
+    disabled: item.disabled,
+    helper:
+      item.reason ??
+      (item.key === 'action'
+        ? 'A button on every row: "Watered", "Mark done", "+1".'
+        : undefined),
+    onClick: item.run,
+  }));
+
+  return (
+    <DropdownMenu
+      Trigger={NewColumnTrigger}
+      items={[...commands.slice(0, 9), DIVIDER, ...commands.slice(9)]}
+    />
+  );
+}

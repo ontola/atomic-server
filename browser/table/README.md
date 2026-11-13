@@ -349,3 +349,5 @@ retry label retain that identity. `onSaved` is a completion notification for the
 current successful scope, not part of the backend transaction. Callers own any
 scoped visibility update. Preparation, definition creation and attachment remain
 backend services rather than hidden UI writes.
+
+`TableNewColumnMenu` owns the add-column categories and guards every capability callback. AtomicServer supplies its dropdown presentation, datatype icons and backend actions; missing native capabilities remain disabled with adapter-provided reasons. The default menu shares the property menu keyboard and focus behavior.

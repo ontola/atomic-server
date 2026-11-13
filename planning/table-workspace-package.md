@@ -578,3 +578,6 @@ rollback or a cross-resource transaction.
 
 Native column creation, the add-column selector, computed/action/external-property
 dialogs and full page/renderer orchestration remain subsequent extraction work.
+
+- [x] Extract the actual add-column category menu and guard unsupported actions, with AtomicServer retaining only presentation and backend dialog callbacks.
+- [ ] Adopt shared add-column creation in the native host, including saved-view visibility and schema revision checks.
