@@ -27,6 +27,7 @@ export interface TableFilterAddMenuProps {
 }
 export interface TableFilterBarProps {
   filters: readonly TableFilter[];
+  disabled?: boolean;
   targets: readonly TableFilterTarget[];
   onAdd: (key: string) => void;
   onValueChange: (key: string, value: string) => void;
@@ -51,6 +52,7 @@ export interface TableFilterBarProps {
  * reference leaves; chip editing, missing targets and Add candidates stay here. */
 export function TableFilterBar({
   filters,
+  disabled,
   targets,
   onAdd,
   onValueChange,
@@ -98,6 +100,7 @@ export function TableFilterBar({
             {...chip}
             key={key}
             filter={filter}
+            disabled={disabled || chip.disabled}
             operatorLabel={chip.operatorLabel(filter.operator)}
             onValueChange={value => onValueChange(key, value)}
             onOperatorChange={operator => onOperatorChange(key, operator)}
@@ -105,7 +108,7 @@ export function TableFilterBar({
           />
         );
       })}
-      {!!items.length && (
+      {!disabled && !!items.length && (
         <AddMenu
           items={items}
           label={text.add}

@@ -122,3 +122,30 @@ it('allows repairing a stored unsupported operator even when the backend support
   fireEvent.change(select, { target: { value: 'eq' } });
   expect(change).toHaveBeenCalledExactlyOnceWith('eq');
 });
+it('locks an already-open popup during a backend operation', async () => {
+  const remove = vi.fn(),
+    change = vi.fn();
+  const props = {
+    ...base,
+    filter: { property: 'amount', operator: 'eq' as const, value: '' },
+    onRemove: remove,
+    onValueChange: change,
+  };
+  const view = render(
+    <TableFilterChip {...props} valueInputProps={{ kind: 'number' }} />,
+  );
+  await screen.findByRole('dialog');
+  view.rerender(
+    <TableFilterChip
+      {...props}
+      disabled
+      valueInputProps={{ kind: 'number' }}
+    />,
+  );
+  expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole('combobox') as HTMLSelectElement).disabled).toBe(
+    true,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Remove filter' }));
+  expect(remove).not.toHaveBeenCalled();
+});

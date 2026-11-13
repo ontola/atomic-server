@@ -49,6 +49,7 @@ export interface TableFilterChipProps {
   renderValueSummary?: (value: string) => ReactNode;
   hint?: ReactNode;
   unavailable?: boolean;
+  disabled?: boolean;
   Popover?: ComponentType<PropsWithChildren<TableFilterPopoverProps>>;
   Input?: ComponentType<InputHTMLAttributes<HTMLInputElement>>;
   Select?: ComponentType<SelectHTMLAttributes<HTMLSelectElement>>;
@@ -90,6 +91,7 @@ export function TableFilterChip({
   renderValueSummary,
   hint,
   unavailable,
+  disabled,
   Popover = DefaultPopover,
   Input,
   Select,
@@ -110,6 +112,7 @@ export function TableFilterChip({
   const input = (
     <InputComponent
       autoFocus
+      disabled={disabled}
       aria-label={text.value}
       data-testid='derived-filter-value'
       placeholder={derivedUnit?.allowsNow ? 'yyyy-mm-dd' : '0'}
@@ -129,6 +132,7 @@ export function TableFilterChip({
       Trigger={
         <ChipTrigger
           type='button'
+          disabled={disabled}
           $active={filter.value !== ''}
           data-testid='filter-chip'
         >
@@ -154,6 +158,7 @@ export function TableFilterChip({
           <strong id={titleId}>{label}</strong>
           <RemoveButton
             type='button'
+            disabled={disabled}
             onClick={() => {
               changeOpen(false);
               onRemove();
@@ -171,6 +176,7 @@ export function TableFilterChip({
             {(operators.length > 1 ||
               !operators.some(option => option.value === filter.operator)) && (
               <SelectComponent
+                disabled={disabled}
                 aria-label={text.operator}
                 value={filter.operator}
                 onChange={event => {
@@ -198,6 +204,7 @@ export function TableFilterChip({
               <>
                 {derivedUnit.allowsNow && (
                   <SelectComponent
+                    disabled={disabled}
                     aria-label={text.compare}
                     value={filter.value === 'now' ? 'now' : 'date'}
                     onChange={event =>
@@ -220,12 +227,15 @@ export function TableFilterChip({
             ) : renderValueInput ? (
               renderValueInput({
                 value: filter.value,
-                onChange: onValueChange,
+                onChange: value => {
+                  if (!disabled) onValueChange(value);
+                },
                 autoFocus: true,
               })
             ) : (
               <TableFilterValueInput
                 {...(valueInputProps ?? { kind: 'text' })}
+                disabled={disabled || valueInputProps?.disabled}
                 label={valueInputProps?.label ?? text.value}
                 value={filter.value}
                 onChange={onValueChange}
