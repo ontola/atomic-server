@@ -449,3 +449,18 @@ verify active-field exclusion and preserve both across reload. Shared selector
 and bar compile cleanly; the pre-existing seven sortable-tab ref diagnostics
 remain unchanged. Full column menus, schema controls and page/renderer
 orchestration remain open before catalog discovery.
+
+## Shared column visibility selector
+
+ELFA's toolbar selector shipped in #112, including a full-constraint reset after
+row creation/sample loading and a query guard scoped to confirmed unsupported
+metadata. Atomic's actual property visibility menu now uses `TableColumnsMenu`
+for check marks, renderer locks, minimum-visible policy and stable-ID guarded
+toggles. Backends supply titles, persistence and their menu primitive; a default
+checkbox selector is available without Atomic UI. Atomic retains its zero-minimum
+policy, while ELFA will retain one visible column and native hidden-column
+semantics. Package tests cover locked columns, minimum visibility and busy
+guards. Actual local-drive browser checks hide a property, verify persistence
+after reload and restore it. The shared component compiles cleanly; the same
+seven sortable-tab ref diagnostics remain in the host. Full property/schema
+menus and page/renderer orchestration remain open before catalog discovery.

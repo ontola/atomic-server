@@ -4877,7 +4877,6 @@ msgid "Duration"
 msgstr "Duration"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Toggle properties"
 msgstr "Toggle properties"
 

@@ -14,6 +14,8 @@ import {
   ViewTabList as Tabs,
   ViewTabActions as Actions,
   TableFilterMenu as SharedFilterMenu,
+  TableColumnsMenu as SharedColumnsMenu,
+  type TableColumnsMenuPresentation,
   type TableFilterAddMenuProps,
 } from '@tomic/table';
 import { ghostButtonStyles } from '@components/Button';
@@ -35,7 +37,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  FaCheck,
   FaCopy,
   FaFilter,
   FaPencil,
@@ -689,12 +690,38 @@ const ColumnsTrigger = buildDefaultTrigger(
   'Toggle properties',
 );
 
-/**
- * Dropdown that shows/hides the table's properties. A `DropdownMenu` rather
- * than its own popover so it matches every other menu here: whole-row targets,
- * a header saying what it does, and keyboard navigation for free. Rows keep the
- * menu open, since toggling several columns is the normal case.
- */
+function AtomicColumnsMenu({
+  label,
+  items,
+  disabled,
+}: TableColumnsMenuPresentation): JSX.Element {
+  if (disabled)
+    return (
+      <IconBtn disabled title={label} type='button'>
+        <FaTableColumns />
+      </IconBtn>
+    );
+
+  return (
+    <DropdownMenu
+      Trigger={ColumnsTrigger}
+      items={[
+        { id: 'columns-header', label, header: true, onClick: () => undefined },
+        ...items.map(item => ({
+          id: item.key,
+          label: item.label,
+          icon: item.icon,
+          helper: item.helper,
+          disabled: item.disabled,
+          keepOpen: true,
+          onClick: item.toggle,
+        })),
+      ]}
+    />
+  );
+}
+
+/** Atomic titles and menu primitive for shared visibility/lock behavior. */
 function ColumnsMenu({
   allColumns,
   columns,
@@ -713,70 +740,25 @@ function ColumnsMenu({
   canWrite: boolean;
 }): JSX.Element {
   const titles = usePropertyTitles(allColumns);
-  const visible = useMemo(
-    () => new Set(columns.map(c => c.subject)),
-    [columns],
-  );
-
-  const items = useMemo((): DropdownItem[] => {
-    if (allColumns.length === 0) {
-      return [];
-    }
-
-    return [
-      {
-        id: 'columns-header',
-        label: 'Toggle properties',
-        header: true,
-        onClick: () => undefined,
-      },
-      ...allColumns.map(column => {
-        const locked = lockedColumns.has(column.subject);
-        // A locked property is rendered by the view whatever the config says,
-        // so it reads as shown regardless.
-        const shown = locked || visible.has(column.subject);
-
-        return {
-          id: column.subject,
-          label: titles.get(column.subject)!,
-          // A check on the shown ones, matching how the view-type section of
-          // the tab menu marks its current choice.
-          icon: shown ? <FaCheck /> : <CheckPlaceholder />,
-          helper: locked
-            ? lockedReason
-            : shown
-              ? 'Hide this property'
-              : 'Show this property',
-          disabled: locked,
-          keepOpen: true,
-          onClick: () =>
-            shown ? hideColumn(column.subject) : showColumn(column.subject),
-        };
-      }),
-    ];
-  }, [
-    allColumns,
-    visible,
-    showColumn,
-    hideColumn,
-    titles,
-    lockedColumns,
-    lockedReason,
-  ]);
-
-  if (!canWrite || items.length === 0) {
-    return (
-      <IconBtn disabled title='Toggle properties' type='button'>
-        <FaTableColumns />
-      </IconBtn>
-    );
-  }
+  const visible = new Set(columns.map(column => column.subject));
 
   return (
-    <DropdownMenu
-      Trigger={ColumnsTrigger}
-      items={items}
-      // Only worth a filter box once scanning the list stops being instant.
+    <SharedColumnsMenu
+      disabled={!canWrite}
+      Menu={AtomicColumnsMenu}
+      columns={allColumns.map(column => ({
+        key: column.subject,
+        label: titles.get(column.subject)!,
+        shown: visible.has(column.subject),
+        locked: lockedColumns.has(column.subject),
+        lockReason: lockedReason,
+      }))}
+      onChange={(key, shown) => (shown ? showColumn(key) : hideColumn(key))}
+      messages={{
+        label: 'Toggle properties',
+        show: 'Show this property',
+        hide: 'Hide this property',
+      }}
     />
   );
 }
@@ -787,10 +769,4 @@ const IconBtn = styled.button`
   height: 1.85rem;
   width: 1.85rem;
   padding: 0;
-`;
-
-/** Keeps unchecked rows aligned with the checked ones. */
-const CheckPlaceholder = styled.span`
-  display: inline-block;
-  width: 1em;
 `;
