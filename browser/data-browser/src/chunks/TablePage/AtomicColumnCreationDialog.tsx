@@ -1,3 +1,4 @@
+import { ExternalPropertyDialog } from './PropertyForm/ExternalPropertyDialog';
 import { useCanWrite, useResource } from '@tomic/react';
 import { NewPropertyDialog } from './PropertyForm/NewPropertyDialog';
 
@@ -19,6 +20,21 @@ export function AtomicColumnCreationDialog({
 }) {
   const tableClass = useResource(owner);
   const canWrite = useCanWrite(tableClass);
+
+  if (category === 'external') {
+    return (
+      <ExternalPropertyDialog
+        open
+        tableClassResource={tableClass}
+        scope={scope}
+        canSave={canSave && canWrite}
+        bindShow={show => {
+          if (!show) onClose();
+        }}
+        onCreated={onCreated}
+      />
+    );
+  }
 
   return (
     <NewPropertyDialog

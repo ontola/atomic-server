@@ -15,7 +15,6 @@ import {
 import { DIVIDER, DropdownMenu } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { TablePageContext } from './tablePageContext';
-import { ExternalPropertyDialog } from './PropertyForm/ExternalPropertyDialog';
 import { DerivedColumnDialog } from './DerivedColumnDialog';
 import { RowActionDialog } from './RowActionDialog';
 import { dataTypeIconMap } from '../../helpers/iconMap';
@@ -33,14 +32,12 @@ const RelationIcon = dataTypeIconMap.get(Datatype.ATOMIC_URL)!;
 const LocalizedTextIcon = dataTypeIconMap.get(Datatype.LOCALIZEDTEXT)!;
 
 export const NewColumnButton: React.FC = () => {
-  const [showExternalDialog, setShowExternalDialog] = useState(false);
   const [showDerivedDialog, setShowDerivedDialog] = useState(false);
   const [showActionDialog, setShowActionDialog] = useState(false);
 
   const {
     tableClassSubject,
     requestColumnCreation,
-    showColumn,
     classProperties,
     addDerivedColumn,
     addRowAction,
@@ -84,7 +81,7 @@ export const NewColumnButton: React.FC = () => {
           relation: { run: () => requestColumnCreation('relation') },
           computed: { run: () => setShowDerivedDialog(true) },
           action: { run: () => setShowActionDialog(true) },
-          external: { run: () => setShowExternalDialog(true) },
+          external: { run: () => requestColumnCreation('external') },
         }}
         icons={{
           text: <TextIcon />,
@@ -100,12 +97,6 @@ export const NewColumnButton: React.FC = () => {
           action: <FaBolt />,
           external: <FaHashtag />,
         }}
-      />
-      <ExternalPropertyDialog
-        open={showExternalDialog}
-        tableClassResource={tableClassResource}
-        bindShow={setShowExternalDialog}
-        onCreated={showColumn}
       />
       {/* Computed columns are view config, not properties on the class — so
        *  this one writes to the active view rather than creating anything. */}
