@@ -325,3 +325,18 @@ export {
   type TableRowActionTarget,
   type TableRowActionKind,
 } from './RowActionFields.js';
+
+export {
+  bindTableFormula,
+  tableFormulaColumnSlugs,
+  tableFormulaColumnSlug,
+  tableFormulaIdentifiers,
+  inferTableDerivedValueKind,
+} from './views/formulaModel.js';
+
+export {
+  TableDerivedColumnFields,
+  type TableDerivedColumnFieldsProps,
+  type TableFormulaColumn,
+  type TableFormulaExample,
+} from './DerivedColumnFields.js';

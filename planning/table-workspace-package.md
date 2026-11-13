@@ -648,3 +648,25 @@ checks pass. Actual SDK desktop/mobile verification retains `-` with Save
 blocked, then independently reads numeric `0` from the saved action metadata.
 The Atomic input wrapper is retained for its existing border/focus styling.
 Screenshots remain outside Git in `/workspace/artifacts/table-row-action-fields`.
+
+
+### Computed-column fields and formula binding
+
+`TableDerivedColumnFields` now owns the actual computed-column name/formula
+controls, examples, local identity/width, binding suggestions and display-kind
+inference. The existing slug/identifier/binding helpers move into the package;
+Atomic compatibility, Rust evaluator loading/validation and row-value/date
+conversion remain backend adapters. The unavailable validator result retains
+its distinct meaning: only explicit successful validation enables Save.
+
+The host's existing formula/backend suite is added to the Atomic adapter lane.
+Computed dialog lifecycle, page/renderer orchestration and native computed-query
+capabilities remain unfinished; this does not enable local-row query emulation
+or advance catalog/lens discovery before the full-page gate.
+
+Computed-field validation: 189 package tests, all 176 tests in the expanded Atomic
+adapter lane, package/host typechecks, packed consumer and changed-component
+compiler checks pass. Actual SDK desktop/mobile verification retains invalid
+syntax, suggests the known Rate column, independently reads the saved formula
+and Property binding, and renders `4` for stored Rate `2` with `rate * 2.0`.
+Screenshots remain outside Git in `/workspace/artifacts/table-computed-fields`.
