@@ -14,8 +14,6 @@ import {
   type SchemaStore,
 } from '@tomic/lib';
 
-const BASE = 'https://atomicdata.dev/properties/';
-
 /** Stored on the table, so its identity survives renaming and moving. */
 export const syncablePlatformSchema = (): SchemaSpec => ({
   properties: [
