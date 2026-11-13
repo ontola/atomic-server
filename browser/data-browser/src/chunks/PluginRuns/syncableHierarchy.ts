@@ -5,6 +5,7 @@
  * or collection. The iframe never receives a drive-root write capability.
  * This module does not make provider requests or handle provider credentials.
  */
+import { ensureSyncablesTableViews } from './syncablesViews';
 import {
   core,
   dataBrowser,
@@ -37,10 +38,18 @@ export interface SyncableNodeInput {
   collectionName?: string;
   /** Organization, user, etc. Relevant only for an owner namespace. */
   ownerKind?: 'organization' | 'personal';
+  /** Public source bindings, never an OAuth token or other credential. */
+  config?: Record<string, string>;
 }
 
 export const syncableHierarchySchema = (): SchemaSpec => ({
   properties: [
+    {
+      shortname: 'syncable-source-config',
+      name: 'Syncable source configuration',
+      description: 'Non-secret source bindings and selected collection parameters.',
+      datatype: Datatype.JSON,
+    },
     {
       shortname: 'syncable-resource-index',
       name: 'Syncable resource index',
@@ -191,6 +200,8 @@ export async function ensureSyncableNode(
   );
   const indexProperty = schema.properties['syncable-resource-index'];
   if (existing) {
+    if (input.kind === 'organizations' || input.kind === 'repositories' || input.kind === 'mirror')
+      await ensureSyncablesTableViews(store, existing);
     await registerSource(store, input.drive, indexProperty, key, existing);
     return existing;
   }
@@ -221,6 +232,7 @@ export async function ensureSyncableNode(
       [core.properties.localId]: localIdFor(key),
       [schema.properties['syncable-source-key']]: key,
       [schema.properties['syncable-node-kind']]: input.kind,
+      ...(input.config ? { [schema.properties['syncable-source-config']]: input.config } : {}),
       ...(isTable ? { [core.properties.classtype]: rowClass } : {}),
       ...(input.kind === 'owner' && input.ownerKind
         ? {
@@ -239,10 +251,12 @@ export async function ensureSyncableNode(
       localIdFor(key),
     );
     if (!winner) throw error;
+    if (isTable) await ensureSyncablesTableViews(store, winner.subject);
     await registerSource(store, input.drive, indexProperty, key, winner.subject);
     return winner.subject;
   }
 
+  if (isTable) await ensureSyncablesTableViews(store, node.subject);
   await registerSource(store, input.drive, indexProperty, key, node.subject);
   return node.subject;
 }
