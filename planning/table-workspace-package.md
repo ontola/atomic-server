@@ -421,3 +421,16 @@ can also repair a previously stored unsupported operator without removing the
 filter. Package tests exercise these state transitions; the actual Atomic page
 checks unavailable-target removal and persisted recovery. ELFA's full stored
 configuration and remaining page orchestration still need adoption.
+
+## Shared stored-property heading
+
+Atomic's actual property heading now uses `TablePropertyHeading` for label/
+required state, sort indicators and command, hover/drag presentation and the
+full-height context-menu target. Property metadata, datatype icons, language
+selectors and property-command menus stay in the backend adapter. Package tests
+cover sorting, disabled capabilities and drag/context dispatch; the dedicated
+adapter lane resolves real required-property metadata and checks stable-ID sort
+dispatch. Actual local-drive browser checks verify ascending/descending numeric
+ordering and the retained backend context menu. ELFA adoption follows its full
+configuration increment (#110); complete configured headings, schema/menu and
+page/renderer orchestration remain open before catalog discovery.
