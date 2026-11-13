@@ -96,6 +96,7 @@ export function SyncablesFrame({
           reply: session.post,
           existing: undefined as ProxyConnection[] | undefined,
         };
+        askRef.current = next;
         setAsk(next);
         void proxy.list(data.platform)
           .then(existing => {
