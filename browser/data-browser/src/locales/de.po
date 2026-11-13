@@ -937,6 +937,8 @@ msgid "I already have an account"
 msgstr ""
 
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/views/ErrorPage.tsx
@@ -13501,4 +13503,12 @@ msgstr ""
 
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Column creation is unavailable. Check access and the selected table."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+msgid "Property attachment is unavailable. Check access and the selected table."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+msgid "Attachment started. Retry to finish adding this property to the table."
 msgstr ""

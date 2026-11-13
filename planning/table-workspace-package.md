@@ -580,4 +580,26 @@ Native column creation, the add-column selector, computed/action/external-proper
 dialogs and full page/renderer orchestration remain subsequent extraction work.
 
 - [x] Extract the actual add-column category menu and guard unsupported actions, with AtomicServer retaining only presentation and backend dialog callbacks.
-- [ ] Adopt shared add-column creation in the native host, including saved-view visibility and schema revision checks.
+- [x] Adopt shared add-column creation for native text, number and checkbox fields, including saved-view visibility and schema revision checks (database-apps #117, merged). Other categories remain explicitly unavailable.
+
+
+### External property attachment lifecycle
+
+The actual external-property attachment dialog now uses `TablePropertyDialog`.
+The Atomic adapter retains its resource picker and attachment service, while the
+shared controller owns validation gating, pending saves, retained errors,
+dismissal and retry. TableResource owns the request and captured table/view/class
+scope, just as for new definitions. A class-heading unmount cannot discard it.
+The selection is locked after attachment starts because ontology and class writes
+are separate; Retry finishes the same intent. Only confirmed success notifies the
+captured view. Invalid non-Property resources fail before attachment.
+
+This does not provide rollback or cross-document CAS. Computed/action dialogs,
+full page/renderer orchestration and catalog/lens discovery remain unfinished.
+
+Validation for external attachment: 149 Atomic adapter tests, host typecheck,
+changed-component React compiler checks and actual desktop/mobile SDK browser
+verification pass. The browser fixture rejects class attachment once, retries
+the same selection and independently reads exactly one persisted class reference
+from the WASM database. Screenshots remain outside Git in
+`/workspace/artifacts/table-external-property`.
