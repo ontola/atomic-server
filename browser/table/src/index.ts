@@ -140,3 +140,11 @@ export {
   parsePropertyRange,
   type PropertyRangeFieldProps,
 } from './schema/PropertyRangeField.js';
+
+export {
+  PropertyChoiceField,
+  type PropertyChoiceFieldProps,
+  type PropertyChoice,
+} from './schema/PropertyChoiceField.js';
+
+export { FloatCell } from './chunks/TablePage/EditorCells/FloatCell.js';

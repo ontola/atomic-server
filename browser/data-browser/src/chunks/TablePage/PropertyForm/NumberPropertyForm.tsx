@@ -7,6 +7,7 @@ import {
   useString,
 } from '@tomic/react';
 import { Suspense, lazy, useEffect, type JSX } from 'react';
+import { PropertyChoiceField } from '@tomic/table';
 import { RadioGroup, RadioInput } from '@components/forms/RadioInput';
 import { FormGroupHeading } from './FormGroupHeading';
 import { DecimalPlacesInput } from './Inputs/DecimalPlacesInput';
@@ -33,12 +34,10 @@ export const NumberPropertyForm = ({
 
   const [_, setDataType] = useString(resource, core.properties.datatype);
 
-  const handleNumberFormatChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    setNumberFormatting(e.target.value);
+  const handleNumberFormatChange = async (value: string) => {
+    setNumberFormatting(value);
 
-    if (e.target.value === numberFormats.currency) {
+    if (value === numberFormats.currency) {
       await resource.addClasses(dataBrowser.classes.currencyProperty);
       await setDataType(Datatype.FLOAT);
     } else {
@@ -63,32 +62,19 @@ export const NumberPropertyForm = ({
   return (
     <Suspense fallback={<div>loading...</div>}>
       <FormGroupHeading>Number Format</FormGroupHeading>
-      <RadioGroup>
-        <RadioInput
-          name='number-format'
-          value={numberFormats.number}
-          checked={numberFormatting === numberFormats.number}
-          onChange={handleNumberFormatChange}
-        >
-          Number
-        </RadioInput>
-        <RadioInput
-          name='number-format'
-          value={numberFormats.percentage}
-          checked={numberFormatting === numberFormats.percentage}
-          onChange={handleNumberFormatChange}
-        >
-          Percentage
-        </RadioInput>
-        <RadioInput
-          name='number-format'
-          value={numberFormats.currency}
-          checked={numberFormatting === numberFormats.currency}
-          onChange={handleNumberFormatChange}
-        >
-          Currency
-        </RadioInput>
-      </RadioGroup>
+      <PropertyChoiceField
+        label='Number format'
+        name='number-format'
+        value={numberFormatting}
+        onChange={handleNumberFormatChange}
+        Radio={RadioInput}
+        Group={RadioGroup}
+        options={[
+          { value: numberFormats.number, label: 'Number' },
+          { value: numberFormats.percentage, label: 'Percentage' },
+          { value: numberFormats.currency, label: 'Currency' },
+        ]}
+      />
       {/* Follows the chosen format, not the class: adding the class is async and
        *  does not re-render, so a new column never got its currency picker. */}
       {numberFormatting === numberFormats.currency ? (
