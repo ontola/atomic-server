@@ -13418,6 +13418,7 @@ msgstr ""
 msgid "The configured measurement is unavailable."
 msgstr ""
 
+#: src/chunks/TablePage/TableFilterChip.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Filter value"
 msgstr ""

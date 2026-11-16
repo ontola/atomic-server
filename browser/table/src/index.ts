@@ -223,3 +223,8 @@ export {
   type TableFilterValueInputProps,
   type TableFilterValueKind,
 } from './filters/FilterValueInput.js';
+export {
+  TableFilterChip,
+  type TableFilterChipProps,
+  type TableFilterPopoverProps,
+} from './filters/FilterChip.js';
