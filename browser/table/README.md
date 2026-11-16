@@ -351,3 +351,10 @@ scoped visibility update. Preparation, definition creation and attachment remain
 backend services rather than hidden UI writes.
 
 `TableNewColumnMenu` owns the add-column categories and guards every capability callback. AtomicServer supplies its dropdown presentation, datatype icons and backend actions; missing native capabilities remain disabled with adapter-provided reasons. The default menu shares the property menu keyboard and focus behavior.
+
+`TableQuickAddBar` owns the actual quick-add field/button and serial submission
+queue. Each accepted request captures its backend callback. Scope changes start a
+fresh UI; already accepted writes finish against their captured backend and late
+successes do not notify the new page. Failed values stay visible with their error
+and are never retried automatically. Backend adapters retain creation defaults,
+validation, identity and persistence policy.
