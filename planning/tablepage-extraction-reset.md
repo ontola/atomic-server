@@ -86,7 +86,7 @@ changes, before integrating them. Keep the improvement children deferred.
 | #2533 row-selection controls | #2556 | #2557 |
 
 For all nine pairs, the improvement child has the exact complete Git tree of
-its original mixed head and includes its move parent in its ancestry. Existing
+its original mixed head and includes its move parent in its ancestry. The superseded mixed PRs are closed; their original
 branches and review history are retained. This proves preservation of the
 original result, not that every original behavior improvement is desirable.
 Each move was checked with package tests and host type checks; relevant host
