@@ -23,7 +23,7 @@ export const TextPropertyForm = ({
     <>
       <FormGroupHeading>Text Format:</FormGroupHeading>
       <PropertyChoiceField
-        name='text-format'
+        label='Text format'
         value={textFormat}
         onChange={handleTextFormatChange}
         Radio={RadioInput}

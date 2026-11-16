@@ -3,7 +3,7 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { beforeAll, afterEach, expect, it, vi } from 'vitest';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import {
   Store,
   StoreContext,
@@ -11,6 +11,7 @@ import {
   core,
   dataBrowser,
   Datatype,
+  urls,
 } from '@tomic/react';
 import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../../../styling';
@@ -67,10 +68,34 @@ async function setup(existingProperty: boolean, format?: string) {
   return { draft, save };
 }
 
+it('does not retype an existing integer property when display precision is absent', async () => {
+  const { draft, save } = await setup(true);
+  await waitFor(() =>
+    expect(draft.get(dataBrowser.properties.numberFormatting)).toBe(
+      urls.instances.numberFormats.number,
+    ),
+  );
+  expect(draft.get(core.properties.datatype)).toBe(Datatype.INTEGER);
+  expect(
+    (screen.getByRole('radio', { name: 'Number' }) as HTMLInputElement).checked,
+  ).toBe(true);
+  expect(save).not.toHaveBeenCalled();
+});
 it('still defaults a new number draft to float without persisting it', async () => {
   const { draft, save } = await setup(false);
   await waitFor(() =>
     expect(draft.get(core.properties.datatype)).toBe(Datatype.FLOAT),
   );
   expect(save).not.toHaveBeenCalled();
+});
+it('preserves an unknown saved format instead of replacing it', async () => {
+  const { draft } = await setup(true, 'https://example.com/custom-format');
+  const option = screen.getByRole('radio', {
+    name: 'https://example.com/custom-format',
+  }) as HTMLInputElement;
+  expect(option.checked).toBe(true);
+  expect(option.disabled).toBe(true);
+  expect(draft.get(dataBrowser.properties.numberFormatting)).toBe(
+    'https://example.com/custom-format',
+  );
 });

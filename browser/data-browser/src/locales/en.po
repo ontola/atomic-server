@@ -13397,3 +13397,11 @@ msgstr "Bounds cannot be negative."
 #: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Minimum must not exceed maximum."
 msgstr "Minimum must not exceed maximum."
+
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+msgid "Text format"
+msgstr "Text format"
+
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
+msgid "Number format"
+msgstr "Number format"

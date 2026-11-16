@@ -189,8 +189,24 @@ necessary only before a future registry release, independently of this port.
   orchestration remain unextracted. Catalog evolution has not started.
 
 
-Next native schema guard hardening: class identity is not a schema revision.
-Thread the accepted schema fingerprint and a live readiness/revision getter into
-native mutation/creation backends, so an in-flight command fails preflight if a
-new schema is loading or activated before the write. Keep confirmed partial
-success explicit; this still cannot make separate schema/row documents atomic.
+Native schema guard hardening is implemented in merged
+[ELFA/database-apps#98](https://git.elfaconsortium.eu/ELFA/database-apps/pulls/98).
+Production commands carry the accepted schema digest and pointer, verify fresh
+native schema metadata before writing, and recheck live scope/field baselines and
+candidate validation after asynchronous verification. Creation/sample writers
+check again after readiness. Nineteen native browser cases and 432 unit tests
+passed on the merged tree. These remain preflights, not cross-document atomicity.
+
+### Shared datatype/format choices and float editing
+
+- [x] Shared choice control for radio/dropdown presentation, enabled-value guards,
+  independent radio groups and preservation of unsupported saved bindings.
+- [x] Atomic text/number format controls use the shared control. Missing display
+  precision no longer retypes an existing integer property as float.
+- [x] Atomic and native hosts use the same float editor; Atomic retains its
+  property-aware display formatting, while native keeps raw drafts and ORM writes.
+- [x] Native schema datatype selection uses the shared choice control.
+- [x] Numeric bounds may be fractional even for integer-valued columns under JSON
+  Schema semantics. Only length bounds require whole numbers; never floor bounds.
+- [ ] Remaining category controls, property dialog lifecycle, shared saved-view
+  lifecycle and actual TablePage/TableResource orchestration remain open.
