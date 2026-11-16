@@ -345,3 +345,12 @@ export {
   type TableViewWriteReceipt,
   type TableViewWriteReceiptState,
 } from './views/viewWrites.js';
+
+export {
+  TableQuickAddFields,
+  quickAddDraftFromSpec,
+  quickAddSpecFromDraft,
+  isQuickAddDraftComplete,
+  type QuickAddDraft,
+  type TableQuickAddFieldsProps,
+} from './QuickAddFields.js';
