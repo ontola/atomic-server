@@ -355,6 +355,8 @@ backend services rather than hidden UI writes.
 `TableQuickAddBar` owns the actual quick-add field/button and serial submission
 queue. Each accepted request captures its backend callback. Scope changes start a
 fresh UI; already accepted writes finish against their captured backend and late
-successes and failures do not notify the new page. Within the current scope,
-failed values stay visible with their error and are never retried automatically. Backend adapters retain creation defaults,
+successes do not notify the new page. Failures still call the original request
+error handler after navigation so accepted writes cannot fail silently; adapters
+should use that handler for reporting, not current-page state updates. Within the
+current scope, failed values stay visible and are never retried automatically. Backend adapters retain creation defaults,
 validation, identity and persistence policy.

@@ -44,7 +44,9 @@ export function createTableQuickAddQueue() {
         };
 
         try {
-          if (active) request.onError?.(error);
+          // Accepted writes still need failure reporting after navigation;
+          // only success callbacks are tied to the mounted UI session.
+          request.onError?.(error);
         } catch {
           /* Keep draining accepted requests. */
         }

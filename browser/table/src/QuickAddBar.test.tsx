@@ -122,7 +122,7 @@ it('serializes a request enqueued synchronously by a completion subscriber', asy
   await waitFor(() => expect(queue.getSnapshot().pending).toBe(0));
   expect(calls).toEqual(['First', 'Second']);
 });
-it('suppresses old-scope failure callbacks while continuing its accepted writes', async () => {
+it('reports failures of accepted old-scope writes without notifying the new scope', async () => {
   let reject!: (error: Error) => void;
   const oldCreate = vi
     .fn()
@@ -156,9 +156,10 @@ it('suppresses old-scope failure callbacks while continuing its accepted writes'
   rerender(
     <TableQuickAddBar scope='new' label='Add' field create={newCreate} />,
   );
-  reject(Error('Old scope failed'));
+  const failure = Error('Old scope failed');
+  reject(failure);
   await waitFor(() => expect(oldCreate).toHaveBeenCalledTimes(2));
-  expect(oldError).not.toHaveBeenCalled();
+  expect(oldError).toHaveBeenCalledExactlyOnceWith(failure);
   expect(oldCreated).not.toHaveBeenCalled();
   expect(newCreate).not.toHaveBeenCalled();
   expect(screen.queryByRole('alert')).toBeNull();
