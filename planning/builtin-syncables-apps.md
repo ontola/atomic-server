@@ -98,8 +98,10 @@ A clickable HTML **concept** (not a production host implementation) accompanies 
 - [x] Source-scoped iframe operations and owner-signed keyed proxy reads.
 - [x] Personal and organization discovery, stable repository and mirror
   identities, typed idempotent issue rows and pause.
-- [ ] Verify keyed OAuth return, retry, reconnect and repository issue sync
-  through the native browser workflow and PR checks.
+- [x] Verify keyed OAuth return, retry, reconnect and repository issue sync
+  with the native Playwright walkthrough against a protocol-checking proxy
+  fixture.
+- [ ] Verify PR checks on the final revision.
 - [ ] Verify the GitHub OAuth flow on a deployed keyed proxy with the new
   catalog.
 

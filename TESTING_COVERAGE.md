@@ -1279,7 +1279,8 @@ This does not yet prove restoration of the user's private staging workspace.
   exercises My Drive → account menu → Apps, repeat install, opaque iframe
   origin, OAuth cancellation and signed PKCE redemption, browser-held
   connection key signing, owner namespaces, repository scopes, paginated
-  issue sync, typed updates and pause across reload. It runs against a real
+  issue sync, typed updates, pause across reload and reconnecting the same
+  GitHub account without replacing its mirror. It runs against a real
   Atomic Server with a protocol-checking proxy fixture. The live GitHub OAuth
   and proxy deployment are separate from this browser test.
 - `syncablePlatform.test.ts`, `syncableHierarchy.test.ts`,
