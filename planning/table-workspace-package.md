@@ -510,3 +510,19 @@ This supersedes the earlier note about confirmation closing before completion.
 It does not make schema detachment and definition deletion atomic, provide
 rollback, or complete property forms and page/renderer extraction. Native targeted
 Edit/Remove services remain disabled pending their own implementation.
+
+
+### Remaining property-format controls
+
+The real Atomic decimal-precision input and date-format choice/preview UI now use
+shared `PropertyPrecisionField` and `PropertyDateFormatField` controls. Atomic
+retains Resource bindings, validation-context integration, locale formatting and
+its precision-to-datatype policy. Invalid fractional, partial or out-of-range
+precision drafts no longer truncate into a different persisted precision or
+datatype. Date radio groups are isolated per form and unsupported stored formats
+remain visible without substitution.
+
+These are property-form controls, not a claim that the complete property form,
+creation/edit dialogs or TablePage orchestration have finished extraction. Native
+format metadata services and unsupported category controls still need explicit
+capability handling when the complete form is adopted.

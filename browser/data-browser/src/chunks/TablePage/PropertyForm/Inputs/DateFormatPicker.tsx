@@ -23,6 +23,7 @@ export function DateFormatPicker({
       value={value}
       onChange={onChange}
       Radio={RadioInput}
+      label='Date format'
       options={[
         {
           value: dateFormats.localNumeric,
