@@ -80,7 +80,6 @@ import { QuickAddBar } from './QuickAddBar';
 import { useTableAggregates } from './useTableAggregates';
 import { toAtomicTableAggregateOptions } from './atomicTableQuery';
 import { TableTotalsFooter } from './TableTotalsFooter';
-import { toAggregation } from './tableAggregates';
 import { stringToSlug } from '@helpers/stringToSlug';
 import { orderColumns, reorderColumnKeys } from './columnOrder';
 import { TableSummaryBar } from './TableSummaryBar';
@@ -557,14 +556,7 @@ const TableResourceContent: React.FC<TableResourceProps> = ({
   );
 
   // Rebuilt every render (it carries a quantized `now`), so keyed on content.
-  const aggregationKey = JSON.stringify(
-    toAggregation(
-      viewAggregates,
-      viewGroupByColumn,
-      viewGroupGranularity,
-      derivedSpecs,
-    ) ?? null,
-  );
+  const aggregationKey = JSON.stringify(query.aggregation ?? null);
   const aggregation = useMemo(
     () => (JSON.parse(aggregationKey) as Aggregation | null) ?? undefined,
     [aggregationKey],

@@ -10,7 +10,11 @@ import {
 import { useTableView, UseTableViewResult } from './useTableView';
 import { getTableDrive } from './tableDrive';
 import { useAtomicTableQuery } from './useAtomicTableQuery';
-import { compileTableViewQuery, type TableQuery } from '@tomic/table';
+import {
+  compileTableViewQuery,
+  timerDurationColumn,
+  type TableQuery,
+} from '@tomic/table';
 
 const PAGE_SIZE = 30;
 
@@ -43,13 +47,26 @@ export function useTableData(
   const [classSubject] = useSubject(resource, core.properties.classtype);
   const tableClass = useResource(classSubject);
 
-  const { query } = compileTableViewQuery(tableView.viewConfiguration, {
+  const defaultDerivedColumns =
+    tableView.viewKind === 'timer' &&
+    tableView.viewGroupBy &&
+    tableView.viewEndProp
+      ? [
+          timerDurationColumn(
+            tableView.viewGroupBy,
+            tableView.viewEndProp,
+            'Duration',
+          ),
+        ]
+      : [];
+  const { query, issues } = compileTableViewQuery(tableView.viewConfiguration, {
     scope: {
       table: resource.subject,
       rowClass: tableView.viewReady ? classSubject : undefined,
       drive: getTableDrive(store, resource),
     },
     pageSize: PAGE_SIZE,
+    defaultDerivedColumns,
   });
   const rows = useAtomicTableQuery(
     query,
@@ -63,5 +80,9 @@ export function useTableData(
     tableClass,
     query,
     ...rows,
+    viewReady: tableView.viewReady && !issues.length,
+    viewError:
+      tableView.viewError ??
+      (issues.length ? 'Saved view configuration is invalid.' : undefined),
   };
 }

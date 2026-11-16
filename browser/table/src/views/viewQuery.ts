@@ -52,23 +52,14 @@ export function tableDerivedFilterNumber(
   value: string,
   now: number,
 ): number | undefined {
-  if (spec.valueKind === 'date') {
-    if (value === 'now') return now;
-    const parsed = Date.parse(value);
+  const result =
+    spec.valueKind === 'date'
+      ? value === 'now'
+        ? now
+        : Date.parse(value)
+      : Number(value) * (spec.valueKind === 'duration' ? 3_600_000 : 1);
 
-    return Number.isNaN(parsed) ? undefined : parsed;
-  }
-
-  if (
-    spec.valueKind !== undefined &&
-    !['number', 'boolean', 'days', 'duration'].includes(spec.valueKind)
-  )
-    throw new TypeError('Unknown derived value kind');
-  const number = Number(value);
-
-  return Number.isFinite(number)
-    ? number * (spec.valueKind === 'duration' ? 3_600_000 : 1)
-    : undefined;
+  return value.trim() && Number.isFinite(result) ? result : undefined;
 }
 
 export interface TableViewQueryIssue {
@@ -94,16 +85,21 @@ export function compileTableViewQuery(
   const now = tableQueryNow(options.now);
   const timezone =
     options.timezoneOffsetMinutes ?? -new Date().getTimezoneOffset();
-  const derivedColumns = config.derivedColumns;
+  const derivedColumns = effectiveTableDerivedColumns(
+    config,
+    options.defaultDerivedColumns,
+  );
   const byId = new Map(derivedColumns.map(spec => [spec.id, spec]));
   const issues: TableViewQueryIssue[] = [];
   const filters: TableQuery['filters'] = [];
   const expressionFilters: TableQuery['expressionFilters'] = [];
-  config.filters.forEach(filter => {
+  config.filters.forEach((filter, index) => {
     if (filter.value === '') return;
 
-    if (filter.derived === undefined) {
-      if (filter.property)
+    if (!filter.derived) {
+      if (!filter.property)
+        issues.push({ field: 'filters', index, reason: 'target' });
+      else
         filters.push({
           property: filter.property,
           value: filter.value,
@@ -115,14 +111,33 @@ export function compileTableViewQuery(
 
     const spec = byId.get(filter.derived);
     const expression = spec && tableDerivedExpression(spec);
-    if (!spec || !expression) return;
-    const value = tableDerivedFilterNumber(spec, filter.value, now);
-    if (value === undefined) return;
+
+    if (!expression) {
+      issues.push({ field: 'filters', index, reason: 'expression' });
+
+      return;
+    }
+
+    if (!['eq', 'gt', 'gte', 'lt', 'lte'].includes(filter.operator)) {
+      issues.push({ field: 'filters', index, reason: 'operator' });
+
+      return;
+    }
+
+    const value = tableDerivedFilterNumber(spec!, filter.value, now);
+
+    if (value === undefined) {
+      issues.push({ field: 'filters', index, reason: 'value' });
+
+      return;
+    }
+
     expressionFilters.push({
       expression,
       operator: filter.operator as 'eq' | 'gt' | 'gte' | 'lt' | 'lte',
       value,
-      ...(tableDerivedDependsOnNow(spec) || value === now
+      ...(tableDerivedDependsOnNow(spec!) ||
+      (spec!.valueKind === 'date' && filter.value === 'now')
         ? { now_ms: now }
         : {}),
       tz_offset_minutes: timezone,
@@ -130,8 +145,8 @@ export function compileTableViewQuery(
   });
   const aggregates: TableQueryAggregation['aggregates'] = [];
   let live = false;
-  config.aggregates.forEach(aggregate => {
-    if (aggregate.derived === undefined) {
+  config.aggregates.forEach((aggregate, index) => {
+    if (!aggregate.derived) {
       aggregates.push({
         id: aggregate.id,
         property: aggregate.property,
@@ -145,6 +160,8 @@ export function compileTableViewQuery(
     const expression = spec && tableDerivedExpression(spec);
 
     if (!expression) {
+      issues.push({ field: 'aggregates', index, reason: 'expression' });
+
       return;
     }
 
@@ -178,7 +195,7 @@ export function compileTableViewQuery(
   const query: TableQuery = {
     scope: {
       ...options.scope,
-      rowClass: options.scope.rowClass,
+      rowClass: issues.length ? undefined : options.scope.rowClass,
     },
     filters,
     expressionFilters,
