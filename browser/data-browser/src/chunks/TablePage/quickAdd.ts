@@ -6,7 +6,7 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
-import { ROW_ACTION_GENERATORS, type RowActionKind } from './rowActions';
+import { ROW_ACTION_GENERATORS } from './rowActions';
 import { createAtomicTableRow } from './atomicCreateRow';
 
 /**
@@ -18,87 +18,13 @@ import { createAtomicTableRow } from './atomicCreateRow';
  * the step. Reusing the verbs keeps the closed set closed — there is no second
  * vocabulary to learn, to document, or to write a second dialog for.
  */
-export interface QuickAddPreset {
-  kind: RowActionKind;
-  property: string;
-  value?: string | number;
-}
+import type { QuickAddSpec } from '@tomic/table';
 
-/**
- * A button above the grid that creates a row: "Log a feed", "Add item", "Log
- * set". The timer's "what are you working on?" bar, generalised — for a personal
- * app this is usually the widget the whole thing exists for.
- */
-export interface QuickAddSpec {
-  /** What the button says. */
-  label: string;
-  /**
-   * A property to type into before creating, almost always the row's name.
-   * Absent means the button creates immediately, with no field at all — which is
-   * what "Log a feed" wants.
-   */
-  field?: string;
-  /** Placeholder for that field. */
-  placeholder?: string;
-  /** Values every new row starts with. */
-  presets?: QuickAddPreset[];
-}
-
-function isPreset(value: unknown): value is QuickAddPreset {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const preset = value as Record<string, unknown>;
-
-  return (
-    typeof preset.kind === 'string' &&
-    preset.kind in ROW_ACTION_GENERATORS &&
-    typeof preset.property === 'string'
-  );
-}
-
-/**
- * Reads the View's stored quick-add. Anything malformed is dropped rather than
- * thrown on — a person or an LLM writes this.
- */
-export function parseQuickAdd(
-  value: JSONValue | undefined,
-): QuickAddSpec | undefined {
-  const parsed =
-    typeof value === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(value) as JSONValue;
-          } catch {
-            return undefined;
-          }
-        })()
-      : value;
-
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return undefined;
-  }
-
-  const spec = parsed as Record<string, unknown>;
-
-  if (typeof spec.label !== 'string' || spec.label === '') {
-    return undefined;
-  }
-
-  return {
-    label: spec.label,
-    ...(typeof spec.field === 'string' && spec.field !== ''
-      ? { field: spec.field }
-      : {}),
-    ...(typeof spec.placeholder === 'string'
-      ? { placeholder: spec.placeholder }
-      : {}),
-    presets: Array.isArray(spec.presets)
-      ? (spec.presets as unknown[]).filter(isPreset)
-      : [],
-  };
-}
+export {
+  parseQuickAdd,
+  type QuickAddPreset,
+  type QuickAddSpec,
+} from '@tomic/table';
 
 /** Whether pressing the button can do anything yet. */
 export function isQuickAddComplete(spec: QuickAddSpec): boolean {

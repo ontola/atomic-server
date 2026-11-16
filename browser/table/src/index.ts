@@ -168,3 +168,27 @@ export {
   type TableViewWriteState,
   type TableViewWriteContext,
 } from './views/viewWrites.js';
+
+export {
+  filterKey,
+  derivedFilterKey,
+  parseFilterKey,
+  DEFAULT_DERIVED_WIDTH,
+  parseDerivedColumnSpecs,
+  ROW_ACTION_KINDS,
+  parseRowActions,
+  parseQuickAdd,
+  AGGREGATE_FUNCTIONS,
+  parseAggregates,
+  parseColumnOrder,
+  type TableFilter,
+  type TableSorting,
+  type DerivedColumnSpec,
+  type DerivedValueKind,
+  type RowActionKind,
+  type RowActionSpec,
+  type QuickAddPreset,
+  type QuickAddSpec,
+  type TableAggregate,
+  type GroupGranularity,
+} from './views/configuration.js';
