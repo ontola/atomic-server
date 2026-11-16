@@ -65,5 +65,39 @@ code does not commit us to retaining every abstraction.
 - [ ] Inactive saved-view rename identity fix from the unpublished work, separate
   from moving the existing saved-tab menus and controls.
 
-Do not treat the existing mixed PRs as extraction-only or merge the old stack
-as completion of TablePage. Keep them in draft while separating their changes.
+## Structural separation of the legacy mixed PRs
+
+Each original mixed change now has an actual intermediate move-only tree and a
+separate improvement child. These pairs retain their original legacy review
+bases: they are content splits, not an extraction-only merge stack. Restack the
+moves onto the clean extraction (#2535 / #2536), resolving inherited state
+changes, before integrating them. Keep the improvement children deferred.
+
+| Original | Code moves | Deferred improvements |
+| --- | --- | --- |
+| #2500 property choices | #2539 | #2540 |
+| #2506 view configuration | #2541 | #2542 |
+| #2508 query composition | #2543 | #2544 |
+| #2511 filter chips | #2545 | #2546 |
+| #2519 property fields | #2547 | #2548 |
+| #2527 quick-add bar | #2549 | #2550 |
+| #2528 row-action fields | #2551 | #2552 |
+| #2531 quick-add fields | #2553 | #2554 |
+| #2533 row-selection controls | #2556 | #2557 |
+
+For all nine pairs, the improvement child has the exact complete Git tree of
+its original mixed head and includes its move parent in its ancestry. Existing
+branches and review history are retained. This proves preservation of the
+original result, not that every original behavior improvement is desirable.
+Each move was checked with package tests and host type checks; relevant host
+regressions ran where the boundary changed. Mandatory commit hooks passed.
+Baseline React Compiler diagnostics were reproduced before retaining them.
+Full integration CI and clean-base restacking remain merge prerequisites.
+
+The move parents preserve existing draft ownership, conversion, lifecycle and
+query readiness. Strict validation, scope services, queue isolation, failure
+recovery and accessibility additions remain with the improvement children.
+Pure state-management PRs listed above are still deferred, not silently merged
+into the clean extraction. The public resource/property editor API and ELFA
+submodule pin are unchanged. Whole-TablePage extraction and integration remain
+unchecked above; these component splits do not complete them.
