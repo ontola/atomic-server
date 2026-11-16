@@ -205,3 +205,15 @@ export {
   type TableViewSave,
   type TableViewDraftSessionState,
 } from './views/viewDraftSession.js';
+export {
+  compileTableViewQuery,
+  effectiveTableDerivedColumns,
+  timerDurationColumn,
+  tableDerivedExpression,
+  tableDerivedDependsOnNow,
+  tableDerivedFilterNumber,
+  tableQueryNow,
+  TABLE_BREAKDOWN_ROWS_ID,
+  TABLE_QUERY_NOW_QUANTUM_MS,
+  type TableViewQueryIssue,
+} from './views/viewQuery.js';
