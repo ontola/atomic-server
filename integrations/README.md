@@ -6,10 +6,10 @@ reach a server as JS bundles fetched over HTTP from its catalog
 URL set under Settings > Integration). Provider code, provider tests and
 provider certification belong there, not here.
 
-This folder keeps `localthought/`, the LocalThought proxy client, until
-atomic-plugins takes it over; the data-browser no longer imports it. It also
-keeps the docs for the host's plugin contract. Test plugins and the catalog mock the
-e2e suite runs against are fixtures under [`testdata/`](../testdata/).
+This folder documents the host's plugin contract. The snapshot mapper and
+test proxy fixtures are in [`localthought/`](localthought/README.md).
+Test plugins and the catalog mock for the e2e suite are in
+[`testdata/`](../testdata/).
 
 Named actions, automation permissions, recovery and MCP setup are documented in
 [ACTIONS.md](ACTIONS.md). The MCP stdio protocol test runs in the JS CI gate.

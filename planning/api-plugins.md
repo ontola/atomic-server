@@ -9,10 +9,11 @@ Reflector-backed importer.
 **Update (PR #1549):** provider plugins (Pets, GitHub issues, MT940,
 Clockify, Calendar), their tests and certification moved to
 [atomic-plugins](https://github.com/ontola/atomic-plugins); this repo keeps
-catalog discovery, install and the plugin runtime. #1549 contains #1618, so the
-WASM Syncables path is gone and LocalThought connect/sync is broken until its
-proxy calls move into the plugin iframe (follow-up). The Pets section below is
-history; the files it names no longer exist here.
+catalog discovery, install and the plugin runtime. #1549 includes #1618, which
+removed the WASM Syncables bridge. The old rotating-code browser connector has
+since been removed. Provider drive apps now use the host's
+[app-frame proxy API](https://github.com/ontola/atomic-plugins/blob/main/integrations/README.md#the-hosts-proxy-access).
+The proposals below record the design discussion at the time.
 
 ## Where PR #1383 left off
 
