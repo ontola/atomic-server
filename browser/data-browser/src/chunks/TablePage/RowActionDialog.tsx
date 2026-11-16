@@ -1,6 +1,6 @@
 import { core, useResource, useString, type Property } from '@tomic/react';
-import { useEffect, useState, type JSX } from 'react';
-import { styled } from 'styled-components';
+import { useEffect, useState, type JSX, type InputHTMLAttributes } from 'react';
+import { TableRowActionFields } from '@tomic/table';
 import {
   Dialog,
   DialogActions,
@@ -70,9 +70,26 @@ export function RowActionDialog({
   }, [isOpen]);
 
   const generator = ROW_ACTION_GENERATORS[kind];
-  const targets = propertiesForRowAction(classProperties, kind);
   const valueField = rowActionValueInput(kind);
   const target = classProperties.find(p => p.subject === property);
+
+  const kinds = ROW_ACTION_KINDS.map(actionKind => ({
+    kind: actionKind,
+    title: ROW_ACTION_GENERATORS[actionKind].title,
+    description: ROW_ACTION_GENERATORS[actionKind].description,
+    defaultLabel: ROW_ACTION_GENERATORS[actionKind].defaultLabel,
+    valueField: rowActionValueInput(actionKind),
+    targets: propertiesForRowAction(classProperties, actionKind).map(
+      candidate => ({
+        key: candidate.subject,
+        option: <PropertyOption key={candidate.subject} property={candidate} />,
+        values: candidate.allowsOnly?.map(tag => ({
+          key: tag,
+          option: <TagOption key={tag} subject={tag} />,
+        })),
+      }),
+    ),
+  }));
 
   const draft: RowActionSpec = {
     id: editing?.id ?? '',
@@ -95,100 +112,40 @@ export function RowActionDialog({
         <h2>{editing ? 'Edit action' : 'Add an action'}</h2>
       </DialogTitle>
       <DialogContent>
-        <Fields>
-          <Field>
-            <label htmlFor='row-action-kind'>Does what</label>
-            <StyledSelect
-              id='row-action-kind'
-              data-testid='action-config-kind'
-              value={kind}
-              onChange={e => {
-                const next = e.target.value as RowActionKind;
-                setKind(next);
-                // The target and the literal both belong to the previous verb —
-                // a step of 1 means nothing to "mark done".
-                setProperty('');
-                setValue('');
-              }}
-            >
-              {ROW_ACTION_KINDS.map(k => (
-                <option key={k} value={k}>
-                  {ROW_ACTION_GENERATORS[k].title}
-                </option>
-              ))}
-            </StyledSelect>
-            <Hint>{generator.description}</Hint>
-          </Field>
-
-          <Field>
-            <label htmlFor='row-action-property'>To column</label>
-            <StyledSelect
-              id='row-action-property'
-              data-testid='action-config-property'
-              value={property}
-              onChange={e => {
-                setProperty(e.target.value);
-                setValue('');
-              }}
-            >
-              <option value=''>Pick a column…</option>
-              {/* Labelled by human title, the same as the computed-column
-               *  dialog and the column menus. */}
-              {targets.map(p => (
-                <PropertyOption key={p.subject} property={p} />
-              ))}
-            </StyledSelect>
-            {targets.length === 0 && (
-              <Hint>
-                This table has no column of the right kind for that yet.
-              </Hint>
-            )}
-          </Field>
-
-          {valueField && (
-            <Field>
-              <label htmlFor='row-action-value'>{valueField.label}</label>
-              {/* A select column's options are its own tags, so offer those
-               *  rather than asking for a subject to be typed. */}
-              {target && target.allowsOnly?.length ? (
-                <StyledSelect
-                  id='row-action-value'
-                  data-testid='action-config-value'
-                  value={value}
-                  onChange={e => setValue(e.target.value)}
-                >
-                  <option value=''>Pick an option…</option>
-                  {target.allowsOnly.map(tag => (
-                    <TagOption key={tag} subject={tag} />
-                  ))}
-                </StyledSelect>
-              ) : (
-                <InputWrapper>
-                  <InputStyled
-                    id='row-action-value'
-                    data-testid='action-config-value'
-                    type={valueField.input === 'number' ? 'number' : 'text'}
-                    value={value}
-                    onChange={e => setValue(e.target.value)}
-                  />
-                </InputWrapper>
-              )}
-            </Field>
-          )}
-
-          <Field>
-            <label htmlFor='row-action-label'>Button says</label>
-            <InputWrapper>
-              <InputStyled
-                id='row-action-label'
-                data-testid='action-config-label'
-                value={label}
-                placeholder={generator.defaultLabel}
-                onChange={e => setLabel(e.target.value)}
-              />
-            </InputWrapper>
-          </Field>
-        </Fields>
+        <TableRowActionFields
+          kinds={kinds}
+          kind={kind}
+          property={property}
+          label={label}
+          value={value}
+          values={
+            target?.allowsOnly?.map(tag => ({
+              key: tag,
+              option: <TagOption key={tag} subject={tag} />,
+            })) ?? []
+          }
+          onKindChange={next => {
+            setKind(next);
+            setProperty('');
+            setValue('');
+          }}
+          onPropertyChange={next => {
+            setProperty(next);
+            setValue('');
+          }}
+          onValueChange={setValue}
+          onLabelChange={setLabel}
+          Input={ActionInput}
+          messages={{
+            kind: 'Does what',
+            property: 'To column',
+            pickProperty: 'Pick a column…',
+            pickOption: 'Pick an option…',
+            label: 'Button says',
+            noTargets:
+              'This table has no column of the right kind for that yet.',
+          }}
+        />
       </DialogContent>
       <DialogActions>
         <Button subtle onClick={() => hide()}>
@@ -217,32 +174,10 @@ export function TagOption({ subject }: { subject: string }): JSX.Element {
   return <option value={subject}>{shortname ?? tag.title}</option>;
 }
 
-const Fields = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${p => p.theme.size(2)};
-`;
-
-const Field = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${p => p.theme.size(1)};
-
-  label {
-    font-size: 0.85rem;
-    color: ${p => p.theme.colors.textLight};
-  }
-`;
-
-const Hint = styled.span`
-  font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const StyledSelect = styled.select`
-  padding: 0.4rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
-`;
+function ActionInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <InputWrapper>
+      <InputStyled {...props} />
+    </InputWrapper>
+  );
+}
