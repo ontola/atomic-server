@@ -11,8 +11,8 @@ testing. Drive apps use the [host's integration proxy API](../AUTHORIZATION.md).
   exercises the legacy PKCE, one-time redemption and connection-code rotation
   endpoints. The mock handles only synthetic identities and data.
 
-Run the mapper and mock tests from the repository root after installing the
-browser workspace dependencies:
+Install the browser workspace dependencies, then run the mapper and mock tests
+from the repository root.
 
 ```sh
 browser/node_modules/.bin/vitest run --config integrations/localthought/vitest.config.ts
@@ -27,9 +27,10 @@ v38 (`5960ae43`). The proxy changes for User-Agent and pagination are tracked
 in [LocalThought proxy #28](https://github.com/localthought/integration-proxy/pull/28)
 and [#29](https://github.com/localthought/integration-proxy/pull/29).
 
-Google Calendar was verified against v39 after
+Google Calendar was verified against v39 after a fix to OpenAPI server base
+path matching. An import bounded to September 9 through October 9, 2026
+(end exclusive, UTC) fetched 22 calendar-list entries and 32 events.
 [LocalThought proxy #30](https://github.com/localthought/integration-proxy/pull/30)
-fixed matching OpenAPI server base paths. An import bounded to September 9
-through October 9, 2026 (end exclusive, UTC) fetched 22 calendar-list entries
-and 32 events. The current Calendar drive app lives in
+
+The current Calendar drive app lives in
 [Atomic Plugins](https://github.com/ontola/atomic-plugins/tree/main/integrations/calendar).

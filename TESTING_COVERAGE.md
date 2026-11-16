@@ -2050,6 +2050,7 @@ cancelled on teardown. Old plugin-name grants are deliberately not migrated.
 `store_host::destroy_identity_tests` checks the signer of the persisted destroy
 commit. It failed with the server signer before `Resource::destroy_as` was used;
 installation deletion must use the same selected identity as create/update.
+
 Google Calendar one-way projection and its E2E (`google-calendar-import.spec.mts`)
 were removed with the Calendar lens; there is no Calendar import coverage here.
 
