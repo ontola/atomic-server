@@ -1,8 +1,4 @@
-import {
-  type ComponentType,
-  type InputHTMLAttributes,
-  type ReactNode,
-} from 'react';
+import { useId, type ComponentType, type InputHTMLAttributes } from 'react';
 import { styled } from 'styled-components';
 import type {
   QuickAddSpec,
@@ -15,7 +11,7 @@ import type {
 } from './RowActionFields.js';
 import { tableTheme } from './theme.js';
 
-/** The existing flat string draft for the create-button form. */
+/** Raw strings retain unfinished input until validation succeeds. */
 export interface QuickAddDraft {
   label: string;
   withField: boolean;
@@ -24,6 +20,8 @@ export interface QuickAddDraft {
   presetKind: RowActionKind | '';
   presetProperty: string;
   presetValue: string;
+  /** The single-preset editor must not silently drop additional stored presets. */
+  remainingPresets?: QuickAddPreset[];
 }
 export function quickAddDraftFromSpec(
   spec: QuickAddSpec | undefined,
@@ -39,34 +37,70 @@ export function quickAddDraftFromSpec(
     presetKind: preset?.kind ?? '',
     presetProperty: preset?.property ?? '',
     presetValue: preset?.value === undefined ? '' : String(preset.value),
+    remainingPresets: structuredClone(spec?.presets?.slice(1) ?? []),
   };
 }
 
-export function isQuickAddDraftComplete(draft: QuickAddDraft): boolean {
-  return draft.label.trim() !== '';
+function presetIsValid(
+  draft: QuickAddDraft,
+  kinds: readonly TableRowActionKind[],
+) {
+  if (!draft.presetKind) return true;
+  const kind = kinds.find(item => item.kind === draft.presetKind);
+  const target = kind?.targets.find(item => item.key === draft.presetProperty);
+  if (!kind || !target) return false;
+  if (
+    target.values?.length &&
+    !target.values.some(item => item.key === draft.presetValue)
+  )
+    return false;
+  if (!kind.valueField) return true;
+  if (kind.valueField.input !== 'number') return draft.presetValue !== '';
+
+  return (
+    !!draft.presetValue.trim() &&
+    /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(
+      draft.presetValue.trim(),
+    ) &&
+    Number.isFinite(Number(draft.presetValue))
+  );
+}
+
+export function isQuickAddDraftComplete(
+  draft: QuickAddDraft,
+  kinds: readonly TableRowActionKind[],
+  fields: readonly TableRowActionTarget[],
+): boolean {
+  return (
+    !!draft.label.trim() &&
+    (!draft.withField || fields.some(field => field.key === draft.field)) &&
+    presetIsValid(draft, kinds)
+  );
 }
 export function quickAddSpecFromDraft(
   draft: QuickAddDraft,
   kinds: readonly TableRowActionKind[],
+  fields: readonly TableRowActionTarget[],
 ): QuickAddSpec {
+  if (!isQuickAddDraftComplete(draft, kinds, fields))
+    throw Error('Complete the create-button configuration before saving.');
   const generator = kinds.find(kind => kind.kind === draft.presetKind);
-  const first: QuickAddPreset[] =
-    draft.presetKind && draft.presetProperty
-      ? [
-          {
-            kind: draft.presetKind,
-            property: draft.presetProperty,
-            ...(generator?.valueField
-              ? {
-                  value:
-                    generator.valueField.input === 'number'
-                      ? Number(draft.presetValue)
-                      : draft.presetValue,
-                }
-              : {}),
-          },
-        ]
-      : [];
+  const first: QuickAddPreset[] = draft.presetKind
+    ? [
+        {
+          kind: draft.presetKind,
+          property: draft.presetProperty,
+          ...(generator?.valueField
+            ? {
+                value:
+                  generator.valueField.input === 'number'
+                    ? Number(draft.presetValue)
+                    : draft.presetValue,
+              }
+            : {}),
+        },
+      ]
+    : [];
 
   return {
     label: draft.label.trim(),
@@ -74,7 +108,7 @@ export function quickAddSpecFromDraft(
     ...(draft.withField && draft.placeholder.trim()
       ? { placeholder: draft.placeholder.trim() }
       : {}),
-    presets: first,
+    presets: [...first, ...structuredClone(draft.remainingPresets ?? [])],
   };
 }
 export interface TableQuickAddFieldsProps {
@@ -82,7 +116,7 @@ export interface TableQuickAddFieldsProps {
   onChange: (draft: QuickAddDraft) => void;
   kinds: readonly TableRowActionKind[];
   fields: readonly TableRowActionTarget[];
-  presetValues: readonly { key: string; option: ReactNode }[];
+  disabled?: boolean;
   Input?: ComponentType<InputHTMLAttributes<HTMLInputElement>>;
   Checkbox?: ComponentType<{
     checked: boolean;
@@ -103,6 +137,8 @@ export interface TableQuickAddFieldsProps {
     fieldPlaceholder: string;
     fieldHint: string;
     value: string;
+    invalidPreset: string;
+    additionalPresets: string;
   }>;
 }
 /** Actual create-button fields shared by table and dashboard configuration. */
@@ -111,16 +147,20 @@ export function TableQuickAddFields({
   onChange,
   kinds,
   fields,
-  presetValues,
+  disabled,
   Input = DefaultInput,
   Checkbox = DefaultCheckbox,
   messages,
 }: TableQuickAddFieldsProps) {
+  const id = useId();
   const set = (patch: Partial<QuickAddDraft>) =>
     onChange({ ...draft, ...patch });
   const generator = kinds.find(kind => kind.kind === draft.presetKind);
-  const presetTarget = { values: presetValues };
+  const presetTarget = generator?.targets.find(
+    target => target.key === draft.presetProperty,
+  );
   const needsValue = generator?.valueField !== undefined;
+  const presetValid = presetIsValid(draft, kinds);
   const text = {
     label: 'Button says',
     withField: 'Ask for a value first',
@@ -136,16 +176,22 @@ export function TableQuickAddFields({
     fieldHint:
       'On for a list you name things in; off for a button you just press.',
     value: 'Value',
+    invalidPreset: 'Choose a compatible column and a valid preset value.',
+    additionalPresets:
+      'Additional stored presets are retained. This form edits the first preset.',
     ...messages,
   };
 
   return (
-    <>
+    <Fields disabled={disabled}>
+      {!!draft.remainingPresets?.length && (
+        <Hint>{text.additionalPresets}</Hint>
+      )}
       <Field>
-        <label htmlFor={'quick-add-label'}>{text.label}</label>
+        <label htmlFor={`${id}-quick-add-label`}>{text.label}</label>
         <>
           <Input
-            id={'quick-add-label'}
+            id={`${id}-quick-add-label`}
             data-testid='quick-add-config-label'
             value={draft.label}
             placeholder={text.labelPlaceholder}
@@ -169,9 +215,9 @@ export function TableQuickAddFields({
       {draft.withField && (
         <>
           <Field>
-            <label htmlFor={'quick-add-field'}>{text.field}</label>
+            <label htmlFor={`${id}-quick-add-field`}>{text.field}</label>
             <StyledSelect
-              id={'quick-add-field'}
+              id={`${id}-quick-add-field`}
               data-testid='quick-add-config-field'
               value={draft.field}
               onChange={e => set({ field: e.target.value })}
@@ -180,10 +226,12 @@ export function TableQuickAddFields({
             </StyledSelect>
           </Field>
           <Field>
-            <label htmlFor={'quick-add-placeholder'}>{text.placeholder}</label>
+            <label htmlFor={`${id}-quick-add-placeholder`}>
+              {text.placeholder}
+            </label>
             <>
               <Input
-                id={'quick-add-placeholder'}
+                id={`${id}-quick-add-placeholder`}
                 data-testid='quick-add-config-placeholder'
                 value={draft.placeholder}
                 placeholder={draft.label || text.fieldPlaceholder}
@@ -195,9 +243,9 @@ export function TableQuickAddFields({
       )}
 
       <Field>
-        <label htmlFor={'quick-add-preset-kind'}>{text.preset}</label>
+        <label htmlFor={`${id}-quick-add-preset-kind`}>{text.preset}</label>
         <StyledSelect
-          id={'quick-add-preset-kind'}
+          id={`${id}-quick-add-preset-kind`}
           data-testid='quick-add-config-preset'
           value={draft.presetKind}
           onChange={e =>
@@ -222,9 +270,11 @@ export function TableQuickAddFields({
 
       {draft.presetKind && (
         <Field>
-          <label htmlFor={'quick-add-preset-property'}>{text.property}</label>
+          <label htmlFor={`${id}-quick-add-preset-property`}>
+            {text.property}
+          </label>
           <StyledSelect
-            id={'quick-add-preset-property'}
+            id={`${id}-quick-add-preset-property`}
             data-testid='quick-add-config-preset-property'
             value={draft.presetProperty}
             onChange={e =>
@@ -239,14 +289,14 @@ export function TableQuickAddFields({
 
       {draft.presetKind && needsValue && (
         <Field>
-          <label htmlFor={'quick-add-preset-value'}>
+          <label htmlFor={`${id}-quick-add-preset-value`}>
             {generator?.valueField?.label ?? text.value}
           </label>
           {/* A select column's options are its own tags, so offer those rather
            *  than asking for a subject to be typed. */}
           {presetTarget?.values?.length ? (
             <StyledSelect
-              id={'quick-add-preset-value'}
+              id={`${id}-quick-add-preset-value`}
               data-testid='quick-add-config-preset-value'
               value={draft.presetValue}
               onChange={e => set({ presetValue: e.target.value })}
@@ -257,11 +307,15 @@ export function TableQuickAddFields({
           ) : (
             <>
               <Input
-                id={'quick-add-preset-value'}
+                id={`${id}-quick-add-preset-value`}
                 data-testid='quick-add-config-preset-value'
-                type={
-                  generator?.valueField?.input === 'number' ? 'number' : 'text'
+                type='text'
+                inputMode={
+                  generator?.valueField?.input === 'number'
+                    ? 'decimal'
+                    : undefined
                 }
+                aria-invalid={!presetValid}
                 value={draft.presetValue}
                 onChange={e => set({ presetValue: e.target.value })}
               />
@@ -269,14 +323,15 @@ export function TableQuickAddFields({
           )}
         </Field>
       )}
-    </>
+      {!presetValid && <Hint role='alert'>{text.invalidPreset}</Hint>}
+    </Fields>
   );
 }
 
 const Field = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${p => tableTheme(p.theme).size(1)};
+  gap: 0.5rem;
 
   label {
     font-size: 0.85rem;
@@ -304,6 +359,14 @@ const StyledSelect = styled.select`
   color: ${p => tableTheme(p.theme).colors.text};
 `;
 
+const Fields = styled.fieldset`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0;
+  margin: 0;
+  border: 0;
+`;
 const DefaultInput = styled.input`
   padding: 0.4rem;
   border: 1px solid ${p => tableTheme(p.theme).colors.bg2};

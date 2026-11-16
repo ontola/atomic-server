@@ -57,14 +57,19 @@ export function draftFromSpec(spec: QuickAddSpec | undefined): QuickAddDraft {
 }
 export function specFromDraft(
   draft: QuickAddDraft,
-  properties: Property[] = [],
+  properties: Property[],
 ): QuickAddSpec {
   const model = options(properties);
 
-  return quickAddSpecFromDraft(draft, model.kinds);
+  return quickAddSpecFromDraft(draft, model.kinds, model.fields);
 }
-export function isQuickAddDraftComplete(draft: QuickAddDraft): boolean {
-  return complete(draft);
+export function isQuickAddDraftComplete(
+  draft: QuickAddDraft,
+  properties: Property[],
+): boolean {
+  const model = options(properties);
+
+  return complete(draft, model.kinds, model.fields);
 }
 export function QuickAddFields({
   draft,
@@ -80,14 +85,6 @@ export function QuickAddFields({
       draft={draft}
       onChange={onChange}
       {...options(classProperties)}
-      presetValues={
-        classProperties
-          .find(candidate => candidate.subject === draft.presetProperty)
-          ?.allowsOnly?.map(tag => ({
-            key: tag,
-            option: <TagOption key={tag} subject={tag} />,
-          })) ?? []
-      }
       Input={AtomicQuickAddInput}
       Checkbox={Checkbox}
       messages={{
@@ -105,6 +102,9 @@ export function QuickAddFields({
         fieldHint:
           'On for a list you name things in; off for a button you just press.',
         value: 'Value',
+        invalidPreset: 'Choose a compatible column and a valid preset value.',
+        additionalPresets:
+          'Additional stored presets are retained. This form edits the first preset.',
       }}
     />
   );

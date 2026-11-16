@@ -6,6 +6,7 @@ import {
   TableQuickAddFields,
   quickAddDraftFromSpec,
   quickAddSpecFromDraft,
+  isQuickAddDraftComplete,
   type QuickAddDraft,
 } from './QuickAddFields.js';
 import type { TableRowActionKind } from './RowActionFields.js';
@@ -62,12 +63,51 @@ const valid = (): QuickAddDraft => ({
   presetProperty: 'count',
   presetValue: '0',
 });
-it('retains native numeric input and delegates preset changes through the existing flat draft', () => {
+it('rejects incomplete numeric and incompatible presets without coercing them into writes', () => {
+  for (const value of ['', '-', '1e', 'Infinity', '0x10', '1e999']) {
+    const draft = { ...valid(), presetValue: value };
+    expect(isQuickAddDraftComplete(draft, kinds, fields)).toBe(false);
+    expect(() => quickAddSpecFromDraft(draft, kinds, fields)).toThrow();
+  }
+
+  expect(
+    isQuickAddDraftComplete(
+      { ...valid(), presetProperty: 'missing' },
+      kinds,
+      fields,
+    ),
+  ).toBe(false);
+  expect(
+    isQuickAddDraftComplete({ ...valid(), field: 'missing' }, kinds, fields),
+  ).toBe(false);
+  expect(quickAddSpecFromDraft(valid(), kinds, fields).presets).toEqual([
+    { kind: 'increment', property: 'count', value: 0 },
+  ]);
+  expect(
+    quickAddSpecFromDraft({ ...valid(), withField: false }, kinds, fields)
+      .field,
+  ).toBeUndefined();
+});
+it('preserves stored presets beyond the first and captures their own values', () => {
+  const spec = {
+    label: 'Create',
+    presets: [
+      { kind: 'increment' as const, property: 'count', value: 2 },
+      { kind: 'toggle' as const, property: 'done' },
+    ],
+  };
+  const draft = quickAddDraftFromSpec(spec, 'name');
+  draft.label = 'Updated';
+  expect(quickAddSpecFromDraft(draft, kinds, fields)).toEqual({
+    ...spec,
+    label: 'Updated',
+  });
+  draft.remainingPresets![0].property = 'other';
+  expect(spec.presets[1].property).toBe('done');
+});
+it('retains raw input and resets target and literal when changing the preset verb', () => {
   function Editor() {
-    const [draft, setDraft] = useState(() => ({
-      ...valid(),
-      presetValue: '1',
-    }));
+    const [draft, setDraft] = useState(valid);
 
     return (
       <>
@@ -76,7 +116,6 @@ it('retains native numeric input and delegates preset changes through the existi
           onChange={setDraft}
           kinds={kinds}
           fields={fields}
-          presetValues={[]}
         />
         <output data-testid='state'>{JSON.stringify(draft)}</output>
       </>
@@ -84,20 +123,20 @@ it('retains native numeric input and delegates preset changes through the existi
   }
 
   render(<Editor />);
-  fireEvent.change(screen.getByRole('spinbutton', { name: 'By' }), {
-    target: { value: '0' },
-  });
-  let draft = JSON.parse(screen.getByTestId('state').textContent!);
-  expect(quickAddSpecFromDraft(draft, kinds).presets).toEqual([
-    { kind: 'increment', property: 'count', value: 0 },
-  ]);
+  fireEvent.change(screen.getByLabelText('By'), { target: { value: '-' } });
+  expect((screen.getByLabelText('By') as HTMLInputElement).value).toBe('-');
+  expect(screen.getByRole('alert')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Also set'), {
     target: { value: 'toggle' },
   });
-  draft = JSON.parse(screen.getByTestId('state').textContent!);
+  const draft = JSON.parse(screen.getByTestId('state').textContent!);
   expect(draft).toMatchObject({
     presetKind: 'toggle',
     presetProperty: '',
     presetValue: '',
   });
+  fireEvent.change(screen.getByLabelText('On column'), {
+    target: { value: 'done' },
+  });
+  expect(screen.queryByRole('alert')).toBeNull();
 });
