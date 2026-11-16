@@ -274,3 +274,12 @@ export {
   TableColumnRemovalDialog,
   type TableColumnRemovalDialogProps,
 } from './schema/ColumnRemovalDialog.js';
+export {
+  PropertyPrecisionField,
+  type PropertyPrecisionFieldProps,
+} from './schema/PropertyPrecisionField.js';
+export {
+  PropertyDateFormatField,
+  type PropertyDateFormatFieldProps,
+  type PropertyDateFormatOption,
+} from './schema/PropertyDateFormatField.js';
