@@ -220,6 +220,7 @@ export function VaultPanel({
                 text: (
                   <>
                     {backupSummary}
+                    {' · '}
                     <ErrorText>{error}</ErrorText>
                   </>
                 ),
