@@ -358,3 +358,8 @@ fresh UI; already accepted writes finish against their captured backend and late
 successes do not notify the new page. Failed values stay visible with their error
 and are never retried automatically. Backend adapters retain creation defaults,
 validation, identity and persistence policy.
+
+`TableRowActionFields` owns row-action configuration fields, compatible target and
+tag choices, target/literal resets, raw finite-decimal validation and stable local
+action identity. Adapters provide compatibility and subscribed option elements;
+execution and dialog lifecycle remain backend/host responsibilities.

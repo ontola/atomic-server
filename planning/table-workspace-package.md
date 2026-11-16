@@ -626,3 +626,25 @@ most one save active and newly typed text preserved. Changed new control and
 adapters have clean compiler checks; TableResource retains its existing rule
 suppression diagnostic. Screenshots remain outside Git in
 `/workspace/artifacts/table-quick-add`.
+
+
+### Shared action configuration fields
+
+Extract the actual row-action fields into `TableRowActionFields`: action kind,
+compatible property and tag selections, button label and literal/step input.
+Kind/property changes clear the previous target/literal as appropriate. Raw
+numeric text remains editable and blocks Save until it is a finite decimal;
+zero is preserved. Local edits keep their original action identity when incoming
+metadata rerenders the editor. Metadata adapters supply subscribed option labels,
+compatibility and backend execution. The dialog lifecycle remains host-bound.
+
+Native shared quick-add adoption is now merged in database-apps #118. Native
+configured row actions remain explicitly unsupported. Full page/renderer adoption
+and catalog/lens discovery remain unfinished.
+
+Action-field validation: all 185 package tests and 149 Atomic adapter tests,
+package/host typechecks, packed external consumer and changed-component compiler
+checks pass. Actual SDK desktop/mobile verification retains `-` with Save
+blocked, then independently reads numeric `0` from the saved action metadata.
+The Atomic input wrapper is retained for its existing border/focus styling.
+Screenshots remain outside Git in `/workspace/artifacts/table-row-action-fields`.

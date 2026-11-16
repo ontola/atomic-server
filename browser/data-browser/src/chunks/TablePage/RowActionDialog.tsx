@@ -1,5 +1,11 @@
 import { core, useResource, useString, type Property } from '@tomic/react';
-import { useEffect, useState, type JSX, type InputHTMLAttributes } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type InputHTMLAttributes,
+  type JSX,
+} from 'react';
 import { TableRowActionFields } from '@tomic/table';
 import {
   Dialog,
@@ -14,10 +20,8 @@ import { PropertyOption } from './DerivedColumnDialog';
 import {
   ROW_ACTION_GENERATORS,
   ROW_ACTION_KINDS,
-  isRowActionComplete,
   propertiesForRowAction,
   rowActionValueInput,
-  type RowActionKind,
   type RowActionSpec,
 } from './rowActions';
 
@@ -42,69 +46,34 @@ export function RowActionDialog({
   editing,
   onSave,
 }: Props): JSX.Element {
-  const [dialogProps, show, hide, isOpen] = useDialog({ bindShow });
-
-  const [kind, setKind] = useState<RowActionKind>('setNow');
-  const [label, setLabel] = useState('');
-  const [property, setProperty] = useState('');
-  const [value, setValue] = useState('');
-
+  const [state, setState] = useState<{
+    draft: RowActionSpec;
+    valid: boolean;
+  }>();
+  const clear = useCallback(() => setState(undefined), []);
+  const [dialogProps, show, hide, isOpen] = useDialog({
+    bindShow,
+    onCancel: clear,
+    onSuccess: clear,
+  });
   useEffect(() => {
-    if (open) {
-      show();
-    }
+    if (open) show();
   }, [open, show]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    setKind(editing?.kind ?? 'setNow');
-    setLabel(editing?.label ?? '');
-    setProperty(editing?.property ?? '');
-    setValue(editing?.value === undefined ? '' : String(editing.value));
-    // Only on open: re-syncing while the dialog is up would overwrite what is
-    // being typed every time a commit lands.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
-  const generator = ROW_ACTION_GENERATORS[kind];
-  const valueField = rowActionValueInput(kind);
-  const target = classProperties.find(p => p.subject === property);
-
-  const kinds = ROW_ACTION_KINDS.map(actionKind => ({
-    kind: actionKind,
-    title: ROW_ACTION_GENERATORS[actionKind].title,
-    description: ROW_ACTION_GENERATORS[actionKind].description,
-    defaultLabel: ROW_ACTION_GENERATORS[actionKind].defaultLabel,
-    valueField: rowActionValueInput(actionKind),
-    targets: propertiesForRowAction(classProperties, actionKind).map(
-      candidate => ({
-        key: candidate.subject,
-        option: <PropertyOption key={candidate.subject} property={candidate} />,
-        values: candidate.allowsOnly?.map(tag => ({
-          key: tag,
-          option: <TagOption key={tag} subject={tag} />,
-        })),
-      }),
-    ),
-  }));
-
-  const draft: RowActionSpec = {
-    id: editing?.id ?? '',
-    label: label || generator.defaultLabel,
+  const kinds = ROW_ACTION_KINDS.map(kind => ({
     kind,
-    property,
-    ...(valueField
-      ? {
-          value:
-            valueField.input === 'number' ? Number(value) : (value as string),
-        }
-      : {}),
-  };
-
-  const complete = isRowActionComplete(draft) && !!property;
+    title: ROW_ACTION_GENERATORS[kind].title,
+    description: ROW_ACTION_GENERATORS[kind].description,
+    defaultLabel: ROW_ACTION_GENERATORS[kind].defaultLabel,
+    valueField: rowActionValueInput(kind),
+    targets: propertiesForRowAction(classProperties, kind).map(property => ({
+      key: property.subject,
+      option: <PropertyOption key={property.subject} property={property} />,
+      values: property.allowsOnly?.map(tag => ({
+        key: tag,
+        option: <TagOption key={tag} subject={tag} />,
+      })),
+    })),
+  }));
 
   return (
     <Dialog {...dialogProps}>
@@ -112,40 +81,24 @@ export function RowActionDialog({
         <h2>{editing ? 'Edit action' : 'Add an action'}</h2>
       </DialogTitle>
       <DialogContent>
-        <TableRowActionFields
-          kinds={kinds}
-          kind={kind}
-          property={property}
-          label={label}
-          value={value}
-          values={
-            target?.allowsOnly?.map(tag => ({
-              key: tag,
-              option: <TagOption key={tag} subject={tag} />,
-            })) ?? []
-          }
-          onKindChange={next => {
-            setKind(next);
-            setProperty('');
-            setValue('');
-          }}
-          onPropertyChange={next => {
-            setProperty(next);
-            setValue('');
-          }}
-          onValueChange={setValue}
-          onLabelChange={setLabel}
-          Input={ActionInput}
-          messages={{
-            kind: 'Does what',
-            property: 'To column',
-            pickProperty: 'Pick a column…',
-            pickOption: 'Pick an option…',
-            label: 'Button says',
-            noTargets:
-              'This table has no column of the right kind for that yet.',
-          }}
-        />
+        {isOpen && (
+          <TableRowActionFields
+            initial={editing}
+            kinds={kinds}
+            Input={ActionInput}
+            onChange={(draft, valid) => setState({ draft, valid })}
+            messages={{
+              kind: 'Does what',
+              property: 'To column',
+              pickProperty: 'Pick a column…',
+              pickOption: 'Pick an option…',
+              label: 'Button says',
+              noTargets:
+                'This table has no column of the right kind for that yet.',
+              invalidNumber: 'Enter a finite number.',
+            }}
+          />
+        )}
       </DialogContent>
       <DialogActions>
         <Button subtle onClick={() => hide()}>
@@ -153,9 +106,10 @@ export function RowActionDialog({
         </Button>
         <Button
           data-testid='action-config-save'
-          disabled={!complete}
+          disabled={!state?.valid}
           onClick={() => {
-            onSave(draft);
+            if (!state?.valid) return;
+            onSave(state.draft);
             hide();
           }}
         >
