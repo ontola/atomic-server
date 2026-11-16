@@ -198,8 +198,6 @@ export type BlobBackupOutcome = {
   tooLarge: number;
   /** Sealed bytes uploaded. */
   bytesUploaded: number;
-  /** Whether this pass told the control plane which files are still live. */
-  retained: boolean;
 };
 
 export type BackupOutcome =
@@ -654,7 +652,7 @@ export type VaultUsage = {
   used_bytes: number;
   quota_bytes: number;
   by_kind: VaultUsageCategory[];
-  /** Superseded history and unused files; freeing these loses nothing. */
+  /** Superseded history; freeing it loses nothing. */
   reclaimable_bytes: number;
   reclaimable_objects: number;
   /** Extra bytes kept only so a recently deleted item can come back. */
@@ -1058,16 +1056,7 @@ async function backupSegment({
   };
 }
 
-type BackupDriveArgs = Parameters<typeof backupSegment>[0] & {
-  /**
-   * Publish this device's live file set so the control plane can reclaim files
-   * no File resource references any more. Only an explicit, authoritative
-   * action passes this ("Compress now", "Discard history"); an ordinary
-   * backup must not, because a device with an incomplete replica would start
-   * the undelete clock on files other devices still use.
-   */
-  retainBlobs?: boolean;
-};
+type BackupDriveArgs = Parameters<typeof backupSegment>[0];
 
 /**
  * Back a drive up: its sealed history, then the sealed bytes of its files.
@@ -1089,7 +1078,6 @@ export async function backupDrive(
     drivePseudonym: args.drivePseudonym,
     driveKey: args.driveKey,
     keyEpoch: args.keyEpoch ?? 1,
-    retainBlobs: args.retainBlobs,
     beforeNetworkWrite: args.beforeNetworkWrite,
   });
 
@@ -1181,10 +1169,10 @@ function idCache(drivePseudonym: string) {
  * whole file at a time; JS only ever holds one sealed chunk (8 MiB, at most
  * 64 MiB) of it.
  *
- * `retain-blobs` runs only with `retainBlobs` (an explicit compress), and only
- * when every file a File resource references resolved to an id on this device
- * and nothing failed: a short live set would start the undelete clock on files
- * that are still wanted. An ordinary backup never calls it.
+ * This never asks the control plane to drop a file. A local inventory can
+ * omit a blob that a retained checkpoint or another device's pack still needs,
+ * so deleted files stay in the vault (and keep counting) until a design that
+ * accounts for both exists.
  *
  * Returns `undefined` when the db cannot read files (an app without a local
  * store), which is a different answer from "nothing to do".
@@ -1196,7 +1184,6 @@ export async function backupBlobs({
   drivePseudonym,
   driveKey,
   keyEpoch,
-  retainBlobs = false,
   beforeNetworkWrite,
 }: {
   db: VaultCapableDb;
@@ -1205,7 +1192,6 @@ export async function backupBlobs({
   drivePseudonym: string;
   driveKey: Uint8Array;
   keyEpoch: number;
-  retainBlobs?: boolean;
   beforeNetworkWrite?: () => Promise<void>;
 }): Promise<BlobBackupOutcome | undefined> {
   if (
@@ -1224,9 +1210,7 @@ export async function backupBlobs({
     missing: 0,
     tooLarge: 0,
     bytesUploaded: 0,
-    retained: false,
   };
-  const live: string[] = [];
   const cache = idCache(drivePseudonym);
 
   signal?.throwIfAborted();
@@ -1251,7 +1235,6 @@ export async function backupBlobs({
       keyEpoch,
       files,
       outcome,
-      live,
       cache,
       beforeNetworkWrite,
     });
@@ -1268,7 +1251,6 @@ export async function backupBlobs({
 
       if (known && isContiguous(stored.get(known))) {
         outcome.alreadyStored++;
-        live.push(known);
         continue;
       }
 
@@ -1289,7 +1271,6 @@ export async function backupBlobs({
 
       if (plan.chunks.every(c => have?.has(c.index))) {
         outcome.alreadyStored++;
-        live.push(plan.blobId);
         continue;
       }
 
@@ -1307,31 +1288,6 @@ export async function backupBlobs({
     cache.save();
   }
 
-  // Complete only when each referenced file is accounted for: stored (live),
-  // or too large to ever be stored. A file this device cannot read could be
-  // someone else's live blob, so its absence from the set is not "unused".
-  if (!retainBlobs || outcome.missing > 0) return outcome;
-
-  signal?.throwIfAborted();
-  await beforeNetworkWrite?.();
-
-  try {
-    await api(`/cloud-vault/${drivePseudonym}/retain-blobs`, {
-      method: 'POST',
-      signal,
-      body: JSON.stringify({ hashes: [...new Set(live)] }),
-    });
-    outcome.retained = true;
-  } catch (error) {
-    if (error instanceof VaultSessionEndedError) throw error;
-    signal?.throwIfAborted();
-    // The files are safe; only freeing deleted ones waits for the next compress.
-    console.warn(
-      'Vault retain-blobs failed; deleted files stay stored.',
-      error,
-    );
-  }
-
   return outcome;
 }
 
@@ -1343,7 +1299,6 @@ async function uploadBlobBatch({
   keyEpoch,
   files,
   outcome,
-  live,
   cache,
   beforeNetworkWrite,
 }: {
@@ -1354,7 +1309,6 @@ async function uploadBlobBatch({
   keyEpoch: number;
   files: ReadyFile[];
   outcome: BlobBackupOutcome;
-  live: string[];
   cache: ReturnType<typeof idCache>;
   beforeNetworkWrite?: () => Promise<void>;
 }): Promise<void> {
@@ -1438,7 +1392,6 @@ async function uploadBlobBatch({
       outcome.alreadyStored++;
     }
 
-    live.push(plan.blobId);
     cache.set(hash, plan.blobId);
   }
 }
@@ -2052,8 +2005,6 @@ export function runVaultBackup(args: {
   forceCheckpoint?: boolean;
   /** Make that checkpoint keep only the current state. See {@link backupDrive}. */
   currentStateOnly?: boolean;
-  /** Publish the live file set. Only an explicit compress passes this. */
-  retainBlobs?: boolean;
 }): Promise<BackupOutcome> {
   const existing = inFlight.get(args.drivePseudonym);
 

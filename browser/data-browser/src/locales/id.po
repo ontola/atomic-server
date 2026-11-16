@@ -11593,11 +11593,6 @@ msgstr "Kolom tabel wajib tidak ada dalam formulir ini:{0} {1} . Respons tidak d
 msgid "Reading what is stored…"
 msgstr "Membaca data yang tersimpan…"
 
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} riwayat lama dan file yang tidak digunakan dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."
-
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} is kept only so recently deleted items can be brought back. Freeing it means those cannot be restored."
@@ -13546,3 +13541,8 @@ msgstr "Cadangan terenkripsi untuk data dan berkas Anda. Hanya Anda yang dapat m
 #: src/components/Vault/VaultPanel.tsx
 msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
 msgstr "Berkas disertakan. Berkas dienkripsi di perangkat ini seperti yang lainnya dan dihitung ke dalam penyimpanan Cloud Vault cadangan ini."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."

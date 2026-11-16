@@ -27,7 +27,7 @@ Files (uploads, images, attachments) are included and are encrypted on your devi
 A file that appears several times in one backup is stored once.
 Files count toward the storage of the backup that holds them.
 Two backups that happen to hold the same file store it separately, and nothing in the cloud links them.
-When you use *Compress now*, files that no longer exist in your drive are removed from the cloud after a short window in which a deletion can still be undone.
+Files you delete from your drive stay in the Cloud Vault, and keep counting toward its storage, until a later version can safely reclaim them. *Compress now* and *Discard history* free old history, not files.
 
 If a file is not on the device that runs the backup, it cannot be backed up from there.
 A restore, including a restore to an earlier snapshot, says how many files it could not bring back.

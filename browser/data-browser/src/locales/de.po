@@ -11593,11 +11593,6 @@ msgstr "Erforderliche Tabellenspalten fehlen in diesem Formular:{0} {1}. Ohne si
 msgid "Reading what is stored…"
 msgstr "Gespeicherte Inhalte werden gelesen …"
 
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} alte Verlaufsdaten und ungenutzte Dateien können entfernt werden. Sichtbare Inhalte bleiben erhalten."
-
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} is kept only so recently deleted items can be brought back. Freeing it means those cannot be restored."
@@ -13554,3 +13549,8 @@ msgstr "Verschlüsselte Sicherung deiner Daten und Dateien. Nur du kannst sie le
 #: src/components/Vault/VaultPanel.tsx
 msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
 msgstr "Dateien sind enthalten. Sie werden auf diesem Gerät verschlüsselt wie alles andere und zählen zum Cloud-Vault-Speicher dieser Sicherung."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} alte Verlaufsdaten können entfernt werden. Sichtbare Inhalte bleiben erhalten."

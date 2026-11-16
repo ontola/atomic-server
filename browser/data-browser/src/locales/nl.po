@@ -11596,11 +11596,6 @@ msgstr "Verplichte tabelkolommen ontbreken in dit formulier:{0} {1} . Zonder dez
 msgid "Reading what is stored…"
 msgstr "Lezen wat is opgeslagen…"
 
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} aan oude geschiedenis en ongebruikte bestanden kan worden verwijderd. Niets wat je kunt zien gaat verloren."
-
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} is kept only so recently deleted items can be brought back. Freeing it means those cannot be restored."
@@ -13557,3 +13552,8 @@ msgstr "Versleutelde back-up van je gegevens en bestanden. Alleen jij kunt deze 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
 msgstr "Bestanden zijn inbegrepen. Ze worden op dit apparaat versleuteld, net als al het andere, en tellen mee voor de Cloud Vault-opslag van deze back-up."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien gaat verloren."

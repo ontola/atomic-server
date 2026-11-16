@@ -13,8 +13,8 @@ import {
  * Hashing, chunking, sealing and opening are Rust (`atomic_lib::vault::sync`,
  * tested there, including the two-vault and corruption cases). These cover
  * what only TypeScript does: which requests go out in which order, that only
- * sealed bytes are uploaded, which ids `retain-blobs` is told are live and
- * when, and how a restore counts what it found.
+ * sealed bytes are uploaded, that `retain-blobs` is never called, and how a
+ * restore counts what it found.
  */
 
 const PSEUDONYM = 'testpseudonym';
@@ -347,54 +347,40 @@ describe('backing up file bytes', () => {
     expect(db.vaultBlobClose).toHaveBeenCalled();
   });
 
-  it('never publishes a live set during an ordinary backup', async () => {
-    const db = fakeDb({ [HASH_A]: new Uint8Array(4) });
-    const p = portal();
-
-    const outcome = await backupDrive({ db, ...PASS });
-
-    expect(outcome.blobs).toMatchObject({ uploaded: 1, retained: false });
-    expect(urls(p, '/retain-blobs')).toHaveLength(0);
-  });
-
-  it('publishes the live ids, last, when an explicit compress asks for it', async () => {
+  it('never calls retain-blobs, however many files are backed up', async () => {
     const db = fakeDb({
       [HASH_A]: new Uint8Array(4),
       [HASH_B]: new Uint8Array(4),
     });
     const p = portal();
 
-    const outcome = await backupDrive({ db, ...PASS, retainBlobs: true });
+    const outcome = await backupDrive({ db, ...PASS });
 
-    expect(outcome.blobs).toMatchObject({ uploaded: 2, retained: true });
-    expect(p.calls.at(-1)!.url).toMatch(/\/retain-blobs$/);
-    expect(p.retain).toEqual([[idOf(HASH_A), idOf(HASH_B)]]);
-  });
-
-  it('does not publish a live set when this device lacks a referenced file', async () => {
-    // B is referenced but neither on this device nor known: its id is unknown,
-    // so leaving it out of the set could start the delete clock on a file
-    // another device uses.
-    const db = fakeDb({ [HASH_A]: new Uint8Array(4) }, [HASH_A, HASH_B]);
-    const p = portal();
-
-    const outcome = await backupDrive({ db, ...PASS, retainBlobs: true });
-
-    expect(outcome.blobs).toMatchObject({
-      uploaded: 1,
-      missing: 1,
-      retained: false,
-    });
+    expect(outcome.blobs).toMatchObject({ uploaded: 2 });
     expect(urls(p, '/retain-blobs')).toHaveLength(0);
   });
 
-  it('publishes an empty live set once every file is gone, so references drop', async () => {
+  it('does not issue a request that could drop a photo another device added', async () => {
+    // Device B added HASH_B and the vault holds its blob. Device A has not
+    // synced it (it is neither referenced nor on disk here) and runs a
+    // checkpoint pass, as "Compress now" does.
+    const db = fakeDb({ [HASH_A]: new Uint8Array(4) });
+    const p = portal({ objects: [stored(HASH_B, 0)] });
+
+    await backupDrive({ db, ...PASS });
+
+    expect(urls(p, '/retain-blobs')).toHaveLength(0);
+    expect(p.retain).toHaveLength(0);
+    expect(p.calls.some(c => c.method === 'DELETE')).toBe(false);
+  });
+
+  it('does not call retain-blobs with an empty file set either', async () => {
     const db = fakeDb({}, []);
     const p = portal();
 
-    await backupDrive({ db, ...PASS, retainBlobs: true });
+    await backupDrive({ db, ...PASS });
 
-    expect(p.retain).toEqual([[]]);
+    expect(urls(p, '/retain-blobs')).toHaveLength(0);
   });
 
   it('does not read, upload or confirm a file this vault already holds', async () => {
@@ -419,12 +405,11 @@ describe('backing up file bytes', () => {
     // The vault now lists what the first pass uploaded.
     p.objects = [0, 1, 2].map(i => stored(HASH_A, i));
     db.vaultBlobOpen.mockClear();
-    const second = await backupDrive({ db, ...PASS, retainBlobs: true });
+    const second = await backupDrive({ db, ...PASS });
 
     expect(db.vaultBlobOpen).not.toHaveBeenCalled();
     expect(second.blobs).toMatchObject({ alreadyStored: 1, uploaded: 0 });
-    // Known without the bytes, so this device can still publish a full set.
-    expect(p.retain).toEqual([[idOf(HASH_A)]]);
+    expect(p.retain).toHaveLength(0);
   });
 
   it('sends only the chunks the vault does not hold yet', async () => {
@@ -447,9 +432,9 @@ describe('backing up file bytes', () => {
     const db = fakeDb({ [HASH_A]: new Uint8Array(4) });
     const p = portal({ putStatus: 500 });
 
-    await expect(
-      backupDrive({ db, ...PASS, retainBlobs: true }),
-    ).rejects.toThrow('Vault file upload failed (500)');
+    await expect(backupDrive({ db, ...PASS })).rejects.toThrow(
+      'Vault file upload failed (500)',
+    );
 
     expect(urls(p, '/confirm-upload')).toHaveLength(0);
     expect(p.retain).toHaveLength(0);
@@ -482,7 +467,7 @@ describe('backing up file bytes', () => {
     expect(sizes).toEqual([2, 2]);
   });
 
-  it('reports files too large for a vault and leaves them out of the live set', async () => {
+  it('reports files too large for a vault', async () => {
     const db = fakeDb({ [HASH_A]: new Uint8Array(4) });
     db.vaultBlobOpen.mockResolvedValueOnce({
       status: 'tooLarge',
@@ -492,32 +477,10 @@ describe('backing up file bytes', () => {
     });
     const p = portal();
 
-    const outcome = await backupDrive({ db, ...PASS, retainBlobs: true });
+    const outcome = await backupDrive({ db, ...PASS });
 
     expect(outcome.blobs).toMatchObject({ tooLarge: 1, uploaded: 0 });
-    expect(p.retain).toEqual([[]]);
-  });
-
-  it('keeps a failed retain-blobs from failing a backup whose files are safe', async () => {
-    const db = fakeDb({ [HASH_A]: new Uint8Array(4) });
-    portal();
-    const fetchMock = vi.mocked(fetch);
-    const inner = fetchMock.getMockImplementation()!;
-
-    fetchMock.mockImplementation(async (url, init) =>
-      String(url).endsWith('/retain-blobs')
-        ? ({
-            ok: false,
-            status: 500,
-            json: async () => ({ error: 'boom' }),
-          } as Response)
-        : inner(url, init),
-    );
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    await expect(
-      backupDrive({ db, ...PASS, retainBlobs: true }),
-    ).resolves.toMatchObject({ blobs: { uploaded: 1, retained: false } });
+    expect(p.retain).toHaveLength(0);
   });
 
   it('leaves a db without file support alone', async () => {

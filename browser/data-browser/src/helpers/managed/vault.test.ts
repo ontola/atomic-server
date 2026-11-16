@@ -1753,6 +1753,10 @@ describe('compacting the backup', () => {
 
       if (url.endsWith('/free-up')) return freeUp();
 
+      if (url.endsWith('/objects')) {
+        return { ok: true, status: 200, json: async () => [] };
+      }
+
       if (url.endsWith('/state')) {
         return {
           ok: true,
@@ -1879,6 +1883,34 @@ describe('compacting the backup', () => {
 
       // Argument 10 is currentStateOnly: "Compress now" keeps the history.
       expect(db.vaultExport.mock.calls[0][9]).toBe(discard);
+    }
+  });
+
+  it('never calls retain-blobs when compressing or discarding history', async () => {
+    // This device has not synced a photo another device added: its inventory
+    // is short, and the vault holds a blob this device knows nothing about.
+    for (const discard of [false, true]) {
+      const db = {
+        ...dbWith('checkpoint'),
+        vaultFileHashes: vi.fn(async () => []),
+        vaultBlobOpen: vi.fn(),
+        vaultBlobChunk: vi.fn(),
+        vaultBlobClose: vi.fn(async () => {}),
+      };
+      const calls = storageMock();
+
+      await compactVaultBackup({
+        drivePseudonym: PSEUDONYM,
+        includeUndoWindow: discard,
+        runBackup: ({ currentStateOnly }) =>
+          runVaultBackup({
+            ...args(db as unknown as VaultCapableDb),
+            forceCheckpoint: true,
+            currentStateOnly,
+          }),
+      });
+
+      expect(calls.some(c => c.url.endsWith('/retain-blobs'))).toBe(false);
     }
   });
 

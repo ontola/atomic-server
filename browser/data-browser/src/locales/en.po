@@ -11596,11 +11596,6 @@ msgstr "Required table columns are missing from this form:{0} {1} . Responses ca
 msgid "Reading what is stored…"
 msgstr "Reading what is stored…"
 
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} of old history and unused files can be removed. Nothing you can see is lost."
-
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} is kept only so recently deleted items can be brought back. Freeing it means those cannot be restored."
@@ -13557,3 +13552,8 @@ msgstr "Encrypted backup of your data and files. Only you can read it."
 #: src/components/Vault/VaultPanel.tsx
 msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
 msgstr "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} of old history can be removed. Nothing you can see is lost."

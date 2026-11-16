@@ -3208,6 +3208,49 @@ mod tests {
         assert_eq!(blob_keys(&vault).len(), 2);
     }
 
+    /// A device that has not synced another device's photo backs up and
+    /// exports its files. That pass must never remove the photo's blob from
+    /// the vault (nothing here deletes blobs), so a clean db restoring a
+    /// checkpoint that references the photo still gets the bytes.
+    #[tokio::test]
+    async fn a_device_missing_a_photo_cannot_make_the_vault_lose_it() {
+        let device_b = Db::init_temp("vault_blob_photo_b").await.unwrap();
+        let (_, drive) = device_b.setup("alice").await.unwrap();
+        let drive_subject = Subject::from_raw(&drive, device_b.get_base_domain().as_deref());
+        let photo = b"photo added on device B";
+        add_file(&device_b, &drive, "photo.jpg", photo).await;
+
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        backup(&device_b, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        export_blobs(&device_b, &drive_subject, &key, &vault).await;
+        let before = blob_keys(&vault);
+        assert_eq!(before.len(), 1);
+
+        // Device A has the drive but not the photo's resource or bytes.
+        let device_a = Db::init_temp("vault_blob_photo_a").await.unwrap();
+        let (_, a_drive) = device_a.setup("alice").await.unwrap();
+        let a_subject = Subject::from_raw(&a_drive, device_a.get_base_domain().as_deref());
+        let pass = export_blobs(&device_a, &a_subject, &key, &vault).await;
+        assert_eq!(pass.blobs_uploaded, 0);
+        assert_eq!(blob_keys(&vault), before, "the photo's blob is untouched");
+
+        let clean = Db::init_temp("vault_blob_photo_clean").await.unwrap();
+        restore(&clean, &key, &vault).await;
+        let done = import_blobs(&clean, &drive_subject, &key, &vault).await;
+        assert_eq!((done.blobs_restored, done.blobs_missing), (1, 0));
+        assert_eq!(
+            clean
+                .get_blob(blake3::hash(photo).as_bytes())
+                .await
+                .unwrap()
+                .unwrap(),
+            photo
+        );
+    }
+
     #[tokio::test]
     async fn missing_or_corrupt_blob_is_reported_on_restore() {
         let source = Db::init_temp("vault_blob_missing_src").await.unwrap();

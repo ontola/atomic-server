@@ -11590,11 +11590,6 @@ msgstr "Faltan columnas obligatorias de la tabla en este formulario:{0} {1} . No
 msgid "Reading what is stored…"
 msgstr "Leyendo lo almacenado…"
 
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "Se pueden eliminar {0} de historial antiguo y archivos sin usar. No se pierde nada de lo que puedes ver."
-
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} is kept only so recently deleted items can be brought back. Freeing it means those cannot be restored."
@@ -13551,3 +13546,8 @@ msgstr "Copia de seguridad cifrada de tus datos y archivos. Solo tú puedes leer
 #: src/components/Vault/VaultPanel.tsx
 msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
 msgstr "Los archivos están incluidos. Se cifran en este dispositivo igual que todo lo demás y cuentan para el almacenamiento de Cloud Vault de esta copia."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "Se pueden eliminar {0} de historial antiguo. No se pierde nada de lo que puedes ver."

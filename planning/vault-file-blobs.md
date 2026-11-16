@@ -55,24 +55,23 @@ end-to-end encryption as the rest of the vault.
 - VaultPanel and the docs say files are included, encrypted on the device like
   everything else, and counted toward this backup's storage.
 
-## `retain-blobs`
+## No blob pruning in this PR
 
-An ordinary backup never calls it: a device with an incomplete replica would
-start the undelete clock on files other devices still use. It is called only
-from the explicit "Compress now" / "Discard history" pass (`retainBlobs: true`
-through `runVaultBackup`), and then only when every File resource's id resolved
-on this device (stored, known from the id cache, or too large to ever be
-stored). If any referenced file is missing locally the call is skipped, because
-its id is unknown and leaving it out would mark a live blob unused.
+Nothing here calls `retain-blobs`: not an ordinary backup, not "Compress now",
+not "Discard history". A local file inventory can omit a blob that a retained
+checkpoint, or another device's pack that this device has not synced, still
+needs, and the control plane would then delete it after the grace period.
+Deleted files therefore stay in the vault, and keep counting toward its
+storage, until a follow-up can reclaim them safely. Compress and discard free
+history only.
 
 ## Left
 
-1. Whether "Compress now" is authoritative enough for the live set is a product
-   call: it proves this device's checkpoint covers the lanes it names, which is
-   the same claim a checkpoint already makes, but it does not prove the device
-   has synced every File resource. If that is not acceptable, drop the call and
-   reclaim unreferenced blobs another way (for example a dedicated "Free up
-   files" action).
+1. Reclaiming files. A safe design has to account for blobs referenced by
+   retained checkpoints and by other devices' packs (for example a live set
+   derived from every retained checkpoint and pack, not one device's
+   inventory), and needs a regression test where device A compresses before it
+   has synced a photo device B added.
 2. Memory: the browser store (redb in OPFS) returns a file as one value, so one
    whole file sits in WASM memory while it is uploaded or restored (restore also
    holds its chunks in JS). A ranged read in the blob store would remove that.
