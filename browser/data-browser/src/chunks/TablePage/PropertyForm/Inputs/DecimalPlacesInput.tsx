@@ -1,95 +1,47 @@
 import { Resource, urls, useNumber, useString } from '@tomic/react';
-import {
-  useCallback,
-  type JSX,
-  type InputHTMLAttributes,
-  type ReactNode,
-} from 'react';
+import { type JSX, type InputHTMLAttributes } from 'react';
 import { PropertyPrecisionField } from '@tomic/table';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import { useValidation } from '@components/forms/formValidation/useValidation';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { FormGroupHeading } from '@chunks/TablePage/PropertyForm/FormGroupHeading';
 
-interface DecimalPlacesInputProps {
-  resource: Resource;
-}
-
-export function DecimalPlacesInput({
-  resource,
-}: DecimalPlacesInputProps): JSX.Element {
-  const { error, setError, setTouched } = useValidation();
-  // No `commit`: the dialog saves (or creates a new property) on confirm.
-  const [_, setDataType] = useString(resource, urls.properties.datatype);
-
-  const [decimalPlaces, setDecimalPlaces] = useNumber(
-    resource,
-    urls.properties.constraints.decimalPlaces,
-  );
-
-  const handleDecimalPointChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newValue = e.target.value;
-      const num = Number.parseInt(newValue, 10);
-
-      if (num < 0 || num > 20) {
-        setError('Value must be between 0 and 20.', true);
-
-        return;
-      } else {
-        setError(undefined);
-      }
-
-      if (num === 0) {
-        await setDataType(urls.datatypes.integer);
-      } else {
-        await setDataType(urls.datatypes.float);
-      }
-
-      if (isNaN(num)) {
-        return await setDecimalPlaces(undefined);
-      }
-
-      setDecimalPlaces(num);
-    },
-    [setError],
-  );
-
+function PrecisionInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <PropertyPrecisionField
-      value={decimalPlaces}
-      label='Decimal Places'
-      error={error}
-      onChange={handleDecimalPointChange}
-      onBlur={setTouched}
-      Input={PrecisionInput}
-      Heading={PrecisionHeading}
-      Error={ErrorChip}
-    />
-  );
-}
-
-function PrecisionInput({
-  $invalid,
-  ...props
-}: InputHTMLAttributes<HTMLInputElement> & { $invalid?: boolean }) {
-  return (
-    <InputWrapper $invalid={$invalid}>
+    <InputWrapper $invalid={props['aria-invalid'] === true}>
       <InputStyled {...props} />
     </InputWrapper>
   );
 }
 
-function PrecisionHeading({
-  htmlFor,
-  children,
+/** Atomic datatype/default policy; raw precision input and validation are shared. */
+export function DecimalPlacesInput({
+  resource,
 }: {
-  htmlFor: string;
-  children: ReactNode;
-}) {
+  resource: Resource;
+}): JSX.Element {
+  const { setError, setTouched } = useValidation();
+  const [_, setDataType] = useString(resource, urls.properties.datatype);
+  const [decimalPlaces, setDecimalPlaces] = useNumber(
+    resource,
+    urls.properties.constraints.decimalPlaces,
+  );
+
   return (
-    <FormGroupHeading as='label' htmlFor={htmlFor}>
-      {children}
-    </FormGroupHeading>
+    <PropertyPrecisionField
+      key={resource.subject}
+      value={decimalPlaces}
+      label='Decimal Places'
+      invalidMessage='Enter a whole number between 0 and 20, or leave empty.'
+      Input={PrecisionInput}
+      Error={ErrorChip}
+      onBlur={setTouched}
+      onValidationError={error => setError(error, true)}
+      onChange={async value => {
+        await setDataType(
+          value === 0 ? urls.datatypes.integer : urls.datatypes.float,
+        );
+        await setDecimalPlaces(value);
+      }}
+    />
   );
 }

@@ -3394,9 +3394,8 @@ msgstr "Long"
 msgid "Relative"
 msgstr "Relative"
 
-#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
-msgid "Value must be between 0 and 20."
-msgstr "Value must be between 0 and 20."
+#~ msgid "Value must be between 0 and 20."
+#~ msgstr "Value must be between 0 and 20."
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Decimal Places"
@@ -13480,3 +13479,11 @@ msgstr "Removing column…"
 #: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Column removal is unavailable. Check access and the selected table."
 msgstr "Column removal is unavailable. Check access and the selected table."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Date format"
+msgstr "Date format"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
+msgid "Enter a whole number between 0 and 20, or leave empty."
+msgstr "Enter a whole number between 0 and 20, or leave empty."
