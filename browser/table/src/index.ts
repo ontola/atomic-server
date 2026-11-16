@@ -313,3 +313,8 @@ export {
   type TableQuickAddBarProps,
   type TableQuickAddButtonProps,
 } from './QuickAddBar.js';
+export {
+  createTableQuickAddQueue,
+  type TableQuickAddState,
+  type TableQuickAddRequest,
+} from './quickAddQueue.js';

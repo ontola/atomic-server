@@ -8,6 +8,7 @@ import { InputStyled } from '@components/forms/InputStyles';
 import { createQuickAddRow, type QuickAddSpec } from './quickAdd';
 
 interface Props {
+  scope?: string;
   spec: QuickAddSpec;
   tableSubject: string;
   tableClass: Resource;
@@ -27,6 +28,7 @@ interface Props {
  * stays a single field rather than becoming a second form.
  */
 export function QuickAddBar({
+  scope,
   spec,
   tableSubject,
   tableClass,
@@ -37,6 +39,7 @@ export function QuickAddBar({
 
   return (
     <TableQuickAddBar
+      scope={JSON.stringify([scope, tableSubject, tableClass.subject, spec])}
       label={spec.label}
       field={!!spec.field}
       placeholder={spec.placeholder}

@@ -1,12 +1,15 @@
 import {
-  useRef,
+  useEffect,
+  useMemo,
   useState,
+  useSyncExternalStore,
   type ComponentType,
   type InputHTMLAttributes,
   type ReactNode,
 } from 'react';
 import { styled } from 'styled-components';
 import { FaPlus } from 'react-icons/fa6';
+import { createTableQuickAddQueue } from './quickAddQueue.js';
 import { tableTheme } from './theme.js';
 
 export interface TableQuickAddButtonProps {
@@ -17,20 +20,27 @@ export interface TableQuickAddButtonProps {
   'data-testid'?: string;
 }
 export interface TableQuickAddBarProps {
+  scope: string;
   label: string;
   field?: boolean;
   placeholder?: string;
+  disabled?: boolean;
   create: (value: string) => Promise<unknown>;
   onCreated?: () => void;
   onError?: (error: unknown) => void;
   Field?: ComponentType<InputHTMLAttributes<HTMLInputElement>>;
   Button?: ComponentType<TableQuickAddButtonProps>;
 }
-/** Existing quick-add input and local serial queue; backend operations stay with the host. */
-export function TableQuickAddBar({
+/** Actual quick-add input/button and serial queue, shared by backend adapters. */
+export function TableQuickAddBar(props: TableQuickAddBarProps) {
+  return <QuickAddSession key={props.scope} {...props} />;
+}
+
+function QuickAddSession({
   label,
   field,
   placeholder,
+  disabled,
   create,
   onCreated,
   onError,
@@ -38,65 +48,59 @@ export function TableQuickAddBar({
   Button = DefaultButton,
 }: TableQuickAddBarProps) {
   const [typed, setTyped] = useState('');
-  const [busy, setBusy] = useState(false);
-  const queued = useRef<string[]>([]);
-  const ready = !field || typed.trim() !== '';
+  const queue = useMemo(() => createTableQuickAddQueue(), []);
+  const state = useSyncExternalStore(
+    queue.subscribe,
+    queue.getSnapshot,
+    queue.getSnapshot,
+  );
+  useEffect(() => {
+    queue.activate();
 
-  const submit = (value: string) => {
-    setBusy(true);
-    void create(value)
-      .then(() => onCreated?.())
-      .catch(error => onError?.(error))
-      .finally(() => {
-        const next = queued.current.shift();
+    return () => queue.deactivate();
+  }, [queue]);
+  const ready = !disabled && (!field || !!typed.trim());
 
-        if (next === undefined) {
-          setBusy(false);
-
-          return;
-        }
-
-        submit(next);
-      });
-  };
-
-  const add = () => {
+  const submit = () => {
     if (!ready) return;
-    const value = typed.trim();
+    queue.enqueue({ value: typed.trim(), create, onCreated, onError });
     setTyped('');
-
-    if (busy) {
-      queued.current.push(value);
-
-      return;
-    }
-
-    submit(value);
   };
 
   return (
-    <Bar>
+    <Bar aria-busy={state.pending > 0}>
       {field && (
         <Field
+          aria-label={placeholder ?? label}
           placeholder={placeholder ?? label}
           data-testid='quick-add-input'
+          disabled={disabled}
           value={typed}
           onChange={event => setTyped(event.target.value)}
           onKeyDown={event => {
             if (event.key === 'Enter') {
               event.preventDefault();
-              add();
+              submit();
             }
           }}
         />
       )}
       <Button
+        type='button'
         data-testid='quick-add-button'
-        disabled={!ready || busy}
-        onClick={add}
+        disabled={!ready || state.pending > 0}
+        onClick={submit}
       >
         <FaPlus /> {label}
       </Button>
+      {state.failures.map((failure, index) => (
+        <p key={index} role='alert'>
+          {failure.value
+            ? `Could not add “${failure.value}”: `
+            : 'Could not add row: '}
+          {String(failure.error)}
+        </p>
+      ))}
     </Bar>
   );
 }

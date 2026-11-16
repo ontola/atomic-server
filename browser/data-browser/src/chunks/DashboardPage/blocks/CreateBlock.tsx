@@ -61,6 +61,7 @@ export function CreateBlock({ block, config }: BlockProps): JSX.Element {
   return (
     <BlockShell block={block} label={config.label} center>
       <QuickAddBar
+        scope={block.subject}
         spec={spec}
         tableSubject={config.source}
         tableClass={rowClass as Resource}
