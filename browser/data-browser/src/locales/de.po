@@ -5494,18 +5494,11 @@ msgstr "{0} Ressourcen"
 msgid "{0} of {1}"
 msgstr "{0} von {1}"
 
-#. 0: syncedAgo
-#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
-#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Synced {0}"
-msgstr "Synchronisiert {0}"
+#~ msgid "Synced {0}"
+#~ msgstr "Synchronisiert {0}"
 
-#: src/routes/SyncRoute.tsx
-msgid "Synced just now"
-msgstr "Gerade synchronisiert"
+#~ msgid "Synced just now"
+#~ msgstr "Gerade synchronisiert"
 
 #: src/routes/SyncRoute.tsx
 msgid "This server"
@@ -5538,10 +5531,8 @@ msgstr "Gekoppelt"
 msgid "Paired device"
 msgstr "Gekoppeltes Gerät"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Not synced yet"
-msgstr "Noch nicht synchronisiert"
+#~ msgid "Not synced yet"
+#~ msgstr "Noch nicht synchronisiert"
 
 #. 0: label; 1: detail
 #: src/actions/runAction.ts
@@ -9205,6 +9196,7 @@ msgid "Click or drag to open"
 msgstr "Zum Öffnen klicken oder ziehen"
 
 #: src/actions/appMenuItems.tsx
+#: src/components/CloudVaultWatcher.tsx
 msgid "Open sync settings"
 msgstr "Synchronisierungseinstellungen öffnen"
 
@@ -13527,3 +13519,63 @@ msgstr "Mit „Bericht senden“ teilst du den geprüften Chattext, Fehlermeldun
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Melde einen Fehler oder schlage eine Verbesserung vor. Deine Nachricht und optionale E-Mail werden über Sentry an das Atomic-Team gesendet, zusammen mit technischen Angaben zu deiner Einrichtung (App-Version, Serveradresse und -status). Bitte lasse private Inhalte aus deinem Arbeitsbereich weg."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The first Cloud Vault backup failed."
+msgstr "Das erste Cloud Vault-Backup ist fehlgeschlagen."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault hasn’t completed the first backup yet."
+msgstr "Cloud Vault hat das erste Backup noch nicht abgeschlossen."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "This workspace has no confirmed Cloud Vault copy."
+msgstr "Für diesen Arbeitsbereich gibt es noch keine bestätigte Kopie in Cloud Vault."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Retry backup"
+msgstr "Backup erneut versuchen"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No copy of this drive could be verified in Cloud Vault or on an external server."
+msgstr "In Cloud Vault oder auf einem externen Server konnte keine Kopie dieses Laufwerks bestätigt werden."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is more than 24 hours old."
+msgstr "Das letzte bestätigte Backup ist älter als 24 Stunden."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is at least 7 days old."
+msgstr "Das letzte bestätigte Backup ist mindestens 7 Tage alt."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No backup from the last 7 days could be verified."
+msgstr "Für die letzten 7 Tage konnte kein Backup bestätigt werden."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was more than 24 hours ago."
+msgstr "Die letzte bestätigte vollständige Synchronisierung mit dem Server liegt mehr als 24 Stunden zurück."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was at least 7 days ago."
+msgstr "Die letzte bestätigte vollständige Synchronisierung mit dem Server liegt mindestens 7 Tage zurück."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "A full sync with the server could not be verified."
+msgstr "Eine vollständige Synchronisierung mit dem Server konnte nicht bestätigt werden."
+
+#. 0: syncedAgo
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync {0}"
+msgstr "Letzte vollständige Synchronisierung {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync just now"
+msgstr "Letzte vollständige Synchronisierung gerade eben"
+
+#. 0: formatTimeAgo(new Date(lastActivity)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Last sync activity {0}"
+msgstr "Letzte Synchronisierungsaktivität {0}"

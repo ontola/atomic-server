@@ -5495,18 +5495,11 @@ msgstr "{0} sumber daya"
 msgid "{0} of {1}"
 msgstr "{0} dari {1}"
 
-#. 0: syncedAgo
-#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
-#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Synced {0}"
-msgstr "Disinkronkan {0}"
+#~ msgid "Synced {0}"
+#~ msgstr "Disinkronkan {0}"
 
-#: src/routes/SyncRoute.tsx
-msgid "Synced just now"
-msgstr "Baru saja disinkronkan"
+#~ msgid "Synced just now"
+#~ msgstr "Baru saja disinkronkan"
 
 #: src/routes/SyncRoute.tsx
 msgid "This server"
@@ -5539,10 +5532,8 @@ msgstr "Dipasangkan"
 msgid "Paired device"
 msgstr "Perangkat yang dipasangkan"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Not synced yet"
-msgstr "Belum disinkronkan"
+#~ msgid "Not synced yet"
+#~ msgstr "Belum disinkronkan"
 
 #. 0: label; 1: detail
 #: src/actions/runAction.ts
@@ -9205,6 +9196,7 @@ msgid "Click or drag to open"
 msgstr "Klik atau seret untuk membuka"
 
 #: src/actions/appMenuItems.tsx
+#: src/components/CloudVaultWatcher.tsx
 msgid "Open sync settings"
 msgstr "Buka pengaturan sinkronisasi"
 
@@ -13522,3 +13514,63 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The first Cloud Vault backup failed."
+msgstr "Pencadangan pertama ke Cloud Vault gagal."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault hasn’t completed the first backup yet."
+msgstr "Cloud Vault belum menyelesaikan pencadangan pertama."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "This workspace has no confirmed Cloud Vault copy."
+msgstr "Ruang kerja ini belum memiliki salinan yang terkonfirmasi di Cloud Vault."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Retry backup"
+msgstr "Coba cadangkan lagi"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No copy of this drive could be verified in Cloud Vault or on an external server."
+msgstr "Tidak ada salinan drive ini yang dapat diverifikasi di Cloud Vault atau server eksternal."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is more than 24 hours old."
+msgstr "Cadangan terakhir yang terverifikasi berusia lebih dari 24 jam."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is at least 7 days old."
+msgstr "Cadangan terakhir yang terverifikasi berusia setidaknya 7 hari."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No backup from the last 7 days could be verified."
+msgstr "Tidak ada cadangan dari 7 hari terakhir yang dapat diverifikasi."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was more than 24 hours ago."
+msgstr "Sinkronisasi penuh terakhir yang terverifikasi dengan server terjadi lebih dari 24 jam yang lalu."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was at least 7 days ago."
+msgstr "Sinkronisasi penuh terakhir yang terverifikasi dengan server terjadi setidaknya 7 hari yang lalu."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "A full sync with the server could not be verified."
+msgstr "Sinkronisasi penuh dengan server tidak dapat diverifikasi."
+
+#. 0: syncedAgo
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync {0}"
+msgstr "Sinkronisasi penuh terakhir {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync just now"
+msgstr "Sinkronisasi penuh terakhir baru saja"
+
+#. 0: formatTimeAgo(new Date(lastActivity)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Last sync activity {0}"
+msgstr "Aktivitas sinkronisasi terakhir {0}"

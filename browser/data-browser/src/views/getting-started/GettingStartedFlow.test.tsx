@@ -127,6 +127,7 @@ vi.mock('../../helpers/managed/recovery', () => ({
 vi.mock('../../helpers/managed/vaultAutoBackup', () => ({
   ensureVaultBackup: vi.fn(),
   restoreFromVault: state.restoreVault,
+  startFirstVaultBackup: vi.fn(),
 }));
 vi.mock('../../helpers/managed/reconcile', () => ({
   connectHostedDrive: async () => true,

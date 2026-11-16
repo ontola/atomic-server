@@ -51,6 +51,7 @@ import {
 import {
   ensureVaultBackup,
   restoreFromVault,
+  startFirstVaultBackup,
 } from '../../helpers/managed/vaultAutoBackup';
 import { isOriginWithoutNode } from '../../helpers/originNode';
 import { isRunningInTauri } from '../../helpers/tauri';
@@ -336,17 +337,12 @@ export function GettingStartedFlow({
    * Sync page. That also puts the honest version of the pitch first — the tier
    * we cannot read comes as standard, and the tier we can read is opt-in.
    *
-   * Best-effort, exactly as the sync enrollment was: the identity and drive
-   * both exist by the time this runs, so a failure here leaves a working
-   * workspace with backup switched off rather than blocking onboarding. The
-   * Sync page will offer it again.
+   * The workspace opens while the first backup runs. The app keeps the
+   * first-backup status visible until Cloud Vault confirms a copy.
    */
-  async function enableEncryptedBackup(driveSubject: string) {
+  function enableEncryptedBackup(driveSubject: string) {
     newDriveSubject.current = driveSubject;
-    // Enrols and backs up straight away. A brand-new drive is a few KB, and an
-    // enrollment with nothing in it would report a protection the account
-    // does not yet have. Failures are swallowed inside — see above.
-    await ensureVaultBackup(store, driveSubject);
+    startFirstVaultBackup(store, driveSubject);
   }
 
   function requireAgentSubject(): string {

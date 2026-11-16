@@ -1802,6 +1802,19 @@ requests, even if a server request would have succeeded.
   on a free port, and preserves its report/build logs. `--preview` opts into Vite.
   Failure traces are retained. Real Cloud Vault integration requires an explicitly
   supplied `ATOMIC_VAULT_PORTAL_URL`; the runner never discovers unrelated portals.
+- `vault-first-backup-status.spec.ts` uses the real signup, local database, and
+  Vault export with a mocked account service and object store. It holds and
+  fails the first storage PUT, also tests an enrollment refusal, verifies a
+  local edit survives reload with the notice, and keeps the notice visible
+  until a retry is confirmed. A later failed backup retains the last success
+  time in Sync settings. Turning off a confirmed Vault backup for a
+  browser-only workspace shows a hard warning that survives reload and links
+  to Sync settings. The spec checks a medium warning at two days, a hard
+  warning at eight days, and a manual backup of an unchanged drive writing
+  a new confirmed checkpoint that clears the warning.
+- `server-full-sync-warning.spec.ts` saves a folder to a standalone Atomic
+  Server with Cloud Vault off and checks that a verified full sync clears the
+  drive warning, including after reload.
 
 ## Boolean reads and managed development origins
 
