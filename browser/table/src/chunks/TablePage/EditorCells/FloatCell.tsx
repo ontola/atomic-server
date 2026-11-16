@@ -12,6 +12,7 @@ function FloatCellEdit({
   value,
   onChange,
   seed,
+  textDraft,
 }: EditCellProps<JSONValue>): JSX.Element {
   // Text, not `type='number'`: that one reads a lone `-` or `.` as empty, so
   // a number could not start with one.
@@ -19,6 +20,7 @@ function FloatCellEdit({
     value,
     onChange,
     seed,
+    textDraft,
     format: formatNumberInput,
     parse: parseFloatText,
   });

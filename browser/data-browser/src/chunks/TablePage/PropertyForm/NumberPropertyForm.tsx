@@ -21,6 +21,7 @@ const CurrencyPicker = lazy(
 
 export const NumberPropertyForm = ({
   resource,
+  existingProperty,
 }: PropertyCategoryFormProps): JSX.Element => {
   const [numberFormatting, setNumberFormatting] = useString(
     resource,
@@ -49,8 +50,9 @@ export const NumberPropertyForm = ({
   useEffect(() => {
     resource.addClasses(dataBrowser.classes.formattedNumber);
 
-    // If decimal places is not set yet we assume it is a new property and should default to float.
-    if (decimalPlaces === undefined) {
+    // A missing display precision does not change an existing property identity.
+    // Only new number drafts default to float.
+    if (!existingProperty && decimalPlaces === undefined) {
       resource.set(core.properties.datatype, Datatype.FLOAT);
     }
 
@@ -64,8 +66,7 @@ export const NumberPropertyForm = ({
       <FormGroupHeading>Number Format</FormGroupHeading>
       <PropertyChoiceField
         label='Number format'
-        name='number-format'
-        value={numberFormatting}
+        value={numberFormatting ?? numberFormats.number}
         onChange={handleNumberFormatChange}
         Radio={RadioInput}
         Group={RadioGroup}
