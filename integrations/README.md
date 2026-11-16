@@ -6,9 +6,10 @@ reach a server as JS bundles fetched over HTTP from its catalog
 URL set under Settings > Integration). Provider code, provider tests and
 provider certification belong there, not here.
 
-This folder documents the host's plugin contract. The snapshot mapper and
-test proxy fixtures are in [`localthought/`](localthought/README.md).
-Test plugins and the catalog mock for the e2e suite are in
+This folder documents the host's plugin contract. The generic snapshot mapper
+and shared integration proxy mock are maintained in
+[atomic-plugins](https://github.com/ontola/atomic-plugins/tree/main/integrations/localthought).
+Test plugins and the catalog mock for the e2e suite live in
 [`testdata/`](../testdata/).
 
 Named actions, automation permissions, recovery and MCP setup are documented in

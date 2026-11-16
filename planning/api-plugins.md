@@ -11,9 +11,10 @@ Clockify, Calendar), their tests and certification moved to
 [atomic-plugins](https://github.com/ontola/atomic-plugins); this repo keeps
 catalog discovery, install and the plugin runtime. #1549 includes #1618, which
 removed the WASM Syncables bridge. The old rotating-code browser connector has
-since been removed. Provider drive apps now use the host's
-[app-frame proxy API](https://github.com/ontola/atomic-plugins/blob/main/integrations/README.md#the-hosts-proxy-access).
-The proposals below record the design discussion at the time.
+since been removed. The generic snapshot mapper and shared proxy mock are
+maintained in [Atomic Plugins](https://github.com/ontola/atomic-plugins/tree/main/integrations/localthought).
+Provider drive apps now use the host's [integration proxy API](../integrations/AUTHORIZATION.md).
+The proposals and paths below record the design discussion at the time.
 
 ## Where PR #1383 left off
 
@@ -46,11 +47,9 @@ the parts that make a provider real:
 
 ## LocalThought and Syncables follow-up
 
-Work continues on `codex/localthought-api-plugins`: dynamic catalog discovery,
+Work on `codex/localthought-api-plugins` covered dynamic catalog discovery,
 signed account handoff, rotating host-owned credentials, Syncables pagination,
 platform-specific typed ontologies, and a paginated Pets mock integration proxy.
-See [the integration README](../integrations/localthought/README.md) for its
-configuration, behavior and tests.
 
 - [x] Replace public demo discovery with the live platform catalog.
 - [x] Implement signed account connection and return flow using `TENANT_SECRET`.
@@ -78,12 +77,11 @@ pending validations can wait sequentially instead of displacing one another.
 
 ## Browser migration
 
-`codex/browser-integrations` moves the LocalThought flow off AtomicServer.
-Catalog parsing and pagination run in the Atomic WASM bundle; the browser owns
-the tenant handoff and rotating connection code, then maps fetched records into
-locally reviewed proposals. Companion branches in Syncables and integration-proxy
-provide WASM compatibility and CORS. See `integrations/localthought/README.md`.
-Legacy direct integrations, action infrastructure and scheduling remain separate.
+`codex/browser-integrations` moved the LocalThought flow off AtomicServer.
+Catalog parsing and pagination ran in the Atomic WASM bundle. The browser
+owned the tenant handoff and rotating connection code and mapped fetched records
+into locally reviewed proposals. Companion branches in Syncables and
+integration-proxy provided WASM compatibility and CORS.
 
 ## Reflector supersedes the browser/WASM path
 

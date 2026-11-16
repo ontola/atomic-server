@@ -232,12 +232,17 @@ covers PKCE, signed redemption and delegation, one-time handoff consumption,
 and frame-bound capabilities. `hostStore.test.ts` checks that the host relays
 requests only to the configured proxy origin and proxy routes.
 
-The retired LocalThought browser connector and its browser tests were removed.
-`integrations/localthought/plugin.test.ts` still covers the generic snapshot
-mapper. `integrations/localthought/mock-proxy.test.mjs` covers the local mock's
-catalog, PKCE, one-time redemption and connection-code rotation with synthetic
-data. Provider integration coverage lives in
-[Atomic Plugins](https://github.com/ontola/atomic-plugins/tree/main/integrations).
+The generic snapshot mapper and shared integration proxy mock are tested in
+the [Atomic Plugins repository](https://github.com/ontola/atomic-plugins/tree/main/integrations/localthought).
+The mapper tests cover import proposals and stable identities. The mock tests
+cover signed requests and frame capabilities with synthetic data.
+Run them from an Atomic Plugins checkout.
+
+```sh
+node integrations/tooling/link-atomic-server.mjs
+node integrations/tooling/run-lane.mjs localthought --tier unit
+node --test integrations/localthought/mock-proxy.test.mjs
+```
 
 Finding another table (#1807): `TablePage/ColumnFilterDropdown.test.tsx`
 (jsdom) checks the table's column-filter menu names its input "Find a column…"
