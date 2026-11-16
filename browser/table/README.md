@@ -221,3 +221,18 @@ a view flushes its draft; newer edits drain after an in-flight save even if the
 page unmounts. Failed writes require explicit Retry. Per-table queue registries
 retain pending/failed work when navigating away and returning. Other built-in
 configuration controls and the complete page orchestration still need extraction.
+
+`compileTableViewQuery` compiles stored/resolved filter, sort and statistics
+settings into one backend request. Valued filters and totals on missing/incomplete
+computed columns return issues and remove the query's row-class readiness; they
+are never silently skipped. Empty filter chips remain inactive. Callers must also
+gate the stored-configuration reader's shape issues and backend capability/type
+checks. Formula evaluation and whole-result aggregation stay with the backend.
+
+Renderer defaults are explicit inputs. `effectiveTableDerivedColumns` preserves
+an explicit empty list, and `timerDurationColumn` supplies the same implicit
+start/end expression to the timer grid, its filters and its totals. Clock values
+are quantized once and timezone offsets travel with the request. Atomic
+TablePage uses this compiler and reuses its aggregation for the totals query.
+Other dashboard-block queries remain separate host adapters; this increment does
+not complete their migration or the full page/renderer port.
