@@ -22,7 +22,6 @@ function DefaultRadio({ children, ...props }: RadioProps) {
 }
 
 export interface PropertyChoiceFieldProps {
-  label: string;
   name?: string;
   value: string | undefined;
   options: readonly PropertyChoice[];
@@ -32,7 +31,6 @@ export interface PropertyChoiceFieldProps {
 }
 /** Existing format-radio layout; data access and mutation remain with the host. */
 export function PropertyChoiceField({
-  label,
   name: suppliedName,
   value,
   options,
@@ -45,7 +43,7 @@ export function PropertyChoiceField({
   const Container = Group ?? 'div';
 
   return (
-    <Container role='radiogroup' aria-label={label}>
+    <Container>
       {options.map(option => (
         <Radio
           key={option.value}
@@ -53,7 +51,7 @@ export function PropertyChoiceField({
           name={name}
           value={option.value}
           checked={option.value === value}
-          onChange={() => onChange(option.value)}
+          onChange={event => onChange(event.target.value)}
         >
           {option.label}
         </Radio>

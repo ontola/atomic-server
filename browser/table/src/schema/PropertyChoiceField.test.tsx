@@ -11,12 +11,7 @@ const options = [
 it('selects by stable value and delegates one enabled radio choice', () => {
   const change = vi.fn();
   render(
-    <PropertyChoiceField
-      label='Format'
-      value='plain'
-      options={options}
-      onChange={change}
-    />,
+    <PropertyChoiceField value='plain' options={options} onChange={change} />,
   );
   expect(
     (screen.getByRole('radio', { name: 'Plain text' }) as HTMLInputElement)

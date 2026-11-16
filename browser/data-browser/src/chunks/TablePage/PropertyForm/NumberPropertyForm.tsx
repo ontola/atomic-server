@@ -63,7 +63,6 @@ export const NumberPropertyForm = ({
     <Suspense fallback={<div>loading...</div>}>
       <FormGroupHeading>Number Format</FormGroupHeading>
       <PropertyChoiceField
-        label='Number format'
         name='number-format'
         value={numberFormatting}
         onChange={handleNumberFormatChange}
