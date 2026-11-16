@@ -354,3 +354,10 @@ export {
   type QuickAddDraft,
   type TableQuickAddFieldsProps,
 } from './QuickAddFields.js';
+
+export {
+  TableRowSelectCheckbox,
+  TableRowSelectionActions,
+  type TableRowSelectCheckboxProps,
+  type TableRowSelectionActionsProps,
+} from './RowSelection.js';

@@ -1,9 +1,7 @@
 import { useTableRowResource } from './useTableRowResource';
-import type { IndexedTableRows } from '@tomic/table';
+import { TableRowSelectCheckbox, type IndexedTableRows } from '@tomic/table';
 import { useContext, type JSX } from 'react';
 import { unknownSubject } from '@tomic/react';
-import { styled } from 'styled-components';
-import { FaCheck } from 'react-icons/fa6';
 import { TablePageContext } from './tablePageContext';
 
 type RowSelectCheckboxProps = { index: number } & (
@@ -52,48 +50,11 @@ function SubjectCheckbox({
   const { selectedRows, toggleRowSelected } = useContext(TablePageContext);
 
   return (
-    <span data-row-select data-active={selectedRows.size > 0}>
-      <Box
-        type='button'
-        role='checkbox'
-        aria-checked={selectedRows.has(subject)}
-        aria-label={`Select row ${index + 1}`}
-        // The header cell selects itself on mouse down; a tick shouldn't.
-        onMouseDown={e => e.stopPropagation()}
-        onClick={e => {
-          e.stopPropagation();
-          toggleRowSelected(subject);
-        }}
-      >
-        <FaCheck />
-      </Box>
-    </span>
+    <TableRowSelectCheckbox
+      checked={selectedRows.has(subject)}
+      selectionActive={selectedRows.size > 0}
+      label={`Select row ${index + 1}`}
+      onToggle={() => toggleRowSelected(subject)}
+    />
   );
 }
-
-// Not an `<input type=checkbox>`: the grid's keyboard handling and its tests
-// look for the first `input` inside the grid to find the cell editor.
-const Box = styled.button`
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 1rem;
-  height: 1rem;
-  padding: 0;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: 3px;
-  background-color: ${p => p.theme.colors.bg};
-  color: transparent;
-  font-size: 0.6rem;
-  cursor: pointer;
-
-  &[aria-checked='true'] {
-    border-color: ${p => p.theme.colors.main};
-    background-color: ${p => p.theme.colors.main};
-    color: ${p => p.theme.colors.bg};
-  }
-
-  &:hover:not([aria-checked='true']) {
-    border-color: ${p => p.theme.colors.main};
-  }
-`;
