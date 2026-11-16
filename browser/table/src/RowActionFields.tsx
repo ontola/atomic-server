@@ -14,6 +14,7 @@ import { tableTheme } from './theme.js';
 export interface TableRowActionTarget {
   key: string;
   option: ReactNode;
+  /** Absent for unrestricted literals; an empty list allows no values. */
   values?: readonly { key: string; option: ReactNode }[];
 }
 export interface TableRowActionKind {
@@ -83,7 +84,7 @@ export function TableRowActionFields({
     !!draft.label.trim() &&
     numericValid &&
     (!action?.valueField || value !== '') &&
-    (!target.values?.length ||
+    (target.values === undefined ||
       target.values.some(option => option.key === value));
   const draftKey = JSON.stringify(draft);
   const notify = useEffectEvent(() => onChange(draft, valid));
@@ -142,7 +143,7 @@ export function TableRowActionFields({
       {action?.valueField && (
         <Field>
           <label htmlFor={`${id}-value`}>{action.valueField.label}</label>
-          {target?.values?.length ? (
+          {target?.values !== undefined ? (
             <Select
               id={`${id}-value`}
               data-testid='action-config-value'

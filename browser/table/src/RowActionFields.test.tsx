@@ -146,3 +146,64 @@ it('resets target and literal on kind changes and validates tag identity', async
     ),
   );
 });
+
+it('invalidates a selected tag when subscribed options become empty and recovers when it returns', async () => {
+  const changed = vi.fn();
+  const initial = {
+    id: 'status-action',
+    kind: 'setValue' as const,
+    label: 'Complete',
+    property: 'status',
+    value: 'done',
+  };
+  const { rerender } = render(
+    <TableRowActionFields kinds={kinds} initial={initial} onChange={changed} />,
+  );
+  await waitFor(() => expect(changed.mock.lastCall?.[1]).toBe(true));
+
+  const withoutOptions = kinds.map(action => ({
+    ...action,
+    targets: action.targets.map(target => ({ ...target, values: [] })),
+  }));
+  rerender(
+    <TableRowActionFields
+      kinds={withoutOptions}
+      initial={initial}
+      onChange={changed}
+    />,
+  );
+  await waitFor(() => expect(changed.mock.lastCall?.[1]).toBe(false));
+  expect(changed.mock.lastCall?.[0]).toEqual(initial);
+  expect(screen.getByLabelText('To').tagName).toBe('SELECT');
+
+  rerender(
+    <TableRowActionFields kinds={kinds} initial={initial} onChange={changed} />,
+  );
+  await waitFor(() => expect(changed).toHaveBeenLastCalledWith(initial, true));
+  expect((screen.getByLabelText('To') as HTMLSelectElement).value).toBe('done');
+});
+
+it('keeps unrestricted literals editable when the target has no allowed-values constraint', async () => {
+  const changed = vi.fn();
+  const unrestricted = kinds.map(action => ({
+    ...action,
+    targets: action.targets.map(({ values: _values, ...target }) => target),
+  }));
+  render(
+    <TableRowActionFields
+      kinds={unrestricted}
+      initial={{
+        id: 'text-action',
+        kind: 'setValue',
+        label: 'Complete',
+        property: 'status',
+        value: 'a new value',
+      }}
+      onChange={changed}
+    />,
+  );
+  expect(
+    screen.getByRole('textbox', { name: 'To', exact: true }),
+  ).toHaveProperty('value', 'a new value');
+  await waitFor(() => expect(changed.mock.lastCall?.[1]).toBe(true));
+});
