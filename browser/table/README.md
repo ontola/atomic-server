@@ -396,3 +396,11 @@ retains its operation for explicit retry. Atomic create-button configuration now
 uses this lifecycle at page scope with tracked saves/removals. Its metadata adapter
 revalidates bindings and rejects a conflicting create-button edit while preserving
 unrelated view settings.
+
+
+`TableRowSelectCheckbox` and `TableRowSelectionActions` own row selection controls,
+including hover/select-mode styling and explicit disabled delete capabilities.
+`useTableRowSelection(scope)` owns identity-only selection in a separate service
+for each active scope. Query changes reset ticks; stale callbacks cannot mutate
+the new selection. Hosts bind table/class/query identity, resolve rows and own
+authorization and mutation policy. A selection count is not a collection total.
