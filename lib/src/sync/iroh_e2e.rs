@@ -59,6 +59,111 @@ async fn sync_b_from_a(pair: &IrohPair) -> usize {
         .expect("B→A sync should succeed")
 }
 
+struct InterruptedBlobWrite {
+    store: std::sync::Arc<dyn crate::db::blob_backend::BlobBackend>,
+    hash: [u8; 32],
+    started: tokio::sync::Notify,
+    finish: tokio::sync::Notify,
+}
+
+#[async_trait::async_trait]
+impl crate::db::blob_backend::BlobBackend for InterruptedBlobWrite {
+    async fn get(&self, key: &[u8]) -> crate::errors::AtomicResult<Option<Vec<u8>>> {
+        self.store.get(key).await
+    }
+
+    async fn put(&self, key: &[u8], bytes: &[u8]) -> crate::errors::AtomicResult<()> {
+        if key == self.hash {
+            self.started.notify_one();
+            self.finish.notified().await;
+            return Err("test interrupted the file write".into());
+        }
+        self.store.put(key, bytes).await
+    }
+
+    async fn size(&self, key: &[u8]) -> crate::errors::AtomicResult<Option<u64>> {
+        self.store.size(key).await
+    }
+}
+
+async fn add_sync_test_file(db: &Db, drive: &str, name: &str, bytes: &[u8]) -> String {
+    let hash = blake3::hash(bytes);
+    db.put_blob(hash.as_bytes(), bytes).await.unwrap();
+    db.create_resource(
+        crate::urls::FILE,
+        drive,
+        name,
+        Some(vec![(
+            crate::urls::BLOB,
+            crate::Value::AtomicUrl(crate::identifiers::blob_subject(&hash.to_hex()).into()),
+        )]),
+    )
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn e2e_interrupted_file_transfer_keeps_last_confirmed_full_sync() {
+    use crate::sync::peer;
+    use std::{sync::Arc, time::Duration};
+
+    let mut pair = setup_pair("e2e_interrupted_file_transfer").await;
+    let node_b = pair.ep_b.node_id().to_string();
+    let completed = b"file contents stored by both peers";
+    let interrupted = b"new file contents interrupted during storage";
+    let backend = Arc::new(InterruptedBlobWrite {
+        store: pair.db_b.blob_store(),
+        hash: *blake3::hash(interrupted).as_bytes(),
+        started: tokio::sync::Notify::new(),
+        finish: tokio::sync::Notify::new(),
+    });
+    pair.db_b.blob_backend = Some(backend.clone());
+
+    add_sync_test_file(&pair.db_a, &pair.drive, "completed.txt", completed).await;
+    sync_b_from_a(&pair).await;
+    assert!(
+        wait_until(Duration::from_secs(10), || async {
+            pair.db_b
+                .get_blob(blake3::hash(completed).as_bytes())
+                .await
+                .unwrap()
+                .as_deref()
+                == Some(completed.as_slice())
+        })
+        .await,
+        "the first uploaded file's bytes should reach the peer"
+    );
+    assert!(
+        wait_until(Duration::from_secs(15), || async {
+            peer::last_confirmed_full_syncs(&pair.db_a, &pair.drive).contains_key(&node_b)
+        })
+        .await,
+        "the peer should confirm a drive with its uploaded file"
+    );
+    peer::remove_live_peer_any(&pair.node_id_a);
+    peer::remove_live_peer_any(&node_b);
+    let previous_date = peer::last_confirmed_full_syncs(&pair.db_a, &pair.drive)[&node_b];
+    let file = add_sync_test_file(&pair.db_a, &pair.drive, "interrupted.txt", interrupted).await;
+    sync_b_from_a(&pair).await;
+    tokio::time::timeout(Duration::from_secs(10), backend.started.notified())
+        .await
+        .expect("the receiving peer should start writing the second file");
+
+    // The file resource reached the peer. Abort the connection while the
+    // content write is still pending, then let that write fail.
+    assert!(pair.db_b.get_resource(&file.as_str().into()).await.is_ok());
+    peer::remove_live_peer_any(&pair.node_id_a);
+    peer::remove_live_peer_any(&node_b);
+    backend.finish.notify_one();
+
+    assert!(pair.db_b.get_blob(&backend.hash).await.unwrap().is_none());
+    assert_eq!(
+        peer::last_confirmed_full_syncs(&pair.db_a, &pair.drive).get(&node_b),
+        Some(&previous_date),
+        "an interrupted file transfer must leave the previous date intact"
+    );
+}
+
 async fn wait_until<F, Fut>(timeout: std::time::Duration, mut check: F) -> bool
 where
     F: FnMut() -> Fut,

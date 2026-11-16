@@ -644,6 +644,8 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Paired peer + its relay/direct addresses survive a kill | `lib/tests/identity_durability.rs` |
 | Two whole servers pair via `POST /iroh-sync` and reconcile | `server/tests/it/iroh_pairing.rs` |
 | `/iroh-sync` refuses malformed node ids with a UI-showable error | `server/tests/it/iroh_pairing.rs` |
+| A peer confirms a drive with its stored file, and disconnecting during the next file write preserves the previous full sync date | `lib/src/sync/iroh_e2e.rs` |
+| Sync settings shows the selected drive's confirmed date for one peer and sync activity for another | `browser/e2e/tests/peer-full-sync-status.spec.ts` |
 
 ### Glue
 

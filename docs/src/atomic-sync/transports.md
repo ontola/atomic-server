@@ -67,6 +67,12 @@ A person with write rights on a Drive can also make a server dial a node with `P
 A node id says _where_ to connect. It does not grant any access. See [permissions and identity](permissions-and-identity.md).
 A browser tab can't accept incoming connections, so it can't be dialed over Iroh.
 
+Peers that support full sync confirmation check the stored resource versions and uploaded file contents for the drive after they exchange data.
+The sender records the date when it receives a matching confirmation for that drive from the peer.
+The date describes the verified copy at that time. An interrupted transfer leaves the previous date in place.
+
+Iroh nodes advertise the `peer-full-sync` capability. The `VERIFY_FULL_SYNC` frame (`0x54`) carries a JSON object with the drive identifier, a 32-character hex nonce, and the 64-character hex SHA-256 drive hash in version 2 format. The receiving peer checks its durable drive state and file contents, then echoes the object in `FULL_SYNC_CONFIRMED` (`0x55`) if they match.
+
 Servers can also announce which Drives they hold through the pkarr relay network, so a client that only knows a Drive's identifier can find a node to dial. See [resolution](../identifiers.md#resolution).
 
 ## WebRTC between browsers

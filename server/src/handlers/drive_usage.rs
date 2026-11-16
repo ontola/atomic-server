@@ -1,13 +1,19 @@
 use crate::{
-    appstate::AppState, errors::AtomicServerResult, helpers::get_client_agent_for_signed_url,
+    appstate::AppState,
+    errors::AtomicServerResult,
+    helpers::{get_client_agent_for_signed_url, NO_STORE},
 };
-use actix_web::{web, HttpRequest, HttpResponse};
-use atomic_lib::{errors::AtomicError, Storelike, Subject};
+use actix_web::{http::header, web, HttpRequest, HttpResponse};
+use atomic_lib::{agents::ForAgent, errors::AtomicError, sync::peer, Storelike, Subject};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Deserialize)]
 pub struct DriveUsageParams {
     pub subject: String,
+    /// Read only peer confirmation dates when polling the Sync page.
+    #[serde(default, rename = "peerFullSyncsOnly")]
+    pub peer_full_syncs_only: bool,
 }
 
 /// The wire shape the sync page reads (`fetchNodeDriveUsage`) — camelCase, so
@@ -31,6 +37,9 @@ struct DriveUsageResponse {
     /// it. Only present when the drive is enrolled and the node was told one.
     #[serde(skip_serializing_if = "Option::is_none")]
     managed_by: Option<String>,
+    /// Last confirmation for this drive, indexed by peer node ID.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    peer_full_syncs: BTreeMap<String, i64>,
 }
 
 /// Longest manager label we pass on, in characters.
@@ -60,7 +69,7 @@ async fn check_drive_readable(
     appstate: &AppState,
     req: &HttpRequest,
     subject: &str,
-) -> AtomicServerResult<()> {
+) -> AtomicServerResult<ForAgent> {
     let store = &appstate.store;
     let for_agent = get_client_agent_for_signed_url(req, appstate).await?;
 
@@ -73,13 +82,13 @@ async fn check_drive_readable(
 
     let drive = store.get_resource(&Subject::from(subject)).await?;
     atomic_lib::hierarchy::check_read(store, &drive, &for_agent).await?;
-    Ok(())
+    Ok(for_agent)
 }
 
-/// `GET /drive-usage?subject=<drive>` — per-drive storage (resource count, blob
-/// bytes, Loro-snapshot bytes) for the sync page's usage display. Generic to any
-/// atomic-server, desktop included. Signed and read-checked: the caller must be
-/// allowed to read the drive.
+/// `GET /drive-usage?subject=<drive>` — per-drive storage for the sync page.
+/// Signed callers with read access also receive the last full sync reported
+/// by each peer. `peerFullSyncsOnly=true` reads those dates without computing
+/// the storage breakdown.
 #[tracing::instrument(skip_all)]
 pub async fn handle_drive_usage(
     appstate: web::Data<AppState>,
@@ -89,7 +98,20 @@ pub async fn handle_drive_usage(
     let store = &appstate.store;
     let subject = params.subject.clone();
 
-    check_drive_readable(&appstate, &req, &subject).await?;
+    let for_agent = check_drive_readable(&appstate, &req, &subject).await?;
+    let peer_full_syncs = match for_agent {
+        ForAgent::Public => BTreeMap::new(),
+        _ => peer::last_confirmed_full_syncs(store, &subject),
+    };
+    let mut response = HttpResponse::Ok();
+
+    if params.peer_full_syncs_only || !peer_full_syncs.is_empty() {
+        response.insert_header((header::CACHE_CONTROL, NO_STORE));
+    }
+
+    if params.peer_full_syncs_only {
+        return Ok(response.json(serde_json::json!({ "peerFullSyncs": peer_full_syncs })));
+    }
 
     let usage = store
         .per_drive_usage(std::slice::from_ref(&subject))
@@ -109,13 +131,14 @@ pub async fn handle_drive_usage(
         None
     };
 
-    Ok(HttpResponse::Ok().json(DriveUsageResponse {
+    Ok(response.json(DriveUsageResponse {
         enrolled,
         managed_by,
         name: row.name,
         resource_count: row.resource_count,
         blob_bytes: row.blob_bytes,
         loro_bytes: row.loro_bytes,
+        peer_full_syncs,
     }))
 }
 

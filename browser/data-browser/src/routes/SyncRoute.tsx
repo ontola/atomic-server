@@ -115,8 +115,10 @@ import {
   type ManagedInfo,
   EMPTY_NODE_INFO,
   fetchNodeDriveUsage,
+  fetchPeerFullSyncs,
   forgetServerPeer,
   type NodeDriveUsage,
+  type PeerFullSyncs,
 } from '../helpers/managedServer';
 import { isOriginWithoutNode } from '../helpers/originNode';
 import { getDriveUsage } from '../helpers/managedUsage';
@@ -168,6 +170,18 @@ function nodeDidToRaw(nodeDid: string): string | undefined {
 
 function rawToNodeDid(raw: string): string {
   return nodeSubject(raw);
+}
+
+function peerFullSyncFact(timestamp: number | undefined) {
+  if (timestamp === undefined) return null;
+  const date = new Date(timestamp);
+  const ago = formatTimeAgo(date);
+
+  return (
+    <time dateTime={date.toISOString()} data-testid='peer-last-full-sync'>
+      {ago ? `Last full sync ${ago}` : 'Last full sync just now'}
+    </time>
+  );
 }
 
 function StatusIcon({ status }: { status: NodeStatus }) {
@@ -698,7 +712,7 @@ function SyncPage() {
     () => localStorage.getItem('ws-debug') === '1',
   );
   const [clientDbOn, setClientDbOn] = useState(() => isClientDbEnabled());
-  const { setServer, setDrive, baseURL } = useSettings();
+  const { agent: peerAgent, setServer, setDrive, baseURL } = useSettings();
   const { drive: requestedDrive } = SyncRoute.useSearch();
   // The portal does not know the name of a drive this account only belongs to,
   // so the links to it carry the name this app shows.
@@ -1248,6 +1262,62 @@ function SyncPage() {
   // display-only: reaching them is the server's job, not this tab's.
   const serverPeers =
     !isNode && showServerConn ? (managedInfo.peers ?? []) : [];
+  const peerServer = isNode ? getLocalServerOrigin() : status.serverUrl;
+  const showPeerDates = isNode
+    ? pairedPeers.length > 0
+    : serverPeers.length > 0;
+  const [peerDates, setPeerDates] = useState<
+    (ScopedDriveValue<PeerFullSyncs> & { agentSubject: string }) | null
+  >(null);
+  const peerFullSyncs =
+    peerDates?.agentSubject === peerAgent?.subject
+      ? currentDriveValue(peerDates, status.drive, peerServer)
+      : null;
+
+  useEffect(() => {
+    const drive = status.drive;
+    const agentSubject = peerAgent?.subject;
+
+    if (
+      !drive ||
+      !peerServer ||
+      !peerAgent ||
+      !agentSubject ||
+      !showPeerDates
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    let checking = false;
+
+    const refresh = () => {
+      if (checking) return;
+
+      checking = true;
+
+      void fetchPeerFullSyncs(peerServer, drive, peerAgent).then(value => {
+        checking = false;
+
+        if (!cancelled) {
+          if (value === undefined) clearInterval(timer);
+
+          setPeerDates(
+            value ? { drive, server: peerServer, agentSubject, value } : null,
+          );
+        }
+      });
+    };
+
+    const timer = setInterval(refresh, 5000);
+    refresh();
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [peerAgent, peerServer, showPeerDates, status.drive]);
+
   const connectionCount =
     (showServerConn ? 1 : 0) + pairedPeers.length + serverPeers.length;
 
@@ -2339,8 +2409,9 @@ function SyncPage() {
               link that was live and exchanging data. The server knows whether
               the peer is connected right now and when it last synced. */}
           {pairedPeers.map(peer => {
+            const raw = nodeDidToRaw(peer.nodeId);
             const reported = serverPeers.find(
-              p => nodeDidToRaw(p.nodeId) === nodeDidToRaw(peer.nodeId),
+              p => nodeDidToRaw(p.nodeId) === raw,
             );
             const lastActivity = reported?.lastSeen ?? peer.lastSync;
 
@@ -2364,9 +2435,10 @@ function SyncPage() {
                 }
                 subtitle='Paired device'
                 facts={[
-                  lastActivity
-                    ? `Last sync activity ${formatTimeAgo(new Date(lastActivity)) ?? 'just now'}`
-                    : null,
+                  peerFullSyncFact(raw ? peerFullSyncs?.[raw] : undefined) ??
+                    (lastActivity
+                      ? `Last sync activity ${formatTimeAgo(new Date(lastActivity)) ?? 'just now'}`
+                      : null),
                   // Only what this side actually counted — the accepting node
                   // answers frames through the engine and does not tally what
                   // it served, and a fabricated 0 would be the same lie this
@@ -2410,10 +2482,10 @@ function SyncPage() {
                 }
                 subtitle={`Paired with ${serverLabel(status.serverUrl ?? '')}`}
                 facts={[
-                  // Peer statistics cover the last pass across the link.
-                  peer.lastSeen
-                    ? `Last sync activity ${formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'}`
-                    : null,
+                  peerFullSyncFact(raw ? peerFullSyncs?.[raw] : undefined) ??
+                    (peer.lastSeen
+                      ? `Last sync activity ${formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'}`
+                      : null),
                   // What that sync moved. Deliberately the last pass, not a
                   // lifetime total — see `KnownPeer::last_sent`.
                   !!peer.lastSeen &&

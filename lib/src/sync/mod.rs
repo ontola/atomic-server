@@ -26,6 +26,8 @@ pub mod local_directory;
 pub mod outbox;
 #[cfg(feature = "iroh")]
 pub mod peer;
+#[cfg(feature = "iroh")]
+mod peer_full_sync;
 pub mod policy;
 pub mod protocol;
 /// Pushing a whole drive to a remote server, as a client. Needs the WS client.

@@ -83,7 +83,14 @@ pub mod tag {
     /// Responder → invitee: `[0x53] [json {"drive": "...", "write": bool}]`,
     /// after the rights were granted to the `AUTH`-ed agent.
     pub const INVITE_OK: u8 = 0x53;
+    /// Iroh only: ask whether the peer durably holds the named drive state.
+    pub const VERIFY_FULL_SYNC: u8 = 0x54;
+    /// Iroh only: echo a matching verification request after checking storage.
+    pub const FULL_SYNC_CONFIRMED: u8 = 0x55;
 }
+
+/// Iroh peers with this capability can check full drive storage after syncing.
+pub const CAP_PEER_FULL_SYNC: &str = "peer-full-sync";
 
 /// Feature names a responder advertises in the `AUTH_OK` payload and both
 /// peers advertise in `HELLO`, so a client can adapt to what the other side
