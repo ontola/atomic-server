@@ -741,3 +741,28 @@ navigation. Screenshots remain outside Git in
 `/workspace/artifacts/table-quick-add-dialog`. QuickAddDialog now compiles without
 its old suppression; the existing TableResource suppression and TableViewTabs
 ref diagnostics remain. No rollback or cross-document CAS is claimed.
+
+
+### Shared row-selection controls and query scope
+
+- [x] Move the actual row-header checkbox and selection toolbar into the shared
+  package. Atomic retains row-resource resolution, translated labels and deletion.
+- [x] Move identity-only selection state into a scoped shared service/hook. A new
+  table/class/query scope starts a new selection; stale callbacks can only modify
+  their old service and cannot clear the currently selected identities. Returning
+  to an earlier query does not restore stale ticks.
+- [ ] Bind native selection commands to public ORM mutation guards; this UI/state
+  extraction does not enable whole-result enumeration or native delete undo.
+
+Full page/session orchestration, remaining row/selection dialogs and renderer
+adoption remain open before catalog/lens discovery.
+
+Selection validation: 202 package tests and 180 Atomic adapter tests pass, with
+package/host typechecks and a packed clean consumer. Actual SDK desktop/mobile
+checks select two stable row identities, use the shared toolbar, keep selection
+buttons out of the grid's text-editor input lookup and independently confirm that
+clearing selection changes no stored rows. The new shared controls/state and
+Atomic checkbox adapter compile cleanly. Existing TableResource/TableViewTabs
+compiler diagnostics remain. Atomic now disables selection deletion when table
+write access is unavailable while allowing local selection clearing. Screenshots
+remain outside Git in `/workspace/artifacts/table-row-selection`.

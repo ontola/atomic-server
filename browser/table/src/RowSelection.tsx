@@ -7,6 +7,7 @@ export interface TableRowSelectCheckboxProps {
   checked: boolean;
   selectionActive: boolean;
   label: string;
+  disabled?: boolean;
   onToggle: () => void;
 }
 /** A button keeps the grid's first-input editor lookup intact. */
@@ -14,6 +15,7 @@ export function TableRowSelectCheckbox({
   checked,
   selectionActive,
   label,
+  disabled,
   onToggle,
 }: TableRowSelectCheckboxProps) {
   return (
@@ -23,10 +25,11 @@ export function TableRowSelectCheckbox({
         role='checkbox'
         aria-checked={checked}
         aria-label={label}
+        disabled={disabled}
         onMouseDown={event => event.stopPropagation()}
         onClick={event => {
           event.stopPropagation();
-          onToggle();
+          if (!disabled) onToggle();
         }}
       >
         <FaCheck />
@@ -36,7 +39,9 @@ export function TableRowSelectCheckbox({
 }
 export interface TableRowSelectionActionsProps {
   count: number;
-  onDelete: () => void;
+  disabled?: boolean;
+  onDelete?: () => void;
+  deleteUnavailable?: string;
   onClear: () => void;
   Button?: ComponentType<ButtonHTMLAttributes<HTMLButtonElement>>;
   messages?: Partial<{
@@ -49,7 +54,9 @@ export interface TableRowSelectionActionsProps {
 /** Selection counts describe exactly the identities selected by the host. */
 export function TableRowSelectionActions({
   count,
+  disabled,
   onDelete,
+  deleteUnavailable,
   onClear,
   Button = DefaultButton,
   messages,
@@ -66,10 +73,26 @@ export function TableRowSelectionActions({
   return (
     <SelectionBar role='toolbar' aria-label={text.label}>
       <SelectionCount>{text.count}</SelectionCount>
-      <Button type='button' title={text.delete} onClick={onDelete}>
+      <Button
+        type='button'
+        title={deleteUnavailable ?? text.delete}
+        aria-label={text.delete}
+        disabled={disabled || !onDelete || !!deleteUnavailable}
+        onClick={() => {
+          if (!disabled && !deleteUnavailable) onDelete?.();
+        }}
+      >
         <FaTrash />
       </Button>
-      <Button type='button' title={text.clear} onClick={onClear}>
+      <Button
+        type='button'
+        title={text.clear}
+        aria-label={text.clear}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) onClear();
+        }}
+      >
         <FaXmark />
       </Button>
     </SelectionBar>

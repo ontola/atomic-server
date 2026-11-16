@@ -325,16 +325,23 @@ function AddViewMenu({
  * them. Sits next to the filter button, where the other table actions live.
  */
 function RowSelectionActions(): JSX.Element | null {
-  const { selectedRows, clearRowSelection, deleteSelectedRows } =
+  const { selectedRows, clearRowSelection, deleteSelectedRows, canWriteTable } =
     useContext(TablePageContext);
 
   return (
     <TableRowSelectionActions
       count={selectedRows.size}
       Button={IconBtn}
-      onDelete={() => {
-        void deleteSelectedRows();
-      }}
+      onDelete={
+        canWriteTable
+          ? () => {
+              void deleteSelectedRows();
+            }
+          : undefined
+      }
+      deleteUnavailable={
+        !canWriteTable ? 'This table is read-only.' : undefined
+      }
       onClear={clearRowSelection}
       messages={{
         label: 'Selected rows',

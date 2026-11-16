@@ -361,3 +361,8 @@ export {
   type TableRowSelectCheckboxProps,
   type TableRowSelectionActionsProps,
 } from './RowSelection.js';
+
+export {
+  createTableRowSelection,
+  useTableRowSelection,
+} from './rowSelectionState.js';
