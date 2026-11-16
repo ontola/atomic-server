@@ -48,6 +48,7 @@ export interface TableFilterChipProps {
   derivedUnit?: { suffix: string; allowsNow: boolean };
   renderValueSummary?: (value: string) => ReactNode;
   hint?: ReactNode;
+  unavailable?: boolean;
   Popover?: ComponentType<PropsWithChildren<TableFilterPopoverProps>>;
   Input?: ComponentType<InputHTMLAttributes<HTMLInputElement>>;
   Select?: ComponentType<SelectHTMLAttributes<HTMLSelectElement>>;
@@ -59,6 +60,7 @@ export interface TableFilterChipProps {
     now: string;
     date: string;
     value: string;
+    unavailable: string;
   }>;
 }
 const defaults = {
@@ -68,6 +70,7 @@ const defaults = {
   now: 'now',
   date: 'a date',
   value: 'Filter value',
+  unavailable: 'This column is unavailable.',
 };
 
 /** Actual TablePage filter-chip UI: open/edit/remove state, numeric/date modes
@@ -86,6 +89,7 @@ export function TableFilterChip({
   derivedUnit,
   renderValueSummary,
   hint,
+  unavailable,
   Popover = DefaultPopover,
   Input,
   Select,
@@ -151,6 +155,7 @@ export function TableFilterChip({
           <RemoveButton
             type='button'
             onClick={() => {
+              changeOpen(false);
               onRemove();
             }}
             title={text.remove}
@@ -159,60 +164,76 @@ export function TableFilterChip({
             <FaXmark />
           </RemoveButton>
         </HeaderRow>
-        <>
-          {operators.length > 1 && (
-            <SelectComponent
-              aria-label={text.operator}
-              value={filter.operator}
-              onChange={event =>
-                onOperatorChange(event.target.value as TableFilterOperator)
-              }
-            >
-              {operators.map(operator => (
-                <option key={operator.value} value={operator.value}>
-                  {operator.label}
-                </option>
-              ))}
-            </SelectComponent>
-          )}
-          {derivedUnit ? (
-            <>
-              {derivedUnit.allowsNow && (
-                <SelectComponent
-                  aria-label={text.compare}
-                  value={filter.value === 'now' ? 'now' : 'date'}
-                  onChange={event =>
-                    onValueChange(event.target.value === 'now' ? 'now' : '')
-                  }
-                >
-                  <option value='now'>{text.now}</option>
-                  <option value='date'>{text.date}</option>
-                </SelectComponent>
-              )}
-              {!(derivedUnit.allowsNow && filter.value === 'now') && (
-                <ValueRow>
-                  {Wrapper ? <Wrapper>{input}</Wrapper> : input}
-                  {derivedUnit.suffix && <Suffix>{derivedUnit.suffix}</Suffix>}
-                </ValueRow>
-              )}
-            </>
-          ) : renderValueInput ? (
-            renderValueInput({
-              value: filter.value,
-              onChange: onValueChange,
-              autoFocus: true,
-            })
-          ) : (
-            <TableFilterValueInput
-              {...(valueInputProps ?? { kind: 'text' })}
-              label={valueInputProps?.label ?? text.value}
-              value={filter.value}
-              onChange={onValueChange}
-              autoFocus
-            />
-          )}
-          {hint && <Hint>{hint}</Hint>}
-        </>
+        {unavailable ? (
+          <Hint>{text.unavailable}</Hint>
+        ) : (
+          <>
+            {operators.length > 1 && (
+              <SelectComponent
+                aria-label={text.operator}
+                value={filter.operator}
+                onChange={event => {
+                  const operator = operators.find(
+                    option => option.value === event.target.value,
+                  );
+                  if (operator) onOperatorChange(operator.value);
+                }}
+              >
+                {!operators.some(
+                  operator => operator.value === filter.operator,
+                ) && (
+                  <option value={filter.operator} disabled>
+                    {operatorLabel}
+                  </option>
+                )}
+                {operators.map(operator => (
+                  <option key={operator.value} value={operator.value}>
+                    {operator.label}
+                  </option>
+                ))}
+              </SelectComponent>
+            )}
+            {derivedUnit ? (
+              <>
+                {derivedUnit.allowsNow && (
+                  <SelectComponent
+                    aria-label={text.compare}
+                    value={filter.value === 'now' ? 'now' : 'date'}
+                    onChange={event =>
+                      onValueChange(event.target.value === 'now' ? 'now' : '')
+                    }
+                  >
+                    <option value='now'>{text.now}</option>
+                    <option value='date'>{text.date}</option>
+                  </SelectComponent>
+                )}
+                {!(derivedUnit.allowsNow && filter.value === 'now') && (
+                  <ValueRow>
+                    {Wrapper ? <Wrapper>{input}</Wrapper> : input}
+                    {derivedUnit.suffix && (
+                      <Suffix>{derivedUnit.suffix}</Suffix>
+                    )}
+                  </ValueRow>
+                )}
+              </>
+            ) : renderValueInput ? (
+              renderValueInput({
+                value: filter.value,
+                onChange: onValueChange,
+                autoFocus: true,
+              })
+            ) : (
+              <TableFilterValueInput
+                {...(valueInputProps ?? { kind: 'text' })}
+                label={valueInputProps?.label ?? text.value}
+                value={filter.value}
+                onChange={onValueChange}
+                autoFocus
+              />
+            )}
+            {hint && <Hint>{hint}</Hint>}
+          </>
+        )}
       </Inner>
     </Popover>
   );

@@ -13443,3 +13443,11 @@ msgstr "Any"
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Value…"
 msgstr "Value…"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Unavailable column"
+msgstr "Unavailable column"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "This column is unavailable."
+msgstr "This column is unavailable."
