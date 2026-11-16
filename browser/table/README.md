@@ -247,3 +247,16 @@ explicit backend policy and defaults off. Native adapters retain their typed
 parser and exactness checks. Hosts supply labels/style primitives, tag labels and
 a resource-picker leaf; the shared control owns the actual value UI and change/
 blur behavior. This does not yet extract the entire filter-chip/menu/page shell.
+
+`TableFilterChip` now owns the real chip, popup state, operator selector,
+computed numeric/date modes and removal action. Its default popup uses Radix;
+Atomic supplies its existing popup/style primitives for dialog/control-lock
+integration. Unsupported stored operators stay visible until explicitly changed,
+and numeric `now` text stays editable when it is invalid for that unit. Popup
+content is labelled by its column header.
+
+Unavailable targets retain a removable chip instead of disappearing. Atomic's
+filter bar uses this recovery path, so removing a missing computed constraint
+restores the scoped query without editing raw metadata. Backend-specific value
+and reference adapters retain their responsibilities; the full filter-menu/page
+orchestration and renderer port remain open.

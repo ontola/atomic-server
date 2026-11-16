@@ -43,14 +43,20 @@ export function TableFilterChip({
   const propResource = useResource(column?.subject ?? unknownSubject);
   const [name] = useString(propResource, core.properties.name);
   const key = filterKey(filter);
-  const label = derived ? derived.label : columnLabel(name, column!.shortname);
+  const label = derived
+    ? derived.label
+    : column
+      ? columnLabel(name, column.shortname)
+      : 'Unavailable column';
   const choices = derived
     ? DERIVED_FILTER_OPERATORS
-    : operatorsForDatatype(column!.datatype);
+    : column
+      ? operatorsForDatatype(column.datatype)
+      : [];
   const labelOperator = (operator: typeof filter.operator) =>
-    derived
+    derived || !column
       ? operatorLabel(operator)
-      : operatorLabelForColumn(operator, column!.datatype);
+      : operatorLabelForColumn(operator, column.datatype);
   const unit = derived ? derivedFilterUnit(derived) : undefined;
 
   return (
@@ -62,6 +68,7 @@ export function TableFilterChip({
       onValueChange={value => setFilterValue(key, value)}
       onOperatorChange={operator => setFilterOperator(key, operator)}
       onRemove={() => removeFilter(key)}
+      unavailable={!column && !derived}
       derivedUnit={unit}
       Popover={Popover}
       Input={InputStyled}
@@ -74,6 +81,7 @@ export function TableFilterChip({
         now: /* @wc-include */ 'now',
         date: /* @wc-include */ 'a date',
         value: 'Filter value',
+        unavailable: 'This column is unavailable.',
       }}
       renderValueInput={
         column
