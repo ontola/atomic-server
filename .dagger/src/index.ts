@@ -682,25 +682,11 @@ export class AtomicServer {
         // 2. Packages reached through node_modules need a `dist`. Building
         //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
         //    `@tomic/edit-mode/react` unresolvable, and `@tomic/form-app`
-        //    needs `@tomic/form-renderer`. All six build from TypeScript
+        //    needs `@tomic/form-renderer`. Build the complete dependency graph,
+        //    including the shared UI/table/pure-helper packages, from TypeScript
         //    alone, so this stays in the cheap static tier beside lint and
         //    `cargo fmt`: no WASM, no Rust.
-        .withExec([
-          'pnpm',
-          '--filter',
-          '@tomic/form-renderer',
-          '--filter',
-          '@tomic/lib',
-          '--filter',
-          '@tomic/react',
-          '--filter',
-          '@tomic/plugin',
-          '--filter',
-          '@tomic/service-ui',
-          '--filter',
-          '@tomic/edit-mode',
-          'build',
-        ])
+        .withExec(['pnpm', '--filter', '@tomic/data-browser^...', 'build'])
         .withExec([
           'pnpm',
           '--filter=!@tomic/data-browser',
