@@ -380,3 +380,11 @@ failed operation whose adapter proves no mutation began. Closing a partially
 applied operation leaves it pending for explicit retry; it is not a rollback.
 Atomic adapters validate current metadata and merge only the edited entry,
 preserving unrelated entries and implicit timer Duration defaults.
+
+
+`TableQuickAddFields` owns create-button configuration fields and raw draft
+conversion for both table and dashboard callers. Backend adapters supply compatible
+text fields, preset kinds/targets and translated metadata options. Numeric presets
+retain incomplete text, reject non-finite values and accept zero. Additional stored
+presets are retained with an explicit note while this form edits the first preset.
+Dialog lifecycle and persistence remain host-bound for this configuration.
