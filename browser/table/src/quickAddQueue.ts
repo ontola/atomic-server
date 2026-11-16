@@ -44,7 +44,7 @@ export function createTableQuickAddQueue() {
         };
 
         try {
-          request.onError?.(error);
+          if (active) request.onError?.(error);
         } catch {
           /* Keep draining accepted requests. */
         }

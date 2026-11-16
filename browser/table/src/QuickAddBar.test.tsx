@@ -122,3 +122,75 @@ it('serializes a request enqueued synchronously by a completion subscriber', asy
   await waitFor(() => expect(queue.getSnapshot().pending).toBe(0));
   expect(calls).toEqual(['First', 'Second']);
 });
+it('suppresses old-scope failure callbacks while continuing its accepted writes', async () => {
+  let reject!: (error: Error) => void;
+  const oldCreate = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((_, fail) => {
+          reject = fail;
+        }),
+    )
+    .mockResolvedValue(undefined);
+  const oldError = vi.fn(),
+    oldCreated = vi.fn(),
+    newCreate = vi.fn();
+  const { rerender } = render(
+    <TableQuickAddBar
+      scope='old'
+      label='Add'
+      field
+      create={oldCreate}
+      onError={oldError}
+      onCreated={oldCreated}
+    />,
+  );
+  const input = screen.getByRole('textbox');
+
+  for (const value of ['First', 'Second']) {
+    fireEvent.change(input, { target: { value } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  }
+
+  rerender(
+    <TableQuickAddBar scope='new' label='Add' field create={newCreate} />,
+  );
+  reject(Error('Old scope failed'));
+  await waitFor(() => expect(oldCreate).toHaveBeenCalledTimes(2));
+  expect(oldError).not.toHaveBeenCalled();
+  expect(oldCreated).not.toHaveBeenCalled();
+  expect(newCreate).not.toHaveBeenCalled();
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+it('starts only one drain when an enqueue subscriber accepts another request', async () => {
+  const queue = createTableQuickAddQueue(),
+    calls: string[] = [];
+  let added = false,
+    release!: () => void;
+  queue.subscribe(() => {
+    if (!added && queue.getSnapshot().pending === 1) {
+      added = true;
+      queue.enqueue({
+        value: 'Second',
+        create: async value => {
+          calls.push(value);
+        },
+      });
+    }
+  });
+  queue.enqueue({
+    value: 'First',
+    create: value => {
+      calls.push(value);
+
+      return new Promise<void>(resolve => {
+        release = resolve;
+      });
+    },
+  });
+  expect(calls).toEqual(['First']);
+  release();
+  await waitFor(() => expect(queue.getSnapshot().pending).toBe(0));
+  expect(calls).toEqual(['First', 'Second']);
+});
