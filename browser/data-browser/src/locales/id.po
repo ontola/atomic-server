@@ -9205,6 +9205,7 @@ msgid "Click or drag to open"
 msgstr "Klik atau seret untuk membuka"
 
 #: src/actions/appMenuItems.tsx
+#: src/components/CloudVaultWatcher.tsx
 msgid "Open sync settings"
 msgstr "Buka pengaturan sinkronisasi"
 
@@ -13538,3 +13539,19 @@ msgstr "Ruang kerja ini belum memiliki salinan yang terkonfirmasi di Cloud Vault
 #: src/components/CloudVaultWatcher.tsx
 msgid "Retry backup"
 msgstr "Coba cadangkan lagi"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No copy of this drive could be verified in Cloud Vault or on an external server."
+msgstr "Tidak ada salinan drive ini yang dapat diverifikasi di Cloud Vault atau server eksternal."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is more than 24 hours old."
+msgstr "Cadangan terakhir yang terverifikasi berusia lebih dari 24 jam."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is at least 7 days old."
+msgstr "Cadangan terakhir yang terverifikasi berusia setidaknya 7 hari."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No backup from the last 7 days could be verified."
+msgstr "Tidak ada cadangan dari 7 hari terakhir yang dapat diverifikasi."

@@ -1807,7 +1807,11 @@ requests, even if a server request would have succeeded.
   fails the first storage PUT, also tests an enrollment refusal, verifies a
   local edit survives reload with the notice, and keeps the notice visible
   until a retry is confirmed. A later failed backup retains the last success
-  time in Sync settings.
+  time in Sync settings. Turning off a confirmed Vault backup for a
+  browser-only workspace shows a hard warning that survives reload and links
+  to Sync settings. The spec checks a medium warning at two days, a hard
+  warning at eight days, and a manual backup of an unchanged drive writing
+  a new confirmed checkpoint that clears the warning.
 
 ## Boolean reads and managed development origins
 

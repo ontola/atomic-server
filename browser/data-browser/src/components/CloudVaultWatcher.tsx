@@ -1,10 +1,15 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useLocation } from '@tanstack/react-router';
+import { FaTriangleExclamation } from 'react-icons/fa6';
 import toast from 'react-hot-toast';
 import { styled } from 'styled-components';
-import { useStore } from '@tomic/react';
+import { StoreEvents, type Store, useStore, withDeadline } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { deviceHasDriveData } from '../helpers/driveData';
+import {
+  getDriveProtectionWarning,
+  readDriveProtection,
+} from '../helpers/driveProtection';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { CLOUD_SERVER_PRICE } from '../helpers/cloudServerPrice';
 import { paths } from '../routes/paths';
@@ -14,6 +19,7 @@ import { ToastBody } from './Notifications/toastStyles';
 import {
   AUTO_BACKUP_RETRY_MS,
   ensureVaultBackup,
+  onVaultChanged,
   onVaultFull,
   watchForVaultBackups,
 } from '../helpers/managed/vaultAutoBackup';
@@ -35,7 +41,7 @@ import {
  */
 export function CloudVaultWatcher() {
   const store = useStore();
-  const { agent, drive } = useSettings();
+  const { agent, baseURL, drive } = useSettings();
   const subject = agent?.subject;
   const navigate = useNavigateWithTransition();
   const { pathname } = useLocation();
@@ -47,6 +53,15 @@ export function CloudVaultWatcher() {
     subscribeFirstVaultBackupStatus,
     () => (subject && drive ? getFirstVaultBackupStatus(subject, drive) : null),
   );
+  const warning = useDriveProtectionWarning(
+    store,
+    subject,
+    onSignupScreen || firstBackupStatus ? '' : drive,
+    baseURL,
+  );
+  const severity = warning?.severity;
+  const missingCopy = warning?.missingCopy;
+  const backup = warning?.backup;
 
   useEffect(() => watchForVaultBackups(store), [store]);
 
@@ -55,7 +70,7 @@ export function CloudVaultWatcher() {
 
     const id = toast.custom(
       <VaultNoticeToast data-testid='vault-first-backup-status'>
-        <ToastBody role='status'>
+        <ToastBody role={firstBackupStatus === 'failed' ? 'alert' : 'status'}>
           <VaultNoticeTitle>
             {firstBackupStatus === 'failed'
               ? 'The first Cloud Vault backup failed.'
@@ -78,6 +93,41 @@ export function CloudVaultWatcher() {
 
     return () => toast.remove(id);
   }, [drive, firstBackupStatus, onSignupScreen, store, subject]);
+
+  useEffect(() => {
+    if (!severity) return;
+
+    const id = toast.custom(
+      <VaultNoticeToast
+        $medium={severity === 'medium'}
+        data-testid='vault-no-backup-status'
+        data-severity={severity}
+      >
+        <ToastBody role={severity === 'hard' ? 'alert' : 'status'}>
+          <ProtectionTitle $medium={severity === 'medium'}>
+            <FaTriangleExclamation aria-hidden />
+            {missingCopy
+              ? 'No copy of this drive could be verified in Cloud Vault or on an external server.'
+              : backup === 'day-old'
+                ? 'The latest verified backup is more than 24 hours old.'
+                : backup === 'week-old'
+                  ? 'The latest verified backup is at least 7 days old.'
+                  : 'No backup from the last 7 days could be verified.'}
+          </ProtectionTitle>
+        </ToastBody>
+        <Button
+          onClick={() =>
+            void navigate(`${paths.sync}?${new URLSearchParams({ drive })}`)
+          }
+        >
+          Open sync settings
+        </Button>
+      </VaultNoticeToast>,
+      { id: `drive-protection:${drive}`, duration: Infinity },
+    );
+
+    return () => toast.remove(id);
+  }, [backup, drive, missingCopy, navigate, severity]);
 
   // A full vault is an upsell moment, not an error: no Bugsnag, and a button
   // that goes to the plans for that drive.
@@ -156,14 +206,112 @@ export function CloudVaultWatcher() {
   return null;
 }
 
-const VaultNoticeToast = styled.div`
+function useDriveProtectionWarning(
+  store: Store,
+  agentSubject: string | undefined,
+  drive: string,
+  server: string,
+) {
+  const [state, setState] = useState<{
+    agentSubject: string;
+    drive: string;
+    server: string;
+    warning: ReturnType<typeof getDriveProtectionWarning>;
+  } | null>(null);
+
+  useEffect(() => {
+    const agent = store.getAgent();
+
+    if (!drive || !agent?.subject || agent.subject !== agentSubject) return;
+    const subject = agent.subject;
+
+    let cancelled = false;
+    let checking = false;
+    let recheck = false;
+    let lastSync: number | undefined;
+
+    const updateWarning = async () => {
+      if (!(await withDeadline(deviceHasDriveData(store, drive), 8_000, false)))
+        return;
+      if (cancelled) return;
+
+      const evidence = await withDeadline(
+        readDriveProtection(store, drive, agent, server),
+        10_000,
+        { vaultHasCopy: false, lastBackupAt: null, serverHasCopy: false },
+      );
+
+      if (cancelled || store.getAgent()?.subject !== subject) return;
+      setState({
+        agentSubject: subject,
+        drive,
+        server,
+        warning: getDriveProtectionWarning(evidence, Date.now()),
+      });
+    };
+
+    function check() {
+      if (cancelled || store.getAgent()?.subject !== subject) return;
+
+      if (checking) {
+        recheck = true;
+
+        return;
+      }
+
+      checking = true;
+      void updateWarning().finally(() => {
+        checking = false;
+
+        if (recheck) {
+          recheck = false;
+          check();
+        }
+      });
+    }
+
+    check();
+    const poll = setInterval(check, AUTO_BACKUP_RETRY_MS);
+    const offVault = onVaultChanged(changed => {
+      if (changed === drive) check();
+    });
+    const offSync = store.on(StoreEvents.SyncStatusChanged, status => {
+      const sync = status.lastDriveSync;
+
+      if (sync?.drive === drive && sync.timestamp !== lastSync) {
+        lastSync = sync.timestamp;
+        check();
+      }
+    });
+    window.addEventListener('focus', check);
+    window.addEventListener('online', check);
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      offVault();
+      offSync();
+      window.removeEventListener('focus', check);
+      window.removeEventListener('online', check);
+    };
+  }, [agentSubject, drive, server, store]);
+
+  return state?.agentSubject === agentSubject &&
+    state?.drive === drive &&
+    state.server === server
+    ? state.warning
+    : null;
+}
+
+const VaultNoticeToast = styled.div<{ $medium?: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.6rem;
   max-width: 22rem;
   padding: 0.7rem 0.8rem;
-  border: 1px solid ${p => p.theme.colors.alert};
+  border: 1px solid
+    ${p => (p.$medium ? p.theme.colors.warning : p.theme.colors.alert)};
   border-radius: ${p => p.theme.radius};
   background: ${p => p.theme.colors.bg};
   box-shadow: ${p => p.theme.boxShadowSoft};
@@ -180,4 +328,16 @@ const UpgradeButton = styled(Button)`
 const VaultNoticeTitle = styled.span`
   font-weight: 600;
   font-size: 0.85rem;
+`;
+
+const ProtectionTitle = styled(VaultNoticeTitle)<{ $medium: boolean }>`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+
+  svg {
+    color: ${p => (p.$medium ? p.theme.colors.warning : p.theme.colors.alert)};
+    flex: none;
+    margin-top: 0.15em;
+  }
 `;

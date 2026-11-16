@@ -9202,6 +9202,7 @@ msgid "Click or drag to open"
 msgstr "Haz clic o arrastra para abrir"
 
 #: src/actions/appMenuItems.tsx
+#: src/components/CloudVaultWatcher.tsx
 msgid "Open sync settings"
 msgstr "Abrir ajustes de sincronización"
 
@@ -13540,3 +13541,19 @@ msgstr "Este espacio de trabajo aún no tiene una copia confirmada en Cloud Vaul
 #: src/components/CloudVaultWatcher.tsx
 msgid "Retry backup"
 msgstr "Reintentar copia de seguridad"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No copy of this drive could be verified in Cloud Vault or on an external server."
+msgstr "No se pudo verificar ninguna copia de esta unidad en Cloud Vault ni en un servidor externo."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is more than 24 hours old."
+msgstr "La última copia de seguridad verificada tiene más de 24 horas."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is at least 7 days old."
+msgstr "La última copia de seguridad verificada tiene al menos 7 días."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No backup from the last 7 days could be verified."
+msgstr "No se pudo verificar ninguna copia de seguridad de los últimos 7 días."

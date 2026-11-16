@@ -283,9 +283,8 @@ type VaultChangeListener = (driveSubject: string) => void;
 const vaultChangeListeners = new Set<VaultChangeListener>();
 
 /**
- * Called when a drive's enrollment or backup changed through the automatic
- * path, so a screen that shows the vault's status (the Sync page) re-reads it
- * rather than keeping the "off" it rendered a moment earlier.
+ * Called when a drive's enrollment or backup changes, so other views can
+ * re-read the current Vault status.
  */
 export function onVaultChanged(listener: VaultChangeListener): () => void {
   vaultChangeListeners.add(listener);
@@ -295,7 +294,7 @@ export function onVaultChanged(listener: VaultChangeListener): () => void {
   };
 }
 
-function notifyVaultChanged(driveSubject: string): void {
+export function notifyVaultChanged(driveSubject: string): void {
   for (const listener of vaultChangeListeners) listener(driveSubject);
 }
 

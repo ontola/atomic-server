@@ -18,17 +18,21 @@ type Reservation = {
 /** Mock only the account service and object storage. Uploads are sealed by
  * the real client, and confirming an object requires a successful PUT.
  */
-async function mockVault(page: Page, failure: Failure) {
+async function mockVault(page: Page, failure: Failure | null) {
   const firstUpload = Promise.withResolvers<void>();
   const firstConfirmation = Promise.withResolvers<void>();
   const state = {
-    failure: failure as Failure | null,
+    failure,
     enrollAttempts: 0,
     uploadAttempts: 0,
     confirmAttempts: 0,
     confirmed: 0,
+    lastConfirmedKind: null as Reservation['kind'] | null,
     releaseFirstUpload: firstUpload.resolve,
     releaseFirstConfirmation: firstConfirmation.resolve,
+    setBackupAge(days: number) {
+      enrollment.last_backup_at = Math.floor(Date.now() / 1000) - days * 86400;
+    },
   };
   const enrollment = {
     id: VAULT,
@@ -40,6 +44,8 @@ async function mockVault(page: Page, failure: Failure) {
     used_bytes: 0,
     last_backup_at: null as number | null,
   };
+  const isEnrolled = () =>
+    !!enrollment.drive_subject && enrollment.status === 'active';
   const reservations = new Map<string, Reservation>();
   const uploaded = new Set<string>();
   const lanes: Record<string, number> = {};
@@ -94,17 +100,18 @@ async function mockVault(page: Page, failure: Failure) {
         const { drive_subject, agent_subject } = request.postDataJSON();
         enrollment.drive_subject = drive_subject;
         enrollment.agent_subject = agent_subject;
+        enrollment.status = 'active';
 
         return route.fulfill({ json: { enrollment } });
       }
 
       case 'drives':
         return route.fulfill({
-          json: enrollment.drive_subject ? [enrollment] : [],
+          json: isEnrolled() ? [enrollment] : [],
         });
       case 'drive-status':
         return route.fulfill({
-          json: enrollment.drive_subject
+          json: isEnrolled()
             ? {
                 enabled: true,
                 is_yours: true,
@@ -124,6 +131,11 @@ async function mockVault(page: Page, failure: Failure) {
             confirmed_objects: state.confirmed,
           },
         });
+      case `${VAULT}/disable`:
+        enrollment.status = 'disabled';
+
+        return route.fulfill({ json: {} });
+
       case `${VAULT}/key`:
         if (request.method() === 'PUT') {
           envelope = request.postDataJSON().envelope;
@@ -169,6 +181,7 @@ async function mockVault(page: Page, failure: Failure) {
           const object = reservations.get(object_id)!;
           expect(size_bytes).toBe(object.size_bytes);
           state.confirmed++;
+          state.lastConfirmedKind = object.kind;
           enrollment.used_bytes += size_bytes;
           if (object.kind === 'pack')
             lanes[object.lane_device_pubkey] = object.segment;
@@ -226,6 +239,18 @@ async function editWorkspace(page: Page, value: string) {
 
 test.use({ serviceWorkers: 'block' });
 
+async function createWorkspace(page: Page) {
+  await page.goto(
+    `${FRONTEND_URL}/app/welcome?from_portal=true&email=${encodeURIComponent(EMAIL)}`,
+  );
+  await page
+    .getByRole('button', { name: 'Save and continue', exact: true })
+    .click({ timeout: 30_000 });
+  await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30_000 });
+
+  return page.url();
+}
+
 for (const failure of ['upload', 'enroll'] as const) {
   test(`a managed signup can recover from a failed first Vault ${failure}`, async ({
     page,
@@ -263,15 +288,7 @@ for (const failure of ['upload', 'enroll'] as const) {
     const canary = 'Edited before the first Cloud Vault backup';
 
     try {
-      await page.goto(
-        `${FRONTEND_URL}/app/welcome?from_portal=true&email=${encodeURIComponent(EMAIL)}`,
-      );
-      await page
-        .getByRole('button', { name: 'Save and continue', exact: true })
-        .click({ timeout: 30_000 });
-      await expect(page).toHaveURL(/\/app\/show\?subject=/, {
-        timeout: 30_000,
-      });
+      await createWorkspace(page);
       await expect(status).toContainText(
         'This workspace has no confirmed Cloud Vault copy.',
       );
@@ -345,3 +362,96 @@ for (const failure of ['upload', 'enroll'] as const) {
     }
   });
 }
+
+test('a browser-only workspace warns when Vault is off or its last copy gets old', async ({
+  page,
+  browserDiagnostics,
+}) => {
+  test.slow();
+  browserDiagnostics.expect(
+    'warning',
+    /^Service Worker registration blocked by Playwright$/,
+    'The same-origin test service responses are intercepted by Playwright.',
+    6,
+    undefined,
+    { optional: true },
+  );
+
+  const vault = await mockVault(page, null);
+  await page.route(/\/drive-usage(?:\?|$)/, route =>
+    route.fulfill({ json: { enrolled: false, resourceCount: 0 } }),
+  );
+  vault.releaseFirstConfirmation();
+  const workspaceUrl = await createWorkspace(page);
+  await expect.poll(() => vault.confirmed).toBe(1);
+  await expect(page.getByTestId('vault-first-backup-status')).toBeHidden();
+
+  await page.goto(`${FRONTEND_URL}/app/sync`);
+  const status = page.getByTestId('vault-no-backup-status');
+  const panel = page.getByTestId('vault-panel');
+  await expect(panel.getByTestId('vault-summary')).toContainText(/Backed up/);
+  await expect(status).toBeHidden();
+  await panel.getByRole('button', { name: 'Turn off', exact: true }).click();
+  await expect(panel).toHaveAttribute('data-vault-state', 'off');
+
+  await page.goto(workspaceUrl);
+  await expect(status).toHaveAttribute('data-severity', 'hard');
+  await page.reload();
+  await expect(status).toHaveAttribute('data-severity', 'hard', {
+    timeout: 30_000,
+  });
+  await expect(status).toContainText(
+    'No copy of this drive could be verified in Cloud Vault or on an external server.',
+  );
+  await expect(page.getByTestId('vault-first-backup-status')).toBeHidden();
+
+  if (process.env.ATOMIC_VAULT_OFF_SCREENSHOT) {
+    await page.screenshot({ path: process.env.ATOMIC_VAULT_OFF_SCREENSHOT });
+  }
+
+  const openSync = status.getByRole('button', { name: 'Open sync settings' });
+  await openSync.click();
+  await expect(page).toHaveURL(/\/app\/sync(?:\?|$)/);
+  await panel.getByRole('button', { name: 'Turn on Cloud Vault' }).click();
+  await expect(panel.getByTestId('vault-summary')).toContainText(/Backed up/);
+  await expect(status).toBeHidden();
+
+  // Reload with unchanged workspace data and progressively older timestamps
+  // from the service. A successful old upload still exists in both cases.
+  vault.setBackupAge(2);
+  await page.goto(workspaceUrl);
+  await expect(status).toHaveAttribute('data-severity', 'medium');
+  await expect(status).toContainText(
+    'The latest verified backup is more than 24 hours old.',
+  );
+
+  if (process.env.ATOMIC_VAULT_MEDIUM_SCREENSHOT) {
+    await page.screenshot({ path: process.env.ATOMIC_VAULT_MEDIUM_SCREENSHOT });
+  }
+
+  vault.setBackupAge(8);
+  await page.reload();
+  await expect(status).toHaveAttribute('data-severity', 'hard');
+  await expect(status).toContainText(
+    'The latest verified backup is at least 7 days old.',
+  );
+
+  if (process.env.ATOMIC_VAULT_STALE_SCREENSHOT) {
+    await page.screenshot({ path: process.env.ATOMIC_VAULT_STALE_SCREENSHOT });
+  }
+
+  await openSync.click();
+  await expect(panel.getByTestId('vault-summary')).toContainText(
+    'Backed up 8d ago',
+  );
+  const before = vault.confirmed;
+  // With no intervening edits, backing up an old recovery point still writes
+  // a fresh checkpoint and updates the service's last-confirmed timestamp.
+  await panel.getByRole('button', { name: 'Back up now' }).click();
+  await expect.poll(() => vault.confirmed).toBeGreaterThan(before);
+  expect(vault.lastConfirmedKind).toBe('checkpoint');
+  await expect(panel.getByTestId('vault-summary')).toContainText(
+    /Backed up \d+h ago/,
+  );
+  await expect(status).toBeHidden();
+});
