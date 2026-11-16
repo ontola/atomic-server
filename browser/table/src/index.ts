@@ -307,3 +307,9 @@ export {
   type TableNewColumnMenuPresentation,
   type TableNewColumnMenuProps,
 } from './NewColumnMenu.js';
+
+export {
+  TableQuickAddBar,
+  type TableQuickAddBarProps,
+  type TableQuickAddButtonProps,
+} from './QuickAddBar.js';
