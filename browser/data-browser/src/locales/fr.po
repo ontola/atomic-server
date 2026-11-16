@@ -12373,9 +12373,8 @@ msgstr "Fichier de sauvegarde"
 msgid "This is not an Atomic vault backup file. Pick a file ending in .atomic-vault."
 msgstr "Ceci n’est pas un fichier de sauvegarde du coffre Atomic. Choisissez un fichier se terminant par .atomic-vault."
 
-#: src/helpers/managed/vaultFile.ts
-msgid "Atomic vault backup"
-msgstr "Sauvegarde du coffre Atomic"
+#~ msgid "Atomic vault backup"
+#~ msgstr "Sauvegarde du coffre Atomic"
 
 #: src/helpers/managed/vaultFile.ts
 msgid "This backup file is incomplete. Download it again."
