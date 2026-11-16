@@ -14,6 +14,7 @@ You can keep working while the app shows that the first backup is pending. If it
 *Storage and hosting* shows the last verified full sync for Cloud Server or a self-hosted Atomic Server, and the last successful backup for Cloud Vault.
 Atomic uses the newest of these times to check how recently it verified your data on an external server or in Cloud Vault. It shows a warning after 24 hours and a stronger warning after seven days or when it can’t verify either a full sync or a backup.
 For server sync, Atomic checks that the server has the drive’s local changes. A full sync with an external server clears the warning even with Cloud Vault turned off.
+In Sync settings, a paired device shows *Last full sync* when it has confirmed that it holds this drive’s resources and uploaded files. The date belongs to this drive and this device.
 Use *Back up now* in Sync settings to make a fresh Cloud Vault backup, including when an unchanged drive has an older backup.
 
 ![The drive switcher and the sidebar tree](../assets/app/drives.png)
