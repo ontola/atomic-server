@@ -1,6 +1,14 @@
-import type { ComponentType, InputHTMLAttributes, ReactNode } from 'react';
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useState,
+  type ComponentType,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from 'react';
 import { styled } from 'styled-components';
-import type { RowActionKind } from './views/configuration.js';
+import type { RowActionKind, RowActionSpec } from './views/configuration.js';
 import { tableTheme } from './theme.js';
 
 export interface TableRowActionTarget {
@@ -17,16 +25,10 @@ export interface TableRowActionKind {
   targets: readonly TableRowActionTarget[];
 }
 export interface TableRowActionFieldsProps {
+  initial?: RowActionSpec;
   kinds: readonly TableRowActionKind[];
-  kind: RowActionKind;
-  property: string;
-  label: string;
-  value: string;
-  values: readonly { key: string; option: ReactNode }[];
-  onKindChange: (kind: RowActionKind) => void;
-  onPropertyChange: (property: string) => void;
-  onValueChange: (value: string) => void;
-  onLabelChange: (label: string) => void;
+  disabled?: boolean;
+  onChange: (draft: RowActionSpec, valid: boolean) => void;
   Input?: ComponentType<InputHTMLAttributes<HTMLInputElement>>;
   messages?: Partial<{
     kind: string;
@@ -35,27 +37,59 @@ export interface TableRowActionFieldsProps {
     pickOption: string;
     label: string;
     noTargets: string;
+    invalidNumber: string;
   }>;
 }
-/** Existing action fields; the host retains draft state, initialization and save policy. */
+/** Actual action form, including target/literal resets and raw numeric validation.
+ * Metadata adapters provide compatible targets and subscribed option labels. */
 export function TableRowActionFields({
+  initial,
   kinds,
-  kind,
-  property,
-  label,
-  value,
-  values,
-  onKindChange,
-  onPropertyChange,
-  onValueChange,
-  onLabelChange,
+  disabled,
+  onChange,
   Input = DefaultInput,
   messages,
 }: TableRowActionFieldsProps) {
-  const id = 'row-action';
+  const id = useId();
+  const [actionId] = useState(initial?.id ?? '');
+  const [kind, setKind] = useState<RowActionKind>(
+    initial?.kind ?? kinds[0]?.kind ?? 'setNow',
+  );
+  const [property, setProperty] = useState(initial?.property ?? '');
+  const [label, setLabel] = useState(initial?.label ?? '');
+  const [value, setValue] = useState(
+    initial?.value === undefined ? '' : String(initial.value),
+  );
   const action = kinds.find(candidate => candidate.kind === kind);
-  const target = { values };
+  const target = action?.targets.find(candidate => candidate.key === property);
   const numeric = action?.valueField?.input === 'number';
+  const numericValid =
+    !numeric ||
+    (!!value.trim() &&
+      /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value.trim()) &&
+      Number.isFinite(Number(value)));
+  const draft: RowActionSpec = {
+    id: actionId,
+    kind,
+    property,
+    label: label || action?.defaultLabel || '',
+    ...(action?.valueField
+      ? { value: numeric && numericValid ? Number(value) : value }
+      : {}),
+  };
+  const valid =
+    !disabled &&
+    !!target &&
+    !!draft.label.trim() &&
+    numericValid &&
+    (!action?.valueField || value !== '') &&
+    (!target.values?.length ||
+      target.values.some(option => option.key === value));
+  const draftKey = JSON.stringify(draft);
+  const notify = useEffectEvent(() => onChange(draft, valid));
+  useEffect(() => {
+    notify();
+  }, [draftKey, valid]);
   const text = {
     kind: 'Does what',
     property: 'To column',
@@ -63,18 +97,23 @@ export function TableRowActionFields({
     pickOption: 'Pick an option…',
     label: 'Button says',
     noTargets: 'This table has no column of the right kind for that yet.',
+    invalidNumber: 'Enter a finite number.',
     ...messages,
   };
 
   return (
-    <Fields>
+    <Fields disabled={disabled}>
       <Field>
         <label htmlFor={`${id}-kind`}>{text.kind}</label>
         <Select
           id={`${id}-kind`}
           data-testid='action-config-kind'
           value={kind}
-          onChange={event => onKindChange(event.target.value as RowActionKind)}
+          onChange={event => {
+            setKind(event.target.value as RowActionKind);
+            setProperty('');
+            setValue('');
+          }}
         >
           {kinds.map(option => (
             <option key={option.kind} value={option.kind}>
@@ -90,7 +129,10 @@ export function TableRowActionFields({
           id={`${id}-property`}
           data-testid='action-config-property'
           value={property}
-          onChange={event => onPropertyChange(event.target.value)}
+          onChange={event => {
+            setProperty(event.target.value);
+            setValue('');
+          }}
         >
           <option value=''>{text.pickProperty}</option>
           {action?.targets.map(candidate => candidate.option)}
@@ -105,7 +147,7 @@ export function TableRowActionFields({
               id={`${id}-value`}
               data-testid='action-config-value'
               value={value}
-              onChange={event => onValueChange(event.target.value)}
+              onChange={event => setValue(event.target.value)}
             >
               <option value=''>{text.pickOption}</option>
               {target.values.map(option => option.option)}
@@ -114,11 +156,14 @@ export function TableRowActionFields({
             <Input
               id={`${id}-value`}
               data-testid='action-config-value'
-              type={numeric ? 'number' : 'text'}
+              type='text'
+              inputMode={numeric ? 'decimal' : undefined}
               value={value}
-              onChange={event => onValueChange(event.target.value)}
+              aria-invalid={!numericValid}
+              onChange={event => setValue(event.target.value)}
             />
           )}
+          {!numericValid && <Hint role='alert'>{text.invalidNumber}</Hint>}
         </Field>
       )}
       <Field>
@@ -128,43 +173,41 @@ export function TableRowActionFields({
           data-testid='action-config-label'
           value={label}
           placeholder={action?.defaultLabel}
-          onChange={event => onLabelChange(event.target.value)}
+          onChange={event => setLabel(event.target.value)}
         />
       </Field>
     </Fields>
   );
 }
 
-const Fields = styled.div`
+const Fields = styled.fieldset`
   display: flex;
   flex-direction: column;
-  gap: ${p => tableTheme(p.theme).size(2)};
+  gap: 1rem;
+  padding: 0;
+  margin: 0;
+  border: none;
 `;
-
 const Field = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${p => tableTheme(p.theme).size(1)};
-
+  gap: 0.5rem;
   label {
     font-size: 0.85rem;
     color: ${p => tableTheme(p.theme).colors.textLight};
   }
 `;
-
 const Hint = styled.span`
   font-size: 0.8rem;
   color: ${p => tableTheme(p.theme).colors.textLight};
 `;
-
 const Select = styled.select`
   padding: 0.4rem;
   border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
   border-radius: ${p => tableTheme(p.theme).radius};
-  background-color: ${p => tableTheme(p.theme).colors.bg};
+  background: ${p => tableTheme(p.theme).colors.bg};
   color: ${p => tableTheme(p.theme).colors.text};
 `;
-
 const DefaultInput = styled.input`
   padding: 0.4rem;
   border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
