@@ -13530,3 +13530,19 @@ msgstr "Pressing Send report shares the reviewed chat text, error messages, and 
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The first Cloud Vault backup failed."
+msgstr "The first Cloud Vault backup failed."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault hasn’t completed the first backup yet."
+msgstr "Cloud Vault hasn’t completed the first backup yet."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "This workspace has no confirmed Cloud Vault copy."
+msgstr "This workspace has no confirmed Cloud Vault copy."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Retry backup"
+msgstr "Retry backup"

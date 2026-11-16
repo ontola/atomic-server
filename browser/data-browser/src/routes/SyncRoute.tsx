@@ -1315,7 +1315,10 @@ function SyncPage() {
       serverSync: showServerConn,
       hosting: cloudEnrolled,
       managed: isCloudSyncAvailable(managedInfo),
-      vaultOn: vault.status.state === 'on' || vault.status.state === 'other',
+      vaultOn:
+        (vault.status.state === 'on' &&
+          vault.status.details.confirmed_objects > 0) ||
+        (vault.status.state === 'other' && vault.status.lastBackupAt !== null),
     });
   }
 

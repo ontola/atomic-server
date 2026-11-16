@@ -1802,6 +1802,12 @@ requests, even if a server request would have succeeded.
   on a free port, and preserves its report/build logs. `--preview` opts into Vite.
   Failure traces are retained. Real Cloud Vault integration requires an explicitly
   supplied `ATOMIC_VAULT_PORTAL_URL`; the runner never discovers unrelated portals.
+- `vault-first-backup-status.spec.ts` uses the real signup, local database, and
+  Vault export with a mocked account service and object store. It holds and
+  fails the first storage PUT, also tests an enrollment refusal, verifies a
+  local edit survives reload with the notice, and keeps the notice visible
+  until a retry is confirmed. A later failed backup retains the last success
+  time in Sync settings.
 
 ## Boolean reads and managed development origins
 

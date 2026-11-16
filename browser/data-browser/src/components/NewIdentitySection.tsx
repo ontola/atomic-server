@@ -48,7 +48,7 @@ interface NewIdentitySectionProps {
   /** Invite onboarding resumes acceptance instead of opening the personal drive. */
   navigateToDrive?: boolean;
   /** Called after the agent and drive are created. Use this for any extra server-side steps (e.g. /setup). */
-  onAfterCreate?: (driveSubject: string) => Promise<void>;
+  onAfterCreate?: (driveSubject: string) => void | Promise<void>;
   /** If true, start creation immediately on mount without showing the button. */
   autoStart?: boolean;
   /**

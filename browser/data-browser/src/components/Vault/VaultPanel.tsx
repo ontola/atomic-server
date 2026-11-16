@@ -176,15 +176,15 @@ export function VaultPanel({
 
   const { enrollment, details } = status;
   const suspended = enrollment.status !== 'active';
+  const hasBackup = details.confirmed_objects > 0;
 
   // The status line is the state: when it last went up. How much is stored
   // is the meter line, in the same place as Cloud Server's.
-  const summary =
-    details.confirmed_objects === 0
-      ? `Nothing backed up to ${PRODUCT_NAME} yet`
-      : enrollment.last_backup_at
-        ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
-        : `Backed up to ${PRODUCT_NAME}`;
+  const summary = !hasBackup
+    ? `Nothing backed up to ${PRODUCT_NAME} yet`
+    : enrollment.last_backup_at
+      ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
+      : `Backed up to ${PRODUCT_NAME}`;
   const objects = plural(details.confirmed_objects, ['# object', '# objects']);
 
   // Included in Cloud Server, the vault's allowance is part of that plan, whose
@@ -193,6 +193,16 @@ export function VaultPanel({
   const quota = enrollment.quota_bytes > 0 ? enrollment.quota_bytes : null;
   const nearlyFull = quota !== null && enrollment.used_bytes >= quota * 0.9;
   const showQuota = !included || nearlyFull;
+  // Tests can check progress from the object count without reading the copy.
+  const backupSummary = (
+    <span
+      data-testid='vault-summary'
+      data-vault-objects={details.confirmed_objects}
+      data-vault-bytes={enrollment.used_bytes}
+    >
+      {summary}
+    </span>
+  );
 
   return (
     <>
@@ -205,7 +215,15 @@ export function VaultPanel({
         tagline={tagline}
         status={
           error
-            ? { tone: 'error', text: <ErrorText>{error}</ErrorText> }
+            ? {
+                tone: 'error',
+                text: (
+                  <>
+                    {backupSummary}
+                    <ErrorText>{error}</ErrorText>
+                  </>
+                ),
+              }
             : restoreProgress !== null
               ? {
                   tone: 'busy',
@@ -226,19 +244,8 @@ export function VaultPanel({
                     ),
                   }
                 : {
-                    tone: 'ok',
-                    text: (
-                      // The object count is an attribute as well as prose: a
-                      // test asserting that a second backup stored something
-                      // should read the number, not parse a sentence.
-                      <span
-                        data-testid='vault-summary'
-                        data-vault-objects={details.confirmed_objects}
-                        data-vault-bytes={enrollment.used_bytes}
-                      >
-                        {summary}
-                      </span>
-                    ),
+                    tone: hasBackup ? 'ok' : 'waiting',
+                    text: backupSummary,
                   }
         }
         details={
@@ -247,7 +254,7 @@ export function VaultPanel({
               data-testid='vault-usage'
               usedBytes={enrollment.used_bytes}
               quotaBytes={showQuota ? quota : null}
-              backedUp
+              backedUp={hasBackup}
               facts={[objects]}
             />
             {!showQuota && (

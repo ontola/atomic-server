@@ -9,6 +9,10 @@ You get a home drive when you start.
 The drive switcher at the top of the sidebar lists *Private drive*, *New Drive* (for a team or project), *View all drives* and *Storage and hosting*.
 Drive settings let you manage who has access, and what is installed.
 
+When you create a workspace through an Atomic account, Cloud Vault starts its first backup in the background.
+You can keep working while the app shows that the first backup is pending. If it fails, use *Retry backup*.
+*Storage and hosting* shows when the last backup succeeded.
+
 ![The drive switcher and the sidebar tree](../assets/app/drives.png)
 
 ## Folders

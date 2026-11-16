@@ -29,6 +29,7 @@ import {
 } from './vaultFile';
 import { restoreDriveToSnapshot } from './vaultRestore';
 import { onVaultChanged, setVaultOptOut } from './vaultAutoBackup';
+import { confirmFirstVaultBackup } from './vaultFirstBackupStatus';
 
 /**
  * Cloud Vault state for one drive, ready to bind to a UI.
@@ -218,10 +219,16 @@ export function useVaultBackup({
         return;
       }
 
+      const details = await getVaultState(enrollment.drive_pseudonym);
+
+      if (agentSubject && details.confirmed_objects > 0) {
+        confirmFirstVaultBackup(agentSubject, driveSubject);
+      }
+
       setStatus({
         state: 'on',
-        enrollment,
-        details: await getVaultState(enrollment.drive_pseudonym),
+        enrollment: details.enrollment ?? enrollment,
+        details,
       });
     } catch (e) {
       // Not signed in, no portal configured, offline. All of these mean "we
@@ -229,7 +236,7 @@ export function useVaultBackup({
       // enable button here would produce a confusing failure on click.
       setStatus({ state: 'unavailable', reason: (e as Error).message });
     }
-  }, [driveSubject]);
+  }, [agentSubject, driveSubject]);
 
   // The automatic path (sign-in, the boot watcher) may enrol this drive after
   // the first read came back "off"; re-read when it says so.
