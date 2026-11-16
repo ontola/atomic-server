@@ -808,3 +808,68 @@ it('resolves implicit timer duration identically for actual row filters and tota
   await waitFor(() => expect(data.result.current.viewReady).toBe(false));
   expect(data.result.current.query.scope.rowClass).toBeUndefined();
 });
+
+it('renames the explicitly captured inactive tab without renaming the active view', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const other = await state.store.newResource({
+    subject: 'https://example.com/other-view',
+    noParent: true,
+  });
+  await other.set(core.properties.parent, state.table.subject, false);
+  await other.set(core.properties.name, 'Other', false);
+  await other.set(dataBrowser.properties.viewKind, 'table', false);
+  const saveOther = vi.spyOn(other, 'save').mockResolvedValue('persisted');
+  await act(async () => {
+    await state.table.push(
+      dataBrowser.properties.tableViews,
+      [other.subject],
+      true,
+    );
+  });
+  const activeName = state.view.get(core.properties.name);
+  act(() => state.result.current.renameView('Renamed other', other.subject));
+  await waitFor(() => expect(saveOther).toHaveBeenCalledOnce());
+  expect(other.get(core.properties.name)).toBe('Renamed other');
+  expect(state.view.get(core.properties.name)).toBe(activeName);
+  expect(state.viewSave).not.toHaveBeenCalled();
+});
+it('refuses an explicitly named tab with a foreign table owner before changing its name', async () => {
+  const state = await setup({ foreignOwner: true });
+  await waitFor(() => expect(state.result.current.viewError).toBeTruthy());
+  const original = state.view.get(core.properties.name);
+  act(() => state.result.current.renameView('Wrong owner', state.view.subject));
+  await waitFor(() => expect(state.result.current.viewSaveError).toBeTruthy());
+  expect(state.view.get(core.properties.name)).toBe(original);
+  expect(state.viewSave).not.toHaveBeenCalled();
+});
+
+it('does not rename a captured tab removed while its resource is loading', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const originalName = state.view.get(core.properties.name);
+  const getResource = state.store.getResource.bind(state.store);
+  let finishLoading!: () => void;
+  const loading = new Promise<typeof state.view>(resolve => {
+    finishLoading = () => resolve(state.view);
+  });
+  const fetch = vi
+    .spyOn(state.store, 'getResource')
+    .mockImplementation(subject =>
+      subject === state.view.subject ? loading : getResource(subject),
+    );
+
+  act(() =>
+    state.result.current.renameView('Stale rename', state.view.subject),
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith(state.view.subject));
+  await act(async () => {
+    await state.table.set(dataBrowser.properties.tableViews, [], false);
+    finishLoading();
+  });
+
+  await waitFor(() => expect(state.result.current.viewSaveError).toBeTruthy());
+  expect(state.view.get(core.properties.name)).toBe(originalName);
+  expect(state.viewSave).not.toHaveBeenCalled();
+  fetch.mockRestore();
+});
