@@ -581,7 +581,9 @@ function ViewTab({
                 header: true,
                 onClick: () => undefined,
               },
-              ...VIEW_KINDS.filter(kind => kind !== ownType && kind !== 'syncables').map(kind => {
+              ...VIEW_KINDS.filter(
+                kind => kind !== ownType && kind !== 'syncables',
+              ).map(kind => {
                 const Icon = VIEW_KIND_ICONS[kind];
 
                 return {

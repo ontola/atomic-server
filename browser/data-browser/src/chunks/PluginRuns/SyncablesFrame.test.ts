@@ -27,7 +27,12 @@ describe('built-in Syncables iframe protocol boundary', () => {
       op: 'syncablesContext',
       args: {},
     };
-    expect(isBuiltinSyncablesRequest({ ...request, op: 'syncablesDeleteEverything' })).toBe(false);
+    expect(
+      isBuiltinSyncablesRequest({
+        ...request,
+        op: 'syncablesDeleteEverything',
+      }),
+    ).toBe(false);
     expect(isBuiltinSyncablesRequest({ ...request, op: 'save' })).toBe(false);
     expect(isBuiltinSyncablesRequest({ ...request, id: '1' })).toBe(false);
     expect(isBuiltinSyncablesRequest({ ...request, args: [] })).toBe(false);

@@ -8,10 +8,9 @@ import {
 
 describe('parseProxyPlatforms', () => {
   it('parses the legacy catalog array and deduplicates platform IDs', () => {
-    expect(parseProxyPlatforms(['github-issues', 'pets', 'github-issues'])).toEqual([
-      'github-issues',
-      'pets',
-    ]);
+    expect(
+      parseProxyPlatforms(['github-issues', 'pets', 'github-issues']),
+    ).toEqual(['github-issues', 'pets']);
   });
 
   it('rejects malformed or non-array proxy responses', () => {
@@ -70,7 +69,9 @@ describe('structured proxy app index', () => {
     expect(() =>
       parseProxyAppIndex({
         ...entry,
-        platforms: [{ ...entry.platforms[0], document: 'https://evil.example' }],
+        platforms: [
+          { ...entry.platforms[0], document: 'https://evil.example' },
+        ],
       }),
     ).toThrow('Invalid proxy platform document path');
   });
@@ -81,9 +82,9 @@ describe('structured proxy app index', () => {
       status: 200,
       json: async () => entry,
     })) as unknown as typeof fetch;
-    expect(await fetchProxyAppIndex('https://proxy.example', { transport })).toEqual(
-      entry.platforms,
-    );
+    expect(
+      await fetchProxyAppIndex('https://proxy.example', { transport }),
+    ).toEqual(entry.platforms);
     expect(transport).toHaveBeenCalledTimes(1);
     expect(transport).toHaveBeenCalledWith(
       'https://proxy.example/catalog/apps',
@@ -97,13 +98,16 @@ describe('structured proxy app index', () => {
         ? { ok: false, status: 404 }
         : { ok: true, status: 200, json: async () => ['pets'] },
     ) as unknown as typeof fetch;
-    expect(await fetchProxyAppIndex('https://proxy.example', { transport })).toEqual([
-      { id: 'pets', name: 'pets' },
-    ]);
+    expect(
+      await fetchProxyAppIndex('https://proxy.example', { transport }),
+    ).toEqual([{ id: 'pets', name: 'pets' }]);
   });
 
   it('surfaces transient failures instead of treating them as an empty catalog', async () => {
-    const transport = vi.fn(async () => ({ ok: false, status: 503 })) as unknown as typeof fetch;
+    const transport = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+    })) as unknown as typeof fetch;
     await expect(
       fetchProxyAppIndex('https://proxy.example', { transport }),
     ).rejects.toThrow('HTTP 503');

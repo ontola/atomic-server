@@ -8,6 +8,9 @@ on:
       - 'browser/data-browser/src/chunks/PluginRuns/syncable*'
       - 'browser/data-browser/src/chunks/PluginRuns/SyncablesFrame.tsx'
       - 'browser/data-browser/src/chunks/TablePage/**'
+      - 'browser/data-browser/src/helpers/proxyConnections*'
+      - 'browser/data-browser/src/chunks/AppPage/ProxyConnectReturn*'
+      - 'browser/e2e/scripts/local-e2e.mjs'
       - 'browser/e2e/tests/syncables-github.spec.ts'
       - 'server/src/handlers/builtin_syncables.js'
       - 'server/src/handlers/plugin_ui.rs'
@@ -47,6 +50,46 @@ jobs:
         run: pnpm --filter @tomic/e2e typecheck
       - name: Test built-in Syncables unit specs
         working-directory: browser
-        run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncableHierarchy.test.ts src/chunks/PluginRuns/syncablesHost.test.ts src/chunks/PluginRuns/SyncablesFrame.test.ts src/chunks/PluginRuns/syncablesProxyScope.test.ts src/chunks/PluginRuns/proxyCatalog.test.ts
+        run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncableHierarchy.test.ts src/chunks/PluginRuns/syncablesHost.test.ts src/chunks/PluginRuns/SyncablesFrame.test.ts src/chunks/PluginRuns/syncablesProxyScope.test.ts src/chunks/PluginRuns/proxyCatalog.test.ts src/helpers/proxyConnections.test.ts src/chunks/AppPage/ProxyConnectReturn.test.tsx
       - name: Validate sandbox module JavaScript syntax
         run: node --check server/src/handlers/builtin_syncables.js
+
+  github-playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: browser
+    env:
+      CARGO_BUILD_JOBS: '4'
+      ATOMIC_E2E_CARGO_PROFILE: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.98.1'
+          targets: wasm32-unknown-unknown,wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: syncables-playwright
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: browser/package.json
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+          cache-dependency-path: browser/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @tomic/e2e exec playwright install-deps chromium
+      - run: pnpm test-e2e:local syncables-github.spec.ts --workers=1 --retries=0
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: syncables-github-playwright
+          path: |
+            .e2e-runs/*/*.log
+            .e2e-runs/*/report.json
+            .e2e-runs/*/report/
+          include-hidden-files: true

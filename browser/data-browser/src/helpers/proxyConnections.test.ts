@@ -4,6 +4,7 @@ import { Agent, JSCryptoProvider, decodeB64 } from '@tomic/react';
 import {
   CAPABILITY_TTL_SECONDS,
   ProxyConnections,
+  base64url,
   canonicalAgent,
   capabilityClaims,
 } from './proxyConnections';
@@ -76,8 +77,11 @@ async function sha256Hex(text: string) {
  * A proxy that checks every call's v2 signature the way the real one does,
  * and keeps connections and delegations.
  */
-function fakeProxy() {
+function fakeProxy(keyed = false, platform = 'pets') {
   const calls: { method: string; url: string; body?: string }[] = [];
+  const sealedWith = new Map<string, string>();
+  const githubUsers = new Map<string, number>();
+  let githubUser = 100;
   const connections: {
     connection_id: string;
     platform: string;
@@ -96,12 +100,14 @@ function fakeProxy() {
     const body = init.body as string | undefined;
     const h = init.headers as Record<string, string>;
     calls.push({ method, url, body });
+    const key = h['x-connection-key'];
     const message = [
       'atomic-request-v2',
       method,
       url,
       h['x-atomic-timestamp'],
       await sha256Hex(body ?? ''),
+      ...(key !== undefined ? [await sha256Hex(key)] : []),
     ].join('\n');
 
     if (
@@ -121,22 +127,70 @@ function fakeProxy() {
     const path = new URL(url).pathname;
 
     if (path === '/connect/redeem') {
+      const redemption = JSON.parse(body!);
+      const id = keyed ? redemption.connection_id : 'new';
+
+      if (keyed) {
+        if (
+          !/^[A-Za-z0-9_-]{43}$/.test(id) ||
+          !/^k1\.[A-Za-z0-9_-]{43}$/.test(redemption.connection_key)
+        )
+          return Response.json(
+            { error: 'invalid_connection_key' },
+            { status: 400 },
+          );
+        sealedWith.set(id, redemption.connection_key);
+        githubUsers.set(id, githubUser);
+      }
+
       connections.push({
-        connection_id: 'new',
-        platform: 'pets',
+        connection_id: id,
+        platform,
         owner: h['x-atomic-agent'],
         delegations: [],
       });
 
       return Response.json({
-        connection_id: 'new',
-        platform: 'pets',
+        connection_id: id,
+        platform,
         owner: h['x-atomic-agent'],
       });
     }
 
     if (path === '/connections' && method === 'GET')
       return Response.json({ owner: USER, connections, runtimes: [] });
+
+    const source = /^\/proxy\/([^/]+)\/(pets\/feed|github-issues\/user)$/.exec(
+      path,
+    );
+
+    if (source && method === 'GET') {
+      if (
+        !key ||
+        sealedWith.get(source[1]) !== key ||
+        !connections.some(
+          row =>
+            row.connection_id === source[1] &&
+            row.owner === h['x-atomic-agent'],
+        )
+      )
+        return Response.json(
+          { error: 'connection_key_required' },
+          { status: 401 },
+        );
+      if (source[2] === 'github-issues/user')
+        return Response.json({
+          id: githubUsers.get(source[1]),
+          login: 'fixture',
+        });
+
+      return Response.json([{ id: 9, name: 'Max' }], {
+        headers: {
+          link: '</feed?page=2>; rel="next"',
+          'x-private-test': 'discard',
+        },
+      });
+    }
 
     const agents = /^\/connections\/([^/]+)\/agents$/.exec(path);
 
@@ -147,13 +201,43 @@ function fakeProxy() {
       return Response.json({ ok: true });
     }
 
+    const connection = /^\/connections\/([^/]+)$/.exec(path);
+
+    if (connection && method === 'DELETE' && keyed) {
+      const index = connections.findIndex(
+        row =>
+          row.connection_id === connection[1] &&
+          row.owner === h['x-atomic-agent'],
+      );
+
+      if (index !== -1) {
+        connections.splice(index, 1);
+
+        return new Response(null, { status: 204 });
+      }
+    }
+
     return Response.json(
       { error: 'not_found', message: path },
       { status: 404 },
     );
   });
 
-  return { http: http as unknown as typeof fetch, calls, connections };
+  return {
+    http: http as unknown as typeof fetch,
+    calls,
+    connections,
+    authorizeGithubUser(id: number) {
+      githubUser = id;
+    },
+  };
+}
+
+function callback(handoff: string) {
+  const redirect = new URL(new URL(handoff).searchParams.get('redirect_uri')!);
+  redirect.searchParams.set('connection_code', 'handoff');
+
+  return redirect.searchParams;
 }
 
 async function connected(storage = new MemoryStorage()) {
@@ -344,6 +428,189 @@ describe('ProxyConnections', () => {
     });
     expect(proxy.calls).toEqual([]);
     expect(storage.length).toBe(0);
+  });
+
+  it('redeems a keyed connection and authorizes signed reads after a reload', async () => {
+    const storage = new MemoryStorage();
+    const proxy = fakeProxy(true);
+    const first = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    const url = new URL(
+      await first.startKeyed(
+        SCOPE,
+        'pets',
+        `${PAGE}/app/show?subject=x`,
+        'Pets',
+        PAGE,
+      ),
+    );
+    const back = new URL(url.searchParams.get('redirect_uri')!);
+    back.searchParams.set('connection_code', 'handoff');
+    const reloaded = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    const finished = await reloaded.finish(back.searchParams);
+    const redemption = JSON.parse(proxy.calls[0].body!);
+    const id = finished.connectionId!;
+
+    expect(finished).toEqual({
+      returnTo: `${PAGE}/app/show?subject=x`,
+      connected: true,
+      connectionId: id,
+    });
+    expect(id).toEqual(redemption.connection_id);
+    expect(proxy.calls).toHaveLength(1);
+    expect(reloaded.isReturn(back.searchParams)).toBe(false);
+    const verifierDigest = new Uint8Array(
+      await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(redemption.code_verifier),
+      ),
+    );
+    expect(url.searchParams.get('code_challenge')).toBe(
+      base64url(verifierDigest),
+    );
+    expect(url.href).not.toContain(redemption.connection_key);
+    expect(storage.values()).not.toContain(redemption.connection_key);
+    expect(await reloaded.listKeyed('pets')).toMatchObject([
+      { connection_id: id, platform: 'pets', delegations: [] },
+    ]);
+
+    const destination = new URL(`/proxy/${id}/pets/feed`, ORIGIN);
+    const read = await reloaded.readKeyed(destination);
+    expect(read).toMatchObject({
+      status: 200,
+      body: [{ id: 9, name: 'Max' }],
+      headers: { link: '</feed?page=2>; rel="next"' },
+    });
+    const call = vi.mocked(proxy.http).mock.calls.at(-1)!;
+    expect(call[1]).toMatchObject({
+      method: 'GET',
+      redirect: 'error',
+      credentials: 'omit',
+    });
+    expect(read.headers['x-private-test']).toBeUndefined();
+    await expect(
+      reloaded.readKeyed(new URL(destination.pathname, 'https://other.test')),
+    ).rejects.toThrow('proxy origin');
+    await expect(
+      reloaded.readKeyed(new URL(destination.href + '#fragment')),
+    ).rejects.toThrow('proxy origin');
+    await expect(
+      reloaded.readKeyed(
+        new URL(destination.pathname.replace('/pets/', '/github/'), ORIGIN),
+      ),
+    ).rejects.toThrow('Reconnect');
+    expect(proxy.calls).toHaveLength(3);
+  });
+
+  it('does not redeem a keyed handoff as a different Atomic agent', async () => {
+    const storage = new MemoryStorage();
+    const proxy = fakeProxy(true);
+    const first = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    const url = new URL(
+      await first.startKeyed(SCOPE, 'pets', `${PAGE}/x`, 'Pets', PAGE),
+    );
+    const back = new URL(url.searchParams.get('redirect_uri')!);
+    back.searchParams.set('connection_code', 'handoff');
+    const different = new ProxyConnections(
+      storage,
+      ORIGIN,
+      () => new Agent(new JSCryptoProvider('B'.repeat(42) + 'E')),
+      proxy.http,
+    );
+    await expect(different.finish(back.searchParams)).rejects.toThrow(
+      'Atomic account',
+    );
+    expect(proxy.calls).toEqual([]);
+  });
+
+  it('permits a keyed retry link only for the saved same-origin return', async () => {
+    const storage = new MemoryStorage();
+    const proxy = fakeProxy(true);
+    const connections = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    const returnTo = `${PAGE}/app/show?subject=mirror`;
+    const handoff = callback(
+      await connections.startKeyed(SCOPE, 'pets', returnTo, 'Pets', PAGE),
+    );
+    expect(connections.keyedReturnTo(handoff, PAGE)).toBe(returnTo);
+    expect(
+      connections.keyedReturnTo(handoff, 'https://other.test'),
+    ).toBeUndefined();
+    expect(
+      connections.keyedReturnTo(new URLSearchParams(), PAGE),
+    ).toBeUndefined();
+    const key = storage.key(0)!;
+    storage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(storage.getItem(key)!),
+        returnTo: 'https://other.test/app/show',
+      }),
+    );
+    expect(connections.keyedReturnTo(handoff, PAGE)).toBeUndefined();
+  });
+
+  it('keeps the original slot through GitHub reconnect and rejects a different profile', async () => {
+    const storage = new MemoryStorage();
+    const proxy = fakeProxy(true, 'github-issues');
+    const connections = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    const returnTo = `${PAGE}/app/show?subject=mirror`;
+    const started = await connections.startKeyed(
+      SCOPE,
+      'github-issues',
+      returnTo,
+      'GitHub',
+      PAGE,
+    );
+    const slot = (await connections.finish(callback(started))).connectionId!;
+    const reconnect = () =>
+      connections.startKeyedReconnect(SCOPE, slot, returnTo, 'GitHub', PAGE);
+    expect(await connections.canReconnectGithub(slot)).toBe(false);
+    await expect(reconnect()).rejects.toThrow('verified GitHub account');
+    await connections.rememberKeyedGithubPrincipal(slot, '100');
+    await expect(
+      connections.rememberKeyedGithubPrincipal(slot, '101'),
+    ).rejects.toThrow('different GitHub account');
+    expect(await connections.canReconnectGithub(slot)).toBe(true);
+
+    // The current proxy row can expire or be revoked. The remembered slot
+    // still drives the reconnect button even when no active row is listed.
+    await connections.revoke(slot);
+    expect(await connections.listKeyed('github-issues')).toMatchObject([
+      { connection_id: slot, platform: 'github-issues' },
+    ]);
+    proxy.authorizeGithubUser(101);
+    await expect(
+      connections.finish(callback(await reconnect())),
+    ).rejects.toThrow('same GitHub account');
+    expect(await connections.activeKeyedConnection('github-issues', slot)).toBe(
+      slot,
+    );
+    expect(
+      proxy.connections.filter(row => row.platform === 'github-issues'),
+    ).toHaveLength(0);
+
+    proxy.authorizeGithubUser(100);
+    const reloaded = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    expect(await reloaded.finish(callback(await reconnect()))).toEqual({
+      returnTo,
+      connected: true,
+      connectionId: slot,
+    });
+    const active = await reloaded.activeKeyedConnection('github-issues', slot);
+    expect(active).not.toBe(slot);
+    expect(await reloaded.listKeyed('github-issues')).toMatchObject([
+      { connection_id: slot, platform: 'github-issues', delegations: [] },
+    ]);
+    expect(
+      await reloaded.readKeyed(
+        new URL(`/proxy/${active}/github-issues/user`, ORIGIN),
+      ),
+    ).toMatchObject({
+      status: 200,
+      body: { id: 100 },
+    });
+    expect(
+      proxy.calls.filter(({ url }) => url.endsWith('/agents')),
+    ).toHaveLength(0);
   });
 });
 

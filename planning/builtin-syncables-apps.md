@@ -1,6 +1,6 @@
 # Built-in Syncables apps: architecture and decisions
 
-**Status:** agreed design, implementation pending · **Date:** 2026-11-13  
+**Status:** GitHub implementation under verification · **Date:** 2026-11-13
 **Issues:** [atomic-server#2521](https://github.com/ontola/atomic-server/issues/2521), [atomic-plugins#733](https://github.com/ontola/atomic-plugins/issues/733)  
 **Wireframes and click-through:** [builtin-syncables-wireframes.md](builtin-syncables-wireframes.md).
 
@@ -91,3 +91,20 @@ These are host-recognized view kinds that can be rendered by one generic built-i
 5. E2E proves OAuth return, connection reuse, personal namespace, two organizations, repo ownership, move/link stability, no credential leaks, cancellation, reconnect and partial-read safety.
 
 A clickable HTML **concept** (not a production host implementation) accompanies the wireframes; use it to validate wording and navigation before wiring the live state.
+
+## Implementation and verification
+
+- [x] Configured catalog, account-menu entry and idempotent GitHub installation.
+- [x] Source-scoped iframe operations and owner-signed keyed proxy reads.
+- [x] Personal and organization discovery, stable repository and mirror
+  identities, typed idempotent issue rows and pause.
+- [ ] Verify keyed OAuth return, retry, reconnect and repository issue sync
+  through the native browser workflow and PR checks.
+- [ ] Verify the GitHub OAuth flow on a deployed keyed proxy with the new
+  catalog.
+
+The GitHub view requests approved operations by name. The host fixes the
+proxy origin, active connection, route and pagination arguments and signs the
+request. The iframe never receives a signing key or connection key. Browser
+Syncables' separate selected-read API is tested in atomic-plugins. The
+initial Atomic Server connector uses a GitHub-specific read adapter.

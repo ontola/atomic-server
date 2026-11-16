@@ -23,6 +23,7 @@ export function parseProxyPlatforms(value: unknown): string[] {
     if (typeof item !== 'string' || !PLATFORM_ID.test(item)) {
       throw new Error('Invalid integration proxy catalog platform ID');
     }
+
     seen.add(item);
   }
 
@@ -43,7 +44,9 @@ export async function fetchProxyPlatforms(
   );
 
   if (!response.ok) {
-    throw new Error(`Could not load integration proxy catalog (HTTP ${response.status})`);
+    throw new Error(
+      `Could not load integration proxy catalog (HTTP ${response.status})`,
+    );
   }
 
   return parseProxyPlatforms(await response.json());
@@ -66,6 +69,7 @@ export function parseProxyAppIndex(raw: unknown): ProxyPlatform[] {
     throw new Error('Unsupported proxy app index version');
 
   const seen = new Set<string>();
+
   return value.platforms.map((item): ProxyPlatform => {
     if (!item || typeof item !== 'object' || Array.isArray(item))
       throw new Error('Invalid proxy app index entry');
@@ -78,7 +82,10 @@ export function parseProxyAppIndex(raw: unknown): ProxyPlatform[] {
       throw new Error('Invalid proxy platform name');
     if (row.description !== undefined && typeof row.description !== 'string')
       throw new Error('Invalid proxy platform description');
-    if (row.document !== undefined && row.document !== `/catalog/${row.id}.yaml`)
+    if (
+      row.document !== undefined &&
+      row.document !== `/catalog/${row.id}.yaml`
+    )
       throw new Error('Invalid proxy platform document path');
 
     return {
@@ -107,10 +114,13 @@ export async function fetchProxyAppIndex(
     credentials: 'omit',
     redirect: 'error',
   });
+
   if (response.status === 404) {
     const platforms = await fetchProxyPlatforms(origin, options);
+
     return platforms.map(id => ({ id, name: id.replaceAll('-', ' ') }));
   }
+
   if (!response.ok) {
     throw new Error(`Could not load proxy app index (HTTP ${response.status})`);
   }

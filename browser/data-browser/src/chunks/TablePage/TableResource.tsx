@@ -218,7 +218,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
   );
 
   // A dashboard or an app shows no rows of its own, so there's nothing to narrow.
-  const showsRows = appView === undefined && viewKind !== 'dashboard' && viewKind !== 'syncables';
+  const showsRows =
+    appView === undefined &&
+    viewKind !== 'dashboard' &&
+    viewKind !== 'syncables';
 
   // The visible stored columns, each language of a split column on its own:
   // what the quick filter reads a row's text from.

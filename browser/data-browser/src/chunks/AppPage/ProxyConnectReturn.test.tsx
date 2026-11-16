@@ -14,6 +14,7 @@ import { StoreContext, type Store } from '@tomic/react';
 /** Handoffs this "browser" started; `finish` consumes them, like the real one. */
 const started = new Set<string>();
 const finish = vi.fn();
+const keyedReturns = new Map<string, string>();
 
 vi.mock('@helpers/integrationProxy', () => ({
   getIntegrationProxy: () => 'https://proxy.example',
@@ -27,6 +28,10 @@ vi.mock('@helpers/proxyConnections', () => ({
 
     finish(params: URLSearchParams) {
       return finish(params);
+    }
+
+    keyedReturnTo(params: URLSearchParams) {
+      return keyedReturns.get(params.get('integration_state') ?? '');
     }
   },
 }));
@@ -61,6 +66,7 @@ function renderReturn(state: string) {
 
 beforeEach(() => {
   started.clear();
+  keyedReturns.clear();
   finish.mockReset();
   finish.mockImplementation(async (params: URLSearchParams) => {
     const state = params.get('integration_state') ?? '';
@@ -105,6 +111,31 @@ describe('ProxyConnectReturn', () => {
       'textContent',
       'The proxy refused the code.',
     );
+    expect(finish).toHaveBeenCalledTimes(1);
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('offers the saved app link after a keyed callback fails', async () => {
+    const returnTo = 'http://localhost:3000/app/show?subject=mirror&view=Sync';
+    started.add('keyed');
+    keyedReturns.set('keyed', returnTo);
+    finish.mockImplementation(async () => {
+      started.delete('keyed');
+      keyedReturns.delete('keyed');
+      throw new Error('Reconnect with the same GitHub account.');
+    });
+    renderReturn('keyed');
+
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Reconnect with the same GitHub account.',
+    );
+    expect(
+      screen
+        .getByRole('link', { name: 'Return to the app' })
+        .getAttribute('href'),
+    ).toBe(returnTo);
     expect(finish).toHaveBeenCalledTimes(1);
     expect(replace).not.toHaveBeenCalled();
   });

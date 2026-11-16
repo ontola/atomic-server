@@ -4,8 +4,7 @@
  * server, never supplied by a provider. It runs inside the existing CSP-
  * sandboxed, null-origin iframe with no direct network access.
  *
- * The ordinary view-client handles signed proxy reads. Privileged resource
- * provisioning goes through syncables* host operations that validate scope.
+ * The existing frame bridge carries scoped discovery, reads and provisioning.
  */
 const pending = new Map();
 let serial = 0;
@@ -14,7 +13,8 @@ window.addEventListener('message', event => {
   if (event.source !== window.parent) return;
   const message = event.data;
   if (message?.type !== 'atomic.view.response' || message.version !== 1) return;
-  if (typeof message.id !== 'string' || !message.id.startsWith('syncables:')) return;
+  if (typeof message.id !== 'string' || !message.id.startsWith('syncables:'))
+    return;
   const waiting = pending.get(message.id);
   if (!waiting) return;
   pending.delete(message.id);
@@ -31,13 +31,16 @@ function call(op, args = {}) {
       reject(new Error('Atomic Server did not answer ' + op));
     }, 60000);
     pending.set(id, { resolve, reject, timer });
-    window.parent.postMessage({
-      type: 'atomic.view.request',
-      version: 1,
-      id,
-      op,
-      args,
-    }, '*');
+    window.parent.postMessage(
+      {
+        type: 'atomic.view.request',
+        version: 1,
+        id,
+        op,
+        args,
+      },
+      '*',
+    );
   });
 }
 
@@ -93,9 +96,7 @@ styles.textContent = [
 document.head.appendChild(styles);
 
 let root;
-let api;
 let current;
-let state = { repositories: [], account: '', incomplete: false };
 function renderBase(title, subtitle) {
   root.replaceChildren();
   const bar = el('div', null, 'toolbar');
@@ -118,29 +119,30 @@ function table(headers, entries) {
   const head = el('thead');
   const tr = el('tr');
   for (const header of headers) tr.append(el('th', header));
-  head.append(tr); t.append(head);
+  head.append(tr);
+  t.append(head);
   const body = el('tbody');
   for (const cells of entries) {
     const row = el('tr');
     for (const cell of cells) {
       const td = el('td');
-      if (cell instanceof Node) td.append(cell); else td.textContent = String(cell ?? '');
+      if (cell instanceof Node) td.append(cell);
+      else td.textContent = String(cell ?? '');
       row.append(td);
     }
     body.append(row);
   }
-  t.append(body); root.append(t);
+  t.append(body);
+  root.append(t);
 }
 function labelAndSub(title, sub) {
   const node = el('div');
   node.append(el('span', title, 'rowtitle'), el('small', sub, 'sub'));
   return node;
 }
-async function navigate(subject) {
-  await api.ui.openResource(subject);
-}
 function validateId(value) {
-  if (!Number.isSafeInteger(value) || value <= 0) throw new Error('Invalid GitHub resource identity');
+  if (!Number.isSafeInteger(value) || value <= 0)
+    throw new Error('Invalid GitHub resource identity');
   return String(value);
 }
 function validLogin(text) {
@@ -150,86 +152,131 @@ function validRepo(text) {
   return typeof text === 'string' && /^[a-zA-Z0-9._-]{1,120}$/.test(text);
 }
 
-/** The proxy already allows /user/repos; other org-list endpoints are not
- * enabled. Group repos by their canonical owner ID and type instead of
- * confusing OAuth account ownership with repository ownership.
- */
-async function loadRepositories(connectionId) {
+async function readPages(read, onPage) {
+  for (let page = 1; page <= 20; page++) {
+    const result = await call('syncablesRead', { read, page });
+    if (result.status < 200 || result.status >= 300)
+      throw new Error('GitHub read failed (HTTP ' + result.status + ').');
+    if (!Array.isArray(result.body) || result.body.length > 100)
+      throw new Error('GitHub returned an invalid ' + read + ' page.');
+    await onPage(result.body);
+    if (!result.nextPage) return true;
+  }
+  return false;
+}
+
+async function loadRepositories() {
   const found = new Map();
-  let incomplete = false;
-  for (let page = 1; page <= 10; page++) {
-    const response = await api.proxy.request({
-      platform: current.platform,
-      connectionId,
-      path: '/user/repos',
-      query: { per_page: '100', page: String(page) },
-    });
-    if (response.status < 200 || response.status >= 300)
-      throw new Error('GitHub repository discovery: HTTP ' + response.status);
-    const records = response.body;
-    if (!Array.isArray(records)) throw new Error('GitHub returned no repository list');
+  const complete = await readPages('repositories', records => {
     for (const repo of records) {
       if (!repo || typeof repo !== 'object') continue;
       const owner = repo.owner;
       if (!owner || !validLogin(owner.login) || !validRepo(repo.name)) continue;
-      if (!Number.isSafeInteger(owner.id) || !Number.isSafeInteger(repo.id)) continue;
+      if (!Number.isSafeInteger(owner.id) || !Number.isSafeInteger(repo.id))
+        continue;
       found.set(String(repo.id), {
         id: repo.id,
         name: repo.name,
         fullName: repo.full_name,
-        owner: { id: owner.id, login: owner.login, type: owner.type === 'Organization' ? 'organization' : 'personal' },
+        owner: {
+          id: owner.id,
+          login: owner.login,
+          type: owner.type === 'Organization' ? 'organization' : 'personal',
+        },
         hasIssues: repo.has_issues !== false,
       });
     }
-    if (records.length < 100) break;
-    if (page === 10) incomplete = true;
-  }
-  state.repositories = [...found.values()];
-  state.incomplete = incomplete;
-  return state.repositories;
+  });
+  return { repos: [...found.values()], complete };
 }
-function ownerGroups() {
-  const byId = new Map();
-  for (const repo of state.repositories) {
-    if (!byId.has(repo.owner.id)) byId.set(repo.owner.id, repo.owner);
-  }
-  return [...byId.values()].sort((a, b) => a.login.localeCompare(b.login));
+
+async function connectAccount() {
+  await call('syncablesConnect');
+}
+
+function reconnectButton(connectionId) {
+  return button(
+    'Reconnect',
+    async () => {
+      await call('syncablesConnect', { connectionId });
+    },
+    true,
+  );
 }
 
 async function renderAccounts() {
-  const bar = renderBase('Connected GitHub accounts', 'One authorization may access several organizations.');
-  bar.append(button('+ Connect account', async () => {
-    const connection = await api.proxy.connect({ platform: current.platform });
-    if (connection?.status === 'connected') await renderAccounts();
-  }));
-  const connected = await api.proxy.connections({ platform: current.platform });
-  if (!Array.isArray(connected) || connected.length === 0) {
+  const bar = renderBase(
+    'Connected GitHub accounts',
+    'Discover organizations and repositories available to your account.',
+  );
+  bar.append(button('Connect account', connectAccount));
+  const connected = await call('syncablesAccounts');
+  if (connected.length === 0) {
     const empty = el('div', null, 'empty');
-    empty.append(el('h3', 'No accounts connected'), el('p', 'Connect GitHub to discover accessible organizations and repositories.'));
-    empty.append(button('Connect GitHub account', async () => {
-      const result = await api.proxy.connect({ platform: current.platform });
-      if (result?.status === 'connected') await renderAccounts();
-    }));
+    empty.append(
+      el('h3', 'No accounts connected'),
+      el(
+        'p',
+        'Connect GitHub to discover accessible organizations and repositories.',
+      ),
+    );
+    empty.append(button('Connect GitHub account', connectAccount));
     root.append(empty);
     return;
   }
-  table(['Account connection', 'Status', 'Action'], connected.map(c => [
-    labelAndSub('GitHub', 'Connection reference ' + c.connectionId.slice(0, 12) + '…'),
-    el('span', 'Connected', 'status'),
-    button('Browse organizations', async () => {
-      const result = await call('syncablesOpenAccount', { connectionId: c.connectionId });
-      await navigate(result.subject);
-    }, true),
-  ]));
+  table(
+    ['Account', 'Status', 'Action'],
+    connected.map(account => [
+      el('span', account.login, 'rowtitle'),
+      el('span', account.healthy ? 'Connected' : 'Needs attention', 'status'),
+      account.healthy
+        ? button(
+            'Browse organizations',
+            async () => {
+              await call('syncablesOpenAccount', {
+                connectionId: account.connectionId,
+              });
+            },
+            true,
+          )
+        : account.canReconnect
+          ? reconnectButton(account.connectionId)
+          : el('span', 'Connect again from this table.', 'muted'),
+    ]),
+  );
 }
 
 async function renderOrganizations() {
-  const bar = renderBase('Organizations', 'GitHub organization and personal owner namespaces accessible through this account.');
-  bar.append(button('↻ Refresh list', renderOrganizations, true));
-  root.append(el('div', 'Loading repositories through GitHub…', 'muted'));
+  renderBase('Organizations', 'Loading GitHub owner namespaces…');
   const connectionId = current.connectionId;
-  await loadRepositories(connectionId);
-  const owners = ownerGroups();
+  const { repos, complete } = await loadRepositories();
+  const found = new Map(repos.map(repo => [repo.owner.id, repo.owner]));
+  const profile = await call('syncablesRead', { read: 'profile' });
+  if (profile.status === 200 && validLogin(profile.body?.login))
+    found.set(profile.body.id, {
+      id: profile.body.id,
+      login: profile.body.login,
+      type: 'personal',
+    });
+
+  let collectionComplete = true;
+  try {
+    collectionComplete = await readPages('owners', organizations => {
+      for (const org of organizations) {
+        if (validLogin(org?.login))
+          found.set(org.id, {
+            id: org.id,
+            login: org.login,
+            type: 'organization',
+          });
+      }
+    });
+  } catch {
+    collectionComplete = false;
+  }
+  const owners = [...found.values()].sort((a, b) =>
+    a.login.localeCompare(b.login),
+  );
   for (let i = 0; i < owners.length; i += 100) {
     await call('syncablesDiscoverOwners', {
       owners: owners.slice(i, i + 100).map(owner => ({
@@ -239,28 +286,45 @@ async function renderOrganizations() {
       })),
     });
   }
-  renderBase('Organizations', owners.length + ' owner namespaces found');
-  if (state.incomplete) root.append(el('div', 'More than 1,000 repositories: discovery is incomplete, and no absent items will be deleted.', 'note'));
-  table(['Owner namespace', 'Kind', 'Repositories', 'Action'], owners.map(owner => [
-    labelAndSub(owner.login, 'GitHub owner ID ' + owner.id),
-    owner.type === 'organization' ? 'Organization' : 'Personal owner',
-    state.repositories.filter(r => r.owner.id === owner.id).length,
-    button('Open', async () => {
-      const result = await call('syncablesOpenOwner', {
-        connectionId,
-        ownerId: validateId(owner.id),
-        ownerLogin: owner.login,
-        ownerKind: owner.type,
-      });
-      await navigate(result.subject);
-    }, true),
-  ]));
+  const bar = renderBase(
+    'Organizations',
+    owners.length + ' owner namespaces found',
+  );
+  bar.append(button('Refresh list', renderOrganizations, true));
+  if (!complete || !collectionComplete)
+    root.append(
+      el(
+        'p',
+        'GitHub returned an incomplete owner list. Refresh to try again.',
+        'note',
+      ),
+    );
+  table(
+    ['Owner namespace', 'Kind', 'Repositories', 'Action'],
+    owners.map(owner => [
+      labelAndSub(owner.login, 'GitHub owner ID ' + owner.id),
+      owner.type === 'organization' ? 'Organization' : 'Personal owner',
+      repos.filter(repo => repo.owner.id === owner.id).length,
+      button(
+        'Open',
+        async () => {
+          await call('syncablesOpenOwner', {
+            connectionId,
+            ownerId: validateId(owner.id),
+            ownerLogin: owner.login,
+            ownerKind: owner.type,
+          });
+        },
+        true,
+      ),
+    ]),
+  );
 }
 
 async function renderRepositories() {
   renderBase('Repositories', 'Repositories belonging to ' + current.ownerLogin);
   root.append(el('div', 'Loading repository list…', 'muted'));
-  const repos = await loadRepositories(current.connectionId);
+  const { repos, complete } = await loadRepositories();
   const selected = repos.filter(r => String(r.owner.id) === current.ownerId);
   for (let i = 0; i < selected.length; i += 100) {
     await call('syncablesDiscoverRepos', {
@@ -270,40 +334,75 @@ async function renderRepositories() {
       })),
     });
   }
-  const bar = renderBase('Repositories', current.ownerLogin + ' · ' + selected.length + ' visible repositories');
+  const bar = renderBase(
+    'Repositories',
+    current.ownerLogin + ' · ' + selected.length + ' visible repositories',
+  );
   bar.append(button('↻ Refresh list', renderRepositories, true));
-  if (state.incomplete) root.append(el('div', 'Repository listing is incomplete; only the visible choices are shown.', 'note'));
-  table(['Repository', 'Owner', 'Issues', 'Action'], selected.map(repo => [
-    labelAndSub(repo.name, repo.fullName || current.ownerLogin + '/' + repo.name),
-    current.ownerLogin,
-    repo.hasIssues ? 'Available' : 'Disabled in GitHub',
-    repo.hasIssues ? button('Sync issues', async () => {
-      const result = await call('syncablesCreateMirror', {
-        connectionId: current.connectionId,
-        ownerId: current.ownerId,
-        ownerLogin: current.ownerLogin,
-        repoId: validateId(repo.id),
-        repoName: repo.name,
-      });
-      await navigate(result.subject);
-    }, true) : el('span', 'Unavailable', 'muted'),
-  ]));
+  if (!complete)
+    root.append(
+      el(
+        'div',
+        'Repository listing is incomplete; only the visible choices are shown.',
+        'note',
+      ),
+    );
+  table(
+    ['Repository', 'Owner', 'Issues', 'Action'],
+    selected.map(repo => [
+      labelAndSub(
+        repo.name,
+        repo.fullName || current.ownerLogin + '/' + repo.name,
+      ),
+      current.ownerLogin,
+      repo.hasIssues ? 'Available' : 'Disabled in GitHub',
+      repo.hasIssues
+        ? button(
+            'Sync issues',
+            async () => {
+              await call('syncablesCreateMirror', {
+                connectionId: current.connectionId,
+                ownerId: current.ownerId,
+                ownerLogin: current.ownerLogin,
+                repoId: validateId(repo.id),
+                repoName: repo.name,
+              });
+            },
+            true,
+          )
+        : el('span', 'Unavailable', 'muted'),
+    ]),
+  );
 }
 
 async function renderMirror() {
   const status = await call('syncablesMirrorStatus');
-  const bar = renderBase('Issues sync', current.ownerLogin + '/' + current.repoName);
+  const bar = renderBase(
+    'Issues sync',
+    current.ownerLogin + '/' + current.repoName,
+  );
   const controls = el('div', null, 'controls');
-  controls.append(button('↻ Sync now', syncIssues, false));
-  controls.append(button(status.paused ? 'Resume' : 'Pause', async () => {
-    await call('syncablesSetPaused', { paused: !status.paused });
-    await renderMirror();
-  }, true));
+  if (!status.paused) controls.append(button('Sync now', syncIssues));
+  controls.append(
+    button(
+      status.paused ? 'Resume' : 'Pause',
+      async () => {
+        await call('syncablesSetPaused', { paused: !status.paused });
+        await renderMirror();
+      },
+      true,
+    ),
+  );
+  if (status.error && current.canReconnect)
+    controls.append(reconnectButton(current.connectionId));
   bar.append(controls);
   const grid = el('div', null, 'metric-row');
   const cards = [
     [status.rows || 0, 'Imported issues'],
-    [status.paused ? 'Paused' : status.error ? 'Needs attention' : 'Ready', 'Synchronization'],
+    [
+      status.paused ? 'Paused' : status.error ? 'Needs attention' : 'Ready',
+      'Synchronization',
+    ],
     [status.lastSuccess || 'Never', 'Last successful sync'],
   ];
   for (const [value, label] of cards) {
@@ -312,75 +411,118 @@ async function renderMirror() {
     grid.append(item);
   }
   root.append(grid);
+  if (status.lastSuccess || status.incomplete) {
+    root.append(
+      el(
+        'p',
+        status.added +
+          ' added · ' +
+          status.changed +
+          ' changed · ' +
+          status.unchanged +
+          ' unchanged',
+        'note',
+      ),
+    );
+  }
   if (status.error) root.append(el('div', status.error, 'error'));
-  root.append(el('p', 'Source: GitHub · ' + current.ownerLogin + '/' + current.repoName + ' · read-only via integration proxy.', 'note'));
-  root.append(el('p', 'Use the Table tab to browse the imported rows. Pausing keeps them in your Atomic drive.', 'note'));
+  root.append(
+    el(
+      'p',
+      'Source: GitHub · ' +
+        current.ownerLogin +
+        '/' +
+        current.repoName +
+        ' · read-only via integration proxy.',
+      'note',
+    ),
+  );
+  root.append(
+    el(
+      'p',
+      'Use the Table tab to browse the imported rows. Pausing keeps them in your Atomic drive.',
+      'note',
+    ),
+  );
 }
 
 async function syncIssues() {
   try {
-  const status = await call('syncablesMirrorStatus');
-  if (status.paused) throw new Error('Resume this mirror before syncing.');
-  const connectionId = current.connectionId;
-  let imported = 0;
-  let more = false;
-  for (let page = 1; page <= 20; page++) {
-    const reply = await api.proxy.request({
-      platform: current.platform,
-      connectionId,
-      path: '/repos/' + encodeURIComponent(current.ownerLogin) + '/' + encodeURIComponent(current.repoName) + '/issues',
-      query: { per_page: '100', page: String(page), state: 'all' },
+    const counts = { added: 0, changed: 0, unchanged: 0 };
+    const seen = new Set();
+    const complete = await readPages('issues', async records => {
+      const issues = [];
+      for (const item of records) {
+        if (!item || typeof item !== 'object')
+          throw new Error('Invalid GitHub issue row.');
+        if (item.pull_request || seen.has(item.id)) continue;
+        seen.add(item.id);
+        issues.push({
+          id: item.id,
+          number: item.number,
+          title: item.title,
+          state: item.state,
+          body: item.body,
+          updatedAt: item.updated_at,
+          htmlUrl: item.html_url,
+        });
+      }
+      if (issues.length === 0) return;
+      const result = await call('syncablesImportIssues', { issues });
+      for (const key of Object.keys(counts)) counts[key] += result[key];
     });
-    if (reply.status < 200 || reply.status >= 300)
-      throw new Error('Could not fetch GitHub issues: HTTP ' + reply.status);
-    if (!Array.isArray(reply.body)) throw new Error('GitHub returned no issues list');
-    const issues = reply.body.filter(item => !item?.pull_request).map(item => ({
-      id: item.id,
-      number: item.number,
-      title: item.title,
-      state: item.state,
-      body: item.body,
-      updatedAt: item.updated_at,
-      htmlUrl: item.html_url,
-    }));
-    if (issues.length) {
-      await call('syncablesImportIssues', { issues });
-      imported += issues.length;
-    }
-    if (reply.body.length < 100) { more = false; break; }
-    more = page === 20;
-  }
-  await call('syncablesRecordSuccess', { imported, incomplete: more });
-  await renderMirror();
+    await call('syncablesRecordSuccess', {
+      ...counts,
+      imported: counts.added + counts.changed + counts.unchanged,
+      incomplete: !complete,
+    });
+    await renderMirror();
   } catch (error) {
     await call('syncablesRecordFailure', {
       message: String(error?.message ?? error).slice(0, 1024),
     }).catch(() => undefined);
+    await renderMirror();
     throw error;
   }
 }
 
-export async function view({ root: viewRoot, store }) {
+export async function view({ root: viewRoot }) {
   root = viewRoot;
-  api = store;
   root.replaceChildren(el('p', 'Opening Syncables…', 'muted'));
   try {
     current = await call('syncablesContext');
     if (current.platform !== 'github-issues') {
       renderBase('Syncables', 'Generic API selection for ' + current.platform);
-      root.append(el('p', 'This platform is in the catalog. Collection discovery is not enabled for this platform yet.', 'muted'));
+      root.append(
+        el(
+          'p',
+          'This platform is in the catalog. Collection discovery is not enabled for this platform yet.',
+          'muted',
+        ),
+      );
       return;
     }
     switch (current.kind) {
-      case 'platform': await renderAccounts(); break;
-      case 'organizations': await renderOrganizations(); break;
-      case 'repositories': await renderRepositories(); break;
-      case 'mirror': await renderMirror(); break;
-      default: throw new Error('Unknown Syncables resource kind');
+      case 'platform':
+        await renderAccounts();
+        break;
+      case 'organizations':
+        await renderOrganizations();
+        break;
+      case 'repositories':
+        await renderRepositories();
+        break;
+      case 'mirror':
+        await renderMirror();
+        break;
+      default:
+        throw new Error('Unknown Syncables resource kind');
     }
   } catch (error) {
     renderBase('Syncables', 'Could not open this view');
     showError(error);
-    root.append(button('Try again', async () => view({ root, store }), true));
+    root.append(button('Try again', async () => view({ root }), true));
+    if (current?.canReconnect)
+      root.append(reconnectButton(current.connectionId));
   }
 }

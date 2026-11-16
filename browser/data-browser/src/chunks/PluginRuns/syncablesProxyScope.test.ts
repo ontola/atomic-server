@@ -1,65 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { assertSyncablesProxyRead } from './syncablesProxyScope';
+import { syncablesProxyUrl } from './syncablesProxyScope';
 
-const root = 'https://proxy.example';
-const connection = 'conn-123';
-const base = `${root}/proxy/${connection}/github-issues`;
+const scope = {
+  proxyOrigin: 'https://proxy.example',
+  platform: 'github-issues',
+  kind: 'mirror',
+  connectionId: 'my-connection',
+  repoId: '456',
+};
 
-describe('built-in Syncables relay scope', () => {
-  const organizations = {
-    proxyOrigin: root,
-    platform: 'github-issues',
-    connectionId: connection,
-    kind: 'organizations',
-  };
-  const mirror = {
-    ...organizations,
-    kind: 'mirror',
-    ownerLogin: 'ontola',
-    repoName: 'atomic-server',
-  };
-
-  it('permits only the declared organization/repository listing', () => {
-    expect(() =>
-      assertSyncablesProxyRead(organizations, {
-        url: `${base}/user/repos?per_page=100&page=1`,
-        method: 'GET',
-      }),
-    ).not.toThrow();
-    expect(() =>
-      assertSyncablesProxyRead(organizations, {
-        url: `${base}/user/orgs`,
-        method: 'GET',
-      }),
-    ).toThrow('only read /user/repos');
+describe('built-in Syncables proxy scope', () => {
+  it('builds the selected source URL from the saved repository and connection IDs', () => {
+    expect(syncablesProxyUrl(scope, 'issues', 2).href).toBe(
+      'https://proxy.example/proxy/my-connection/github-issues/repositories/456/issues?per_page=100&page=2&state=all',
+    );
   });
 
-  it('permits only issues from the exact selected repository', () => {
+  it('refuses unrelated endpoints, invalid page numbers and invalid bindings', () => {
+    expect(() => syncablesProxyUrl(scope, 'repositories')).toThrow();
     expect(() =>
-      assertSyncablesProxyRead(mirror, {
-        url: `${base}/repos/ontola/atomic-server/issues?per_page=100&page=1&state=all`,
-        method: 'GET',
-      }),
-    ).not.toThrow();
-    for (const url of [
-      `${base}/repos/ontola/other-repo/issues`,
-      `${base}/repos/another-owner/atomic-server/issues`,
-      `${base}/repos/ontola/atomic-server/issues/123`,
-      `${root}/proxy/another-connection/github-issues/repos/ontola/atomic-server/issues`,
-      `https://evil.example/proxy/${connection}/github-issues/repos/ontola/atomic-server/issues`,
-    ]) {
-      expect(() => assertSyncablesProxyRead(mirror, { url, method: 'GET' })).toThrow();
-    }
+      syncablesProxyUrl(scope, 'https://elsewhere.example'),
+    ).toThrow();
+    expect(() => syncablesProxyUrl(scope, 'issues', 21)).toThrow();
+    expect(() => syncablesProxyUrl(scope, 'issues', '2')).toThrow();
+    expect(() =>
+      syncablesProxyUrl({ ...scope, repoId: '../456' }, 'issues'),
+    ).toThrow();
   });
 
-  it('rejects writes, unexpected pagination and extra read paths', () => {
-    const url = `${base}/repos/ontola/atomic-server/issues`;
-    expect(() => assertSyncablesProxyRead(mirror, { url, method: 'POST' })).toThrow('read-only');
+  it('exposes independently authorized listing and profile reads', () => {
+    expect(
+      syncablesProxyUrl({ ...scope, kind: 'organizations' }, 'owners').pathname,
+    ).toBe('/proxy/my-connection/github-issues/user/orgs');
+    expect(
+      syncablesProxyUrl({ ...scope, kind: 'platform' }, 'profile').pathname,
+    ).toBe('/proxy/my-connection/github-issues/user');
     expect(() =>
-      assertSyncablesProxyRead(mirror, { url: url + '?since=2020', method: 'GET' }),
-    ).toThrow('Unexpected provider query');
-    expect(() =>
-      assertSyncablesProxyRead(mirror, { url: url + '?page=21', method: 'GET' }),
-    ).toThrow('Invalid pagination');
+      syncablesProxyUrl({ ...scope, kind: 'repositories' }, 'owners'),
+    ).toThrow();
   });
 });

@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import toast from 'react-hot-toast';
-import { isViewRequest } from '@tomic/plugin';
 import { useStore } from '@tomic/react';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
 import { viewSession } from '@helpers/extensions/viewSession';
@@ -12,25 +10,20 @@ import {
 } from '@views/PluginView/useCreateThemeVars';
 import resetCss from '../../reset.css?raw';
 import { useIntegrationProxy } from '@helpers/integrationProxy';
-import {
-  ProxyConnections,
-  type ProxyConnection,
-} from '@helpers/proxyConnections';
-import {
-  handleRequest,
-  isHostRequest,
-  type HostRequest,
-} from '@chunks/AppPage/hostStore';
+import { ProxyConnections } from '@helpers/proxyConnections';
 import { ConnectDialog } from '@chunks/AppPage/ConnectDialog';
-import { assertSyncablesProxyRead } from './syncablesProxyScope';
 import {
   syncablesHostRequest,
   type BuiltinSyncablesRequest,
+  type SyncablesDiscovery,
 } from './syncablesHost';
 
 /** Operations only the built-in Syncables frame may send. */
 const SYNCABLES_OPERATIONS = new Set([
   'syncablesContext',
+  'syncablesAccounts',
+  'syncablesConnect',
+  'syncablesRead',
   'syncablesOpenAccount',
   'syncablesDiscoverOwners',
   'syncablesOpenOwner',
@@ -49,9 +42,7 @@ const SYNCABLES_OPERATIONS = new Set([
  * then give them the same canonical reply/session encoding as ordinary view
  * requests. Every operation still has its own host-side scope check.
  */
-export function isBuiltinSyncablesRequest(
-  wire: unknown,
-): wire is {
+export function isBuiltinSyncablesRequest(wire: unknown): wire is {
   type: 'atomic.view.request';
   version: 1;
   id: string;
@@ -60,6 +51,7 @@ export function isBuiltinSyncablesRequest(
 } {
   if (!wire || typeof wire !== 'object') return false;
   const data = wire as Record<string, unknown>;
+
   return (
     data.type === 'atomic.view.request' &&
     data.version === 1 &&
@@ -99,15 +91,10 @@ export function SyncablesFrame({
   const colorScheme = useFrameColorScheme();
   const [error, setError] = useState('');
   const [ask, setAsk] = useState<{
-    id: number | string;
-    platform: string;
-    reply: (response: unknown) => void;
-    existing?: ProxyConnection[];
+    cancel: () => void;
+    reconnectId?: string;
   }>();
-  const askRef = useRef(ask);
-  useEffect(() => {
-    askRef.current = ask;
-  }, [ask]);
+  const askRef = useRef<typeof ask>(undefined);
 
   const src = !store.noServer
     ? store.getServerUrl() + '/builtin-syncables-ui?format=html'
@@ -117,136 +104,113 @@ export function SyncablesFrame({
     const frame = frameRef.current;
     if (!frame || !src) return;
 
+    const discovery: SyncablesDiscovery = {
+      owners: new Set(),
+      repositories: new Map(),
+    };
+
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
-      const canonical =
-        isViewRequest(wire) || isBuiltinSyncablesRequest(wire);
-      const data = canonical
-        ? { ...wire.args, __atomic: true, id: wire.id, op: wire.op }
-        : wire;
-      const session = canonical
-        ? viewSession(originalSession, wire.id)
-        : originalSession;
-      if (!isHostRequest(data)) return;
+      if (!isBuiltinSyncablesRequest(wire)) return;
+      const session = viewSession(originalSession, wire.id);
+      const controller = new AbortController();
+      session.watch(wire.id, () => () => controller.abort());
 
-      if (data.op === 'proxyConnect') {
-        if (data.platform !== 'github-issues') {
-          session.post({ id: data.id, error: 'Only GitHub is supported by this view yet' });
-          return;
-        }
-        askRef.current?.reply({
-          id: askRef.current.id,
-          result: { status: 'cancelled' },
-        });
-        const next = {
-          id: data.id,
-          platform: data.platform,
-          reply: session.post,
-          existing: undefined as ProxyConnection[] | undefined,
-        };
-        askRef.current = next;
-        setAsk(next);
-        void proxy.list(data.platform)
-          .then(existing => {
-            if (askRef.current?.id === next.id)
-              setAsk({ ...next, existing });
-          })
-          .catch(() => {
-            if (askRef.current?.id === next.id)
-              setAsk({ ...next, existing: [] });
-          });
-        return;
-      }
+      const work = async () => {
+        const request = {
+          ...wire.args,
+          op: wire.op,
+        } as BuiltinSyncablesRequest;
 
-      const work = async (): Promise<unknown> => {
-        if (SYNCABLES_OPERATIONS.has(data.op))
-          return syncablesHostRequest(
-            store,
-            drive,
-            table,
-            data as BuiltinSyncablesRequest,
-            proxy,
-          );
-
-        if (data.op === 'openResource') {
-          if (typeof data.subject !== 'string')
-            throw new Error('Missing destination resource');
-          navigate(constructOpenURL(data.subject));
-          return true;
-        }
-
-        if (data.op === 'toast') {
-          const body = (data as HostRequest & { text?: unknown }).text;
-          if (typeof body === 'string') toast(body);
-          return true;
-        }
-
-        // This view needs only the signed proxy transport. Do not expose the
-        // ordinary app's get/query/create/save/apply calls: a compromised
-        // iframe must not inherit the person's general Atomic drive access.
-        // Further scope proxy requests to this view's provider and selected
-        // connection, not just the configured proxy origin.
-        if (
-          ['proxyCapability', 'proxyFetch', 'proxyConnections'].includes(data.op)
-        ) {
+        if (request.op === 'syncablesConnect') {
           const context = (await syncablesHostRequest(
             store,
             drive,
             table,
             { op: 'syncablesContext' },
             proxy,
-          )) as {
-            platform: string;
-            proxyOrigin: string;
-            connectionId?: string;
-            kind: string;
-            ownerLogin?: string;
-            repoName?: string;
-          };
-          if (context.proxyOrigin !== origin)
-            throw new Error('The source proxy differs from the current proxy setting');
-          if (
-            data.op === 'proxyConnections' ||
-            data.op === 'proxyCapability'
-          ) {
-            if (data.platform !== context.platform)
-              throw new Error('This view cannot access another provider');
+            discovery,
+            controller.signal,
+          )) as { platform: string; kind: string; connectionId?: string };
+          const reconnectId = request.connectionId;
+          if (context.platform !== 'github-issues')
+            throw new Error('This view does not support GitHub connections');
+
+          if (reconnectId !== undefined) {
             if (
-              context.connectionId &&
-              data.op === 'proxyCapability' &&
-              data.connectionId !== context.connectionId
-            ) throw new Error('This view cannot access another connection');
+              typeof reconnectId !== 'string' ||
+              (context.kind !== 'platform' &&
+                reconnectId !== context.connectionId) ||
+              !(await proxy.canReconnectGithub(reconnectId))
+            )
+              throw new Error(
+                'Reconnect a verified GitHub account for this view',
+              );
+          } else if (context.kind !== 'platform') {
+            throw new Error(
+              'Connect a new GitHub account from its platform table',
+            );
           }
-          if (data.op === 'proxyFetch')
-            assertSyncablesProxyRead(context, data);
-          const user = store.getAgent();
-          const proxyHost = user?.subject
-            ? proxy.host(async () => user.subject!)
-            : undefined;
-          return handleRequest(
-            store,
-            table,
-            drive,
-            data,
-            table,
-            proxyHost,
-          );
+
+          controller.signal.throwIfAborted();
+
+          return await new Promise(resolve => {
+            askRef.current?.cancel();
+            const pending = {
+              cancel: () => resolve({ status: 'cancelled' }),
+              reconnectId,
+            };
+            askRef.current = pending;
+            setAsk(pending);
+            controller.signal.addEventListener(
+              'abort',
+              () => {
+                pending.cancel();
+                if (askRef.current !== pending) return;
+                askRef.current = undefined;
+                setAsk(undefined);
+              },
+              { once: true },
+            );
+          });
         }
-        throw new Error('This built-in view cannot perform ' + data.op);
+
+        return syncablesHostRequest(
+          store,
+          drive,
+          table,
+          request,
+          proxy,
+          discovery,
+          controller.signal,
+        );
       };
 
       void work()
         .then(result => {
-          if (session.isActive())
-            session.post({ id: data.id, result: result ?? true });
+          if (!session.isActive()) return;
+          session.post({ result: result ?? true });
+
+          if (
+            result &&
+            typeof result === 'object' &&
+            'subject' in result &&
+            typeof result.subject === 'string'
+          ) {
+            navigate(constructOpenURL(result.subject));
+          }
         })
-        .catch(reason => {
-          if (session.isActive())
-            session.post({ id: data.id, error: String(reason?.message ?? reason) });
-        });
+        .catch(reason =>
+          session.post({ error: String(reason?.message ?? reason) }),
+        )
+        .finally(() => session.unwatch(wire.id));
     });
 
     bridgeRef.current = bridge;
+
     return () => {
+      askRef.current?.cancel();
+      askRef.current = undefined;
+      setAsk(undefined);
       bridge.close();
       if (bridgeRef.current === bridge) bridgeRef.current = undefined;
     };
@@ -256,49 +220,31 @@ export function SyncablesFrame({
     bridgeRef.current?.setStyle(resetCss + '\n' + stylesheet, colorScheme);
   }, [stylesheet, colorScheme, src]);
 
-  const finishAsk = (chosen: ProxyConnection | undefined) => {
-    const current = askRef.current;
-    if (!current) return;
-    current.reply({
-      id: current.id,
-      result: chosen
-        ? {
-            status: 'connected',
-            connectionId: chosen.connection_id,
-            platform: current.platform,
-          }
-        : { status: 'cancelled' },
-    });
+  const finishAsk = () => {
+    askRef.current?.cancel();
+    askRef.current = undefined;
     setAsk(undefined);
   };
 
   const connect = async () => {
     const user = store.getAgent();
     if (!user?.subject) throw new Error('Sign in to connect GitHub');
-    const target = await proxy.start(
-      {
-        drive,
-        app: table,
-        // First-party only: caller identity is the signed-in account.
-        // The sandbox's ephemeral signing key is still bound to each proxy
-        // capability and its connection identifier.
-        appAgent: user.subject,
-      },
-      'github-issues',
-      location.href,
-      'Atomic Syncables',
-    );
+    const scope = { drive, app: table, appAgent: user.subject };
+    const reconnectId = askRef.current?.reconnectId;
+    const target = reconnectId
+      ? await proxy.startKeyedReconnect(
+          scope,
+          reconnectId,
+          location.href,
+          'Atomic Syncables',
+        )
+      : await proxy.startKeyed(
+          scope,
+          'github-issues',
+          location.href,
+          'Atomic Syncables',
+        );
     location.assign(target);
-  };
-
-  const useExisting = async (connection: ProxyConnection) => {
-    const user = store.getAgent();
-    if (!user?.subject) throw new Error('Sign in to use GitHub');
-    await proxy.delegate(
-      connection.connection_id,
-      user.subject,
-      'Atomic Syncables',
-    );
   };
 
   if (!src) {
@@ -318,9 +264,9 @@ export function SyncablesFrame({
           app='Atomic Syncables'
           platform='GitHub'
           proxySite={new URL(origin).host}
-          existing={ask.existing}
+          existing={[]}
           onConnect={connect}
-          onUseExisting={useExisting}
+          onUseExisting={async () => undefined}
           onClosed={finishAsk}
         />
       )}
@@ -328,9 +274,15 @@ export function SyncablesFrame({
         ref={frameRef}
         src={src}
         title='Built-in Syncables collection view'
-        sandbox='allow-scripts allow-modals'
+        sandbox='allow-scripts'
         allow='fullscreen'
-        style={{ display: 'block', border: 0, width: '100%', minHeight: '55vh', height: '70vh' }}
+        style={{
+          display: 'block',
+          border: 0,
+          width: '100%',
+          minHeight: '55vh',
+          height: '70vh',
+        }}
         onError={() => setError('Could not load the built-in Syncables iframe')}
       />
     </div>

@@ -7,28 +7,45 @@
  */
 import { ensureSyncablesTableViews } from './syncablesViews';
 import {
+  AtomicError,
   core,
   dataBrowser,
   Datatype,
   ensureSchema,
+  ErrorType,
   findSchema,
+  subjectsReferToSameResource,
+  type PropertySpec,
   type SchemaSpec,
   type SchemaStore,
 } from '@tomic/lib';
 
+type SchemaResource = Awaited<ReturnType<SchemaStore['getResource']>>;
+
+export const syncableNameProperty: PropertySpec = {
+  subject: core.properties.name,
+  shortname: 'name',
+  name: 'Name',
+  description: 'The name of a thing or person.',
+  datatype: Datatype.STRING,
+};
+
 /** Stored on the table, so its identity survives renaming and moving. */
 export const syncablePlatformSchema = (): SchemaSpec => ({
   properties: [
+    syncableNameProperty,
     {
       shortname: 'syncable-platform-index',
       name: 'Connected platform tables',
-      description: 'Drive-owned lookup of platform identity to Atomic table, independent of parent path.',
+      description:
+        'Drive-owned lookup of platform identity to Atomic table, independent of parent path.',
       datatype: Datatype.JSON,
     },
     {
       shortname: 'syncable-platform-id',
       name: 'Syncable platform ID',
-      description: 'Platform identifier in the selected integration proxy catalog.',
+      description:
+        'Platform identifier in the selected integration proxy catalog.',
       datatype: Datatype.STRING,
     },
     {
@@ -42,8 +59,9 @@ export const syncablePlatformSchema = (): SchemaSpec => ({
     {
       shortname: 'syncable-account',
       name: 'Syncable account',
-      description: 'A connected account through which remote collection instances can be discovered.',
-      recommends: [],
+      description:
+        'A connected account through which remote collection instances can be discovered.',
+      recommends: ['name'],
     },
   ],
 });
@@ -66,6 +84,80 @@ export function platformLocalId(proxyOrigin: string, platform: string): string {
 
 export interface PlatformProvisioner extends SchemaStore {}
 
+const DRIVE_PROPERTY = 'https://atomicdata.dev/properties/drive';
+const provisioning = new WeakMap<SchemaStore, Map<string, Promise<unknown>>>();
+
+/** A host store serializes updates to its drive-owned indexes and schemas. */
+export async function queueSyncableProvisioning<T>(
+  store: SchemaStore,
+  drive: string,
+  provision: () => Promise<T>,
+): Promise<T> {
+  let writes = provisioning.get(store);
+
+  if (!writes) {
+    writes = new Map();
+    provisioning.set(store, writes);
+  }
+
+  const previous = writes.get(drive);
+  const pending = previous ? previous.then(provision, provision) : provision();
+  writes.set(drive, pending);
+
+  try {
+    return await pending;
+  } finally {
+    if (writes.get(drive) === pending) writes.delete(drive);
+  }
+}
+
+export async function loadSyncableResource(
+  store: SchemaStore,
+  subject: string,
+): Promise<SchemaResource | undefined> {
+  try {
+    const resource = await store.getResource(subject);
+    if ('error' in resource && resource.error) throw resource.error;
+
+    return resource;
+  } catch (error) {
+    if (
+      error instanceof AtomicError &&
+      (error.type === ErrorType.NotFound ||
+        error.type === ErrorType.Unauthorized)
+    ) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+/** Cert-based resources have a stable drive; older resources may only have a parent. */
+export async function isSyncableResourceInDrive(
+  store: SchemaStore,
+  drive: string,
+  subject: string,
+): Promise<boolean> {
+  const seen = new Set<string>();
+  let current = subject;
+
+  while (!seen.has(current) && seen.size < 64) {
+    if (subjectsReferToSameResource(drive, current)) return true;
+    seen.add(current);
+    const resource = await loadSyncableResource(store, current);
+    if (!resource) return false;
+    const assignedDrive = resource.get(DRIVE_PROPERTY);
+    if (typeof assignedDrive === 'string')
+      return subjectsReferToSameResource(drive, assignedDrive);
+    const parent = resource.get(core.properties.parent);
+    if (typeof parent !== 'string' || !parent) return false;
+    current = parent;
+  }
+
+  return false;
+}
+
 /** Read-only lookup, including a platform table moved elsewhere in the drive. */
 export async function findSyncablePlatform(
   store: PlatformProvisioner,
@@ -73,25 +165,39 @@ export async function findSyncablePlatform(
 ): Promise<string | undefined> {
   const { drive, proxyOrigin, platform } = input;
   const localId = platformLocalId(proxyOrigin, platform);
-  const schema = await findSchema(store, drive, syncablePlatformSchema()).catch(
-    () => undefined,
-  );
-  const indexProperty = schema?.properties?.['syncable-platform-index'];
-  const platformProperty = schema?.properties?.['syncable-platform-id'];
-  const proxyProperty = schema?.properties?.['syncable-proxy-origin'];
+  const schema = await findSchema(store, drive, syncablePlatformSchema());
+  const indexProperty = schema.properties?.['syncable-platform-index'];
+  const platformProperty = schema.properties?.['syncable-platform-id'];
+  const proxyProperty = schema.properties?.['syncable-proxy-origin'];
+  if (!platformProperty || !proxyProperty) return undefined;
 
-  if (indexProperty && platformProperty && proxyProperty) {
+  const isMatchingTable = (target: SchemaResource) => {
+    const classes = target.get(core.properties.isA);
+
+    return (
+      Array.isArray(classes) &&
+      classes.includes(dataBrowser.classes.table) &&
+      target.get(platformProperty) === platform &&
+      target.get(proxyProperty) === proxyOrigin
+    );
+  };
+
+  if (indexProperty) {
     const root = await store.getResource(drive);
     const map = root.get(indexProperty);
+
     if (map && typeof map === 'object' && !Array.isArray(map)) {
       const subject = (map as Record<string, unknown>)[localId];
+
       if (typeof subject === 'string') {
-        const target = await store.getResource(subject);
+        const target = await loadSyncableResource(store, subject);
+
         if (
-          target.get(platformProperty) === platform &&
-          target.get(proxyProperty) === proxyOrigin
+          target &&
+          isMatchingTable(target) &&
+          (await isSyncableResourceInDrive(store, drive, target.subject))
         ) {
-          return subject;
+          return target.subject;
         }
       }
     }
@@ -99,7 +205,14 @@ export async function findSyncablePlatform(
 
   // Compatibility with tables provisioned before the drive index existed.
   const original = await store.findByLocalId(drive, drive, localId);
-  return original?.subject;
+
+  if (
+    original &&
+    isMatchingTable(original) &&
+    (await isSyncableResourceInDrive(store, drive, original.subject))
+  ) {
+    return original.subject;
+  }
 }
 
 async function indexSyncablePlatform(
@@ -112,38 +225,50 @@ async function indexSyncablePlatform(
   const root = await store.getResource(drive);
   const current = root.get(property);
   const map: Record<string, string> = {};
+
   if (current && typeof current === 'object' && !Array.isArray(current)) {
     for (const [key, value] of Object.entries(current)) {
       if (typeof value === 'string') map[key] = value;
     }
   }
+
+  if (map[localId] === subject) return;
   await root.set(property, { ...map, [localId]: subject });
   await root.save();
 }
-
 
 /**
  * Return an existing platform table or create it at the current drive root.
  * Reopening an installed provider must not create a second table.
  *
- * The table starts as an ordinary, readable Atomic Table. The planned
- * SyncableAccountsTable sandbox view and account connection are added by
- * later host milestones, never by executing catalog-supplied JavaScript.
+ * The table starts with the built-in Syncables view and a standard table view.
  */
-export async function ensureSyncablePlatform(
+export function ensureSyncablePlatform(
   store: PlatformProvisioner,
-  input: {
-    drive: string;
-    proxyOrigin: string;
-    platform: string;
-    name: string;
-  },
+  input: PlatformInstall,
+): Promise<string> {
+  return queueSyncableProvisioning(store, input.drive, () =>
+    provisionPlatform(store, input),
+  );
+}
+
+interface PlatformInstall {
+  drive: string;
+  proxyOrigin: string;
+  platform: string;
+  name: string;
+}
+
+async function provisionPlatform(
+  store: PlatformProvisioner,
+  input: PlatformInstall,
 ): Promise<string> {
   const { drive, proxyOrigin, platform, name } = input;
   const localId = platformLocalId(proxyOrigin, platform);
 
   const existing = await findSyncablePlatform(store, input);
   const schema = await ensureSchema(store, drive, syncablePlatformSchema());
+
   if (existing) {
     await ensureSyncablesTableViews(store, existing);
     await indexSyncablePlatform(
@@ -153,8 +278,10 @@ export async function ensureSyncablePlatform(
       localId,
       existing,
     );
+
     return existing;
   }
+
   const table = await store.newResource({
     parent: drive,
     isA: [dataBrowser.classes.table],
@@ -171,18 +298,21 @@ export async function ensureSyncablePlatform(
     await table.save();
   } catch (error) {
     // If a concurrent install won the same localId, reuse the winner.
-    const winner = await store.findByLocalId(drive, drive, localId);
+    const winner = await findSyncablePlatform(store, input);
+
     if (winner) {
-      await ensureSyncablesTableViews(store, winner.subject);
+      await ensureSyncablesTableViews(store, winner);
       await indexSyncablePlatform(
         store,
         drive,
         schema.properties['syncable-platform-index'],
         localId,
-        winner.subject,
+        winner,
       );
-      return winner.subject;
+
+      return winner;
     }
+
     throw error;
   }
 
@@ -194,5 +324,6 @@ export async function ensureSyncablePlatform(
     localId,
     table.subject,
   );
+
   return table.subject;
 }

@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
-import { FaGithub, FaCalendarDays, FaNoteSticky, FaTableCells } from 'react-icons/fa6';
+import {
+  FaGithub,
+  FaCalendarDays,
+  FaNoteSticky,
+  FaTableCells,
+} from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
 import { Button } from '@components/Button';
 import { Card } from '@components/Card';
 import { Column, Row } from '@components/Row';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { findSyncablePlatform, ensureSyncablePlatform } from './syncablePlatform';
+import {
+  findSyncablePlatform,
+  ensureSyncablePlatform,
+} from './syncablePlatform';
 import { useProxyCatalog } from './proxyCatalog';
 
 /** Display names only. Source IDs are always the proxy's own canonical IDs. */
@@ -25,24 +33,28 @@ export function platformDisplayName(id: string): string {
 
   return id
     .split('-')
-    .map(part => (part === 'api' ? 'API' : part[0]?.toUpperCase() + part.slice(1)))
+    .map(part =>
+      part === 'api' ? 'API' : part[0]?.toUpperCase() + part.slice(1),
+    )
     .join(' ');
 }
 
 export function visibleProxyPlatforms(ids: string[], query: string): string[] {
   const search = query.trim().toLocaleLowerCase();
+
   return ids.filter(id =>
-    [platformDisplayName(id), id].join(' ').toLocaleLowerCase().includes(search),
+    [platformDisplayName(id), id]
+      .join(' ')
+      .toLocaleLowerCase()
+      .includes(search),
   );
 }
 
 /**
  * Discover provider *definitions* from the configured proxy.
  *
- * Installing creates an ordinary platform table, not an executable app.
- * Account OAuth, the collection tree and the sandboxed Syncables view are
- * deliberately separate milestones of #2521. Keep this section behind the
- * existing experimental toggle until those milestones can be completed.
+ * Installing a supported service creates an ordinary platform table with
+ * Atomic Server's built-in Syncables view.
  */
 export function ProxyCatalogApps({
   drive,
@@ -59,23 +71,23 @@ export function ProxyCatalogApps({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string>();
 
-  const catalogIds = catalog.status === 'ready' ? catalog.platforms : [];
-  const catalogKey = catalogIds.join('\n');
+  const ready = catalog.status === 'ready' ? catalog : undefined;
 
   useEffect(() => {
+    if (!ready) return;
+
     let active = true;
     setExisting({});
     setLookupError(undefined);
-    if (catalog.status !== 'ready') return;
-
     setLoading(true);
     void Promise.all(
-      catalog.platforms.map(async platform => {
+      ready.platforms.map(async platform => {
         const subject = await findSyncablePlatform(store, {
           drive,
-          proxyOrigin: catalog.origin,
+          proxyOrigin: ready.origin,
           platform,
         });
+
         return [platform, subject] as const;
       }),
     )
@@ -83,7 +95,9 @@ export function ProxyCatalogApps({
         if (active) {
           setExisting(
             Object.fromEntries(
-              found.filter((entry): entry is readonly [string, string] => !!entry[1]),
+              found.filter(
+                (entry): entry is readonly [string, string] => !!entry[1],
+              ),
             ),
           );
         }
@@ -98,9 +112,7 @@ export function ProxyCatalogApps({
     return () => {
       active = false;
     };
-    // Catalog key changes on new provider lists; origin/drive are separate.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, drive, catalog.origin, catalog.status, catalogKey]);
+  }, [store, drive, ready]);
 
   if (catalog.status === 'loading') {
     return <p aria-live='polite'>Loading integration proxy catalog…</p>;
@@ -116,23 +128,24 @@ export function ProxyCatalogApps({
 
   const visible = visibleProxyPlatforms(catalog.platforms, query);
 
-  const install = async (platform: string) => {
+  const install = (platform: string) => {
     setBusy(platform);
-
-    try {
-      const subject = await ensureSyncablePlatform(store, {
-        drive,
-        proxyOrigin: catalog.origin,
-        platform,
-        name: platform === 'github-issues' ? 'GitHub' : catalog.entries.find(item => item.id === platform)?.name ?? platformDisplayName(platform),
-      });
-      setExisting(previous => ({ ...previous, [platform]: subject }));
-      navigate(constructOpenURL(subject));
-    } catch (error) {
-      toast.error(String(error));
-    } finally {
-      setBusy(undefined);
-    }
+    void ensureSyncablePlatform(store, {
+      drive,
+      proxyOrigin: catalog.origin,
+      platform,
+      name:
+        platform === 'github-issues'
+          ? 'GitHub'
+          : (catalog.entries.find(item => item.id === platform)?.name ??
+            platformDisplayName(platform)),
+    })
+      .then(subject => {
+        setExisting(previous => ({ ...previous, [platform]: subject }));
+        navigate(constructOpenURL(subject));
+      })
+      .catch(error => toast.error(String(error)))
+      .finally(() => setBusy(undefined));
   };
 
   return (
@@ -140,9 +153,8 @@ export function ProxyCatalogApps({
       <Column gap='0.75rem'>
         <h2>Connect a service</h2>
         <p>
-          From the configured integration proxy at <code>{catalog.origin}</code>.
-          Experimental: adding a service creates its Atomic table. Connecting
-          accounts and syncing collections will follow.
+          From the configured integration proxy at <code>{catalog.origin}</code>
+          . Add GitHub to browse repositories and import issues into your drive.
         </p>
         {lookupError && (
           <p role='alert'>
@@ -156,8 +168,9 @@ export function ProxyCatalogApps({
             const name =
               platform === 'github-issues'
                 ? 'GitHub'
-                : entry?.name ?? platformDisplayName(platform);
+                : (entry?.name ?? platformDisplayName(platform));
             const subject = existing[platform];
+            const canInstall = platform === 'github-issues';
 
             return (
               <Card key={platform} data-proxy-platform={platform}>
@@ -181,21 +194,25 @@ export function ProxyCatalogApps({
                     <Description>{entry?.description || platform}</Description>
                   </div>
                   <Row>
-                    <Button
-                      disabled={busy !== undefined || loading || !!lookupError}
-                      onClick={() =>
-                        subject
-                          ? navigate(constructOpenURL(subject))
-                          : void install(platform)
-                      }
-                      aria-label={subject ? `Open ${name}` : `Add ${name} to drive`}
-                    >
-                      {busy === platform
-                        ? 'Adding…'
-                        : subject
-                          ? 'Open'
-                          : 'Add to Drive'}
-                    </Button>
+                    {!canInstall && !subject ? (
+                      <small>Sync support unavailable</small>
+                    ) : (
+                      <Button
+                        disabled={
+                          busy !== undefined || loading || !!lookupError
+                        }
+                        onClick={() => install(platform)}
+                        aria-label={
+                          subject ? `Open ${name}` : `Add ${name} to drive`
+                        }
+                      >
+                        {busy === platform
+                          ? 'Adding…'
+                          : subject
+                            ? 'Open'
+                            : 'Add to Drive'}
+                      </Button>
+                    )}
                   </Row>
                 </Column>
               </Card>

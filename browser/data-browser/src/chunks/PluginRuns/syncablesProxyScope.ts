@@ -1,77 +1,67 @@
-/**
- * Pure authorization check for the host-side relay of a built-in Syncables
- * iframe's signed proxy request. The frame itself cannot make network calls.
- *
- * We do not give this trusted renderer carte blanche to read every endpoint
- * a GitHub OAuth token permits. Each view gets its one explicit source.
- */
+// @wc-ignore-file
 export interface SyncablesProxyScope {
   proxyOrigin: string;
   platform: string;
   kind: string;
   connectionId?: string;
-  ownerLogin?: string;
-  repoName?: string;
+  repoId?: string;
 }
 
-function decode(segment: string): string {
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    throw new Error('Invalid proxy path encoding');
-  }
-}
-
-export function assertSyncablesProxyRead(
+/** The iframe names a read, never an HTTP URL or method. The host supplies
+ * the connection, stable repository ID, and every provider query parameter. */
+export function syncablesProxyUrl(
   scope: SyncablesProxyScope,
-  request: { url?: unknown; method?: unknown },
-): void {
-  if (request.method !== 'GET') {
-    throw new Error('Syncables only permits read-only proxy GET requests');
-  }
-  if (typeof request.url !== 'string')
-    throw new Error('Missing signed proxy URL');
-  const target = new URL(request.url);
-  if (target.origin !== scope.proxyOrigin || target.username || target.password) {
-    throw new Error('Proxy origin is outside this Syncables source');
-  }
-
-  const path = target.pathname.split('/').filter(Boolean).map(decode);
+  read: unknown,
+  page: unknown = 1,
+): URL {
+  if (scope.platform !== 'github-issues' || !scope.connectionId)
+    throw new Error('This view has no GitHub connection');
   if (
-    path[0] !== 'proxy' ||
-    !path[1] ||
-    path[2] !== scope.platform ||
-    (scope.connectionId && path[1] !== scope.connectionId)
+    typeof page !== 'number' ||
+    !Number.isInteger(page) ||
+    page < 1 ||
+    page > 20
+  )
+    throw new Error('Invalid pagination page');
+
+  let endpoint: string;
+
+  if (
+    read === 'profile' &&
+    ['platform', 'organizations'].includes(scope.kind) &&
+    page === 1
   ) {
-    throw new Error('Proxy platform or connection is outside this view source');
-  }
-
-  const endpoint = path.slice(3);
-  if (scope.kind === 'organizations' || scope.kind === 'repositories') {
-    if (endpoint.length !== 2 || endpoint[0] !== 'user' || endpoint[1] !== 'repos')
-      throw new Error('Collection discovery may only read /user/repos');
-  } else if (scope.kind === 'mirror') {
-    if (
-      endpoint.length !== 4 ||
-      endpoint[0] !== 'repos' ||
-      endpoint[1] !== scope.ownerLogin ||
-      endpoint[2] !== scope.repoName ||
-      endpoint[3] !== 'issues'
-    ) {
-      throw new Error('Mirror may only read issues from its selected repository');
-    }
+    endpoint = 'user';
+  } else if (read === 'owners' && scope.kind === 'organizations') {
+    endpoint = 'user/orgs';
+  } else if (
+    read === 'repositories' &&
+    ['organizations', 'repositories'].includes(scope.kind)
+  ) {
+    endpoint = 'user/repos';
+  } else if (
+    read === 'issues' &&
+    scope.kind === 'mirror' &&
+    scope.repoId &&
+    /^[1-9][0-9]*$/.test(scope.repoId)
+  ) {
+    endpoint = 'repositories/' + scope.repoId + '/issues';
   } else {
-    throw new Error('This view has no provider read permissions');
+    throw new Error('This view cannot read that GitHub endpoint');
   }
 
-  for (const [key, value] of target.searchParams) {
-    if (key !== 'page' && key !== 'per_page' && key !== 'state')
-      throw new Error('Unexpected provider query parameter');
-    if (key === 'page' && (!/^[1-9][0-9]*$/.test(value) || Number(value) > 20))
-      throw new Error('Invalid pagination page');
-    if (key === 'per_page' && value !== '100')
-      throw new Error('Invalid pagination page size');
-    if (key === 'state' && (scope.kind !== 'mirror' || value !== 'all'))
-      throw new Error('Unexpected issue state filter');
+  const connection = encodeURIComponent(scope.connectionId);
+  const url = new URL(
+    `/proxy/${connection}/${scope.platform}/${endpoint}`,
+    scope.proxyOrigin,
+  );
+
+  if (read !== 'profile') {
+    url.searchParams.set('per_page', '100');
+    url.searchParams.set('page', String(page));
   }
+
+  if (read === 'issues') url.searchParams.set('state', 'all');
+
+  return url;
 }

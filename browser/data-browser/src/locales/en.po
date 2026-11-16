@@ -1290,6 +1290,7 @@ msgstr "Document"
 
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/chunks/PluginRuns/syncablesViews.ts
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/components/SideBar/AccountMenu.tsx
@@ -1863,6 +1864,7 @@ msgstr "Toggle whether this resource appears in your Favorites."
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/IntegrationStore.tsx
@@ -2068,6 +2070,7 @@ msgstr "Ok"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+#: src/chunks/PluginRuns/syncablesViews.ts
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "Table"
@@ -7512,6 +7515,7 @@ msgstr "No automations yet."
 msgid "Connect services to this workspace. Your data and views stay here when sync is paused."
 msgstr "Connect services to this workspace. Your data and views stay here when sync is paused."
 
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
 msgid "Connect a service"
 msgstr "Connect a service"
@@ -7543,6 +7547,7 @@ msgstr "All day"
 msgid "{0} · Recurring meeting (opens its series or exception)"
 msgstr "{0} · Recurring meeting (opens its series or exception)"
 
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Integration proxy"
 msgstr "Integration proxy"
@@ -8750,7 +8755,9 @@ msgid "Install {0}"
 msgstr "Install {0}"
 
 #. 0: app.name
+#. 0: name
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Open {0}"
 msgstr "Open {0}"
 
@@ -8879,6 +8886,7 @@ msgstr "{0} Open"
 msgid "{0} Closed"
 msgstr "{0} Closed"
 
+#: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Issue state"
 msgstr "Issue state"
@@ -13337,6 +13345,7 @@ msgstr "Show Getting started on my drives"
 msgid "Start with"
 msgstr "Start with"
 
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Adding…"
 msgstr "Adding…"
@@ -13530,3 +13539,303 @@ msgstr "Pressing Send report shares the reviewed chat text, error messages, and 
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: src/chunks/PluginRuns/SyncablesFrame.tsx
+msgid "GitHub"
+msgstr "GitHub"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "GitLab"
+msgstr "GitLab"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Todoist"
+msgstr "Todoist"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Spotify"
+msgstr "Spotify"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Airtable"
+msgstr "Airtable"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Discord"
+msgstr "Discord"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Notion"
+msgstr "Notion"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Moneybird"
+msgstr "Moneybird"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Clockify"
+msgstr "Clockify"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Loading integration proxy catalog…"
+msgstr "Loading integration proxy catalog…"
+
+#. 0: catalog.origin; 1: catalog.message
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Could not load apps from {0}: {1}"
+msgstr "Could not load apps from {0}: {1}"
+
+#. 0: lookupError
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Could not determine installed services: {0}"
+msgstr "Could not determine installed services: {0}"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "No matching services."
+msgstr "No matching services."
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Sync support unavailable"
+msgstr "Sync support unavailable"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Add to Drive"
+msgstr "Add to Drive"
+
+#. 0: name
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Add {0} to drive"
+msgstr "Add {0} to drive"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
+msgstr "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Integration proxy apps"
+msgstr "Integration proxy apps"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Connected platform tables"
+msgstr "Connected platform tables"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Drive-owned lookup of platform identity to Atomic table, independent of parent path."
+msgstr "Drive-owned lookup of platform identity to Atomic table, independent of parent path."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Syncable platform ID"
+msgstr "Syncable platform ID"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Platform identifier in the selected integration proxy catalog."
+msgstr "Platform identifier in the selected integration proxy catalog."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration proxy origin"
+msgstr "Integration proxy origin"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "The HTTPS origin of the proxy describing this platform."
+msgstr "The HTTPS origin of the proxy describing this platform."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Syncable account"
+msgstr "Syncable account"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A connected account through which remote collection instances can be discovered."
+msgstr "A connected account through which remote collection instances can be discovered."
+
+#: src/chunks/PluginRuns/SyncablesFrame.tsx
+#: src/chunks/PluginRuns/SyncablesFrame.tsx
+#: src/chunks/PluginRuns/SyncablesFrame.tsx
+msgid "Atomic Syncables"
+msgstr "Atomic Syncables"
+
+#: src/chunks/PluginRuns/SyncablesFrame.tsx
+msgid "Connecting services requires an Atomic Server node. The local table remains accessible without a connection."
+msgstr "Connecting services requires an Atomic Server node. The local table remains accessible without a connection."
+
+#: src/chunks/PluginRuns/SyncablesFrame.tsx
+msgid "Built-in Syncables collection view"
+msgstr "Built-in Syncables collection view"
+
+#: src/chunks/PluginRuns/SyncablesFrame.tsx
+msgid "Could not load the built-in Syncables iframe"
+msgstr "Could not load the built-in Syncables iframe"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+#: src/chunks/PluginRuns/syncablesHost.ts
+#: src/chunks/PluginRuns/syncablesHost.ts
+#: src/chunks/PluginRuns/syncablesHost.ts
+#: src/chunks/PluginRuns/syncablesHost.ts
+#: src/chunks/PluginRuns/syncablesHost.ts
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Connection ID"
+msgstr "Connection ID"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "GitHub account login"
+msgstr "GitHub account login"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "GitHub account ID"
+msgstr "GitHub account ID"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "GitHub account"
+msgstr "GitHub account"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Issue title"
+msgstr "Issue title"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Issue updatedAt"
+msgstr "Issue updatedAt"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Issue URL"
+msgstr "Issue URL"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Organizations"
+msgstr "Organizations"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Repositories"
+msgstr "Repositories"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Issues"
+msgstr "Issues"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Read limit reached. Local rows were retained."
+msgstr "Read limit reached. Local rows were retained."
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Sync error"
+msgstr "Sync error"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Mirror status"
+msgstr "Mirror status"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Last acknowledged synchronization and pause state."
+msgstr "Last acknowledged synchronization and pause state."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "GitHub issue number"
+msgstr "GitHub issue number"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Stable issue number within its repository."
+msgstr "Stable issue number within its repository."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Open or closed at last successful read."
+msgstr "Open or closed at last successful read."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Updated at"
+msgstr "Updated at"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Last GitHub update timestamp."
+msgstr "Last GitHub update timestamp."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Canonical GitHub issue link."
+msgstr "Canonical GitHub issue link."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Issue body"
+msgstr "Issue body"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "GitHub issue description in Markdown."
+msgstr "GitHub issue description in Markdown."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Syncable source configuration"
+msgstr "Syncable source configuration"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Non-secret source bindings and selected collection parameters."
+msgstr "Non-secret source bindings and selected collection parameters."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Syncable resource index"
+msgstr "Syncable resource index"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Drive-level lookup of synced resources by canonical source key."
+msgstr "Drive-level lookup of synced resources by canonical source key."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Syncable source identity"
+msgstr "Syncable source identity"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
+msgstr "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Syncable node kind"
+msgstr "Syncable node kind"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Role of this resource in the discovery hierarchy."
+msgstr "Role of this resource in the discovery hierarchy."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Remote owner kind"
+msgstr "Remote owner kind"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Whether this owner namespace is an organization or personal account."
+msgstr "Whether this owner namespace is an organization or personal account."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "An authorized remote account."
+msgstr "An authorized remote account."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Syncable owner namespace"
+msgstr "Syncable owner namespace"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "A remote organization or personal repository owner."
+msgstr "A remote organization or personal repository owner."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Syncable repository"
+msgstr "Syncable repository"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "A repository within its canonical remote owner namespace."
+msgstr "A repository within its canonical remote owner namespace."
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "Syncable record"
+msgstr "Syncable record"
+
+#: src/chunks/PluginRuns/syncableHierarchy.ts
+msgid "A record mirrored from a selected remote collection."
+msgstr "A record mirrored from a selected remote collection."
+
+#: src/chunks/AppPage/ProxyConnectReturn.tsx
+msgid "Return to the app"
+msgstr "Return to the app"
+
+#: src/chunks/PluginRuns/syncablesHost.ts
+msgid "Organization"
+msgstr "Organization"
