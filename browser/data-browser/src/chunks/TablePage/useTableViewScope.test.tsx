@@ -843,3 +843,33 @@ it('refuses an explicitly named tab with a foreign table owner before changing i
   expect(state.view.get(core.properties.name)).toBe(original);
   expect(state.viewSave).not.toHaveBeenCalled();
 });
+
+it('does not rename a captured tab removed while its resource is loading', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const originalName = state.view.get(core.properties.name);
+  const getResource = state.store.getResource.bind(state.store);
+  let finishLoading!: () => void;
+  const loading = new Promise<typeof state.view>(resolve => {
+    finishLoading = () => resolve(state.view);
+  });
+  const fetch = vi
+    .spyOn(state.store, 'getResource')
+    .mockImplementation(subject =>
+      subject === state.view.subject ? loading : getResource(subject),
+    );
+
+  act(() =>
+    state.result.current.renameView('Stale rename', state.view.subject),
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith(state.view.subject));
+  await act(async () => {
+    await state.table.set(dataBrowser.properties.tableViews, [], false);
+    finishLoading();
+  });
+
+  await waitFor(() => expect(state.result.current.viewSaveError).toBeTruthy());
+  expect(state.view.get(core.properties.name)).toBe(originalName);
+  expect(state.viewSave).not.toHaveBeenCalled();
+  fetch.mockRestore();
+});
