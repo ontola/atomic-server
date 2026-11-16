@@ -4,24 +4,6 @@ type FilterOperator = TableFilterOperator;
 type AggregateFunction =
   TableQueryAggregation['aggregates'][number]['function'];
 
-export type GroupGranularity = 'exact' | 'day' | 'month';
-export const ROW_ACTION_KINDS: RowActionKind[] = [
-  'setNow',
-  'setValue',
-  'toggle',
-  'increment',
-];
-const ROW_ACTION_GENERATORS = Object.fromEntries(
-  ROW_ACTION_KINDS.map(kind => [kind, true]),
-);
-
-/**
- * A single table filter: an extra `(property, operator, value)` constraint
- * ANDed onto the table's `parent = <table>` query. One filter per property
- * (keyed by `property` subject). `value === ''` means "not set yet" — such
- * filters are kept in the UI (so the chip stays visible while editing) but
- * skipped by the query.
- */
 export interface TableFilter {
   /** The stored property this constrains. Absent for a computed column. */
   property?: string;
@@ -36,14 +18,6 @@ export interface TableFilter {
   value: string;
 }
 
-/**
- * How a filter is identified while it's being edited: a property subject, or a
- * computed column as `derived:<id>` — the same convention `view-column-order`
- * uses for the columns that aren't properties.
- *
- * A single key keeps the chips, the setters and the "already filtered" check
- * working for both kinds without every one of them growing a branch.
- */
 export function filterKey(filter: TableFilter): string {
   return filter.derived
     ? derivedFilterKey(filter.derived)
@@ -68,16 +42,6 @@ export interface TableSorting {
   sortDesc: boolean;
 }
 
-/**
- * A column whose value is computed from the row rather than stored on it: a
- * duration, a days-since, an amount, "birthday within two weeks". Configuration,
- * not code — the View lists them in `view-derived-columns` and every view kind
- * renders them. See `planning/table-templates-and-mini-apps.md`.
- *
- * The value is a formula (evaluated by the Rust `evalexpr` crate, in the browser
- * and in the store alike) over `vars`, which bind the identifiers it uses to
- * property subjects: `coalesce(until, now()) - start`.
- */
 export interface DerivedColumnSpec {
   /** Stable identity within the view — the grid column key. */
   id: string;
@@ -106,8 +70,6 @@ export type DerivedValueKind =
 
 export const DEFAULT_DERIVED_WIDTH = 120;
 
-// --- Reading what is stored -------------------------------------------------
-
 type LegacyArgs = Record<string, string | number | undefined>;
 
 /** The five fixed generators this replaced: their arguments and the formula each meant. */
@@ -132,7 +94,9 @@ const LEGACY: Record<
 
 /** A spec stored as `{ kind, args }`, as the same formula the store converts it to. */
 function fromLegacy(kind: string, args: LegacyArgs) {
-  const [names, formula, valueKind] = LEGACY[kind] ?? [];
+  const entry = Object.hasOwn(LEGACY, kind) ? LEGACY[kind] : undefined;
+  if (!entry) return undefined;
+  const [names, formula, valueKind] = entry;
   const vars: Record<string, string> = {};
   const operands = names?.map(name => {
     const arg = args[name];
@@ -205,9 +169,7 @@ function readSpec(value: unknown): DerivedColumnSpec | undefined {
  * assistant-written) config must not be able to take the whole table down with
  * it.
  */
-export function parseDerivedColumnSpecs(
-  value: JSONValue | undefined,
-): DerivedColumnSpec[] {
+export function parseDerivedColumnSpecs(value: unknown): DerivedColumnSpec[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -218,21 +180,6 @@ export function parseDerivedColumnSpecs(
     return spec?.formula ? [spec] : [];
   });
 }
-
-/**
- * The verbs a row action can perform.
- *
- * A closed set, on purpose, and the same rule the derived-column generators
- * follow: a person can edit one in a dialog and an LLM can write one, because it
- * is configuration rather than code. The moment an action can run arbitrary code
- * it stops being config and becomes the plugin platform, which is a different
- * document ([[llm-wasm-gui-plugins]]).
- *
- * These four came out of walking the thirteen table templates (see
- * `planning/dashboards.md`): "Watered" and "Log contact" stamp now, "Mark done"
- * and "Yes/No" set a value, a grocery list toggles, and an inventory counts up
- * and down. Nothing in the catalogue needed a fifth *per-row* verb.
- */
 export type RowActionKind = 'setNow' | 'setValue' | 'toggle' | 'increment';
 
 /** One configured action, stored on the View in `view-row-actions`. */
@@ -251,6 +198,13 @@ export interface RowActionSpec {
   value?: string | number;
 }
 
+export const ROW_ACTION_KINDS: RowActionKind[] = [
+  'setNow',
+  'setValue',
+  'toggle',
+  'increment',
+];
+
 function isSpec(value: unknown): value is RowActionSpec {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -262,7 +216,7 @@ function isSpec(value: unknown): value is RowActionSpec {
     typeof spec.id === 'string' &&
     typeof spec.label === 'string' &&
     typeof spec.kind === 'string' &&
-    spec.kind in ROW_ACTION_GENERATORS &&
+    ROW_ACTION_KINDS.includes(spec.kind as RowActionKind) &&
     typeof spec.property === 'string'
   );
 }
@@ -272,7 +226,7 @@ function isSpec(value: unknown): value is RowActionSpec {
  * thrown on: a person or an LLM writes this, and one bad entry must not take the
  * table down.
  */
-export function parseRowActions(value: JSONValue | undefined): RowActionSpec[] {
+export function parseRowActions(value: unknown): RowActionSpec[] {
   const parsed =
     typeof value === 'string'
       ? (() => {
@@ -291,15 +245,6 @@ export function parseRowActions(value: JSONValue | undefined): RowActionSpec[] {
   return (parsed as unknown[]).filter(isSpec);
 }
 
-/**
- * One value a new row starts with.
- *
- * Deliberately the *same* patch vocabulary a row action uses, applied to a row
- * that does not exist yet: `setNow` stamps the moment you pressed the button,
- * `setValue` presets a status, `toggle` starts it ticked, `increment` starts it at
- * the step. Reusing the verbs keeps the closed set closed — there is no second
- * vocabulary to learn, to document, or to write a second dialog for.
- */
 export interface QuickAddPreset {
   kind: RowActionKind;
   property: string;
@@ -335,7 +280,7 @@ function isPreset(value: unknown): value is QuickAddPreset {
 
   return (
     typeof preset.kind === 'string' &&
-    preset.kind in ROW_ACTION_GENERATORS &&
+    ROW_ACTION_KINDS.includes(preset.kind as RowActionKind) &&
     typeof preset.property === 'string'
   );
 }
@@ -344,9 +289,7 @@ function isPreset(value: unknown): value is QuickAddPreset {
  * Reads the View's stored quick-add. Anything malformed is dropped rather than
  * thrown on — a person or an LLM writes this.
  */
-export function parseQuickAdd(
-  value: JSONValue | undefined,
-): QuickAddSpec | undefined {
+export function parseQuickAdd(value: unknown): QuickAddSpec | undefined {
   const parsed =
     typeof value === 'string'
       ? (() => {
@@ -382,13 +325,6 @@ export function parseQuickAdd(
   };
 }
 
-/**
- * A statistic a view shows under its rows. Configuration on the View
- * (`view-aggregates`), computed by the store over **every** row the view
- * matches — filters included, paging excluded. So a "Sum of Amount" is the
- * answer for the whole table, not for the rows that happen to be loaded.
- * A quick filter narrows it to the rows that match (`aggregateRows`).
- */
 export interface TableAggregate {
   /** Stable identity within the view. */
   id: string;
@@ -409,6 +345,9 @@ export interface TableAggregate {
    */
   row?: number;
 }
+
+/** How a date or timestamp breakdown column is bucketed. */
+export type GroupGranularity = 'exact' | 'day' | 'month';
 
 export const AGGREGATE_FUNCTIONS: AggregateFunction[] = [
   'sum',
@@ -441,9 +380,7 @@ function isAggregate(value: unknown): value is TableAggregate {
  * than thrown — the same rule the derived columns follow: config can be written
  * by a person or the assistant, and a bad entry must not take the table down.
  */
-export function parseAggregates(
-  value: JSONValue | undefined,
-): TableAggregate[] {
+export function parseAggregates(value: unknown): TableAggregate[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -451,8 +388,7 @@ export function parseAggregates(
   return (value as unknown[]).filter(isAggregate);
 }
 
-/** Reads a stored order, ignoring anything that isn't a list of keys. */
-export function parseColumnOrder(value: JSONValue | undefined): string[] {
+export function parseColumnOrder(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -460,4 +396,175 @@ export function parseColumnOrder(value: JSONValue | undefined): string[] {
   return (value as unknown[]).filter(
     (key): key is string => typeof key === 'string',
   );
+}
+
+/** The complete saved configuration consumed by built-in TablePage features.
+ * Backend property names, resource handles and persistence revisions are kept in
+ * adapters. A raw kind may name a built-in or an app; matching/authorization is
+ * separate from reading its stored binding. Sort defaults belong to the backend. */
+export interface TableViewConfiguration {
+  name?: string;
+  kind?: string;
+  dashboard?: string;
+  filters: TableFilter[];
+  sortBy?: string;
+  sortDesc: boolean;
+  columns: string[];
+  groupBy?: string;
+  endProp?: string;
+  timerExclusive: boolean;
+  splitLanguages: string[];
+  derivedColumns: DerivedColumnSpec[];
+  derivedColumnsSet: boolean;
+  columnOrder: string[];
+  aggregates: TableAggregate[];
+  rowActions: RowActionSpec[];
+  quickAdd?: QuickAddSpec;
+  groupByColumn?: string;
+  groupGranularity: GroupGranularity;
+}
+
+export type TableViewConfigurationInput = Partial<
+  Record<Exclude<keyof TableViewConfiguration, 'derivedColumnsSet'>, unknown>
+>;
+export interface TableViewConfigurationIssue {
+  field:
+    | 'filters'
+    | 'sortBy'
+    | 'sortDesc'
+    | 'aggregates'
+    | 'groupByColumn'
+    | 'groupGranularity'
+    | 'derivedColumns';
+  index?: number;
+}
+
+const FILTER_OPERATORS: TableFilterOperator[] = [
+  'eq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'starts_with',
+  'contains',
+];
+const VALUE_KINDS: DerivedValueKind[] = [
+  'duration',
+  'days',
+  'number',
+  'date',
+  'boolean',
+];
+const optionalString = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined;
+
+/** Optional display metadata retains the established tolerant codecs. Invalid
+ * query-bearing metadata is reported explicitly: a host must gate its row query
+ * on `issues`, never substitute the returned empty/default query fields. No
+ * serialization/migration or write is performed merely by reading a view.
+ * Schema references and implicit renderer columns resolve in the session, which
+ * must additionally preflight the resulting backend query. */
+export function readTableViewConfiguration(input: TableViewConfigurationInput) {
+  const issues: TableViewConfigurationIssue[] = [];
+  const filters: TableFilter[] = [];
+
+  if (input.filters !== undefined) {
+    if (!Array.isArray(input.filters)) issues.push({ field: 'filters' });
+    else
+      input.filters.forEach((value, index) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+          issues.push({ field: 'filters', index });
+
+          return;
+        }
+
+        const candidate = value as Record<string, unknown>;
+        const property =
+          typeof candidate.property === 'string' && candidate.property
+            ? candidate.property
+            : undefined;
+        const derived =
+          typeof candidate.derived === 'string' && candidate.derived
+            ? candidate.derived
+            : undefined;
+        const operator = candidate.operator ?? 'eq';
+
+        if (
+          !!property === !!derived ||
+          typeof candidate.value !== 'string' ||
+          !FILTER_OPERATORS.includes(operator as TableFilterOperator)
+        ) {
+          issues.push({ field: 'filters', index });
+
+          return;
+        }
+
+        filters.push({
+          ...(property ? { property } : { derived }),
+          operator: operator as TableFilterOperator,
+          value: candidate.value,
+        });
+      });
+  }
+
+  const sortBy = optionalString(input.sortBy) || undefined;
+  if (input.sortBy !== undefined && typeof input.sortBy !== 'string')
+    issues.push({ field: 'sortBy' });
+  if (input.sortDesc !== undefined && typeof input.sortDesc !== 'boolean')
+    issues.push({ field: 'sortDesc' });
+  const derivedColumns = parseDerivedColumnSpecs(input.derivedColumns);
+  // Unknown formatting kinds cannot be handed to an exhaustive formatter.
+  derivedColumns.forEach((spec, index) => {
+    if (spec.valueKind !== undefined && !VALUE_KINDS.includes(spec.valueKind)) {
+      issues.push({ field: 'derivedColumns', index });
+      derivedColumns[index] = { ...spec, valueKind: undefined };
+    }
+  });
+  const aggregates = parseAggregates(input.aggregates);
+  if (
+    input.aggregates !== undefined &&
+    (!Array.isArray(input.aggregates) ||
+      aggregates.length !== input.aggregates.length)
+  )
+    issues.push({ field: 'aggregates' });
+  const groupByColumn = optionalString(input.groupByColumn) || undefined;
+  if (
+    input.groupByColumn !== undefined &&
+    typeof input.groupByColumn !== 'string'
+  )
+    issues.push({ field: 'groupByColumn' });
+  const groupGranularity =
+    input.groupGranularity === undefined || input.groupGranularity === ''
+      ? 'day'
+      : input.groupGranularity;
+  if (!['day', 'month', 'exact'].includes(groupGranularity as string))
+    issues.push({ field: 'groupGranularity' });
+  const config: TableViewConfiguration = {
+    name: optionalString(input.name),
+    kind: optionalString(input.kind),
+    dashboard: optionalString(input.dashboard),
+    filters,
+    sortBy,
+    sortDesc: input.sortDesc === true,
+    columns: parseColumnOrder(input.columns),
+    groupBy: optionalString(input.groupBy),
+    endProp: optionalString(input.endProp),
+    timerExclusive:
+      input.timerExclusive === undefined ? true : !!input.timerExclusive,
+    splitLanguages: parseColumnOrder(input.splitLanguages),
+    derivedColumns,
+    derivedColumnsSet: Array.isArray(input.derivedColumns),
+    columnOrder: parseColumnOrder(input.columnOrder),
+    aggregates,
+    rowActions: parseRowActions(input.rowActions),
+    quickAdd: parseQuickAdd(input.quickAdd),
+    groupByColumn,
+    groupGranularity: ['day', 'month', 'exact'].includes(
+      groupGranularity as string,
+    )
+      ? (groupGranularity as GroupGranularity)
+      : 'day',
+  };
+
+  return { config, issues };
 }

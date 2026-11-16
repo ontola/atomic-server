@@ -458,3 +458,135 @@ it('does not count a foreign linked record as a replacement for the last Table v
   expect(state.save).not.toHaveBeenCalled();
   expect(state.destroy).not.toHaveBeenCalled();
 });
+
+it('reacts to a local owner change before a save or remote store notification', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  await act(async () => {
+    await state.view.set(
+      core.properties.parent,
+      'https://example.com/other-table',
+      false,
+    );
+  });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(false));
+  expect(state.result.current.viewError).toBeTruthy();
+  expect(state.viewSave).not.toHaveBeenCalled();
+});
+
+it('keeps a malformed saved filter from falling back to an unfiltered row query', async () => {
+  const state = await setup();
+  const rowClass = await state.store.newResource({
+    subject: 'https://example.com/row-class',
+    noParent: true,
+  });
+  await act(async () => {
+    await state.table.set(core.properties.classtype, rowClass.subject, false);
+    await state.view.set(
+      dataBrowser.properties.viewFilters,
+      [
+        {
+          property: 'https://example.com/property',
+          value: 'one',
+          operator: 'unsupported',
+        },
+      ],
+      false,
+    );
+  });
+  const data = renderHook(() => useTableData(state.table), {
+    wrapper: state.wrapper,
+  });
+  await waitFor(() =>
+    expect(data.result.current.viewError).toBe(
+      'Saved view configuration is invalid.',
+    ),
+  );
+  expect(data.result.current.query.scope.rowClass).toBeUndefined();
+  expect(data.result.current.ready).toBe(false);
+});
+
+it('keeps parsed config arrays stable across unrelated local view metadata changes', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const columns = state.result.current.viewColumnOrder;
+  const derived = state.result.current.viewDerivedColumns;
+  await act(async () => {
+    await state.view.set(
+      core.properties.description,
+      'Unrelated description',
+      false,
+    );
+  });
+  expect(state.result.current.viewColumnOrder).toBe(columns);
+  expect(state.result.current.viewDerivedColumns).toBe(derived);
+});
+
+it('hydrates an owned unnamed legacy view before declaring its query ready', async () => {
+  const state = await setup();
+  const filters = [
+    {
+      property: 'https://example.com/property',
+      operator: 'eq',
+      value: 'retained',
+    },
+  ];
+  await act(async () => {
+    await state.view.set(dataBrowser.properties.viewFilters, filters, false);
+    state.view.remove(core.properties.name);
+  });
+  state.unmount();
+  const readyFilters: unknown[] = [];
+  const reopened = renderHook(
+    () => {
+      const current = useTableView(state.table);
+      if (current.viewReady) readyFilters.push(current.filters);
+
+      return current;
+    },
+    { wrapper: state.wrapper },
+  );
+  await waitFor(() => expect(reopened.result.current.viewReady).toBe(true));
+  await waitFor(() => expect(reopened.result.current.filters).toEqual(filters));
+  expect(readyFilters.length).toBeGreaterThan(0);
+  expect(
+    readyFilters.every(
+      value => JSON.stringify(value) === JSON.stringify(filters),
+    ),
+  ).toBe(true);
+});
+
+it('keeps a late implicit-view creation from changing another table session', async () => {
+  const state = await setup({ implicit: true });
+  state.unmount();
+  const other = await state.store.newResource({
+    subject: 'https://example.com/second-table',
+    noParent: true,
+  });
+  const hook = renderHook(({ table }) => useTableView(table), {
+    initialProps: { table: state.table },
+    wrapper: state.wrapper,
+  });
+  await waitFor(() => expect(hook.result.current.viewReady).toBe(true));
+  let complete!: (view: typeof state.view) => void;
+  vi.spyOn(state.store, 'newResource').mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        complete = resolve;
+      }),
+  );
+  act(() => hook.result.current.renameView('First table view'));
+  await waitFor(() => expect(complete).toBeTypeOf('function'));
+  hook.rerender({ table: other });
+  await waitFor(() => expect(hook.result.current.viewReady).toBe(true));
+  await act(async () => {
+    complete(state.view);
+  });
+  await waitFor(() =>
+    expect(state.view.get(core.properties.name)).toBe('First table view'),
+  );
+  expect(hook.result.current.viewReady).toBe(true);
+  expect(hook.result.current.activeView).toBeUndefined();
+  expect(hook.result.current.filters).toEqual([]);
+  expect(other.get(dataBrowser.properties.tableViews)).toBeUndefined();
+});
