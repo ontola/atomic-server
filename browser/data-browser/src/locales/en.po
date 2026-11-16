@@ -5497,18 +5497,11 @@ msgstr "{0} resources"
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
 
-#. 0: syncedAgo
-#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
-#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Synced {0}"
-msgstr "Synced {0}"
+#~ msgid "Synced {0}"
+#~ msgstr "Synced {0}"
 
-#: src/routes/SyncRoute.tsx
-msgid "Synced just now"
-msgstr "Synced just now"
+#~ msgid "Synced just now"
+#~ msgstr "Synced just now"
 
 #: src/routes/SyncRoute.tsx
 msgid "This server"
@@ -5541,10 +5534,8 @@ msgstr "Paired"
 msgid "Paired device"
 msgstr "Paired device"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Not synced yet"
-msgstr "Not synced yet"
+#~ msgid "Not synced yet"
+#~ msgstr "Not synced yet"
 
 #. 0: label; 1: detail
 #: src/actions/runAction.ts
@@ -13563,3 +13554,31 @@ msgstr "The latest verified backup is at least 7 days old."
 #: src/components/CloudVaultWatcher.tsx
 msgid "No backup from the last 7 days could be verified."
 msgstr "No backup from the last 7 days could be verified."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was more than 24 hours ago."
+msgstr "The last verified full sync with the server was more than 24 hours ago."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was at least 7 days ago."
+msgstr "The last verified full sync with the server was at least 7 days ago."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "A full sync with the server could not be verified."
+msgstr "A full sync with the server could not be verified."
+
+#. 0: syncedAgo
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync {0}"
+msgstr "Last full sync {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync just now"
+msgstr "Last full sync just now"
+
+#. 0: formatTimeAgo(new Date(lastActivity)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Last sync activity {0}"
+msgstr "Last sync activity {0}"

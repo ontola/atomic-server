@@ -4,7 +4,9 @@ import {
   BACKUP_DAY_MS,
   BACKUP_WEEK_MS,
   getDriveProtectionWarning,
+  getLastFullSyncAt,
   readDriveProtection,
+  subscribeToFullSync,
 } from './driveProtection';
 import { getManagedEnrollments } from './managed/enrollmentApi';
 import { getManagedAccount } from './managed/session';
@@ -43,6 +45,7 @@ const inaccessible = {
   vaultHasCopy: false,
   lastBackupAt: null,
   serverHasCopy: false,
+  lastFullSyncAt: null,
 };
 
 const enrollment: VaultEnrollment = {
@@ -68,7 +71,51 @@ function store(localOnly = false): Store {
     normalizeSubject: (subject: string) =>
       subject.replace(/^did:ad:/, 'atomic:'),
     isLocalOnlyDrive: () => localOnly,
+    getDefaultWebSocket: () => undefined,
   } as unknown as Store;
+}
+
+function connectedStore() {
+  const socket = {
+    readyState: WebSocket.OPEN,
+    driveInventory: vi.fn().mockResolvedValue([
+      { subject: 'did:ad:some-drive', vv: { peer: 3 } },
+      { subject: 'atomic:child', vv: { peer: 5 } },
+    ]),
+  };
+  const status: Pick<
+    ReturnType<Store['getSyncStatus']>,
+    | 'drive'
+    | 'serverUrl'
+    | 'serverConnected'
+    | 'syncInProgress'
+    | 'pendingDirtyCount'
+    | 'blockedCount'
+  > = {
+    drive: DRIVE,
+    serverUrl: SERVER,
+    serverConnected: true,
+    syncInProgress: false,
+    pendingDirtyCount: 0,
+    blockedCount: 0,
+  };
+  const activeStore = Object.assign(store(), {
+    getAgent: vi.fn().mockReturnValue(AGENT),
+    getDrive: () => status.drive,
+    getServerUrl: () => status.serverUrl,
+    getDefaultWebSocket: vi.fn().mockReturnValue(socket),
+    getSyncStatus: vi.fn().mockReturnValue(status),
+    isLiveSyncedDrive: vi.fn().mockReturnValue(true),
+    isDriveRefusedByServer: vi.fn().mockReturnValue(false),
+    computeDriveSyncState: vi.fn().mockResolvedValue({
+      vvs: {
+        [DRIVE]: { peer: 3 },
+        'atomic:child': { peer: 4 },
+      },
+    }),
+  });
+
+  return { activeStore, status, socket };
 }
 
 function signedIn() {
@@ -78,36 +125,78 @@ function signedIn() {
 }
 
 describe('drive protection warning', () => {
-  it('treats a server replica as a copy without a dated backup', () => {
+  it('distinguishes a server copy from a confirmed full sync', () => {
     expect(getDriveProtectionWarning(inaccessible, NOW)).toEqual({
       severity: 'hard',
       missingCopy: true,
-      backup: 'unverified',
+      age: 'unverified',
+      source: 'vault',
     });
     expect(
       getDriveProtectionWarning({ ...inaccessible, serverHasCopy: true }, NOW),
     ).toEqual({
       severity: 'hard',
       missingCopy: false,
-      backup: 'unverified',
+      age: 'unverified',
+      source: 'server',
     });
+    expect(
+      getDriveProtectionWarning(
+        { ...inaccessible, serverHasCopy: true, lastFullSyncAt: NOW },
+        NOW,
+      ),
+    ).toBeNull();
   });
 
-  it.each([
-    [BACKUP_DAY_MS, null],
-    [BACKUP_DAY_MS + 1, { severity: 'medium', backup: 'day-old' }],
-    [BACKUP_WEEK_MS - 1, { severity: 'medium', backup: 'day-old' }],
-    [BACKUP_WEEK_MS, { severity: 'hard', backup: 'week-old' }],
-  ])('applies the freshness thresholds at age %s', (age, warning) => {
+  it.each(['vault', 'server'] as const)(
+    'applies the freshness thresholds for %s',
+    source => {
+      for (const [age, warning] of [
+        [BACKUP_DAY_MS, null],
+        [BACKUP_DAY_MS + 1, { severity: 'medium', age: 'day-old' }],
+        [BACKUP_WEEK_MS - 1, { severity: 'medium', age: 'day-old' }],
+        [BACKUP_WEEK_MS, { severity: 'hard', age: 'week-old' }],
+      ] as const) {
+        const sample = {
+          ...inaccessible,
+          ...(source === 'vault'
+            ? { vaultHasCopy: true, lastBackupAt: NOW - age }
+            : { serverHasCopy: true, lastFullSyncAt: NOW - age }),
+        };
+
+        expect(getDriveProtectionWarning(sample, NOW)).toEqual(
+          warning && { source, missingCopy: false, ...warning },
+        );
+      }
+    },
+  );
+
+  it('uses the newest confirmed server sync or Vault backup', () => {
     const sample = {
-      ...inaccessible,
       vaultHasCopy: true,
-      lastBackupAt: NOW - age,
+      lastBackupAt: NOW - BACKUP_WEEK_MS,
+      serverHasCopy: true,
+      lastFullSyncAt: NOW - BACKUP_DAY_MS - 1,
     };
 
-    expect(getDriveProtectionWarning(sample, NOW)).toEqual(
-      warning && { missingCopy: false, ...warning },
-    );
+    expect(getDriveProtectionWarning(sample, NOW)).toEqual({
+      severity: 'medium',
+      missingCopy: false,
+      age: 'day-old',
+      source: 'server',
+    });
+    expect(
+      getDriveProtectionWarning({ ...sample, lastBackupAt: NOW }, NOW),
+    ).toBeNull();
+    expect(
+      getDriveProtectionWarning({ ...sample, lastFullSyncAt: NOW }, NOW),
+    ).toBeNull();
+    expect(
+      getDriveProtectionWarning(
+        { ...sample, lastBackupAt: sample.lastFullSyncAt },
+        NOW,
+      )?.source,
+    ).toBe('vault');
   });
 });
 
@@ -203,6 +292,139 @@ describe('reading drive protection evidence', () => {
     });
     expect(fetchNodeDriveUsage).toHaveBeenCalledWith(SERVER, DRIVE, AGENT);
   });
+
+  it('confirms a full sync with a server holding every local version while Vault is off', async () => {
+    vi.useFakeTimers().setSystemTime(NOW);
+    vi.mocked(fetchNodeDriveUsage).mockResolvedValue(usage);
+    const { activeStore, status, socket } = connectedStore();
+    const listener = vi.fn();
+    const unsubscribe = subscribeToFullSync(listener);
+
+    try {
+      const sample = await readDriveProtection(
+        activeStore,
+        DRIVE,
+        AGENT,
+        SERVER,
+      );
+
+      expect(sample).toEqual({
+        ...inaccessible,
+        serverHasCopy: true,
+        lastFullSyncAt: NOW,
+      });
+      expect(getDriveProtectionWarning(sample, NOW)).toBeNull();
+      expect(socket.driveInventory).toHaveBeenCalledExactlyOnceWith(DRIVE, '');
+      expect(getLastFullSyncAt(activeStore, DRIVE, SERVER, AGENT.subject)).toBe(
+        NOW,
+      );
+      expect(
+        getLastFullSyncAt(activeStore, DRIVE, HOSTED, AGENT.subject),
+      ).toBeNull();
+      expect(
+        getLastFullSyncAt(activeStore, DRIVE, SERVER, 'atomic:agent:bob'),
+      ).toBeNull();
+      expect(listener).toHaveBeenCalledOnce();
+
+      // A new edit in flight cannot advance the last confirmed date.
+      status.pendingDirtyCount = 1;
+      vi.setSystemTime(NOW + BACKUP_DAY_MS + 1);
+      const pending = await readDriveProtection(
+        activeStore,
+        DRIVE,
+        AGENT,
+        SERVER,
+      );
+      expect(pending.lastFullSyncAt).toBe(NOW);
+      expect(getDriveProtectionWarning(pending, Date.now())).toMatchObject({
+        severity: 'medium',
+        source: 'server',
+      });
+      expect(listener).toHaveBeenCalledOnce();
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it.each([
+    [{ subject: 'atomic:child', vv: { peer: 5 } }],
+    [
+      { subject: DRIVE, vv: { peer: 3 } },
+      { subject: 'atomic:child', vv: { peer: 3 } },
+    ],
+  ])(
+    'requires the remote root and current local versions',
+    async (...inventory) => {
+      vi.mocked(fetchNodeDriveUsage).mockResolvedValue(usage);
+      const { activeStore, socket } = connectedStore();
+      socket.driveInventory.mockResolvedValue(inventory);
+
+      expect(
+        await readDriveProtection(activeStore, DRIVE, AGENT, SERVER),
+      ).toEqual({
+        ...inaccessible,
+        serverHasCopy: true,
+      });
+    },
+  );
+
+  it('discards inventory if the active socket changes while it was requested', async () => {
+    vi.mocked(fetchNodeDriveUsage).mockResolvedValue(usage);
+    const { activeStore, socket } = connectedStore();
+    socket.driveInventory.mockImplementationOnce(async () => {
+      vi.mocked(activeStore.getDefaultWebSocket).mockReturnValue(undefined);
+
+      return [{ subject: DRIVE, vv: { peer: 3 } }];
+    });
+
+    expect(
+      await readDriveProtection(activeStore, DRIVE, AGENT, SERVER),
+    ).toEqual({
+      ...inaccessible,
+      serverHasCopy: true,
+    });
+    expect(activeStore.computeDriveSyncState).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { ...usage, enrolled: false },
+    { ...usage, resourceCount: 0 },
+  ])(
+    'ages a previous full sync when the server cannot be reached, and clears it after a signed refusal',
+    async lostCopy => {
+      vi.useFakeTimers().setSystemTime(NOW);
+      vi.mocked(fetchNodeDriveUsage).mockResolvedValue(usage);
+      const { activeStore, status } = connectedStore();
+
+      await readDriveProtection(activeStore, DRIVE, AGENT, SERVER);
+
+      status.serverConnected = false;
+      vi.setSystemTime(NOW + BACKUP_WEEK_MS);
+      vi.mocked(fetchNodeDriveUsage).mockRejectedValue(new Error('Offline'));
+      const offline = await readDriveProtection(
+        activeStore,
+        DRIVE,
+        AGENT,
+        SERVER,
+      );
+
+      expect(getDriveProtectionWarning(offline, Date.now())).toEqual({
+        severity: 'hard',
+        missingCopy: false,
+        age: 'week-old',
+        source: 'server',
+      });
+
+      vi.mocked(fetchNodeDriveUsage).mockResolvedValue(lostCopy);
+
+      expect(
+        await readDriveProtection(activeStore, DRIVE, AGENT, SERVER),
+      ).toEqual(inaccessible);
+      expect(
+        getLastFullSyncAt(activeStore, DRIVE, SERVER, AGENT.subject),
+      ).toBeNull();
+    },
+  );
 
   it('keeps a confirmed Vault receipt when the server check times out', async () => {
     vi.useFakeTimers();

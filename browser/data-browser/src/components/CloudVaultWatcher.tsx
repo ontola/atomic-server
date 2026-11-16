@@ -9,6 +9,7 @@ import { deviceHasDriveData } from '../helpers/driveData';
 import {
   getDriveProtectionWarning,
   readDriveProtection,
+  type DriveProtectionWarning,
 } from '../helpers/driveProtection';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { CLOUD_SERVER_PRICE } from '../helpers/cloudServerPrice';
@@ -60,8 +61,7 @@ export function CloudVaultWatcher() {
     baseURL,
   );
   const severity = warning?.severity;
-  const missingCopy = warning?.missingCopy;
-  const backup = warning?.backup;
+  const warningMessage = warning ? driveProtectionMessage(warning) : null;
 
   useEffect(() => watchForVaultBackups(store), [store]);
 
@@ -95,7 +95,7 @@ export function CloudVaultWatcher() {
   }, [drive, firstBackupStatus, onSignupScreen, store, subject]);
 
   useEffect(() => {
-    if (!severity) return;
+    if (!severity || !warningMessage) return;
 
     const id = toast.custom(
       <VaultNoticeToast
@@ -106,13 +106,7 @@ export function CloudVaultWatcher() {
         <ToastBody role={severity === 'hard' ? 'alert' : 'status'}>
           <ProtectionTitle $medium={severity === 'medium'}>
             <FaTriangleExclamation aria-hidden />
-            {missingCopy
-              ? 'No copy of this drive could be verified in Cloud Vault or on an external server.'
-              : backup === 'day-old'
-                ? 'The latest verified backup is more than 24 hours old.'
-                : backup === 'week-old'
-                  ? 'The latest verified backup is at least 7 days old.'
-                  : 'No backup from the last 7 days could be verified.'}
+            {warningMessage}
           </ProtectionTitle>
         </ToastBody>
         <Button
@@ -127,7 +121,7 @@ export function CloudVaultWatcher() {
     );
 
     return () => toast.remove(id);
-  }, [backup, drive, missingCopy, navigate, severity]);
+  }, [drive, navigate, severity, warningMessage]);
 
   // A full vault is an upsell moment, not an error: no Bugsnag, and a button
   // that goes to the plans for that drive.
@@ -206,6 +200,31 @@ export function CloudVaultWatcher() {
   return null;
 }
 
+function driveProtectionMessage({
+  age,
+  missingCopy,
+  source,
+}: DriveProtectionWarning): string {
+  if (missingCopy)
+    return 'No copy of this drive could be verified in Cloud Vault or on an external server.';
+
+  if (source === 'server') {
+    if (age === 'day-old')
+      return 'The last verified full sync with the server was more than 24 hours ago.';
+    if (age === 'week-old')
+      return 'The last verified full sync with the server was at least 7 days ago.';
+
+    return 'A full sync with the server could not be verified.';
+  }
+
+  if (age === 'day-old')
+    return 'The latest verified backup is more than 24 hours old.';
+  if (age === 'week-old')
+    return 'The latest verified backup is at least 7 days old.';
+
+  return 'No backup from the last 7 days could be verified.';
+}
+
 function useDriveProtectionWarning(
   store: Store,
   agentSubject: string | undefined,
@@ -229,6 +248,7 @@ function useDriveProtectionWarning(
     let checking = false;
     let recheck = false;
     let lastSync: number | undefined;
+    let serverReady = false;
 
     const updateWarning = async () => {
       if (!(await withDeadline(deviceHasDriveData(store, drive), 8_000, false)))
@@ -238,7 +258,12 @@ function useDriveProtectionWarning(
       const evidence = await withDeadline(
         readDriveProtection(store, drive, agent, server),
         10_000,
-        { vaultHasCopy: false, lastBackupAt: null, serverHasCopy: false },
+        {
+          vaultHasCopy: false,
+          lastBackupAt: null,
+          serverHasCopy: false,
+          lastFullSyncAt: null,
+        },
       );
 
       if (cancelled || store.getAgent()?.subject !== subject) return;
@@ -277,9 +302,19 @@ function useDriveProtectionWarning(
     });
     const offSync = store.on(StoreEvents.SyncStatusChanged, status => {
       const sync = status.lastDriveSync;
+      const ready =
+        status.drive === drive &&
+        status.serverConnected &&
+        !status.syncInProgress &&
+        status.pendingDirtyCount === 0 &&
+        status.blockedCount === 0;
+      const settled = ready && !serverReady;
+      serverReady = ready;
 
       if (sync?.drive === drive && sync.timestamp !== lastSync) {
         lastSync = sync.timestamp;
+        check();
+      } else if (settled) {
         check();
       }
     });

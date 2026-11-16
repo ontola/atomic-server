@@ -1812,6 +1812,9 @@ requests, even if a server request would have succeeded.
   to Sync settings. The spec checks a medium warning at two days, a hard
   warning at eight days, and a manual backup of an unchanged drive writing
   a new confirmed checkpoint that clears the warning.
+- `server-full-sync-warning.spec.ts` saves a folder to a standalone Atomic
+  Server with Cloud Vault off and checks that a verified full sync clears the
+  drive warning, including after reload.
 
 ## Boolean reads and managed development origins
 

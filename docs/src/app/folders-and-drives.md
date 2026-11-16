@@ -11,10 +11,9 @@ Drive settings let you manage who has access, and what is installed.
 
 When you create a workspace through an Atomic account, Cloud Vault starts its first backup in the background.
 You can keep working while the app shows that the first backup is pending. If it fails, use *Retry backup*.
-*Storage and hosting* shows when the last backup succeeded.
-Atomic shows a warning when it can’t verify a copy of the drive in Cloud Vault or on an external server, or when it can’t verify a backup from the last seven days.
-A verified backup older than 24 hours shows a lower-priority warning until it reaches seven days.
-The app can verify that a server holds drive data, while backup dates come from Cloud Vault. Sync with another browser and the server built into the desktop app do not count as external copies.
+*Storage and hosting* shows the last verified full sync for Cloud Server or a self-hosted Atomic Server, and the last successful backup for Cloud Vault.
+Atomic uses the newest of these times to check how recently it verified your data on an external server or in Cloud Vault. It shows a warning after 24 hours and a stronger warning after seven days or when it can’t verify either a full sync or a backup.
+For server sync, Atomic checks that the server has the drive’s local changes. A full sync with an external server clears the warning even with Cloud Vault turned off.
 Use *Back up now* in Sync settings to make a fresh Cloud Vault backup, including when an unchanged drive has an older backup.
 
 ![The drive switcher and the sidebar tree](../assets/app/drives.png)

@@ -5491,18 +5491,11 @@ msgstr "{0} ressources"
 msgid "{0} of {1}"
 msgstr "{0} sur {1}"
 
-#. 0: syncedAgo
-#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
-#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Synced {0}"
-msgstr "Synchronisé {0}"
+#~ msgid "Synced {0}"
+#~ msgstr "Synchronisé {0}"
 
-#: src/routes/SyncRoute.tsx
-msgid "Synced just now"
-msgstr "Synchronisé à l’instant"
+#~ msgid "Synced just now"
+#~ msgstr "Synchronisé à l’instant"
 
 #: src/routes/SyncRoute.tsx
 msgid "This server"
@@ -5535,10 +5528,8 @@ msgstr "Associé"
 msgid "Paired device"
 msgstr "Appareil associé"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Not synced yet"
-msgstr "Pas encore synchronisé"
+#~ msgid "Not synced yet"
+#~ msgstr "Pas encore synchronisé"
 
 #. 0: label; 1: detail
 #: src/actions/runAction.ts
@@ -13557,3 +13548,31 @@ msgstr "La dernière sauvegarde vérifiée date d’au moins 7 jours."
 #: src/components/CloudVaultWatcher.tsx
 msgid "No backup from the last 7 days could be verified."
 msgstr "Aucune sauvegarde des 7 derniers jours n’a pu être vérifiée."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was more than 24 hours ago."
+msgstr "La dernière synchronisation complète vérifiée avec le serveur date de plus de 24 heures."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was at least 7 days ago."
+msgstr "La dernière synchronisation complète vérifiée avec le serveur date d’au moins 7 jours."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "A full sync with the server could not be verified."
+msgstr "Aucune synchronisation complète avec le serveur n’a pu être vérifiée."
+
+#. 0: syncedAgo
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync {0}"
+msgstr "Dernière synchronisation complète {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync just now"
+msgstr "Dernière synchronisation complète à l’instant"
+
+#. 0: formatTimeAgo(new Date(lastActivity)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Last sync activity {0}"
+msgstr "Dernière activité de synchronisation {0}"

@@ -25,36 +25,44 @@ export type DriveProtectionSample = {
   /** Time of the last confirmed Vault backup, in Unix milliseconds. */
   lastBackupAt: number | null;
   serverHasCopy: boolean;
+  /** Time of the last confirmed full sync with the external server. */
+  lastFullSyncAt: number | null;
 };
 
 export type DriveProtectionWarning = {
   severity: 'hard' | 'medium';
   missingCopy: boolean;
-  backup: 'unverified' | 'week-old' | 'day-old' | 'recent';
+  age: 'unverified' | 'week-old' | 'day-old';
+  source: 'vault' | 'server';
 };
 
 export function getDriveProtectionWarning(
   sample: DriveProtectionSample,
   now: number,
 ): DriveProtectionWarning | null {
-  const { lastBackupAt, vaultHasCopy, serverHasCopy } = sample;
+  const { vaultHasCopy, serverHasCopy } = sample;
   const missingCopy = !vaultHasCopy && !serverHasCopy;
-  const age = lastBackupAt === null ? null : now - lastBackupAt;
-  const backup =
-    age === null
-      ? 'unverified'
-      : age >= BACKUP_WEEK_MS
-        ? 'week-old'
-        : age > BACKUP_DAY_MS
-          ? 'day-old'
-          : 'recent';
+  const backup = vaultHasCopy ? sample.lastBackupAt : null;
+  const fullSync = serverHasCopy ? sample.lastFullSyncAt : null;
+  const source =
+    serverHasCopy &&
+    (backup === null || (fullSync !== null && fullSync > backup))
+      ? 'server'
+      : 'vault';
+  const mostRecent = source === 'server' ? fullSync : backup;
 
-  if (missingCopy || backup === 'unverified' || backup === 'week-old') {
-    return { severity: 'hard', missingCopy, backup };
+  if (mostRecent === null) {
+    return { severity: 'hard', missingCopy, age: 'unverified', source };
   }
 
-  return backup === 'day-old'
-    ? { severity: 'medium', missingCopy, backup }
+  const age = now - mostRecent;
+
+  if (age >= BACKUP_WEEK_MS) {
+    return { severity: 'hard', missingCopy, age: 'week-old', source };
+  }
+
+  return age > BACKUP_DAY_MS
+    ? { severity: 'medium', missingCopy, age: 'day-old', source }
     : null;
 }
 
@@ -140,6 +148,128 @@ function isExternalServer(url: URL): boolean {
   );
 }
 
+const fullSyncDates = new WeakMap<Store, Map<string, number>>();
+const fullSyncListeners = new Set<() => void>();
+
+function fullSyncKey(store: Store, drive: string, server: URL, agent: string) {
+  return JSON.stringify([agent, store.normalizeSubject(drive), server.origin]);
+}
+
+export function getLastFullSyncAt(
+  store: Store,
+  drive: string | undefined,
+  serverUrl: string,
+  agentSubject: string | undefined,
+): number | null {
+  const server = httpUrl(serverUrl);
+
+  if (!drive || !server || !agentSubject) return null;
+
+  const date = fullSyncDates
+    .get(store)
+    ?.get(fullSyncKey(store, drive, server, agentSubject));
+  const activeDrive = date === undefined ? undefined : store.getDrive();
+
+  if (
+    date === undefined ||
+    !activeDrive ||
+    store.normalizeSubject(activeDrive) !== store.normalizeSubject(drive) ||
+    httpUrl(store.getServerUrl())?.origin !== server.origin ||
+    store.getAgent()?.subject !== agentSubject ||
+    !store.isLiveSyncedDrive(drive)
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+export function subscribeToFullSync(listener: () => void): () => void {
+  fullSyncListeners.add(listener);
+
+  return () => fullSyncListeners.delete(listener);
+}
+
+function forgetFullSync(
+  store: Store,
+  drive: string,
+  server: URL,
+  agentSubject: string | undefined,
+) {
+  if (
+    agentSubject &&
+    fullSyncDates
+      .get(store)
+      ?.delete(fullSyncKey(store, drive, server, agentSubject))
+  ) {
+    fullSyncListeners.forEach(listener => listener());
+  }
+}
+
+/** Check the server's stored versions, including the drive root. A completed
+ * handshake can be reported as soon as a push is sent, before it lands. */
+async function verifyFullSync(
+  store: Store,
+  drive: string,
+  server: URL,
+  agent: Agent,
+): Promise<number | null> {
+  const socket = store.getDefaultWebSocket();
+
+  if (!socket || !agent.subject) return null;
+
+  const normalizedDrive = store.normalizeSubject(drive);
+  const challengeNonce = socket.challengeNonce;
+
+  const isCurrent = () => {
+    const status = store.getSyncStatus();
+
+    return (
+      store.getAgent() === agent &&
+      status.drive !== undefined &&
+      store.normalizeSubject(status.drive) === normalizedDrive &&
+      httpUrl(status.serverUrl)?.origin === server.origin &&
+      store.isLiveSyncedDrive(drive) &&
+      !store.isDriveRefusedByServer(drive) &&
+      socket === store.getDefaultWebSocket() &&
+      socket.challengeNonce === challengeNonce &&
+      socket.readyState === WebSocket.OPEN &&
+      status.serverConnected &&
+      !status.syncInProgress &&
+      status.pendingDirtyCount === 0 &&
+      status.blockedCount === 0
+    );
+  };
+
+  if (!isCurrent()) return null;
+
+  const inventory = await socket.driveInventory(drive, '');
+
+  if (!isCurrent()) return null;
+
+  const { vvs } = await store.computeDriveSyncState(drive, { sparse: true });
+
+  if (!vvs || !isCurrent()) return null;
+
+  const remote = new Map(
+    inventory.map(({ subject, vv }) => [store.normalizeSubject(subject), vv]),
+  );
+  const coversLocal =
+    remote.has(normalizedDrive) &&
+    Object.entries(vvs).every(([subject, version]) => {
+      const confirmed = remote.get(store.normalizeSubject(subject));
+
+      return (
+        confirmed &&
+        Object.entries(version).every(
+          ([peer, counter]) => (confirmed[peer] ?? 0) >= counter,
+        )
+      );
+    });
+
+  return coversLocal ? Date.now() : null;
+}
+
 /**
  * Read the receipts for this drive. A server can prove it holds resources via
  * a signed usage read. This API reports a replica's presence, without a dated
@@ -156,12 +286,18 @@ export async function readDriveProtection(
     store.normalizeSubject(subject) === normalizedDrive;
   const active = httpUrl(serverUrl);
   const named = httpUrl(drive);
+  const localOnly = store.isLocalOnlyDrive(drive);
+
+  if (active && localOnly) {
+    forgetFullSync(store, drive, active, agent.subject);
+  }
+
   // A foreign HTTP drive names its own server. A local-only drive does not
   // replicate to the currently selected server.
   const direct =
     named && named.origin !== active?.origin
       ? named
-      : store.isLocalOnlyDrive(drive)
+      : localOnly
         ? undefined
         : active;
   const managedAccount = getManagedAccount().catch(() => null);
@@ -170,7 +306,7 @@ export async function readDriveProtection(
 
   const checkServer = async (url: URL | undefined) => {
     if (!url || !isExternalServer(url) || checkedOrigins.has(url.origin)) {
-      return false;
+      return undefined;
     }
 
     checkedOrigins.add(url.origin);
@@ -178,12 +314,21 @@ export async function readDriveProtection(
       () => null,
     );
 
-    return !!usage && usage.enrolled !== false && usage.resourceCount > 0;
+    if (!usage) return undefined;
+
+    if (usage.enrolled === false || usage.resourceCount === 0) {
+      forgetFullSync(store, drive, url, agent.subject);
+
+      return undefined;
+    }
+
+    return usage.resourceCount > 0 ? url : undefined;
   };
 
   const readServerCopy = async () => {
-    if (await checkServer(direct)) return true;
-    if (!(await managedAccount)) return false;
+    const confirmed = await checkServer(direct);
+
+    if (confirmed || !(await managedAccount)) return confirmed;
 
     const enrollments = await getManagedEnrollments().catch(() => []);
     const placement = enrollments.find(
@@ -201,11 +346,47 @@ export async function readDriveProtection(
   const readVault = managedAccount.then(account =>
     account ? readVaultEvidence(drive, matchesDrive) : UNVERIFIED_VAULT,
   );
-  // An unreachable server must not hide the Vault receipt, or vice versa.
-  const [vault, serverHasCopy] = await Promise.all([
+  const serverCopy = readServerCopy();
+  const readFullSync = serverCopy.then(server =>
+    server && server.origin === active?.origin
+      ? verifyFullSync(store, drive, server, agent)
+      : null,
+  );
+  const rememberFullSync = withDeadline(
+    readFullSync,
+    EVIDENCE_TIMEOUT_MS,
+    null,
+  ).then(verifiedAt => {
+    if (!active || verifiedAt === null || !agent.subject) return;
+
+    const dates = fullSyncDates.get(store) ?? new Map<string, number>();
+    const key = fullSyncKey(store, drive, active, agent.subject);
+
+    if (verifiedAt <= (dates.get(key) ?? 0)) return;
+
+    dates.set(key, verifiedAt);
+    fullSyncDates.set(store, dates);
+    fullSyncListeners.forEach(listener => listener());
+  });
+  // A slow confirmation should still leave the server copy and Vault visible.
+  const [vault, server] = await Promise.all([
     withDeadline(readVault, EVIDENCE_TIMEOUT_MS, UNVERIFIED_VAULT),
-    withDeadline(readServerCopy(), EVIDENCE_TIMEOUT_MS, false),
+    withDeadline(serverCopy, EVIDENCE_TIMEOUT_MS, undefined),
+    rememberFullSync,
   ]);
 
-  return { ...vault, serverHasCopy };
+  // Keep an earlier proof through a transient network failure in the same
+  // session. A signed response showing the copy is gone clears it above.
+  const lastFullSyncAt = getLastFullSyncAt(
+    store,
+    drive,
+    serverUrl,
+    agent.subject,
+  );
+
+  return {
+    ...vault,
+    serverHasCopy: !!server || lastFullSyncAt !== null,
+    lastFullSyncAt,
+  };
 }

@@ -15,7 +15,6 @@ import {
 import { reportUserFacingFailure } from '../helpers/sentry';
 import {
   deriveNodeStatuses,
-  currentDriveSync,
   driveHostedByNode,
   currentDriveValue,
   hasHostedDriveConnection,
@@ -23,6 +22,10 @@ import {
   type ScopedDriveValue,
   type NodeStatus,
 } from '../helpers/driveSyncStatus';
+import {
+  getLastFullSyncAt,
+  subscribeToFullSync,
+} from '../helpers/driveProtection';
 import { BrowserPeerPanel } from '../components/BrowserPeerPanel';
 import { HostingPaymentRequiredError } from '../helpers/managed/enrollment';
 import { DiscoverWorkspace } from '../views/getting-started/DiscoverWorkspace';
@@ -31,6 +34,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type JSX,
   type MouseEvent,
   type ReactNode,
@@ -314,9 +318,18 @@ function ServerCard({
   const serverHostname = status.serverUrl
     ? new URL(status.serverUrl).hostname
     : undefined;
-  const driveSync = isActive ? currentDriveSync(status) : undefined;
-  const syncedAgo = driveSync
-    ? formatTimeAgo(new Date(driveSync.timestamp))
+  const lastFullSyncAt = useSyncExternalStore(subscribeToFullSync, () =>
+    isActive && status.drive
+      ? getLastFullSyncAt(
+          store,
+          status.drive,
+          server,
+          store.getAgent()?.subject,
+        )
+      : null,
+  );
+  const syncedAgo = lastFullSyncAt
+    ? formatTimeAgo(new Date(lastFullSyncAt))
     : null;
   const usedBytes = nodeUsage
     ? nodeUsage.blobBytes + nodeUsage.loroBytes
@@ -369,12 +382,13 @@ function ServerCard({
     );
   }
 
-  // Shown next to the "in use" line at the top of the card.
-  const syncedFact = driveSync
-    ? syncedAgo
-      ? `Synced ${syncedAgo}`
-      : 'Synced just now'
-    : null;
+  if (lastFullSyncAt !== null) {
+    facts.push(
+      <span key='full-sync' data-testid='server-last-full-sync'>
+        {syncedAgo ? `Last full sync ${syncedAgo}` : 'Last full sync just now'}
+      </span>,
+    );
+  }
 
   async function toggleWorkspaceSync(next: boolean) {
     const drive = status.drive;
@@ -456,9 +470,7 @@ function ServerCard({
         isActive
           ? isCloud
             ? serverHostname
-            : ['Always-on · in use', hostingPending ? null : syncedFact]
-                .filter(Boolean)
-                .join(' · ')
+            : 'Always-on · in use'
           : 'Always-on device'
       }
       facts={isActive ? facts : undefined}
@@ -2330,7 +2342,7 @@ function SyncPage() {
             const reported = serverPeers.find(
               p => nodeDidToRaw(p.nodeId) === nodeDidToRaw(peer.nodeId),
             );
-            const lastSynced = reported?.lastSeen ?? peer.lastSync;
+            const lastActivity = reported?.lastSeen ?? peer.lastSync;
 
             return (
               <SyncCard
@@ -2352,9 +2364,9 @@ function SyncPage() {
                 }
                 subtitle='Paired device'
                 facts={[
-                  lastSynced
-                    ? `Synced ${formatTimeAgo(new Date(lastSynced)) ?? 'just now'}`
-                    : 'Not synced yet',
+                  lastActivity
+                    ? `Last sync activity ${formatTimeAgo(new Date(lastActivity)) ?? 'just now'}`
+                    : null,
                   // Only what this side actually counted — the accepting node
                   // answers frames through the engine and does not tally what
                   // it served, and a fabricated 0 would be the same lie this
@@ -2398,12 +2410,10 @@ function SyncPage() {
                 }
                 subtitle={`Paired with ${serverLabel(status.serverUrl ?? '')}`}
                 facts={[
-                  // "Connected" only says a socket is open. Say when data last
-                  // actually moved, so a link that is up but carrying nothing
-                  // is distinguishable from a healthy one.
+                  // Peer statistics cover the last pass across the link.
                   peer.lastSeen
-                    ? `Synced ${formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'}`
-                    : 'Not synced yet',
+                    ? `Last sync activity ${formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'}`
+                    : null,
                   // What that sync moved. Deliberately the last pass, not a
                   // lifetime total — see `KnownPeer::last_sent`.
                   !!peer.lastSeen &&

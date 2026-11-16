@@ -5495,18 +5495,11 @@ msgstr "{0} sumber daya"
 msgid "{0} of {1}"
 msgstr "{0} dari {1}"
 
-#. 0: syncedAgo
-#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
-#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Synced {0}"
-msgstr "Disinkronkan {0}"
+#~ msgid "Synced {0}"
+#~ msgstr "Disinkronkan {0}"
 
-#: src/routes/SyncRoute.tsx
-msgid "Synced just now"
-msgstr "Baru saja disinkronkan"
+#~ msgid "Synced just now"
+#~ msgstr "Baru saja disinkronkan"
 
 #: src/routes/SyncRoute.tsx
 msgid "This server"
@@ -5539,10 +5532,8 @@ msgstr "Dipasangkan"
 msgid "Paired device"
 msgstr "Perangkat yang dipasangkan"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Not synced yet"
-msgstr "Belum disinkronkan"
+#~ msgid "Not synced yet"
+#~ msgstr "Belum disinkronkan"
 
 #. 0: label; 1: detail
 #: src/actions/runAction.ts
@@ -13555,3 +13546,31 @@ msgstr "Cadangan terakhir yang terverifikasi berusia setidaknya 7 hari."
 #: src/components/CloudVaultWatcher.tsx
 msgid "No backup from the last 7 days could be verified."
 msgstr "Tidak ada cadangan dari 7 hari terakhir yang dapat diverifikasi."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was more than 24 hours ago."
+msgstr "Sinkronisasi penuh terakhir yang terverifikasi dengan server terjadi lebih dari 24 jam yang lalu."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was at least 7 days ago."
+msgstr "Sinkronisasi penuh terakhir yang terverifikasi dengan server terjadi setidaknya 7 hari yang lalu."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "A full sync with the server could not be verified."
+msgstr "Sinkronisasi penuh dengan server tidak dapat diverifikasi."
+
+#. 0: syncedAgo
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync {0}"
+msgstr "Sinkronisasi penuh terakhir {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync just now"
+msgstr "Sinkronisasi penuh terakhir baru saja"
+
+#. 0: formatTimeAgo(new Date(lastActivity)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Last sync activity {0}"
+msgstr "Aktivitas sinkronisasi terakhir {0}"
