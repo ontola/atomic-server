@@ -322,19 +322,24 @@ async fn answer_get_many(
     wire: WireScheme,
     budget: usize,
 ) -> Vec<Vec<u8>> {
-    use futures::StreamExt;
-
     let mut answers: Vec<Vec<u8>> = Vec::with_capacity(subjects.len());
     let mut spent = 0usize;
-    {
-        let mut fetches = futures::stream::iter(subjects.iter().copied())
-            .map(|subject| answer_get(store, agent, request_id, subject, wire))
-            .buffered(protocol::GET_MANY_CONCURRENCY)
-            .boxed();
-        while spent < budget {
-            let Some(answer) = fetches.next().await else {
+    // A few at a time, in order. Not a `buffered` stream: boxing one needs a
+    // `Send` future, which the store's futures are not on wasm32.
+    for chunk in subjects.chunks(protocol::GET_MANY_CONCURRENCY) {
+        if spent >= budget {
+            break;
+        }
+        let fetched = futures::future::join_all(
+            chunk
+                .iter()
+                .map(|subject| answer_get(store, agent, request_id, subject, wire)),
+        )
+        .await;
+        for answer in fetched {
+            if spent >= budget {
                 break;
-            };
+            }
             spent += answer.len() + 4;
             answers.push(answer);
         }
