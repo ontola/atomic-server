@@ -38,7 +38,11 @@ export function fakeSchemaStore(): {
     },
     save: async () => undefined,
     destroy: async () => undefined,
-    remove: () => undefined,
+    remove: (property: string) => {
+      const values = { ...(resources.get(subject) ?? {}) };
+      delete values[property];
+      resources.set(subject, values);
+    },
   });
 
   const store: SchemaStore = {

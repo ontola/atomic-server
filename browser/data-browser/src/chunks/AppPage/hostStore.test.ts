@@ -18,6 +18,10 @@ import {
   MAX_GET_MANY,
 } from './hostStore';
 
+vi.mock('./appAgent', () => ({
+  appAgentOf: vi.fn(async () => 'did:ad:agent:app'),
+}));
+
 vi.mock('@tomic/react', async () => {
   const actual =
     await vi.importActual<typeof import('@tomic/react')>('@tomic/react');
@@ -1364,4 +1368,85 @@ describe('the rows of the table an app is a view of (#1740)', () => {
       handleRequest(fakeStore(), APP, DRIVE, req('requestRowAccess'), TABLE),
     ).rejects.toThrow('cannot ask');
   });
+});
+
+it('resource context is read-only context and does not become a table row grant', async () => {
+  const store = fakeStore({ 'did:ad:note': 'did:ad:account-folder' });
+  expect(
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('data'),
+      undefined,
+      undefined,
+      undefined,
+      'did:ad:note',
+    ),
+  ).toEqual({ resource: 'did:ad:note' });
+  expect(
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('context'),
+      undefined,
+      undefined,
+      undefined,
+      'did:ad:note',
+    ),
+  ).toMatchObject({ subject: 'did:ad:note' });
+  expect(
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('rowAccess'),
+      undefined,
+      undefined,
+      undefined,
+      'did:ad:note',
+    ),
+  ).toEqual({ status: 'unavailable' });
+  await expect(
+    handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', { subject: 'did:ad:note', propVals: { checked: true } }),
+      undefined,
+      undefined,
+      undefined,
+      'did:ad:note',
+    ),
+  ).rejects.toThrow('own data');
+  expect(sent).toEqual([]);
+});
+
+it('allows external account data only through the actual app key native rights', async () => {
+  const store = fakeStore({
+    'did:ad:note': 'did:ad:account-folder',
+    'did:ad:other': DRIVE,
+  });
+  const read = store.getResource.bind(store);
+
+  store.getResource = async subject => {
+    const resource = await read(subject);
+    resource.canWrite = async agent =>
+      [subject === 'did:ad:note' && agent === 'did:ad:agent:app', ''] as never;
+
+    return resource;
+  };
+
+  await handleRequest(
+    store,
+    APP,
+    DRIVE,
+    req('save', { subject: 'did:ad:note', propVals: { checked: true } }),
+  );
+  expect(sent).toHaveLength(1);
+  await expect(
+    handleRequest(store, APP, DRIVE, req('save', { subject: 'did:ad:other' })),
+  ).rejects.toThrow('own data');
+  expect(sent).toHaveLength(1);
 });

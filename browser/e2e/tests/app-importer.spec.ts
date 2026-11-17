@@ -302,6 +302,11 @@ async function addAppAsView(page: Page, table: string) {
   const main = page.getByRole('main');
   await main.getByRole('button', { name: 'Add view' }).click();
   await page.getByRole('menuitem', { name: 'New app' }).click();
+  // Import writes use their separate review/apply flow, not a table-row grant.
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Read-only', exact: true })
+    .click();
   await expect(
     page.frameLocator('iframe[title="App"]').getByRole('heading', {
       name: 'Lines',

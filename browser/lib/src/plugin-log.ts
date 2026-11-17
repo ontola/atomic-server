@@ -133,11 +133,25 @@ export function pluginSchema(): SchemaSpec {
         datatype: Datatype.RESOURCEARRAY,
       },
       {
+        shortname: 'resource-renders',
+        name: 'Resource renders',
+        description:
+          'Classes this App can render as individual resource pages. Separate from table row classes accepted by renders; registering a table view must not replace its row pages.',
+        datatype: Datatype.RESOURCEARRAY,
+      },
+      {
         shortname: 'row-extras',
         name: 'Row extras',
         description:
           "Properties this app keeps on rows of a table it may edit, besides the table's columns: a sync's provider id, ETag or version, and baseline. A grant to edit a table's rows covers the ones declared when it was given, and only while they are still declared here. Never shown as table columns.",
         datatype: Datatype.RESOURCEARRAY,
+      },
+      {
+        shortname: 'app-resource-view',
+        name: 'Resource view',
+        description:
+          'The installed App that renders this resource. Selecting a renderer grants no write rights.',
+        datatype: Datatype.ATOMIC_URL,
       },
       {
         shortname: 'app-data',
@@ -173,7 +187,14 @@ export function pluginSchema(): SchemaSpec {
         // only be made once the app has a subject — a property that cannot be
         // set at creation time must not be required, or creating one is
         // impossible.
-        recommends: ['entrypoint', 'app-data', 'renders', 'row-extras'],
+        recommends: [
+          'entrypoint',
+          'app-data',
+          'renders',
+          'resource-renders',
+          'row-extras',
+          'app-resource-view',
+        ],
       },
     ],
   };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { appsForClass, type DriveApp } from './useDriveApps';
+import { core, type Resource } from '@tomic/react';
+import { appsForClass, readDriveApp, type DriveApp } from './useDriveApps';
 
 const app = (name: string, renders: string[]): DriveApp => ({
   subject: `did:ad:${name}`,
@@ -33,5 +34,31 @@ describe('which apps a table offers', () => {
 
   it('offers nothing for a table whose rows have no class', () => {
     expect(appsForClass([app('Ledger', [invoices])], undefined)).toEqual([]);
+  });
+});
+
+describe('table and resource-page compatibility', () => {
+  it('reads independent declarations without promoting table row classes to resource pages', () => {
+    const props = {
+      [core.properties.isA]: ['app-class'],
+      'table-renders': ['keep-note', 'keep-item', 'imported-checklist'],
+      'resource-renders': ['keep-note'],
+    };
+    const resource = {
+      subject: 'keep-view',
+      title: 'Keep View',
+      get: (property: string) => props[property as keyof typeof props],
+    } as unknown as Resource;
+    expect(
+      readDriveApp(resource, 'app-class', 'table-renders', 'resource-renders'),
+    ).toEqual({
+      subject: 'keep-view',
+      name: 'Keep View',
+      renders: ['keep-note', 'keep-item', 'imported-checklist'],
+      resourceRenders: ['keep-note'],
+    });
+    expect(
+      readDriveApp(resource, 'app-class', 'table-renders'),
+    ).not.toHaveProperty('resourceRenders');
   });
 });

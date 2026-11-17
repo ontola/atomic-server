@@ -257,6 +257,7 @@ export * from './agent-grants.js';
 export * from './issue-access-agent.js';
 export {
   createApp,
+  APP_RESOURCE_VIEW_SHORTNAME,
   describeApp,
   updateApp,
   type AppDescription,
@@ -270,6 +271,7 @@ export {
   compareVersions,
   fetchCatalogAppModule,
   installCatalogApp,
+  migrateCatalogAppLayout,
   parseCatalogApp,
   readInstalledCatalogApps,
   resolveModuleUrl,
@@ -487,6 +489,8 @@ export {
 
 // The expansion functions live in `@tomic/lib/calendar-recurrence.js`: they
 // pull in the Temporal polyfill (~120 kB), which most apps never need.
+// Keep the established root validation API available to provider integrations.
+export { validateCalendarEvent } from './calendar-recurrence.js';
 export type {
   CalendarTime,
   CalendarEvent,
@@ -511,3 +515,8 @@ export {
   prepareAppPackageImport,
 } from './app-package.js';
 export type { AppPackage } from './app-package.js';
+
+export {
+  resolveResourceAppView,
+  resolveDefaultResourceAppView,
+} from './resource-app-view.js';

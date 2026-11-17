@@ -1,3 +1,7 @@
+import {
+  ResourceAppView,
+  useResourceAppView,
+} from '@chunks/AppPage/ResourceAppView';
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import {
@@ -117,6 +121,7 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   const isPlugin = useIsPlugin(resource);
   const store = useStore();
   const drive = store.getDrive();
+  const resourceApp = useResourceAppView(resource, drive);
   const appClass = useAppClass(drive);
   const websiteClass = useWebsiteClass(isAList.join('|'));
   const websiteExportClass = useWebsiteClass(
@@ -196,6 +201,16 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
     return (
       <Main subject={subject}>
         <ErrorPage resource={resource} />
+      </Main>
+    );
+  }
+
+  if (resourceApp && drive) {
+    return (
+      <Main subject={subject}>
+        <ErrorBoundary>
+          <ResourceAppView app={resourceApp} drive={drive} resource={subject} />
+        </ErrorBoundary>
       </Main>
     );
   }
