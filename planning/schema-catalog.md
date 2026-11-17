@@ -319,7 +319,7 @@ conformance is claimed.
 
 - [x] Time tracker, Expenses, Deals, Job applications and Guest list bind generic columns to embedded `work/v1`, `money/v1`, `pipeline/v1` and `contact/v1` (`lib/defaults/vocabularies.json`, `browser/lib/src/shared-vocabularies.ts`), the same mechanism as `task/v1`. Row classes stay in the drive ontology.
 - [ ] Existing tables keep drive-local properties; reviewed Lens mappings only.
-- [x] `timeTrackingSchema()` is removed from `@tomic/lib`; use `workSchema`.
+- [ ] `timeTrackingSchema()` is removed from `@tomic/lib`. The Clockify app (atomic-plugins) now writes ontology-kit's `time-entry-v1` (`work-*` on the kit's base), not `workSchema`; the two are still different properties.
 - [ ] Same frozen-package caveat as the task pilot.
 
 ## Time Tracker / Clockify pilot (2026-09-07)
