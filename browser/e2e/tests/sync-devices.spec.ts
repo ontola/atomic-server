@@ -282,9 +282,7 @@ test.describe('sync page devices', () => {
     await gotoSync(page);
 
     // One section, always there: no button to reveal it first.
-    await expect(
-      page.getByRole('heading', { name: 'Connect a device', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByTestId('connect-device')).toBeVisible();
 
     const address = page.getByPlaceholder('Code or server address');
     await expect(address).toBeVisible();

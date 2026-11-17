@@ -2792,9 +2792,14 @@ const Section = styled.section`
   margin-bottom: 2rem;
 `;
 
-const SectionTitle = styled.h2`
-  font-size: 1.1rem;
-  margin-bottom: 0.8rem;
+/** Same look as a settings subsection heading. */
+const SectionTitle = styled.h3`
+  margin: 0 0 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const NodeAction = styled.button`
