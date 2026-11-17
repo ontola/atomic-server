@@ -307,6 +307,54 @@ async fn answer_get(
     }
 }
 
+/// The entries of one `GET_MANY_RESULT`: one answer per subject, in request
+/// order, so the client can pair an `ERROR` (which names no subject) with what
+/// it asked. Fetches run a few at a time (`buffered` keeps the order), because
+/// the batch is only worth its frame if it is not slower than the single GETs
+/// it replaces. Once the answers so far hold `budget` bytes, no further subject
+/// is fetched: every remaining entry is an `ERROR` saying so, which keeps the
+/// entry count equal to the subject count.
+async fn answer_get_many(
+    store: &Db,
+    agent: &crate::agents::ForAgent,
+    request_id: u16,
+    subjects: &[&str],
+    wire: WireScheme,
+    budget: usize,
+) -> Vec<Vec<u8>> {
+    use futures::StreamExt;
+
+    let mut answers: Vec<Vec<u8>> = Vec::with_capacity(subjects.len());
+    let mut spent = 0usize;
+    {
+        let mut fetches = futures::stream::iter(subjects.iter().copied())
+            .map(|subject| answer_get(store, agent, request_id, subject, wire))
+            .buffered(protocol::GET_MANY_CONCURRENCY)
+            .boxed();
+        while spent < budget {
+            let Some(answer) = fetches.next().await else {
+                break;
+            };
+            spent += answer.len() + 4;
+            answers.push(answer);
+        }
+    }
+    let message = format!(
+        "GET_MANY size limit of {budget} bytes reached after {} of {} subjects; \
+         ask for the remaining subjects again in a new request",
+        answers.len(),
+        subjects.len()
+    );
+    while answers.len() < subjects.len() {
+        answers.push(protocol::encode_error(
+            request_id,
+            protocol::error_code::UNKNOWN,
+            &message,
+        ));
+    }
+    answers
+}
+
 /// Like [`handle_frame`], plus the `SUB`/`UNSUB` session commands a hub
 /// applies to its commit monitor.
 pub async fn handle_frame_full(
@@ -364,16 +412,30 @@ pub async fn handle_frame_full_for_caps(
 
         protocol::tag::GET_MANY => {
             if let Some(decoded) = protocol::decode_get_many(payload) {
-                // One answer per subject, in request order (join_all keeps it), so
-                // the client can pair an `ERROR` (which names no subject) with what
-                // it asked. Evaluated concurrently: the batch is only worth its
-                // frame if it is not slower than the single GETs it replaces.
+                if decoded.subjects.len() > protocol::MAX_GET_MANY_SUBJECTS {
+                    return HandleOutput {
+                        frames: vec![protocol::encode_error(
+                            decoded.request_id,
+                            protocol::error_code::UNKNOWN,
+                            &format!(
+                                "GET_MANY names {} subjects; at most {} are allowed per request",
+                                decoded.subjects.len(),
+                                protocol::MAX_GET_MANY_SUBJECTS
+                            ),
+                        )],
+                        ..Default::default()
+                    };
+                }
                 let agent: &crate::agents::ForAgent = agent;
-                let answers =
-                    futures::future::join_all(decoded.subjects.iter().map(|subject| {
-                        answer_get(store, agent, decoded.request_id, subject, wire)
-                    }))
-                    .await;
+                let answers = answer_get_many(
+                    store,
+                    agent,
+                    decoded.request_id,
+                    &decoded.subjects,
+                    wire,
+                    protocol::GET_MANY_RESULT_BUDGET_BYTES,
+                )
+                .await;
                 vec![protocol::encode_get_many_result(
                     decoded.request_id,
                     &answers,
@@ -2920,6 +2982,52 @@ mod bootstrap_and_sub_tests {
 
         let third = protocol::decode_update(&result.frames[2][1..]).unwrap();
         assert_eq!(third.subject, alice_subject);
+    }
+
+    #[tokio::test]
+    async fn get_many_over_the_subject_limit_is_one_error() {
+        let db = Db::init_temp("get_many_limit").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let subjects: Vec<&str> = vec![drive.as_str(); 1001];
+        let frame = protocol::encode_get_many(33, &subjects);
+        let mut agent = ForAgent::from(alice);
+        let out = handle_frame_full(&frame, &db, &mut agent).await;
+        assert_eq!(out.frames.len(), 1);
+        assert_eq!(
+            out.frames[0][0],
+            tag::ERROR,
+            "an oversized batch is refused"
+        );
+        let error = protocol::decode_error(&out.frames[0][1..]).unwrap();
+        assert_eq!(error.request_id, 33);
+        assert!(error.message.contains("1000"), "{}", error.message);
+    }
+
+    #[tokio::test]
+    async fn get_many_stops_at_the_byte_budget_and_keeps_the_entry_count() {
+        let db = Db::init_temp("get_many_budget").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let alice_subject = alice.subject.to_string();
+        let agent = ForAgent::from(alice);
+        let subjects = [drive.as_str(), alice_subject.as_str(), drive.as_str()];
+
+        // A budget of one byte is spent by the first answer.
+        let entries = answer_get_many(&db, &agent, 5, &subjects, WireScheme::CANONICAL, 1).await;
+        assert_eq!(entries.len(), subjects.len(), "one entry per subject");
+        assert_eq!(entries[0][0], tag::UPDATE);
+        for entry in &entries[1..] {
+            assert_eq!(entry[0], tag::ERROR);
+            let error = protocol::decode_error(&entry[1..]).unwrap();
+            assert_eq!(error.request_id, 5);
+            assert!(error.message.contains("size limit"), "{}", error.message);
+        }
+        let total: usize = entries.iter().map(|e| e.len()).sum();
+        assert!(total < entries[0].len() + 4 * entries.len() + 1024 + 1);
+
+        // An ample budget answers everything.
+        let entries =
+            answer_get_many(&db, &agent, 5, &subjects, WireScheme::CANONICAL, 1 << 30).await;
+        assert!(entries.iter().all(|e| e[0] == tag::UPDATE));
     }
 
     #[tokio::test]

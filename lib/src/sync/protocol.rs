@@ -1362,6 +1362,18 @@ pub fn decode_get(data: &[u8]) -> Option<DecodedGet<'_>> {
 /// The name of the responder capability that says `GET_MANY` is understood.
 pub const CAP_GET_MANY: &str = "get-many";
 
+/// The most subjects one `GET_MANY` may name. The bundled clients send at
+/// most 200 per frame (`GET_MANY_CHUNK` in `browser/lib/src/store.ts`).
+pub const MAX_GET_MANY_SUBJECTS: usize = 1000;
+
+/// Fetches a `GET_MANY` runs at once. Order of the answers is unaffected.
+pub const GET_MANY_CONCURRENCY: usize = 16;
+
+/// The most bytes of snapshots one `GET_MANY_RESULT` collects before the
+/// remaining subjects are answered with an `ERROR` instead. Well under the
+/// 16 MiB WebSocket message limit; a single entry may overshoot it.
+pub const GET_MANY_RESULT_BUDGET_BYTES: usize = 8 * 1024 * 1024;
+
 /// Encode a GET_MANY message: one request for a whole list of subjects.
 ///
 /// Format: `[0x15] [request_id: u16] [count: u16] ([subject_len: u16] [subject_utf8])*`.
