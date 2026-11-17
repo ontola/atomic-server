@@ -1,7 +1,7 @@
 import { driveDisplayMetadata } from './driveDisplayMetadata';
 import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '@tomic/react';
-import { reopenRestoredDrive } from '../driveData';
+import { keepUnhostedRestoreLocal, reopenRestoredDrive } from '../driveData';
 import { loadVaultKeyOps } from './vaultKeyOps';
 import { vaultLaneId, type VaultKeyOps } from './vault';
 import { getOrCreateDeviceId } from './devices';
@@ -94,6 +94,10 @@ export function useDriveVault(driveSubject: string | null): UseVaultBackup {
       // A snapshot restore edits resources the store already holds. Only what
       // it had to import from the vault needs the store to look again.
       if (outcome && driveSubject && (!snapshotId || outcome.packsRead > 0)) {
+        if (outcome.resourcesRestored > 0) {
+          await keepUnhostedRestoreLocal(store, driveSubject);
+        }
+
         await reopenRestoredDrive(store, driveSubject);
       }
 
