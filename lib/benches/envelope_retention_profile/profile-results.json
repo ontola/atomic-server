@@ -1,0 +1,1119 @@
+{
+  "revision": "f570405eb2ff14570ca26d4e91e82e5dafd338b5",
+  "date": "2026-10-30",
+  "profile": "e2e, opt-level=2, lto=false, codegen-units=16, debug assertions on",
+  "binarySha256": "a37b2fe717b77d6cad59248e23484dacfd7a43a742c72bbbb755d94075fe5c2b",
+  "scope": "Receiver-only temporary foreground elapsed-time probes on the native batched envelope importer. Includes nested calls and waits; category times are inclusive and must not be summed. File-backed Db initialization starts the normal 100 ms periodic durable-flush thread. Probes collect receiver-thread foreground elapsed time, including waits; background flush work is not directly timed. Excludes network, TLS and browser/OPFS. Same synthetic half-ProseMirror/half-properties fixture as PR2415.",
+  "rows": [
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 1.627048826,
+      "envelopes": 1001,
+      "imported": 1001,
+      "profile": {},
+      "receiverSeconds": 1.284258039,
+      "reconcileSeconds": 0.342790787,
+      "resources": 1000,
+      "searchableSeconds": 1.6358452780000001,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "control-before"
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 1.7097717700000001,
+      "envelopes": 1001,
+      "imported": 1001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 1001,
+          "seconds": 0.005464475
+        },
+        "envelope.parse": {
+          "count": 1001,
+          "seconds": 0.109847272
+        },
+        "envelope.retained_scan": {
+          "count": 1001,
+          "seconds": 0.01351883
+        },
+        "envelope.retention": {
+          "count": 1001,
+          "seconds": 0.113362711
+        },
+        "envelope.row_encode": {
+          "count": 1001,
+          "seconds": 0.011067313
+        },
+        "envelope.signature": {
+          "count": 1001,
+          "seconds": 0.179494156
+        },
+        "envelope.stage_total": {
+          "count": 11,
+          "seconds": 0.15163507
+        },
+        "envelope.verify_total": {
+          "count": 1001,
+          "seconds": 0.297444913
+        },
+        "import.envelopes_verify": {
+          "count": 11,
+          "seconds": 0.300434336
+        },
+        "import.overlay_build": {
+          "count": 11,
+          "seconds": 0.067049207
+        },
+        "import.persist_with_envelopes": {
+          "count": 11,
+          "seconds": 0.465121404
+        },
+        "loro.snapshot_export": {
+          "count": 5104,
+          "seconds": 0.154903072
+        },
+        "loro.snapshot_load": {
+          "count": 5515,
+          "seconds": 0.192845534
+        },
+        "overlay.db_hits": {
+          "count": 8509,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 8509,
+          "seconds": 0.106063527
+        },
+        "overlay.resource_reads": {
+          "count": 8509,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 3102,
+          "seconds": 0.221448281
+        },
+        "retention.resource_reads": {
+          "count": 2001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 1001,
+          "seconds": 0.057982053
+        },
+        "signature.ed25519": {
+          "count": 1001,
+          "seconds": 0.053309101
+        },
+        "signature.genesis_and_rest": {
+          "count": 1001,
+          "seconds": 0.066601867
+        },
+        "signature.total": {
+          "count": 1001,
+          "seconds": 0.179350399
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.000381554
+        },
+        "storage.encode": {
+          "count": 3003,
+          "seconds": 0.092996023
+        },
+        "storage.redb_batch": {
+          "count": 11,
+          "seconds": 0.134113709
+        }
+      },
+      "receiverSeconds": 1.3261345530000002,
+      "reconcileSeconds": 0.383637217,
+      "resources": 1000,
+      "searchableSeconds": 1.720048223,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "profile-1"
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 1.606159605,
+      "envelopes": 1001,
+      "imported": 1001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 1001,
+          "seconds": 0.005165679
+        },
+        "envelope.parse": {
+          "count": 1001,
+          "seconds": 0.108435974
+        },
+        "envelope.retained_scan": {
+          "count": 101,
+          "seconds": 0.00140075
+        },
+        "envelope.retention": {
+          "count": 1001,
+          "seconds": 0.101065941
+        },
+        "envelope.row_encode": {
+          "count": 1001,
+          "seconds": 0.010800304
+        },
+        "envelope.signature": {
+          "count": 1001,
+          "seconds": 0.182079858
+        },
+        "envelope.stage_total": {
+          "count": 11,
+          "seconds": 0.122629426
+        },
+        "envelope.verify_total": {
+          "count": 1001,
+          "seconds": 0.298387529
+        },
+        "import.envelopes_verify": {
+          "count": 11,
+          "seconds": 0.300968748
+        },
+        "import.overlay_build": {
+          "count": 11,
+          "seconds": 0.064987158
+        },
+        "import.persist_with_envelopes": {
+          "count": 11,
+          "seconds": 0.44759123
+        },
+        "loro.snapshot_export": {
+          "count": 5104,
+          "seconds": 0.149703729
+        },
+        "loro.snapshot_load": {
+          "count": 4606,
+          "seconds": 0.155697774
+        },
+        "overlay.db_hits": {
+          "count": 8509,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 8509,
+          "seconds": 0.10621643
+        },
+        "overlay.resource_reads": {
+          "count": 8509,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 3102,
+          "seconds": 0.211391265
+        },
+        "retention.resource_reads": {
+          "count": 2001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 1001,
+          "seconds": 0.059325397
+        },
+        "signature.ed25519": {
+          "count": 1001,
+          "seconds": 0.054181826
+        },
+        "signature.genesis_and_rest": {
+          "count": 1001,
+          "seconds": 0.066738206
+        },
+        "signature.total": {
+          "count": 1001,
+          "seconds": 0.18187544
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.000309776
+        },
+        "storage.encode": {
+          "count": 3003,
+          "seconds": 0.092477879
+        },
+        "storage.redb_batch": {
+          "count": 11,
+          "seconds": 0.130894713
+        }
+      },
+      "receiverSeconds": 1.169713308,
+      "reconcileSeconds": 0.436446297,
+      "resources": 1000,
+      "searchableSeconds": 1.619925822,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "profile-2"
+    },
+    {
+      "bodyResources": 500,
+      "chunks": 11,
+      "durableSeconds": 1.6479747439999999,
+      "envelopes": 1001,
+      "imported": 1001,
+      "profile": {},
+      "receiverSeconds": 1.259758341,
+      "reconcileSeconds": 0.388216403,
+      "resources": 1000,
+      "searchableSeconds": 1.656974205,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 4884935,
+      "label": "control-after"
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 9.00659904,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 6.863227337,
+      "reconcileSeconds": 2.143371703,
+      "resources": 5000,
+      "searchableSeconds": 9.05237936,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "control-before"
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 9.619023114,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 5001,
+          "seconds": 0.028633236
+        },
+        "envelope.parse": {
+          "count": 5001,
+          "seconds": 0.596537061
+        },
+        "envelope.retained_scan": {
+          "count": 4601,
+          "seconds": 0.069832501
+        },
+        "envelope.retention": {
+          "count": 5001,
+          "seconds": 0.645039828
+        },
+        "envelope.row_encode": {
+          "count": 5001,
+          "seconds": 0.062217144
+        },
+        "envelope.signature": {
+          "count": 5001,
+          "seconds": 0.920025979
+        },
+        "envelope.stage_total": {
+          "count": 51,
+          "seconds": 0.864794316
+        },
+        "envelope.verify_total": {
+          "count": 5001,
+          "seconds": 1.561069719
+        },
+        "import.envelopes_verify": {
+          "count": 51,
+          "seconds": 1.575670257
+        },
+        "import.overlay_build": {
+          "count": 51,
+          "seconds": 0.406191373
+        },
+        "import.persist_with_envelopes": {
+          "count": 51,
+          "seconds": 2.686028745
+        },
+        "loro.snapshot_export": {
+          "count": 25104,
+          "seconds": 0.903779959
+        },
+        "loro.snapshot_load": {
+          "count": 27151,
+          "seconds": 1.105088689
+        },
+        "overlay.db_hits": {
+          "count": 42509,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 42509,
+          "seconds": 0.553136357
+        },
+        "overlay.resource_reads": {
+          "count": 42509,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 15102,
+          "seconds": 1.305127577
+        },
+        "retention.resource_reads": {
+          "count": 10001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 5001,
+          "seconds": 0.31613999
+        },
+        "signature.ed25519": {
+          "count": 5001,
+          "seconds": 0.247275773
+        },
+        "signature.genesis_and_rest": {
+          "count": 5001,
+          "seconds": 0.347232696
+        },
+        "signature.total": {
+          "count": 5001,
+          "seconds": 0.918856382
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.003826728
+        },
+        "storage.encode": {
+          "count": 15003,
+          "seconds": 0.491383476
+        },
+        "storage.redb_batch": {
+          "count": 51,
+          "seconds": 0.91055778
+        }
+      },
+      "receiverSeconds": 7.595442001,
+      "reconcileSeconds": 2.023581113,
+      "resources": 5000,
+      "searchableSeconds": 9.682314611,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "profile-1"
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 9.050362834,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 5001,
+          "seconds": 0.027285537
+        },
+        "envelope.parse": {
+          "count": 5001,
+          "seconds": 0.584430778
+        },
+        "envelope.retained_scan": {
+          "count": 1701,
+          "seconds": 0.029899034
+        },
+        "envelope.retention": {
+          "count": 5001,
+          "seconds": 0.560514763
+        },
+        "envelope.row_encode": {
+          "count": 5001,
+          "seconds": 0.061115433
+        },
+        "envelope.signature": {
+          "count": 5001,
+          "seconds": 0.951738878
+        },
+        "envelope.stage_total": {
+          "count": 51,
+          "seconds": 0.722408275
+        },
+        "envelope.verify_total": {
+          "count": 5001,
+          "seconds": 1.581185814
+        },
+        "import.envelopes_verify": {
+          "count": 51,
+          "seconds": 1.595949047
+        },
+        "import.overlay_build": {
+          "count": 51,
+          "seconds": 0.373161191
+        },
+        "import.persist_with_envelopes": {
+          "count": 51,
+          "seconds": 2.686821856
+        },
+        "loro.snapshot_export": {
+          "count": 25104,
+          "seconds": 0.848783711
+        },
+        "loro.snapshot_load": {
+          "count": 24222,
+          "seconds": 0.9193658
+        },
+        "overlay.db_hits": {
+          "count": 42509,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 42509,
+          "seconds": 0.567007703
+        },
+        "overlay.resource_reads": {
+          "count": 42509,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 15102,
+          "seconds": 1.190116174
+        },
+        "retention.resource_reads": {
+          "count": 10001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 5001,
+          "seconds": 0.327210194
+        },
+        "signature.ed25519": {
+          "count": 5001,
+          "seconds": 0.256299199
+        },
+        "signature.genesis_and_rest": {
+          "count": 5001,
+          "seconds": 0.359798645
+        },
+        "signature.total": {
+          "count": 5001,
+          "seconds": 0.950760714
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.001967922
+        },
+        "storage.encode": {
+          "count": 15003,
+          "seconds": 0.482308139
+        },
+        "storage.redb_batch": {
+          "count": 51,
+          "seconds": 0.932494043
+        }
+      },
+      "receiverSeconds": 6.938769407,
+      "reconcileSeconds": 2.111593427,
+      "resources": 5000,
+      "searchableSeconds": 9.100286719,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "profile-2"
+    },
+    {
+      "bodyResources": 2500,
+      "chunks": 51,
+      "durableSeconds": 10.166663733,
+      "envelopes": 5001,
+      "imported": 5001,
+      "profile": {},
+      "receiverSeconds": 7.910528405,
+      "reconcileSeconds": 2.256135328,
+      "resources": 5000,
+      "searchableSeconds": 10.263047708,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 24449650,
+      "label": "control-after"
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 19.530602406,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 14.575806227000001,
+      "reconcileSeconds": 4.954796179,
+      "resources": 10000,
+      "searchableSeconds": 19.632705516,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "control-before"
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 17.646060896,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 10001,
+          "seconds": 0.054877258
+        },
+        "envelope.parse": {
+          "count": 10001,
+          "seconds": 1.169483023
+        },
+        "envelope.retained_scan": {
+          "count": 701,
+          "seconds": 0.010557429
+        },
+        "envelope.retention": {
+          "count": 10001,
+          "seconds": 1.001759003
+        },
+        "envelope.row_encode": {
+          "count": 10001,
+          "seconds": 0.115607984
+        },
+        "envelope.signature": {
+          "count": 10001,
+          "seconds": 1.824329944
+        },
+        "envelope.stage_total": {
+          "count": 101,
+          "seconds": 1.255680959
+        },
+        "envelope.verify_total": {
+          "count": 10001,
+          "seconds": 3.08236681
+        },
+        "import.envelopes_verify": {
+          "count": 101,
+          "seconds": 3.111223548
+        },
+        "import.overlay_build": {
+          "count": 101,
+          "seconds": 0.740414997
+        },
+        "import.persist_with_envelopes": {
+          "count": 101,
+          "seconds": 5.611669641
+        },
+        "loro.snapshot_export": {
+          "count": 50104,
+          "seconds": 1.626257909
+        },
+        "loro.snapshot_load": {
+          "count": 45712,
+          "seconds": 1.691623531
+        },
+        "overlay.db_hits": {
+          "count": 85009,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 85009,
+          "seconds": 1.116572154
+        },
+        "overlay.resource_reads": {
+          "count": 85009,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 30102,
+          "seconds": 2.262595638
+        },
+        "retention.resource_reads": {
+          "count": 20001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 10001,
+          "seconds": 0.636399364
+        },
+        "signature.ed25519": {
+          "count": 10001,
+          "seconds": 0.484628026
+        },
+        "signature.genesis_and_rest": {
+          "count": 10001,
+          "seconds": 0.683787504
+        },
+        "signature.total": {
+          "count": 10001,
+          "seconds": 1.821830576
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.0026451
+        },
+        "storage.encode": {
+          "count": 30003,
+          "seconds": 0.971520664
+        },
+        "storage.redb_batch": {
+          "count": 101,
+          "seconds": 2.140791711
+        }
+      },
+      "receiverSeconds": 13.482352585000001,
+      "reconcileSeconds": 4.163708311,
+      "resources": 10000,
+      "searchableSeconds": 17.764114329999998,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "profile-1"
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 19.86836955,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {
+        "envelope.from_resource": {
+          "count": 10001,
+          "seconds": 0.058478084
+        },
+        "envelope.parse": {
+          "count": 10001,
+          "seconds": 1.273353086
+        },
+        "envelope.retained_scan": {
+          "count": 1701,
+          "seconds": 0.027920196
+        },
+        "envelope.retention": {
+          "count": 10001,
+          "seconds": 1.167348065
+        },
+        "envelope.row_encode": {
+          "count": 10001,
+          "seconds": 0.123552166
+        },
+        "envelope.signature": {
+          "count": 10001,
+          "seconds": 2.011302607
+        },
+        "envelope.stage_total": {
+          "count": 101,
+          "seconds": 1.462253949
+        },
+        "envelope.verify_total": {
+          "count": 10001,
+          "seconds": 3.380360336
+        },
+        "import.envelopes_verify": {
+          "count": 101,
+          "seconds": 3.413343139
+        },
+        "import.overlay_build": {
+          "count": 101,
+          "seconds": 0.863705293
+        },
+        "import.persist_with_envelopes": {
+          "count": 101,
+          "seconds": 6.01399668
+        },
+        "loro.snapshot_export": {
+          "count": 50104,
+          "seconds": 1.828484324
+        },
+        "loro.snapshot_load": {
+          "count": 46722,
+          "seconds": 1.982775364
+        },
+        "overlay.db_hits": {
+          "count": 85009,
+          "seconds": 0.0
+        },
+        "overlay.get_resource": {
+          "count": 85009,
+          "seconds": 1.196030781
+        },
+        "overlay.resource_reads": {
+          "count": 85009,
+          "seconds": 0.0
+        },
+        "resource.clone": {
+          "count": 30102,
+          "seconds": 2.614653157
+        },
+        "retention.resource_reads": {
+          "count": 20001,
+          "seconds": 0.0
+        },
+        "signature.canonicalize": {
+          "count": 10001,
+          "seconds": 0.689406349
+        },
+        "signature.ed25519": {
+          "count": 10001,
+          "seconds": 0.530955106
+        },
+        "signature.genesis_and_rest": {
+          "count": 10001,
+          "seconds": 0.771636626
+        },
+        "signature.total": {
+          "count": 10001,
+          "seconds": 2.008929442
+        },
+        "storage.durable_flush": {
+          "count": 1,
+          "seconds": 0.003406585
+        },
+        "storage.encode": {
+          "count": 30003,
+          "seconds": 1.012906594
+        },
+        "storage.redb_batch": {
+          "count": 101,
+          "seconds": 2.27953171
+        }
+      },
+      "receiverSeconds": 15.023243232,
+      "reconcileSeconds": 4.845126318,
+      "resources": 10000,
+      "searchableSeconds": 19.972763596,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "profile-2"
+    },
+    {
+      "bodyResources": 5000,
+      "chunks": 101,
+      "durableSeconds": 21.211147606,
+      "envelopes": 10001,
+      "imported": 10001,
+      "profile": {},
+      "receiverSeconds": 16.663676917,
+      "reconcileSeconds": 4.547470689,
+      "resources": 10000,
+      "searchableSeconds": 21.314351926,
+      "verifiedStateHistoryEnvelopesSearchAndReopen": true,
+      "wireBytes": 49036226,
+      "label": "control-after"
+    }
+  ],
+  "summary": [
+    {
+      "resources": 1000,
+      "controlReceiverMedian": 1.27200819,
+      "profileReceiverMedian": 1.2479239305,
+      "phases": {
+        "envelope.from_resource": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.005315077
+        },
+        "envelope.parse": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.109141623
+        },
+        "envelope.retained_scan": {
+          "medianCount": 551.0,
+          "medianSeconds": 0.007459790000000001
+        },
+        "envelope.retention": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.107214326
+        },
+        "envelope.row_encode": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.0109338085
+        },
+        "envelope.signature": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.180787007
+        },
+        "envelope.stage_total": {
+          "medianCount": 11.0,
+          "medianSeconds": 0.137132248
+        },
+        "envelope.verify_total": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.297916221
+        },
+        "import.envelopes_verify": {
+          "medianCount": 11.0,
+          "medianSeconds": 0.300701542
+        },
+        "import.overlay_build": {
+          "medianCount": 11.0,
+          "medianSeconds": 0.0660181825
+        },
+        "import.persist_with_envelopes": {
+          "medianCount": 11.0,
+          "medianSeconds": 0.456356317
+        },
+        "loro.snapshot_export": {
+          "medianCount": 5104.0,
+          "medianSeconds": 0.15230340050000002
+        },
+        "loro.snapshot_load": {
+          "medianCount": 5060.5,
+          "medianSeconds": 0.174271654
+        },
+        "overlay.db_hits": {
+          "medianCount": 8509.0,
+          "medianSeconds": 0.0
+        },
+        "overlay.get_resource": {
+          "medianCount": 8509.0,
+          "medianSeconds": 0.10613997850000001
+        },
+        "overlay.resource_reads": {
+          "medianCount": 8509.0,
+          "medianSeconds": 0.0
+        },
+        "resource.clone": {
+          "medianCount": 3102.0,
+          "medianSeconds": 0.21641977299999998
+        },
+        "retention.resource_reads": {
+          "medianCount": 2001.0,
+          "medianSeconds": 0.0
+        },
+        "signature.canonicalize": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.058653725000000004
+        },
+        "signature.ed25519": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.0537454635
+        },
+        "signature.genesis_and_rest": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.0666700365
+        },
+        "signature.total": {
+          "medianCount": 1001.0,
+          "medianSeconds": 0.1806129195
+        },
+        "storage.durable_flush": {
+          "medianCount": 1.0,
+          "medianSeconds": 0.000345665
+        },
+        "storage.encode": {
+          "medianCount": 3003.0,
+          "medianSeconds": 0.092736951
+        },
+        "storage.redb_batch": {
+          "medianCount": 11.0,
+          "medianSeconds": 0.13250421099999998
+        }
+      }
+    },
+    {
+      "resources": 5000,
+      "controlReceiverMedian": 7.386877870999999,
+      "profileReceiverMedian": 7.267105704,
+      "phases": {
+        "envelope.from_resource": {
+          "medianCount": 5001.0,
+          "medianSeconds": 0.0279593865
+        },
+        "envelope.parse": {
+          "medianCount": 5001.0,
+          "medianSeconds": 0.5904839195
+        },
+        "envelope.retained_scan": {
+          "medianCount": 3151.0,
+          "medianSeconds": 0.049865767500000005
+        },
+        "envelope.retention": {
+          "medianCount": 5001.0,
+          "medianSeconds": 0.6027772955
+        },
+        "envelope.row_encode": {
+          "medianCount": 5001.0,
+          "medianSeconds": 0.0616662885
+        },
+        "envelope.signature": {
+          "medianCount": 5001.0,
+          "medianSeconds": 0.9358824285
+        },
+        "envelope.stage_total": {
+          "medianCount": 51.0,
+          "medianSeconds": 0.7936012955
+        },
+        "envelope.verify_total": {
+          "medianCount": 5001.0,
+          "medianSeconds": 1.5711277665
+        },
+        "import.envelopes_verify": {
+          "medianCount": 51.0,
+          "medianSeconds": 1.585809652
+        },
+        "import.overlay_build": {
+          "medianCount": 51.0,
+          "medianSeconds": 0.38967628200000004
+        },
+        "import.persist_with_envelopes": {
+          "medianCount": 51.0,
+          "medianSeconds": 2.6864253005
+        },
+        "loro.snapshot_export": {
+          "medianCount": 25104.0,
+          "medianSeconds": 0.876281835
+        },
+        "loro.snapshot_load": {
+          "medianCount": 25686.5,
+          "medianSeconds": 1.0122272445
+        },
+        "overlay.db_hits": {
+          "medianCount": 42509.0,
+          "medianSeconds": 0.0
+        },
+        "overlay.get_resource": {
+          "medianCount": 42509.0,
+          "medianSeconds": 0.5600720299999999
+        },
+        "overlay.resource_reads": {
+          "medianCount": 42509.0,
+          "medianSeconds": 0.0
+        },
+        "resource.clone": {
+          "medianCount": 15102.0,
+          "medianSeconds": 1.2476218755
+        },
+        "retention.resource_reads": {
+          "medianCount": 10001.0,
+          "medianSeconds": 0.0
+        },
+        "signature.canonicalize": {
+          "medianCount": 5001.0,
+          "medianSeconds": 0.321675092
+        },
+        "signature.ed25519": {
+          "medianCount": 5001.0,
+          "medianSeconds": 0.251787486
+        },
+        "signature.genesis_and_rest": {
+          "medianCount": 5001.0,
+          "medianSeconds": 0.3535156705
+        },
+        "signature.total": {
+          "medianCount": 5001.0,
+          "medianSeconds": 0.9348085479999999
+        },
+        "storage.durable_flush": {
+          "medianCount": 1.0,
+          "medianSeconds": 0.002897325
+        },
+        "storage.encode": {
+          "medianCount": 15003.0,
+          "medianSeconds": 0.4868458075
+        },
+        "storage.redb_batch": {
+          "medianCount": 51.0,
+          "medianSeconds": 0.9215259115000001
+        }
+      }
+    },
+    {
+      "resources": 10000,
+      "controlReceiverMedian": 15.619741572,
+      "profileReceiverMedian": 14.2527979085,
+      "phases": {
+        "envelope.from_resource": {
+          "medianCount": 10001.0,
+          "medianSeconds": 0.056677671
+        },
+        "envelope.parse": {
+          "medianCount": 10001.0,
+          "medianSeconds": 1.2214180545
+        },
+        "envelope.retained_scan": {
+          "medianCount": 1201.0,
+          "medianSeconds": 0.0192388125
+        },
+        "envelope.retention": {
+          "medianCount": 10001.0,
+          "medianSeconds": 1.084553534
+        },
+        "envelope.row_encode": {
+          "medianCount": 10001.0,
+          "medianSeconds": 0.11958007500000001
+        },
+        "envelope.signature": {
+          "medianCount": 10001.0,
+          "medianSeconds": 1.9178162755000001
+        },
+        "envelope.stage_total": {
+          "medianCount": 101.0,
+          "medianSeconds": 1.358967454
+        },
+        "envelope.verify_total": {
+          "medianCount": 10001.0,
+          "medianSeconds": 3.231363573
+        },
+        "import.envelopes_verify": {
+          "medianCount": 101.0,
+          "medianSeconds": 3.2622833435
+        },
+        "import.overlay_build": {
+          "medianCount": 101.0,
+          "medianSeconds": 0.802060145
+        },
+        "import.persist_with_envelopes": {
+          "medianCount": 101.0,
+          "medianSeconds": 5.8128331605
+        },
+        "loro.snapshot_export": {
+          "medianCount": 50104.0,
+          "medianSeconds": 1.7273711165
+        },
+        "loro.snapshot_load": {
+          "medianCount": 46217.0,
+          "medianSeconds": 1.8371994475000002
+        },
+        "overlay.db_hits": {
+          "medianCount": 85009.0,
+          "medianSeconds": 0.0
+        },
+        "overlay.get_resource": {
+          "medianCount": 85009.0,
+          "medianSeconds": 1.1563014675
+        },
+        "overlay.resource_reads": {
+          "medianCount": 85009.0,
+          "medianSeconds": 0.0
+        },
+        "resource.clone": {
+          "medianCount": 30102.0,
+          "medianSeconds": 2.4386243975
+        },
+        "retention.resource_reads": {
+          "medianCount": 20001.0,
+          "medianSeconds": 0.0
+        },
+        "signature.canonicalize": {
+          "medianCount": 10001.0,
+          "medianSeconds": 0.6629028564999999
+        },
+        "signature.ed25519": {
+          "medianCount": 10001.0,
+          "medianSeconds": 0.507791566
+        },
+        "signature.genesis_and_rest": {
+          "medianCount": 10001.0,
+          "medianSeconds": 0.727712065
+        },
+        "signature.total": {
+          "medianCount": 10001.0,
+          "medianSeconds": 1.915380009
+        },
+        "storage.durable_flush": {
+          "medianCount": 1.0,
+          "medianSeconds": 0.0030258425
+        },
+        "storage.encode": {
+          "medianCount": 30003.0,
+          "medianSeconds": 0.992213629
+        },
+        "storage.redb_batch": {
+          "medianCount": 101.0,
+          "medianSeconds": 2.2101617105
+        }
+      }
+    }
+  ],
+  "metadataCorrection": "Code inspection confirmed that Db::init_redb_file starts periodic durable flushing; initial scope text incorrectly stated otherwise. Timings and sample values are unchanged."
+}

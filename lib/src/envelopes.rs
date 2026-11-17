@@ -653,8 +653,13 @@ fn resolve_staged_retention(
     let read = |subject: &crate::Subject| {
         staged
             .get(&store.normalize_subject(subject).pure_id())
-            .cloned()
-            .or_else(|| store.get_resource_shallow(subject).ok())
+            .map(std::borrow::Cow::Borrowed)
+            .or_else(|| {
+                store
+                    .get_resource_shallow(subject)
+                    .ok()
+                    .map(std::borrow::Cow::Owned)
+            })
     };
     let Some(start) = read(subject) else {
         return Resolved::Unknown;

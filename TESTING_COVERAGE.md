@@ -3189,6 +3189,14 @@ Sync probe hash cache: Rust unit tests in `lib/src/db/write_log.rs` check that a
 
 ## Batched SYNC_PUSH persistence
 
+Borrowed staged retention: the 42 envelope tests cover audit inheritance,
+unknown ancestors, staged genesis replacement, unreadable rows and rejected
+proofs. A frozen-frame diagnostic trial validates full state, projections,
+version vectors, history metadata, exact retained envelopes, complete title/body
+searches and reopen for all 20 runs. Method, all samples and the scope limits
+are in `lib/benches/envelope_retention_profile/README.md`; receiver timing is
+not total network/browser sync latency or a crash-durability test.
+
 `db::test::sync_push_batches_local_ids_and_flushes_only_at_last` uses a counting
 KV adapter to verify that localId resources share one projection transaction,
 non-final chunks do not flush, and LAST flushes once. The test-only copy fails
