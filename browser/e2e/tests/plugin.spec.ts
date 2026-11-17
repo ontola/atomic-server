@@ -214,15 +214,8 @@ test.describe('Plugins', () => {
     // description from the manifest, so these read as plain properties.
     const saveConfig = page.getByRole('button', { name: 'Save', exact: true });
     await expect(saveConfig).toBeDisabled();
-    await page
-      .getByLabel('Config', { exact: true })
-      .fill('{"folderPrefix":"Draft"}');
-    await expect(saveConfig).toBeEnabled();
-    await page.getByLabel('Config', { exact: true }).fill('{');
-    await expect(saveConfig).toBeDisabled();
-    await page
-      .getByLabel('Config', { exact: true })
-      .fill('{"folderPrefix":"Draft"}');
+    const prefix = page.getByLabel('folderPrefix', { exact: true });
+    await prefix.fill('Draft');
     await expect(saveConfig).toBeEnabled();
     await page.evaluate(async () => {
       const subject = new URL(location.href).searchParams.get('subject')!;
@@ -250,19 +243,11 @@ test.describe('Plugins', () => {
     await expect(page.getByLabel('App Description')).toHaveText(
       'Updated description',
     );
-    await expect(page.getByLabel('Config', { exact: true })).toContainText(
-      'Draft',
-    );
+    await expect(prefix).toHaveValue('Draft');
     await saveConfig.click();
     await expect(saveConfig).toBeDisabled();
     await waitForSynced(page);
-    await page
-      .getByLabel('Config', { exact: true })
-      .fill('{"folderPrefix": 5}');
-    await expect(saveConfig).toBeDisabled();
-    await page
-      .getByLabel('Config', { exact: true })
-      .fill('{"folderPrefix":"Final"}');
+    await prefix.fill('Final');
     await expect(saveConfig).toBeEnabled();
     await saveConfig.click();
     await expect(saveConfig).toBeDisabled();
@@ -275,16 +260,12 @@ test.describe('Plugins', () => {
       )
       .toBe(false);
     await context.setOffline(true);
-    await page
-      .getByLabel('Config', { exact: true })
-      .fill('{"folderPrefix":"Offline"}');
+    await prefix.fill('Offline');
     await expect(saveConfig).toBeEnabled();
     await saveConfig.click();
     await expect(saveConfig).toBeDisabled();
     // A queued save must not prevent saving a later offline draft.
-    await page
-      .getByLabel('Config', { exact: true })
-      .fill('{"folderPrefix":"Offline latest"}');
+    await prefix.fill('Offline latest');
     await expect(saveConfig).toBeEnabled();
     await saveConfig.click();
     await expect(saveConfig).toBeDisabled();
@@ -292,9 +273,7 @@ test.describe('Plugins', () => {
     await page.evaluate(() => window.store.reconnect());
     await waitForSynced(page);
     await page.reload();
-    await expect(page.getByLabel('Config', { exact: true })).toContainText(
-      'Offline latest',
-    );
+    await expect(prefix).toHaveValue('Offline latest');
     await expect(saveConfig).toBeDisabled();
 
     // Uninstall the plugin
