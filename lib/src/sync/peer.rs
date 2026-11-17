@@ -1128,7 +1128,7 @@ struct FullSyncState {
     confirmed: Option<ConfirmedFullSync>,
 }
 
-fn live_peer_agent(peer: &str, generation: u64) -> Option<ForAgent> {
+pub(super) fn live_peer_agent(peer: &str, generation: u64) -> Option<ForAgent> {
     live_peers()
         .get(peer)
         .filter(|live| live.generation == generation)
@@ -1300,13 +1300,21 @@ fn register_live_peer(
     // Always notify so both sides refresh UI (replacing a dead channel still counts).
     push_event(&key, 0, "connected");
 
-    let verification_drive = drive
-        .filter(|_| {
-            peer_caps
-                .iter()
-                .any(|cap| cap == super::protocol::CAP_PEER_FULL_SYNC)
-        })
-        .map(|drive| super::peer_full_sync::normalized_drive(&store, &drive));
+    let drive = drive.map(|drive| super::peer_full_sync::normalized_drive(&store, &drive));
+    let blob_repair = drive.as_ref().map(|drive| {
+        super::peer_blob_repair::start(
+            store.clone(),
+            key.clone(),
+            drive.clone(),
+            generation,
+            tx_for_read.clone(),
+        )
+    });
+    let verification_drive = drive.clone().filter(|_| {
+        peer_caps
+            .iter()
+            .any(|cap| cap == super::protocol::CAP_PEER_FULL_SYNC)
+    });
     let full_sync = verification_drive.as_ref().map(|drive| {
         start_full_sync_checks(
             store.clone(),
@@ -1566,6 +1574,30 @@ fn register_live_peer(
                     resolve_commit_waiter(&read_peer_id, ok.request_id, Ok(ok.commit_id));
                 }
                 continue;
+            }
+
+            if buf[0] == super::protocol::tag::BLOB_RESPONSE {
+                if let (Some(repair), Some(drive), Some((hash, bytes))) =
+                    (&blob_repair, &drive, buf[1..].split_first_chunk::<32>())
+                {
+                    if let Some(subject) = repair.requested_subject(hash, &agent) {
+                        if super::peer_blob_repair::can_repair(
+                            &store, drive, &subject, hash, &agent,
+                        )
+                        .await
+                            && live_peer_agent(&read_peer_id, generation).as_ref() == Some(&agent)
+                        {
+                            if let Err(Some(frame)) =
+                                super::engine::write_requested_blob(&store, drive, hash, bytes)
+                                    .await
+                            {
+                                let _ = tx_for_read.send(frame_with_len(&frame)).await;
+                            }
+                        }
+                        repair.complete(hash, &agent);
+                        continue;
+                    }
+                }
             }
 
             if buf[0] == super::protocol::tag::VERIFY_FULL_SYNC {
@@ -3009,7 +3041,7 @@ fn auth_required_error(tag: u8) -> Vec<u8> {
 }
 
 /// Prefix a frame with the u32 length the Iroh stream framing expects.
-fn frame_with_len(frame: &[u8]) -> Vec<u8> {
+pub(super) fn frame_with_len(frame: &[u8]) -> Vec<u8> {
     let mut framed = Vec::with_capacity(4 + frame.len());
     framed.extend_from_slice(&(frame.len() as u32).to_be_bytes());
     framed.extend_from_slice(frame);
