@@ -473,6 +473,7 @@ export function useVaultBackup({
 
           return await restoreDrive({
             db: db!,
+            driveSubject: driveSubject ?? undefined,
             drivePseudonym: status.enrollment.drive_pseudonym,
             // This device's lane, so the import can record which *other* lanes it
             // now provably holds. That is what lets a checkpoint published from
