@@ -8,6 +8,10 @@ interface SettingsSearchContext {
   section?: string;
   /** Nesting level: 0 for a top-level section, which folds; deeper ones are plain subheadings. */
   depth?: number;
+  /** The one top-level section that is open, on a page that keeps only one
+   *  open at a time. Pages without `setOpenSection` let each section fold freely. */
+  openSection?: string;
+  setOpenSection?: (key: string | undefined) => void;
 }
 
 const settingsSearchContext = createContext<SettingsSearchContext>({

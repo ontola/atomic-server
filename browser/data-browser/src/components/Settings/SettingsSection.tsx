@@ -74,7 +74,7 @@ export function queryMatches(query: string, haystack: string): boolean {
 
 /** Extracts text content from React children without rendering them to DOM.
  *  Walks the React element tree and collects string content. */
-function extractTextFromChildren(node: ReactNode): string {
+export function extractTextFromChildren(node: ReactNode): string {
   if (node === null || node === undefined || typeof node === 'boolean') {
     return '';
   }
@@ -115,7 +115,13 @@ export function SettingsSection({
   ...detailsProps
 }: PropsWithChildren<SettingsSectionProps>) {
   const searchContext = useSettingsSearch();
-  const { query, parentMatched, depth = 0 } = searchContext;
+  const {
+    query,
+    parentMatched,
+    depth = 0,
+    openSection,
+    setOpenSection,
+  } = searchContext;
   const isSearching = query.length > 0;
   const targeted = !!id && searchContext.section === id;
   const ref = useRef<HTMLDivElement>(null);
@@ -141,15 +147,17 @@ export function SettingsSection({
     !!childSearchKeywords &&
     queryMatches(query, childSearchKeywords.toLowerCase());
 
-  // Only set parentMatched for children when this section's OWN content matched
-  // (or it was already set by an ancestor). Don't set it for childMatch — let children filter.
+  // Only a match on the section's own label (or an ancestor's) shows all of
+  // its settings. A match on content shows the section, and its settings
+  // rows (SettingCheckbox, SettingField) then filter themselves.
+  const labelMatch = isSearching && queryMatches(query, label.toLowerCase());
   const childContext = useMemo(
     () => ({
       ...searchContext,
-      parentMatched: parentMatched || ownMatch,
+      parentMatched: parentMatched || labelMatch,
       depth: depth + 1,
     }),
-    [searchContext, parentMatched, ownMatch, depth],
+    [searchContext, parentMatched, labelMatch, depth],
   );
 
   // If searching and nothing matches (own, child, or inherited parent), hide.
@@ -178,8 +186,18 @@ export function SettingsSection({
       <Details
         noIndent
         title={<SettingsLabel>{label}</SettingsLabel>}
-        open={isSearching || targeted}
-        initialState={isSearching || targeted}
+        {...(setOpenSection
+          ? {
+              // One open at a time; a search opens every match.
+              open: isSearching || openSection === (id ?? label),
+              initialState: isSearching || openSection === (id ?? label),
+              onStateToggle: (state: boolean) =>
+                setOpenSection(state ? (id ?? label) : undefined),
+            }
+          : {
+              open: isSearching || targeted,
+              initialState: isSearching || targeted,
+            })}
         {...detailsProps}
       >
         <SettingsContent>{content}</SettingsContent>
@@ -208,3 +226,11 @@ const SubSection = styled.div`
     color: ${p => p.theme.colors.textLight};
   }
 `;
+
+/** Whether a settings row with this text shows: always, unless a search is
+ *  running that neither it nor an enclosing section's label matches. */
+export function useSettingVisible(text: string): boolean {
+  const { query, parentMatched } = useSettingsSearch();
+
+  return !query || parentMatched || queryMatches(query, text.toLowerCase());
+}

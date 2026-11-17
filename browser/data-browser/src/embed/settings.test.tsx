@@ -68,6 +68,15 @@ vi.mock('@components/Settings', () => ({
   }: React.PropsWithChildren<{ label: string }>) => (
     <section aria-label={label}>{children}</section>
   ),
+  SettingField: ({
+    label,
+    children,
+  }: React.PropsWithChildren<{ label: string }>) => (
+    <div>
+      <span>{label}</span>
+      {children}
+    </div>
+  ),
   SettingCheckbox: ({
     children,
     hint,

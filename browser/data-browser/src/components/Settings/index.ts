@@ -9,4 +9,4 @@ export {
 
 export { SettingsSearchProvider, useSettingsSearch } from './SettingsSearch';
 
-export { SettingCheckbox } from './SettingCheckbox';
+export { SettingCheckbox, SettingField } from './SettingCheckbox';

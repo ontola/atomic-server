@@ -22,6 +22,7 @@ import { BasicSelect } from '@components/forms/BasicSelect';
 import { styled } from 'styled-components';
 import {
   SettingCheckbox,
+  SettingField,
   SettingsGroup,
   SettingsSection,
   SettingsSearchProvider,
@@ -98,9 +99,19 @@ const AppSettings: React.FunctionComponent = () => {
   // In the Flutter embed only part of the page applies (embed/settings.ts).
   const show = showAppearanceOption;
 
+  // One section open at a time; `?section=` picks the first.
+  const [openSection, setOpenSection] = useState<string | undefined>(section);
+  useEffect(() => setOpenSection(section), [section]);
+
   const searchContext = useMemo(
-    () => ({ query: searchQuery, parentMatched: false, section }),
-    [searchQuery, section],
+    () => ({
+      query: searchQuery,
+      parentMatched: false,
+      section,
+      openSection,
+      setOpenSection,
+    }),
+    [searchQuery, section, openSection],
   );
 
   const header = showSettingsHeader();
@@ -147,8 +158,7 @@ const AppSettings: React.FunctionComponent = () => {
               >
                 <Column gap='1rem'>
                   {show('theme') && (
-                    <Column gap='0.5rem'>
-                      <SubLabel>Theme</SubLabel>
+                    <SettingField label='Theme'>
                       <Row>
                         <Button
                           subtle={!(darkModeSetting === DarkModeOption.auto)}
@@ -170,11 +180,10 @@ const AppSettings: React.FunctionComponent = () => {
                           Light
                         </Button>
                       </Row>
-                    </Column>
+                    </SettingField>
                   )}
                   {show('navbarPosition') && (
-                    <Column gap='0.5rem'>
-                      <SubLabel>NavBar position</SubLabel>
+                    <SettingField label='NavBar position'>
                       <Row>
                         <Button
                           subtle={!navbarTop}
@@ -189,13 +198,12 @@ const AppSettings: React.FunctionComponent = () => {
                           Bottom
                         </Button>
                       </Row>
-                    </Column>
+                    </SettingField>
                   )}
                   {show('mainColor') && (
-                    <Column gap='0.5rem'>
-                      <SubLabel>Main color</SubLabel>
+                    <SettingField label='Main color'>
                       <MainColorPicker />
-                    </Column>
+                    </SettingField>
                   )}
                   {show('colorfulMode') && (
                     <SettingCheckbox
@@ -215,8 +223,7 @@ const AppSettings: React.FunctionComponent = () => {
                     </SettingCheckbox>
                   )}
                   {show('language') && (
-                    <Column gap='0.5rem'>
-                      <label htmlFor='settings-language'>Language</label>
+                    <SettingField label='Language' htmlFor='settings-language'>
                       <BasicSelect
                         id='settings-language'
                         value={locale}
@@ -228,7 +235,7 @@ const AppSettings: React.FunctionComponent = () => {
                           </option>
                         ))}
                       </BasicSelect>
-                    </Column>
+                    </SettingField>
                   )}
                   <SettingsSection
                     label={show('panels') ? 'Panels & Templates' : 'Templates'}
@@ -418,9 +425,4 @@ const ClearButton = styled.button`
   &:hover {
     color: ${p => p.theme.colors.text};
   }
-`;
-
-const SubLabel = styled.span`
-  font-size: 0.85rem;
-  color: ${p => p.theme.colors.textLight};
 `;
