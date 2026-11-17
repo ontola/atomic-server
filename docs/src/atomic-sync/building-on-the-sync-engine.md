@@ -5,6 +5,8 @@ Every developer who builds a multi-device app ends up solving the same things: w
 The sync engine is a library so you don't have to, and you can use it without running the Atomic app.
 You write against a local store, and identity, signing, permissions, history and sync come with it.
 
+Coming from Supabase or Firebase? See [Atomic vs Supabase and Firebase](vs-supabase-firebase.md).
+
 ## In the browser or Node: `@tomic/lib`
 
 `@tomic/lib` runs the same Rust core as the app, compiled to WebAssembly, on top of OPFS in the browser.
