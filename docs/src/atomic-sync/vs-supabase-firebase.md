@@ -13,65 +13,52 @@ This is a different default, not a better one for everything.
 Some apps are much better off with a central SQL database, and the [section below](#what-supabase-and-firebase-do-better) says which.
 
 <div class="atomic-diagram">
-<svg viewBox="0 0 420 640" width="100%" style="max-width:520px;height:auto;display:block;margin:1.5em auto" font-family="inherit" font-size="14" fill="currentColor" role="img" aria-labelledby="frag-t frag-d">
+<svg viewBox="0 0 360 560" width="100%" style="max-width:480px;height:auto;display:block;margin:1.5em auto" font-family="inherit" font-size="15" fill="currentColor" role="img" aria-labelledby="frag-t frag-d">
   <title id="frag-t">Your data today, and with Atomic</title>
   <desc id="frag-d">Today your data is scattered over many separate services. Each one is closed, charges a fee or shares your data. With Atomic your data lives on your own devices, which sync with each other, with an optional encrypted backup on a server.</desc>
-  <defs>
-    <marker id="farr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
-  </defs>
+  <defs><marker id="farr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
   <g text-anchor="middle">
-    <text x="210" y="24" font-weight="700" font-size="16">Today: your data lives in their clouds</text>
-    <!-- links -->
-    <g stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 4" opacity=".45" fill="none">
-      <path d="M210 170L110 112"/><path d="M210 170L210 112"/><path d="M210 170L310 112"/>
-      <path d="M210 170L115 170"/><path d="M210 170L305 170"/>
-      <path d="M210 170L110 228"/><path d="M210 170L210 228"/><path d="M210 170L310 228"/>
+    <text x="180" y="22" font-weight="700" font-size="16">Today: your data lives in their clouds</text>
+    <g stroke="currentColor" stroke-width="1.5" opacity=".5" fill="none">
+      <path d="M154 146C120 146 164 76 130 76"/>
+      <path d="M154 146C120 146 164 146 130 146"/>
+      <path d="M154 146C120 146 164 216 130 216"/>
+      <path d="M206 146C240 146 196 76 230 76"/>
+      <path d="M206 146C240 146 196 146 230 146"/>
+      <path d="M206 146C240 146 196 216 230 216"/>
     </g>
     <g stroke="none">
-      <rect x="15" y="62" width="110" height="50" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
-      <rect x="155" y="62" width="110" height="50" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
-      <rect x="295" y="62" width="110" height="50" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
-      <rect x="5" y="145" width="110" height="50" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
-      <rect x="305" y="145" width="110" height="50" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
-      <rect x="15" y="228" width="110" height="50" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
-      <rect x="155" y="228" width="110" height="50" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
-      <rect x="295" y="228" width="110" height="50" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
-      <circle cx="210" cy="170" r="34" fill="#99C0B7" fill-opacity=".7"/>
+      <rect x="6" y="48" width="124" height="56" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
+      <rect x="6" y="118" width="124" height="56" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
+      <rect x="6" y="188" width="124" height="56" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
+      <rect x="230" y="48" width="124" height="56" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
+      <rect x="230" y="118" width="124" height="56" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
+      <rect x="230" y="188" width="124" height="56" rx="10" fill="#B3B4E2" fill-opacity=".55"/>
+      <circle cx="180" cy="146" r="28" fill="#99C0B7" fill-opacity=".7"/>
     </g>
-    <g>
-      <text x="70" y="84">Notes app</text><text x="70" y="102" font-size="12" opacity=".8">closed format</text>
-      <text x="210" y="84">Documents</text><text x="210" y="102" font-size="12" opacity=".8">paid per seat</text>
-      <text x="350" y="84">Chat</text><text x="350" y="102" font-size="12" opacity=".8">owned by them</text>
-      <text x="60" y="167">Photos</text><text x="60" y="185" font-size="12" opacity=".8">shares your data</text>
-      <text x="360" y="167">Tasks</text><text x="360" y="185" font-size="12" opacity=".8">paid, no export</text>
-      <text x="70" y="250">Files</text><text x="70" y="268" font-size="12" opacity=".8">closed, paid</text>
-      <text x="210" y="250">Forms</text><text x="210" y="268" font-size="12" opacity=".8">sells your data</text>
-      <text x="350" y="250">Backend</text><text x="350" y="268" font-size="12" opacity=".8">locked in</text>
-      <text x="210" y="175" font-weight="700">You</text>
-    </g>
-    <text x="210" y="306" font-size="13" opacity=".85">Many accounts, many silos, no single copy you control.</text>
-
-    <line x1="20" y1="330" x2="400" y2="330" stroke="currentColor" opacity=".25"/>
-
-    <text x="210" y="364" font-weight="700" font-size="16">With Atomic: your data lives on your devices</text>
-    <g stroke="none">
-      <rect x="10" y="385" width="400" height="125" rx="16" fill="#6B94A6" fill-opacity=".18"/>
-      <rect x="25" y="410" width="100" height="70" rx="12" fill="#99C0B7" fill-opacity=".6"/>
-      <rect x="160" y="410" width="100" height="70" rx="12" fill="#99C0B7" fill-opacity=".6"/>
-      <rect x="295" y="410" width="100" height="70" rx="12" fill="#99C0B7" fill-opacity=".6"/>
-      <rect x="130" y="560" width="160" height="56" rx="12" fill="#BD99C0" fill-opacity=".55"/>
-    </g>
-    <text x="210" y="402" font-size="12" opacity=".85">Your devices: a full copy on each</text>
-    <text x="75" y="440">Phone</text><text x="75" y="460" font-size="12" opacity=".8">full copy</text>
-    <text x="210" y="440">Laptop</text><text x="210" y="460" font-size="12" opacity=".8">full copy</text>
-    <text x="345" y="440">Tablet</text><text x="345" y="460" font-size="12" opacity=".8">full copy</text>
-    <g stroke="currentColor" stroke-width="1.5" fill="none" marker-end="url(#farr)" marker-start="url(#farr)">
-      <path d="M127 445H158"/><path d="M262 445H293"/>
-    </g>
-    <text x="210" y="498" font-size="12" opacity=".85">Open formats, signed edits, no one in the middle</text>
-    <path d="M210 512V556" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4" fill="none" marker-end="url(#farr)"/>
-    <text x="210" y="583">Optional backup</text>
-    <text x="210" y="602" font-size="12" opacity=".8">encrypted, you hold the key</text>
+    <text x="68" y="72" font-size="15">Notes app</text><text x="68" y="91" font-size="12.5" opacity=".85">closed format</text>
+    <text x="68" y="142" font-size="15">Chat</text><text x="68" y="161" font-size="12.5" opacity=".85">owned by them</text>
+    <text x="68" y="212" font-size="15">Files</text><text x="68" y="231" font-size="12.5" opacity=".85">closed, paid</text>
+    <text x="292" y="72" font-size="15">Documents</text><text x="292" y="91" font-size="12.5" opacity=".85">paid per seat</text>
+    <text x="292" y="142" font-size="15">Photos</text><text x="292" y="161" font-size="12.5" opacity=".85">shares your data</text>
+    <text x="292" y="212" font-size="15">Forms</text><text x="292" y="231" font-size="12.5" opacity=".85">sells your data</text>
+    <text x="180" y="151" font-weight="700">You</text>
+    <text x="180" y="270" font-size="13.5" opacity=".9">Many accounts, many silos, no copy you control.</text>
+    <line x1="20" y1="292" x2="340" y2="292" stroke="currentColor" opacity=".25"/>
+    <text x="180" y="322" font-weight="700" font-size="16">With Atomic: your data lives on your devices</text>
+    <g stroke="none"><rect x="6" y="338" width="348" height="130" rx="16" fill="#6B94A6" fill-opacity=".18"/>
+      <rect x="14" y="368" width="96" height="66" rx="12" fill="#99C0B7" fill-opacity=".6"/>
+      <rect x="132" y="368" width="96" height="66" rx="12" fill="#99C0B7" fill-opacity=".6"/>
+      <rect x="250" y="368" width="96" height="66" rx="12" fill="#99C0B7" fill-opacity=".6"/>
+      <rect x="55" y="500" width="250" height="56" rx="12" fill="#BD99C0" fill-opacity=".55"/></g>
+    <text x="180" y="358" font-size="12.5" opacity=".9">Your devices: a full copy on each</text>
+    <text x="62" y="396" font-size="15">Phone</text><text x="62" y="415" font-size="12.5" opacity=".85">full copy</text>
+    <text x="180" y="396" font-size="15">Laptop</text><text x="180" y="415" font-size="12.5" opacity=".85">full copy</text>
+    <text x="298" y="396" font-size="15">Tablet</text><text x="298" y="415" font-size="12.5" opacity=".85">full copy</text>
+    <g stroke="currentColor" stroke-width="1.5" fill="none" marker-end="url(#farr)" marker-start="url(#farr)"><path d="M112 401H130"/><path d="M230 401H248"/></g>
+    <text x="180" y="455" font-size="12.5" opacity=".9">Open formats, signed edits, no one in the middle</text>
+    <path d="M180 470V496" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4" fill="none" marker-end="url(#farr)"/>
+    <text x="180" y="524" font-size="15">Optional backup</text><text x="180" y="544" font-size="12.5" opacity=".85">encrypted, you hold the key</text>
   </g>
 </svg>
 </div>
