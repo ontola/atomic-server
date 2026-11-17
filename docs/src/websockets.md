@@ -527,6 +527,7 @@ Everything else is open to an anonymous socket and gated per subject by
 | `11` | `CAUSALITY_CONFLICT` | A new Loro write lost against stored state. Keep the local edit; stop sending the same stale update until it is rebased. |
 | `12` | `BUSY` | The node is overloaded with writes, or the agent spent its write rate budget. Refused **before** any work; nothing landed. The message carries `retry_after_ms=<n>`. Not a failure: keep the edit, wait, send one merged delta, and do not retry over another transport. See [Write load and pacing](#write-load-and-pacing). |
 | `14` | `DEPRECATED_CLIENT` | A notice, not a refusal, sent with `request_id` 0 in answer to the `HELLO` to a client that predates `canonical-scheme` (see [Versioning and capabilities](#versioning-and-capabilities)). The connection stays usable; log it and carry on. A client that predates the code sees an unknown code with request id 0. |
+| `15` | `RESULT_TOO_LARGE` | A `GET_MANY` entry that was not fetched because the entries before it filled the batch's byte budget (32 MiB). Nothing is wrong with the subject: ask for it again, on its own or in a smaller batch. |
 
 Codes `1` to `4` and `9` to `12` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
@@ -619,8 +620,8 @@ when the capability is absent.
 
 A request may name at most 1000 subjects; a larger one is answered with a
 single `ERROR` carrying its `request_id`. The responder stops fetching once the
-entries so far hold 8 MiB; every remaining entry is then an `ERROR` saying the
-batch's size limit was reached, so the count still equals the subject count and
+entries so far hold 32 MiB; every remaining entry is then an `ERROR` saying the
+batch's size limit was reached (`RESULT_TOO_LARGE`, 15), so the count still equals the subject count and
 the client asks for those subjects again.
 
 ## Persisted commits

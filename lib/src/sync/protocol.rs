@@ -293,6 +293,10 @@ pub mod error_code {
     /// lacks `canonical-scheme`, so it predates v0.41.0-beta.8 and will stop
     /// working in a coming release. Log it and carry on.
     pub const DEPRECATED_CLIENT: u16 = 14;
+    /// A `GET_MANY` entry that was not fetched because the answers before it
+    /// already filled the batch's byte budget. Nothing is wrong with the
+    /// subject: ask for it again, on its own or in a smaller batch.
+    pub const RESULT_TOO_LARGE: u16 = 15;
 }
 
 /// Pull the `retry_after_ms=<n>` hint out of a `BUSY` error message (or an
@@ -1370,9 +1374,12 @@ pub const MAX_GET_MANY_SUBJECTS: usize = 1000;
 pub const GET_MANY_CONCURRENCY: usize = 16;
 
 /// The most bytes of snapshots one `GET_MANY_RESULT` collects before the
-/// remaining subjects are answered with an `ERROR` instead. Well under the
-/// 16 MiB WebSocket message limit; a single entry may overshoot it.
-pub const GET_MANY_RESULT_BUDGET_BYTES: usize = 8 * 1024 * 1024;
+/// remaining subjects are answered with a `RESULT_TOO_LARGE` `ERROR` instead.
+/// It bounds the memory and bandwidth one request can make the responder
+/// spend (together with the subject cap). Released clients cannot refetch a
+/// refused entry, so it is set far above any real batch of 200 subjects; a
+/// single entry may overshoot it.
+pub const GET_MANY_RESULT_BUDGET_BYTES: usize = 32 * 1024 * 1024;
 
 /// Encode a GET_MANY message: one request for a whole list of subjects.
 ///

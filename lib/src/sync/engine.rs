@@ -348,7 +348,7 @@ async fn answer_get_many(
     while answers.len() < subjects.len() {
         answers.push(protocol::encode_error(
             request_id,
-            protocol::error_code::UNKNOWN,
+            protocol::error_code::RESULT_TOO_LARGE,
             &message,
         ));
     }
@@ -2984,6 +2984,7 @@ mod bootstrap_and_sub_tests {
             assert_eq!(entry[0], tag::ERROR);
             let error = protocol::decode_error(&entry[1..]).unwrap();
             assert_eq!(error.request_id, 5);
+            assert_eq!(error.code, protocol::error_code::RESULT_TOO_LARGE);
             assert!(error.message.contains("size limit"), "{}", error.message);
         }
         let total: usize = entries.iter().map(|e| e.len()).sum();

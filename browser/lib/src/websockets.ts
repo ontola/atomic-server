@@ -341,7 +341,9 @@ export class WSClient {
     number,
     {
       subjects: string[];
-      resolve: (results: Array<Resource | Error>) => void;
+      resolve: (
+        results: Array<Resource | Error> | Promise<Array<Resource | Error>>,
+      ) => void;
       reject: (e: Error) => void;
       timer: ReturnType<typeof setTimeout>;
     }
@@ -1525,7 +1527,20 @@ export class WSClient {
                 ErrorType.Server,
               );
         });
-        pending.resolve(results);
+        // The server stopped fetching at its byte budget: the subject itself
+        // is fine, so ask for it alone rather than surface the refusal.
+        pending.resolve(
+          Promise.all(
+            results.map((result, index) =>
+              result instanceof AtomicError &&
+              result.code === ErrorCode.RESULT_TOO_LARGE
+                ? this.fetch(pending.subjects[index]).catch((e: unknown) =>
+                    asError(e),
+                  )
+                : result,
+            ),
+          ),
+        );
 
         break;
       }
