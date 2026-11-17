@@ -742,18 +742,9 @@ impl WebSocketConnection {
                     let agent = self.agent.clone();
                     ctx.spawn(
                         async move {
-                            let subject = atomic_lib::Subject::from_raw(
-                                &checked,
-                                store.get_base_domain().as_deref(),
-                            );
-                            let resource = store
-                                .get_resource(&subject)
+                            atomic_lib::sync::engine::readable_subject(&store, &checked, &agent)
                                 .await
-                                .map_err(|_| "not readable".to_string())?;
-                            atomic_lib::hierarchy::check_read(&store, &resource, &agent)
-                                .await
-                                .map_err(|e| e.to_string())?;
-                            Ok::<_, String>(())
+                                .map(|_| ())
                         }
                         .into_actor(self)
                         .map(move |res, actor, ctx| match res {

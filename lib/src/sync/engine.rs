@@ -416,7 +416,7 @@ pub async fn handle_frame_full_for_caps(
                     return HandleOutput {
                         frames: vec![protocol::encode_error(
                             decoded.request_id,
-                            protocol::error_code::UNKNOWN,
+                            protocol::error_code::RESULT_TOO_LARGE,
                             &format!(
                                 "GET_MANY names {} subjects; at most {} are allowed per request",
                                 decoded.subjects.len(),
@@ -717,9 +717,6 @@ pub async fn handle_frame_full_for_caps(
     }
 }
 
-/// `SUB <subject>`: parse, `check_read`, and tell the transport to register.
-/// The wire refusal matches `refuse_subscription` in the server so a client
-/// cannot tell the engine path from the monitor's defence-in-depth re-check.
 /// If `resource` points at a blob this store does not hold, record which
 /// (already-admitted) drive the hash belongs to and return the BLOB_REQUEST
 /// frame to send. Recording the drive lets the BLOB_RESPONSE handler gate the
@@ -737,6 +734,9 @@ pub(crate) async fn missing_blob_request(
     Some(protocol::encode_blob_request(&hash))
 }
 
+/// `SUB <subject>`: parse, `check_read`, and tell the transport to register.
+/// The wire refusal matches `refuse_subscription` in the server so a client
+/// cannot tell the engine path from the monitor's defence-in-depth re-check.
 async fn handle_sub(payload: &[u8], store: &Db, agent: &crate::agents::ForAgent) -> HandleOutput {
     let Ok(subject_str) = std::str::from_utf8(payload) else {
         return HandleOutput {
@@ -751,27 +751,20 @@ async fn handle_sub(payload: &[u8], store: &Db, agent: &crate::agents::ForAgent)
 
     let subject = crate::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
 
-    let refuse = |reason: &str| HandleOutput {
-        frames: vec![protocol::encode_error(
-            0,
-            protocol::error_code::UNAUTHORIZED_READ,
-            &format!("SUB refused for {subject}: {reason}"),
-        )],
-        ..HandleOutput::default()
-    };
-
     if !subject.is_local() {
         tracing::warn!("can't subscribe to external resource: {subject}");
         return HandleOutput::default();
     }
 
-    let resource = match store.get_resource(&subject).await {
-        Ok(r) => r,
-        Err(_) => return refuse("not readable"),
-    };
-
-    if let Err(e) = crate::hierarchy::check_read(store, &resource, agent).await {
-        return refuse(&e.to_string());
+    if let Err(reason) = readable_subject(store, subject_str, agent).await {
+        return HandleOutput {
+            frames: vec![protocol::encode_error(
+                0,
+                protocol::error_code::UNAUTHORIZED_READ,
+                &format!("SUB refused for {subject}: {reason}"),
+            )],
+            ..HandleOutput::default()
+        };
     }
 
     HandleOutput {
@@ -779,6 +772,29 @@ async fn handle_sub(payload: &[u8], store: &Db, agent: &crate::agents::ForAgent)
         subscribe: Some(subject_str.to_string()),
         unsubscribe: None,
     }
+}
+
+/// The resource a subscription names, when `agent` may read it. The `Err` is
+/// the reason put on the wire after "<what> refused for <subject>: ". An
+/// absent subject and an unreadable one give the same reason, so a refusal
+/// does not tell an agent without read rights which of the two it hit.
+pub async fn readable_subject(
+    store: &Db,
+    raw: &str,
+    agent: &crate::agents::ForAgent,
+) -> Result<crate::Resource, String> {
+    let subject = crate::Subject::from_raw(raw, store.get_base_domain().as_deref());
+    if !subject.is_local() {
+        return Err("not a resource of this server".to_string());
+    }
+    let resource = store
+        .get_resource(&subject)
+        .await
+        .map_err(|_| "not readable".to_string())?;
+    crate::hierarchy::check_read(store, &resource, agent)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(resource)
 }
 
 /// `UNSUB <subject>`: no rights check — cancelling a subscription you never
@@ -2965,6 +2981,7 @@ mod bootstrap_and_sub_tests {
         );
         let error = protocol::decode_error(&out.frames[0][1..]).unwrap();
         assert_eq!(error.request_id, 33);
+        assert_eq!(error.code, protocol::error_code::RESULT_TOO_LARGE);
         assert!(error.message.contains("1000"), "{}", error.message);
     }
 

@@ -619,7 +619,7 @@ The browser chunks a request at 200 subjects and falls back to single `GET`s
 when the capability is absent.
 
 A request may name at most 1000 subjects; a larger one is answered with a
-single `ERROR` carrying its `request_id`. The responder stops fetching once the
+single `ERROR` carrying its `request_id` and the code `RESULT_TOO_LARGE`. The responder stops fetching once the
 entries so far hold 32 MiB; every remaining entry is then an `ERROR` saying the
 batch's size limit was reached (`RESULT_TOO_LARGE`, 15), so the count still equals the subject count and
 the client asks for those subjects again.

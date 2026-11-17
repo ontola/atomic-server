@@ -1300,8 +1300,17 @@ export class WSClient {
           err.retryAfterMs = busyRetryAfterMs(msg.message, msg.code);
           const pendingGet = this.takePending(msg.requestId);
 
+          const pendingGetMany = this.pendingGetManys.get(msg.requestId);
+
           if (pendingGet) {
             pendingGet.reject(getError(msg));
+          } else if (pendingGetMany) {
+            // The whole batch was refused (more subjects than allowed, say):
+            // fail it now instead of waiting out the timeout. Only per-entry
+            // errors inside a GET_MANY_RESULT are refetched.
+            clearTimeout(pendingGetMany.timer);
+            this.pendingGetManys.delete(msg.requestId);
+            pendingGetMany.reject(getError(msg));
           } else {
             this.takePendingCommit(msg.requestId)?.reject(err);
           }

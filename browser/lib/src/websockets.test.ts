@@ -1535,6 +1535,28 @@ describe('WSClient.fetchMany', () => {
     client.close();
   });
 
+  it('rejects the whole batch on a top-level ERROR without refetching', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    vi.spyOn(client, 'authenticate').mockResolvedValue(undefined);
+    socket.receive(encodeAuthOk(['get-many']));
+
+    const results = client.fetchMany(['did:ad:a', 'did:ad:b']);
+    const settled = results.catch((e: unknown) => e);
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.GET_MANY)).toHaveLength(1),
+    );
+    const requestId = requestIdOf(framesWithTag(socket, Tag.GET_MANY)[0]);
+    socket.receive(
+      encodeError(requestId, ErrorCode.RESULT_TOO_LARGE, 'too many subjects'),
+    );
+
+    expect(await settled).toMatchObject({ code: ErrorCode.RESULT_TOO_LARGE });
+    expect(framesWithTag(socket, Tag.GET)).toHaveLength(0);
+    client.close();
+  });
+
   it('falls back to single GETs when the server lacks the capability', async ({
     expect,
   }) => {
