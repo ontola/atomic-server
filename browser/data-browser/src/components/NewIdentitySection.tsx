@@ -175,9 +175,17 @@ export function NewIdentitySection({
       // (the old key must still sign the grants). Same rule as signing in with
       // a secret (`prepareIdentitySwitch`); an identity that is not a guest is
       // only archived here, never handed over unasked.
-      broughtAlong.current =
-        (await prepareIdentitySwitch(store, agentDID, async () => false)) ===
-        'brought';
+      // Never in the way of making the account: the guest's key is archived
+      // before anything is handed over, so a failed hand-over loses nothing
+      // and the reconcile gate can still bring the work along later.
+      try {
+        broughtAlong.current =
+          (await prepareIdentitySwitch(store, agentDID, async () => false)) ===
+          'brought';
+      } catch (e) {
+        broughtAlong.current = false;
+        console.warn('Bringing the guest work along failed', e);
+      }
 
       store.setAgent(newAgent);
 

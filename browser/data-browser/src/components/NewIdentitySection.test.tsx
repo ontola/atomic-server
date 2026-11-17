@@ -162,3 +162,12 @@ it('does not apply anything when nothing was brought', async () => {
 
   expect(m.applyBrought).not.toHaveBeenCalled();
 });
+
+it('still creates the account when handing the guest work over fails', async () => {
+  m.prepare.mockRejectedValue(new Error('grant refused'));
+  await createAccount();
+
+  expect(m.order).toContain('setAgent:did:ad:agent:new');
+  expect(store.createDrive).toHaveBeenCalled();
+  expect(m.applyBrought).not.toHaveBeenCalled();
+});
