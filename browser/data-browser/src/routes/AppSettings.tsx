@@ -174,7 +174,7 @@ const AppSettings: React.FunctionComponent = () => {
               <SettingsSection
                 label='Sync & devices'
                 id='sync'
-                childSearchKeywords='sync devices device backup vault cloud vault cloud server paired pairing connect another device local database restore hosted server offline'
+                childSearchKeywords='sync devices device backup paired pairing connect another device local database restore offline'
               >
                 <Suspense>
                   <SyncSettings requestedDrive={drive} />

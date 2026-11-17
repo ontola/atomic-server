@@ -20,6 +20,7 @@ import { clearHeartbeat } from '../../helpers/deviceLock';
 import { saveAgentToIDB } from '@helpers/agentStorage';
 import { SettingsSection } from './SettingsSection';
 import { useSettingsSearch } from './SettingsSearch';
+import { SyncSettings } from './SyncSettings';
 
 /** Two top-level sections: Profile (name, avatar, sign out) and Account &
  *  security (recovery, connected apps, this device). One component because
@@ -120,9 +121,10 @@ export function AccountSettings() {
       <SettingsSection
         label='Account & security'
         id='account'
-        childSearchKeywords='sign in account'
+        childSearchKeywords='sign in account login log in inloggen aanmelden atomic.place cloud vault cloud server plan subscription abonnement email recovery herstel e-mail credits'
       >
         <SignInButton />
+        <SyncSettings part='account' />
       </SettingsSection>
     );
   }
@@ -132,7 +134,7 @@ export function AccountSettings() {
       <SettingsSection
         label='Profile'
         id='profile'
-        childSearchKeywords='profile name avatar picture user agent sign out log out'
+        childSearchKeywords='profile name avatar picture user agent sign out log out login log in logout log out sign out uitloggen afmelden'
       >
         <Column>
           {effectiveAgent.subject?.startsWith('http://localhost') && (
@@ -165,9 +167,10 @@ export function AccountSettings() {
       <SettingsSection
         label='Account & security'
         id='account'
-        childSearchKeywords='account recovery passkey backup agent secret connected apps mcp device lock idle forget'
+        childSearchKeywords='account recovery passkey backup agent secret connected apps mcp device lock idle forget login log in sign in inloggen aanmelden atomic.place cloud vault cloud server plan subscription abonnement email recovery herstel e-mail credits'
       >
         <Column>
+          <SyncSettings part='account' />
           <SettingsSection
             label='Account recovery'
             initialState

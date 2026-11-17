@@ -4286,7 +4286,6 @@ msgstr "Salin {0}"
 msgid "Your data lives on the device you’re connected to."
 msgstr "Data Anda berada di perangkat yang terhubung dengan Anda."
 
-#: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx

@@ -294,6 +294,10 @@ function ServerCard({
     (refusedByServer ||
       (isCloudSyncAvailable(managedInfo) && cloudEnrolled === false));
   const isCloud = isActive && cloudHosted;
+  // Any drive on the provider's node is the provider's, paid or not: an account
+  // always has its personal drive hosted there. It reads blue like the rest of
+  // the account, and says whose server it is instead of a bare hostname.
+  const onProvider = isCloud || (isActive && managedInfo.managed);
   // A managed node admits a drive it does not host for a short bootstrap window,
   // so first sync can finish while the enrollment propagates. In that window
   // the connection looks healthy ("In sync") for a drive the node will refuse
@@ -399,9 +403,16 @@ function ServerCard({
   return (
     <SyncCard
       active={isActive}
-      icon={isCloud ? <FaCloud /> : <FaServer />}
-      iconTone={isCloud ? 'provider' : 'neutral'}
-      title={isCloud ? 'Cloud Server' : serverLabel(server)}
+      provider={onProvider}
+      icon={onProvider ? <FaCloud /> : <FaServer />}
+      iconTone={onProvider ? 'provider' : 'neutral'}
+      title={
+        isCloud
+          ? 'Cloud Server'
+          : onProvider
+            ? PRODUCT_NAME
+            : serverLabel(server)
+      }
       status={
         localOnlyDrive
           ? { tone: 'unknown', label: 'Drive sync off' }
@@ -450,7 +461,11 @@ function ServerCard({
         isActive
           ? isCloud
             ? serverHostname
-            : ['Always-on · in use', hostingPending ? null : syncedFact]
+            : [
+                onProvider ? serverHostname : null,
+                'Always-on · in use',
+                hostingPending ? null : syncedFact,
+              ]
                 .filter(Boolean)
                 .join(' · ')
           : 'Always-on device'
@@ -572,6 +587,8 @@ interface SyncCardProps {
   nodeId?: string;
   footer?: ReactNode;
   active?: boolean;
+  /** Run by the provider: drawn in the account's blue. */
+  provider?: boolean;
   /** The standalone spacing "This device" uses; the list cards sit tighter. */
   spacious?: boolean;
 }
@@ -589,13 +606,14 @@ function SyncCard({
   nodeId,
   footer,
   active,
+  provider,
   spacious,
 }: SyncCardProps): JSX.Element {
   const store = useStore();
   const shown = (facts ?? []).filter(f => !!f);
 
   return (
-    <ConnCard $active={active} $spacious={spacious}>
+    <ConnCard $active={active} $provider={provider} $spacious={spacious}>
       <CardIcon $tone={iconTone}>{icon}</CardIcon>
       <ConnBody>
         <ConnTopRow>
@@ -670,7 +688,14 @@ function sameInfo(prev: ManagedInfo, next: ManagedInfo): ManagedInfo {
 
 /** The Sync & devices section of the settings page. `requestedDrive` is the
  *  page's `?drive=`: the drive this section shows. */
-export function SyncSettings({ requestedDrive }: { requestedDrive?: string }) {
+export function SyncSettings({
+  requestedDrive,
+  part = 'devices',
+}: {
+  requestedDrive?: string;
+  /** `account`: only the atomic.place card. `devices`: everything else. */
+  part?: 'account' | 'devices';
+}) {
   const store = useStore();
   const [status, setStatus] = useState<StoreSyncStatus>(() =>
     store.getSyncStatus(),
@@ -1979,91 +2004,67 @@ export function SyncSettings({ requestedDrive }: { requestedDrive?: string }) {
     setSyncRetrying(false);
   }
 
-  return (
-    <>
-      <Lead>{summaryLine()}</Lead>
-      {syncProblem && (
-        <SyncProblemBanner
-          problem={syncProblem}
-          notified={isErrorReportingEnabled()}
-          retrying={syncRetrying}
-          onTryAgain={() => void tryAgainSync()}
-        />
-      )}
-      {/* Everything our paid services own, in one card.
-
-            These used to be loose entries in the Devices list, on the reasoning
-            that a person does not think of "this device", "the backup" and "the
-            hosted drive" as different kinds of thing — they are all places
-            the same data lives. True as far as it goes, but it left no answer to
-            a different question the page is also asked: which of this is a
-            product I am paying for, and where do I go to manage it. Grouping
-            under the account answers that without returning to the old stack of
-            free-floating offer cards, because this is one card, not three.
-
-            Gated on a portal being known at all, so a self-hosted node with no
-            control plane renders none of it. That URL comes from a managed
-            node, a build-time override, or one a node named earlier — never
-            from anything hardcoded here. */}
-      {/* Everything our paid services own, in one card.
+  /* Everything our paid services own, in one card.
 
             The top is the account, not a service: whose services these are,
             who is signed in and whether email recovery is set up, with the
             way out to the portal. Below it, the drive's place on one ladder:
             on this device, then Cloud Vault (encrypted backup we cannot read),
-            then Cloud Server (hosting on top of that backup). Cloud Server is
-            the step up from Cloud Vault, not a second product next to it.
+            then Cloud Server (hosting on top of that backup).
+
+            It shows under "Account & security" (`part='account'`), not in
+            this section: it is the account's, not a device's. It is built here
+            because this component owns the polling and fetches behind it;
+            closed sections unmount, so the two parts rarely both run.
 
             Gated on a portal being known at all, so a self-hosted node with no
-            control plane renders none of it. That URL comes from a managed
-            node, a build-time override, or one a node named earlier, never
-            from anything hardcoded here. */}
-      {accountPortalUrl && (
-        <ProviderCard data-testid='provider-card'>
-          <SyncProviderAccount
-            key={accountPortalUrl}
-            portalUrl={accountPortalUrl}
-            email={managedAccount?.email ?? null}
-            emailRecoveryOn={recoveryBackup === 'stored'}
-            onLinked={() => window.location.reload()}
-          />
+            control plane renders none of it. */
+  const providerCard = accountPortalUrl ? (
+    <ProviderCard data-testid='provider-card'>
+      <SyncProviderAccount
+        key={accountPortalUrl}
+        portalUrl={accountPortalUrl}
+        email={managedAccount?.email ?? null}
+        emailRecoveryOn={recoveryBackup === 'stored'}
+        onLinked={() => window.location.reload()}
+      />
 
-          {/* Only when it needs you: signed out, or no backup that gets you
+      {/* Only when it needs you: signed out, or no backup that gets you
                 back in on a new device. Set up, it is one phrase in the
                 header; unknown, the header just shows the account. */}
-          {(!managedAccount ||
-            recoveryBackup === 'none' ||
-            recoveryBackup === 'device-only' ||
-            recoveryBackup === 'sign-in-not-on' ||
-            recoveryBackup === 'passkey-only') && (
-            <ProviderService data-testid='recovery-row'>
-              <CardIcon
-                $tone={
-                  managedAccount && recoveryBackup === 'stored'
-                    ? 'provider'
-                    : 'neutral'
-                }
-              >
-                <FaKey />
-              </CardIcon>
-              <ConnBody>
-                <ConnTitle>Email recovery</ConnTitle>
-                <ConnSub>
-                  {!managedAccount
-                    ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account.`
-                    : recoveryBackup === null
-                      ? `Signed in as ${managedAccount.email}.`
-                      : recoveryBackup === 'stored'
-                        ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
-                        : recoveryBackup === 'sign-in-not-on'
-                          ? `${managedAccount.email}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
-                          : recoveryBackup === 'passkey-only'
-                            ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
-                            : recoveryBackup === 'device-only'
-                              ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                              : `${managedAccount.email}. No recovery backup stored, so losing every device loses this drive.`}
-                </ConnSub>
-                {/* Signed out, use the account header's sign-in action.
+      {(!managedAccount ||
+        recoveryBackup === 'none' ||
+        recoveryBackup === 'device-only' ||
+        recoveryBackup === 'sign-in-not-on' ||
+        recoveryBackup === 'passkey-only') && (
+        <ProviderService data-testid='recovery-row'>
+          <CardIcon
+            $tone={
+              managedAccount && recoveryBackup === 'stored'
+                ? 'provider'
+                : 'neutral'
+            }
+          >
+            <FaKey />
+          </CardIcon>
+          <ConnBody>
+            <ConnTitle>Email recovery</ConnTitle>
+            <ConnSub>
+              {!managedAccount
+                ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account.`
+                : recoveryBackup === null
+                  ? `Signed in as ${managedAccount.email}.`
+                  : recoveryBackup === 'stored'
+                    ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
+                    : recoveryBackup === 'sign-in-not-on'
+                      ? `${managedAccount.email}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
+                      : recoveryBackup === 'passkey-only'
+                        ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
+                        : recoveryBackup === 'device-only'
+                          ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
+                          : `${managedAccount.email}. No recovery backup stored, so losing every device loses this drive.`}
+            </ConnSub>
+            {/* Signed out, use the account header's sign-in action.
                       Signed in with nothing stored, the flow is in settings,
                       where the rest of account recovery already lives. It asks
                       for the agent secret, which this page has no business
@@ -2074,83 +2075,97 @@ export function SyncSettings({ requestedDrive }: { requestedDrive?: string }) {
                       Nothing to press once it is on. Rotating a code or reading
                       the secret back are settings' business, and this row's job
                       is answering whether you are covered. */}
-                {managedAccount &&
-                (recoveryBackup === 'none' ||
-                  recoveryBackup === 'device-only' ||
-                  recoveryBackup === 'sign-in-not-on' ||
-                  recoveryBackup === 'passkey-only') ? (
-                  <ConnActions>
-                    <LearnMoreLink
-                      to={paths.appSettings}
-                      // The router's loose typing does not know this route's search params.
-                      search={{ section: 'account' } as never}
-                      data-testid='recovery-row-action'
-                    >
-                      {recoveryBackup === 'device-only'
-                        ? 'Store it with ' + PRODUCT_NAME
-                        : recoveryBackup === 'sign-in-not-on'
-                          ? 'Turn it on'
-                          : recoveryBackup === 'passkey-only'
-                            ? 'Add a recovery code'
-                            : 'Set up email recovery'}
-                    </LearnMoreLink>
-                  </ConnActions>
-                ) : null}
-              </ConnBody>
-            </ProviderService>
-          )}
+            {managedAccount &&
+            (recoveryBackup === 'none' ||
+              recoveryBackup === 'device-only' ||
+              recoveryBackup === 'sign-in-not-on' ||
+              recoveryBackup === 'passkey-only') ? (
+              <ConnActions>
+                <LearnMoreLink
+                  to={paths.appSettings}
+                  // The router's loose typing does not know this route's search params.
+                  search={{ section: 'account' } as never}
+                  data-testid='recovery-row-action'
+                >
+                  {recoveryBackup === 'device-only'
+                    ? 'Store it with ' + PRODUCT_NAME
+                    : recoveryBackup === 'sign-in-not-on'
+                      ? 'Turn it on'
+                      : recoveryBackup === 'passkey-only'
+                        ? 'Add a recovery code'
+                        : 'Set up email recovery'}
+                </LearnMoreLink>
+              </ConnActions>
+            ) : null}
+          </ConnBody>
+        </ProviderService>
+      )}
 
-          {/* The plan as steps: Cloud Vault, then Cloud Server on top of
+      {/* The plan as steps: Cloud Vault, then Cloud Server on top of
                 it. Both are the same `ServiceRow`, so they read the same way:
                 name and standing, what it is, what you get, how it is doing,
                 what you can do. Where the drive's data syncs is the Devices
                 list's business, further down. */}
-          <PlanLabelRow data-testid='cloud-tier' data-tier={cloudTier}>
-            <PlanLabel>Your plan</PlanLabel>
-            <LearnMore
-              {...externalLinkProps(tierOfferUrl(accountPortalUrl, 'server'))}
-            >
-              See plans
-            </LearnMore>
-          </PlanLabelRow>
-          <ServiceRows>
-            <VaultPanel
-              vault={vault}
-              included={serverRow.standing === 'current'}
-              onRestored={() => window.location.reload()}
-            />
-            <ServiceRow
-              data-testid='cloud-server-row'
-              data-state={serverRow.state}
-              kind='server'
-              title='Cloud Server'
-              standing={serverRow.standing}
-              tagline='Everything in Cloud Vault, plus a hosted drive on atomic.place, always online. Our servers process what you put here.'
-              points={[
-                'Shareable links and API access',
-                'Search across everything',
-                'No need for another device to be awake',
-              ]}
-              status={serverRow.status}
-              details={serverRow.details}
-              notice={
-                serverRow.state === 'offered' ? (
-                  <>
-                    <strong>Before you turn it on:</strong> unlike Cloud Vault,
-                    Cloud Server stores a readable, unencrypted copy of this
-                    drive on our servers, so we can run search, shareable links
-                    and the API for it. Your sharing permissions still control
-                    who else sees it, and you can turn it off at any time.
-                  </>
-                ) : undefined
-              }
-              actions={serverRow.actions}
-            />
-          </ServiceRows>
-          {/* Credits belong to the account, not to a plan or a drive: shown
+      <PlanLabelRow data-testid='cloud-tier' data-tier={cloudTier}>
+        <PlanLabel>Your plan</PlanLabel>
+        <LearnMore
+          {...externalLinkProps(tierOfferUrl(accountPortalUrl, 'server'))}
+        >
+          See plans
+        </LearnMore>
+      </PlanLabelRow>
+      <ServiceRows>
+        <VaultPanel
+          vault={vault}
+          included={serverRow.standing === 'current'}
+          onRestored={() => window.location.reload()}
+        />
+        <ServiceRow
+          data-testid='cloud-server-row'
+          data-state={serverRow.state}
+          kind='server'
+          title='Cloud Server'
+          standing={serverRow.standing}
+          tagline='Everything in Cloud Vault, plus a hosted drive on atomic.place, always online. Our servers process what you put here.'
+          points={[
+            'Shareable links and API access',
+            'Search across everything',
+            'No need for another device to be awake',
+          ]}
+          status={serverRow.status}
+          details={serverRow.details}
+          notice={
+            serverRow.state === 'offered' ? (
+              <>
+                <strong>Before you turn it on:</strong> unlike Cloud Vault,
+                Cloud Server stores a readable, unencrypted copy of this drive
+                on our servers, so we can run search, shareable links and the
+                API for it. Your sharing permissions still control who else sees
+                it, and you can turn it off at any time.
+              </>
+            ) : undefined
+          }
+          actions={serverRow.actions}
+        />
+      </ServiceRows>
+      {/* Credits belong to the account, not to a plan or a drive: shown
                 with or without a Cloud Server, only while signed in. */}
-          {managedAccount && <ProviderAICredits />}
-        </ProviderCard>
+      {managedAccount && <ProviderAICredits />}
+    </ProviderCard>
+  ) : null;
+
+  if (part === 'account') return <>{providerCard}</>;
+
+  return (
+    <>
+      <Lead>{summaryLine()}</Lead>
+      {syncProblem && (
+        <SyncProblemBanner
+          problem={syncProblem}
+          notified={isErrorReportingEnabled()}
+          retrying={syncRetrying}
+          onTryAgain={() => void tryAgainSync()}
+        />
       )}
 
       {/* A failed read gives no evidence about copies on other devices. */}
@@ -2917,16 +2932,23 @@ const NodeIdValue = styled.button`
  * only thing that changes: a reshuffling list is far harder to follow than a
  * highlighted row.
  *
- * Every device looks like this, Cloud Server included. The provider's blue
- * belongs to the plan card above, which is where it is bought and managed.
+ * A server the provider runs wears the provider's blue, like the account
+ * card: it behaves differently from a self-hosted one, so it should look it.
  */
 const ConnCard = styled.div<{
   $active?: boolean;
+  $provider?: boolean;
   $spacious?: boolean;
 }>`
   ${cardBase}
   margin-bottom: ${p => (p.$spacious ? '1.5rem' : '0.6rem')};
-  border-color: ${p => (p.$active ? p.theme.colors.textLight : undefined)};
+  border-color: ${p =>
+    p.$provider
+      ? p.theme.colors.main
+      : p.$active
+        ? p.theme.colors.textLight
+        : undefined};
+  background: ${p => (p.$provider ? `${p.theme.colors.main}0a` : undefined)};
 `;
 
 /** A call to action, but still one of the cards in this list. The button

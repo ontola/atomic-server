@@ -4285,7 +4285,6 @@ msgstr "{0} kopieren"
 msgid "Your data lives on the device you’re connected to."
 msgstr "Deine Daten liegen auf dem Gerät, mit dem du verbunden bist."
 
-#: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx

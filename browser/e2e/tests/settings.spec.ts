@@ -40,6 +40,19 @@ test.describe('settings', () => {
     await expect(main.getByLabel('Language', { exact: true })).toHaveCount(0);
   });
 
+  test('searching for login finds sign out and the account section', async ({
+    page,
+  }) => {
+    await page.goto(`${FRONTEND_URL}/app/settings`);
+    await page.getByPlaceholder('Search settings...').fill('login');
+
+    const main = page.getByRole('main');
+    await expect(main.locator('[data-test="sign-out"]')).toBeVisible();
+    await expect(
+      main.getByText('Account & security', { exact: true }),
+    ).toBeVisible();
+  });
+
   test('opening a section closes the one that was open', async ({ page }) => {
     await page.goto(`${FRONTEND_URL}/app/settings`);
     const main = page.getByRole('main');
