@@ -1501,27 +1501,34 @@ export class Store {
     if (this.isLocalOnlyDrive(personal)) return;
     if (this.getAgent()?.subject !== agent.subject) return;
 
+    // Lifted for the duration of the push only: `save()` skips the server for
+    // a local-only subject. Registered again unless the push went through, so
+    // a profile that was not loaded yet, or a node that could not be reached,
+    // is tried again on the next connection instead of being given up on.
     this.unregisterLocalOnlyDrive(subject);
+    let published = false;
 
     try {
-      const local = this.resources.get(subject);
-      if (!local?.isReady()) return;
+      if (this.resources.get(subject)?.isReady()) {
+        // Merge in the node's copy first, so the push builds on its history.
+        await this.fetchResourceFromServer(subject, { noWebSocket: true });
+        const profile = this.resources.get(subject);
 
-      // Merge in the node's copy first, so the push builds on its history.
-      await this.fetchResourceFromServer(subject, { noWebSocket: true });
-      const profile = this.resources.get(subject);
-      if (!profile?.isReady()) return;
-
-      // A commit carrying the whole document: everything signed so far stayed
-      // on this device, and the node's own bare agent has none of those ops.
-      profile.clearLoroSaveCursor();
-      profile.markDirty();
-      await profile.save();
+        if (profile?.isReady() && this.getAgent()?.subject === agent.subject) {
+          // A commit carrying the whole document: everything signed so far
+          // stayed on this device, and the node's own bare agent has none of
+          // those ops.
+          profile.clearLoroSaveCursor();
+          profile.markDirty();
+          await profile.save();
+          published = true;
+        }
+      }
     } catch (e) {
-      // Not published yet: try again on the next connection.
-      this.registerLocalOnlyDrive(subject);
       console.warn('[Store] could not publish the agent profile:', e);
     }
+
+    if (!published) this.registerLocalOnlyDrive(subject);
   }
 
   /**
