@@ -27,6 +27,8 @@ pub mod outbox;
 #[cfg(feature = "iroh")]
 pub mod peer;
 #[cfg(feature = "iroh")]
+mod peer_blob_repair;
+#[cfg(feature = "iroh")]
 mod peer_full_sync;
 pub mod policy;
 pub mod protocol;

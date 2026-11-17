@@ -270,8 +270,8 @@ async fn announce_drives_pkarr(
     Ok(())
 }
 
-// Increase the maximum payload size (for POSTing a body, for example) to 50MB
-pub(crate) const PAYLOAD_MAX: usize = 50_242_880;
+// Keep the HTTP upload limit in sync with the Iroh blob response limit.
+pub(crate) const PAYLOAD_MAX: usize = atomic_lib::sync::protocol::SERVER_UPLOAD_MAX_BYTES;
 pub(crate) const SERVER_VERSION_HEADER: &str = "X-Atomic-Server-Version";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 

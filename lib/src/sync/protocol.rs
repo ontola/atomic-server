@@ -439,14 +439,21 @@ pub mod sync_push_flags {
 pub const SYNC_PUSH_MAX_ENTRIES: usize = 100;
 pub const SYNC_PUSH_MAX_BYTES: usize = 1_048_576; // 1 MB
 
+/// Maximum file size accepted by the server's HTTP upload handler.
+pub const SERVER_UPLOAD_MAX_BYTES: usize = 50_242_880;
+
+/// A BLOB_RESPONSE begins with one tag byte and a 32-byte content hash.
+const BLOB_RESPONSE_HEADER_BYTES: usize = 1 + 32;
+
 /// Max length-prefixed frame `peer.rs` will read off an **authenticated**
 /// Iroh QUIC stream before giving up on the connection — bounds the
 /// `vec![0u8; len]` allocation against an attacker-controlled `u32` length
 /// prefix. Shared by the live-sync loop and an initiator's own post-AUTH
 /// `SYNC_*` response reads (cheap inconsistency sweep, planning/unified-sync.md
 /// Phase 0b) — both run only after the peer has already proven its identity,
-/// so a generous cap doesn't expand who can trigger the allocation.
-pub const IROH_FRAME_MAX_BYTES: usize = 50_000_000;
+/// so a generous cap doesn't expand who can trigger the allocation. Allow
+/// the largest accepted upload to fit in a single BLOB_RESPONSE.
+pub const IROH_FRAME_MAX_BYTES: usize = SERVER_UPLOAD_MAX_BYTES + BLOB_RESPONSE_HEADER_BYTES;
 
 /// Same purpose, but for frames read from a peer that has **not yet**
 /// authenticated: the accept-side dispatch loop (`handle_stream`), whose
@@ -1271,7 +1278,7 @@ pub fn encode_blob_request(hash: &[u8; 32]) -> Vec<u8> {
 
 /// Encode a BLOB_RESPONSE message: [0x35] [hash: [u8; 32]] [bytes...]
 pub fn encode_blob_response(hash: &[u8; 32], bytes: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(1 + 32 + bytes.len());
+    let mut buf = Vec::with_capacity(BLOB_RESPONSE_HEADER_BYTES + bytes.len());
     buf.push(tag::BLOB_RESPONSE);
     buf.extend_from_slice(hash);
     buf.extend_from_slice(bytes);

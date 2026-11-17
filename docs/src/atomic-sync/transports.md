@@ -67,6 +67,9 @@ A person with write rights on a Drive can also make a server dial a node with `P
 A node id says _where_ to connect. It does not grant any access. See [permissions and identity](permissions-and-identity.md).
 A browser tab can't accept incoming connections, so it can't be dialed over Iroh.
 
+When an Iroh connection starts, both devices check the files in the selected Drive for missing contents. If an earlier transfer left only a file record, the device requests the contents again, even when the file records already match. The check also picks up missing contents as files arrive over the live connection. The device checks the hash of the received bytes before storing them.
+Iroh can carry a file up to the same size as the HTTP upload endpoint allows (50,242,880 bytes).
+
 Peers that support full sync confirmation check the stored resource versions and uploaded file contents for the drive after they exchange data.
 The sender records the date when it receives a matching confirmation for that drive from the peer.
 The date describes the verified copy at that time. An interrupted transfer leaves the previous date in place.
