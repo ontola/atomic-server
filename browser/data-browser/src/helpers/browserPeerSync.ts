@@ -1,4 +1,5 @@
 import { isLoopbackHost } from '@tomic/lib';
+import { paths } from '../routes/paths';
 import { fetchManagedInfo } from './managedServer';
 import {
   BrowserPeerSync,
@@ -216,7 +217,7 @@ export function createPeerLink(
     signalingUrl: requirePeerSignalingUrl(store.resources?.get(drive)),
   };
   const invite = { ...link, expectedPeer: store.getAgent()?.subject };
-  const url = new URL('/app/sync', window.location.origin);
+  const url = new URL(paths.sync, window.location.origin);
   url.searchParams.set('drive', drive);
   url.hash = `peer=${btoa(JSON.stringify(invite))}`;
 

@@ -158,7 +158,7 @@ function AccountMenuRow({
   // A warning icon leads to the banner that explains it.
   const goToSync = () => {
     if (hasSyncWarning(syncStatus)) {
-      void navigate({ to: paths.sync, hash: 'sync-problem' });
+      void navigate({ to: `${paths.sync}#sync-problem` });
       onItemClick();
     } else {
       goTo(paths.sync)();

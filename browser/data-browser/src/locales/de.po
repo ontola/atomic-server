@@ -271,10 +271,10 @@ msgstr "Komprimiere die Unterhaltung automatisch, wenn die Eingabe-Tokens diesen
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
 msgstr "Entfernen"
@@ -534,12 +534,12 @@ msgstr "Nicht konfiguriert"
 
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/AI/ProviderStatus.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SideBar/syncStatus.tsx
 #: src/components/SideBar/syncStatus.tsx
 #: src/routes/ConnectAgentRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr "Verbunden"
 
@@ -574,17 +574,17 @@ msgstr "Diese Eigenschaft löschen"
 msgid "Required field."
 msgstr "Pflichtfeld."
 
-#. 0: JSON.stringify(error)
-#. 0: searchError.message
 #. 0: e instanceof PairingEnvelopeError ? e.message \\: e
 #. 0: data.error
 #. 0: e
+#. 0: JSON.stringify(error)
+#. 0: searchError.message
 #. 0: resource.error.message
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/ResourceRow.tsx
 msgid "Error: {0}"
 msgstr "Fehler: {0}"
@@ -1290,17 +1290,15 @@ msgstr "Dokument"
 
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/components/SideBar/AccountMenu.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr "Synchronisierung"
 
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SideBar/syncStatus.tsx
 #: src/components/SideBar/syncStatus.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr "Offline"
 
@@ -1308,8 +1306,8 @@ msgstr "Offline"
 msgid "Changes could not sync"
 msgstr "Änderungen konnten nicht synchronisiert werden"
 
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SideBar/syncStatus.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Changes pending"
 msgstr "Ausstehende Änderungen"
 
@@ -1512,17 +1510,17 @@ msgstr "Du verwendest einen lokalen Agenten, der sich auf anderen Domains nicht 
 msgid "Global"
 msgstr "Global"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "In sync"
 msgstr "Synchronisiert"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Fehler: atomic:node:<node-id> erwartet"
 
 #: src/components/Settings/AccountSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/helpers/managed/deviceLink.ts
-#: src/routes/SyncRoute.tsx
 #: src/views/DriveUnavailable.tsx
 msgid "This device"
 msgstr "Dieses Gerät"
@@ -1538,43 +1536,43 @@ msgstr "Hinzufügen"
 msgid "Copy"
 msgstr "Kopieren"
 
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/helpers/sentry.ts
 #: src/routes/LinkOpenRouter.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Error"
 msgstr "Fehler"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Logging to console"
 msgstr "Ausgabe in der Konsole"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Off"
 msgstr "Aus"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "destroy"
 msgstr "zerstören"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "No activity recorded in this session yet."
 msgstr "In dieser Sitzung wurde noch keine Aktivität aufgezeichnet."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Disabled (server-only)"
 msgstr "Deaktiviert (nur Server)"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Initializing..."
 msgstr "Wird initialisiert …"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Ready — WASM + OPFS"
 msgstr "Bereit – WASM + OPFS"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Enable local WASM DB"
 msgstr "Lokale WASM-Datenbank aktivieren"
 
@@ -3985,19 +3983,19 @@ msgid "Recently visited"
 msgstr "Kürzlich besucht"
 
 #. 0: status.lastDriveSync.count.toLocaleString()
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} resources · stored locally"
 msgstr "{0} Ressourcen · lokal gespeichert"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Embedded server · stored locally"
 msgstr "Eingebetteter Server · lokal gespeichert"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cached locally · works offline"
 msgstr "Lokal zwischengespeichert · offline nutzbar"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Server-only · no local cache"
 msgstr "Nur auf dem Server · kein lokaler Cache"
 
@@ -4006,13 +4004,13 @@ msgstr "Nur auf dem Server · kein lokaler Cache"
 msgid "{0}% used"
 msgstr "{0}% belegt"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Syncing…"
 msgstr "Wird synchronisiert …"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sync now"
 msgstr "Jetzt synchronisieren"
 
@@ -4020,31 +4018,31 @@ msgstr "Jetzt synchronisieren"
 msgid "Embedded (this device)"
 msgstr "Eingebettet (dieses Gerät)"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Node ID"
 msgstr "Knoten-ID"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Local database"
 msgstr "Lokale Datenbank"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "WebSocket debug"
 msgstr "WebSocket-Debugging"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Developer"
 msgstr "Entwicklung"
 
 #: src/chunks/Conference/ConferenceRoom.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/views/PeerInvitePage.tsx
 msgid "Connecting…"
 msgstr "Verbindung wird hergestellt …"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Only on this device"
 msgstr "Nur auf diesem Gerät"
 
@@ -4078,10 +4076,10 @@ msgstr "Gerät wird gekoppelt"
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Erneut versuchen"
 
@@ -4124,10 +4122,10 @@ msgstr "Dein Arbeitsbereich ist da"
 msgid "Bring your workspace over"
 msgstr "Deinen Arbeitsbereich übertragen"
 
-#. 0: device
 #. 0: serverLabel(status.serverUrl ?? '')
+#. 0: device
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Paired with {0}"
 msgstr "Mit {0} gekoppelt"
 
@@ -4150,8 +4148,8 @@ msgstr "Dein Arbeitsbereich wurde hier noch nicht geöffnet. Die Übertragung l�
 
 #. 0: PRODUCT_NAME
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "No {0} portal is configured for this server."
 msgstr "Für diesen Server ist kein {0}-Portal konfiguriert."
 
@@ -4274,12 +4272,12 @@ msgstr "<0/> Öffnen"
 msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
 msgstr "Binde deine Atomic-Laufwerke als Ordner auf diesem Computer ein. Deine Dateien, Ordner und Dokumente erscheinen im Dateimanager, und Änderungen werden zurücksynchronisiert."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Node ID copied"
 msgstr "Knoten-ID kopiert"
 
 #. 0: nodeId
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Copy {0}"
 msgstr "{0} kopieren"
 
@@ -4289,28 +4287,28 @@ msgstr "Deine Daten liegen auf dem Gerät, mit dem du verbunden bist."
 
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Connect a device"
 msgstr "Gerät verbinden"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Connect a device below first."
 msgstr "Verbinde zuerst unten ein Gerät."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Pair another device to sync directly, or connect an always-on one to reach your data from anywhere."
 msgstr "Kopple ein weiteres Gerät zur direkten Synchronisierung oder verbinde ein dauerhaft eingeschaltetes Gerät, um deine Daten überall zu erreichen."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Connect an always-on device to back up your data and reach it from anywhere."
 msgstr "Verbinde ein dauerhaft eingeschaltetes Gerät, um deine Daten zu sichern und überall zu erreichen."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Always-on · in use"
 msgstr "Dauerhaft eingeschaltet · in Verwendung"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Always-on device"
 msgstr "Dauerhaft eingeschaltetes Gerät"
 
@@ -4318,7 +4316,7 @@ msgstr "Dauerhaft eingeschaltetes Gerät"
 msgid "Scan this from that device"
 msgstr "Mit diesem Gerät scannen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Error: could not disconnect that device"
 msgstr "Fehler: Verbindung zu diesem Gerät konnte nicht getrennt werden"
 
@@ -4410,7 +4408,7 @@ msgstr "Die Sprachen, in denen dieses Laufwerk Inhalte veröffentlicht (BCP-47-K
 msgid "This property is server-managed and cannot be edited."
 msgstr "Diese Eigenschaft wird vom Server verwaltet und kann nicht bearbeitet werden."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Lokaler Speicher ist deaktiviert. Dieser Server ist daher die einzige Datenquelle. Aktiviere unten den lokalen Speicher, um ohne Verbindung zu arbeiten."
 
@@ -5310,8 +5308,8 @@ msgstr "Dokumente, Tabellen, Dateien, Chat und eigene Apps an einem Ort. AtomicS
 msgid "Bearer {0}"
 msgstr "Bearer {0}"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server"
 msgstr "Cloud Server"
 
@@ -5433,32 +5431,32 @@ msgstr "Cloud Vault aktivieren"
 msgid "Cloud Vault is not available here: {0}."
 msgstr "Cloud Vault ist hier nicht verfügbar: {0}."
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Disconnect"
 msgstr "Trennen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Reconnect"
 msgstr "Erneut verbinden"
 
+#: src/components/Settings/SyncSettings.tsx
 #: src/helpers/browserPeerSync.ts
-#: src/routes/SyncRoute.tsx
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Switch"
 msgstr "Wechseln"
 
-#. 0: accountAddress(phase.account)
 #. 0: managedAccount.email
+#. 0: accountAddress(phase.account)
+#: src/components/Settings/SyncSettings.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
 msgstr "Angemeldet als {0}."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Email recovery"
 msgstr "Wiederherstellung per E-Mail"
 
@@ -5467,7 +5465,7 @@ msgstr "Wiederherstellung per E-Mail"
 #. 0: nodeUsage.resourceCount.toLocaleString()
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 #: src/components/Cloud/CloudServerDetails.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} resources"
 msgstr "{0} Ressourcen"
 
@@ -5477,7 +5475,7 @@ msgstr "{0} Ressourcen"
 #. 0: doneCount; 1: steps.length
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} von {1}"
@@ -5485,22 +5483,22 @@ msgstr "{0} von {1}"
 #. 0: syncedAgo
 #. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
 #. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Synced {0}"
 msgstr "Synchronisiert {0}"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Synced just now"
 msgstr "Gerade synchronisiert"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This server"
 msgstr "Dieser Server"
 
 #. 0: serverHostname ?? 'This server'
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} doesn’t offer hosting, so it can’t be switched on from here."
 msgstr "{0} bietet kein Hosting an, daher kann es hier nicht aktiviert werden."
 
@@ -5509,25 +5507,25 @@ msgid "Checking this workspace’s backup…"
 msgstr "Sicherung dieses Arbeitsbereichs wird geprüft …"
 
 #. 0: withWhom
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Already up to date{0}"
 msgstr "Bereits aktuell{0}"
 
 #. 0: withWhom; 1: sent; 2: received
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Synced{0} — sent {1}, received {2}"
 msgstr "Synchronisiert{0} – {1} gesendet, {2} empfangen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Paired"
 msgstr "Gekoppelt"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Paired device"
 msgstr "Gekoppeltes Gerät"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Not synced yet"
 msgstr "Noch nicht synchronisiert"
 
@@ -5542,11 +5540,11 @@ msgid "Sign in →"
 msgstr "Anmelden →"
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf. Mit dieser E-Mail erhältst du auf einem neuen Gerät wieder Zugriff."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Set up email recovery"
 msgstr "Wiederherstellung per E-Mail einrichten"
 
@@ -5592,7 +5590,7 @@ msgstr "Dein Agentengeheimnis"
 msgid "Set up account recovery"
 msgstr "Kontowiederherstellung einrichten"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Store it with "
 msgstr "Speichern bei "
 
@@ -5613,7 +5611,7 @@ msgid "Store it with {0}"
 msgstr "Bei {0} speichern"
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Deine Sicherung ist nur in diesem Browser verschlüsselt gespeichert. Sie lässt sich hier entsperren, aber ein neues Gerät könnte dir keinen Zugriff verschaffen."
 
@@ -5668,12 +5666,12 @@ msgid "Only your passkey opens this account. If it isn't on this device, unlock 
 msgstr "Nur dein Passkey öffnet dieses Konto. Ist er nicht auf diesem Gerät, entsperre das Konto auf dem Gerät, auf dem du ihn eingerichtet hast, und füge in den Einstellungen einen Wiederherstellungscode hinzu. Damit erhältst du überall Zugriff."
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf, aber nur dein Passkey öffnet ihn. In einem Browser, mit dem dein Passkey nicht synchronisiert wurde, erhältst du keinen Zugriff. Ein Wiederherstellungscode würde das ermöglichen."
 
 #: src/components/AccountRecoveryCard.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Add a recovery code"
 msgstr "Wiederherstellungscode hinzufügen"
 
@@ -5857,23 +5855,23 @@ msgstr "Signierte Hülle vorhanden, aber ihre Signatur konnte nicht verifiziert 
 msgid "No signed envelope covers this change on this node"
 msgstr "Auf diesem Knoten deckt keine signierte Hülle diese Änderung ab"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive uses a legacy server address. Cloud Server requires a portable DID drive."
 msgstr "Dieses Laufwerk verwendet eine alte Serveradresse. Cloud Server benötigt ein portables DID-Laufwerk."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sign-in wasn’t completed — hosting setup was cancelled."
 msgstr "Anmeldung nicht abgeschlossen – Hosting-Einrichtung abgebrochen."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Could not set up Cloud Server."
 msgstr "Cloud Server konnte nicht eingerichtet werden."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Use Cloud Server"
 msgstr "Cloud Server verwenden"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "See plans"
 msgstr "Tarife ansehen"
 
@@ -6110,7 +6108,7 @@ msgstr "Aktualisieren"
 msgid "Context compacted"
 msgstr "Kontext komprimiert"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Recent activity"
 msgstr "Letzte Aktivitäten"
 
@@ -6267,7 +6265,7 @@ msgstr "<0>Bewahre diesen Wiederherstellungscode auf.</0> Er gibt dir auf einem 
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Entsperren mit einem Passkey fehlgeschlagen. Verwende stattdessen deinen Wiederherstellungscode."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Error: Sign in before syncing with another device"
 msgstr "Fehler: Melde dich an, bevor du mit einem anderen Gerät synchronisierst"
 
@@ -6429,7 +6427,7 @@ msgstr "Deine Daten liegen auf diesem Gerät und werden mit einem Server synchro
 msgid "Your data lives on this device. Browser sync connects when another browser is available."
 msgstr "Deine Daten liegen auf diesem Gerät. Browser-Synchronisierung verbindet sich, sobald ein anderer Browser verfügbar ist."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Checking local copy…"
 msgstr "Lokale Kopie wird geprüft …"
 
@@ -8339,7 +8337,7 @@ msgstr "Hier gibt es keine Plugins anzuzeigen."
 msgid "Your home is ready. Have data elsewhere?{0} <0>Connect another device or restore a backup</0>."
 msgstr "Dein Startbereich ist bereit. Hast du Daten anderswo?{0} <0>Verbinde ein anderes Gerät oder stelle eine Sicherung wieder her</0>."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Local copy unavailable"
 msgstr "Lokale Kopie nicht verfügbar"
 
@@ -8411,7 +8409,7 @@ msgstr "Prüfe das Chat-Transkript, bevor du es mit dem Atomic-Team teilst"
 msgid "Buy AI credits"
 msgstr "KI-Credits kaufen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Starting server sync…"
 msgstr "Serversynchronisierung wird gestartet …"
 
@@ -8949,7 +8947,7 @@ msgstr "Vorlage auswählen"
 msgid "Name your drive"
 msgstr "Dein Laufwerk benennen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Not hosted here"
 msgstr "Hier nicht gehostet"
 
@@ -10758,11 +10756,11 @@ msgstr "App neu starten"
 msgid "Reload the whole app, as if you opened it again."
 msgstr "Die gesamte App neu laden, als hättest du sie erneut geöffnet."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
 msgstr "Hochladen dieser Änderung stoppen? Sie bleibt auf diesem Gerät, erreicht aber nicht den Server."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Discard upload"
 msgstr "Upload verwerfen"
 
@@ -10923,7 +10921,7 @@ msgstr "Laufwerk"
 msgid "Back to sync settings"
 msgstr "Zurück zu den Synchronisierungseinstellungen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "(see where space goes)"
 msgstr "(Speicherbelegung ansehen)"
 
@@ -11011,15 +11009,15 @@ msgid "See how much space this resource and what is in it take up."
 msgstr "Ansehen, wie viel Speicher diese Ressource und ihre Inhalte belegen."
 
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to start Cloud Server."
 msgstr "Melde dich bei deinem {0}-Konto an, um Cloud Server zu starten."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan does not include Cloud Server yet."
 msgstr "Der Tarif dieses Laufwerks enthält noch keinen Cloud Server."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Could not start Cloud Server."
 msgstr "Cloud Server konnte nicht gestartet werden."
 
@@ -11028,12 +11026,12 @@ msgstr "Cloud Server konnte nicht gestartet werden."
 msgid "{0} · Email recovery on"
 msgstr "{0} · E-Mail-Wiederherstellung aktiviert"
 
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Trying again…"
 msgstr "Erneuter Versuch …"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Your plan"
 msgstr "Dein Tarif"
 
@@ -11041,15 +11039,15 @@ msgstr "Dein Tarif"
 msgid "Current"
 msgstr "Aktuell"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Shareable links and API access"
 msgstr "Teilbare Links und API-Zugriff"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Search across everything"
 msgstr "Alles durchsuchen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "No need for another device to be awake"
 msgstr "Kein weiteres Gerät muss eingeschaltet sein"
 
@@ -11072,15 +11070,15 @@ msgstr "Bei {0} gesichert"
 msgid "Encrypted backup of your data. Only you can read it."
 msgstr "Verschlüsselte Sicherung deiner Daten. Nur du kannst sie lesen."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Manage plan"
 msgstr "Tarif verwalten"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Turn on Cloud Server"
 msgstr "Cloud Server aktivieren"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Upgrade to Cloud Server"
 msgstr "Auf Cloud Server upgraden"
 
@@ -11196,16 +11194,16 @@ msgstr "Integrationen werden geladen …"
 msgid "<0/> Show experimental plugins"
 msgstr "<0/> Experimentelle Plugins anzeigen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."
 msgstr "Noch keine anderen Geräte – deine Daten sind auf diesem sicher."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Devices"
 msgstr "Geräte"
 
 #. 0: status.pendingDirtyCount
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} unsynced"
 msgstr "{0} nicht synchronisiert"
 
@@ -11633,11 +11631,11 @@ msgid "Confirm with your code"
 msgstr "Mit deinem Code bestätigen"
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf, aber eine Anmeldung öffnet ihn noch nicht. Bestätige einmal mit deinem Passkey oder Wiederherstellungscode, um dies zu aktivieren."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Turn it on"
 msgstr "Aktivieren"
 
@@ -12017,15 +12015,15 @@ msgstr "<0/> möchte deine Atomic-Daten verwenden. Die App hat einen eigenen Sch
 msgid "Connected apps"
 msgstr "Verbundene Apps"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup: no portal configured"
 msgstr "Cloud-Server-Einrichtung: kein Portal konfiguriert"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed after sign-in"
 msgstr "Cloud-Server-Einrichtung nach Anmeldung fehlgeschlagen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed on its own"
 msgstr "Cloud-Server-Einrichtung ohne Anmeldung fehlgeschlagen"
 
@@ -12616,107 +12614,107 @@ msgstr "Chats"
 msgid "Show technical details"
 msgstr "Technische Details anzeigen"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Could not change drive sync."
 msgstr "Laufwerksynchronisierung konnte nicht geändert werden."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This server doesn’t host this drive, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
 msgstr "Dieser Server hostet dieses Laufwerk nicht und lehnt deshalb seine Änderungen ab. Richte Cloud Server ein, um es hier zu synchronisieren, oder deaktiviere die Synchronisierung, um es nur auf diesem Gerät zu behalten."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive with this server"
 msgstr "Dieses Laufwerk mit diesem Server synchronisieren"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Off stops server sync for this drive on this browser. The server’s existing copy and other devices are unchanged; browser sync can still connect open browsers."
 msgstr "Deaktivieren stoppt die Serversynchronisierung dieses Laufwerks in diesem Browser. Die vorhandene Serverkopie und andere Geräte bleiben unverändert. Browser-Synchronisierung kann weiterhin geöffnete Browser verbinden."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Drive sync off"
 msgstr "Laufwerksynchronisierung aus"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Open a drive to see whether it can be hosted."
 msgstr "Öffne ein Laufwerk, um zu sehen, ob es gehostet werden kann."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This device doesn’t have this drive yet. Pair the device that does, and you can host it from here."
 msgstr "Dieses Gerät hat dieses Laufwerk noch nicht. Kopple das Gerät, auf dem es liegt, dann kannst du es von hier aus hosten."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Checking whether this drive is hosted…"
 msgstr "Es wird geprüft, ob dieses Laufwerk gehostet wird …"
 
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sign in to {0} to see whether this drive is hosted."
 msgstr "Melde dich bei {0} an, um zu sehen, ob dieses Laufwerk gehostet wird."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server received this drive. Your source server is still connected."
 msgstr "Cloud Server hat dieses Laufwerk empfangen. Dein Quellserver ist weiterhin verbunden."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Connected to Cloud Server. Syncing this drive…"
 msgstr "Mit Cloud Server verbunden. Dieses Laufwerk wird synchronisiert …"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive is on Cloud Server. This device still syncs with its old server."
 msgstr "Dieses Laufwerk liegt auf Cloud Server. Dieses Gerät synchronisiert noch mit seinem alten Server."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Moving this drive to Cloud Server. It switches on by itself; you can keep working."
 msgstr "Dieses Laufwerk wird zu Cloud Server übertragen. Es schaltet sich automatisch ein; du kannst weiterarbeiten."
 
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} added Cloud Server to this drive. It waits for your consent."
 msgstr "{0} hat Cloud Server zu diesem Laufwerk hinzugefügt. Es wartet auf deine Zustimmung."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan includes Cloud Server. It waits for your consent."
 msgstr "Der Tarif dieses Laufwerks enthält Cloud Server. Es wartet auf deine Zustimmung."
 
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Melde dich bei deinem {0}-Konto an, um die E-Mail-Wiederherstellung zu prüfen. Die Anmeldung bei diesem Laufwerk mit Passkey oder Geheimnis verbindet dein Cloud-Konto nicht automatisch."
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Keine Wiederherstellungssicherung gespeichert. Wenn du alle Geräte verlierst, verlierst du dieses Laufwerk."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Everything in Cloud Vault, plus a hosted drive on atomic.place, always online. Our servers process what you put here."
 msgstr "Alles aus Cloud Vault, dazu ein gehostetes, jederzeit erreichbares Laufwerk auf atomic.place. Unsere Server verarbeiten die Inhalte, die du hier ablegst."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "<0>Before you turn it on:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this drive on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
 msgstr "<0>Bevor du es aktivierst:</0> Anders als Cloud Vault speichert Cloud Server eine lesbare, unverschlüsselte Kopie dieses Laufwerks auf unseren Servern, damit wir Suche, teilbare Links und API-Zugriff anbieten können. Deine Freigabeberechtigungen bestimmen weiterhin, wer sonst Zugriff hat, und du kannst es jederzeit deaktivieren."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, scan the code below to connect it."
 msgstr "Wenn dieses Laufwerk auf einem anderen Gerät liegt, scanne den Code unten, um es zu verbinden."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, you can connect it."
 msgstr "Wenn dieses Laufwerk auf einem anderen Gerät liegt, kannst du es verbinden."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive could not be read on this device"
 msgstr "Dieses Laufwerk konnte auf diesem Gerät nicht gelesen werden"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive"
 msgstr "Dieses Laufwerk synchronisieren"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
 msgstr "Dieses Laufwerk wurde noch nicht synchronisiert. Es ist hier sicher, aber nicht gesichert und nicht auf deinen anderen Geräten."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "These sync your other drives — not this drive."
 msgstr "Diese synchronisieren deine anderen Laufwerke – nicht dieses."
 
@@ -12966,11 +12964,11 @@ msgstr "<0/> Weiterleitung am alten Ort hinterlassen"
 msgid "All drives"
 msgstr "Alle Laufwerke"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server isn’t on for this drive. This server only accepts it for a short while; after that it stops syncing. Set up Cloud Server to keep it here, or turn off sync to keep it on this device only."
 msgstr "Cloud Server ist für dieses Laufwerk nicht aktiviert. Dieser Server akzeptiert es nur kurzzeitig, danach stoppt die Synchronisierung. Richte Cloud Server ein, um es hier zu behalten, oder deaktiviere die Synchronisierung, um es nur auf diesem Gerät zu behalten."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Not hosted yet"
 msgstr "Noch nicht gehostet"
 
@@ -13502,3 +13500,7 @@ msgstr "Verbrauchte Credits: {0} /{1} {2}"
 #: src/components/Settings/AccountSettings.tsx
 msgid "Account & security"
 msgstr "Konto und Sicherheit"
+
+#: src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Synchronisierung und Geräte"

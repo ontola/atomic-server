@@ -29,8 +29,6 @@ function useRouteTitle(): string | undefined {
       return 'Apps';
     case pathNames.notifications:
       return 'Notifications';
-    case pathNames.sync:
-      return 'Sync';
     case pathNames.serverSettings:
       return 'Server settings';
     case pathNames.new:

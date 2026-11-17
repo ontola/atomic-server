@@ -5,6 +5,7 @@ import { isEmbedded } from '../helpers/embedMode';
 export type SettingsSectionId =
   | 'account'
   | 'drive'
+  | 'sync'
   | 'appearance'
   | 'accessibility'
   | 'notifications'

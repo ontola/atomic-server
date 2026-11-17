@@ -181,7 +181,7 @@ export function DriveSwitcher({
       helper:
         'Local stays on your devices. Vault is encrypted backup. Server hosts a readable copy. Remote is another connected server.',
       onClick: () =>
-        navigate(`/app/sync?drive=${encodeURIComponent(drive ?? '')}`),
+        navigate(`${paths.sync}&drive=${encodeURIComponent(drive ?? '')}`),
     },
   ];
 

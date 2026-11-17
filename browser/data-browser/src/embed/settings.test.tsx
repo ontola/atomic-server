@@ -104,6 +104,9 @@ vi.mock('@components/Settings/AccountSettings', () => ({
 vi.mock('@components/Settings/DriveSettings', () => ({
   DriveSettings: () => <section aria-label='Drive' />,
 }));
+vi.mock('@components/Settings/SyncSettings', () => ({
+  SyncSettings: () => null,
+}));
 vi.mock('@components/Settings/IntegrationSettings', () => ({
   IntegrationSettings: () => <section aria-label='Integration' />,
 }));
@@ -143,6 +146,7 @@ it('shows every section outside the embed', () => {
   const ids: SettingsSectionId[] = [
     'account',
     'drive',
+    'sync',
     'appearance',
     'accessibility',
     'notifications',
@@ -163,6 +167,7 @@ it('shows only the allow-listed sections and options in the embed', () => {
   for (const id of [
     'account',
     'drive',
+    'sync',
     'accessibility',
     'notifications',
     'virtualDrive',
@@ -187,6 +192,7 @@ it('renders the full page outside the embed', () => {
   for (const label of [
     'Account & security',
     'Drive',
+    'Sync & devices',
     'Appearance',
     'Accessibility',
     'Notifications',
@@ -215,6 +221,7 @@ it('renders only Appearance, without the chrome options, in the embed', () => {
   for (const label of [
     'Account & security',
     'Drive',
+    'Sync & devices',
     'Accessibility',
     'Notifications',
     'AI',

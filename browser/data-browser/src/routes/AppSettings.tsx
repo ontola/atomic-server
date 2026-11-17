@@ -20,6 +20,7 @@ import { useLocale } from '@components/LocaleContext';
 import { SUPPORTED_LOCALES } from '@helpers/preloadLocale';
 import { BasicSelect } from '@components/forms/BasicSelect';
 import { styled } from 'styled-components';
+import { isAtomicIdentifier } from '@tomic/react';
 import {
   SettingCheckbox,
   SettingField,
@@ -29,6 +30,7 @@ import {
 } from '@components/Settings';
 import { AccountSettings } from '@components/Settings/AccountSettings';
 import { DriveSettings } from '@components/Settings/DriveSettings';
+import { SyncSettings } from '@components/Settings/SyncSettings';
 import { presetColors } from '../styling';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
@@ -47,9 +49,14 @@ export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
   validateSearch: (
     search: Record<string, unknown>,
-  ): { q?: string; section?: string } => ({
+  ): { q?: string; section?: string; drive?: string } => ({
     q: typeof search.q === 'string' ? search.q : undefined,
     section: typeof search.section === 'string' ? search.section : undefined,
+    // The drive the Sync section shows (`?section=sync&drive=`).
+    drive:
+      typeof search.drive === 'string' && isAtomicIdentifier(search.drive)
+        ? search.drive
+        : undefined,
   }),
   component: () => <AppSettings />,
   getParentRoute: () => appRoute,
@@ -82,7 +89,7 @@ const AppSettings: React.FunctionComponent = () => {
   } = useSettings();
 
   const { locale, setLocale } = useLocale();
-  const { q, section } = AppSettingsRoute.useSearch();
+  const { q, section, drive } = AppSettingsRoute.useSearch();
   const [searchQuery, setSearchQuery] = useState(q ?? '');
   useEffect(() => setSearchQuery(q ?? ''), [q]);
 
@@ -148,6 +155,15 @@ const AppSettings: React.FunctionComponent = () => {
           <SettingsGroup>
             {showSettingsSection('account') && <AccountSettings />}
             {showSettingsSection('drive') && <DriveSettings />}
+            {showSettingsSection('sync') && (
+              <SettingsSection
+                label='Sync & devices'
+                id='sync'
+                childSearchKeywords='sync devices device backup vault cloud vault cloud server paired pairing connect another device local database restore hosted server offline'
+              >
+                <SyncSettings requestedDrive={drive} />
+              </SettingsSection>
+            )}
             {showSettingsSection('appearance') && (
               <SettingsSection
                 label='Appearance'

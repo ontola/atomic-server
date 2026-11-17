@@ -49,7 +49,8 @@ export const paths = {
   apps: `${pathNames.app}${pathNames.apps}`,
   integrations: `${pathNames.app}${pathNames.integrations}`,
   notifications: `${pathNames.app}${pathNames.notifications}`,
-  sync: `${pathNames.app}${pathNames.sync}`,
+  // `/app/sync` itself only redirects here (see SyncRoute).
+  sync: `${pathNames.app}${pathNames.appSettings}?section=sync`,
   storage: `${pathNames.app}${pathNames.storage}`,
   serverSettings: `${pathNames.app}${pathNames.serverSettings}`,
   new: `${pathNames.app}${pathNames.new}`,
