@@ -40,10 +40,6 @@ vi.mock('@components/Button', () => ({
 vi.mock('@helpers/AppSettings', () => ({
   useSettings: () => ({ drive: 'did:ad:settings-drive', setDrive: vi.fn() }),
 }));
-vi.mock('@components/SideBar/DriveSwitcher', () => ({
-  DriveSwitcher: () => <button>Switch Drive</button>,
-  DriveSwitcherChevronTrigger: () => <button />,
-}));
 vi.mock('@components/EditableTitle', () => ({
   EditableTitle: () => <h1>Drive title</h1>,
 }));
