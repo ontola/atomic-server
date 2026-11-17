@@ -4,7 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
-- Fixed: after restoring an account from Cloud Vault on another device, the sidebar said "Signed in" instead of the person's name. A reload that finds the stored copy of a resource with an unsaved edit now merges the stored history into it instead of skipping it, so the profile the vault brought back is no longer lost behind the encryption key written to the empty agent resource first.
+- Fixed: the person's profile name and picture went missing on other devices and for collaborators once their drive was hosted on a node ("Signed in" in the sidebar, raw agent ids in activity). A full snapshot from a node can no longer replace a local resource that has history of its own (the node's bare agent document was overwriting the real profile), and the agent profile that onboarding kept local-only is now merged with the node's copy and pushed when the personal drive is hosted, including on the next session for accounts already in that state.
 - Internal: one `isPlainObject` in @tomic/lib replaces 5 local type guards.
 - Internal: one `isLoopbackHost` in @tomic/lib replaces 12 inline localhost checks.
 - Removed the dead mobile-Tauri frontend code: Android back-button handling, the native QR scanner ("Scan a QR code" button) and the `@tauri-apps/plugin-barcode-scanner` dependency. The mobile app is the Flutter app; Tauri is desktop only. Pairing codes are still pasted or typed.

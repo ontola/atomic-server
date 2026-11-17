@@ -196,56 +196,6 @@ describe('Cloud Vault restore and the agent profile', () => {
     expect(after.get(core.properties.name)).toBe('Erin Returning');
   }, 60_000);
 
-  it('merges the restored profile into an agent resource with an unsaved edit', async () => {
-    const keys = await Agent.generateKeyPair();
-    const did = agentSubject(
-      await new JSCryptoProvider(keys.privateKey).getPublicKey(),
-    );
-    const agent = new Agent(new JSCryptoProvider(keys.privateKey), did);
-
-    const one = await deviceFor(agent);
-    one.store.registerLocalOnlyDrive(did);
-    const profile = one.store.getResourceLoading(did, { newResource: true });
-    await profile.set(core.properties.publicKey, agentPublicKey(did) ?? '');
-    await profile.set(core.properties.isA, [core.classes.agent]);
-    await profile.set(core.properties.name, 'Hana Returning');
-    await profile.save();
-    const drive = await one.store.createDrive("Hana's Drive");
-    await delay(300);
-    await one.clientDb.flush();
-    const key = new Uint8Array(32).fill(8);
-    const out = await raw(one.clientDb).vaultExport(
-      drive.subject, key, 1, PSEUDONYM, DEVICE, 1, 1n, false, undefined, undefined,
-    );
-
-    // Device 2: the key publisher has set `encryptionKey` on the (empty) agent
-    // resource and its save has not gone through (a managed node refuses a
-    // standalone agent profile), so the edit is still unsaved when the vault
-    // restore lands.
-    const two = await deviceFor(agent);
-    two.store.setServerConnected(true);
-    await two.clientDb.putResource(
-      JSON.stringify({
-        '@id': did,
-        [core.properties.isA]: [core.classes.agent],
-        [core.properties.publicKey]: agentPublicKey(did),
-      }),
-    );
-    const early = await two.store.getResource(did);
-    await early.set(conversations.properties.encryptionKey, 'pubkey-3', false);
-    expect(early.hasUnsavedChanges()).toBe(true);
-
-    await raw(two.clientDb).vaultImport(key, 1, PSEUDONYM, DEVICE, [
-      { objectKey: out.objectKey, sealed: out.sealed },
-    ]);
-    await two.store.reloadResource(did);
-
-    const after = two.store.getResourceLoading(did);
-    expect(after.loading).toBe(false);
-    expect(after.get(core.properties.name)).toBe('Hana Returning');
-    expect(after.get(conversations.properties.encryptionKey)).toBe('pubkey-3');
-  }, 60_000);
-
   describe('with a node that has never heard of the profile', () => {
     let node: ServerHandle;
 
