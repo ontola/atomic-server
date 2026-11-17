@@ -1096,6 +1096,16 @@ native clients.
 
 ### Save durability and identity lifecycle regressions
 
+- `local-save-persistence.test.ts` checks required offline/local-only save
+  persistence through the real Resource/signing/outbox path with a stubbed worker
+  boundary: missing, unsupported and failing storage reject; edits and signed
+  local-only genesis/history remain retryable; recovery clears the save error;
+  saved notifications and peer publication wait for the write to finish.
+  Snapshot-only persistence retains the internal outbox-written boolean meaning.
+  `save-status-coordinator.test.ts` distinguishes failed local writes from normal
+  queued remote work. Existing save-acknowledgement tests retain optional online
+  mirror failure/timeout coverage. These tests validate completion/error handling,
+  not a new OPFS crash guarantee or independent replica receipt (#2538).
 - `save-acknowledgement.test.ts` exercises `Resource.save()` through the real
   outbox with a stubbed commit transport: server refusals (including terminal
   drops), backoff, blocked entries and cancellation cannot report persistence.

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { core } from './ontologies/core.js';
 import { Resource } from './resource.js';
-import { testStore } from './test-store.js';
+import { mockLocalPersistence, testStore } from './test-store.js';
 import { AtomicError, ErrorType, RequestCancelledError } from './error.js';
 import { BLOCK_AFTER_FAILURES } from './local-outbox.js';
 import { ErrorCode } from './ws-v2.js';
@@ -47,6 +47,7 @@ describe('explicit save acknowledgement', () => {
 
   it('keeps transport failures queued and returns offline', async () => {
     const { store, postCommitSpy } = await testStore();
+    mockLocalPersistence(store);
     const doc = await store.newResource({
       isA: 'https://atomicdata.dev/classes/Drive',
       noParent: true,
