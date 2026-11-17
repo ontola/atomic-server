@@ -3,6 +3,8 @@ import { isEmbedded } from '../helpers/embedMode';
 
 /** The top-level sections of the settings page. */
 export type SettingsSectionId =
+  | 'account'
+  | 'drive'
   | 'appearance'
   | 'accessibility'
   | 'notifications'

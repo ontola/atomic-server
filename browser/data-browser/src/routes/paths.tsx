@@ -38,7 +38,9 @@ export const pathNames = {
 } as const;
 export const paths = {
   welcome: `${pathNames.app}${pathNames.welcome}`,
-  agentSettings: `${pathNames.app}${pathNames.agentSettings}`,
+  // `agentSettings` and `serverSettings` only redirect; the pages live in settings.
+  accountSettings: `${pathNames.app}${pathNames.appSettings}?section=account`,
+  driveSettings: `${pathNames.app}${pathNames.appSettings}?section=drive`,
   connectAgent: `${pathNames.app}${pathNames.connectAgent}`,
   authorizeMcp: `${pathNames.app}${pathNames.authorizeMcp}`,
   sendIdentity: `${pathNames.app}${pathNames.sendIdentity}`,

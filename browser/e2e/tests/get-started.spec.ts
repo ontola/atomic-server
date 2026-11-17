@@ -113,13 +113,13 @@ test('Drive settings bring the Getting started card back after Hide', async ({
   await card.getByRole('button', { name: 'Hide' }).click();
   await expect(card).toHaveCount(0);
 
-  const dialog = await openDriveSettings(page);
-  await dialog
+  const settings = await openDriveSettings(page);
+  await settings
     .getByRole('checkbox', {
       name: 'Show Getting started on my drives',
     })
     .check();
-  await page.keyboard.press('Escape');
+  await page.goBack();
   await expect(card).toBeVisible();
 
   await page.reload();

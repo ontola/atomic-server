@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Column } from '../Row';
-import { Checkbox, CheckboxLabel } from '../forms/Checkbox';
+import { SettingCheckbox } from './SettingCheckbox';
 import {
   osNotificationState,
   turnOffOsNotifications,
@@ -34,14 +34,13 @@ export function NotificationSettings() {
       {state === 'unsupported' ? (
         <p>This browser can't show system notifications.</p>
       ) : (
-        <CheckboxLabel>
-          <Checkbox
-            checked={state === 'on'}
-            onChange={checked => void onChange(checked)}
-            disabled={state === 'blocked'}
-          />{' '}
-          <span>Show system notifications on this device</span>
-        </CheckboxLabel>
+        <SettingCheckbox
+          checked={state === 'on'}
+          onChange={checked => void onChange(checked)}
+          disabled={state === 'blocked'}
+        >
+          Show system notifications on this device
+        </SettingCheckbox>
       )}
       {state === 'blocked' && (
         <p>

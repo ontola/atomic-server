@@ -68,6 +68,32 @@ vi.mock('@components/Settings', () => ({
   }: React.PropsWithChildren<{ label: string }>) => (
     <section aria-label={label}>{children}</section>
   ),
+  SettingCheckbox: ({
+    children,
+    hint,
+    checked,
+    onChange,
+  }: React.PropsWithChildren<{
+    hint?: string;
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+  }>) => (
+    <label>
+      <input
+        type='checkbox'
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+      />
+      {children}
+      {hint && <span>{hint}</span>}
+    </label>
+  ),
+}));
+vi.mock('@components/Settings/AccountSettings', () => ({
+  AccountSettings: () => <section aria-label='Account & security' />,
+}));
+vi.mock('@components/Settings/DriveSettings', () => ({
+  DriveSettings: () => <section aria-label='Drive' />,
 }));
 vi.mock('@components/Settings/IntegrationSettings', () => ({
   IntegrationSettings: () => <section aria-label='Integration' />,
@@ -106,6 +132,8 @@ afterEach(() => {
 
 it('shows every section outside the embed', () => {
   const ids: SettingsSectionId[] = [
+    'account',
+    'drive',
     'appearance',
     'accessibility',
     'notifications',
@@ -124,6 +152,8 @@ it('shows only the allow-listed sections and options in the embed', () => {
   expect(showSettingsSection('appearance', true)).toBe(true);
 
   for (const id of [
+    'account',
+    'drive',
     'accessibility',
     'notifications',
     'virtualDrive',
@@ -145,7 +175,14 @@ it('shows only the allow-listed sections and options in the embed', () => {
 it('renders the full page outside the embed', () => {
   renderPage();
 
-  for (const label of ['Appearance', 'Accessibility', 'Notifications', 'AI']) {
+  for (const label of [
+    'Account & security',
+    'Drive',
+    'Appearance',
+    'Accessibility',
+    'Notifications',
+    'AI',
+  ]) {
     expect(screen.getByLabelText(label)).toBeTruthy();
   }
 
@@ -166,7 +203,14 @@ it('renders only Appearance, without the chrome options, in the embed', () => {
   expect(screen.getByText('Language')).toBeTruthy();
   expect(screen.getByText('Hide templates on new resource page')).toBeTruthy();
 
-  for (const label of ['Accessibility', 'Notifications', 'AI', 'Integration']) {
+  for (const label of [
+    'Account & security',
+    'Drive',
+    'Accessibility',
+    'Notifications',
+    'AI',
+    'Integration',
+  ]) {
     expect(screen.queryByLabelText(label)).toBeNull();
   }
 

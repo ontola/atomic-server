@@ -7,7 +7,8 @@ import {
 } from './test-utils';
 
 const english = {
-  user: 'User',
+  account: 'Account & security',
+  settings: 'Settings',
   drives: 'My drives',
   name: 'Your name',
   profile: 'More profile fields',
@@ -27,7 +28,8 @@ const languages: Array<{
   {
     locale: 'es',
     labels: {
-      user: 'Usuario',
+      account: 'Cuenta y seguridad',
+      settings: 'Configuración',
       drives: 'Mis unidades',
       name: 'Tu nombre',
       profile: 'Más campos del perfil',
@@ -40,7 +42,8 @@ const languages: Array<{
   {
     locale: 'fr',
     labels: {
-      user: 'Utilisateur',
+      account: 'Compte et sécurité',
+      settings: 'Paramètres',
       drives: 'Mes lecteurs',
       name: 'Votre nom',
       profile: 'Plus de champs de profil',
@@ -53,7 +56,8 @@ const languages: Array<{
   {
     locale: 'de',
     labels: {
-      user: 'Benutzer',
+      account: 'Konto und Sicherheit',
+      settings: 'Einstellungen',
       drives: 'Meine Laufwerke',
       name: 'Dein Name',
       profile: 'Weitere Profilfelder',
@@ -67,7 +71,8 @@ const languages: Array<{
     locale: 'nl',
     pickerName: 'Nederlands',
     labels: {
-      user: 'Gebruiker',
+      account: 'Account en beveiliging',
+      settings: 'Instellingen',
       drives: 'Mijn schijven',
       name: 'Je naam',
       profile: 'Meer profielvelden',
@@ -81,7 +86,8 @@ const languages: Array<{
     locale: 'id',
     pickerName: 'Bahasa Indonesia',
     labels: {
-      user: 'Pengguna',
+      account: 'Akun dan keamanan',
+      settings: 'Pengaturan',
       drives: 'Drive saya',
       name: 'Nama Anda',
       profile: 'Kolom profil lainnya',
@@ -99,11 +105,9 @@ async function expectAccount(
   driveTitle: string,
 ) {
   await expect(
-    page.getByRole('heading', { level: 1, name: labels.user, exact: true }),
+    page.getByRole('heading', { level: 1, name: labels.settings, exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: labels.drives, exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText(labels.account, { exact: true })).toBeVisible();
   await expect(page.locator('#boot-splash')).toBeHidden();
   await expect(
     page.getByRole('textbox', { name: labels.name, exact: true }),
@@ -116,6 +120,17 @@ async function expectAccount(
   ).toBeVisible();
   // User-authored resource names must remain data, not become UI translations.
   await expect(currentDriveTitle(page)).toHaveText(driveTitle);
+  await expect(page.locator('body')).not.toContainText(/\[i18n-404:/);
+}
+
+/** The Drive section, which the settings page opens on `?section=drive`. */
+async function expectDrives(
+  page: Page,
+  labels: AccountLabels,
+  driveTitle: string,
+) {
+  await page.goto(`${FRONTEND_URL}/app/settings?section=drive`);
+  await expect(page.getByText(labels.drives, { exact: true })).toBeVisible();
   await expect(
     page.getByTestId('my-drives').getByText(driveTitle, { exact: true }),
   ).toBeVisible();
@@ -150,8 +165,9 @@ test.describe('interface language', () => {
       page,
     }, testInfo) => {
       const { driveTitle } = await newDrive(page);
-      await page.goto(`${FRONTEND_URL}/app/agent`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
       await expectAccount(page, english, driveTitle);
+      await expectDrives(page, english, driveTitle);
       await expectDriveMenu(page, english, driveTitle);
 
       // Exercise the real Settings control, without writing locale storage or
@@ -173,9 +189,11 @@ test.describe('interface language', () => {
       await page.getByText(labels.appearance, { exact: true }).click();
       await expect(language).toHaveValue(locale);
 
-      await page.goto(`${FRONTEND_URL}/app/agent`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
       await expectAccount(page, labels, driveTitle);
+      await expectDrives(page, labels, driveTitle);
       await expectDriveMenu(page, labels, driveTitle);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
       await page.reload();
       await expectAccount(page, labels, driveTitle);
 
@@ -194,8 +212,9 @@ test.describe('interface language', () => {
       await language.selectOption('en');
       await page.getByText(english.appearance, { exact: true }).click();
       await expect(language).toHaveValue('en');
-      await page.goto(`${FRONTEND_URL}/app/agent`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
       await expectAccount(page, english, driveTitle);
+      await expectDrives(page, english, driveTitle);
       await expectDriveMenu(page, english, driveTitle);
     });
   }
@@ -212,7 +231,7 @@ for (const { locale, labels, pickerName } of languages.filter(language =>
       page,
     }) => {
       const driveTitle = await currentDriveTitle(page).innerText();
-      await page.goto(`${FRONTEND_URL}/app/agent`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
       await expectAccount(page, labels, driveTitle);
 
       await page.goto(`${FRONTEND_URL}/app/settings`);
@@ -223,7 +242,7 @@ for (const { locale, labels, pickerName } of languages.filter(language =>
 
       // An explicit choice takes precedence over the browser after reload.
       await language.selectOption('en');
-      await page.goto(`${FRONTEND_URL}/app/agent`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
       await page.reload();
       await expectAccount(page, english, driveTitle);
     });

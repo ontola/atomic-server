@@ -985,27 +985,27 @@ msgstr "Resources"
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Tags"
 msgstr "Tags"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Add LLM instructions"
 msgstr "LLM-instructies toevoegen"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "LLM Instructions"
 msgstr "LLM-instructies"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Default Ontology"
 msgstr "Standaardontologie"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Plugins"
 msgstr "Plugins"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Remove tag"
 msgstr "Tag verwijderen"
 
@@ -1500,11 +1500,11 @@ msgstr "Turtle / N-triples / N3"
 msgid "Create account"
 msgstr "Account maken"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Warning:"
 msgstr "Waarschuwing:"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "Je gebruikt een lokale agent die zich niet op andere domeinen kan authenticeren, omdat de URL niet bereikbaar is."
 
@@ -1520,8 +1520,8 @@ msgstr "Gesynchroniseerd"
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Fout: atomic:node:<node-id> verwacht"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/helpers/managed/deviceLink.ts
-#: src/routes/SettingsAgent.tsx
 #: src/routes/SyncRoute.tsx
 #: src/views/DriveUnavailable.tsx
 msgid "This device"
@@ -1578,7 +1578,7 @@ msgstr "Gereed — WASM + OPFS"
 msgid "Enable local WASM DB"
 msgstr "Lokale WASM-database inschakelen"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Enter a Drive DID or URL"
 msgstr "Voer een schijf-DID of URL in"
 
@@ -1865,9 +1865,9 @@ msgstr "Bepaal of deze resource in je favorieten verschijnt."
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
+#: src/components/Settings/DriveSettings.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/routes/IntegrationStore.tsx
-#: src/routes/SettingsAgent.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Open"
 msgstr "Openen"
 
@@ -2185,8 +2185,8 @@ msgstr "<0/> Notitie"
 
 #: src/actions/appMenuItems.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/routes/IntegrationStore.tsx
-#: src/routes/SettingsAgent.tsx
 #: src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Nieuw"
@@ -3789,7 +3789,7 @@ msgstr "Tik op <0>Ongedaan maken</0> / <1>Opnieuw uitvoeren</1> om door bewerkin
 msgid "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
 msgstr "Houd de knop voor ongedaan maken ingedrukt om versies te zien die je hebt verlaten door na het ongedaan maken te tekenen; sleep naar een versie en laat los om die te herstellen"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "A short description given to the AI Agent, use this to tell it what this drive is about, link important resources etc."
 msgstr "Een korte beschrijving voor de AI-agent. Vertel hiermee waar deze schijf over gaat, link belangrijke resources enzovoort."
 
@@ -3979,15 +3979,11 @@ msgstr "Privéschijf"
 msgid "View and organize all your drives."
 msgstr "Bekijk en orden al je schijven."
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "My drives"
 msgstr "Mijn schijven"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Only stored on this device. Star a drive to keep it in My drives."
-msgstr "Alleen opgeslagen op dit apparaat. Geef een schijf een ster om deze in Mijn schijven te bewaren."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Recently visited"
 msgstr "Onlangs bezocht"
 
@@ -4664,11 +4660,7 @@ msgstr "In plaats daarvan je passkey gebruiken"
 msgid "Could not add a recovery code."
 msgstr "Kan geen herstelcode toevoegen."
 
-#: src/routes/SettingsAgent.tsx
-msgid "How you get back in on a new device — and where to find your agent secret."
-msgstr "Hoe je op een nieuw apparaat weer toegang krijgt — en waar je je geheime agentsleutel vindt."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Account recovery"
 msgstr "Accountherstel"
 
@@ -4751,11 +4743,11 @@ msgstr "Ontgrendel {0} met je vingerafdruk, gezicht of schermvergrendeling."
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "We hebben je oude herstelwachtwoord vervangen door een sterkere, gegenereerde code. Bewaar deze veilig — je hebt de code en je e-mail nodig om weer toegang te krijgen. We kunnen de code niet opnieuw tonen, maar je kunt op elk moment een nieuwe genereren via Instellingen."
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "More profile fields"
 msgstr "Meer profielvelden"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 #: src/routes/SignOutRoute.tsx
 #: src/routes/SignOutRoute.tsx
 msgid "Sign out"
@@ -4790,11 +4782,11 @@ msgstr "Gebruik je vingerafdruk, gezicht of schermvergrendeling."
 msgid "or sign in another way"
 msgstr "of log op een andere manier in"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
 msgstr "Uitloggen en de kopie van je versleutelde back-up op dit apparaat verwijderen"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out & forget this device"
 msgstr "Uitloggen en dit apparaat vergeten"
 
@@ -4818,10 +4810,6 @@ msgstr "Plak je geheime agentsleutel"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
 msgstr "Dat lijkt geen geldige geheime agentsleutel te zijn."
-
-#: src/routes/SettingsAgent.tsx
-msgid "Whether this browser stays signed in as you when anyone opens it."
-msgstr "Of deze browser met jouw account ingelogd blijft wanneer iemand deze opent."
 
 #: src/components/DeviceLockCard.tsx
 msgid "Lock now"
@@ -5661,20 +5649,16 @@ msgstr "Je privéschijf maken…"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Kan je lijst niet bijwerken: er is nog geen privéschijf ingesteld voor dit account."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr "Je privéschijf staat altijd bovenaan. Verwijder de ster van een andere schijf om deze terug te zetten bij onlangs bezocht."
-
 #: src/components/Drives/DrivesCard.tsx
 msgid "Drives"
 msgstr "Schijven"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL"
 msgstr "Een schijf openen via URL"
 
-#: src/routes/SettingsAgent.tsx
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL or DID"
 msgstr "Een schijf openen via URL of DID"
 
@@ -8333,7 +8317,6 @@ msgid "AI settings…"
 msgstr "AI-instellingen…"
 
 #: src/actions/appActions.ts
-#: src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr "Gebruiker"
 
@@ -8786,10 +8769,6 @@ msgstr "Ontdek integraties uit deze catalog.json. Deze instelling wordt opgeslag
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Voer een HTTPS-URL of een localhost-HTTP-URL in die verwijst naar een catalog.json-bestand."
 
-#: src/components/SignInButton.tsx
-msgid "Go to the User page"
-msgstr "Naar de gebruikerspagina"
-
 #. 0: title || 'Untitled Chat'; 1: messages.length
 #: src/chunks/AI/formatAIChatReport.ts
 msgid ""
@@ -9164,10 +9143,6 @@ msgstr "Instellingen openen"
 #: src/actions/appMenuItems.tsx
 msgid "Switch drive"
 msgstr "Van schijf wisselen"
-
-#: src/actions/appMenuItems.tsx
-msgid "Open user settings"
-msgstr "Gebruikersinstellingen openen"
 
 #: src/actions/appMenuItems.tsx
 msgid "Give feedback"
@@ -10100,7 +10075,7 @@ msgstr "Kies een afbeelding"
 msgid "Textual Description"
 msgstr "Tekstuele beschrijving"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out of this device."
 msgstr "Uitloggen op dit apparaat."
 
@@ -10853,10 +10828,6 @@ msgid "Welcome"
 msgstr "Welkom"
 
 #: src/components/MetaSetter.tsx
-msgid "Account"
-msgstr "Account"
-
-#: src/components/MetaSetter.tsx
 msgid "Server settings"
 msgstr "Serverinstellingen"
 
@@ -10945,6 +10916,7 @@ msgstr "Waar ruimte naartoe gaat"
 msgid "This workspace"
 msgstr "Deze werkruimte"
 
+#: src/components/Settings/DriveSettings.tsx
 #: src/helpers/storageMap.ts
 msgid "Drive"
 msgstr "Schijf"
@@ -11332,11 +11304,6 @@ msgstr "{0} gebeurtenissen in wachtrij. Ze blijven opgeslagen terwijl ze op beoo
 msgid "<0/> or"
 msgstr "<0/> of"
 
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: src/components/AI/AISettings.tsx
-msgid "Credits used: {0}{1} / {2}"
-msgstr "Gebruikte credits: {0}{1} / {2}"
-
 #. 0: index + 1; 1: id === status.state?.active ? ' (live)' \\: ''
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0} {1}"
@@ -11647,7 +11614,7 @@ msgstr "{0} punten"
 msgid "Showing first {0} answers"
 msgstr "Eerste {0} antwoorden worden getoond"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Add your passkey here. A passkey added in the app also unlocks your encrypted backup, which only the app can do."
 msgstr "Voeg hier je passkey toe. Een passkey die in de app is toegevoegd ontgrendelt ook je versleutelde back-up, wat alleen de app kan doen."
 
@@ -12048,11 +12015,7 @@ msgstr "Accountinstellingen"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> vraagt om je Atomic-gegevens te gebruiken. De app heeft een eigen sleutel, zodat je geheime sleutel bij jou blijft. Je kunt de toegang altijd intrekken."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
-msgstr "Apps die je je gegevens laat gebruiken, zoals een AI-assistent. Elke app heeft een eigen sleutel; trek deze in om de toegang te stoppen."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Connected apps"
 msgstr "Verbonden apps"
 
@@ -12508,15 +12471,11 @@ msgstr "<0/> Schijfinstellingen"
 msgid "Nothing here yet."
 msgstr "Hier is nog niets."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Drive settings"
-msgstr "Schijfinstellingen"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Server via welke leden elkaar vinden voor gratis browsersynchronisatie."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Browser sync server"
 msgstr "Browsersynchronisatieserver"
 
@@ -13045,7 +13004,7 @@ msgstr "Sla je werk op"
 msgid "Sign up with your email, save your secret or connect a device"
 msgstr "Meld je aan met je e-mail, bewaar je geheime sleutel of verbind een apparaat"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Getting started"
@@ -13193,10 +13152,6 @@ msgstr "Een resource in de map"
 msgid "Rendered by ResourcePage, with nothing around it."
 msgstr "Weergegeven door ResourcePage, zonder iets eromheen."
 
-#: src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar <0>Show icons and pictures next to items in the sidebar</0>"
-msgstr "Pictogrammen in de zijbalk tonen <0>Toon pictogrammen en afbeeldingen naast items in de zijbalk</0>"
-
 #: src/routes/SendIdentityRoute.tsx
 msgid "This link has no code. Start again from your device."
 msgstr "Deze link heeft geen code. Begin opnieuw vanaf je apparaat."
@@ -13271,6 +13226,7 @@ msgstr "Ga terug naar je apparaat."
 msgid "Could not send your identity"
 msgstr "Kan je identiteit niet verzenden"
 
+#: src/components/Settings/DriveSettings.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx
@@ -13329,7 +13285,7 @@ msgstr "Aan deze schijf toevoegen"
 msgid "Or describe what you need"
 msgstr "Of beschrijf wat je nodig hebt"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Show Getting started on my drives"
 msgstr "Aan de slag tonen op mijn schijven"
 
@@ -13530,3 +13486,20 @@ msgstr "Met Melding verzenden deel je de gecontroleerde chattekst, foutmeldingen
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team, samen met technische gegevens over je opstelling (app-versie, serveradres en status). Vermeld geen privé-inhoud uit je werkruimte."
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Pictogrammen in de zijbalk tonen"
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Toon pictogrammen en afbeeldingen naast items in de zijbalk"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Gebruikte credits: {0} /{1} {2}"
+
+#: src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Account en beveiliging"

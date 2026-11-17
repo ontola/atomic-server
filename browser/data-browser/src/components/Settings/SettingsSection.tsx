@@ -2,7 +2,7 @@ import { styled } from 'styled-components';
 import { Details, type DetailsPropsBase } from '../Details';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { useSettingsSearch, SettingsSearchProvider } from './SettingsSearch';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 /** Container for a group of settings sections. Adds top border and resets Details toggle styling. */
 export const SettingsGroup = styled.div`
@@ -67,6 +67,8 @@ export const SettingsContent = styled.div`
 interface SettingsSectionProps extends DetailsPropsBase {
   /** Label shown as the collapsible title */
   label: string;
+  /** Target for the page's `?section=`: this section opens and scrolls into view. */
+  id?: string;
   /** Keywords from child sections (matching these shows this section, but children still filter themselves) */
   childSearchKeywords?: string;
 }
@@ -94,10 +96,20 @@ function extractTextFromChildren(node: ReactNode): string {
     return node.map(extractTextFromChildren).join(' ');
   }
 
-  if (typeof node === 'object' && 'props' in node) {
-    const props = (node as { props: { children?: ReactNode } }).props;
+  // A nested section indexes and filters itself.
+  if (
+    typeof node === 'object' &&
+    'type' in node &&
+    node.type === SettingsSection
+  ) {
+    return '';
+  }
 
-    return extractTextFromChildren(props.children);
+  if (typeof node === 'object' && 'props' in node) {
+    const props = (node as { props: { children?: ReactNode; hint?: string } })
+      .props;
+
+    return `${extractTextFromChildren(props.children)} ${props.hint ?? ''}`;
   }
 
   return '';
@@ -108,12 +120,20 @@ function extractTextFromChildren(node: ReactNode): string {
  *  Automatically indexes the text content of children for search. */
 export function SettingsSection({
   label,
+  id,
   childSearchKeywords,
   children,
   ...detailsProps
 }: PropsWithChildren<SettingsSectionProps>) {
-  const { query, parentMatched } = useSettingsSearch();
+  const searchContext = useSettingsSearch();
+  const { query, parentMatched } = searchContext;
   const isSearching = query.length > 0;
+  const targeted = !!id && searchContext.section === id;
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (targeted) ref.current?.scrollIntoView?.({ block: 'start' });
+  }, [targeted]);
 
   // Build search haystack from label + children text content
   const childText = useMemo(
@@ -135,8 +155,8 @@ export function SettingsSection({
   // Only set parentMatched for children when this section's OWN content matched
   // (or it was already set by an ancestor). Don't set it for childMatch — let children filter.
   const childContext = useMemo(
-    () => ({ query, parentMatched: parentMatched || ownMatch }),
-    [query, parentMatched, ownMatch],
+    () => ({ ...searchContext, parentMatched: parentMatched || ownMatch }),
+    [searchContext, parentMatched, ownMatch],
   );
 
   // If searching and nothing matches (own, child, or inherited parent), hide.
@@ -145,12 +165,12 @@ export function SettingsSection({
   }
 
   return (
-    <SettingsSectionWrapper>
+    <SettingsSectionWrapper ref={ref} id={id}>
       <Details
         noIndent
         title={<SettingsLabel>{label}</SettingsLabel>}
-        open={isSearching}
-        initialState={isSearching}
+        open={isSearching || targeted}
+        initialState={isSearching || targeted}
         {...detailsProps}
       >
         <SettingsContent>

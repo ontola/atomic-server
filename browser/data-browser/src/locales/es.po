@@ -985,27 +985,27 @@ msgstr "Recursos"
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Tags"
 msgstr "Etiquetas"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Add LLM instructions"
 msgstr "Añadir instrucciones del LLM"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "LLM Instructions"
 msgstr "Instrucciones LLM"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Default Ontology"
 msgstr "Ontología predeterminada"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Plugins"
 msgstr "Plugins"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Remove tag"
 msgstr "Quitar etiqueta"
 
@@ -1500,11 +1500,11 @@ msgstr "Turtle / N-triples / N3"
 msgid "Create account"
 msgstr "Crear cuenta"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Warning:"
 msgstr "Advertencia:"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "Estás utilizando un Agente local, que no puede autenticarse en otros dominios, porque su URL no se resuelve."
 
@@ -1520,8 +1520,8 @@ msgstr "Sincronizado"
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Error: Se esperaba atomic:node:<node-id>"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/helpers/managed/deviceLink.ts
-#: src/routes/SettingsAgent.tsx
 #: src/routes/SyncRoute.tsx
 #: src/views/DriveUnavailable.tsx
 msgid "This device"
@@ -1578,7 +1578,7 @@ msgstr "Listo — WASM + OPFS"
 msgid "Enable local WASM DB"
 msgstr "Habilitar base de datos WASM local"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Enter a Drive DID or URL"
 msgstr "Introduce un DID o URL de unidad"
 
@@ -1865,9 +1865,9 @@ msgstr "Elige si este recurso aparece en tus favoritos."
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
+#: src/components/Settings/DriveSettings.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/routes/IntegrationStore.tsx
-#: src/routes/SettingsAgent.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Open"
 msgstr "Abrir"
 
@@ -2185,8 +2185,8 @@ msgstr "<0/> Nota"
 
 #: src/actions/appMenuItems.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/routes/IntegrationStore.tsx
-#: src/routes/SettingsAgent.tsx
 #: src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Nuevo"
@@ -3783,7 +3783,7 @@ msgstr "Toca <0>Deshacer</0> / <1>Rehacer</1> para avanzar o retroceder en las e
 msgid "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
 msgstr "Mantén pulsado el botón de deshacer para ver las versiones que abandonaste al dibujar después de deshacer; arrastra hasta una y suelta para restaurarla"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "A short description given to the AI Agent, use this to tell it what this drive is about, link important resources etc."
 msgstr "Una breve descripción dada al Agente de IA, úsala para indicarle de qué trata esta unidad, enlazar recursos importantes, etc."
 
@@ -3973,15 +3973,11 @@ msgstr "Unidad privada"
 msgid "View and organize all your drives."
 msgstr "Consulta y organiza todas tus unidades."
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "My drives"
 msgstr "Mis unidades"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Only stored on this device. Star a drive to keep it in My drives."
-msgstr "Solo se almacena en este dispositivo. Marca una unidad con una estrella para mantenerla en Mis unidades."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Recently visited"
 msgstr "Visitadas recientemente"
 
@@ -4658,11 +4654,7 @@ msgstr "Usar tu clave de acceso en su lugar"
 msgid "Could not add a recovery code."
 msgstr "No se ha podido añadir un código de recuperación."
 
-#: src/routes/SettingsAgent.tsx
-msgid "How you get back in on a new device — and where to find your agent secret."
-msgstr "Cómo volver a entrar desde un dispositivo nuevo y dónde encontrar el secreto de tu agente."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Account recovery"
 msgstr "Recuperación de la cuenta"
 
@@ -4745,11 +4737,11 @@ msgstr "Desbloquea {0} con tu huella, tu rostro o el bloqueo de pantalla."
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "Hemos sustituido tu antigua contraseña de recuperación por un código generado más seguro. Guárdalo en un lugar seguro: lo necesitarás, junto con tu correo, para volver a entrar. No podemos volver a mostrarlo, pero puedes generar uno nuevo desde Ajustes en cualquier momento."
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "More profile fields"
 msgstr "Más campos del perfil"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 #: src/routes/SignOutRoute.tsx
 #: src/routes/SignOutRoute.tsx
 msgid "Sign out"
@@ -4784,11 +4776,11 @@ msgstr "Usa tu huella, tu rostro o el bloqueo de pantalla."
 msgid "or sign in another way"
 msgstr "o inicia sesión de otra forma"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
 msgstr "Cerrar sesión y eliminar de este dispositivo la copia de tu copia de seguridad cifrada"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out & forget this device"
 msgstr "Cerrar sesión y olvidar este dispositivo"
 
@@ -4812,10 +4804,6 @@ msgstr "Pega el secreto de tu agente"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
 msgstr "Eso no parece un secreto de agente válido."
-
-#: src/routes/SettingsAgent.tsx
-msgid "Whether this browser stays signed in as you when anyone opens it."
-msgstr "Si este navegador mantiene tu sesión iniciada cuando alguien lo abre."
 
 #: src/components/DeviceLockCard.tsx
 msgid "Lock now"
@@ -5655,20 +5643,16 @@ msgstr "Creando tu unidad privada…"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "No se ha podido actualizar tu lista: aún no hay ninguna unidad privada configurada para esta cuenta."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr "Tu unidad privada siempre aparece primero. Quita la estrella de cualquier otra unidad para devolverla a las visitadas recientemente."
-
 #: src/components/Drives/DrivesCard.tsx
 msgid "Drives"
 msgstr "Unidades"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL"
 msgstr "Abrir una unidad por URL"
 
-#: src/routes/SettingsAgent.tsx
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL or DID"
 msgstr "Abrir una unidad por URL o DID"
 
@@ -8327,7 +8311,6 @@ msgid "AI settings…"
 msgstr "Ajustes de IA…"
 
 #: src/actions/appActions.ts
-#: src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr "Usuario"
 
@@ -8780,10 +8763,6 @@ msgstr "Descubre integraciones desde este catalog.json. Este ajuste se guarda en
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Introduce una URL HTTPS o una URL HTTP de localhost que apunte a un archivo catalog.json."
 
-#: src/components/SignInButton.tsx
-msgid "Go to the User page"
-msgstr "Ir a la página de usuario"
-
 #. 0: title || 'Untitled Chat'; 1: messages.length
 #: src/chunks/AI/formatAIChatReport.ts
 msgid ""
@@ -9158,10 +9137,6 @@ msgstr "Abrir ajustes"
 #: src/actions/appMenuItems.tsx
 msgid "Switch drive"
 msgstr "Cambiar de unidad"
-
-#: src/actions/appMenuItems.tsx
-msgid "Open user settings"
-msgstr "Abrir ajustes de usuario"
 
 #: src/actions/appMenuItems.tsx
 msgid "Give feedback"
@@ -10094,7 +10069,7 @@ msgstr "Elegir una imagen"
 msgid "Textual Description"
 msgstr "Descripción textual"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out of this device."
 msgstr "Cerrar sesión en este dispositivo."
 
@@ -10847,10 +10822,6 @@ msgid "Welcome"
 msgstr "Bienvenido"
 
 #: src/components/MetaSetter.tsx
-msgid "Account"
-msgstr "Cuenta"
-
-#: src/components/MetaSetter.tsx
 msgid "Server settings"
 msgstr "Ajustes del servidor"
 
@@ -10939,6 +10910,7 @@ msgstr "En qué se usa el espacio"
 msgid "This workspace"
 msgstr "Este espacio de trabajo"
 
+#: src/components/Settings/DriveSettings.tsx
 #: src/helpers/storageMap.ts
 msgid "Drive"
 msgstr "Unidad"
@@ -11326,11 +11298,6 @@ msgstr "{0} eventos en cola. Permanecen guardados mientras esperan revisión."
 msgid "<0/> or"
 msgstr "<0/> o"
 
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: src/components/AI/AISettings.tsx
-msgid "Credits used: {0}{1} / {2}"
-msgstr "Créditos usados: {0}{1} / {2}"
-
 #. 0: index + 1; 1: id === status.state?.active ? ' (live)' \\: ''
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0} {1}"
@@ -11641,7 +11608,7 @@ msgstr "{0} puntos"
 msgid "Showing first {0} answers"
 msgstr "Se muestran las primeras {0} respuestas"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Add your passkey here. A passkey added in the app also unlocks your encrypted backup, which only the app can do."
 msgstr "Añade tu clave de acceso aquí. Una clave de acceso añadida en la aplicación también desbloquea tu copia de seguridad cifrada, algo que solo puede hacer la aplicación."
 
@@ -12042,11 +12009,7 @@ msgstr "Ajustes de la cuenta"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> solicita usar tus datos de Atomic. Tiene su propia clave, por lo que tu secreto se queda contigo y puedes revocarla en cualquier momento."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
-msgstr "Aplicaciones a las que has permitido usar tus datos, como un asistente de IA. Cada una tiene su propia clave; revoca una para cortarle el acceso."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Connected apps"
 msgstr "Aplicaciones conectadas"
 
@@ -12502,15 +12465,11 @@ msgstr "<0/> Ajustes del drive"
 msgid "Nothing here yet."
 msgstr "Aún no hay nada aquí."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Drive settings"
-msgstr "Ajustes del drive"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Servidor a través del cual se encuentran los miembros para la sincronización gratuita entre navegadores."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Browser sync server"
 msgstr "Servidor de sincronización entre navegadores"
 
@@ -13039,7 +12998,7 @@ msgstr "Guarda tu trabajo"
 msgid "Sign up with your email, save your secret or connect a device"
 msgstr "Regístrate con tu correo, guarda tu secreto o conecta un dispositivo"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Getting started"
@@ -13187,10 +13146,6 @@ msgstr "Un recurso dentro de la carpeta"
 msgid "Rendered by ResourcePage, with nothing around it."
 msgstr "Renderizado por ResourcePage, sin nada alrededor."
 
-#: src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar <0>Show icons and pictures next to items in the sidebar</0>"
-msgstr "Mostrar iconos en la barra lateral <0>Mostrar iconos e imágenes junto a los elementos de la barra lateral</0>"
-
 #: src/routes/SendIdentityRoute.tsx
 msgid "This link has no code. Start again from your device."
 msgstr "Este enlace no tiene código. Empieza de nuevo desde tu dispositivo."
@@ -13265,6 +13220,7 @@ msgstr "Vuelve a tu dispositivo."
 msgid "Could not send your identity"
 msgstr "No se ha podido enviar tu identidad"
 
+#: src/components/Settings/DriveSettings.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx
@@ -13323,7 +13279,7 @@ msgstr "Añadir a esta unidad"
 msgid "Or describe what you need"
 msgstr "O describe lo que necesitas"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Show Getting started on my drives"
 msgstr "Mostrar Primeros pasos en mis unidades"
 
@@ -13524,3 +13480,20 @@ msgstr "Al pulsar Enviar informe compartes con el equipo de Atomic, mediante Sen
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Informa de un error o sugiere una mejora. Tu mensaje y tu correo opcional se envían al equipo de Atomic mediante Sentry, junto con detalles técnicos de tu configuración (versión de la app, dirección y estado del servidor). No incluyas contenido privado del espacio de trabajo."
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Mostrar iconos en la barra lateral"
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Mostrar iconos e imágenes junto a los elementos de la barra lateral"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Créditos usados: {0} /{1} {2}"
+
+#: src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Cuenta y seguridad"

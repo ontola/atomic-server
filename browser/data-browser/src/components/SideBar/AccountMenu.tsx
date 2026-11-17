@@ -173,14 +173,14 @@ function AccountMenuRow({
           icon: <FaUser />,
           helper: 'See and edit the current Agent / User',
           shortcut: shortcuts.userSettings,
-          onClick: goTo(paths.agentSettings),
+          onClick: goTo(paths.accountSettings),
         }
       : {
           id: 'login',
           label: 'Login / New User',
           icon: <FaUser />,
           helper: 'Sign in, or create a new Agent / User',
-          onClick: goTo(paths.agentSettings),
+          onClick: goTo(paths.accountSettings),
         },
     ...(agent
       ? [

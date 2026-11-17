@@ -2088,7 +2088,9 @@ function SyncPage() {
                     recoveryBackup === 'passkey-only') ? (
                     <ConnActions>
                       <LearnMoreLink
-                        to={paths.agentSettings}
+                        to={paths.appSettings}
+                        // The router's loose typing does not know this route's search params.
+                        search={{ section: 'account' } as never}
                         data-testid='recovery-row-action'
                       >
                         {recoveryBackup === 'device-only'

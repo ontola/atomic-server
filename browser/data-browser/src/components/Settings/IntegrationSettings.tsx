@@ -1,6 +1,5 @@
 import { styled } from 'styled-components';
 import { useState } from 'react';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
 import { Column, Row } from '@components/Row';
 import {
@@ -11,6 +10,7 @@ import {
 import { Button } from '@components/Button';
 import { FaRotateLeft, FaTrash } from 'react-icons/fa6';
 import { SettingsSection } from './SettingsSection';
+import { SettingCheckbox } from './SettingCheckbox';
 import {
   defaultIntegrationProxy,
   setIntegrationProxy,
@@ -40,6 +40,7 @@ export function IntegrationSettings() {
   return (
     <SettingsSection
       label='Integration'
+      id='integration'
       childSearchKeywords='proxy catalog marketplace server url experimental plugins'
     >
       <Column
@@ -50,15 +51,14 @@ export function IntegrationSettings() {
       >
         {experimentalToggleVisible && (
           <>
-            <CheckboxLabel>
-              <Checkbox
-                checked={showExperimentalPlugins}
-                onChange={value =>
-                  setVisibility('show-experimental-plugins', value)
-                }
-              />
-              <span>Show experimental plugins</span>
-            </CheckboxLabel>
+            <SettingCheckbox
+              checked={showExperimentalPlugins}
+              onChange={value =>
+                setVisibility('show-experimental-plugins', value)
+              }
+            >
+              Show experimental plugins
+            </SettingCheckbox>
             <Description>
               These preferences are saved in your private Atomic drive. Existing
               connections remain available.

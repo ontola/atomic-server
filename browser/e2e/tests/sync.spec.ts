@@ -378,9 +378,9 @@ test.describe('sync', () => {
     // 5. Open a fresh browser context (simulates another device)
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
-    await page2.goto(`${FRONTEND_URL}/app/agent`);
+    await page2.goto(`${FRONTEND_URL}/app/settings?section=account`);
 
-    // /app/agent redirects signed-out users to the canonical sign-in form.
+    // The account section redirects signed-out users to the canonical sign-in form.
     // The flow signs in as soon as the secret parses.
     const secretField = page2.getByLabel('Agent secret');
     // This is the first thing asked of a brand new context, so it is really

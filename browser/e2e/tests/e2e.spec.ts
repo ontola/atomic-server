@@ -611,13 +611,11 @@ test.describe('data-browser', async () => {
     const initialDriveTitle = await currentDriveTitle(page).textContent();
 
     await openConfigureDrive(page);
-    await expect(
-      page.getByRole('heading', { name: 'My drives' }),
-    ).toBeVisible();
+    await expect(page.getByText('My drives', { exact: true })).toBeVisible();
     // Personal and saved drives don't count as "recently visited"; with no
     // other drives opened yet the section hides entirely.
     await expect(
-      page.getByRole('heading', { name: 'Recently visited' }),
+      page.getByText('Recently visited', { exact: true }),
     ).not.toBeVisible();
 
     const { driveTitle: secondDriveTitle } = await newDrive(page);
@@ -645,7 +643,7 @@ test.describe('data-browser', async () => {
     // on its own. Measured here, four workers on a four-core box: the whole
     // body is 17.5 to 18.6s, of which `devDrive` alone is 11.5s, against 7.4s
     // when the box is idle. Run 4714 on CI spent the 60s default before the
-    // `/app/agent` render at the end, and the wall then named that page's
+    // settings render at the end, and the wall then named that page's
     // heading assertion, which had 10s of its own and never got to use it, plus
     // a `Protocol error ... session closed` as the page was torn down. Same
     // trap as run 4686's two calendar reds.
@@ -663,7 +661,7 @@ test.describe('data-browser', async () => {
     await otherContext.close();
     await openConfigureDrive(page);
     await expect(
-      page.getByRole('heading', { name: 'Recently visited' }),
+      page.getByText('Recently visited', { exact: true }),
     ).toBeVisible();
   });
 

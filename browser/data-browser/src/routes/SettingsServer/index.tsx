@@ -4,20 +4,33 @@ import { pathNames, paths } from '../paths';
 import { appRoute } from '../RootRoutes';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
-export const ServerSettingsRoute = createRoute({
-  path: pathNames.serverSettings,
-  component: () => <RedirectToUserSettings />,
+/** Account and drive settings live on the settings page now; these routes only
+ *  survive so old links and bookmarks keep working. */
+const redirectTo = (target: string) =>
+  function Redirect() {
+    const navigate = useNavigateWithTransition();
+
+    useEffect(() => {
+      // Keep other params, such as atomic.place's `?add=passkey`.
+      const extra = new URLSearchParams(window.location.search).toString();
+
+      navigate({
+        to: extra ? `${target}&${extra}` : target,
+        replace: true,
+      });
+    }, [navigate]);
+
+    return null;
+  };
+
+export const AgentSettingsRoute = createRoute({
+  path: pathNames.agentSettings,
+  component: redirectTo(paths.accountSettings),
   getParentRoute: () => appRoute,
 });
 
-/** Drive management lives on the User Settings page now (a user HAS drives);
- *  this route only survives so old links and bookmarks keep working. */
-function RedirectToUserSettings() {
-  const navigate = useNavigateWithTransition();
-
-  useEffect(() => {
-    navigate({ to: paths.agentSettings, replace: true });
-  }, [navigate]);
-
-  return null;
-}
+export const ServerSettingsRoute = createRoute({
+  path: pathNames.serverSettings,
+  component: redirectTo(paths.accountSettings),
+  getParentRoute: () => appRoute,
+});

@@ -985,27 +985,27 @@ msgstr "Sumber daya"
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Tags"
 msgstr "Tag"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Add LLM instructions"
 msgstr "Tambahkan instruksi LLM"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "LLM Instructions"
 msgstr "Instruksi LLM"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Default Ontology"
 msgstr "Ontologi bawaan"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Plugins"
 msgstr "Plugin"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Remove tag"
 msgstr "Hapus tag"
 
@@ -1500,11 +1500,11 @@ msgstr "Turtle / N-triples / N3"
 msgid "Create account"
 msgstr "Buat akun"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Warning:"
 msgstr "Peringatan:"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "Anda menggunakan agen lokal yang tidak dapat melakukan autentikasi di domain lain karena URL-nya tidak dapat diakses."
 
@@ -1520,8 +1520,8 @@ msgstr "Tersinkron"
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Kesalahan: Diharapkan atomic:node:<node-id>"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/helpers/managed/deviceLink.ts
-#: src/routes/SettingsAgent.tsx
 #: src/routes/SyncRoute.tsx
 #: src/views/DriveUnavailable.tsx
 msgid "This device"
@@ -1578,7 +1578,7 @@ msgstr "Siap — WASM + OPFS"
 msgid "Enable local WASM DB"
 msgstr "Aktifkan DB WASM lokal"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Enter a Drive DID or URL"
 msgstr "Masukkan DID atau URL drive"
 
@@ -1865,9 +1865,9 @@ msgstr "Atur apakah sumber daya ini muncul di Favorit Anda."
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
+#: src/components/Settings/DriveSettings.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/routes/IntegrationStore.tsx
-#: src/routes/SettingsAgent.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Open"
 msgstr "Buka"
 
@@ -2185,8 +2185,8 @@ msgstr "<0/> Catatan"
 
 #: src/actions/appMenuItems.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/routes/IntegrationStore.tsx
-#: src/routes/SettingsAgent.tsx
 #: src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Baru"
@@ -3787,7 +3787,7 @@ msgstr "Ketuk <0>Urungkan</0> / <1>Ulangi</1> untuk menelusuri suntingan; seret 
 msgid "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
 msgstr "Tahan tombol urungkan untuk melihat versi yang ditinggalkan saat Anda menggambar setelah mengurungkan; seret ke salah satu versi dan lepaskan untuk memulihkannya"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "A short description given to the AI Agent, use this to tell it what this drive is about, link important resources etc."
 msgstr "Deskripsi singkat untuk agen AI. Gunakan ini untuk menjelaskan isi drive ini, menautkan sumber daya penting, dan sebagainya."
 
@@ -3977,15 +3977,11 @@ msgstr "Drive pribadi"
 msgid "View and organize all your drives."
 msgstr "Lihat dan atur semua drive Anda."
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "My drives"
 msgstr "Drive saya"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Only stored on this device. Star a drive to keep it in My drives."
-msgstr "Hanya disimpan di perangkat ini. Beri bintang pada drive untuk menyimpannya di Drive saya."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Recently visited"
 msgstr "Baru dikunjungi"
 
@@ -4662,11 +4658,7 @@ msgstr "Gunakan kunci sandi Anda sebagai gantinya"
 msgid "Could not add a recovery code."
 msgstr "Tidak dapat menambahkan kode pemulihan."
 
-#: src/routes/SettingsAgent.tsx
-msgid "How you get back in on a new device — and where to find your agent secret."
-msgstr "Cara masuk kembali di perangkat baru — dan tempat menemukan kunci rahasia agen Anda."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Account recovery"
 msgstr "Pemulihan akun"
 
@@ -4749,11 +4741,11 @@ msgstr "Buka {0} dengan sidik jari, wajah, atau kunci layar Anda."
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "Kami telah mengganti kata sandi pemulihan lama Anda dengan kode yang dibuat lebih kuat. Simpan di tempat aman — Anda memerlukannya, beserta email Anda, untuk masuk kembali. Kami tidak dapat menampilkannya lagi, tetapi Anda dapat membuat kode baru dari Pengaturan kapan saja."
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "More profile fields"
 msgstr "Kolom profil lainnya"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 #: src/routes/SignOutRoute.tsx
 #: src/routes/SignOutRoute.tsx
 msgid "Sign out"
@@ -4788,11 +4780,11 @@ msgstr "Gunakan sidik jari, wajah, atau kunci layar Anda."
 msgid "or sign in another way"
 msgstr "atau masuk dengan cara lain"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
 msgstr "Keluar dan hapus salinan cadangan terenkripsi Anda dari perangkat ini"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out & forget this device"
 msgstr "Keluar & lupakan perangkat ini"
 
@@ -4816,10 +4808,6 @@ msgstr "Tempel kunci rahasia agen Anda"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
 msgstr "Itu sepertinya bukan kunci rahasia agen yang valid."
-
-#: src/routes/SettingsAgent.tsx
-msgid "Whether this browser stays signed in as you when anyone opens it."
-msgstr "Apakah browser ini tetap masuk sebagai Anda saat siapa pun membukanya."
 
 #: src/components/DeviceLockCard.tsx
 msgid "Lock now"
@@ -5659,20 +5647,16 @@ msgstr "Membuat drive pribadi Anda…"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Tidak dapat memperbarui daftar Anda: drive pribadi belum disiapkan untuk akun ini."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr "Drive pribadi Anda selalu berada di urutan pertama. Hapus bintang dari drive lain untuk memindahkannya kembali ke daftar baru dikunjungi."
-
 #: src/components/Drives/DrivesCard.tsx
 msgid "Drives"
 msgstr "Drive"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL"
 msgstr "Buka drive berdasarkan URL"
 
-#: src/routes/SettingsAgent.tsx
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL or DID"
 msgstr "Buka drive berdasarkan URL atau DID"
 
@@ -8331,7 +8315,6 @@ msgid "AI settings…"
 msgstr "Pengaturan AI…"
 
 #: src/actions/appActions.ts
-#: src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr "Pengguna"
 
@@ -8784,10 +8767,6 @@ msgstr "Temukan integrasi dari catalog.json ini. Pengaturan ini disimpan di brow
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Masukkan URL HTTPS atau URL HTTP localhost yang mengarah ke file catalog.json."
 
-#: src/components/SignInButton.tsx
-msgid "Go to the User page"
-msgstr "Buka halaman Pengguna"
-
 #. 0: title || 'Untitled Chat'; 1: messages.length
 #: src/chunks/AI/formatAIChatReport.ts
 msgid ""
@@ -9161,10 +9140,6 @@ msgstr "Buka pengaturan"
 #: src/actions/appMenuItems.tsx
 msgid "Switch drive"
 msgstr "Ganti drive"
-
-#: src/actions/appMenuItems.tsx
-msgid "Open user settings"
-msgstr "Buka pengaturan pengguna"
 
 #: src/actions/appMenuItems.tsx
 msgid "Give feedback"
@@ -10097,7 +10072,7 @@ msgstr "Pilih gambar"
 msgid "Textual Description"
 msgstr "Deskripsi teks"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out of this device."
 msgstr "Keluar dari perangkat ini."
 
@@ -10850,10 +10825,6 @@ msgid "Welcome"
 msgstr "Selamat datang"
 
 #: src/components/MetaSetter.tsx
-msgid "Account"
-msgstr "Akun"
-
-#: src/components/MetaSetter.tsx
 msgid "Server settings"
 msgstr "Pengaturan server"
 
@@ -10942,6 +10913,7 @@ msgstr "Penggunaan ruang"
 msgid "This workspace"
 msgstr "Ruang kerja ini"
 
+#: src/components/Settings/DriveSettings.tsx
 #: src/helpers/storageMap.ts
 msgid "Drive"
 msgstr "Drive"
@@ -11329,11 +11301,6 @@ msgstr "{0} peristiwa dalam antrean. Peristiwa tetap tersimpan sambil menunggu p
 msgid "<0/> or"
 msgstr "<0/> atau"
 
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: src/components/AI/AISettings.tsx
-msgid "Credits used: {0}{1} / {2}"
-msgstr "Kredit terpakai: {0}{1} / {2}"
-
 #. 0: index + 1; 1: id === status.state?.active ? ' (live)' \\: ''
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0} {1}"
@@ -11644,7 +11611,7 @@ msgstr "{0} poin"
 msgid "Showing first {0} answers"
 msgstr "Menampilkan {0} jawaban pertama"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Add your passkey here. A passkey added in the app also unlocks your encrypted backup, which only the app can do."
 msgstr "Tambahkan kunci sandi Anda di sini. Kunci sandi yang ditambahkan di aplikasi juga membuka cadangan terenkripsi Anda, yang hanya dapat dilakukan oleh aplikasi."
 
@@ -12045,11 +12012,7 @@ msgstr "Pengaturan akun"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> meminta untuk menggunakan data Atomic Anda. Aplikasi memiliki kunci sendiri, sehingga kunci rahasia tetap pada Anda, dan Anda dapat mencabut aksesnya kapan saja."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
-msgstr "Aplikasi yang Anda izinkan menggunakan data, seperti asisten AI. Masing-masing memiliki kunci sendiri; cabut aksesnya untuk memutuskan hubungan."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Connected apps"
 msgstr "Aplikasi terhubung"
 
@@ -12505,15 +12468,11 @@ msgstr "<0/> Pengaturan drive"
 msgid "Nothing here yet."
 msgstr "Belum ada apa pun di sini."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Drive settings"
-msgstr "Pengaturan drive"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Server tempat anggota bertemu untuk sinkronisasi browser gratis."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Browser sync server"
 msgstr "Server sinkronisasi browser"
 
@@ -13042,7 +13001,7 @@ msgstr "Simpan pekerjaan Anda"
 msgid "Sign up with your email, save your secret or connect a device"
 msgstr "Daftar dengan email, simpan kunci rahasia, atau hubungkan perangkat"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Getting started"
@@ -13190,10 +13149,6 @@ msgstr "Sumber daya di dalam folder"
 msgid "Rendered by ResourcePage, with nothing around it."
 msgstr "Dirender oleh ResourcePage, tanpa elemen di sekitarnya."
 
-#: src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar <0>Show icons and pictures next to items in the sidebar</0>"
-msgstr "Tampilkan ikon di bilah samping <0>Tampilkan ikon dan gambar di samping item dalam bilah samping</0>"
-
 #: src/routes/SendIdentityRoute.tsx
 msgid "This link has no code. Start again from your device."
 msgstr "Tautan ini tidak memiliki kode. Mulai lagi dari perangkat Anda."
@@ -13268,6 +13223,7 @@ msgstr "Kembali ke perangkat Anda."
 msgid "Could not send your identity"
 msgstr "Tidak dapat mengirim identitas Anda"
 
+#: src/components/Settings/DriveSettings.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx
@@ -13326,7 +13282,7 @@ msgstr "Tambahkan ke drive ini"
 msgid "Or describe what you need"
 msgstr "Atau jelaskan kebutuhan Anda"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Show Getting started on my drives"
 msgstr "Tampilkan Memulai di drive saya"
 
@@ -13522,3 +13478,20 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Tampilkan ikon di bilah samping"
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Tampilkan ikon dan gambar di samping item dalam bilah samping"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Kredit terpakai: {0} /{1} {2}"
+
+#: src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Akun dan keamanan"

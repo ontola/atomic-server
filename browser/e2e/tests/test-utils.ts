@@ -141,15 +141,14 @@ export const timestamp = () => new Date().toLocaleTimeString();
 // chevron next to the title.
 export const sideBarDriveSwitcher = (page: Page) =>
   page.getByTestId('sidebar').getByTitle('Switch Drive');
-/** Opens the "Drive settings" dialog from the drive page header. */
+/** Opens the settings page at the current drive's section, from the drive page header. */
 export async function openDriveSettings(page: Page) {
   await page.getByTestId('drive-settings-button').click();
-  const dialog = currentDialog(page);
-  await expect(
-    dialog.getByRole('heading', { name: 'Drive settings' }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/settings\?section=drive/);
+  const section = page.locator('#drive');
+  await expect(section.getByText('Plugins', { exact: true })).toBeVisible();
 
-  return dialog;
+  return section;
 }
 
 export const sideBarNewResourceTestId = 'sidebar-new-resource';
@@ -1139,7 +1138,7 @@ export async function waitForClassInstanceSearchable(
 }
 
 export async function openAgentPage(page: Page) {
-  await page.goto(`${FRONTEND_URL}/app/agent`);
+  await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
 }
 
 /** Opens the users' profile, sets a username, saves, reloads and verifies the change persisted. */
@@ -2000,12 +1999,9 @@ export async function openNewSubjectWindow(
 }
 
 export async function openConfigureDrive(page: Page) {
-  // Drive management lives on the User Settings page (/app/server redirects
-  // there too, but go direct).
-  await page.goto(`${FRONTEND_URL}/app/agent`);
-  await expect(
-    page.getByRole('heading', { name: 'User', exact: true }),
-  ).toBeVisible({
+  // Drive management lives in the Drive section of the settings page.
+  await page.goto(`${FRONTEND_URL}/app/settings?section=drive`);
+  await expect(page.getByTestId('my-drives')).toBeVisible({
     timeout: 10000,
   });
 }
@@ -2031,7 +2027,7 @@ export async function changeDrive(
       }
     }
 
-    // The open-by-URL input starts empty on the User Settings page; the Open
+    // The open-by-URL input starts empty in the Drive settings; the Open
     // button is disabled when the target equals the current drive.
     const currentDriveInput = page.getByTestId('drive-url-input');
     await currentDriveInput.fill(subject);

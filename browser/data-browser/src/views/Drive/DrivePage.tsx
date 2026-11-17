@@ -14,17 +14,17 @@ import {
   DriveSwitcherChevronTrigger,
 } from '@components/SideBar/DriveSwitcher';
 import { styled } from 'styled-components';
-import { useDialog } from '@components/Dialog/useDialog';
 import { FaGear, FaRegStar, FaStar } from 'react-icons/fa6';
 import { useEffect, useState, type JSX } from 'react';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { paths } from '../../routes/paths';
 import { useSavedDriveToggle } from '@hooks/useSavedDriveToggle';
 import { useDriveHistory } from '@hooks/useDriveHistory';
 import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { FileDropZone } from '@components/forms/FileDropzone/FileDropzone';
-import { DriveSettingsDialog } from './DriveSettingsDialog';
 import { GettingStartedCard } from './GettingStartedCard';
 import { EmptyDriveStart } from './EmptyDriveStart';
 import {
@@ -41,7 +41,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const { subjects: subResources, loading } = useVisibleDriveChildren(
     resource.subject,
   );
-  const [dialogProps, showSettings, , settingsOpen] = useDialog();
+  const navigate = useNavigateWithTransition();
 
   const vectorIndexing = useVectorIndexStatus();
 
@@ -120,7 +120,11 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                 )}
                 <Button
                   subtle
-                  onClick={showSettings}
+                  onClick={() => {
+                    // The settings page shows the current drive.
+                    setBaseURL(resource.subject);
+                    navigate(paths.driveSettings);
+                  }}
                   data-testid='drive-settings-button'
                 >
                   <FaGear /> Drive settings
@@ -167,11 +171,6 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
           </Column>
         </ContainerNarrow>
       </FileDropZone>
-      <DriveSettingsDialog
-        drive={resource}
-        dialogProps={dialogProps}
-        isOpen={settingsOpen}
-      />
     </>
   );
 }

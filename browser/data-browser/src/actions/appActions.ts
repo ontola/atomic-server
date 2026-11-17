@@ -70,7 +70,7 @@ export const appActions: ActionDefinition[] = [
     helper: () => 'Open your agent / user settings.',
     keywords: ['account', 'agent', 'profile'],
     shortcut: shortcuts.userSettings,
-    run: ctx => ctx.navigate(paths.agentSettings),
+    run: ctx => ctx.navigate(paths.accountSettings),
   },
   {
     id: 'themeSettings',
