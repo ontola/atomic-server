@@ -4757,7 +4757,20 @@ export class Store {
     // `loading` never cleared). clientDb already holds the offline
     // state, so hydrating from it RESTORES the edit — it doesn't clobber
     // it.
+    //
+    // The stored history still has to arrive: it is not a rival to the edit
+    // but earlier ops of the same document (a Cloud Vault restore wrote them
+    // behind this page's back), and a Loro import merges them under the
+    // unsaved ones. Skipping it left a restored agent resource without its
+    // name whenever the encryption-key publisher had set a key on the empty
+    // resource first, and `reloadResource` left it loading for good.
     if (existing?.hasUnsavedChanges()) {
+      if (snapshot?.length) {
+        existing.importLoroUpdate(snapshot);
+        existing.loading = false;
+        this.notify(existing);
+      }
+
       return true;
     }
 
