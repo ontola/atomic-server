@@ -41,23 +41,12 @@ export const SettingsLabel = styled.span`
   color: ${p => p.theme.colors.text};
 `;
 
-/** Indentation and a guide keep expanded children visibly inside their section. */
+/** Indentation keeps expanded children visibly inside their section. */
 export const SettingsContent = styled.div`
-  /* Summary padding + half the toggle, minus half the rule. */
-  margin: 0.5rem 0 0.75rem calc(1.1rem - 1px);
+  /* Aligns children with the section label, past the toggle. */
+  margin: 0.5rem 0 0.75rem 1.1rem;
   padding: 0.25rem 0 0.25rem 1rem;
-  border-inline-start: 2px solid ${p => p.theme.colors.bg2};
   min-width: 0;
-
-  ${SettingsSectionWrapper} {
-    border-bottom: 0;
-    padding-block: 0.25rem;
-  }
-
-  ${SettingsLabel} {
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
 
   @media (max-width: 600px) {
     padding-inline-start: 0.65rem;
@@ -126,7 +115,7 @@ export function SettingsSection({
   ...detailsProps
 }: PropsWithChildren<SettingsSectionProps>) {
   const searchContext = useSettingsSearch();
-  const { query, parentMatched } = searchContext;
+  const { query, parentMatched, depth = 0 } = searchContext;
   const isSearching = query.length > 0;
   const targeted = !!id && searchContext.section === id;
   const ref = useRef<HTMLDivElement>(null);
@@ -155,13 +144,33 @@ export function SettingsSection({
   // Only set parentMatched for children when this section's OWN content matched
   // (or it was already set by an ancestor). Don't set it for childMatch — let children filter.
   const childContext = useMemo(
-    () => ({ ...searchContext, parentMatched: parentMatched || ownMatch }),
-    [searchContext, parentMatched, ownMatch],
+    () => ({
+      ...searchContext,
+      parentMatched: parentMatched || ownMatch,
+      depth: depth + 1,
+    }),
+    [searchContext, parentMatched, ownMatch, depth],
   );
 
   // If searching and nothing matches (own, child, or inherited parent), hide.
   if (isSearching && !ownMatch && !childMatch && !parentMatched) {
     return null;
+  }
+
+  const content = (
+    <SettingsSearchProvider value={childContext}>
+      {children}
+    </SettingsSearchProvider>
+  );
+
+  // Only top-level sections fold; inside one, a section is a plain subheading.
+  if (depth > 0) {
+    return (
+      <SubSection ref={ref} id={id}>
+        <SettingsLabel as='h3'>{label}</SettingsLabel>
+        {content}
+      </SubSection>
+    );
   }
 
   return (
@@ -173,12 +182,29 @@ export function SettingsSection({
         initialState={isSearching || targeted}
         {...detailsProps}
       >
-        <SettingsContent>
-          <SettingsSearchProvider value={childContext}>
-            {children}
-          </SettingsSearchProvider>
-        </SettingsContent>
+        <SettingsContent>{content}</SettingsContent>
       </Details>
     </SettingsSectionWrapper>
   );
 }
+
+/** A subsection inside an open section: a small heading above its settings. */
+const SubSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-block: 0.75rem;
+
+  & + & {
+    border-top: 1px solid ${p => p.theme.colors.bg2};
+  }
+
+  > ${SettingsLabel} {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: ${p => p.theme.colors.textLight};
+  }
+`;

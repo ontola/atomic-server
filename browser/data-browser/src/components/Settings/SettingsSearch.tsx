@@ -6,6 +6,8 @@ interface SettingsSearchContext {
   parentMatched: boolean;
   /** The `?section=` of the settings page: the section with this id opens and scrolls into view. */
   section?: string;
+  /** Nesting level: 0 for a top-level section, which folds; deeper ones are plain subheadings. */
+  depth?: number;
 }
 
 const settingsSearchContext = createContext<SettingsSearchContext>({
