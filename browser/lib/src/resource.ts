@@ -116,13 +116,13 @@ export const unknownSubject = 'unknown-subject';
  *  - `'persisted'` — the server acknowledged the commit (or a local-only
  *                    resource was durably saved to the local database).
  *  - `'offline'`   — server unreachable; saved locally, drain retries
- *                    on reconnect (also returned for a child queued
- *                    behind an unsaved parent).
+ *                    on reconnect.
+ *  - `'queued'`    — waiting for an unsaved parent; no persistence claim.
  *  - `'noop'`      — nothing to save.
- * Server refusals and queued writes without acknowledgement reject; background
+ * Server refusals and unacknowledged remote drains reject; background
  * retries continue according to the outbox policy.
  */
-export type SaveResult = 'persisted' | 'offline' | 'noop';
+export type SaveResult = 'persisted' | 'offline' | 'queued' | 'noop';
 
 /**
  * Origin tag attached to Loro commits the runtime writes for housekeeping
@@ -3632,12 +3632,14 @@ export class Resource<C extends OptionalClass = any> {
    * The commit is signed at drain time by the outbox, not here.
    */
   /**
-   * Persist this resource. Resolves once the change is durable:
+   * Save this resource and report how far the save progressed:
    *
    *  - `'persisted'` — the server acknowledged the commit (or a local-only
    *                    resource was durably saved to the local database).
    *  - `'offline'`   — server unreachable; saved to clientDb, the drain
    *                    retries on reconnect.
+   *  - `'queued'`    — waiting for an unsaved parent; neither local
+   *                    persistence nor server acceptance has completed.
    *  - `'noop'`      — nothing to save (no unsaved changes, nothing
    *                    pending).
    *
@@ -3841,11 +3843,12 @@ export class Resource<C extends OptionalClass = any> {
       this._lastCommit = this.get(properties.commit.lastCommit)?.toString();
     }
 
-    // If the parent of this resource is new we can't save yet so we add it to a batched that gets saved when the parent does.
+    // An unsaved parent must be saved first. This in-memory batch is not
+    // evidence that the child has been persisted anywhere.
     if (this.isParentNew()) {
       this.store.batchResource(this.subject);
 
-      return 'offline';
+      return 'queued';
     }
 
     // Local-only drives: sign-at-save. Same signing pipeline as the

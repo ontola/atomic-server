@@ -209,6 +209,13 @@ The runner must use Vite's worker bundling: copying only its entry with `?url`
 left shared library imports missing in production. The publish-button assertion
 also catches an obsolete English catalog entry rendering an empty label.
 
+Queued child saves (#2538): `browser/lib/src/commit.test.ts` checks that saving a
+child before its parent returns `queued` without posting or requesting local
+persistence, retains its edits, and later posts parent then child and clears
+pending work. `renderWebsite.test.ts` checks that website publication rejects
+both `offline` and `queued` results. These unit checks establish save-result
+handling, not OPFS crash durability or independent replica coverage.
+
 Save acknowledgement: `browser/lib/src/save-acknowledgement.test.ts` reproduces
 an online genesis POST failure reported as persisted. It verifies pending/backoff
 saves return offline and a later acknowledged retry preserves the subject.

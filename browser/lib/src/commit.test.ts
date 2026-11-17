@@ -100,10 +100,13 @@ describe('Resource save flow', () => {
       deferGenesis: true,
     });
     await child.set(core.properties.name, 'Child', false);
+    const persist = vi.spyOn(child, 'persistToClientDb');
 
     // The parent does not exist yet, so the child waits for it.
-    expect(await child.save()).toBe('offline');
+    expect(await child.save()).toBe('queued');
     expect(postCommitSpy).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
+    expect(child.hasUnsavedChanges()).toBe(true);
 
     await form.set(core.properties.name, 'Form', false);
     await form.save();
@@ -113,6 +116,7 @@ describe('Resource save flow', () => {
     expect(posted).toEqual([form.subject, child.subject]);
     expect(child.get(core.properties.parent)).toBe(form.subject);
     expect(store.outbox.hasPending(child.subject)).toBe(false);
+    expect(child.hasUnsavedChanges()).toBe(false);
   });
 
   it('creates a DID resource and posts sequential saves', async ({
