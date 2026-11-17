@@ -353,6 +353,31 @@ impl Resource {
         Ok(())
     }
 
+    /// The resource a Loro snapshot describes, as a replicated copy: the
+    /// propvals are materialized from the doc alone (datatype tags, genesis
+    /// metadata, `lenses`), so a caller that holds only the CRDT state does not
+    /// have to ship a second, parsed copy of it. `last_commit` is the one
+    /// value no doc holds (it is derived from the newest envelope, see
+    /// [`Self::set_derived_last_commit`]) and is passed explicitly.
+    ///
+    /// Fails when `snapshot` does not import; nothing is guessed from other
+    /// state.
+    pub fn from_loro_snapshot(
+        subject: &str,
+        snapshot: Vec<u8>,
+        last_commit: Option<&str>,
+        lenses: Option<&crate::lens::LensIndex>,
+    ) -> AtomicResult<Resource> {
+        let doc = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
+            .map_err(|e| format!("Loro snapshot for '{subject}' does not import: {e}"))?;
+        let mut resource = Resource::new(subject.to_string());
+        resource.apply_state_doc_with_lenses(doc, snapshot, lenses)?;
+        if let Some(id) = last_commit.filter(|id| !id.is_empty()) {
+            resource.set_derived_last_commit(Value::AtomicUrl(id.into()));
+        }
+        Ok(resource)
+    }
+
     /// Set the served `lastCommit` on the propvals only. The value is derived
     /// (the id of the newest retained envelope) and never written into the
     /// Loro doc, so it costs no change in the oplog and cannot diverge between

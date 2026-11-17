@@ -79,7 +79,6 @@ import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { LoroLoader } from './loro-loader.js';
-import { loroCall } from './loro-context.js';
 import { withDeadline } from './withDeadline.js';
 
 /** How long a connected store waits on its local database before asking the server. */
@@ -126,6 +125,7 @@ import {
 import type {
   ClientDbWorker,
   ClientDbOutboxWrite,
+  ClientDbRow,
   ClientDbQueryOpts,
   ClientDbQueryResult,
 } from './client-db.js';
@@ -3255,33 +3255,23 @@ export class Store {
     const clientDb = this.clientDb;
 
     try {
-      const jsonAd = resource.toClientDbJsonAd();
+      const row = resource.toClientDbRow();
 
-      if (!jsonAd) return;
-
-      const doc = resource.getLoroDoc?.();
-      // A snapshot export commits pending ops, untagged; keep a mid-edit
-      // persist from stripping the edit's history token.
-      resource.sealPendingEdits();
-      const snapshot = doc
-        ? loroCall('export', doc, () => doc.export({ mode: 'snapshot' }))
-        : undefined;
+      if (!row) return;
 
       // Skipped when this exact state is already written there: a table
       // built from a template used to do 64 writes for 15 resources.
-      this.persistState(clientDb, resource.subject, jsonAd, snapshot).catch(
-        e => {
-          // A follower's in-flight write is deliberately cancelled on leader
-          // handoff; the next attempt retries it. That is not a storage fault
-          // to report as an error.
-          if (!(e instanceof RequestCancelledError)) {
-            console.error(
-              `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
-              e,
-            );
-          }
-        },
-      );
+      this.persistState(clientDb, resource.subject, row).catch(e => {
+        // A follower's in-flight write is deliberately cancelled on leader
+        // handoff; the next attempt retries it. That is not a storage fault
+        // to report as an error.
+        if (!(e instanceof RequestCancelledError)) {
+          console.error(
+            `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
+            e,
+          );
+        }
+      });
     } catch (e) {
       console.error(
         `[ClientDb] put serialization threw for ${resource.subject.slice(0, 60)}:`,
@@ -8284,11 +8274,11 @@ export class Store {
   private lastPersisted = new Map<string, PersistedState>();
 
   /**
-   * Write `jsonAd` + `snapshot` for `subject` to `db`, unless that state is
-   * already written or being written there, in which case this returns that
-   * write. `addResource` and `Resource.persistToClientDb` both go through
-   * here, so an online save that the drain already persisted does not write
-   * the same row (an index rebuild plus an fsync, ~9ms) a second time.
+   * Write `row` for `subject` to `db`, unless that state is already written or
+   * being written there, in which case this returns that write.
+   * `addResource` and `Resource.persistToClientDb` both go through here, so an
+   * online save that the drain already persisted does not write the same row
+   * (an index rebuild plus an fsync, ~9ms) a second time.
    *
    * Deliberately a content stamp rather than `lastCommit`: local edits and
    * merges change state without advancing it, and the stamp covers the Loro
@@ -8302,8 +8292,7 @@ export class Store {
   public persistState(
     db: ClientDbWorker,
     subject: string,
-    jsonAd: string,
-    snapshot?: Uint8Array,
+    row: ClientDbRow,
     {
       exact = false,
       outbox,
@@ -8314,17 +8303,13 @@ export class Store {
       outbox?: ClientDbOutboxWrite;
     } = {},
   ): Promise<void> {
-    const stamp = hashPersistedState(jsonAd, snapshot);
+    const stamp = hashPersistedState(row);
     const last = this.lastPersisted.get(subject);
 
     if (!outbox && last && last.db === db && last.stamp === stamp) {
       if (!exact) return last.done;
 
-      if (
-        last.inFlight &&
-        last.inFlight.jsonAd === jsonAd &&
-        bytesEqual(last.inFlight.snapshot, snapshot)
-      ) {
+      if (last.inFlight && sameRow(last.inFlight, row)) {
         return last.done;
       }
     }
@@ -8333,24 +8318,26 @@ export class Store {
       db,
       stamp,
       done: Promise.resolve(),
-      inFlight: { jsonAd, snapshot },
+      inFlight: row,
     };
-    entry.done = db
-      .putResourceWithSnapshot(subject, jsonAd, snapshot, outbox)
-      .then(
-        () => {
-          entry.inFlight = undefined;
-        },
-        e => {
-          // Failed write: forget it so the next attempt is not skipped as a
-          // duplicate of a write that never landed.
-          if (this.lastPersisted.get(subject) === entry) {
-            this.lastPersisted.delete(subject);
-          }
+    entry.done = (
+      row.kind === 'loro'
+        ? db.putLoroSnapshot(subject, row.snapshot, row.lastCommit, outbox)
+        : db.putResourceWithSnapshot(subject, row.jsonAd, row.snapshot, outbox)
+    ).then(
+      () => {
+        entry.inFlight = undefined;
+      },
+      e => {
+        // Failed write: forget it so the next attempt is not skipped as a
+        // duplicate of a write that never landed.
+        if (this.lastPersisted.get(subject) === entry) {
+          this.lastPersisted.delete(subject);
+        }
 
-          throw e;
-        },
-      );
+        throw e;
+      },
+    );
     this.lastPersisted.set(subject, entry);
 
     return entry.done;
@@ -8617,7 +8604,15 @@ interface PersistedState {
   db: ClientDbWorker;
   stamp: number;
   done: Promise<void>;
-  inFlight?: { jsonAd: string; snapshot?: Uint8Array };
+  inFlight?: ClientDbRow;
+}
+
+function sameRow(a: ClientDbRow, b: ClientDbRow): boolean {
+  if (a.kind !== b.kind || !bytesEqual(a.snapshot, b.snapshot)) return false;
+
+  return a.kind === 'loro'
+    ? a.lastCommit === (b as typeof a).lastCommit
+    : a.jsonAd === (b as typeof a).jsonAd;
 }
 
 function bytesEqual(a?: Uint8Array, b?: Uint8Array): boolean {
@@ -8655,20 +8650,24 @@ function isPersistableState(resource: Resource): boolean {
 
 /**
  * Cheap 53-bit content stamp over exactly what a local-DB write persists: the
- * JSON-AD and the Loro snapshot. Used only to skip re-writing state identical
- * to the last write for that subject (see `addResource`), so the cost has to
+ * row (its JSON-AD or `lastCommit`) and the Loro snapshot. Used only to skip
+ * re-writing state identical to the last write for that subject (see `addResource`), so the cost has to
  * stay far below the ~9ms write it saves — this is two xor-multiply passes over
  * a few KB, i.e. microseconds.
  *
  * Not a security hash. The failure mode of a collision is one skipped cache
  * write, repaired by the next real change or by re-fetching from the server.
  */
-function hashPersistedState(jsonAd: string, snapshot?: Uint8Array): number {
-  let h1 = 0xdeadbeef;
+function hashPersistedState(row: ClientDbRow): number {
+  const { snapshot } = row;
+  // The text the stamp covers besides the snapshot: the whole row for a
+  // JSON-AD write, the one side value for a Loro write.
+  const text = row.kind === 'jsonAd' ? row.jsonAd : (row.lastCommit ?? '');
+  let h1 = row.kind === 'jsonAd' ? 0xdeadbeef : 0x5bd1e995;
   let h2 = 0x41c6ce57;
 
-  for (let i = 0; i < jsonAd.length; i++) {
-    const ch = jsonAd.charCodeAt(i);
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
     h1 = Math.imul(h1 ^ ch, 2654435761);
     h2 = Math.imul(h2 ^ ch, 1597334677);
   }

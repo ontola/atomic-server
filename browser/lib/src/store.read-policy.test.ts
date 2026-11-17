@@ -58,6 +58,7 @@ function fakeDb(
       return subjects.map(s => rows[s] ?? { jsonAd: null, snapshot: null });
     },
     putResourceWithSnapshot: async () => undefined,
+    putLoroSnapshot: async () => undefined,
     putResource: async () => undefined,
     removeResource: async () => undefined,
     flush: async () => undefined,

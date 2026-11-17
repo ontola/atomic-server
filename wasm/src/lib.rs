@@ -324,6 +324,46 @@ impl ClientDb {
         self.put_resource_inner(json_ad, None).await
     }
 
+    /// Store a resource from its Loro snapshot alone. The row, the index
+    /// entries and the stored snapshot are derived from that doc in one
+    /// transaction; `last_commit` is the one value no doc holds. Rejects a
+    /// snapshot that does not import.
+    #[wasm_bindgen(js_name = "putLoroSnapshot")]
+    pub async fn put_loro_snapshot(
+        &self,
+        subject: &str,
+        snapshot: Vec<u8>,
+        last_commit: Option<String>,
+    ) -> Result<(), JsError> {
+        self.db()
+            .persist_replicated_loro_snapshot(subject, snapshot, last_commit.as_deref())
+            .await
+            .map_err(to_js_err)
+    }
+
+    /// [`Self::put_loro_snapshot`] for many resources in one write.
+    /// `last_commits[i]` is a string, or null/undefined.
+    #[wasm_bindgen(js_name = "putLoroSnapshots")]
+    pub async fn put_loro_snapshots(
+        &self,
+        subjects: Vec<String>,
+        snapshots: js_sys::Array,
+        last_commits: js_sys::Array,
+    ) -> Result<(), JsError> {
+        let puts = subjects
+            .into_iter()
+            .enumerate()
+            .map(|(i, subject)| {
+                let snapshot = js_sys::Uint8Array::new(&snapshots.get(i as u32)).to_vec();
+                (subject, snapshot, last_commits.get(i as u32).as_string())
+            })
+            .collect();
+        self.db()
+            .persist_replicated_loro_snapshots(puts)
+            .await
+            .map_err(to_js_err)
+    }
+
     /// [`Self::put_resource`] with the resource's Loro snapshot. The row, the
     /// snapshot and the index entries are written in one transaction, and the
     /// snapshot is stored as given rather than rebuilt from the propvals.

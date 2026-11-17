@@ -29,14 +29,14 @@ describe('state that arrives while no local database is attached', () => {
   };
 
   const fakeWorker = () => {
-    const putResourceWithSnapshot = vi.fn(async () => undefined);
+    const putLoroSnapshot = vi.fn(async () => undefined);
 
     return {
-      putResourceWithSnapshot,
+      putLoroSnapshot,
       worker: {
         isReady: true,
         waitForReady: async () => true,
-        putResourceWithSnapshot,
+        putLoroSnapshot,
       } as unknown as ClientDbWorker,
     };
   };
@@ -48,18 +48,18 @@ describe('state that arrives while no local database is attached', () => {
     const child = makeResource('did:ad:resource:child', store);
     store.addResource(child);
 
-    const { worker, putResourceWithSnapshot } = fakeWorker();
-    expect(putResourceWithSnapshot).not.toHaveBeenCalled();
+    const { worker, putLoroSnapshot } = fakeWorker();
+    expect(putLoroSnapshot).not.toHaveBeenCalled();
 
     store.setClientDb(worker);
     // A write waits for the outbox to say whether an offline edit is stored in
     // the database it is about to go to.
     await store.outbox.whenHydrated();
 
-    expect(putResourceWithSnapshot).toHaveBeenCalledOnce();
+    expect(putLoroSnapshot).toHaveBeenCalledOnce();
     // The store normalises on the way in, so ask the resource for its subject
     // rather than repeating the one it was constructed with.
-    expect(putResourceWithSnapshot.mock.calls[0][0]).toBe(child.subject);
+    expect(putLoroSnapshot.mock.calls[0][0]).toBe(child.subject);
   });
 
   it('does not queue anything when the app has no database at all', () => {
@@ -68,10 +68,10 @@ describe('state that arrives while no local database is attached', () => {
     const store = new Store({ serverUrl: 'https://example.com' });
     store.addResource(makeResource('did:ad:resource:no-db', store));
 
-    const { worker, putResourceWithSnapshot } = fakeWorker();
+    const { worker, putLoroSnapshot } = fakeWorker();
     store.setClientDb(worker);
 
-    expect(putResourceWithSnapshot).not.toHaveBeenCalled();
+    expect(putLoroSnapshot).not.toHaveBeenCalled();
   });
 
   it('goes to the database the sign-in attached, not the one it replaced', async () => {
@@ -92,8 +92,8 @@ describe('state that arrives while no local database is attached', () => {
     store.setClientDb(owned.worker);
     await store.outbox.whenHydrated();
 
-    expect(owned.putResourceWithSnapshot).toHaveBeenCalledOnce();
-    expect(owned.putResourceWithSnapshot.mock.calls[0][0]).toBe(child.subject);
-    expect(anon.putResourceWithSnapshot).not.toHaveBeenCalled();
+    expect(owned.putLoroSnapshot).toHaveBeenCalledOnce();
+    expect(owned.putLoroSnapshot.mock.calls[0][0]).toBe(child.subject);
+    expect(anon.putLoroSnapshot).not.toHaveBeenCalled();
   });
 });

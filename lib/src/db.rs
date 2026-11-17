@@ -823,6 +823,48 @@ impl Db {
         self.persist_replicated(resource, Some(snapshot)).await
     }
 
+    /// Store a resource from its Loro snapshot alone: the row, the index
+    /// entries and the stored snapshot are all derived from the doc in one
+    /// transaction (see [`Resource::from_loro_snapshot`]). `last_commit` is the
+    /// one derived value the doc cannot hold. Errors when `snapshot` does not
+    /// import.
+    pub async fn persist_replicated_loro_snapshot(
+        &self,
+        subject: &str,
+        snapshot: Vec<u8>,
+        last_commit: Option<&str>,
+    ) -> AtomicResult<()> {
+        let resource = Resource::from_loro_snapshot(
+            subject,
+            snapshot.clone(),
+            last_commit,
+            Some(&self.lenses()),
+        )?;
+        self.persist_replicated_resource_with_snapshot(&resource, snapshot)
+            .await
+    }
+
+    /// [`Self::persist_replicated_loro_snapshot`] for many resources in one
+    /// write, as [`Self::persist_replicated_resources`]. Every snapshot is
+    /// checked before anything is written.
+    pub async fn persist_replicated_loro_snapshots(
+        &self,
+        puts: Vec<(String, Vec<u8>, Option<String>)>,
+    ) -> AtomicResult<()> {
+        let lenses = self.lenses();
+        let mut entries = Vec::with_capacity(puts.len());
+        for (subject, snapshot, last_commit) in puts {
+            let resource = Resource::from_loro_snapshot(
+                &subject,
+                snapshot.clone(),
+                last_commit.as_deref(),
+                Some(&lenses),
+            )?;
+            entries.push((resource, Some(snapshot)));
+        }
+        self.persist_replicated_resources(entries).await
+    }
+
     /// [`Self::persist_replicated_resource_with_snapshot`] for many resources in
     /// one write. Each resource costs the same index entries as on its own, but
     /// they share one commit, so a page the batch touches repeatedly (a
