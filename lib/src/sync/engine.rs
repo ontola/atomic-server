@@ -732,6 +732,32 @@ fn handle_unsub(payload: &[u8]) -> HandleOutput {
     }
 }
 
+/// The `host[:port]` of an http(s) URL, lowercased by the URL parser. The port
+/// is only present when it is not the scheme's default. Userinfo, path, query
+/// and fragment never take part.
+fn subject_host(url: &str) -> Option<String> {
+    let parsed = url::Url::parse(url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    let host = parsed.host_str()?;
+    Some(match parsed.port() {
+        Some(port) => format!("{host}:{port}"),
+        None => host.to_string(),
+    })
+}
+
+/// Whether `origin` (a base domain or request origin, scheme optional) has the
+/// host `host`, as produced by [`subject_host`].
+fn subject_host_matches(origin: &str, host: &str) -> bool {
+    let with_scheme = if origin.contains("://") {
+        origin.to_string()
+    } else {
+        format!("http://{origin}")
+    };
+    subject_host(&with_scheme).is_some_and(|origin_host| origin_host == host)
+}
+
 /// Policy knobs distinguishing a hub ingesting a client's commit from a peer
 /// replica ingesting another peer's commit. The validation *core* (signature,
 /// schema, timestamp, signer rights) is identical in both roles.
@@ -948,27 +974,24 @@ pub async fn ingest_commit(
     }
 
     if opts.enforce_subject_ownership {
+        let subject = incoming_commit.subject.as_str();
         let is_internal = incoming_commit.subject.is_internal();
         let is_did = incoming_commit.subject.is_did();
-        let matches_base = if let Some(base) = store.get_base_domain() {
-            // The base domain is the origin this store was booted with, scheme
-            // included. Behind a TLS-terminating proxy that is `http://host`
-            // while clients name the resource `https://host/…`: same server,
-            // so compare the host, not the scheme.
-            let host = base
-                .trim_start_matches("http://")
-                .trim_start_matches("https://");
-            incoming_commit.subject.as_str().contains(host)
-        } else {
-            false
-        };
 
-        // Fallback: if it's a local path like http://localhost/ or https://atomicdata.dev/
-        // and it matches the current request's Host, we should also allow it.
-        let is_local_path =
-            !is_did && !is_internal && incoming_commit.subject.as_str().ends_with('/');
+        // An http(s) subject is ours when its host[:port] is the host of this
+        // store's base domain, or of the origin the request came in on. The
+        // scheme is not compared: behind a TLS-terminating proxy the base
+        // domain is `http://host` while clients name the resource
+        // `https://host/…`, same server.
+        let owned_by_host = subject_host(subject).is_some_and(|subject_host| {
+            store
+                .get_base_domain()
+                .iter()
+                .chain(opts.response_origin.iter())
+                .any(|origin| subject_host_matches(origin, &subject_host))
+        });
 
-        if !is_internal && !is_did && !matches_base && !is_local_path {
+        if !is_internal && !is_did && !owned_by_host {
             return Err(
                 "Subject of commit should be sent to other domain - this store can not own this resource."
                     .into(),
@@ -2699,6 +2722,81 @@ mod bootstrap_and_sub_tests {
             .unwrap();
         assert_eq!(count, 1, "moving within the admitted drive is allowed");
         assert_eq!(parent_of(&db).await, own_folder);
+    }
+
+    /// The hub's ownership gate compares hosts. A subject that merely
+    /// mentions this host (in its query, userinfo or path) or that ends in `/`
+    /// on a foreign host is not ours; the base host and the host the request
+    /// came in on are.
+    #[tokio::test]
+    async fn ownership_gate_compares_hosts_not_substrings() {
+        use crate::client::commit_to_wire_json;
+        use crate::commit::CommitBuilder;
+
+        const OWNERSHIP_ERR: &str = "Subject of commit should be sent to other domain - this store can not own this resource.";
+
+        let db = Db::init_temp("ingest_commit_ownership_hosts")
+            .await
+            .unwrap();
+        let (alice, _drive) = db.setup("Alice").await.unwrap();
+        let db = db.clone_with_url("http://atomic.example.de".into());
+
+        // The error the hub gives for a destroy of a subject that does not
+        // exist: anything but the ownership error means the gate let it pass.
+        let outcome = |subject: &'static str, origin: Option<&'static str>| {
+            let db = &db;
+            let alice = &alice;
+            async move {
+                let empty = crate::Resource::new(subject.to_string());
+                let mut builder = CommitBuilder::new(subject.into());
+                builder.destroy(true);
+                let commit = builder.sign(alice, db, &empty).await.unwrap();
+                let json = commit_to_wire_json(&commit, db).await.unwrap();
+                let opts = CommitIngestOpts::hub(None, origin.map(String::from));
+                ingest_commit_json(db, &json, &opts)
+                    .await
+                    .expect_err("nothing to destroy")
+                    .to_string()
+            }
+        };
+
+        for foreign in [
+            "https://evil.example/x?h=atomic.example.de",
+            "https://evil.example/atomic.example.de/x",
+            "https://atomic.example.de@evil.example/x",
+            "https://atomic.example.de.evil.example/x",
+            "https://evil.example/",
+        ] {
+            assert_eq!(
+                outcome(foreign, None).await,
+                OWNERSHIP_ERR,
+                "{foreign} is not on this host"
+            );
+        }
+
+        for own in [
+            "https://atomic.example.de/doc",
+            "http://atomic.example.de/doc",
+            "https://atomic.example.de/",
+        ] {
+            assert_ne!(outcome(own, None).await, OWNERSHIP_ERR, "{own} is ours");
+        }
+
+        // The host the request came in on counts too, and only that host.
+        assert_ne!(
+            outcome(
+                "https://other.example.org/doc",
+                Some("https://other.example.org")
+            )
+            .await,
+            OWNERSHIP_ERR,
+            "a subject on the request origin's host is accepted"
+        );
+        assert_eq!(
+            outcome("https://evil.example/", Some("https://other.example.org")).await,
+            OWNERSHIP_ERR,
+            "a request origin does not open up other hosts"
+        );
     }
 
     #[tokio::test]
