@@ -10047,6 +10047,7 @@ msgstr "Nog {0}, open om alles te zien"
 msgid "Show older messages ({0})"
 msgstr "Oudere berichten tonen ({0})"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Profile"
 msgstr "Profiel"
@@ -13500,6 +13501,7 @@ msgstr "Toon pictogrammen en afbeeldingen naast items in de zijbalk"
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Gebruikte credits: {0} /{1} {2}"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/components/Settings/AccountSettings.tsx
 msgid "Account & security"
 msgstr "Account en beveiliging"

@@ -10041,6 +10041,7 @@ msgstr "{0} de plus, ouvrir pour tout voir"
 msgid "Show older messages ({0})"
 msgstr "Afficher les messages plus anciens ({0})"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Profile"
 msgstr "Profil"
@@ -13494,6 +13495,7 @@ msgstr "Afficher les icônes et images à côté des éléments de la barre lat�
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Crédits utilisés : {0} /{1} {2}"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/components/Settings/AccountSettings.tsx
 msgid "Account & security"
 msgstr "Compte et sécurité"

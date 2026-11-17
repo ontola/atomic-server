@@ -10044,6 +10044,7 @@ msgstr "{0} lainnya, buka untuk melihat semua"
 msgid "Show older messages ({0})"
 msgstr "Tampilkan pesan sebelumnya ({0})"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Profile"
 msgstr "Profil"
@@ -13492,6 +13493,7 @@ msgstr "Tampilkan ikon dan gambar di samping item dalam bilah samping"
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Kredit terpakai: {0} /{1} {2}"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/components/Settings/AccountSettings.tsx
 msgid "Account & security"
 msgstr "Akun dan keamanan"
