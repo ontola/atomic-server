@@ -1010,30 +1010,13 @@ pub async fn ingest_commit(
 
     let incoming_commit = crate::commit::Commit::from_json_map(&incoming)?;
 
-    // Log incoming commit details for debugging
-    if let Some(loro_bytes) = &incoming_commit.loro_update {
-        let doc = crate::loro::AtomicLoroDoc::new();
-        if doc.import_update(loro_bytes).is_ok() {
-            let props = doc.get_all_properties();
-            let prop_summary: Vec<String> = props
-                .keys()
-                .map(|k| k.rsplit('/').next().unwrap_or(k).to_string())
-                .collect();
-            tracing::info!(
-                subject = %incoming_commit.subject,
-                signer = %incoming_commit.signer,
-                properties = ?prop_summary,
-                loro_bytes = loro_bytes.len(),
-                "Incoming commit"
-            );
-        }
-    } else {
-        tracing::info!(
-            subject = %incoming_commit.subject,
-            destroy = ?incoming_commit.destroy,
-            "Incoming commit (no loroUpdate)"
-        );
-    }
+    tracing::debug!(
+        subject = %incoming_commit.subject,
+        signer = %incoming_commit.signer,
+        loro_bytes = incoming_commit.loro_update.as_ref().map(|b| b.len()),
+        destroy = ?incoming_commit.destroy,
+        "Incoming commit"
+    );
 
     if opts.enforce_subject_ownership {
         let subject = incoming_commit.subject.as_str();
@@ -2317,17 +2300,6 @@ pub async fn import_sync_push(
         // Only persist after every scope check succeeds. In particular, a
         // rejected new subject must not leave a snapshot that a later valid
         // import would merge. add_resource_opts stores the validated state.
-        // Log what properties arrived
-        let has_strokes = resource
-            .get("https://atomicdata.dev/ontology/canvas/strokeData")
-            .is_ok();
-        tracing::info!(
-            "  sync imported {}: {} props, has_strokes={}",
-            &entry.subject[..entry.subject.len().min(30)],
-            resource.get_propvals().len(),
-            has_strokes,
-        );
-
         if let Some(index) = staged_by_subject.get(&snapshot_key).copied() {
             staged[index] = (resource.clone(), Some(snapshot));
         } else {
@@ -2386,13 +2358,6 @@ pub async fn import_sync_push(
         count,
         push.drive
     );
-    for entry in &push.entries {
-        tracing::info!(
-            "  imported: {} ({} bytes)",
-            &entry.subject[..entry.subject.len().min(30)],
-            entry.loro_bytes.len()
-        );
-    }
     Ok((count, blob_requests))
 }
 
