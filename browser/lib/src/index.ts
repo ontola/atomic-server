@@ -372,6 +372,7 @@ export {
   contactSchema,
   pipelineSchema,
   moneySchema,
+  preferencesSchema,
   sharedVocabularyOntologies,
   sharedVocabularyProperties,
 } from './shared-vocabularies.js';

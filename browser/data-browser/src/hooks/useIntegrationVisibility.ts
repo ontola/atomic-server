@@ -1,8 +1,4 @@
 import {
-  core,
-  ensureSchema,
-  findSchema,
-  server,
   useCurrentAgent,
   useResource,
   useStore,
@@ -12,10 +8,10 @@ import { useEffect, useRef, useState } from 'react';
 import { usePrivateDrive } from './usePrivateDrive';
 import {
   integrationVisibility,
-  integrationVisibilitySchema,
   readPendingVisibility,
   readPreviewUnlocked,
   readVisibilityCache,
+  visibilityProperties,
   writePendingVisibility,
   writePreviewUnlocked,
   writeVisibilityCache,
@@ -25,47 +21,34 @@ import {
 import { retryDelayMs } from '@helpers/retryBackoff';
 
 /**
- * One pass at the private drive's visibility schema.
- *
- * Kept out of the hook, and exported, so the retry above is testable without
- * rendering the settings page.
- *
- * `fromServer` is what makes asking again worth anything. A read that timed out
- * leaves an errored resource in the store's cache, and `getResource` hands that
- * same error back for as long as the tab is open, so a retry that asked the
- * cache would get the same answer forever. Going back to the server also heals
- * the drive resource that this panel's `ready` gate reads directly.
+ * Asks the server for the private drive again for as long as its read stays
+ * failed. A read that timed out leaves an errored resource in the store's
+ * cache, and `getResource` hands that same error back for as long as the tab is
+ * open, so only going back to the server can heal it, and this panel's `ready`
+ * gate reads that resource directly. Returns the function that stops asking.
  */
-export async function resolveVisibilitySchema(
-  store: Store,
-  privateDrive: string,
-  fromServer: boolean,
-): Promise<
-  | { ok: true; properties: Record<string, string> }
-  | { ok: false; error: string }
-> {
-  try {
-    const drive = fromServer
-      ? await store.fetchResourceFromServer(privateDrive)
-      : await store.getResource(privateDrive);
+export function retryDriveRead(store: Store, privateDrive: string): () => void {
+  let active = true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let failures = 0;
 
-    // An errored drive resource is not an answer. `findSchema` would read no
-    // `default-ontology` off it and report an empty schema, which is exactly
-    // what a drive that genuinely has none looks like, and the `ready` gate
-    // below reads this same resource: a pass that accepted that would leave the
-    // panel unready with nothing asking again.
-    if (drive.error) return { ok: false, error: String(drive.error) };
+  const schedule = () => {
+    failures += 1;
+    timer = setTimeout(async () => {
+      const drive = await store
+        .fetchResourceFromServer(privateDrive)
+        .catch(() => undefined);
 
-    const schema = await findSchema(
-      store,
-      privateDrive,
-      integrationVisibilitySchema(),
-    );
+      if (active && (!drive || drive.error)) schedule();
+    }, retryDelayMs(failures));
+  };
 
-    return { ok: true, properties: schema.properties ?? {} };
-  } catch (reason) {
-    return { ok: false, error: String(reason) };
-  }
+  schedule();
+
+  return () => {
+    active = false;
+    clearTimeout(timer);
+  };
 }
 
 /**
@@ -84,18 +67,6 @@ export function useIntegrationVisibility({
   const actor = agent?.subject;
   const { privateDrive, loading } = usePrivateDrive();
   const resource = useResource(loading ? undefined : privateDrive);
-  const ontologySubject = resource.get(server.properties.defaultOntology);
-  const ontology = useResource(
-    typeof ontologySubject === 'string' ? ontologySubject : undefined,
-  );
-  const ontologyProperties = JSON.stringify(
-    ontology.get(core.properties.properties),
-  );
-  const [resolved, setResolved] = useState<{
-    actor: string;
-    drive: string;
-    properties: Record<string, string>;
-  }>();
   const [saving, setSaving] = useState(false);
   /** Last known values for this agent, shown until the drive is readable. */
   const [local, setLocal] = useState<IntegrationVisibilityValues>(() =>
@@ -113,7 +84,7 @@ export function useIntegrationVisibility({
   /** A facilitator unlocked the experimental toggle on this device. */
   const [unlocked, setUnlocked] = useState(() => readPreviewUnlocked(actor));
   const flushing = useRef(false);
-  const [error, setError] = useState<string>();
+  const [saveError, setSaveError] = useState<string>();
 
   useEffect(() => {
     const pending = readPendingVisibility(actor);
@@ -121,77 +92,25 @@ export function useIntegrationVisibility({
     setLocal(readVisibilityCache(actor));
     setUnconfirmed(pendingKeys(pending));
     setQueue(pending);
-    setError(undefined);
+    setSaveError(undefined);
   }, [actor]);
 
-  // Resolving the schema is what makes this panel ready, so a read that failed
-  // has to be asked again. It used to be a single attempt: one timed-out read of
-  // the private drive rejected `findSchema`, the panel stayed `data-ready=false`
-  // with an error beside its checkboxes, and nothing asked again, so the
-  // preferences could not be changed until the page was reloaded. Measured on a
-  // loaded box: "Async Request for subject atomic:… timed out after 10000ms",
-  // then 30 seconds of a panel that never became ready.
+  // One timed-out read of the private drive must not leave the panel unready
+  // until the page is reloaded.
+  const driveFailed = !!resource.error;
+
   useEffect(() => {
-    let active = true;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let failures = 0;
-    setResolved(undefined);
-    setError(undefined);
-    if (!privateDrive || loading || !actor) return;
+    if (!privateDrive || !driveFailed) return;
 
-    const resolve = async () => {
-      const result = await resolveVisibilitySchema(
-        store,
-        privateDrive,
-        // The store cannot answer differently than it did a moment ago, so
-        // every pass after the first goes back to the server.
-        failures > 0,
-      );
-
-      if (!active) return;
-
-      if (!result.ok) {
-        failures += 1;
-        setError(result.error);
-        retry = setTimeout(() => void resolve(), retryDelayMs(failures));
-
-        return;
-      }
-
-      failures = 0;
-      setError(undefined);
-      setResolved({
-        actor,
-        drive: privateDrive,
-        properties: result.properties,
-      });
-    };
-
-    void resolve();
-
-    return () => {
-      active = false;
-      clearTimeout(retry);
-    };
-  }, [
-    store,
-    actor,
-    privateDrive,
-    loading,
-    ontologySubject,
-    ontologyProperties,
-  ]);
+    return retryDriveRead(store, privateDrive);
+  }, [store, privateDrive, driveFailed]);
 
   const ready =
-    !loading &&
-    !!privateDrive &&
-    resolved?.drive === privateDrive &&
-    resolved?.actor === actor &&
-    !resource.loading &&
-    !resource.error;
-  const stored = integrationVisibility(
-    resource,
-    ready ? resolved.properties : {},
+    !loading && !!privateDrive && !resource.loading && !resource.error;
+  const stored = integrationVisibility(resource);
+  const savedApi = resource.get(visibilityProperties['show-api-plugins']);
+  const savedExperimental = resource.get(
+    visibilityProperties['show-experimental-plugins'],
   );
 
   // Writes are queued rather than awaited, so a slow or unreachable server
@@ -217,13 +136,6 @@ export function useIntegrationVisibility({
       // above, which reloads the preferences for whoever is signed in now.
       if (store.getAgent()?.subject !== actor) return;
 
-      if (result.properties)
-        setResolved({
-          actor,
-          drive: privateDrive,
-          properties: result.properties,
-        });
-
       if (!result.error) {
         const remaining = dropSaved(readPendingVisibility(actor), entries);
         writePendingVisibility(actor, remaining);
@@ -233,20 +145,58 @@ export function useIntegrationVisibility({
       }
 
       // A failed write leaves the choice applied locally; only saving failed.
-      setError(result.error);
+      setSaveError(result.error);
       setQueue(current => dropSaved(current, entries));
     });
   }, [ready, queue, actor, privateDrive, store]);
 
+  // Choices made before these preferences had fixed properties live only in
+  // this agent's cache: queue them so they land on the drive.
+  useEffect(() => {
+    if (!ready || !actor) return;
+    const carried = carryOver(
+      {
+        'show-api-plugins': savedApi,
+        'show-experimental-plugins': savedExperimental,
+      },
+      readVisibilityCache(actor),
+    );
+    const fresh = pendingKeys(carried).filter(
+      key => !unconfirmed.includes(key),
+    );
+
+    if (fresh.length === 0) return;
+
+    writePendingVisibility(actor, {
+      ...readPendingVisibility(actor),
+      ...carried,
+    });
+    setUnconfirmed(current => [...current, ...fresh]);
+    setQueue(current => ({ ...current, ...carried }));
+  }, [ready, actor, savedApi, savedExperimental, unconfirmed]);
+
   // Once the drive is readable and in sync, it is the source of truth again.
   useEffect(() => {
     if (!ready) return;
+    const carried = carryOver(
+      {
+        'show-api-plugins': savedApi,
+        'show-experimental-plugins': savedExperimental,
+      },
+      readVisibilityCache(actor),
+    );
     const confirmed: IntegrationVisibilityValues = {};
 
-    if (!unconfirmed.includes('show-api-plugins'))
+    if (
+      !unconfirmed.includes('show-api-plugins') &&
+      !carried['show-api-plugins']
+    )
       confirmed['show-api-plugins'] = stored.showApiPlugins;
 
-    if (!unconfirmed.includes('show-experimental-plugins'))
+    if (
+      !unconfirmed.includes('show-experimental-plugins') &&
+      !carried['show-experimental-plugins']
+    )
       confirmed['show-experimental-plugins'] = stored.showExperimentalPlugins;
 
     if (Object.keys(confirmed).length === 0) return;
@@ -255,6 +205,8 @@ export function useIntegrationVisibility({
     ready,
     actor,
     unconfirmed,
+    savedApi,
+    savedExperimental,
     stored.showApiPlugins,
     stored.showExperimentalPlugins,
   ]);
@@ -284,7 +236,7 @@ export function useIntegrationVisibility({
       current.includes(key) ? current : [...current, key],
     );
     setQueue(current => ({ ...current, [key]: next }));
-    setError(undefined);
+    setSaveError(undefined);
   };
 
   const showExperimentalPlugins = value(
@@ -302,7 +254,7 @@ export function useIntegrationVisibility({
     ready,
     saving,
     pending: saving || Object.keys(queue).length > 0,
-    error,
+    error: saveError ?? (resource.error ? String(resource.error) : undefined),
     setVisibility,
   };
 }
@@ -339,30 +291,43 @@ export function stillUnconfirmed(
   );
 }
 
+/**
+ * Toggles to queue for the fixed properties: the drive has no value for a
+ * preference yet but this agent's cache holds an opt-in, which was made before
+ * the properties were fixed. Only `true` is carried; `false` is the default.
+ */
+export function carryOver(
+  saved: Partial<Record<IntegrationVisibilityKey, unknown>>,
+  cached: IntegrationVisibilityValues,
+): IntegrationVisibilityValues {
+  const carried: IntegrationVisibilityValues = {};
+
+  for (const key of pendingKeys(cached)) {
+    if (cached[key] === true && saved[key] === undefined) carried[key] = true;
+  }
+
+  return carried;
+}
+
 async function saveVisibility(
   store: Store,
   privateDrive: string,
   actor: string,
   entries: [IntegrationVisibilityKey, boolean][],
-): Promise<{ properties?: Record<string, string>; error?: string }> {
+): Promise<{ error?: string }> {
   try {
-    const schema = await ensureSchema(
-      store,
-      privateDrive,
-      integrationVisibilitySchema(),
-    );
     const drive = await store.getResource(privateDrive);
 
     // The agent may have changed while we waited for the server.
     if (store.getAgent()?.subject !== actor) return {};
 
     for (const [key, value] of entries) {
-      await drive.set(schema.properties[key], value);
+      await drive.set(visibilityProperties[key], value);
     }
 
     await drive.save();
 
-    return { properties: schema.properties };
+    return {};
   } catch (reason) {
     return { error: String(reason) };
   }
