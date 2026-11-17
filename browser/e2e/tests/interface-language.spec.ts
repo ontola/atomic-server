@@ -165,7 +165,7 @@ test.describe('interface language', () => {
       page,
     }, testInfo) => {
       const { driveTitle } = await newDrive(page);
-      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
       await expectAccount(page, english, driveTitle);
       await expectDrives(page, english, driveTitle);
       await expectDriveMenu(page, english, driveTitle);
@@ -189,11 +189,11 @@ test.describe('interface language', () => {
       await page.getByText(labels.appearance, { exact: true }).click();
       await expect(language).toHaveValue(locale);
 
-      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
       await expectAccount(page, labels, driveTitle);
       await expectDrives(page, labels, driveTitle);
       await expectDriveMenu(page, labels, driveTitle);
-      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
       await page.reload();
       await expectAccount(page, labels, driveTitle);
 
@@ -212,7 +212,7 @@ test.describe('interface language', () => {
       await language.selectOption('en');
       await page.getByText(english.appearance, { exact: true }).click();
       await expect(language).toHaveValue('en');
-      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
       await expectAccount(page, english, driveTitle);
       await expectDrives(page, english, driveTitle);
       await expectDriveMenu(page, english, driveTitle);
@@ -231,7 +231,7 @@ for (const { locale, labels, pickerName } of languages.filter(language =>
       page,
     }) => {
       const driveTitle = await currentDriveTitle(page).innerText();
-      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
       await expectAccount(page, labels, driveTitle);
 
       await page.goto(`${FRONTEND_URL}/app/settings`);
@@ -242,7 +242,7 @@ for (const { locale, labels, pickerName } of languages.filter(language =>
 
       // An explicit choice takes precedence over the browser after reload.
       await language.selectOption('en');
-      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
+      await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
       await page.reload();
       await expectAccount(page, english, driveTitle);
     });

@@ -8,7 +8,7 @@ const CONNECT_LINKS = ['/app/authorize-mcp?', '/app/connect-agent?'];
  * a link can never send someone elsewhere.
  */
 export function parseReturnPath(value: string | null): string | undefined {
-  if (value === 'agent') return paths.accountSettings;
+  if (value === 'agent') return paths.profileSettings;
 
   return value && CONNECT_LINKS.some(prefix => value.startsWith(prefix))
     ? value

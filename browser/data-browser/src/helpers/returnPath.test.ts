@@ -4,7 +4,7 @@ import { paths } from '../routes/paths';
 
 describe('parseReturnPath', () => {
   it('maps agent to the account settings', () => {
-    expect(parseReturnPath('agent')).toBe(paths.accountSettings);
+    expect(parseReturnPath('agent')).toBe(paths.profileSettings);
   });
 
   it('accepts connect links', () => {

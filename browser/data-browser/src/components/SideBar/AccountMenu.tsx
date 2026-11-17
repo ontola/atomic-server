@@ -173,7 +173,7 @@ function AccountMenuRow({
           icon: <FaUser />,
           helper: 'See and edit the current Agent / User',
           shortcut: shortcuts.userSettings,
-          onClick: goTo(paths.accountSettings),
+          onClick: goTo(paths.profileSettings),
         }
       : {
           id: 'login',

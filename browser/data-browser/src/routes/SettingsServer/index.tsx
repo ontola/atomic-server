@@ -23,9 +23,19 @@ const redirectTo = (target: string) =>
     return null;
   };
 
+const AccountRedirect = redirectTo(paths.accountSettings);
+const ProfileRedirect = redirectTo(paths.profileSettings);
+
 export const AgentSettingsRoute = createRoute({
   path: pathNames.agentSettings,
-  component: redirectTo(paths.accountSettings),
+  // `?add=passkey` (from atomic.place) belongs with account recovery.
+  component: () => {
+    const Redirect = new URLSearchParams(window.location.search).has('add')
+      ? AccountRedirect
+      : ProfileRedirect;
+
+    return <Redirect />;
+  },
   getParentRoute: () => appRoute,
 });
 

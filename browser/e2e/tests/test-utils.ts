@@ -1138,7 +1138,7 @@ export async function waitForClassInstanceSearchable(
 }
 
 export async function openAgentPage(page: Page) {
-  await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
+  await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
 }
 
 /** Opens the users' profile, sets a username, saves, reloads and verifies the change persisted. */

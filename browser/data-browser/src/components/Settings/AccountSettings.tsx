@@ -21,7 +21,9 @@ import { saveAgentToIDB } from '@helpers/agentStorage';
 import { SettingsSection } from './SettingsSection';
 import { useSettingsSearch } from './SettingsSearch';
 
-/** Profile, sign out, account recovery, connected apps and device lock. */
+/** Two top-level sections: Profile (name, avatar, sign out) and Account &
+ *  security (recovery, connected apps, this device). One component because
+ *  both share the sign-out flow. */
 export function AccountSettings() {
   const store = useStore();
   const { agent, drive, setAgent, setDrive } = useSettings();
@@ -48,7 +50,11 @@ export function AccountSettings() {
   // Asked for by link while signed out → the one canonical sign-in surface is
   // /app/welcome (GettingStartedFlow), not a second login form here.
   useEffect(() => {
-    if (!effectiveAgent && section === 'account' && !leavingAccount.current) {
+    if (
+      !effectiveAgent &&
+      (section === 'account' || section === 'profile') &&
+      !leavingAccount.current
+    ) {
       navigate({ to: `${paths.welcome}?return_to=agent`, replace: true });
     }
   }, [effectiveAgent, section, navigate]);
@@ -109,13 +115,25 @@ export function AccountSettings() {
       .catch(() => undefined);
   }
 
+  if (!effectiveAgent) {
+    return (
+      <SettingsSection
+        label='Account & security'
+        id='account'
+        childSearchKeywords='sign in account'
+      >
+        <SignInButton />
+      </SettingsSection>
+    );
+  }
+
   return (
-    <SettingsSection
-      label='Account & security'
-      id='account'
-      childSearchKeywords='profile name avatar user agent sign in sign out log out account recovery passkey backup agent secret connected apps mcp device lock idle forget'
-    >
-      {effectiveAgent ? (
+    <>
+      <SettingsSection
+        label='Profile'
+        id='profile'
+        childSearchKeywords='profile name avatar picture user agent sign out log out'
+      >
         <Column>
           {effectiveAgent.subject?.startsWith('http://localhost') && (
             <WarningBlock>
@@ -142,6 +160,14 @@ export function AccountSettings() {
               Sign out
             </Button>
           </Row>
+        </Column>
+      </SettingsSection>
+      <SettingsSection
+        label='Account & security'
+        id='account'
+        childSearchKeywords='account recovery passkey backup agent secret connected apps mcp device lock idle forget'
+      >
+        <Column>
           <SettingsSection
             label='Account recovery'
             initialState
@@ -192,9 +218,7 @@ export function AccountSettings() {
             </Row>
           </SettingsSection>
         </Column>
-      ) : (
-        <SignInButton />
-      )}
-    </SettingsSection>
+      </SettingsSection>
+    </>
   );
 }
