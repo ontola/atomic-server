@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useMemo, useEffect } from 'react';
+import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { HexColorPicker } from 'react-colorful';
 import { ContainerNarrow } from '../components/Containers';
@@ -28,9 +28,22 @@ import {
   SettingsSection,
   SettingsSearchProvider,
 } from '@components/Settings';
-import { AccountSettings } from '@components/Settings/AccountSettings';
-import { DriveSettings } from '@components/Settings/DriveSettings';
-import { SyncSettings } from '@components/Settings/SyncSettings';
+// Web-only sections, out of the Flutter embed's first-use bundle.
+const AccountSettings = lazy(() =>
+  import('@components/Settings/AccountSettings').then(m => ({
+    default: m.AccountSettings,
+  })),
+);
+const DriveSettings = lazy(() =>
+  import('@components/Settings/DriveSettings').then(m => ({
+    default: m.DriveSettings,
+  })),
+);
+const SyncSettings = lazy(() =>
+  import('@components/Settings/SyncSettings').then(m => ({
+    default: m.SyncSettings,
+  })),
+);
 import { presetColors } from '../styling';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
@@ -153,15 +166,19 @@ const AppSettings: React.FunctionComponent = () => {
         )}
         <SettingsSearchProvider value={searchContext}>
           <SettingsGroup>
-            {showSettingsSection('account') && <AccountSettings />}
-            {showSettingsSection('drive') && <DriveSettings />}
+            <Suspense>
+              {showSettingsSection('account') && <AccountSettings />}
+              {showSettingsSection('drive') && <DriveSettings />}
+            </Suspense>
             {showSettingsSection('sync') && (
               <SettingsSection
                 label='Sync & devices'
                 id='sync'
                 childSearchKeywords='sync devices device backup vault cloud vault cloud server paired pairing connect another device local database restore hosted server offline'
               >
-                <SyncSettings requestedDrive={drive} />
+                <Suspense>
+                  <SyncSettings requestedDrive={drive} />
+                </Suspense>
               </SettingsSection>
             )}
             {showSettingsSection('appearance') && (

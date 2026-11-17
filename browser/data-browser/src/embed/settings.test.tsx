@@ -186,8 +186,12 @@ it('shows only the allow-listed sections and options in the embed', () => {
   expect(showAppearanceOption('sidebarIcons', true)).toBe(true);
 });
 
-it('renders the full page outside the embed', () => {
+it('renders the full page outside the embed', async () => {
   renderPage();
+
+  // Account and Drive load lazily, out of the embed's bundle.
+  expect(await screen.findByLabelText('Account & security')).toBeTruthy();
+  expect(await screen.findByLabelText('Drive')).toBeTruthy();
 
   for (const label of [
     'Account & security',
