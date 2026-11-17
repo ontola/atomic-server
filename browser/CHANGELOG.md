@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: a guest's work (started with Get started, no account) comes along when they sign up for an account afterwards. The account's new identity replaced the guest without handing its drives over, so the Welcome drive and everything in it disappeared after sign-up.
 - Internal: one `isPlainObject` in @tomic/lib replaces 5 local type guards.
 - Internal: one `isLoopbackHost` in @tomic/lib replaces 12 inline localhost checks.
 - Removed the dead mobile-Tauri frontend code: Android back-button handling, the native QR scanner ("Scan a QR code" button) and the `@tauri-apps/plugin-barcode-scanner` dependency. The mobile app is the Flutter app; Tauri is desktop only. Pairing codes are still pasted or typed.
