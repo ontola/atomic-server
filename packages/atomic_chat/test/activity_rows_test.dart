@@ -20,7 +20,9 @@ ActivityEntry _entry(String name,
         String driveName = 'Ontola',
         Duration ago = const Duration(hours: 16, minutes: 5),
         ResourcePicture? actorPicture =
-            const ResourcePicture(file: 'did:ad:polle', person: true)}) =>
+            const ResourcePicture(file: 'did:ad:polle', person: true),
+        ResourcePicture? drivePicture =
+            const ResourcePicture(file: 'did:ad:drivepic')}) =>
     ActivityEntry(
       subject: 'did:ad:$name',
       drive: drive,
@@ -31,7 +33,7 @@ ActivityEntry _entry(String name,
       className: 'Document',
       actorPicture: actorPicture,
       driveName: driveName,
-      drivePicture: const ResourcePicture(file: 'did:ad:drivepic'),
+      drivePicture: drivePicture,
     );
 
 class _Api extends FakeApi {
@@ -73,7 +75,8 @@ void main() {
         driveName: 'Other drive',
         drive: 'did:ad:d2',
         ago: const Duration(days: 5),
-        actorPicture: null),
+        actorPicture: null,
+        drivePicture: null),
     for (var i = 0; i < 8; i++)
       _entry('Filler $i', ago: Duration(hours: 17 + i)),
   ];
@@ -123,6 +126,13 @@ void main() {
             of: find.byKey(const Key('activity-drive')).first,
             matching: find.byKey(const Key('row-picture'))),
         findsOneWidget);
+    // A drive without a picture of its own shows just its name, not the
+    // generic drive icon.
+    final otherDrive = find.ancestor(
+        of: find.descendant(of: row, matching: find.text('Other drive')),
+        matching: find.byKey(const Key('activity-drive')));
+    expect(find.descendant(of: otherDrive, matching: find.byType(RowLeading)),
+        findsNothing);
     // The type icon of a document.
     expect(find.descendant(of: row, matching: find.byType(RowLeading)),
         findsWidgets);
