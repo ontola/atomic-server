@@ -1947,6 +1947,28 @@ async fn staged_parent_drive(
     )
 }
 
+/// The drive a pushed (merged) resource claims to live in: its parent's
+/// stored drive when the parent is known here, otherwise its own `drive`
+/// stamp, otherwise itself (a drive root).
+async fn claimed_drive(
+    store: &Db,
+    resource: &crate::Resource,
+    staged: &[(crate::Resource, Option<Vec<u8>>)],
+    by_subject: &std::collections::HashMap<String, usize>,
+) -> String {
+    let mut claimed = resource
+        .get(crate::urls::DRIVE_PROP)
+        .map(|v| v.to_string())
+        .unwrap_or_else(|_| resource.get_subject().to_string());
+    if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
+        let parent_subject = crate::Subject::from(parent_val.to_string());
+        if let Some(drive) = staged_parent_drive(store, &parent_subject, staged, by_subject).await {
+            claimed = drive;
+        }
+    }
+    claimed
+}
+
 /// Import resources from a SYNC_PUSH message into the local store.
 ///
 /// `for_agent` is the identity the sending peer proved. `trust_owned` is true
@@ -2178,22 +2200,27 @@ pub async fn import_sync_push(
         // here; otherwise the resource must stamp itself into that drive or
         // be the drive root itself. (A peer gains nothing by stamping a NEW
         // resource into a drive it already has write on.)
-        if existing_resource.is_none() {
-            let mut claimed = resource
-                .get(crate::urls::DRIVE_PROP)
+        //
+        // An existing subject passed the check above on its stored state, but
+        // the merged state may name another parent: moving it must not take
+        // it out of the admitted drive either.
+        let new_resource = existing_resource.is_none();
+        let reparented = existing_resource.is_some_and(|existing| {
+            existing
+                .get(crate::urls::PARENT)
+                .ok()
                 .map(|v| v.to_string())
-                .unwrap_or_else(|_| resource.get_subject().to_string());
-            if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
-                let parent_subject = crate::Subject::from(parent_val.to_string());
-                if let Some(drive) =
-                    staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject).await
-                {
-                    claimed = drive;
-                }
-            }
+                != resource
+                    .get(crate::urls::PARENT)
+                    .ok()
+                    .map(|v| v.to_string())
+        });
+        if new_resource || reparented {
+            let claimed = claimed_drive(store, &resource, &staged, &staged_by_subject).await;
             if normalize(&claimed) != admitted_drive {
                 tracing::warn!(
-                    "import_sync_push: new resource {} resolves to drive {}, not to {} this push was admitted for; skipped",
+                    "import_sync_push: {} {} resolves to drive {}, not to {} this push was admitted for; skipped",
+                    if new_resource { "new resource" } else { "re-parented resource" },
                     entry.subject,
                     claimed,
                     push.drive
@@ -2589,6 +2616,89 @@ mod bootstrap_and_sub_tests {
                 .to_string(),
             "Original"
         );
+    }
+
+    /// The pre-merge drive check does not look at where an existing resource
+    /// goes: a sender admitted for its own drive must not be able to re-parent
+    /// one of its resources under a parent in another drive, but may still
+    /// move it within the admitted drive.
+    #[tokio::test]
+    async fn existing_resource_cannot_be_reparented_into_another_drive_by_push() {
+        let db = Db::init_temp("existing_reparent_cross_drive")
+            .await
+            .unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let other_drive = crate::test_utils::create_test_drive(&db)
+            .await
+            .unwrap()
+            .to_string();
+        assert_ne!(drive, other_drive);
+        let victim_folder = db
+            .create_resource(crate::urls::FOLDER, &other_drive, "victim", None)
+            .await
+            .unwrap();
+        let own_folder = db
+            .create_resource(crate::urls::FOLDER, &drive, "own", None)
+            .await
+            .unwrap();
+        let subject = db
+            .create_resource(crate::urls::FOLDER, &drive, "mine", None)
+            .await
+            .unwrap();
+
+        let push_with_parent = |db: &Db, parent: &str| {
+            let db = db.clone();
+            let subject = subject.clone();
+            let drive = drive.clone();
+            let parent = parent.to_string();
+            async move {
+                let mut incoming = db.get_resource(&subject.as_str().into()).await.unwrap();
+                incoming
+                    .set_unsafe(
+                        crate::urls::PARENT.into(),
+                        crate::Value::AtomicUrl(parent.as_str().into()),
+                    )
+                    .unwrap();
+                let bytes = incoming.build_state_doc().unwrap().export_snapshot();
+                let frame = protocol::encode_sync_push(
+                    &drive,
+                    &[(subject.as_str(), bytes.as_slice())],
+                    true,
+                );
+                protocol::decode_sync_push(&frame[1..]).unwrap()
+            }
+        };
+        let parent_of = |db: &Db| {
+            let db = db.clone();
+            let subject = subject.clone();
+            async move {
+                db.get_resource(&subject.as_str().into())
+                    .await
+                    .unwrap()
+                    .get(crate::urls::PARENT)
+                    .unwrap()
+                    .to_string()
+            }
+        };
+        let original_parent = parent_of(&db).await;
+
+        let push = push_with_parent(&db, &victim_folder).await;
+        let (count, _) = import_sync_push(&push, &db, &ForAgent::Sudo, false)
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "re-parenting into another drive must be skipped");
+        assert_eq!(
+            parent_of(&db).await,
+            original_parent,
+            "the resource must stay under its old parent"
+        );
+
+        let push = push_with_parent(&db, &own_folder).await;
+        let (count, _) = import_sync_push(&push, &db, &ForAgent::Sudo, false)
+            .await
+            .unwrap();
+        assert_eq!(count, 1, "moving within the admitted drive is allowed");
+        assert_eq!(parent_of(&db).await, own_folder);
     }
 
     #[tokio::test]
