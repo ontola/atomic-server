@@ -5,6 +5,11 @@
  * The WASM module URL is passed as the first message after creation.
  */
 
+import type {
+  ResourceSyncEvidence,
+  ResourceSyncScope,
+  SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
 import { wasmBinaryUrl } from './wasm-url.js';
 import type {
@@ -71,6 +76,14 @@ export interface ClientDbInitRequest {
 export interface ClientDbRpc {
   init: [ClientDbInitRequest, ClientDbInitTimings];
   getResource: [{ subject: string }, string | null];
+  getResourceSyncEvidence: [
+    { subjects: string[]; scope?: ResourceSyncScope },
+    ResourceSyncEvidence[] | undefined,
+  ];
+  putResourceSyncReceipts: [
+    { scope: ResourceSyncScope; receipts: SerializedServerReceipt[] },
+    void,
+  ];
   getResourceWithSnapshot: [{ subject: string }, Rows[number] | null];
   getResourcesWithSnapshots: [{ subjects: string[] }, Rows | null];
   putResource: [{ jsonAd: string }, void];
@@ -228,6 +241,27 @@ const handlers: Handlers = {
   handlePeerFrame: m => db!.handlePeerFrame(m.session, m.frame),
   closePeerSession: m => db!.closePeerSession(m.session),
   getResource: m => db!.getResource(m.subject),
+  getResourceSyncEvidence: m => {
+    if (typeof db!.getResourceSyncEvidence !== 'function') return undefined;
+    dirty = true;
+    const evidence = db!.getResourceSyncEvidence(
+      JSON.stringify(m.subjects),
+      m.scope ? JSON.stringify(m.scope) : undefined,
+    ) as ResourceSyncEvidence[];
+    // The Rust method also flushes; keep the RPC durability boundary explicit.
+    flushNow();
+
+    return evidence;
+  },
+  putResourceSyncReceipts: m => {
+    if (typeof db!.putResourceSyncReceipts !== 'function') return;
+    dirty = true;
+    db!.putResourceSyncReceipts(
+      JSON.stringify(m.scope),
+      JSON.stringify(m.receipts),
+    );
+    flushNow();
+  },
   // One round trip for a whole list: opening a chat asks for every message and
   // part at once, and a postMessage per subject queued behind boot-time sync
   // traffic made that the slow part of the open.

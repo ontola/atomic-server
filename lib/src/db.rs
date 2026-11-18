@@ -46,6 +46,7 @@ pub fn chat_migration_drive_set(drives: Vec<String>) -> std::collections::HashSe
 pub use query_index::{drive_prefix_from_subject, query_id, PropVal, QueryFilter};
 #[cfg(feature = "db-sled")]
 pub mod sled_store;
+pub mod sync_receipts;
 #[cfg(test)]
 pub mod test;
 pub mod trees;
@@ -486,6 +487,8 @@ pub struct Db {
     /// store, not global — see [`crate::subject_lock`].
     pub(crate) subject_locks: crate::subject_lock::SubjectLocks,
     plugin_locks: crate::subject_lock::SubjectLocks,
+    /// Serializes receipt merges and resource deletion cleanup across Db clones.
+    sync_receipts_gate: Arc<Mutex<()>>,
     /// Last sequence number given per drive, held while a commit's batch
     /// lands so the stream stays in order. See [`drive_events`].
     drive_event_seq: Arc<std::sync::Mutex<HashMap<String, u64>>>,
@@ -617,6 +620,7 @@ impl Db {
             filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
+            sync_receipts_gate: Default::default(),
             drive_event_seq: Default::default(),
             drive_events_on: Default::default(),
             base_domain,
@@ -4008,6 +4012,19 @@ impl Db {
         source_id: Option<&str>,
         events: Vec<drive_events::PendingEvent>,
     ) -> AtomicResult<()> {
+        let _receipt_guard = self
+            .sync_receipts_gate
+            .lock()
+            .map_err(|_| "sync receipt lock poisoned")?;
+        let mut receipt_deletes = Vec::new();
+        for op in transaction
+            .iter()
+            .filter(|op| op.tree == Tree::Resources && matches!(op.method, Method::Delete))
+        {
+            let subject = std::str::from_utf8(&op.key).map_err(|e| e.to_string())?;
+            receipt_deletes.extend(sync_receipts::remove_ops(self, subject)?);
+        }
+        transaction.extend(receipt_deletes);
         // A change's query edges ride in its drive event, in the same batch, so
         // a trigger that was down or lagging replays them from its cursor. A
         // sorted member moving positions has a delete and insert in this

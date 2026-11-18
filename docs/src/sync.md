@@ -43,12 +43,17 @@ The panel separates this device's local copy from the configured server. It
 shows pending saves and failures for that resource, rather than treating a
 connected server as proof that every resource is saved.
 
-A confirmed copy covers the resource version that this session has observed
-being saved on the device, acknowledged by the server, or received directly
-from that server. Later edits need a new confirmation. A server going offline does
-not erase an earlier confirmation; its connection status is shown separately.
-If the browser has no confirmation, the panel says so. Confirmation history
-is not recovered across browser reloads yet.
+A confirmed copy covers the resource version saved on the device, acknowledged
+by the server, or received directly from that server. Later edits need a new
+confirmation. A server going offline does not erase an earlier confirmation;
+its connection status is shown separately.
+
+The browser saves server confirmations locally for the account and server that
+supplied them. After a reload, it compares those confirmations with the restored
+resource, including while offline. The local-copy indicator checks the data
+actually stored on this device. Newer offline edits remain waiting to sync.
+Existing resources without a saved server confirmation remain unconfirmed until
+the server supplies one. Clearing local storage also clears these confirmations.
 
 Cloud Vault backups and browser-peer connections are separate from these
 resource-level confirmations. A workspace backup timestamp or a connected peer

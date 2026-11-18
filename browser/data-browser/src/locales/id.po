@@ -13652,9 +13652,8 @@ msgstr "Tujuan ruang kerja"
 msgid "These confirmations cover file details. The file’s contents are not verified here."
 msgstr "Konfirmasi ini mencakup detail berkas. Isi berkas tidak diverifikasi di sini."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Confirmations shown here are from this session."
-msgstr "Konfirmasi yang ditampilkan di sini berasal dari sesi ini."
+#~ msgid "Confirmations shown here are from this session."
+#~ msgstr "Konfirmasi yang ditampilkan di sini berasal dari sesi ini."
 
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Manage sync and backup"

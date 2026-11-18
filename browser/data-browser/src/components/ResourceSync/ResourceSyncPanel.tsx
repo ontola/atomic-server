@@ -140,7 +140,6 @@ export function ResourceSyncPanel({
         </Note>
       )}
       <Footer>
-        <Note>Confirmations shown here are from this session.</Note>
         <AtomicLink
           path={`${paths.sync}?${new URLSearchParams({ drive: context.drive })}`}
         >

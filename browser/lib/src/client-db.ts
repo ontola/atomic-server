@@ -25,6 +25,11 @@
  * ```
  */
 
+import type {
+  ResourceSyncEvidence,
+  ResourceSyncScope,
+  SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 import { randomUUID } from './uuid.js';
 import {
   publishIndexMigration,
@@ -245,6 +250,9 @@ const REPEATABLE_RPC_TYPES = new Set([
   'query',
   'search',
   'allSubjects',
+  // Stored proof reads and monotonic receipt merges are safe after handoff.
+  'getResourceSyncEvidence',
+  'putResourceSyncReceipts',
   'flush',
   'exportAllResources',
   'getLoroSnapshot',
@@ -1054,6 +1062,20 @@ export class ClientDbWorker {
 
   applyCommit(commitJsonAd: string): Promise<void> {
     return this.call('applyCommit', { commitJsonAd });
+  }
+
+  async getResourceSyncEvidence(
+    subjects: string[],
+    scope?: ResourceSyncScope,
+  ): Promise<ResourceSyncEvidence[] | undefined> {
+    return this.call('getResourceSyncEvidence', { subjects, scope });
+  }
+
+  async putResourceSyncReceipts(
+    scope: ResourceSyncScope,
+    receipts: SerializedServerReceipt[],
+  ): Promise<void> {
+    return this.call('putResourceSyncReceipts', { scope, receipts });
   }
 
   removeResource(subject: string): Promise<void> {

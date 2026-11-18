@@ -1,8 +1,13 @@
 import { LoroLoader } from './loro-loader.js';
 import type { Resource } from './resource.js';
+import {
+  parseSerializedServerReceipt,
+  type ResourceSyncEvidence,
+  type SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 
 /** Evidence for this resource's current CRDT state, not a drive-wide guess.
- * Receipts are session-local and do not cover attachment bytes or other resources.
+ * Receipts cover observed CRDT versions, not attachment bytes or other resources.
  */
 export interface ResourceSyncStatus {
   readonly local: Readonly<{
@@ -18,7 +23,7 @@ export interface ResourceSyncStatus {
 }
 
 type Version = Map<string, number>;
-type Receipt = { version: Version; confirmedAt: number };
+type Receipt = { version: Version; confirmedAt?: number };
 type Evidence = {
   local?: Receipt;
   server?: Receipt;
@@ -114,7 +119,10 @@ export class ResourceSyncStatusTracker {
   }
 
   /** Call before sending; the returned acknowledgement cannot include newer ops. */
-  serverWrite(subject: string, bytes: Uint8Array | undefined): () => void {
+  serverWrite(
+    subject: string,
+    bytes: Uint8Array | undefined,
+  ): () => SerializedServerReceipt | undefined {
     const epoch = this.epoch;
     const version = carriedVersion(bytes);
     const entry = this.entry(subject);
@@ -133,6 +141,73 @@ export class ResourceSyncStatusTracker {
       }
 
       entry.server = { version: merged, confirmedAt: Date.now() };
+      const receipt = this.serverReceipt(subject);
+      this.changed(subject);
+
+      return receipt;
+    };
+  }
+
+  /** A copy of proven server coverage, never the live resource's version. */
+  serverReceipt(subject: string): SerializedServerReceipt | undefined {
+    const receipt = this.evidence.get(subject)?.server;
+    if (!receipt || receipt.confirmedAt === undefined) return undefined;
+
+    return {
+      subject,
+      version: Object.fromEntries(receipt.version),
+      confirmedAt: receipt.confirmedAt,
+    };
+  }
+
+  /** Bind a durable read to the scope and local-write generation before its RPC.
+   * The database provides proof only after its flush barrier. Reading an old
+   * snapshot must not replace a newer completed local write or its error.
+   */
+  restore(
+    subject: string,
+  ): (row?: ResourceSyncEvidence, error?: unknown) => void {
+    const epoch = this.epoch;
+    const entry = this.entry(subject);
+    const sequence = entry.writeSequence;
+
+    return (row, error) => {
+      if (epoch !== this.epoch || this.evidence.get(subject) !== entry) return;
+
+      const restoredVersion = carriedVersion(row?.snapshot ?? undefined);
+
+      if (sequence === entry.writeSequence && entry.pendingWrites === 0) {
+        if (error !== undefined) {
+          entry.localError =
+            error instanceof Error ? error.message : String(error);
+        } else if (restoredVersion) {
+          // This is a fresh verification of stored bytes, not knowledge of
+          // when they were originally saved.
+          entry.local = { version: restoredVersion };
+          entry.localError = undefined;
+        }
+      }
+
+      const server = restoredVersion
+        ? parseSerializedServerReceipt(row?.serverReceipt)
+        : undefined;
+
+      if (server && server.subject === subject) {
+        const version = new Map(entry.server?.version);
+
+        for (const [peer, count] of Object.entries(server.version)) {
+          version.set(peer, Math.max(version.get(peer) ?? 0, count));
+        }
+
+        entry.server = {
+          version,
+          confirmedAt: Math.max(
+            entry.server?.confirmedAt ?? 0,
+            server.confirmedAt,
+          ),
+        };
+      }
+
       this.changed(subject);
     };
   }

@@ -5,6 +5,11 @@ import {
   ResourceSyncStatusTracker,
   type ResourceSyncStatus,
 } from './resource-sync-status.js';
+import {
+  normalizeResourceSyncScope,
+  type ResourceSyncScope,
+  type SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
 import {
   encodeCommit as encodePeerCommit,
@@ -1182,7 +1187,14 @@ export class Store {
     const changed = clientDb !== this.clientDb;
     const attached = !!clientDb && changed;
     this.clientDb = clientDb;
-    if (changed) this.resourceSyncStatus.reset();
+
+    if (changed) this.resetResourceSyncEvidence();
+    else {
+      for (const resource of this.resourceSyncWatchers.keys()) {
+        this.resourceSyncReads.delete(this.normalizeSubject(resource.subject));
+        this.ensureResourceSyncEvidence(resource.subject);
+      }
+    }
 
     if (isOutboxDatabase(clientDb)) this.outbox.expectDatabase();
 
@@ -2567,6 +2579,8 @@ export class Store {
       source: 'offline-replay',
     });
 
+    if (outcome === 'applied') this.ensureResourceSyncEvidence(subject);
+
     return outcome === 'applied' ? this.getResolved(subject) : undefined;
   }
 
@@ -2958,6 +2972,9 @@ export class Store {
     ) {
       if (!isCommitSubject(subject)) {
         existing.importLoroUpdate(change.loroBytes);
+        // The echo can add server-owned causal metadata after our save finished.
+        // Keep that exact merged state locally without re-notifying editors.
+        this.writeToClientDb(existing);
       }
 
       return 'deduped';
@@ -5892,7 +5909,7 @@ export class Store {
   public setCommitTransport(transport: CommitTransport | undefined): void {
     const changed = transport !== this.commitTransport;
     this.commitTransport = transport;
-    if (changed) this.resourceSyncStatus.reset();
+    if (changed) this.resetResourceSyncEvidence();
     this.emitSyncStatus();
     this.scheduleOutboxDrain();
   }
@@ -6009,8 +6026,223 @@ export class Store {
   }
 
   private resourceSyncStatus = new ResourceSyncStatusTracker();
+  private resourceSyncEpoch = 0;
+  private resourceSyncWatchers = new Map<Resource, number>();
+  private resourceSyncReads = new Map<string, object>();
+  private resourceSyncReadBatch:
+    | {
+        epoch: number;
+        db: ClientDbWorker;
+        scope?: ResourceSyncScope;
+        entries: Map<
+          string,
+          {
+            token: object;
+            restore: ReturnType<ResourceSyncStatusTracker['restore']>;
+          }
+        >;
+      }
+    | undefined;
+  private resourceSyncWriteBatch:
+    | {
+        epoch: number;
+        db: ClientDbWorker;
+        scope: ResourceSyncScope;
+        receipts: Map<string, SerializedServerReceipt>;
+      }
+    | undefined;
 
-  /** Session-local evidence for the resource itself; excludes attachment bytes.
+  private resourceSyncScope(): ResourceSyncScope | undefined {
+    const agent = this.agent?.subject;
+    if (!agent || this.noServer || this.commitTransport) return undefined;
+
+    return normalizeResourceSyncScope({ agent, serverUrl: this.serverUrl });
+  }
+
+  private resetResourceSyncEvidence(): void {
+    this.resourceSyncEpoch++;
+    this.resourceSyncReads.clear();
+    this.resourceSyncReadBatch = undefined;
+    this.resourceSyncWriteBatch = undefined;
+    this.resourceSyncStatus.reset();
+    // Configuration is assigned before reset notifies subscribers. Schedule
+    // recovery outside getResourceSyncStatus, which React calls during render.
+    queueMicrotask(() => {
+      for (const resource of this.resourceSyncWatchers.keys()) {
+        this.ensureResourceSyncEvidence(resource.subject);
+      }
+    });
+  }
+
+  /** Read-only proof recovery, batched across mounted rows. Ordinary DB reads
+   * may observe unflushed writes; this optional RPC supplies its own barrier.
+   */
+  private ensureResourceSyncEvidence(subjectRaw: string): void {
+    const db = this.clientDb;
+    const subject = this.normalizeSubject(subjectRaw);
+    if (
+      !db ||
+      typeof db.getResourceSyncEvidence !== 'function' ||
+      this.resourceSyncReads.has(subject) ||
+      this.isDestroyed(subject) ||
+      this.hasPendingDestroy(subject)
+    )
+      return;
+    const token = {};
+    this.resourceSyncReads.set(subject, token);
+    let batch = this.resourceSyncReadBatch;
+
+    if (!batch) {
+      batch = {
+        epoch: this.resourceSyncEpoch,
+        db,
+        scope: this.resourceSyncScope(),
+        entries: new Map(),
+      };
+      this.resourceSyncReadBatch = batch;
+      const pending = batch;
+      queueMicrotask(() => {
+        void this.restoreResourceSyncBatch(pending);
+      });
+    }
+
+    batch.entries.set(subject, {
+      token,
+      restore: this.resourceSyncStatus.restore(subject),
+    });
+  }
+
+  private async restoreResourceSyncBatch(
+    batch: NonNullable<Store['resourceSyncReadBatch']>,
+  ): Promise<void> {
+    if (this.resourceSyncReadBatch === batch)
+      this.resourceSyncReadBatch = undefined;
+    const current = () =>
+      this.resourceSyncEpoch === batch.epoch && this.clientDb === batch.db;
+    if (!current()) return;
+    const subjects = [...batch.entries.keys()];
+
+    try {
+      if (
+        typeof batch.db.waitForInit === 'function' &&
+        !(await batch.db.waitForInit())
+      )
+        return;
+      if (!current()) return;
+      const rows = await batch.db.getResourceSyncEvidence(
+        subjects,
+        batch.scope,
+      );
+      if (!current() || !rows) return;
+      const bySubject = new Map(
+        rows.map(row => [this.normalizeSubject(row.subject), row]),
+      );
+
+      for (const [subject, entry] of batch.entries) {
+        if (
+          this.resourceSyncReads.get(subject) !== entry.token ||
+          this.isDestroyed(subject) ||
+          this.hasPendingDestroy(subject)
+        )
+          continue;
+        const row = bySubject.get(subject);
+        if (!row) continue;
+        entry.restore({
+          ...row,
+          subject,
+          serverReceipt:
+            batch.scope &&
+            !this.isLocalOnlySubject(subject) &&
+            row.serverReceipt
+              ? {
+                  ...row.serverReceipt,
+                  subject: this.normalizeSubject(row.serverReceipt.subject),
+                }
+              : undefined,
+        });
+      }
+    } catch (error) {
+      if (!current()) return;
+
+      for (const [subject, entry] of batch.entries) {
+        if (this.resourceSyncReads.get(subject) === entry.token)
+          entry.restore(undefined, error);
+      }
+    }
+  }
+
+  /** Coalesce diagnostic writes under the same account/database scope. They
+   * participate in reload readiness but never turn an accepted save into failure.
+   */
+  private queueResourceSyncReceipt(subject: string): void {
+    const db = this.clientDb;
+    const scope = this.resourceSyncScope();
+    const receipt = this.resourceSyncStatus.serverReceipt(subject);
+    if (
+      !db ||
+      !scope ||
+      !receipt ||
+      typeof db.putResourceSyncReceipts !== 'function' ||
+      this.isLocalOnlySubject(subject) ||
+      this.isDestroyed(subject) ||
+      this.hasPendingDestroy(subject)
+    )
+      return;
+    let batch = this.resourceSyncWriteBatch;
+
+    if (!batch) {
+      batch = { epoch: this.resourceSyncEpoch, db, scope, receipts: new Map() };
+      this.resourceSyncWriteBatch = batch;
+      this.startScheduledSave();
+      const pending = batch;
+      queueMicrotask(() => {
+        void this.persistResourceSyncBatch(pending);
+      });
+    }
+
+    batch.receipts.set(subject, receipt);
+  }
+
+  private async persistResourceSyncBatch(
+    batch: NonNullable<Store['resourceSyncWriteBatch']>,
+  ): Promise<void> {
+    if (this.resourceSyncWriteBatch === batch)
+      this.resourceSyncWriteBatch = undefined;
+
+    try {
+      if (batch.epoch !== this.resourceSyncEpoch || batch.db !== this.clientDb)
+        return;
+      const receipts = [...batch.receipts.values()].filter(
+        receipt =>
+          !this.isDestroyed(receipt.subject) &&
+          !this.hasPendingDestroy(receipt.subject),
+      );
+      if (receipts.length)
+        await batch.db.putResourceSyncReceipts(batch.scope, receipts);
+    } catch {
+      // The remote acknowledgement remains valid in this session. A failed
+      // diagnostic write only means recovery must stay unknown after reload.
+    } finally {
+      this.finishScheduledSave();
+    }
+  }
+
+  private trackServerResourceReceipt(
+    subjectRaw: string,
+    bytes: Uint8Array | undefined,
+  ): () => void {
+    const subject = this.normalizeSubject(subjectRaw);
+    const epoch = this.resourceSyncEpoch;
+    const acknowledge = this.resourceSyncStatus.serverWrite(subject, bytes);
+
+    return () => {
+      const receipt = acknowledge();
+      if (receipt && epoch === this.resourceSyncEpoch)
+        this.queueResourceSyncReceipt(subject);
+    };
+  }
+
+  /** Version-scoped evidence for the resource itself; excludes attachment bytes.
    * Unknown is intentional: idle save state or a finished drive sync is not proof.
    */
   public getResourceSyncStatus(resource: Resource): ResourceSyncStatus {
@@ -6038,6 +6270,17 @@ export class Store {
     callback: () => void,
   ): () => void {
     const target = resource.__internalObject;
+    this.resourceSyncWatchers.set(
+      target,
+      (this.resourceSyncWatchers.get(target) ?? 0) + 1,
+    );
+    this.ensureResourceSyncEvidence(target.subject);
+
+    const refresh = () => {
+      this.ensureResourceSyncEvidence(target.subject);
+      callback();
+    };
+
     const unsubscribers = [
       this.resourceSyncStatus.subscribe(
         () => this.normalizeSubject(target.subject),
@@ -6045,12 +6288,17 @@ export class Store {
       ),
       this.subscribeSaveState(target, callback),
       this.subscribe(target.subject, callback),
-      this.on(StoreEvents.SyncStatusChanged, callback),
-      this.on(StoreEvents.AgentChanged, callback),
-      this.on(StoreEvents.ServerURLChanged, callback),
+      this.on(StoreEvents.SyncStatusChanged, refresh),
+      this.on(StoreEvents.AgentChanged, refresh),
+      this.on(StoreEvents.ServerURLChanged, refresh),
     ];
 
-    return () => unsubscribers.forEach(unsubscribe => unsubscribe());
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe());
+      const remaining = (this.resourceSyncWatchers.get(target) ?? 1) - 1;
+      if (remaining) this.resourceSyncWatchers.set(target, remaining);
+      else this.resourceSyncWatchers.delete(target);
+    };
   }
 
   private saveStatus = new SaveStatusCoordinator({
@@ -6512,6 +6760,11 @@ export class Store {
     // A subsequently loaded resource must not inherit the old cache stamp.
     this.lastPersisted.delete(resolved);
     this.resourceSyncStatus.remove(this.normalizeSubject(resolved));
+    this.resourceSyncReads.delete(this.normalizeSubject(resolved));
+    this.resourceSyncReadBatch?.entries.delete(this.normalizeSubject(resolved));
+    this.resourceSyncWriteBatch?.receipts.delete(
+      this.normalizeSubject(resolved),
+    );
     this._withoutLoroHistory.delete(resolved);
 
     if (this.resources.delete(resolved)) {
@@ -6558,8 +6811,9 @@ export class Store {
     // it before reauthenticating, so the next identity never subscribes or
     // reconciles the previous identity's private workspace.
     if (this.agent && this.agent.subject !== agent?.subject) this.setDrive('');
-    if (this.agent?.subject !== agent?.subject) this.resourceSyncStatus.reset();
+    const changed = this.agent?.subject !== agent?.subject;
     this.agent = agent;
+    if (changed) this.resetResourceSyncEvidence();
 
     // The outbox is identity-scoped: rebind to this agent's own queue so a new
     // identity never drains a previous agent's commits (whose `did:ad:<sig>`
@@ -6911,8 +7165,8 @@ export class Store {
 
     const previous = this.serverUrl;
 
-    if (previous !== url) this.resourceSyncStatus.reset();
     this.serverUrl = url;
+    if (previous !== url) this.resetResourceSyncEvidence();
 
     // Switching servers: tear down the old socket and reset the connection
     // status. `serverConnected` / `serverConnectionError` describe *the current
@@ -8040,10 +8294,7 @@ export class Store {
     )
       return undefined;
 
-    return this.resourceSyncStatus.serverWrite(
-      this.normalizeSubject(subject),
-      bytes,
-    );
+    return this.trackServerResourceReceipt(subject, bytes);
   }
 
   private captureServerReceipt(
@@ -8058,8 +8309,8 @@ export class Store {
       )
         return undefined;
 
-      return this.resourceSyncStatus.serverWrite(
-        this.normalizeSubject(commit.subject),
+      return this.trackServerResourceReceipt(
+        commit.subject,
         typeof commit.loroUpdate === 'string'
           ? decodeB64(commit.loroUpdate)
           : commit.loroUpdate,
@@ -8429,6 +8680,7 @@ export class Store {
       done: Promise.resolve(),
       inFlight: { jsonAd, snapshot },
     };
+    const receiptEpoch = this.resourceSyncEpoch;
     const settle =
       db === this.clientDb
         ? this.resourceSyncStatus.localWrite(
@@ -8442,6 +8694,10 @@ export class Store {
         () => {
           entry.inFlight = undefined;
           settle?.();
+
+          if (receiptEpoch === this.resourceSyncEpoch && db === this.clientDb) {
+            this.queueResourceSyncReceipt(this.normalizeSubject(subject));
+          }
         },
         e => {
           settle?.(e);

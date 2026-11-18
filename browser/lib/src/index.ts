@@ -96,6 +96,11 @@ export * from './forks.js';
 export * from './copy.js';
 export * from './store.js';
 export type { ResourceSyncStatus } from './resource-sync-status.js';
+export type {
+  ResourceSyncScope,
+  ResourceSyncEvidence,
+  SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 export * from './property-identity.js';
 export { getOrCreateDriveLocation } from './drive-location.js';
 export { readTrashFolder, type IsTrashedOptions } from './trash.js';

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Resource } from './resource.js';
 import { Store } from './store.js';
 import { testStore } from './test-store.js';
+import { LoroLoader } from './loro-loader.js';
 import { core } from './ontologies/core.js';
 import type { ClientDbWorker } from './client-db.js';
 import type { Commit } from './commit.js';
@@ -43,6 +44,48 @@ function database(put = vi.fn(async () => {})) {
 }
 
 describe('resource copy evidence', () => {
+  it('persists server metadata carried by a deduplicated own commit echo without notifying resource consumers', async () => {
+    const { store } = await testStore();
+    const resource = await store.newResource({
+      isA: core.classes.Drive,
+      noParent: true,
+    });
+    await resource.save();
+    const db = database();
+    store.setClientDb(db);
+    resource.appliedCommitSignatures.add('own-signature');
+    store.resources.set(resource.subject, resource);
+    await store.persistState(
+      db,
+      resource.subject,
+      resource.toClientDbJsonAd()!,
+      snapshot(resource),
+    );
+    const remote = new LoroLoader.Loro.LoroDoc();
+    remote.import(snapshot(resource));
+    remote
+      .getMap('properties')
+      .set(core.properties.description, 'Server metadata');
+    remote.commit();
+    const changed = vi.fn();
+    const unsubscribe = store.subscribe(resource.subject, changed);
+    expect(
+      store.applyIncoming({
+        subject: resource.subject,
+        loroBytes: remote.export({ mode: 'snapshot' }),
+        commitId: 'atomic:commit:own-signature',
+        source: 'ws-sub-push',
+      }),
+    ).toBe('deduped');
+    await vi.waitFor(() =>
+      expect(store.getResourceSyncStatus(resource).local.state).toBe(
+        'confirmed',
+      ),
+    );
+    expect(changed).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
   it('does not infer a resource receipt from a connected server or a finished drive sync', () => {
     const store = new Store({
       serverUrl: 'https://example.com',

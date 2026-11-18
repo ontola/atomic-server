@@ -272,6 +272,53 @@ impl ClientDb {
         }
     }
 
+    /// Durable resource bytes and scoped acknowledgement metadata. No network IO.
+    #[wasm_bindgen(js_name = "getResourceSyncEvidence")]
+    pub fn get_resource_sync_evidence(
+        &self,
+        subjects: &str,
+        scope: Option<String>,
+    ) -> Result<JsValue, JsError> {
+        let subjects: Vec<String> = serde_json::from_str(subjects)?;
+        let scope = scope
+            .map(|value| {
+                serde_json::from_str::<atomic_lib::db::sync_receipts::ResourceSyncScope>(&value)
+            })
+            .transpose()?;
+        let rows = self
+            .db()
+            .get_resource_sync_evidence(&subjects, scope.as_ref())?;
+        let array = js_sys::Array::new();
+        for evidence in rows {
+            let row = js_sys::Object::new();
+            js_sys::Reflect::set(&row, &"subject".into(), &evidence.subject.into())
+                .map_err(|_| JsError::new("could not build evidence"))?;
+            let snapshot = evidence
+                .snapshot
+                .map(|bytes| js_sys::Uint8Array::from(bytes.as_slice()).into())
+                .unwrap_or(JsValue::NULL);
+            js_sys::Reflect::set(&row, &"snapshot".into(), &snapshot)
+                .map_err(|_| JsError::new("could not build evidence"))?;
+            if let Some(receipt) = evidence.server_receipt {
+                let receipt = js_sys::JSON::parse(&serde_json::to_string(&receipt)?)
+                    .map_err(|_| JsError::new("could not encode receipt"))?;
+                js_sys::Reflect::set(&row, &"serverReceipt".into(), &receipt)
+                    .map_err(|_| JsError::new("could not build evidence"))?;
+            }
+            array.push(&row);
+        }
+        Ok(array.into())
+    }
+
+    #[wasm_bindgen(js_name = "putResourceSyncReceipts")]
+    pub fn put_resource_sync_receipts(&self, scope: &str, receipts: &str) -> Result<(), JsError> {
+        let scope = serde_json::from_str(scope)?;
+        let receipts: Vec<atomic_lib::db::sync_receipts::SerializedServerReceipt> =
+            serde_json::from_str(receipts)?;
+        self.db().put_resource_sync_receipts(&scope, &receipts)?;
+        Ok(())
+    }
+
     /// A resource's stored row as JSON-AD plus its Loro snapshot, as
     /// `{ jsonAd, snapshot }` (either may be null), for hydrating a tab.
     ///

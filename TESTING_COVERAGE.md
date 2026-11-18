@@ -618,9 +618,18 @@ resource-specific subscriptions and panel interactions; `views/ResourceRow.test.
 checks that nested controls do not navigate and noninteractive rows do not gain
 buttons. `browser/e2e/tests/resource-sync.spec.ts` creates and saves a real resource,
 opens its panel, checks keyboard dismissal/focus, edits offline, and checks the
-narrow layout. These indicators cover resource metadata; attachment bytes,
-per-resource Vault/peer receipts and confirmation recovery across reloads are
-not implemented or claimed by this coverage.
+narrow layout. A separate offline-reload journey disables all browser networking,
+recovers both confirmations with the original server timestamp, then persists an
+offline edit and reloads again to prove that the old server receipt cannot cover it.
+
+`lib/src/db/sync_receipts.rs` tests version merging, account/server isolation,
+malformed records, deletion cleanup, concurrent writers and reopening a disk DB.
+The worker and Node adapter tests cover capability fallback and propagation of
+durability failures. Store/tracker recovery tests cover delayed reads and scope
+changes, older adapters, missing/corrupt evidence and persistence failures. The
+own-echo regression verifies that server-added metadata is also persisted locally.
+These indicators cover resource metadata; attachment bytes and per-resource
+Vault/peer receipts are not implemented or claimed by this coverage.
 
 ### Protocol — well covered
 

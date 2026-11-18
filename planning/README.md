@@ -74,7 +74,7 @@ fork review diff) are recorded in their owning plans, not here.
    [`plugins.md`](./plugins.md).
 
 ## Active
-- [Resource copies and sync indicators](./resource-sync-indicators.md) — implementation started: resource-level local/server evidence and a row details panel; per-resource vault and browser-peer receipts remain follow-up work.
+- [Resource copies and sync indicators](./resource-sync-indicators.md) — resource indicators and durable reload confirmations implemented in draft PR #2576; this plan tracks unfinished per-resource vault, browser-peer and multiple-server dependencies.
 - [`atomic:` identifier scheme](atomic-scheme.md) — #1584: canonical `atomic:` scheme, dual-accept `did:ad:`, genesis v2.
 - [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
 - [Website publishing](./website-publishing.md) — FOSS publication on `develop` since #1500 (2026-09-17); managed SaaS adapter and the open follow-ups carried from that PR's handoff.

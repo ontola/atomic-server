@@ -13660,9 +13660,8 @@ msgstr "Bestemmingen van de werkruimte"
 msgid "These confirmations cover file details. The file’s contents are not verified here."
 msgstr "Deze bevestigingen gelden voor de bestandsgegevens. De bestandsinhoud wordt hier niet gecontroleerd."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Confirmations shown here are from this session."
-msgstr "De bevestigingen die je hier ziet, zijn van deze sessie."
+#~ msgid "Confirmations shown here are from this session."
+#~ msgstr "De bevestigingen die je hier ziet, zijn van deze sessie."
 
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Manage sync and backup"

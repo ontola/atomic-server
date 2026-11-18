@@ -13657,9 +13657,8 @@ msgstr "Ziele des Arbeitsbereichs"
 msgid "These confirmations cover file details. The file’s contents are not verified here."
 msgstr "Diese Bestätigungen betreffen die Dateiinformationen. Der Dateiinhalt wird hier nicht überprüft."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Confirmations shown here are from this session."
-msgstr "Die hier angezeigten Bestätigungen stammen aus dieser Sitzung."
+#~ msgid "Confirmations shown here are from this session."
+#~ msgstr "Die hier angezeigten Bestätigungen stammen aus dieser Sitzung."
 
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Manage sync and backup"

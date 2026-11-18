@@ -13654,9 +13654,8 @@ msgstr "Destinations de l’espace de travail"
 msgid "These confirmations cover file details. The file’s contents are not verified here."
 msgstr "Ces confirmations concernent les informations du fichier. Son contenu n’est pas vérifié ici."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Confirmations shown here are from this session."
-msgstr "Les confirmations affichées ici proviennent de cette session."
+#~ msgid "Confirmations shown here are from this session."
+#~ msgstr "Les confirmations affichées ici proviennent de cette session."
 
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Manage sync and backup"

@@ -7,6 +7,11 @@
  * use, keep `ClientDbWorker`.
  */
 
+import type {
+  ResourceSyncEvidence,
+  ResourceSyncScope,
+  SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 import { versionVectorRecords } from './version-vector-records.js';
 import {
   parseHistoryAttribution,
@@ -221,6 +226,31 @@ export class NodeClientDb {
 
   async applyCommit(commitJsonAd: string): Promise<void> {
     await this.requireDb().applyCommit(commitJsonAd);
+  }
+
+  async getResourceSyncEvidence(
+    subjects: string[],
+    scope?: ResourceSyncScope,
+  ): Promise<ResourceSyncEvidence[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceSyncEvidence !== 'function') return undefined;
+    const evidence = db.getResourceSyncEvidence(
+      JSON.stringify(subjects),
+      scope ? JSON.stringify(scope) : undefined,
+    ) as ResourceSyncEvidence[];
+    db.flush();
+
+    return evidence;
+  }
+
+  async putResourceSyncReceipts(
+    scope: ResourceSyncScope,
+    receipts: SerializedServerReceipt[],
+  ): Promise<void> {
+    const db = this.requireDb();
+    if (typeof db.putResourceSyncReceipts !== 'function') return;
+    db.putResourceSyncReceipts(JSON.stringify(scope), JSON.stringify(receipts));
+    db.flush();
   }
 
   async removeResource(subject: string): Promise<void> {
