@@ -19,8 +19,29 @@
 
 use crate::errors::AtomicResult;
 
-/// The pkarr relay URL to use for publishing and resolving.
-const RELAY_URL: &str = "https://dns.iroh.link/pkarr";
+/// The default pkarr relay, always kept as the last fallback.
+const DEFAULT_RELAY_URL: &str = "https://dns.iroh.link/pkarr";
+/// Env var with a comma-separated list of extra pkarr relay base URLs.
+const RELAYS_ENV: &str = "ATOMIC_PKARR_RELAYS";
+
+/// The relays to use, in order: those listed in `raw` (the value of
+/// [`RELAYS_ENV`]) first, then the default as a fallback, without duplicates.
+/// Entries are trimmed, empty ones skipped and a trailing `/` removed.
+fn parse_relays(raw: Option<&str>) -> Vec<String> {
+    let mut relays: Vec<String> = Vec::new();
+    for entry in raw.unwrap_or_default().split(',') {
+        let entry = entry.trim().trim_end_matches('/');
+        if !entry.is_empty() {
+            push_unique(&mut relays, entry);
+        }
+    }
+    push_unique(&mut relays, DEFAULT_RELAY_URL);
+    relays
+}
+
+fn relays() -> Vec<String> {
+    parse_relays(std::env::var(RELAYS_ENV).ok().as_deref())
+}
 
 /// TXT label holding the JSON array of Iroh NodeIDs.
 const NODES_LABEL: &str = "_atomic_nodes";
@@ -333,11 +354,28 @@ async fn resolve_record_raw(public_key: &pkarr::PublicKey) -> AtomicResult<Drive
         .unwrap_or_default())
 }
 
-/// The relay's current packet for `public_key`: `None` for a 404, an error for
-/// anything that is not an answer (no network, DNS, TLS, a timeout, a 5xx, a
-/// packet that does not verify).
+/// The current packet for `public_key`, asking the relays in order; the first
+/// one that has a packet wins. `None` when no relay failed and none has a
+/// packet (404). An error when a relay gave no answer (no network, DNS, TLS, a
+/// timeout, a 5xx, a packet that does not verify) and no other relay had a
+/// packet: a 404 from one relay does not prove the record is absent.
 async fn fetch_packet(public_key: &pkarr::PublicKey) -> AtomicResult<Option<pkarr::SignedPacket>> {
-    fetch_packet_from(RELAY_URL, public_key).await
+    let mut errors: Vec<String> = Vec::new();
+    for relay in relays() {
+        match fetch_packet_from(&relay, public_key).await {
+            Ok(Some(packet)) => return Ok(Some(packet)),
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!("Discovery: {e}");
+                errors.push(e.to_string());
+            }
+        }
+    }
+    if errors.is_empty() {
+        Ok(None)
+    } else {
+        Err(errors.join("; ").into())
+    }
 }
 
 async fn fetch_packet_from(
@@ -442,7 +480,7 @@ fn build_client() -> AtomicResult<pkarr::Client> {
     let mut builder = pkarr::Client::builder();
     builder.no_default_network();
     builder
-        .relays(&[RELAY_URL])
+        .relays(&relays())
         .map_err(|e| format!("Invalid relay URL: {e}"))?;
     let client = builder
         .build()
@@ -463,6 +501,35 @@ mod tests {
         let result = fetch_packet_from("http://127.0.0.1:9/pkarr", &keypair.public_key()).await;
         let err = result.expect_err("unreachable relay must be an error");
         assert!(err.to_string().contains("unreachable"), "{err}");
+    }
+
+    #[test]
+    fn relays_default_when_unset_or_empty() {
+        assert_eq!(parse_relays(None), vec![DEFAULT_RELAY_URL]);
+        assert_eq!(parse_relays(Some("")), vec![DEFAULT_RELAY_URL]);
+        assert_eq!(parse_relays(Some(" , ,")), vec![DEFAULT_RELAY_URL]);
+    }
+
+    #[test]
+    fn custom_relays_come_first_with_default_as_fallback() {
+        assert_eq!(
+            parse_relays(Some(" https://a.example/pkarr , https://b.example/pkarr")),
+            vec![
+                "https://a.example/pkarr",
+                "https://b.example/pkarr",
+                DEFAULT_RELAY_URL
+            ]
+        );
+    }
+
+    #[test]
+    fn relays_are_deduplicated_and_trailing_slash_stripped() {
+        assert_eq!(
+            parse_relays(Some(
+                "https://a.example/pkarr/,https://a.example/pkarr,https://dns.iroh.link/pkarr/"
+            )),
+            vec!["https://a.example/pkarr", DEFAULT_RELAY_URL]
+        );
     }
 
     #[test]
