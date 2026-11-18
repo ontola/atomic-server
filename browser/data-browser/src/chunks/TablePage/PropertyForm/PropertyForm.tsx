@@ -1,5 +1,12 @@
 import { core, Resource, unknownSubject, useString } from '@tomic/react';
-import { useCallback, useEffect, useMemo, type JSX } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  forwardRef,
+  type InputHTMLAttributes,
+  type JSX,
+} from 'react';
 import { styled } from 'styled-components';
 import { PropertyNameField, nameTableProperty } from '@tomic/table';
 import { ErrorChip } from '@components/forms/ErrorChip';
@@ -15,6 +22,15 @@ interface PropertyFormProps {
   existingProperty?: boolean;
   autoFocusName?: boolean;
 }
+
+const PropertyNameInput = forwardRef<
+  HTMLInputElement,
+  InputHTMLAttributes<HTMLInputElement>
+>((props, ref) => (
+  <InputWrapper $invalid={props['aria-invalid'] === true}>
+    <InputStyled {...props} ref={ref} />
+  </InputWrapper>
+));
 
 export function PropertyForm({
   resource,
@@ -100,18 +116,18 @@ export function PropertyForm({
   return (
     <Form onSubmit={handleSubmit}>
       <div>
-        <InputWrapper $invalid={!!nameError}>
-          <PropertyNameField
-            Input={InputStyled}
-            focusKey={resource.subject}
-            autoFocus={autoFocusName}
-            value={name ?? ''}
-            onChange={handleNameChange}
-            placeholder='New Column'
-            onBlur={setNameTouched}
-          />
-        </InputWrapper>
-        {nameError && <ErrorChip>{nameError}</ErrorChip>}
+        <PropertyNameField
+          Input={PropertyNameInput}
+          Error={ErrorChip}
+          value={name ?? ''}
+          onChange={handleNameChange}
+          autoFocus={autoFocusName}
+          focusKey={resource.subject}
+          label='Column name'
+          placeholder='New Column'
+          onBlur={setNameTouched}
+          error={nameError}
+        />
       </div>
       <CategoryForm resource={resource} existingProperty={existingProperty} />
       {/* Needed for inputs to submit on enter */}

@@ -2816,7 +2816,7 @@ The private-dataset harness is kept outside the repository; it is not a CI
 speed assertion. Crash durability is covered by the abort test above.
 
 
-Property-name content split: `browser/table/src/schema/PropertyNameField.test.tsx`
-covers existing versus provisional shortnames, raw callbacks, fixed input identity
-and delayed focus reset when the resource changes. The Atomic host retains its
-error wrapper and baseline text-format save. No new persistence guarantee.
+Property-name accessibility proposal: `browser/table/src/schema/PropertyNameField.test.tsx`
+covers accessible error relations, raw names, disabled input and baseline delayed
+selection after resource changes. The Atomic text-format regression retains the
+explicit save; removing it is a separate held proposal under #2538.

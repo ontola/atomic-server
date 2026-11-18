@@ -13362,3 +13362,7 @@ msgstr ""
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Rename view"
 msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr ""

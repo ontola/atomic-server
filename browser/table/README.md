@@ -153,9 +153,7 @@ rollback. Native saved-cell undo uses the saved values as conflict baselines thr
 `executeTableRowMutation`; Atomic retains its existing restoration/save policies.
 
 
-`PropertyNameField` moves the existing controlled name input and delayed focus
-behavior. The host keeps its original error wrapper and form submission rules.
-`nameTableProperty` retains the pre-existing shortname policy. Accessibility,
-focus-policy changes and removing explicit text-format saves are separate review
-items, not part of this move. This legacy-base content split is not a clean-base
-TablePage merge prerequisite.
+`PropertyNameField` shares controlled input, autofocus and validation presentation
+between property drafts. `nameTableProperty` preserves an existing property's
+shortname when changing its display label; only a new draft derives a provisional
+shortname. Category controls and schema activation remain adapter work.
