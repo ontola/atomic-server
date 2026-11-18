@@ -312,8 +312,8 @@ export function VaultStorage({
               {!onCompact && usage.reclaimable_bytes > 0 && (
                 <Actions>
                   <span data-testid='vault-storage-reclaimable'>
-                    {formatBytes(usage.reclaimable_bytes)} of old history and
-                    unused files can be removed. Nothing you can see is lost.
+                    {formatBytes(usage.reclaimable_bytes)} of old history can be
+                    removed. Nothing you can see is lost.
                   </span>
                   <ButtonRow>
                     <Button
