@@ -78,6 +78,8 @@ styles.textContent = [
   '.btn{font:inherit;font-size:13px;border:1px solid #1b50d8;background:#1b50d8;color:#fff;border-radius:9px;padding:7px 13px;min-height:34px;cursor:pointer}',
   '.btn.secondary{background:transparent;border-color:#c7cbd4;color:inherit}',
   '.btn:hover{filter:brightness(1.08)}.btn:disabled{opacity:.55;cursor:wait}',
+  '.repository-link{display:grid;gap:6px;margin:14px 0}',
+  '.repository-link input{font:inherit;color:inherit;background:transparent;border:1px solid #c7cbd4;border-radius:9px;padding:7px 10px;min-height:34px;width:min(100%,16rem)}',
   '.muted{color:#777;font-size:13px}.note{color:#666;font-size:12px;margin:10px 0}',
   '.error{border:1px solid #f4c2bc;background:#fff0ef;color:#9d2020;border-radius:8px;padding:12px;margin:10px 0}',
   '.empty{border:1px dashed #ccc;text-align:center;border-radius:10px;padding:35px 14px;margin:12px 0}',
@@ -153,7 +155,8 @@ function validRepo(text) {
 }
 
 async function readPages(read, onPage) {
-  for (let page = 1; page <= 20; page++) {
+  const limit = current.mode === 'public' && read === 'issues' ? 40 : 20;
+  for (let page = 1; page <= limit; page++) {
     const result = await call('syncablesRead', { read, page });
     if (result.status < 200 || result.status >= 300)
       throw new Error('GitHub read failed (HTTP ' + result.status + ').');
@@ -209,8 +212,26 @@ async function renderAccounts() {
     'Connected GitHub accounts',
     'Discover organizations and repositories available to your account.',
   );
-  bar.append(button('Connect account', connectAccount));
-  const connected = await call('syncablesAccounts');
+  const controls = el('div', null, 'controls');
+  controls.append(
+    button('Connect account', connectAccount),
+    button(
+      'Public repositories',
+      async () => {
+        await call('syncablesOpenPublic');
+      },
+      true,
+    ),
+  );
+  bar.append(controls);
+  let connected;
+  try {
+    connected = await call('syncablesAccounts');
+  } catch (error) {
+    showError(error);
+    root.append(button('Try again', renderAccounts, true));
+    return;
+  }
   if (connected.length === 0) {
     const empty = el('div', null, 'empty');
     empty.append(
@@ -244,6 +265,46 @@ async function renderAccounts() {
           : el('span', 'Connect again from this table.', 'muted'),
     ]),
   );
+}
+
+function publicRepositoryLink() {
+  const container = el('div', null, 'repository-link');
+  const label = el('label', 'Public GitHub repository');
+  const input = el('input');
+  input.id = 'public-github-repository';
+  input.type = 'text';
+  input.placeholder = 'owner/repo';
+  input.autocomplete = 'off';
+  input.autocapitalize = 'none';
+  input.spellcheck = false;
+  label.htmlFor = input.id;
+
+  const link = button(
+    'Link repository',
+    async () => {
+      const repository = input.value.trim();
+      if (!repository) {
+        input.focus();
+        throw new Error('Enter a repository as owner/repo.');
+      }
+      await call('syncablesLinkPublicRepository', { repository });
+    },
+    true,
+  );
+  input.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    event.preventDefault();
+    link.click();
+  });
+  const controls = el('div', null, 'controls');
+  controls.append(input, link);
+  container.append(label, controls);
+  return container;
+}
+
+function renderPublic() {
+  renderBase('Public repositories');
+  root.append(publicRepositoryLink());
 }
 
 async function renderOrganizations() {
@@ -433,7 +494,9 @@ async function renderMirror() {
         current.ownerLogin +
         '/' +
         current.repoName +
-        ' · read-only via integration proxy.',
+        (current.mode === 'public'
+          ? ' · public repository.'
+          : ' · read-only via integration proxy.'),
       'note',
     ),
   );
@@ -505,6 +568,9 @@ export async function view({ root: viewRoot }) {
     switch (current.kind) {
       case 'platform':
         await renderAccounts();
+        break;
+      case 'public':
+        renderPublic();
         break;
       case 'organizations':
         await renderOrganizations();

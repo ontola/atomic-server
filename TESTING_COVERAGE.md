@@ -1278,7 +1278,8 @@ This does not yet prove restoration of the user's private staging workspace.
 - Built-in GitHub Syncables in `browser/e2e/tests/syncables-github.spec.ts`
   exercises My Drive → account menu → Apps, repeat install, opaque iframe
   origin, OAuth cancellation and signed PKCE redemption, browser-held
-  connection key signing, owner namespaces, repository scopes, paginated
+  connection key signing, owner namespaces, account-independent public
+  repository linking by name, sidebar navigation, scoped and paginated
   issue sync, typed updates, pause across reload and reconnecting the same
   GitHub account without replacing its mirror. It runs against a real
   Atomic Server with a protocol-checking proxy fixture. The live GitHub OAuth

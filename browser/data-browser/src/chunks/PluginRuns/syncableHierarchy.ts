@@ -30,7 +30,11 @@ export type SyncableNodeKind =
   | 'owner'
   | 'repositories'
   | 'repository'
-  | 'mirror';
+  | 'mirror'
+  | 'public'
+  | 'public-owner'
+  | 'public-repository'
+  | 'public-mirror';
 
 export interface SyncableNodeInput {
   drive: string;
@@ -172,8 +176,10 @@ function sourceKeys(input: SyncableNodeInput): [string, ...string[]] {
   if (!/^[a-z0-9-]{1,80}$/.test(platform))
     throw new Error('Invalid platform ID');
   if (!remoteId) throw new Error('A remote identity is required');
-  if (kind === 'mirror' && !collectionName)
+  if ((kind === 'mirror' || kind === 'public-mirror') && !collectionName)
     throw new Error('A mirrored collection needs a collection name');
+  if (kind.startsWith('public') && input.config?.connectionId !== undefined)
+    throw new Error('Public resources cannot have a connection ID');
 
   const identity = [
     proxyOrigin,
@@ -201,7 +207,11 @@ const localIdFor = (key: string): string =>
   `syncables:node:${encodeURIComponent(key)}`;
 
 const isTableKind = (kind: SyncableNodeKind): boolean =>
-  kind === 'organizations' || kind === 'repositories' || kind === 'mirror';
+  kind === 'organizations' ||
+  kind === 'repositories' ||
+  kind === 'mirror' ||
+  kind === 'public' ||
+  kind === 'public-mirror';
 
 function fromIndex(value: unknown): Record<string, string> {
   const entries: Record<string, string> = {};
@@ -354,7 +364,7 @@ async function provisionSyncableNode(
   }
 
   const rowClass =
-    input.kind === 'organizations'
+    input.kind === 'organizations' || input.kind === 'public'
       ? schema.classes['syncable-owner']
       : input.kind === 'repositories'
         ? schema.classes['syncable-repository']
@@ -363,7 +373,7 @@ async function provisionSyncableNode(
   const klass =
     input.kind === 'account'
       ? schema.classes['syncable-account']
-      : input.kind === 'owner'
+      : input.kind === 'owner' || input.kind === 'public-owner'
         ? schema.classes['syncable-owner']
         : schema.classes['syncable-repository'];
 
@@ -379,7 +389,8 @@ async function provisionSyncableNode(
         ? { [schema.properties['syncable-source-config']]: input.config }
         : {}),
       ...(isTable ? { [core.properties.classtype]: rowClass } : {}),
-      ...(input.kind === 'owner' && input.ownerKind
+      ...((input.kind === 'owner' || input.kind === 'public-owner') &&
+      input.ownerKind
         ? {
             [schema.properties['syncable-owner-kind']]: input.ownerKind,
           }

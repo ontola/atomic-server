@@ -1,6 +1,9 @@
 import { core, findSchema, ensureSchema, type Store } from '@tomic/react';
 import { getIntegrationProxy } from '@helpers/integrationProxy';
-import { ProxyConnections } from '@helpers/proxyConnections';
+import {
+  readLimitedResponseText,
+  type ProxyConnections,
+} from '@helpers/proxyConnections';
 import {
   isSyncableResourceInDrive,
   queueSyncableProvisioning,
@@ -9,6 +12,7 @@ import {
 import {
   ensureSyncableNode,
   syncableHierarchySchema,
+  type SyncableNodeInput,
 } from './syncableHierarchy';
 import { syncablesProxyUrl } from './syncablesProxyScope';
 
@@ -26,6 +30,7 @@ export interface BuiltinSyncablesRequest {
   ownerKind?: unknown;
   repoId?: unknown;
   repoName?: unknown;
+  repository?: unknown;
   issues?: unknown;
   paused?: unknown;
   imported?: unknown;
@@ -44,6 +49,7 @@ interface Context {
   platform: string;
   proxyOrigin: string;
   kind: string;
+  mode?: 'public';
   connectionId?: string;
   ownerId?: string;
   ownerLogin?: string;
@@ -51,10 +57,16 @@ interface Context {
   repoName?: string;
 }
 
-/** Values the scoped proxy actually returned to this frame. */
+interface PublicIssueContinuation {
+  page: number;
+  after?: string;
+}
+
+/** Values the scoped provider reads actually returned to this frame. */
 export interface SyncablesDiscovery {
   owners: Set<string>;
   repositories: Map<string, boolean>;
+  publicIssuePages: Map<string, PublicIssueContinuation | 'loading'>;
 }
 
 function ownerKey(id: string, login: string, type: string) {
@@ -129,6 +141,266 @@ function identifier(value: unknown, name: string): string {
   return text;
 }
 
+type RepositoryOwnerKind = 'organization' | 'personal';
+
+function parseGitHubRepositoryReference(value: unknown) {
+  const reference = requiredText(value, 'GitHub repository', 140);
+  const match = reference.match(
+    /^([a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?)\/([a-z0-9._-]{1,100})$/i,
+  );
+  if (!match || match[0] !== reference || match[2] === '.' || match[2] === '..')
+    throw new Error('Enter a GitHub repository as owner/repo');
+
+  return { owner: match[1], repo: match[2] };
+}
+
+async function fetchPublicGitHub(path: string, signal?: AbortSignal) {
+  signal?.throwIfAborted();
+  const deadline = AbortSignal.timeout(15_000);
+  const response = await fetch('https://api.github.com' + path, {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'omit',
+    redirect: 'error',
+    referrerPolicy: 'no-referrer',
+    headers: { Accept: 'application/vnd.github+json' },
+    signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+  });
+  if (!response.ok) await response.body?.cancel().catch(() => undefined);
+
+  return response;
+}
+
+async function readPublicGitHubRepository(
+  {
+    owner: requestedOwner,
+    repo: requestedRepo,
+  }: { owner: string; repo: string },
+  signal?: AbortSignal,
+) {
+  const response = await fetchPublicGitHub(
+    `/repos/${requestedOwner}/${requestedRepo}`,
+    signal,
+  );
+  if (!response.ok)
+    throw new Error(
+      response.status === 404
+        ? 'Public GitHub repository not found'
+        : 'GitHub repository lookup failed (HTTP ' + response.status + ')',
+    );
+
+  const body = JSON.parse(
+    await readLimitedResponseText(response, 'GitHub'),
+  ) as {
+    id?: unknown;
+    name?: unknown;
+    full_name?: unknown;
+    private?: unknown;
+    has_issues?: unknown;
+    owner?: { id?: unknown; login?: unknown; type?: unknown };
+  } | null;
+  if (body?.private !== false || body.has_issues !== true)
+    throw new Error('Choose a public GitHub repository with Issues enabled');
+
+  const owner = body.owner;
+  if (
+    typeof owner?.login !== 'string' ||
+    typeof body.name !== 'string' ||
+    body.full_name !== owner.login + '/' + body.name ||
+    owner.login.toLowerCase() !== requestedOwner.toLowerCase() ||
+    body.name.toLowerCase() !== requestedRepo.toLowerCase() ||
+    (owner.type !== 'Organization' && owner.type !== 'User') ||
+    typeof owner.id !== 'number' ||
+    typeof body.id !== 'number'
+  )
+    throw new Error('GitHub returned unexpected repository metadata');
+
+  const ownerKind: RepositoryOwnerKind =
+    owner.type === 'Organization' ? 'organization' : 'personal';
+
+  return {
+    ownerId: numericId(String(owner.id), 'owner ID'),
+    ownerLogin: owner.login,
+    ownerKind,
+    repoId: numericId(String(body.id), 'repository ID'),
+    repoName: body.name,
+  };
+}
+
+const hasNextPage = (link: string | null | undefined): boolean =>
+  /<[^>]+>\s*;\s*rel="next"/i.test(link ?? '');
+
+function publicIssueContinuation(
+  link: string | null,
+  current: URL,
+  nextPage: number,
+): PublicIssueContinuation | undefined {
+  if (!link || !/;\s*rel\s*=\s*(?:"next"|next)(?=\s*(?:;|,|$))/i.test(link))
+    return undefined;
+  const invalid = () =>
+    new Error('GitHub returned an invalid issue continuation');
+  const links = [
+    ...link.matchAll(
+      /<([^<>]+)>\s*;\s*rel\s*=\s*(?:"next"|next)(?=\s*(?:;|,|$))/gi,
+    ),
+  ];
+  if (links.length !== 1) throw invalid();
+
+  let next: URL;
+
+  try {
+    next = new URL(links[0][1], current);
+  } catch {
+    throw invalid();
+  }
+
+  if (
+    next.origin !== current.origin ||
+    next.pathname !== current.pathname ||
+    next.username ||
+    next.password ||
+    next.hash ||
+    next.searchParams.get('page') !== String(nextPage)
+  )
+    throw invalid();
+
+  const seen = new Set<string>();
+
+  for (const [key, value] of next.searchParams) {
+    if (seen.has(key)) throw invalid();
+    seen.add(key);
+    if (
+      key !== 'page' &&
+      !(key === 'per_page' && value === '100') &&
+      !(key === 'state' && value === 'all') &&
+      !(
+        key === 'after' &&
+        value.length <= 512 &&
+        /^[A-Za-z0-9+/_-]+={0,2}$/.test(value)
+      )
+    )
+      throw invalid();
+  }
+
+  const after = next.searchParams.get('after') ?? undefined;
+
+  return { page: nextPage, after };
+}
+
+async function readPublicGitHubIssues(
+  repoId: string,
+  pagination: SyncablesDiscovery['publicIssuePages'],
+  page: unknown = 1,
+  signal?: AbortSignal,
+) {
+  if (
+    typeof page !== 'number' ||
+    !Number.isInteger(page) ||
+    page < 1 ||
+    page > 40
+  )
+    throw new Error('Invalid pagination page');
+  const next = pagination.get(repoId);
+  if (next === 'loading')
+    throw new Error('A GitHub issue page is already loading');
+  if (page > 1 && next?.page !== page)
+    throw new Error('Load public GitHub issue pages in order');
+
+  // Use only the validated cursor. Rebuild the URL from this mirror's fixed
+  // numeric repository and read parameters rather than following the Link.
+  const url = new URL(
+    `/repositories/${repoId}/issues?per_page=100&page=${page}&state=all`,
+    'https://api.github.com',
+  );
+  if (page > 1 && next?.after) url.searchParams.set('after', next.after);
+  pagination.set(repoId, 'loading');
+
+  try {
+    const response = await fetchPublicGitHub(url.pathname + url.search, signal);
+    const body: unknown = response.ok
+      ? JSON.parse(await readLimitedResponseText(response, 'GitHub'))
+      : null;
+    signal?.throwIfAborted();
+    if (response.ok && !Array.isArray(body))
+      throw new Error('GitHub returned an invalid issue list');
+    const continuation = response.ok
+      ? publicIssueContinuation(response.headers.get('Link'), url, page + 1)
+      : undefined;
+    if (continuation) pagination.set(repoId, continuation);
+
+    return { status: response.status, body, nextPage: !!continuation };
+  } finally {
+    if (pagination.get(repoId) === 'loading') pagination.delete(repoId);
+  }
+}
+
+type ProvisionDestination = Pick<
+  SyncableNodeInput,
+  'drive' | 'parent' | 'platform' | 'proxyOrigin'
+>;
+type OwnerBinding = {
+  connectionId: string;
+  ownerId: string;
+  ownerLogin: string;
+};
+
+async function ensureOwnerRepositories(
+  store: Store,
+  destination: ProvisionDestination,
+  config: OwnerBinding,
+  ownerKind: RepositoryOwnerKind,
+  signal?: AbortSignal,
+) {
+  const remoteId = 'github-owner:' + config.ownerId;
+  signal?.throwIfAborted();
+  const owner = await ensureSyncableNode(store, {
+    ...destination,
+    kind: 'owner',
+    remoteId,
+    name: config.ownerLogin,
+    ownerKind,
+    config,
+  });
+  signal?.throwIfAborted();
+
+  return ensureSyncableNode(store, {
+    ...destination,
+    parent: owner,
+    kind: 'repositories',
+    remoteId,
+    name: 'Repositories',
+    config,
+  });
+}
+
+async function ensureRepositoryMirror(
+  store: Store,
+  destination: ProvisionDestination,
+  config: OwnerBinding & { repoId: string; repoName: string },
+  signal?: AbortSignal,
+) {
+  const remoteId = 'github-repo:' + config.repoId;
+  signal?.throwIfAborted();
+  const repository = await ensureSyncableNode(store, {
+    ...destination,
+    kind: 'repository',
+    remoteId,
+    name: config.repoName,
+    config,
+  });
+  signal?.throwIfAborted();
+
+  return ensureSyncableNode(store, {
+    ...destination,
+    parent: repository,
+    kind: 'mirror',
+    remoteId,
+    collectionName: 'issues',
+    name: 'Issues',
+    config,
+  });
+}
+
 function readConfig(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const result: Record<string, string> = {};
@@ -178,18 +450,59 @@ async function contextOf(
   if (!Array.isArray(key) || (key.length !== 5 && key.length !== 6))
     throw new Error('Invalid Syncables source key');
   const [origin, service, kind, sourceId, collection, sourceConnection] = key;
-  if (
-    typeof origin !== 'string' ||
-    typeof service !== 'string' ||
-    typeof kind !== 'string' ||
-    !['organizations', 'repositories', 'mirror'].includes(kind)
-  )
+  if (typeof origin !== 'string' || typeof service !== 'string')
     throw new Error('Unsupported Syncables source');
 
-  const config = readConfig(
-    h.properties?.['syncable-source-config'] &&
-      resource.get(h.properties['syncable-source-config']),
-  );
+  const configProperty = h.properties?.['syncable-source-config'];
+  const storedConfig = configProperty
+    ? resource.get(configProperty)
+    : undefined;
+  const config = readConfig(storedConfig);
+
+  if (kind === 'public' || kind === 'public-mirror') {
+    const recordedKind = h.properties?.['syncable-node-kind'];
+    if (
+      key.length !== 5 ||
+      service !== 'github-issues' ||
+      !recordedKind ||
+      resource.get(recordedKind) !== kind ||
+      (storedConfig &&
+        typeof storedConfig === 'object' &&
+        Object.hasOwn(storedConfig, 'connectionId'))
+    )
+      throw new Error('Invalid public GitHub source binding');
+
+    const context = {
+      proxyOrigin: origin,
+      platform: service,
+      mode: 'public',
+    } as const;
+    if (kind === 'public' && sourceId === 'github-public' && collection === '')
+      return { ...context, kind };
+
+    if (kind === 'public-mirror' && collection === 'issues') {
+      const ownerId = numericId(config.ownerId, 'owner ID');
+      const repoId = numericId(config.repoId, 'repository ID');
+      const ownerLogin = requiredText(config.ownerLogin, 'owner login', 39);
+      const repoName = requiredText(config.repoName, 'repository name', 100);
+      parseGitHubRepositoryReference(ownerLogin + '/' + repoName);
+      if (sourceId === 'github-public-repo:' + repoId)
+        return {
+          ...context,
+          kind: 'mirror',
+          ownerId,
+          ownerLogin,
+          repoId,
+          repoName,
+        };
+    }
+
+    throw new Error('Invalid public GitHub source binding');
+  }
+
+  if (kind !== 'organizations' && kind !== 'repositories' && kind !== 'mirror')
+    throw new Error('Unsupported Syncables source');
+
   const connectionId = requiredText(config.connectionId, 'Connection ID');
   const context = {
     kind,
@@ -430,7 +743,10 @@ export async function syncablesHostRequest(
   if (!store.getAgent()?.subject)
     throw new Error('Sign in to use connected services');
   const context = await contextOf(store, drive, table);
-  if (context.proxyOrigin !== getIntegrationProxy())
+  if (
+    context.mode !== 'public' &&
+    context.proxyOrigin !== getIntegrationProxy()
+  )
     throw new Error('Select this integration proxy in Settings before syncing');
   if (context.platform !== 'github-issues' && request.op !== 'syncablesContext')
     throw new Error(
@@ -455,6 +771,20 @@ export async function syncablesHostRequest(
   }
 
   if (request.op === 'syncablesRead') {
+    if (context.mode === 'public') {
+      if (context.kind !== 'mirror' || request.read !== 'issues')
+        throw new Error('This view cannot read that GitHub endpoint');
+      if ((await mirrorStatus(store, drive, table)).paused)
+        throw new Error('This mirror is paused');
+
+      return readPublicGitHubIssues(
+        numericId(context.repoId, 'repository ID'),
+        discovery.publicIssuePages,
+        request.page,
+        signal,
+      );
+    }
+
     if (!context.connectionId)
       throw new Error('This view has no GitHub connection');
     const connectionId = await proxy.activeKeyedConnection(
@@ -490,7 +820,7 @@ export async function syncablesHostRequest(
     return {
       status: response.status,
       body,
-      nextPage: /<[^>]+>\s*;\s*rel="next"/i.test(response.headers.link ?? ''),
+      nextPage: hasNextPage(response.headers.link),
     };
   }
 
@@ -499,6 +829,21 @@ export async function syncablesHostRequest(
   if (!canWrite && request.op !== 'syncablesMirrorStatus')
     throw new Error('Write access to this Syncables table is required');
   signal?.throwIfAborted();
+
+  if (request.op === 'syncablesOpenPublic') {
+    if (context.kind !== 'platform') throw new Error('Expected platform table');
+    const subject = await ensureSyncableNode(store, {
+      drive,
+      parent: table,
+      proxyOrigin: context.proxyOrigin,
+      platform: context.platform,
+      kind: 'public',
+      remoteId: 'github-public',
+      name: 'Public',
+    });
+
+    return { subject };
+  }
 
   if (request.op === 'syncablesOpenAccount') {
     if (context.kind !== 'platform') throw new Error('Expected platform table');
@@ -624,30 +969,65 @@ export async function syncablesHostRequest(
     if (!discovery.owners.has(ownerKey(ownerId, ownerLogin, ownerKind)))
       throw new Error('Refresh the owner list before opening this namespace');
 
-    signal?.throwIfAborted();
-    const owner = await ensureSyncableNode(store, {
+    const subject = await ensureOwnerRepositories(
+      store,
+      {
+        drive,
+        parent: table,
+        proxyOrigin: context.proxyOrigin,
+        platform: context.platform,
+      },
+      { connectionId, ownerId, ownerLogin },
+      ownerKind,
+      signal,
+    );
+
+    return { subject };
+  }
+
+  if (request.op === 'syncablesLinkPublicRepository') {
+    if (context.kind !== 'public')
+      throw new Error('Expected public GitHub repositories');
+    const reference = parseGitHubRepositoryReference(request.repository);
+    const { ownerId, ownerLogin, ownerKind, repoId, repoName } =
+      await readPublicGitHubRepository(reference, signal);
+    const config = { ownerId, ownerLogin, repoId, repoName };
+    const destination = {
       drive,
       parent: table,
       proxyOrigin: context.proxyOrigin,
       platform: context.platform,
-      kind: 'owner',
-      remoteId: 'github-owner:' + ownerId,
+    };
+    signal?.throwIfAborted();
+    const owner = await ensureSyncableNode(store, {
+      ...destination,
+      kind: 'public-owner',
+      remoteId: 'github-public-owner:' + ownerId,
       name: ownerLogin,
       ownerKind,
-      config: { connectionId, ownerId, ownerLogin },
+      config: { ownerId, ownerLogin },
     });
-    const repositories = await ensureSyncableNode(store, {
-      drive,
+    signal?.throwIfAborted();
+    const repository = await ensureSyncableNode(store, {
+      ...destination,
       parent: owner,
-      proxyOrigin: context.proxyOrigin,
-      platform: context.platform,
-      kind: 'repositories',
-      remoteId: 'github-owner:' + ownerId,
-      name: 'Repositories',
-      config: { connectionId, ownerId, ownerLogin },
+      kind: 'public-repository',
+      remoteId: 'github-public-repo:' + repoId,
+      name: repoName,
+      config,
+    });
+    signal?.throwIfAborted();
+    const subject = await ensureSyncableNode(store, {
+      ...destination,
+      parent: repository,
+      kind: 'public-mirror',
+      remoteId: 'github-public-repo:' + repoId,
+      collectionName: 'issues',
+      name: 'Issues',
+      config,
     });
 
-    return { subject: repositories };
+    return { subject };
   }
 
   if (request.op === 'syncablesCreateMirror') {
@@ -667,31 +1047,19 @@ export async function syncablesHostRequest(
     const repoName = identifier(request.repoName, 'repository name');
     if (discovery.repositories.get(repositoryKey(repoId, repoName)) !== true)
       throw new Error('This repository is not available for issue sync');
-    const config = { connectionId, ownerId, ownerLogin, repoId, repoName };
-    signal?.throwIfAborted();
-    const repository = await ensureSyncableNode(store, {
-      drive,
-      parent: table,
-      proxyOrigin: context.proxyOrigin,
-      platform: context.platform,
-      kind: 'repository',
-      remoteId: 'github-repo:' + repoId,
-      name: repoName,
-      config,
-    });
-    const mirror = await ensureSyncableNode(store, {
-      drive,
-      parent: repository,
-      proxyOrigin: context.proxyOrigin,
-      platform: context.platform,
-      kind: 'mirror',
-      remoteId: 'github-repo:' + repoId,
-      collectionName: 'issues',
-      name: 'Issues',
-      config,
-    });
+    const subject = await ensureRepositoryMirror(
+      store,
+      {
+        drive,
+        parent: table,
+        proxyOrigin: context.proxyOrigin,
+        platform: context.platform,
+      },
+      { connectionId, ownerId, ownerLogin, repoId, repoName },
+      signal,
+    );
 
-    return { subject: mirror };
+    return { subject };
   }
 
   if (context.kind !== 'mirror')

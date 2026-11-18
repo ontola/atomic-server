@@ -28,17 +28,21 @@ The browser-side Syncables UI, picker and logic are **owned and bundled by atomi
 ```text
 Current drive root (folder; logical platforms listing)
 └── GitHub [platform table, SyncableAccountsTable]
+    ├── Public [public repository picker]
+    │   └── ontola
+    │       └── atomic-server
+    │           └── Issues [public mirror]
     └── michiel [connected account resource]
         └── Organizations [collection-type table, SyncableCollectionTypeTable]
-            ├── ontola [organization resource; provider-stable identity]
-            │   └── Repositories [collection-type table, SyncableCollectionTypeTable]
-            │       └── atomic-server [repository resource born in ontola]
-            │           └── Issues [mirrored Atomic table, SyncableCollection]
-            └── michiel [personal owner namespace, NOT necessarily GitHub Organization]
+            └── michiel [personal owner namespace]
                 └── Repositories [collection-type table]
-                    └── personal-notes [repository resource born in personal namespace]
-                        └── Issues [mirrored Atomic table]
+                    └── personal-notes [repository resource]
+                        └── Issues [authenticated mirror, SyncableCollection]
 ```
+
+The GitHub install also has a **Public** branch alongside its account
+resources. It contains only explicitly linked public repositories. The
+sidebar expands discovery tables and keeps imported issue rows in the grid.
 
 **Do not confuse GitHub authentication with ownership.** A connection authorizes discovering an account's accessible organizations and repositories; the organization is not owned by that account. A personal username acts as a repository owner namespace, but need not be represented as a GitHub Organization object. Repositories belong under their canonical provider owner (organization or personal namespace), not directly under an OAuth account. A single organization may be reachable through multiple accounts.
 
@@ -102,11 +106,38 @@ A clickable HTML **concept** (not a production host implementation) accompanies 
   with the native Playwright walkthrough against a protocol-checking proxy
   fixture.
 - [ ] Verify PR checks on the final revision.
-- [ ] Verify the GitHub OAuth flow on a deployed keyed proxy with the new
-  catalog.
+- [x] Verify GitHub OAuth and the account listing on the deployed keyed
+  proxy at `integrations.atomic.place`.
+- [x] Verify public repository linking and issue import against live GitHub.
+  GitHub reports 1,217 issues and the local Public mirror contains 1,217.
+  The signed-in account still uses the deployed keyed proxy.
 
 The GitHub view requests approved operations by name. The host fixes the
 proxy origin, active connection, route and pagination arguments and signs the
 request. The iframe never receives a signing key or connection key. Browser
 Syncables' separate selected-read API is tested in atomic-plugins. The
 initial Atomic Server connector uses a GitHub-specific read adapter.
+
+GitHub can omit an organization from the signed account listings when it
+restricts the OAuth app. The Public view accepts an explicit `owner/repo`.
+The host verifies the canonical owner and repository IDs against public
+GitHub metadata before provisioning a tree under Public. Its Issues view
+uses credential-free GitHub reads, with source identities separate from
+mirrors that use a signed account connection.
+
+
+### Live verification on 2026-11-18
+
+The `michielbdejong` account connected through `integrations.atomic.place`.
+The Public branch linked `ontola/atomic-server` as a separate anonymous
+source, completed all GitHub cursor pages, and imported 1,217 Issues.
+GitHub search returned the same count with `incomplete_results: false`.
+Open issue #2566 and closed issue #2454 matched the imported titles and
+URLs. The sidebar shows Public alongside the connected account, with
+navigation resources through Issues and no imported issue rows or table
+view definitions underneath.
+
+The latest local Chromium walkthrough passed both the authenticated and
+Public flows with zero failures, flakes or skips. Typechecks and 81
+focused unit tests passed. The full server CI still needs a completed
+run on the final commit.

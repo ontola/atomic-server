@@ -50,7 +50,7 @@ jobs:
         run: pnpm --filter @tomic/e2e typecheck
       - name: Test built-in Syncables unit specs
         working-directory: browser
-        run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncableHierarchy.test.ts src/chunks/PluginRuns/syncablesHost.test.ts src/chunks/PluginRuns/SyncablesFrame.test.ts src/chunks/PluginRuns/syncablesProxyScope.test.ts src/chunks/PluginRuns/proxyCatalog.test.ts src/helpers/proxyConnections.test.ts src/chunks/AppPage/ProxyConnectReturn.test.tsx
+        run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncableHierarchy.test.ts src/chunks/PluginRuns/syncablesHost.test.ts src/chunks/PluginRuns/syncablesNavigation.test.ts src/chunks/PluginRuns/SyncablesFrame.test.ts src/chunks/PluginRuns/syncablesProxyScope.test.ts src/chunks/PluginRuns/proxyCatalog.test.ts src/helpers/proxyConnections.test.ts src/chunks/AppPage/ProxyConnectReturn.test.tsx
       - name: Validate sandbox module JavaScript syntax
         run: node --check server/src/handlers/builtin_syncables.js
 

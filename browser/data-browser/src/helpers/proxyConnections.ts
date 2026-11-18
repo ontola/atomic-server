@@ -176,7 +176,10 @@ export function canonicalAgent(id: string): string {
   return agentSubject(base64url(key));
 }
 
-async function limitedText(response: Response): Promise<string> {
+export async function readLimitedResponseText(
+  response: Response,
+  source = 'Proxy',
+): Promise<string> {
   if (!response.body) return '';
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -188,7 +191,7 @@ async function limitedText(response: Response): Promise<string> {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BODY) throw new Error('Proxy response exceeds 10 MB');
+      if (size > MAX_BODY) throw new Error(source + ' response exceeds 10 MB');
       text += decoder.decode(value, { stream: true });
     }
 
@@ -306,7 +309,7 @@ export class ProxyConnections {
       redirect: 'error',
       signal: AbortSignal.timeout(TIMEOUT),
     });
-    const parsed = parseBody(await limitedText(response));
+    const parsed = parseBody(await readLimitedResponseText(response));
 
     if (!response.ok) {
       const error = parsed as { error?: unknown; message?: unknown } | null;
@@ -864,7 +867,7 @@ export class ProxyConnections {
     return {
       status: response.status,
       headers,
-      body: parseBody(await limitedText(response)),
+      body: parseBody(await readLimitedResponseText(response)),
     };
   }
 

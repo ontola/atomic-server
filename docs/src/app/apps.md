@@ -35,6 +35,11 @@ import issues. The **Table** view shows the imported rows. Run Sync again to
 update changed rows. **Pause** keeps the rows in your drive and prevents
 refreshes until you resume.
 
+To link a public repository, choose **Public repositories** in GitHub's
+**Sync** view. Enter its `owner/repo` name and choose **Link repository**.
+The Issues table appears under **GitHub → Public** in the sidebar. This
+branch reads from GitHub's public API and works without a GitHub account.
+
 The integration runs when you use the Sync view. Changes you make in Atomic
 stay in your drive. An interrupted or incomplete import keeps cached issues.
 Moving an Issues table within the same drive keeps its source binding.

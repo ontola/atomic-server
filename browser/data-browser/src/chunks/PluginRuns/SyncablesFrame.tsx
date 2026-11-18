@@ -27,6 +27,8 @@ const SYNCABLES_OPERATIONS = new Set([
   'syncablesOpenAccount',
   'syncablesDiscoverOwners',
   'syncablesOpenOwner',
+  'syncablesOpenPublic',
+  'syncablesLinkPublicRepository',
   'syncablesDiscoverRepos',
   'syncablesCreateMirror',
   'syncablesMirrorStatus',
@@ -107,6 +109,7 @@ export function SyncablesFrame({
     const discovery: SyncablesDiscovery = {
       owners: new Set(),
       repositories: new Map(),
+      publicIssuePages: new Map(),
     };
 
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
