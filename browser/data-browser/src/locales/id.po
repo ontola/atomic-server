@@ -1304,6 +1304,7 @@ msgstr "Sinkronisasi"
 msgid "Offline"
 msgstr "Offline"
 
+#: src/components/ResourceSync/resourceSyncPresentation.ts
 #: src/components/SideBar/syncStatus.tsx
 msgid "Changes could not sync"
 msgstr "Perubahan tidak dapat disinkronkan"
@@ -1520,6 +1521,7 @@ msgstr "Tersinkron"
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Kesalahan: Diharapkan atomic:node:<node-id>"
 
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
 #: src/helpers/managed/deviceLink.ts
 #: src/routes/SettingsAgent.tsx
 #: src/routes/SyncRoute.tsx
@@ -5430,6 +5432,7 @@ msgstr "Tidak dapat mengaktifkan hosting {0} (HTTP {1})."
 msgid "Manage account →"
 msgstr "Kelola akun →"
 
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
@@ -5906,6 +5909,8 @@ msgstr "Status cloud tidak diketahui"
 msgid "Checking cloud…"
 msgstr "Memeriksa cloud…"
 
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
 #: src/helpers/managed/driveHostingState.ts
 #: src/views/DriveUnavailable.tsx
 msgid "Server"
@@ -13522,3 +13527,155 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#. 0: title; 1: presentation.label
+#: src/components/ResourceSync/ResourceSyncIndicator.tsx
+msgid "Copies and sync for {0}: {1}"
+msgstr "Salinan dan sinkronisasi untuk {0}: {1}"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Could not save on this device"
+msgstr "Tidak dapat menyimpan di perangkat ini"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes could not be saved"
+msgstr "Perubahan tidak dapat disimpan"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting to save"
+msgstr "Perubahan menunggu untuk disimpan"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting to sync"
+msgstr "Perubahan menunggu sinkronisasi"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Saving changes…"
+msgstr "Menyimpan perubahan…"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes saved to server"
+msgstr "Perubahan terbaru disimpan di server"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Server copy not confirmed"
+msgstr "Salinan di server belum dikonfirmasi"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Saved on this device"
+msgstr "Disimpan di perangkat ini"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Local storage unavailable"
+msgstr "Penyimpanan lokal tidak tersedia"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Local copy not confirmed"
+msgstr "Salinan lokal belum dikonfirmasi"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Saving on this device…"
+msgstr "Menyimpan di perangkat ini…"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "No server configured"
+msgstr "Belum ada server yang dikonfigurasi"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes saved"
+msgstr "Perubahan terbaru disimpan"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Copy not confirmed"
+msgstr "Salinan belum dikonfirmasi"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Close copies and sync"
+msgstr "Tutup salinan dan sinkronisasi"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Copies & sync"
+msgstr "Salinan dan sinkronisasi"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Currently connected"
+msgstr "Saat ini terhubung"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Currently offline"
+msgstr "Saat ini offline"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Resource copies"
+msgstr "Salinan sumber daya"
+
+#. 0: formatTime(context.lastBackupAt)
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last workspace backup: {0}"
+msgstr "Pencadangan ruang kerja terakhir: {0}"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "This resource’s latest backup is not confirmed here."
+msgstr "Cadangan terbaru sumber daya ini belum dikonfirmasi di sini."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace connection only. Resource copies are not confirmed."
+msgstr "Hanya koneksi ruang kerja. Salinan sumber daya belum dikonfirmasi."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Browser peers may become unavailable when tabs close."
+msgstr "Peer browser mungkin tidak lagi tersedia saat tab ditutup."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Browser peers"
+msgstr "Peer browser"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Connection not confirmed"
+msgstr "Koneksi belum dikonfirmasi"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace destinations"
+msgstr "Tujuan ruang kerja"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "These confirmations cover file details. The file’s contents are not verified here."
+msgstr "Konfirmasi ini mencakup detail berkas. Isi berkas tidak diverifikasi di sini."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Confirmations shown here are from this session."
+msgstr "Konfirmasi yang ditampilkan di sini berasal dari sesi ini."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Manage sync and backup"
+msgstr "Kelola sinkronisasi dan pencadangan"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup enabled"
+msgstr "Pencadangan ruang kerja diaktifkan"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup paused"
+msgstr "Pencadangan ruang kerja dijeda"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup is off"
+msgstr "Pencadangan ruang kerja dinonaktifkan"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Checking workspace backup…"
+msgstr "Memeriksa pencadangan ruang kerja…"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup status unavailable"
+msgstr "Status pencadangan ruang kerja tidak tersedia"

@@ -1304,6 +1304,7 @@ msgstr "Synchroniser"
 msgid "Offline"
 msgstr "Hors ligne"
 
+#: src/components/ResourceSync/resourceSyncPresentation.ts
 #: src/components/SideBar/syncStatus.tsx
 msgid "Changes could not sync"
 msgstr "Les modifications n'ont pas pu être synchronisées"
@@ -1520,6 +1521,7 @@ msgstr "Synchronisé"
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Erreur : atomic:node:<node-id> attendu"
 
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
 #: src/helpers/managed/deviceLink.ts
 #: src/routes/SettingsAgent.tsx
 #: src/routes/SyncRoute.tsx
@@ -5426,6 +5428,7 @@ msgstr "Impossible d’activer l’hébergement {0} (HTTP {1})."
 msgid "Manage account →"
 msgstr "Gérer le compte →"
 
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
@@ -5902,6 +5905,8 @@ msgstr "État du cloud inconnu"
 msgid "Checking cloud…"
 msgstr "Vérification du cloud…"
 
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
 #: src/helpers/managed/driveHostingState.ts
 #: src/views/DriveUnavailable.tsx
 msgid "Server"
@@ -13524,3 +13529,155 @@ msgstr "Appuyer sur Envoyer le rapport transmet le texte de discussion vérifié
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Signalez un bug ou suggérez une amélioration. Votre message et votre e-mail facultatif sont transmis à l’équipe Atomic via Sentry, avec des détails techniques sur votre configuration (version de l’application, adresse et état du serveur). Veuillez ne pas inclure de contenu privé de votre espace de travail."
+
+#. 0: title; 1: presentation.label
+#: src/components/ResourceSync/ResourceSyncIndicator.tsx
+msgid "Copies and sync for {0}: {1}"
+msgstr "Copies et synchronisation de {0} : {1}"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Could not save on this device"
+msgstr "Impossible d’enregistrer sur cet appareil"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes could not be saved"
+msgstr "Les modifications n’ont pas pu être enregistrées"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting to save"
+msgstr "Modifications en attente d’enregistrement"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting to sync"
+msgstr "Modifications en attente de synchronisation"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Saving changes…"
+msgstr "Enregistrement des modifications…"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes saved to server"
+msgstr "Dernières modifications enregistrées sur le serveur"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Server copy not confirmed"
+msgstr "Copie sur le serveur non confirmée"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Saved on this device"
+msgstr "Enregistré sur cet appareil"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Local storage unavailable"
+msgstr "Stockage local indisponible"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Local copy not confirmed"
+msgstr "Copie locale non confirmée"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Saving on this device…"
+msgstr "Enregistrement sur cet appareil…"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "No server configured"
+msgstr "Aucun serveur configuré"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes saved"
+msgstr "Dernières modifications enregistrées"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Copy not confirmed"
+msgstr "Copie non confirmée"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Close copies and sync"
+msgstr "Fermer les copies et la synchronisation"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Copies & sync"
+msgstr "Copies et synchronisation"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Currently connected"
+msgstr "Actuellement connecté"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Currently offline"
+msgstr "Actuellement hors ligne"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Resource copies"
+msgstr "Copies de la ressource"
+
+#. 0: formatTime(context.lastBackupAt)
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last workspace backup: {0}"
+msgstr "Dernière sauvegarde de l’espace de travail : {0}"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "This resource’s latest backup is not confirmed here."
+msgstr "La dernière sauvegarde de cette ressource n’est pas confirmée ici."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace connection only. Resource copies are not confirmed."
+msgstr "Connexion à l’espace de travail uniquement. Les copies de la ressource ne sont pas confirmées."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Browser peers may become unavailable when tabs close."
+msgstr "Les navigateurs pairs peuvent devenir indisponibles à la fermeture des onglets."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Browser peers"
+msgstr "Navigateurs pairs"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Connection not confirmed"
+msgstr "Connexion non confirmée"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace destinations"
+msgstr "Destinations de l’espace de travail"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "These confirmations cover file details. The file’s contents are not verified here."
+msgstr "Ces confirmations concernent les informations du fichier. Son contenu n’est pas vérifié ici."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Confirmations shown here are from this session."
+msgstr "Les confirmations affichées ici proviennent de cette session."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Manage sync and backup"
+msgstr "Gérer la synchronisation et la sauvegarde"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup enabled"
+msgstr "Sauvegarde de l’espace de travail activée"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup paused"
+msgstr "Sauvegarde de l’espace de travail en pause"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup is off"
+msgstr "La sauvegarde de l’espace de travail est désactivée"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Checking workspace backup…"
+msgstr "Vérification de la sauvegarde de l’espace de travail…"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup status unavailable"
+msgstr "État de la sauvegarde de l’espace de travail indisponible"

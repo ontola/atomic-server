@@ -18,6 +18,7 @@ import { useControlLock } from '../hooks/useControlLock';
 import { floatingSurface, floatingSurfaceAppear } from './floatingSurface';
 
 export interface PopoverProps {
+  'aria-labelledby'?: string;
   Trigger: ReactNode;
   open?: boolean;
   defaultOpen?: boolean;
@@ -33,6 +34,7 @@ export interface PopoverProps {
 }
 
 export function Popover({
+  'aria-labelledby': labelledBy,
   children,
   className,
   open,
@@ -76,6 +78,7 @@ export function Popover({
       {Trigger}
       <RadixPopover.Portal container={container}>
         <Content
+          aria-labelledby={labelledBy}
           onOpenAutoFocus={onOpenAutoFocus}
           onCloseAutoFocus={onCloseAutoFocus}
           collisionPadding={10}

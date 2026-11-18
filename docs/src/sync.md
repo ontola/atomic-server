@@ -36,6 +36,27 @@ Not everything a device holds travels, and not everything that travels is kept.
 4. Your phone, paired to the laptop directly, dials it over Iroh the next time both are awake. They compare version vectors, exchange only what differs, and end up identical.
 5. Meanwhile a colleague edited the same table from a browser tab. If you edited the same row, accepted changes merge automatically in that Resource's CRDT.
 
+## Checking an individual resource
+
+In resource lists, select a resource's sync icon to open **Copies & sync**.
+The panel separates this device's local copy from the configured server. It
+shows pending saves and failures for that resource, rather than treating a
+connected server as proof that every resource is saved.
+
+A confirmed copy covers the resource version that this session has observed
+being saved on the device, acknowledged by the server, or received directly
+from that server. Later edits need a new confirmation. A server going offline does
+not erase an earlier confirmation; its connection status is shown separately.
+If the browser has no confirmation, the panel says so. Confirmation history
+is not recovered across browser reloads yet.
+
+Cloud Vault backups and browser-peer connections are separate from these
+resource-level confirmations. A workspace backup timestamp or a connected peer
+does not prove that it holds this resource's latest edits. Browser peers may
+also become unavailable when their tabs close. File resource confirmations
+describe the resource data, not whether every destination has its attachment
+bytes.
+
 ## Connecting a cloud account
 
 If this app is configured with a cloud provider, the provider's account card

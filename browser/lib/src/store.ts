@@ -1,6 +1,10 @@
 import { randomUUID } from './uuid.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
+import {
+  ResourceSyncStatusTracker,
+  type ResourceSyncStatus,
+} from './resource-sync-status.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
 import {
   encodeCommit as encodePeerCommit,
@@ -1175,8 +1179,10 @@ export class Store {
     // post-init, post-init-error) to refresh sync status. Only the
     // first call introduces a new worker; the others just want
     // `emitSyncStatus`.
-    const attached = !!clientDb && clientDb !== this.clientDb;
+    const changed = clientDb !== this.clientDb;
+    const attached = !!clientDb && changed;
     this.clientDb = clientDb;
+    if (changed) this.resourceSyncStatus.reset();
 
     if (isOutboxDatabase(clientDb)) this.outbox.expectDatabase();
 
@@ -5884,7 +5890,9 @@ export class Store {
    * signed here and handed over, and `save()` resolves once the host has it.
    */
   public setCommitTransport(transport: CommitTransport | undefined): void {
+    const changed = transport !== this.commitTransport;
     this.commitTransport = transport;
+    if (changed) this.resourceSyncStatus.reset();
     this.emitSyncStatus();
     this.scheduleOutboxDrain();
   }
@@ -5998,6 +6006,51 @@ export class Store {
         }
       });
     }
+  }
+
+  private resourceSyncStatus = new ResourceSyncStatusTracker();
+
+  /** Session-local evidence for the resource itself; excludes attachment bytes.
+   * Unknown is intentional: idle save state or a finished drive sync is not proof.
+   */
+  public getResourceSyncStatus(resource: Resource): ResourceSyncStatus {
+    const target = resource.__internalObject;
+    const db = this.clientDb;
+
+    return this.resourceSyncStatus.get(
+      this.normalizeSubject(target.subject),
+      target,
+      {
+        localAvailable: !!db && !db.unsupportedEnvironment,
+        localError: db?.initError?.message,
+        serverUrl:
+          this.noServer ||
+          this.commitTransport ||
+          this.isLocalOnlySubject(target.subject)
+            ? undefined
+            : this.serverUrl,
+      },
+    );
+  }
+
+  public subscribeResourceSyncStatus(
+    resource: Resource,
+    callback: () => void,
+  ): () => void {
+    const target = resource.__internalObject;
+    const unsubscribers = [
+      this.resourceSyncStatus.subscribe(
+        () => this.normalizeSubject(target.subject),
+        callback,
+      ),
+      this.subscribeSaveState(target, callback),
+      this.subscribe(target.subject, callback),
+      this.on(StoreEvents.SyncStatusChanged, callback),
+      this.on(StoreEvents.AgentChanged, callback),
+      this.on(StoreEvents.ServerURLChanged, callback),
+    ];
+
+    return () => unsubscribers.forEach(unsubscribe => unsubscribe());
   }
 
   private saveStatus = new SaveStatusCoordinator({
@@ -6458,6 +6511,7 @@ export class Store {
     const resolved = this.resolveSubject(subjectRaw);
     // A subsequently loaded resource must not inherit the old cache stamp.
     this.lastPersisted.delete(resolved);
+    this.resourceSyncStatus.remove(this.normalizeSubject(resolved));
     this._withoutLoroHistory.delete(resolved);
 
     if (this.resources.delete(resolved)) {
@@ -6504,6 +6558,7 @@ export class Store {
     // it before reauthenticating, so the next identity never subscribes or
     // reconciles the previous identity's private workspace.
     if (this.agent && this.agent.subject !== agent?.subject) this.setDrive('');
+    if (this.agent?.subject !== agent?.subject) this.resourceSyncStatus.reset();
     this.agent = agent;
 
     // The outbox is identity-scoped: rebind to this agent's own queue so a new
@@ -6856,6 +6911,7 @@ export class Store {
 
     const previous = this.serverUrl;
 
+    if (previous !== url) this.resourceSyncStatus.reset();
     this.serverUrl = url;
 
     // Switching servers: tear down the old socket and reset the connection
@@ -7968,14 +8024,65 @@ export class Store {
     this.outbox.setServerPace(paceMs);
   }
 
+  /** @internal Capture only the bytes received from the current server socket.
+   * The caller acknowledges after a valid import. Capturing before import also
+   * fences identity/destination changes triggered by resource subscribers.
+   */
+  public captureServerResourceReceipt(
+    source: WSClient,
+    subject: string,
+    bytes: Uint8Array,
+  ): (() => void) | undefined {
+    if (
+      this.noServer ||
+      this.commitTransport ||
+      source !== this.getDefaultWebSocket()
+    )
+      return undefined;
+
+    return this.resourceSyncStatus.serverWrite(
+      this.normalizeSubject(subject),
+      bytes,
+    );
+  }
+
+  private captureServerReceipt(
+    commit: Commit,
+    endpoint: string,
+  ): (() => void) | undefined {
+    try {
+      if (
+        this.commitTransport ||
+        this.noServer ||
+        new URL(endpoint).origin !== new URL(this.serverUrl).origin
+      )
+        return undefined;
+
+      return this.resourceSyncStatus.serverWrite(
+        this.normalizeSubject(commit.subject),
+        typeof commit.loroUpdate === 'string'
+          ? decodeB64(commit.loroUpdate)
+          : commit.loroUpdate,
+      );
+    } catch {
+      // Evidence is diagnostic and must not change a save's behavior.
+      return undefined;
+    }
+  }
+
   /** Posts a Commit to some endpoint. Returns the Commit created by the server. */
   public async postCommit(commit: Commit, endpoint: string): Promise<Commit> {
     const close = perfSpan('store.postCommit', {
       genesis: !!commit.isGenesis,
     });
 
+    // Capture only the bytes sent to this destination. A later edit, an identity
+    // switch or a custom host transport must never turn into a server receipt.
+    const acknowledge = this.captureServerReceipt(commit, endpoint);
+
     try {
       const created = await this.sendCommit(commit, endpoint);
+      acknowledge?.();
       this.outbox.noteCommitted(commit.subject);
       close('ok');
       this.pushCommitLog(
@@ -8322,13 +8429,23 @@ export class Store {
       done: Promise.resolve(),
       inFlight: { jsonAd, snapshot },
     };
+    const settle =
+      db === this.clientDb
+        ? this.resourceSyncStatus.localWrite(
+            this.normalizeSubject(subject),
+            snapshot,
+          )
+        : undefined;
     entry.done = db
       .putResourceWithSnapshot(subject, jsonAd, snapshot, outbox)
       .then(
         () => {
           entry.inFlight = undefined;
+          settle?.();
         },
         e => {
+          settle?.(e);
+
           // Failed write: forget it so the next attempt is not skipped as a
           // duplicate of a write that never landed.
           if (this.lastPersisted.get(subject) === entry) {

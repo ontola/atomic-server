@@ -5,6 +5,7 @@ import { styled } from 'styled-components';
 import { ResourceGlyph } from '../components/ResourceGlyph';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { ResourceSyncIndicator } from '../components/ResourceSync/ResourceSyncIndicator';
 
 import type { JSX, MouseEvent, ReactNode } from 'react';
 
@@ -17,6 +18,8 @@ type Props = {
   tabbable?: boolean;
   /** Quiet content aligned to the right end of the row. */
   trailing?: ReactNode;
+  /** Defaults to clickable rows. Disable inside another interactive control. */
+  showSyncStatus?: boolean;
 };
 
 const RootDiv = styled.div<{ $clickable?: boolean }>`
@@ -34,6 +37,7 @@ function ResourceRow({
   className,
   tabbable,
   trailing,
+  showSyncStatus,
 }: Props): JSX.Element {
   const resource = useResource(subject);
   const [title] = useTitle(resource);
@@ -57,8 +61,13 @@ function ResourceRow({
   }
 
   const handleClick = (e: MouseEvent) => {
-    // The title link navigates on its own.
-    if (clickable && !(e.target as Element).closest('a')) {
+    // Links, row actions, and portalled sync controls handle their own clicks.
+    if (
+      clickable &&
+      !(e.target as Element).closest(
+        'a, button, input, select, textarea, [role="button"], [data-resource-sync]',
+      )
+    ) {
       navigate(constructOpenURL(subject));
     }
   };
@@ -90,6 +99,9 @@ function ResourceRow({
         </ResourceRowDescription>
       </Content>
       {trailing}
+      {(showSyncStatus ?? clickable) && (
+        <ResourceSyncIndicator resource={resource} />
+      )}
     </RootDiv>
   );
 }

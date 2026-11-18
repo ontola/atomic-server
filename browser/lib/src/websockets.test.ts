@@ -1,4 +1,5 @@
 import { Resource } from './resource.js';
+import { core } from './ontologies/core.js';
 import { AtomicError, ErrorType } from './error.js';
 import { describe, it, vi, afterEach, expect as assert } from 'vitest';
 import { testStore } from './test-store.js';
@@ -1517,6 +1518,154 @@ describe('WSClient.fetchMany', () => {
     const settled = await results;
     expect(settled).toHaveLength(2);
     expect(settled[0]).toMatchObject({ type: ErrorType.NotFound });
+    client.close();
+  });
+});
+
+describe('WSClient resource server receipts', () => {
+  const original = globalThis.WebSocket;
+
+  afterEach(() => {
+    globalThis.WebSocket = original;
+    vi.restoreAllMocks();
+  });
+
+  function updateFrame(subject: string, loro: Uint8Array) {
+    const encoded = new TextEncoder().encode(subject);
+    const frame = new Uint8Array(6 + encoded.length + loro.length);
+    frame[0] = Tag.UPDATE;
+    frame[1] = Flags.PUSH;
+    new DataView(frame.buffer).setUint16(4, encoded.length);
+    frame.set(encoded, 6);
+    frame.set(loro, 6 + encoded.length);
+
+    return frame;
+  }
+
+  async function receiptClient() {
+    const ctx = await connectedClient();
+    vi.spyOn(ctx.store, 'getDefaultWebSocket').mockReturnValue(ctx.client);
+    ctx.socket.receive(encodeChallenge('resource-receipt'));
+    const authentication = ctx.client.authenticate();
+    await vi.waitFor(() =>
+      assert(framesWithTag(ctx.socket, Tag.AUTH)).toHaveLength(1),
+    );
+    ctx.socket.receive(encodeAuthOk([]));
+    await authentication;
+
+    return ctx;
+  }
+
+  function resourceWithServerCopy(
+    store: Awaited<ReturnType<typeof testStore>>['store'],
+  ) {
+    const resource = new Resource('https://example.com/receipt-document');
+    resource.setStore(store);
+    resource
+      .getLoroDoc()!
+      .getMap('properties')
+      .set(core.properties.name, 'First');
+    resource.sealPendingEdits();
+    store.resources.set(resource.subject, resource);
+    const serverDoc = new LoroLoader.Loro.LoroDoc();
+    serverDoc.import(resource.getLoroDoc()!.export({ mode: 'snapshot' }));
+
+    return { resource, serverDoc };
+  }
+
+  it('confirms server-added operations from the exact UPDATE and not newer local edits', async () => {
+    const { client, socket, store } = await receiptClient();
+    const { resource, serverDoc } = resourceWithServerCopy(store);
+    // First establish the received server version, then a server-owned metadata
+    // operation. Real commit echoes add createdAt/lastCommit under another peer.
+    socket.receive(
+      updateFrame(resource.subject, serverDoc.export({ mode: 'snapshot' })),
+    );
+    assert(store.getResourceSyncStatus(resource).server.state).toBe(
+      'confirmed',
+    );
+    const beforeMetadata = serverDoc.oplogVersion();
+    serverDoc
+      .getMap('properties')
+      .set(core.properties.description, 'Server metadata');
+    serverDoc.commit();
+    socket.receive(
+      updateFrame(
+        resource.subject,
+        serverDoc.export({ mode: 'update', from: beforeMetadata }),
+      ),
+    );
+    assert(store.getResourceSyncStatus(resource).server.state).toBe(
+      'confirmed',
+    );
+    assert(resource.get(core.properties.description)).toBe('Server metadata');
+
+    // A new local op created after the server prepared its message must not be
+    // acknowledged by observing the merged live document after import.
+    serverDoc
+      .getMap('properties')
+      .set(core.properties.description, 'New server metadata');
+    serverDoc.commit();
+    const incoming = serverDoc.export({ mode: 'snapshot' });
+    resource
+      .getLoroDoc()!
+      .getMap('properties')
+      .set(core.properties.name, 'Not sent');
+    resource.sealPendingEdits();
+    socket.receive(updateFrame(resource.subject, incoming));
+    assert(store.getResourceSyncStatus(resource).server.state).toBe('pending');
+    assert(resource.get(core.properties.name)).toBe('Not sent');
+    client.close();
+  });
+
+  it.each([
+    'foreign socket',
+    'old identity',
+    'closed socket',
+    'custom transport',
+    'peer ingress',
+  ])('does not claim a server receipt for %s', async boundary => {
+    const { client, socket, store } = await receiptClient();
+    const { resource, serverDoc } = resourceWithServerCopy(store);
+    const bytes = serverDoc.export({ mode: 'snapshot' });
+
+    if (boundary === 'foreign socket') {
+      vi.mocked(store.getDefaultWebSocket).mockReturnValue(undefined);
+    } else if (boundary === 'old identity') {
+      store.setAgent(undefined);
+    } else if (boundary === 'closed socket') {
+      client.close();
+    } else if (boundary === 'custom transport') {
+      store.setCommitTransport(async commit => commit);
+    }
+
+    if (boundary === 'peer ingress') {
+      store.applyIncoming({
+        subject: resource.subject,
+        loroBytes: bytes,
+        source: 'peer-sync',
+      });
+    } else {
+      socket.receive(updateFrame(resource.subject, bytes));
+    }
+
+    assert(store.getResourceSyncStatus(resource).server.state).toBe(
+      boundary === 'custom transport' ? 'not-configured' : 'unknown',
+    );
+    client.close();
+  });
+
+  it('discards a receipt when resource notification switches the destination during import', async () => {
+    const { client, socket, store } = await receiptClient();
+    const { resource, serverDoc } = resourceWithServerCopy(store);
+    const unsubscribe = store.subscribe(resource.subject, () => {
+      store.setServerUrl('https://other.example', { connect: false });
+    });
+    socket.receive(
+      updateFrame(resource.subject, serverDoc.export({ mode: 'snapshot' })),
+    );
+    assert(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    unsubscribe();
     client.close();
   });
 });

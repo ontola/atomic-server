@@ -602,6 +602,26 @@ Two things worth knowing about the runners:
 
 ## Sync and pairing
 
+### Per-resource copies and sync
+
+`browser/lib/src/resource-sync-status.test.ts` covers evidence from actual sent
+and persisted Loro versions: connected/drive-synced is not a receipt, newer edits
+remain unconfirmed, successful server saves remain confirmed while offline,
+local writes wait for persistence and expose failures, and identity/server/DB
+changes cannot inherit acknowledgements. It also covers identifier aliases,
+resource renaming, foreign/custom transports and subscriber exception isolation.
+Authoritative incoming server updates extend only the version carried by their
+bytes; peer traffic and superseded connections cannot create server receipts.
+
+The data-browser's `components/ResourceSync/*.test.ts(x)` exercises status copy,
+resource-specific subscriptions and panel interactions; `views/ResourceRow.test.tsx`
+checks that nested controls do not navigate and noninteractive rows do not gain
+buttons. `browser/e2e/tests/resource-sync.spec.ts` creates and saves a real resource,
+opens its panel, checks keyboard dismissal/focus, edits offline, and checks the
+narrow layout. These indicators cover resource metadata; attachment bytes,
+per-resource Vault/peer receipts and confirmation recovery across reloads are
+not implemented or claimed by this coverage.
+
 ### Protocol — well covered
 
 | Flow | Where |

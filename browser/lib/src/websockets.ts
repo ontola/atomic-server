@@ -18,7 +18,7 @@ import {
 } from './subject.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
-import { StoreEvents, type Store } from './store.js';
+import { StoreEvents, type Store, type IncomingChange } from './store.js';
 import type { DriveItem } from './local-drive-copy.js';
 import {
   AtomicError,
@@ -950,6 +950,26 @@ export class WSClient {
     this.sendEphemeral(EphemeralKind.PRESENCE, drive, update);
   }
 
+  /** Server UPDATE/SYNC bytes describe applied server state. Peer traffic never
+   * enters here. Do not use the merged document: it may contain newer local edits.
+   */
+  private applyServerUpdate(change: IncomingChange): void {
+    const acknowledge =
+      change.loroBytes &&
+      !this._closed &&
+      !this.connection.signal.aborted &&
+      this.readyState === WebSocket.OPEN &&
+      this.isAuthenticatedAsCurrentAgent()
+        ? this.store.captureServerResourceReceipt(
+            this,
+            change.subject,
+            change.loroBytes,
+          )
+        : undefined;
+    const result = this.store.applyIncoming(change);
+    if (result !== 'invalid') acknowledge?.();
+  }
+
   private isAuthenticatedAsCurrentAgent(): boolean {
     return (
       !!this.authenticatedWith &&
@@ -1429,7 +1449,7 @@ export class WSClient {
           : undefined;
 
         if (pending) {
-          this.store.applyIncoming({
+          this.applyServerUpdate({
             subject: msg.subject,
             loroBytes: msg.loroBytes,
             commitId: msg.commitId,
@@ -1455,7 +1475,7 @@ export class WSClient {
         // pre-import lastCommit equals the post-import (e.g. a
         // properties-only push) — applyIncoming sets it
         // unconditionally, so the gate runs once at the top.
-        this.store.applyIncoming({
+        this.applyServerUpdate({
           subject: msg.subject,
           loroBytes: msg.loroBytes,
           commitId: msg.commitId,
@@ -1501,7 +1521,7 @@ export class WSClient {
               );
             }
 
-            this.store.applyIncoming({
+            this.applyServerUpdate({
               subject: update.subject,
               loroBytes: update.loroBytes,
               commitId: update.commitId,
@@ -1617,7 +1637,7 @@ export class WSClient {
           }
 
           for (const { subject, loroBytes } of entries) {
-            this.store.applyIncoming({
+            this.applyServerUpdate({
               subject,
               loroBytes,
               source: 'ws-sync-push',

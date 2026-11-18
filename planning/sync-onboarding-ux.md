@@ -20,7 +20,8 @@ Most UX mistakes here come from getting this wrong. It is not symmetric.
 | device ↔ device (either one always-on) | Iroh, by scanning a code — a node id needs no address, port or certificate | each side serves what the other's key **may read** (`check_read`), per subject |
 | device → always-on device | Iroh, or a push over WS if you have its address | needs write rights there, signed as *your* agent |
 | always-on device → device | WS subscribe + fetch | the device must know its address |
-| browser tab ↔ anything | only through an always-on device | a browser tab **is not a node**: it cannot pair, and holds nothing |
+| browser tab ↔ browser tab | authenticated WebRTC peer link, with a signaling service | each tab needs local storage and must be open to exchange changes; a connection alone does not prove a resource was copied |
+| browser tab ↔ server | HTTP/WebSocket | local browser copies and server acknowledgements are separate evidence |
 
 Three consequences that keep being forgotten:
 
@@ -90,10 +91,22 @@ that moves data.
 | new account on Flutter mobile | another Flutter mobile | pairing code | ✅ |
 | new account on Flutter mobile | browser later | scan the browser's code — the always-on device it reads from — or push over WS | ✅ Iroh, or `syncDriveToServer` |
 | new account anywhere | atomicserver.eu later | device pushes up, then everything reads from there | ⚠️ untested |
-| new account in browser A | browser B, no machine in common | **nothing crosses** | ❌ by design — say so |
+| new account in browser A | browser B, no data server in common | WebRTC peer link via a signaling service | ✅ while peers are reachable; see `docs/src/browser-peer-sync.md` |
 
-The last row is the one to get right in copy: two browser tabs with no machine
-between them cannot reach each other, ever. Neither is a node.
+Browser peer sharing does not provide an always-online replica. Signaling
+introduces the browsers but does not store their resource data. Show connection
+information separately from confirmation that a particular resource was saved.
+
+### Resource-level copies
+
+Resource-list indicators open **Copies & sync**. Local persistence and server
+acknowledgements are independent; an idle save state, an open connection, a
+workspace backup timestamp or peer presence alone cannot imply that the latest
+resource version is stored there. Unknown evidence stays explicit. Browser-peer
+copies must remain visually distinct from durable remote storage, and file
+metadata confirmation does not establish attachment-byte availability.
+
+Implementation and follow-ups: [`resource-sync-indicators.md`](./resource-sync-indicators.md).
 
 ## 4. Where the logic lives
 
