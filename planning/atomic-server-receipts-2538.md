@@ -1,7 +1,8 @@
 # Automatic HTTP/WebSocket storage receipts
 
-Status: implementation in progress. Follows #2592; related #2538, #2537 and
-#2244. Separate from the TablePage extraction.
+Status: implementation and local validation complete; required CI pending.
+PR: https://github.com/ontola/atomic-server/pull/2594. Follows #2592; related
+#2538, #2537 and #2244. Separate from the TablePage extraction.
 
 ## Isolation and ownership
 
@@ -40,7 +41,7 @@ Status: implementation in progress. Follows #2592; related #2538, #2537 and
 - [x] Real-server integration coverage
 - [x] Public docs and coverage map
 - [x] Independent review and required local checks
-- [ ] Dedicated stacked PR
+- [x] Dedicated stacked PR (#2594)
 - [ ] Exact-head required CI (self-hosted runners were unavailable for #2592)
 
 The plan remains until required CI passes; pending dependency plans stay intact.
@@ -76,7 +77,7 @@ identified storage and transport satisfy their trust and independence policy.
   fair 300-resource inventories and HTTP adapter boundaries.
 - Final SDK unit suite: 1,903 passed, one existing skipped test. TypeScript
   checking, Rust formatting and the full browser/WASM production build passed.
-  The implementation commit runs the mandatory staged lint/workspace Clippy gate.
+  The mandatory staged lint/workspace Clippy gate also passed.
 - Independent source review found no remaining blocker. Deterministic WS
   held-proof/overlapping-AUTH reauthentication coverage remains a test gap.
 - No new dependency, UI or TablePage changes. These are historical resource

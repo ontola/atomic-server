@@ -139,7 +139,7 @@ logged and dropped, not answered.
 | `0x52` | `INVITE` | Iroh dialer, after `AUTH` | `atomic_lib::sync::invite`. Iroh only; the WS server answers it with an `ERROR`. |
 | `0x53` | `INVITE_OK` | Iroh responder | the dialer of the `INVITE`. A refusal is an `ERROR` with code 13 (`INVITE_REFUSED`). |
 | `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated browser, native Iroh or WS client | Session advertising the transport-specific storage-receipt capability. |
-| `0x57` | `STORAGE_RECEIPT` | authenticated browser or native Iroh peer | Correlated live request on that same connection. |
+| `0x57` | `STORAGE_RECEIPT` | authenticated browser/native Iroh peer or WS server | Correlated live request on that same connection. |
 
 ## Frame layouts
 
