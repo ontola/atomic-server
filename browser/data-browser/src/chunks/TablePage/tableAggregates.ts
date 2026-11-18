@@ -28,37 +28,14 @@ import { evaluateFormula, localOffsetMinutes } from './formulaEngine';
  * answer for the whole table, not for the rows that happen to be loaded.
  * A quick filter narrows it to the rows that match (`aggregateRows`).
  */
-export interface TableAggregate {
-  /** Stable identity within the view. */
-  id: string;
-  /** The property whose values are aggregated. Absent for a plain row count. */
-  property?: string;
-  /**
-   * The id of a computed column of this view, when the statistic is over a value
-   * computed per row rather than stored on it — a duration, an amount. The store
-   * evaluates the column's expression as it aggregates, so a sum of durations
-   * covers every matching row like any other total.
-   */
-  derived?: string;
-  function: AggregateFunction;
-  /**
-   * Which totals row this sits in, counting from 0. A column can carry one
-   * statistic per row, so a table can show a sum and an average under the same
-   * column. Absent means the first row.
-   */
-  row?: number;
-}
+import { type TableAggregate, type GroupGranularity } from '@tomic/table';
 
-/** How a date or timestamp breakdown column is bucketed. */
-export type GroupGranularity = NonNullable<AggregateGrouping['granularity']>;
-
-export const AGGREGATE_FUNCTIONS: AggregateFunction[] = [
-  'sum',
-  'avg',
-  'min',
-  'max',
-  'count',
-];
+export {
+  AGGREGATE_FUNCTIONS,
+  parseAggregates,
+  type TableAggregate,
+  type GroupGranularity,
+} from '@tomic/table';
 
 /** How each function reads in the UI: "Sum of Amount", "Rows". */
 export const AGGREGATE_FUNCTION_LABELS: Record<AggregateFunction, string> = {
@@ -146,39 +123,6 @@ export function defaultGranularity(
   property: Property | undefined,
 ): GroupGranularity {
   return granularityApplies(property) ? 'day' : 'exact';
-}
-
-function isAggregate(value: unknown): value is TableAggregate {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const spec = value as Partial<TableAggregate>;
-
-  return (
-    typeof spec.id === 'string' &&
-    typeof spec.function === 'string' &&
-    (AGGREGATE_FUNCTIONS as string[]).includes(spec.function) &&
-    (spec.property === undefined || typeof spec.property === 'string') &&
-    (spec.derived === undefined || typeof spec.derived === 'string') &&
-    (spec.row === undefined ||
-      (typeof spec.row === 'number' && Number.isInteger(spec.row)))
-  );
-}
-
-/**
- * Reads the aggregates stored on a View. Anything malformed is dropped rather
- * than thrown — the same rule the derived columns follow: config can be written
- * by a person or the assistant, and a bad entry must not take the table down.
- */
-export function parseAggregates(
-  value: JSONValue | undefined,
-): TableAggregate[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return (value as unknown[]).filter(isAggregate);
 }
 
 /**

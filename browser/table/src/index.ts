@@ -64,3 +64,28 @@ export type {
 export type { JSONValue } from './value.js';
 
 export { TableHeadingWrapper } from './chunks/TableEditor/TableHeading.js';
+export {
+  ROW_ACTION_KINDS,
+  DEFAULT_DERIVED_WIDTH,
+  AGGREGATE_FUNCTIONS,
+  filterKey,
+  derivedFilterKey,
+  parseFilterKey,
+  parseDerivedColumnSpecs,
+  parseRowActions,
+  parseQuickAdd,
+  parseAggregates,
+  parseColumnOrder,
+  type TableFilter,
+  type TableFilterOperator,
+  type TableAggregateFunction,
+  type TableSorting,
+  type DerivedColumnSpec,
+  type DerivedValueKind,
+  type RowActionKind,
+  type RowActionSpec,
+  type QuickAddPreset,
+  type QuickAddSpec,
+  type TableAggregate,
+  type GroupGranularity,
+} from './views/configuration.js';
