@@ -159,8 +159,15 @@ shortname when changing its display label; only a new draft derives a provisiona
 shortname. Category controls and schema activation remain adapter work.
 
 
-`PropertyRangeField` relocates the complete existing min/max input, including
-uncontrolled values, floor-on-change conversion and its original validator.
-The Atomic adapter supplies its existing Row/Input primitives and translated
-validation messages. Corrected max-only/equal bounds, strict raw drafts and
-form-submit guards belong to the separate behavior review.
+`PropertyRangeField` is an unsaved schema-draft control for numeric or text-length
+bounds. It retains raw invalid input, publishes only valid finite values, supports
+integer/nonnegative rules and equal inclusive limits, and reports validity to the
+host form. `parsePropertyRange` returns stable error codes; hosts can localize the
+control's messages. Remount the field when changing draft/schema revision.
+
+
+The range-policy proposal is independent of the baseline range-input move.
+Its original whole-number requirement on integer-column boundaries overlaps
+#2540 and must be reconciled before merge; this review does not establish a new
+Resource/Store persistence contract. The unused former host MinMaxInput is
+removed rather than kept as a second implementation.

@@ -1,15 +1,13 @@
-# Legacy schema review content separation
+# Range-policy behavior review
 
-Keep baseline code moves separate from behavioral proposals, without expanding
-the clean extraction or changing ELFA's pin. These are legacy review bases and
-still need later clean-base integration.
+- [x] Preserve original mixed headab17e73 at codex/legacy-tablepage-property-ranges.
+- [x] Initial child e5e9630 reproduces the complete original Git tree.
+- [x] Remove the now-unused old MinMaxInput implementation; keep one range UI.
+- [x] Keep raw validation/form-submit changes separate from the baseline move.
+- [ ] Reconcile fractional numeric bounds for integer columns with #2540.
+- [ ] Clean-base restacking and full integration CI before any merge.
 
-- [x] Identify input/focus, persistence and range-validation changes.
-- [x] Relocate baseline presentation and helpers without fixing old policies.
-- [x] Run focused package/real Atomic compatibility tests, compiler/types, real
-  component desktop/mobile captures and the mandatory commit hook.
-- [x] Preserve original heads and all child review bases before rewriting refs.
-- [ ] Publish separate proposed-behavior reviews; preserve the original result.
-
-Explicit text-format save removal is disputed under #2538. Raw range semantics
-and submit validation require their own review, not an extraction prerequisite.
+These are proposed policies, not extraction prerequisites. Integer-valued
+columns can have fractional JSON Schema boundaries; the original proposal's
+whole-number restriction needs explicit reconciliation before merge. No
+Resource/Store/useValue API or ELFA submodule change.

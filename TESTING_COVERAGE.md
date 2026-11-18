@@ -2816,7 +2816,9 @@ The private-dataset harness is kept outside the repository; it is not a CI
 speed assertion. Crash durability is covered by the abort test above.
 
 
-Range-field content split: `browser/table/src/schema/PropertyRangeField.test.tsx`
-characterizes baseline floor conversion with an uncontrolled visible draft,
-empty-bound/blur callbacks and original max-only/equal-limit validation quirks.
-This move does not fix those policies or alter PropertyForm submission.
+Range-policy proposal: `browser/table/src/schema/PropertyRangeField.test.tsx`
+and the four actual Atomic `TableRangeInput.test.tsx` cases cover retained raw
+input, finite/fractional parsing, equal/max-only bounds and guarded submission.
+The original integer-bound restriction overlaps #2540 and is not a settled
+schema policy. The unused old MinMaxInput implementation has no callers and is
+removed, avoiding a second range-input implementation.

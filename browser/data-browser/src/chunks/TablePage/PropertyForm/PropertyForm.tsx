@@ -1,6 +1,7 @@
 import { core, Resource, unknownSubject, useString } from '@tomic/react';
 import {
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   forwardRef,
@@ -11,6 +12,7 @@ import { styled } from 'styled-components';
 import { PropertyNameField, nameTableProperty } from '@tomic/table';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import { useValidation } from '@components/forms/formValidation/useValidation';
+import { FormValidationContext } from '@components/forms/formValidation/FormValidationContextProvider';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { stringToSlug } from '@helpers/stringToSlug';
 import { categoryFormFactory, PropertyFormCategory } from './categories';
@@ -39,6 +41,7 @@ export function PropertyForm({
   category,
   autoFocusName,
 }: PropertyFormProps): JSX.Element {
+  const { validations } = useContext(FormValidationContext);
   const {
     error: nameError,
     setError: setNameError,
@@ -89,9 +92,10 @@ export function PropertyForm({
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = useCallback(
     e => {
       e.preventDefault();
+      if (Object.values(validations).some(error => error !== undefined)) return;
       onSubmit();
     },
-    [onSubmit],
+    [onSubmit, validations],
   );
 
   // Clear validation error if name is already set (pre-filled or existing property).

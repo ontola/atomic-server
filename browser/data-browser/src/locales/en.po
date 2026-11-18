@@ -3227,14 +3227,6 @@ msgstr "Search"
 msgid "Disabled"
 msgstr "Disabled"
 
-#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
-msgid "Value should be a round number."
-msgstr "Value should be a round number."
-
-#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
-msgid "Min must be a less than max"
-msgstr "Min must be a less than max"
-
 #: src/routes/History/VersionContent.tsx
 msgid "Document body"
 msgstr "Document body"
@@ -11725,10 +11717,12 @@ msgstr "Could not change datatype: {0}"
 msgid "Failed to save column: {0}"
 msgstr "Failed to save column: {0}"
 
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Minimum"
 msgstr "Minimum"
 
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Maximum"
 msgstr "Maximum"
@@ -13378,3 +13372,19 @@ msgstr "Rename view"
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
 msgstr "Column name"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Enter whole numbers or leave the bounds empty."
+msgstr "Enter whole numbers or leave the bounds empty."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Enter finite numbers or leave the bounds empty."
+msgstr "Enter finite numbers or leave the bounds empty."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Bounds cannot be negative."
+msgstr "Bounds cannot be negative."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Minimum must not exceed maximum."
+msgstr "Minimum must not exceed maximum."
