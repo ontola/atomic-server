@@ -114,7 +114,13 @@ A clickable HTML **concept** (not a production host implementation) accompanies 
   Final native run: 2 passed, no failures, skips or flakes; 121 focused tests
   and Data Browser/E2E typechecks pass.
 - [x] Check live rendered custom views on localhost using the real GitHub account.
-- [ ] Verify final exact-commit CI (full pipeline awaiting its runner).
+- [x] Complete new UI translations in all five non-English catalogs; keep
+  catalog identities, references and placeholders unchanged.
+- [ ] Verify final exact-commit CI. The previous full run stopped at
+  translation completeness; focused Linux browser validation passed.
+  Translation repair passes all 2,697 Data Browser tests and both MCP tests
+  with CI’s UTC setting; the existing Amsterdam date-fixture gap is recorded
+  in TESTING_COVERAGE.md.
 
 - [x] Configured catalog, account-menu entry and idempotent GitHub installation.
 - [x] Source-scoped iframe operations and owner-signed keyed proxy reads.

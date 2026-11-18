@@ -13539,129 +13539,129 @@ msgstr "Signalez un bug ou suggérez une amélioration. Votre message et votre e
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "GitHub"
-msgstr ""
+msgstr "GitHub"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "GitLab"
-msgstr ""
+msgstr "GitLab"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Todoist"
-msgstr ""
+msgstr "Todoist"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Spotify"
-msgstr ""
+msgstr "Spotify"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Airtable"
-msgstr ""
+msgstr "Airtable"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Discord"
-msgstr ""
+msgstr "Discord"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Notion"
-msgstr ""
+msgstr "Notion"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Moneybird"
-msgstr ""
+msgstr "Moneybird"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Clockify"
-msgstr ""
+msgstr "Clockify"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Loading integration proxy catalog…"
-msgstr ""
+msgstr "Chargement du catalogue du proxy d’intégration…"
 
 #. 0: catalog.origin; 1: catalog.message
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Could not load apps from {0}: {1}"
-msgstr ""
+msgstr "Impossible de charger les applications depuis {0} : {1}"
 
 #. 0: lookupError
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Could not determine installed services: {0}"
-msgstr ""
+msgstr "Impossible de déterminer les services installés : {0}"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "No matching services."
-msgstr ""
+msgstr "Aucun service correspondant."
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Sync support unavailable"
-msgstr ""
+msgstr "Synchronisation indisponible"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Add to Drive"
-msgstr ""
+msgstr "Ajouter au lecteur"
 
 #. 0: name
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Add {0} to drive"
-msgstr ""
+msgstr "Ajouter {0} au lecteur"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
-msgstr ""
+msgstr "Depuis le proxy d’intégration configuré à l’adresse <0/>. Ajoutez GitHub pour parcourir les dépôts et importer des tickets dans votre lecteur."
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Integration proxy apps"
-msgstr ""
+msgstr "Applications du proxy d’intégration"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Connected platform tables"
-msgstr ""
+msgstr "Tables des plateformes connectées"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Drive-owned lookup of platform identity to Atomic table, independent of parent path."
-msgstr ""
+msgstr "Index propre au lecteur associant l’identité de la plateforme à une table Atomic, indépendamment du chemin du parent."
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Syncable platform ID"
-msgstr ""
+msgstr "Identifiant de la plateforme synchronisable"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Platform identifier in the selected integration proxy catalog."
-msgstr ""
+msgstr "Identifiant de la plateforme dans le catalogue du proxy d’intégration sélectionné."
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Integration proxy origin"
-msgstr ""
+msgstr "Origine du proxy d’intégration"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "The HTTPS origin of the proxy describing this platform."
-msgstr ""
+msgstr "L’origine HTTPS du proxy décrivant cette plateforme."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Syncable account"
-msgstr ""
+msgstr "Compte synchronisable"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "A connected account through which remote collection instances can be discovered."
-msgstr ""
+msgstr "Un compte connecté permettant de découvrir des instances de collections distantes."
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "Atomic Syncables"
-msgstr ""
+msgstr "Atomic Syncables"
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "Connecting services requires an Atomic Server node. The local table remains accessible without a connection."
-msgstr ""
+msgstr "La connexion de services nécessite un nœud Atomic Server. La table locale reste accessible sans connexion."
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "Built-in Syncables collection view"
-msgstr ""
+msgstr "Vue intégrée des collections Syncables"
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "Could not load the built-in Syncables iframe"
-msgstr ""
+msgstr "Impossible de charger l’iframe intégrée de Syncables"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 #: src/chunks/PluginRuns/syncablesHost.ts
@@ -13671,165 +13671,165 @@ msgstr ""
 #: src/chunks/PluginRuns/syncablesHost.ts
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Connection ID"
-msgstr ""
+msgstr "Identifiant de connexion"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "GitHub account login"
-msgstr ""
+msgstr "Nom d’utilisateur du compte GitHub"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "GitHub account ID"
-msgstr ""
+msgstr "Identifiant du compte GitHub"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "GitHub account"
-msgstr ""
+msgstr "Compte GitHub"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issue title"
-msgstr ""
+msgstr "Titre du ticket"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issue updatedAt"
-msgstr ""
+msgstr "Date de mise à jour du ticket"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issue URL"
-msgstr ""
+msgstr "URL du ticket"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Organizations"
-msgstr ""
+msgstr "Organisations"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Repositories"
-msgstr ""
+msgstr "Dépôts"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issues"
-msgstr ""
+msgstr "Tickets"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Read limit reached. Local rows were retained."
-msgstr ""
+msgstr "Limite de lecture atteinte. Les lignes locales ont été conservées."
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Sync error"
-msgstr ""
+msgstr "Erreur de synchronisation"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Mirror status"
-msgstr ""
+msgstr "État de la réplique"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Last acknowledged synchronization and pause state."
-msgstr ""
+msgstr "Dernière synchronisation confirmée et état de pause."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "GitHub issue number"
-msgstr ""
+msgstr "Numéro du ticket GitHub"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Stable issue number within its repository."
-msgstr ""
+msgstr "Numéro stable du ticket dans son dépôt."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Open or closed at last successful read."
-msgstr ""
+msgstr "Ouvert ou fermé lors de la dernière lecture réussie."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Updated at"
-msgstr ""
+msgstr "Date de mise à jour"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Last GitHub update timestamp."
-msgstr ""
+msgstr "Horodatage de la dernière mise à jour GitHub."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Canonical GitHub issue link."
-msgstr ""
+msgstr "Lien canonique du ticket GitHub."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Issue body"
-msgstr ""
+msgstr "Contenu du ticket"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "GitHub issue description in Markdown."
-msgstr ""
+msgstr "Description du ticket GitHub en Markdown."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable source configuration"
-msgstr ""
+msgstr "Configuration de la source synchronisable"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Non-secret source bindings and selected collection parameters."
-msgstr ""
+msgstr "Liaisons de source non secrètes et paramètres de la collection sélectionnée."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable resource index"
-msgstr ""
+msgstr "Index des ressources synchronisables"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Drive-level lookup of synced resources by canonical source key."
-msgstr ""
+msgstr "Index du lecteur permettant de retrouver les ressources synchronisées par leur clé de source canonique."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable source identity"
-msgstr ""
+msgstr "Identité de la source synchronisable"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
-msgstr ""
+msgstr "Liaison canonique du proxy, de la plateforme, du type et de la ressource distante, indépendante du parent Atomic."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable node kind"
-msgstr ""
+msgstr "Type de nœud synchronisable"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Role of this resource in the discovery hierarchy."
-msgstr ""
+msgstr "Rôle de cette ressource dans la hiérarchie de découverte."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Remote owner kind"
-msgstr ""
+msgstr "Type de propriétaire distant"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Whether this owner namespace is an organization or personal account."
-msgstr ""
+msgstr "Indique si cet espace de noms de propriétaire correspond à une organisation ou à un compte personnel."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "An authorized remote account."
-msgstr ""
+msgstr "Un compte distant autorisé."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable owner namespace"
-msgstr ""
+msgstr "Espace de noms de propriétaire synchronisable"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "A remote organization or personal repository owner."
-msgstr ""
+msgstr "Une organisation distante ou un propriétaire personnel de dépôt."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable repository"
-msgstr ""
+msgstr "Dépôt synchronisable"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "A repository within its canonical remote owner namespace."
-msgstr ""
+msgstr "Un dépôt dans l’espace de noms canonique de son propriétaire distant."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable record"
-msgstr ""
+msgstr "Enregistrement synchronisable"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "A record mirrored from a selected remote collection."
-msgstr ""
+msgstr "Un enregistrement répliqué depuis une collection distante sélectionnée."
 
 #: src/chunks/AppPage/ProxyConnectReturn.tsx
 msgid "Return to the app"
-msgstr ""
+msgstr "Revenir à l’application"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Organization"
-msgstr ""
+msgstr "Organisation"

@@ -1275,6 +1275,10 @@ This does not yet prove restoration of the user's private staging workspace.
 
 ## Plugin UI sandbox and private assets
 
+- `browser/data-browser/scripts/check-translations.test.ts` audits every
+  supported UI catalog, including the Syncables Apps and OAuth strings, for
+  missing entries, empty translations and invalid placeholders/markup.
+
 - Built-in GitHub Syncables in `browser/e2e/tests/syncables-github.spec.ts`
   exercises My Drive → account menu → Apps, repeat install, opaque iframe
   origin, OAuth cancellation and signed PKCE redemption, browser-held
@@ -2914,3 +2918,13 @@ Existing installs whose secret was already discarded require reinstalling;
 this does not rotate an app identity or repair provider delegations. New online
 installations still work with older nodes; automatic replay requires a node
 that advertises the initialization-only protocol.
+
+
+## Local date-formula test limitation
+
+`derivedColumns.test.ts` includes a July local-midnight fixture, while
+`formulaEngine.ts` obtains the UTC offset from the current date. In a
+Europe/Amsterdam November run, the summer/winter offset mismatch fails
+“counts a date stamped today as today, in any time zone”. It passes with
+`TZ=UTC`, matching CI. This existing case does not establish correctness
+across seasonal UTC-offset changes.

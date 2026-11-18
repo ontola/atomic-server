@@ -13537,129 +13537,129 @@ msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda diki
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "GitHub"
-msgstr ""
+msgstr "GitHub"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "GitLab"
-msgstr ""
+msgstr "GitLab"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Todoist"
-msgstr ""
+msgstr "Todoist"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Spotify"
-msgstr ""
+msgstr "Spotify"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Airtable"
-msgstr ""
+msgstr "Airtable"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Discord"
-msgstr ""
+msgstr "Discord"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Notion"
-msgstr ""
+msgstr "Notion"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Moneybird"
-msgstr ""
+msgstr "Moneybird"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Clockify"
-msgstr ""
+msgstr "Clockify"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Loading integration proxy catalog…"
-msgstr ""
+msgstr "Memuat katalog proksi integrasi…"
 
 #. 0: catalog.origin; 1: catalog.message
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Could not load apps from {0}: {1}"
-msgstr ""
+msgstr "Tidak dapat memuat aplikasi dari {0}: {1}"
 
 #. 0: lookupError
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Could not determine installed services: {0}"
-msgstr ""
+msgstr "Tidak dapat menentukan layanan yang terpasang: {0}"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "No matching services."
-msgstr ""
+msgstr "Tidak ada layanan yang cocok."
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Sync support unavailable"
-msgstr ""
+msgstr "Dukungan sinkronisasi tidak tersedia"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Add to Drive"
-msgstr ""
+msgstr "Tambahkan ke Drive"
 
 #. 0: name
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Add {0} to drive"
-msgstr ""
+msgstr "Tambahkan {0} ke drive"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
-msgstr ""
+msgstr "Dari proksi integrasi yang dikonfigurasi di <0/>. Tambahkan GitHub untuk menelusuri repositori dan mengimpor masalah ke drive Anda."
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Integration proxy apps"
-msgstr ""
+msgstr "Aplikasi proksi integrasi"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Connected platform tables"
-msgstr ""
+msgstr "Tabel platform yang terhubung"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Drive-owned lookup of platform identity to Atomic table, independent of parent path."
-msgstr ""
+msgstr "Pemetaan identitas platform ke tabel Atomic yang dikelola drive, terlepas dari jalur induknya."
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Syncable platform ID"
-msgstr ""
+msgstr "ID platform yang dapat disinkronkan"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Platform identifier in the selected integration proxy catalog."
-msgstr ""
+msgstr "Pengenal platform dalam katalog proksi integrasi yang dipilih."
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Integration proxy origin"
-msgstr ""
+msgstr "Asal proksi integrasi"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "The HTTPS origin of the proxy describing this platform."
-msgstr ""
+msgstr "Asal HTTPS proksi yang mendeskripsikan platform ini."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Syncable account"
-msgstr ""
+msgstr "Akun yang dapat disinkronkan"
 
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "A connected account through which remote collection instances can be discovered."
-msgstr ""
+msgstr "Akun terhubung yang dapat digunakan untuk menemukan instans koleksi jarak jauh."
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "Atomic Syncables"
-msgstr ""
+msgstr "Atomic Syncables"
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "Connecting services requires an Atomic Server node. The local table remains accessible without a connection."
-msgstr ""
+msgstr "Menghubungkan layanan memerlukan node Atomic Server. Tabel lokal tetap dapat diakses tanpa koneksi."
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "Built-in Syncables collection view"
-msgstr ""
+msgstr "Tampilan koleksi Syncables bawaan"
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 msgid "Could not load the built-in Syncables iframe"
-msgstr ""
+msgstr "Tidak dapat memuat iframe Syncables bawaan"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 #: src/chunks/PluginRuns/syncablesHost.ts
@@ -13669,165 +13669,165 @@ msgstr ""
 #: src/chunks/PluginRuns/syncablesHost.ts
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Connection ID"
-msgstr ""
+msgstr "ID koneksi"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "GitHub account login"
-msgstr ""
+msgstr "Nama pengguna akun GitHub"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "GitHub account ID"
-msgstr ""
+msgstr "ID akun GitHub"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "GitHub account"
-msgstr ""
+msgstr "Akun GitHub"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issue title"
-msgstr ""
+msgstr "Judul masalah"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issue updatedAt"
-msgstr ""
+msgstr "Waktu pembaruan masalah"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issue URL"
-msgstr ""
+msgstr "URL masalah"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Organizations"
-msgstr ""
+msgstr "Organisasi"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Repositories"
-msgstr ""
+msgstr "Repositori"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issues"
-msgstr ""
+msgstr "Masalah"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Read limit reached. Local rows were retained."
-msgstr ""
+msgstr "Batas pembacaan tercapai. Baris lokal tetap disimpan."
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Sync error"
-msgstr ""
+msgstr "Kesalahan sinkronisasi"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Mirror status"
-msgstr ""
+msgstr "Status pencerminan"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Last acknowledged synchronization and pause state."
-msgstr ""
+msgstr "Status sinkronisasi dan jeda terakhir yang telah dikonfirmasi."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "GitHub issue number"
-msgstr ""
+msgstr "Nomor masalah GitHub"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Stable issue number within its repository."
-msgstr ""
+msgstr "Nomor masalah yang tetap dalam repositorinya."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Open or closed at last successful read."
-msgstr ""
+msgstr "Terbuka atau ditutup pada pembacaan terakhir yang berhasil."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Updated at"
-msgstr ""
+msgstr "Diperbarui pada"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Last GitHub update timestamp."
-msgstr ""
+msgstr "Stempel waktu pembaruan GitHub terakhir."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Canonical GitHub issue link."
-msgstr ""
+msgstr "Tautan kanonis masalah GitHub."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Issue body"
-msgstr ""
+msgstr "Isi masalah"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "GitHub issue description in Markdown."
-msgstr ""
+msgstr "Deskripsi masalah GitHub dalam Markdown."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable source configuration"
-msgstr ""
+msgstr "Konfigurasi sumber yang dapat disinkronkan"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Non-secret source bindings and selected collection parameters."
-msgstr ""
+msgstr "Ikatan sumber yang tidak rahasia dan parameter koleksi yang dipilih."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable resource index"
-msgstr ""
+msgstr "Indeks sumber daya yang dapat disinkronkan"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Drive-level lookup of synced resources by canonical source key."
-msgstr ""
+msgstr "Pencarian sumber daya tersinkron pada tingkat drive berdasarkan kunci sumber kanonis."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable source identity"
-msgstr ""
+msgstr "Identitas sumber yang dapat disinkronkan"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
-msgstr ""
+msgstr "Ikatan kanonis proksi, platform, jenis, dan sumber jarak jauh, terlepas dari induk Atomic."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable node kind"
-msgstr ""
+msgstr "Jenis node yang dapat disinkronkan"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Role of this resource in the discovery hierarchy."
-msgstr ""
+msgstr "Peran sumber daya ini dalam hierarki penemuan."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Remote owner kind"
-msgstr ""
+msgstr "Jenis pemilik jarak jauh"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Whether this owner namespace is an organization or personal account."
-msgstr ""
+msgstr "Menunjukkan apakah ruang nama pemilik ini merupakan organisasi atau akun pribadi."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "An authorized remote account."
-msgstr ""
+msgstr "Akun jarak jauh yang telah diotorisasi."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable owner namespace"
-msgstr ""
+msgstr "Ruang nama pemilik yang dapat disinkronkan"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "A remote organization or personal repository owner."
-msgstr ""
+msgstr "Organisasi jarak jauh atau pemilik repositori pribadi."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable repository"
-msgstr ""
+msgstr "Repositori yang dapat disinkronkan"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "A repository within its canonical remote owner namespace."
-msgstr ""
+msgstr "Repositori dalam ruang nama kanonis pemilik jarak jauhnya."
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "Syncable record"
-msgstr ""
+msgstr "Rekaman yang dapat disinkronkan"
 
 #: src/chunks/PluginRuns/syncableHierarchy.ts
 msgid "A record mirrored from a selected remote collection."
-msgstr ""
+msgstr "Rekaman yang dicerminkan dari koleksi jarak jauh yang dipilih."
 
 #: src/chunks/AppPage/ProxyConnectReturn.tsx
 msgid "Return to the app"
-msgstr ""
+msgstr "Kembali ke aplikasi"
 
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Organization"
-msgstr ""
+msgstr "Organisasi"
