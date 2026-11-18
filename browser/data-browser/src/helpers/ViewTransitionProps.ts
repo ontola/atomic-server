@@ -1,3 +1,1 @@
-export interface ViewTransitionProps {
-  subject?: string;
-}
+export * from '@tomic/resource-ui/helpers/ViewTransitionProps';

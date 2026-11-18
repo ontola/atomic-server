@@ -1,6 +1,6 @@
 import { type JSX } from 'react';
 import { ResourceContextMenu } from './index';
-import { useResourceContextMenuState } from './ResourceContextMenuContext';
+import { useResourceContextMenuState } from '@tomic/resource-ui/components/ResourceContextMenu/ResourceContextMenuContext';
 
 /**
  * Renders the single, app-wide resource context menu at the cursor. MUST be

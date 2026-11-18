@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite';
+import path from 'node:path';
 import { transform } from 'oxc-transform-react';
 
 // Same skip-filter @vitejs/plugin-react uses for the Babel compiler preset:
@@ -54,7 +55,7 @@ export function oxcReactCompiler({
   let sourcemap = true;
   let jsxDevelopment = false;
   let fastRefresh = false;
-  let appSourceDir = '';
+  let appSourceDirs: string[] = [];
 
   const compilerPlugin: Plugin = {
     name: 'atomic:oxc-react-compiler',
@@ -73,7 +74,12 @@ export function oxcReactCompiler({
         !config.isProduction &&
         config.command === 'serve' &&
         config.server.hmr !== false;
-      appSourceDir = `${config.root}/src/`;
+      appSourceDirs = [
+        config.root,
+        ...['ui', 'table', 'resource-ui', 'table-page'].map(name =>
+          path.resolve(config.root, '..', name),
+        ),
+      ].map(root => `${root.replaceAll(path.sep, '/')}/src/`);
     },
     transform: {
       filter: {
@@ -91,22 +97,11 @@ export function oxcReactCompiler({
 
         const shouldCompile = isClient && looksLikeReactCode.test(code);
 
-        // Only this app's own source gets Fast Refresh instrumentation.
-        //
-        // `includeRE` matches every `.ts` in the workspace, and the refresh
-        // transform registers anything capitalized — which in `@tomic/lib`
-        // means classes like `Store` and `Resource`, not components. Those
-        // modules also load inside the ClientDb worker, where the
-        // `$RefreshReg$` definition never runs: plugin-react's footer that
-        // declares it is guarded by `!inWebWorker`, while the call this pass
-        // emits is not. The worker then dies on
-        // `ReferenceError: $RefreshReg$ is not defined`, the app reports it as
-        // an error toast on every page, and that toast has a "Copy" button
-        // that collides with e2e selectors elsewhere on the page.
-        //
-        // Nothing is lost: the workspace packages hold no components, and
-        // editing them needs a rebuild before vite sees the change anyway.
-        const isAppSource = filename.startsWith(appSourceDir);
+        // UI workspace sources are now app consumers too. Keep SDK/worker
+        // classes outside Fast Refresh: their workers have no $RefreshReg$.
+        const isAppSource = appSourceDirs.some(root =>
+          filename.startsWith(root),
+        );
 
         const result = await transform(filename, code, {
           jsx: {

@@ -1,5 +1,5 @@
-import { BubbleMenu } from './BubbleMenu';
-import { useTipTapEditor } from './TiptapContext';
+import { BubbleMenu } from '@tomic/resource-ui/chunks/RTE/BubbleMenu';
+import { useTipTapEditor } from '@tomic/resource-ui/chunks/RTE/TiptapContext';
 
 export const FullBubbleMenu: React.FC = () => {
   const editor = useTipTapEditor();

@@ -6,7 +6,7 @@ import {
   FaDownload,
   FaFileImport,
 } from 'react-icons/fa6';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { ServiceRow, type ServiceStanding } from '../Cloud/ServiceRow';
 import { UsageMeter } from '../Cloud/UsageMeter';
 import { VaultStorage } from './VaultStorage';
@@ -17,7 +17,7 @@ import {
   type VaultSnapshotUsage,
 } from '../../helpers/managed/vault';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
-import { plural } from '@helpers/plural';
+import { plural } from '@tomic/resource-ui/helpers/plural';
 
 /**
  * Cloud Vault for one drive, as one {@link ServiceRow}.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
-import { Button } from './Button';
-import { Column, Row } from './Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   getLockPolicy,
   LOCK_POLICY_LABELS,

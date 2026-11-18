@@ -5,7 +5,7 @@ import {
   classColumns,
   columnLabel,
   createMappedField,
-} from './tableColumns';
+} from '@tomic/resource-ui/chunks/FormBuilder/tableColumns';
 
 function property(datatype: string, extra: Record<string, unknown> = {}) {
   const values: Record<string, unknown> = {

@@ -13,11 +13,14 @@ import {
 import { FaCodeBranch, FaCodeMerge, FaListCheck } from 'react-icons/fa6';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
-import { ResourceInline } from '../views/ResourceInline/ResourceInline';
-import { Button } from './Button';
-import { Row } from './Row';
-import { ResourceDiff, type AtomicDiff } from './ResourceDiff/ResourceDiff';
-import { plural } from '@helpers/plural';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
+import {
+  ResourceDiff,
+  type AtomicDiff,
+} from '@tomic/resource-ui/components/ResourceDiff/ResourceDiff';
+import { plural } from '@tomic/resource-ui/helpers/plural';
 
 interface ForkBarProps {
   resource: Resource;

@@ -1,8 +1,8 @@
 import { Resource } from '@tomic/react';
 import type { JSX } from 'react';
-import Field from '@components/forms/Field';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import { useFieldOptions } from './useFieldOptions';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import { useFieldOptions } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
 import { FieldPair } from './FieldPair';
 import { BoundField } from './BoundField';
 import { Divider } from './Divider';

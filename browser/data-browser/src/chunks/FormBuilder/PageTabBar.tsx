@@ -10,9 +10,9 @@ import {
 import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaCodeBranch, FaGripVertical, FaPlus } from 'react-icons/fa6';
-import { Row } from '@components/Row';
-import { ScrollArea } from '@components/ScrollArea';
-import { SkeletonButton } from '@components/SkeletonButton';
+import { Row } from '@tomic/ui/components/Row';
+import { ScrollArea } from '@tomic/ui/components/ScrollArea';
+import { SkeletonButton } from '@tomic/ui/components/SkeletonButton';
 import { ReorderableList, type ItemDragProps } from './ReorderableList';
 
 interface PageTabBarProps {

@@ -1,7 +1,7 @@
 import { FC, PropsWithChildren, ReactNode } from 'react';
 import * as RadixTabs from '@radix-ui/react-tabs';
 import { styled } from 'styled-components';
-import { transition } from '../helpers/transition';
+import { transition } from '@tomic/ui/helpers/transition';
 
 type TabItem = {
   label: string;

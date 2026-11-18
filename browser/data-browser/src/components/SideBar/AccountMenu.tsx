@@ -40,11 +40,14 @@ import { shortcuts } from '../../actions/shortcuts';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useInbox } from '../../hooks/useInbox';
 import { useHasManagedAccount } from '../../hooks/useHasManagedAccount';
-import { DropdownMenu, type DropdownItem } from '../Dropdown';
-import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
-import { IconButton } from '../IconButton/IconButton';
+import {
+  DropdownMenu,
+  type DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import type { DropdownTriggerProps } from '@tomic/ui/components/Dropdown/DropdownTrigger';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { ResourceGlyph } from '../ResourceGlyph';
-import { useCombineRefs } from '../../hooks/useCombineRefs';
+import { useCombineRefs } from '@tomic/ui/hooks/useCombineRefs';
 import { useFeedbackDialog } from './FeedbackButton';
 import { OPEN_FEEDBACK_EVENT } from '../../actions/appMenuItems';
 import {

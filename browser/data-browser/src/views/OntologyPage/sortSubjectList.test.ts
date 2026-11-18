@@ -3,7 +3,7 @@ import type { Store } from '@tomic/react';
 import {
   SORT_SUBJECT_FETCH_DEADLINE_MS,
   sortSubjectList,
-} from './sortSubjectList';
+} from '@tomic/resource-ui/views/OntologyPage/sortSubjectList';
 
 type Behaviour = string | 'reject' | 'hang' | 'error';
 

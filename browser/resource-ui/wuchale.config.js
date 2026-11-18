@@ -1,0 +1,153 @@
+// @ts-check
+import { adapter as jsx } from '@wuchale/jsx';
+import { defineConfig } from 'wuchale';
+import { generateText } from 'ai';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+
+const OPENROUTER_MODEL = 'deepseek/deepseek-v4-flash';
+
+/** Custom wuchale AI provider using the Vercel AI SDK + OpenRouter. */
+function openRouterTranslator({
+  apiKey = process.env.OPENROUTER_API_KEY,
+  model = OPENROUTER_MODEL,
+  batchSize = 50,
+  group = {},
+  parallel = 4,
+} = {}) {
+  if (!apiKey) {
+    return null;
+  }
+
+  const openrouter = createOpenRouter({ apiKey });
+
+  return {
+    name: `OpenRouter (${model})`,
+    batchSize,
+    group,
+    parallel,
+    /**
+     * Translate the content using the OpenRouter model.
+     * @param {string} content - The content to translate.
+     * @param {string} instruction - The instruction to use for the translation.
+     * @returns {Promise<string>} The translated text.
+     */
+    translate: async (content, instruction) => {
+      const { text } = await generateText({
+        model: openrouter(model),
+        system: instruction,
+        prompt: content,
+      });
+
+      return text;
+    },
+  };
+}
+
+// These strings will not be translated when present in script scopes.
+const IGNORE_MESSAGES = [
+  'Content-Type',
+  'Authorization',
+  'Bearer',
+  'ArrowDown',
+  'ArrowUp',
+  'Enter',
+  'Escape',
+  'Tab',
+  'Backspace',
+  'Delete',
+  'Shift',
+  'Ctrl',
+  'Alt',
+  'SHA-256',
+];
+
+// Any strings defined in these functions will not be translated.
+const IGNORED_FUNCTIONS = ['effectFetch', 'JSON.stringify', 'JSON.parse'];
+
+const IGNORED_FILE_PARTS = ['.test', '.spec'];
+
+/**
+ * Whether translated strings in `funcName` may call a React hook.
+ *
+ * Copy of `defaultRuntime` from `@wuchale/jsx` (not exported), with one
+ * change: wuchale names class methods and static blocks `ClassName.method` /
+ * `ClassName.[static]`. The default rule ("starts with `use` or an uppercase
+ * letter") then treats every method of a class as a component, so a
+ * translated string in e.g. an error constructor compiled to
+ * `useW_load_rx_()`, a hook called outside React (React error #321 when
+ * `new NoEncryptionKeyError()` ran in an event handler). A name with a `.`
+ * is never a component or hook, so those use the plain runtime.
+ * @param {import('wuchale').DecideReactiveDetails} details
+ */
+const isReactiveFunction = ({ funcName, nested }) =>
+  typeof funcName === 'string' &&
+  !nested &&
+  !funcName.includes('.') &&
+  ((funcName.startsWith('use') && funcName.length > 3) ||
+    /[A-Z]/.test(funcName[0]));
+
+/** @type {import('wuchale').RuntimeConf} */
+const runtime = {
+  // `null` at the top level: no runtime is initialised outside functions.
+  initReactive: details =>
+    typeof details.funcName === 'string' ? isReactiveFunction(details) : null,
+  useReactive: isReactiveFunction,
+  reactive: { wrapInit: expr => expr, wrapUse: expr => expr },
+  plain: { wrapInit: expr => expr, wrapUse: expr => expr },
+};
+
+export default defineConfig({
+  // sourceLocale is en by default
+  locales: ['en', 'es', 'fr', 'de', 'nl', 'id'],
+  // `group` batches all target locales into ONE model request instead of one
+  // request per locale. In dev this matters a lot: wuchale's Vite transform
+  // BLOCKS the module (and thus the HMR update) until translation finishes,
+  // so ungrouped locales cost multiple sequential-ish OpenRouter round-trips
+  // (~6.5s measured) for every new string, vs ~1 round-trip grouped.
+  ai: openRouterTranslator({ group: { en: [['es', 'fr', 'de', 'nl', 'id']] } }),
+  adapters: {
+    main: jsx({
+      loader: 'custom',
+      runtime,
+      // Tests never reach the vite plugin, so the CLI (`pnpm
+      // clean-translations`) must skip them too; otherwise the two extract
+      // different catalogs and every dev-server start rewrites them.
+      files: {
+        include: [
+          'src/**/*.{js,ts,jsx,tsx}',
+          '../table-page/src/**/*.{js,ts,jsx,tsx}',
+          '../data-browser/src/**/*.{js,ts,jsx,tsx}',
+        ],
+        ignore: ['**/*.d.ts', '**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
+      },
+      heuristic: ({ msgStr, details }) => {
+        const [msg] = msgStr;
+
+        if (IGNORED_FILE_PARTS.some(part => details.file.includes(part))) {
+          return false;
+        }
+
+        if (details.scope === 'script') {
+          // Ignore certain functions
+          if (details.call && IGNORED_FUNCTIONS.includes(details.call)) {
+            // console.log('Ignoring', msg);
+            return false;
+          }
+
+          // Ignore certain messages
+          if (IGNORE_MESSAGES.includes(msg)) {
+            // console.log('Ignoring', msg);
+
+            return false;
+          }
+        }
+
+        // Ignore words that are in full caps and only contain letters, digits, and underscores
+        if (msg === msg.toUpperCase() && /^[A-Z0-9_]+$/.test(msg)) {
+          // console.log('Ignoring', msg);
+          return false;
+        }
+      },
+    }),
+  },
+});

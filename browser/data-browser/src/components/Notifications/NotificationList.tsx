@@ -15,14 +15,14 @@ import {
   type NotificationGroup,
 } from '../../helpers/notifications/inbox';
 import { actorName } from '../../helpers/notifications/actorName';
-import { formatTimeAgo } from '../../helpers/formatTimeAgo';
+import { formatTimeAgo } from '@tomic/resource-ui/helpers/formatTimeAgo';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { AgentAvatar } from '../Presence/AgentAvatar';
-import { Button } from '../Button';
-import { Row } from '../Row';
-import { LoaderBlock } from '../Loader';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 
 /**
  * Everything in your Inbox, newest first: who said what where, one row per

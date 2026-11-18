@@ -1,7 +1,10 @@
 import { styled } from 'styled-components';
-import { Column } from '../Row';
+import { Column } from '@tomic/ui/components/Row';
 import { ParentPickerItem } from './ParentPickerItem';
-import { InputStyled, InputWrapper } from '../forms/InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { useSettings } from '../../helpers/AppSettings';
 import { FaFolderOpen } from 'react-icons/fa6';
 import type { Resource } from '@tomic/react';

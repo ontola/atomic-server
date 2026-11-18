@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { CheckboxLabel } from './Checkbox';
+import { CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
 import { styled } from 'styled-components';
 
 interface CheckboxDescriptorProps {

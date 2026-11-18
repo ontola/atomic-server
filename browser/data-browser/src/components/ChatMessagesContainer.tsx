@@ -1,7 +1,7 @@
 import { styled } from 'styled-components';
 import { useEffect, useEffectEvent, useRef } from 'react';
-import { ScrollArea, ScrollViewPort } from '@components/ScrollArea';
-import { Column } from '@components/Row';
+import { ScrollArea, ScrollViewPort } from '@tomic/ui/components/ScrollArea';
+import { Column } from '@tomic/ui/components/Row';
 
 /** How close to the bottom (px) still counts as "stuck to the bottom". */
 const BOTTOM_THRESHOLD_PX = 48;

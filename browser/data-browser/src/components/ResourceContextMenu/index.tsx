@@ -8,10 +8,15 @@ import {
   useDrive,
   useString,
 } from '@tomic/react';
-import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
-import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
-import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
-import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
+import {
+  DIVIDER,
+  DropdownMenu,
+  isItem,
+  DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import { AutoOpenTrigger } from '@tomic/ui/components/Dropdown/AutoOpenTrigger';
+import { DropdownTriggerComponent } from '@tomic/ui/components/Dropdown/DropdownTrigger';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
 import {
   FaArrowUpRightFromSquare,
   FaEllipsisVertical,
@@ -21,27 +26,30 @@ import {
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from '../ConfirmationDialog';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
 import { ResourceCodeUsageDialog } from '../../views/CodeUsage/ResourceCodeUsageDialog';
-import { addIf } from '../../helpers/addIf';
+import { addIf } from '@tomic/resource-ui/helpers/addIf';
 import { resourceActions } from '../../actions/resourceActions';
 import { useAppMenuItems } from '../../actions/appMenuItems';
 import { useActionContext } from '../../actions/useActionContext';
 import { runAction } from '../../actions/runAction';
 import type { ActionDefinition } from '../../actions/types';
 import { usePluginClass } from '@chunks/PluginRuns/useDriveClass';
-import { useCustomContextItemsContext } from './CustomContextItemsContext';
+import { useCustomContextItemsContext } from '@tomic/resource-ui/components/ResourceContextMenu/CustomContextItemsContext';
 import { MoveResourceDialog } from '../MoveResourceDialog';
-import { CoverPickerDialog, IconPickerDialog } from '../ResourceDecorations';
-import { ResourceInline } from '../../views/ResourceInline';
-import { ResourceUsage } from '../ResourceUsage';
-import { getDeleteDialog } from './deleteDialogRegistry';
+import {
+  CoverPickerDialog,
+  IconPickerDialog,
+} from '@tomic/resource-ui/components/ResourceDecorations';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
+import { ResourceUsage } from '@tomic/resource-ui/components/ResourceUsage/index';
+import { getDeleteDialog } from '@tomic/resource-ui/components/ResourceContextMenu/deleteDialogRegistry';
 import { useAfterResourceDelete } from '../../hooks/useAfterResourceDelete';
 import { useExternalApps } from '../../hooks/useExternalApps';
 import { appsForResource } from '../../helpers/driveApps';
 
 const CreateTableFormDialog = lazy(() =>
-  import('../../chunks/TablePage/CreateTableFormDialog').then(module => ({
+  import('@tomic/table-page/TablePage/CreateTableFormDialog').then(module => ({
     default: module.CreateTableFormDialog,
   })),
 );
@@ -56,13 +64,16 @@ const ReportAIChatDialog = lazy(() => import('@chunks/AI/ReportAIChatDialog'));
 export {
   CustomContextItemsProvider,
   useCustomContextItems,
-} from './CustomContextItemsContext';
+} from '@tomic/resource-ui/components/ResourceContextMenu/CustomContextItemsContext';
 
 export { ResourceContextMenuProvider } from './ResourceContextMenuProvider';
 export { ResourceContextMenuHost } from './ResourceContextMenuHost';
 export { useResourceContextMenu } from './ResourceContextMenuContext';
 
-export { DIVIDER, type DropdownItem } from '../Dropdown';
+export {
+  DIVIDER,
+  type DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
 
 /** Ids of the actions in the registry (`actions/resourceActions.tsx`). */
 export const ContextMenuOptions = {

@@ -3,7 +3,10 @@
 import React, { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { IconPickerDialog, TitleIcon } from './ResourceDecorations';
+import {
+  IconPickerDialog,
+  TitleIcon,
+} from '@tomic/resource-ui/components/ResourceDecorations';
 
 // The resource's properties, shared between the mocked hooks and the asserts.
 const db = vi.hoisted(() => ({ props: {} as Record<string, unknown> }));

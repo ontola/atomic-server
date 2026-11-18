@@ -5,7 +5,7 @@ import { styled } from 'styled-components';
 import {
   CommandList,
   type CommandListRefType,
-} from '../../chunks/RTE/SlashMenu/CommandList';
+} from '@tomic/resource-ui/chunks/RTE/SlashMenu/CommandList';
 import type { SuggestionItem } from '../../chunks/RTE/types';
 import type { MentionTrigger } from '../../helpers/chatMention';
 import { getIconForClass } from '../../helpers/iconMap';

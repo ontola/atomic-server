@@ -1,7 +1,7 @@
 import { type AtomicUIMessage } from '../types';
 import { styled } from 'styled-components';
-import Markdown from '@components/datatypes/Markdown';
-import { Row } from '@components/Row';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import { Row } from '@tomic/ui/components/Row';
 import { MessageContextItem } from '../MessageContextItem';
 import { FileContent } from './FileContent';
 

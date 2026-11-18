@@ -1,6 +1,6 @@
 import { Ai, useResource } from '@tomic/react';
 import type { CardViewProps } from './CardViewProps';
-import { Column, Row } from '../../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ResourceCardTitle } from './ResourceCardTitle';
 import Markdown from '../../components/datatypes/Markdown';
 import { ResourceContextMenu } from '../../components/ResourceContextMenu';

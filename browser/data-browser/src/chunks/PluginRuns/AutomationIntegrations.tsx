@@ -5,8 +5,8 @@ import {
   readConnectionSubjects,
   useStore,
 } from '@tomic/react';
-import { Column } from '@components/Row';
-import { ResourceInline } from '../../views/ResourceInline/ResourceInline';
+import { Column } from '@tomic/ui/components/Row';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 
 /** Explicit references, independent of either resource's containment parent. */
 export function AutomationIntegrations({

@@ -36,7 +36,7 @@ import {
   toEntryId,
   type PageInfo,
   type Timed,
-} from '@helpers/chatLog';
+} from '@tomic/resource-ui/helpers/chatLog';
 import { entryToMessage, messageToEntry } from './aiChatEntries';
 
 const TAG_TO_ROLE_MAPPING = {

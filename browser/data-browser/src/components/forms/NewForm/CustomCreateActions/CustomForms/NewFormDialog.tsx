@@ -2,8 +2,8 @@ import { core, forms, dataBrowser, useStore } from '@tomic/react';
 import { useState, useCallback, useEffect, useRef, FormEvent, FC } from 'react';
 import { useSettings } from '../../../../../helpers/AppSettings';
 import { BetaBadge } from '../../../../BetaBadge';
-import { FormServerWarning } from '../../../FormServerWarning';
-import { Button } from '../../../../Button';
+import { FormServerWarning } from '@tomic/resource-ui/components/forms/FormServerWarning';
+import { Button } from '@tomic/ui/components/Button';
 import {
   useDialog,
   Dialog,
@@ -12,7 +12,10 @@ import {
   DialogTitle,
 } from '../../../../Dialog';
 import Field from '../../../Field';
-import { InputWrapper, InputStyled } from '../../../InputStyles';
+import {
+  InputWrapper,
+  InputStyled,
+} from '@tomic/ui/components/forms/InputStyles';
 import type { CustomResourceDialogProps } from '../../useNewResourceUI';
 import { singularize } from '../../../../../helpers/singularize';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
@@ -20,7 +23,7 @@ import { useAddToOntology } from '../../../../../hooks/useAddToOntology';
 import {
   createRowClass,
   resolveOntologyParent,
-} from '../../../../../chunks/TablePage/createTableFromSpec';
+} from '@tomic/table-page/TablePage/createTableFromSpec';
 import { styled } from 'styled-components';
 
 /**

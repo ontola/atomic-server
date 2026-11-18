@@ -1,4 +1,4 @@
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   installRelease,
   publishZipRelease,
@@ -12,7 +12,7 @@ import { useRef, useState } from 'react';
 import { FaPlus } from 'react-icons/fa6';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import {
   InstallationReviewDialog,
   type PendingInstallation,

@@ -6,7 +6,7 @@ import {
   forms,
   getEffectiveConstraint,
 } from '@tomic/react';
-import { optionSubjects } from '@helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 import { formTestFixture as fixture } from './formTestFixture';
 import { buildFormFromSpec, type FormSpec } from './createFormFromSpec';
 

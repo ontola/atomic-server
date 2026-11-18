@@ -12,26 +12,26 @@ import {
 } from '@tomic/react';
 import { useCallback, useState, type JSX } from 'react';
 import toast from 'react-hot-toast';
-import { Column, Row } from '../../../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { styled } from 'styled-components';
 import { FaCaretRight } from 'react-icons/fa6';
-import { Button } from '../../../components/Button';
-import { IconButton } from '../../../components/IconButton/IconButton';
+import { Button } from '@tomic/ui/components/Button';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { ResourceInline } from '../../ResourceInline';
 import { BUTTON_WIDTH, NARROW_BREAKPOINT } from './AddPropertyButton';
 import { FaPlus, FaXmark } from 'react-icons/fa6';
-import { ErrorChip } from '../../../components/forms/ErrorChip';
+import { ErrorChip } from '@tomic/resource-ui/components/forms/ErrorChip';
 import {
   InputStyled,
   InputWrapper,
-} from '../../../components/forms/InputStyles';
+} from '@tomic/ui/components/forms/InputStyles';
 import { SearchBox } from '../../../components/forms/SearchBox';
 import { LabelText } from '../LabelText';
 import { newClass } from '../ontologyUtils';
 import { useOntologyContext } from '../OntologyContext';
 import { TagOptionsEditor } from '../Property/EnumFormPart';
 import { useClassEnumHandlers } from '../Property/useEnumHandlers';
-import { optionSubjects } from '../../../helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 
 const NUMBER_TYPES: string[] = [Datatype.INTEGER, Datatype.FLOAT];
 const TEXT_TYPES: string[] = [

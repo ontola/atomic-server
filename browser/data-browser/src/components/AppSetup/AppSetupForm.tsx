@@ -1,12 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useCurrentAgent, useStore } from '@tomic/react';
 import { validateSetupArguments, type SetupArguments } from '@tomic/lib';
-import { Button } from '../Button';
-import { Column } from '../Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
 import Field from '../forms/Field';
-import { Input, ErrMessage } from '../forms/InputStyles';
-import { Checkbox } from '../forms/Checkbox';
-import { BasicSelect } from '../forms/BasicSelect';
+import { Input, ErrMessage } from '@tomic/ui/components/forms/InputStyles';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { ExternalLink } from '../ExternalLink';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../helpers/navigation';

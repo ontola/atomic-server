@@ -6,6 +6,8 @@ export interface UITheme {
   colorful: boolean;
   radius: string;
   margin: number;
+  containerWidth: number;
+  containerWidthWide: string;
   boxShadowSoft: string;
   boxShadowButton: string;
   boxShadowIntense: string;
@@ -21,6 +23,8 @@ export const defaultUITheme: UITheme = {
   colorful: false,
   radius: '8px',
   margin: 1,
+  containerWidth: 40,
+  containerWidthWide: '70rem',
   boxShadowSoft: '0 0 0 1px #0001',
   boxShadowButton: '0 1px 3px #0002',
   boxShadowIntense: '0 4px 16px #0003',

@@ -24,7 +24,7 @@ and [#86](https://github.com/loro-dev/loro-prosemirror/pull/86). Upstream 0.4.4
 already contains the "only emit changed style ops" part, so do not bump past
 0.4.3 without rebasing the patch. Removal steps: [#1494](https://github.com/ontola/atomic-server/issues/1494).
 
-## @reactflow__core.patch
+## @reactflow\_\_core.patch
 
 Added in #1382. Silences the spurious `error002` ("node types object changed")
 warning that fires in development when the `nodeTypes` object is referentially
@@ -82,4 +82,4 @@ error. `Children.toArray` does not help: React still warns for elements it
 keys that way.
 
 Upstream: not yet reported. Remove when the `@wuchale/jsx` runtime keys the
-pieces it returns; `src/locales/wuchaleRuntime.test.tsx` fails if it does not.
+pieces it returns; `browser/resource-ui/src/locales/wuchaleRuntime.test.tsx` fails if it does not.

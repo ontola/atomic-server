@@ -19,15 +19,15 @@ import { appRoute } from '../RootRoutes';
 import { pathNames } from '../paths';
 import { ContainerNarrow, ContainerWide } from '../../components/Containers';
 import { Main } from '../../components/Main';
-import { Button } from '../../components/Button';
-import { Column, Row } from '../../components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   InputStyled,
   InputWrapper,
   TextAreaStyled,
-} from '../../components/forms/InputStyles';
+} from '@tomic/ui/components/forms/InputStyles';
 import { ResourceSelector } from '../../components/forms/ResourceSelector';
-import { FileDropzoneInput } from '../../components/forms/FileDropzone/FileDropzoneInput';
+import { FileDropzoneInput } from '@tomic/resource-ui/components/forms/FileDropzone/FileDropzoneInput';
 import { NewFormFullPage } from '../../components/forms/NewForm/NewFormPage';
 import { useNewResourceUI } from '../../components/forms/NewForm/useNewResourceUI';
 import { useSettings } from '../../helpers/AppSettings';

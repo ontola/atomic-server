@@ -2,7 +2,7 @@ import { useEffect, useRef, type JSX } from 'react';
 import { Link } from '@tanstack/react-router';
 import { styled } from 'styled-components';
 import { FaCircleExclamation } from 'react-icons/fa6';
-import { Button } from './Button';
+import { Button } from '@tomic/ui/components/Button';
 import { focusConnectDevice } from './ConnectDevice';
 import { cardSurface, CARD_SUB_FONT } from './cardSurface';
 import { compactButtons } from './Cloud/ServiceRow';

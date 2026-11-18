@@ -136,6 +136,28 @@ export default defineConfig(({ mode }) => {
       dedupe: ['prosemirror-view', 'prosemirror-state', 'prosemirror-model'],
       alias: [
         {
+          find: '@tomic/resource-ui/locale-runtime',
+          replacement: path.resolve(
+            __dirname,
+            '../resource-ui/src/locales/main.loader.js',
+          ),
+        },
+        {
+          find: '@tomic/resource-ui/locale-message',
+          replacement: path.resolve(
+            __dirname,
+            '../resource-ui/src/locales/message.js',
+          ),
+        },
+        {
+          find: '@tomic/resource-ui',
+          replacement: path.resolve(__dirname, '../resource-ui/src'),
+        },
+        {
+          find: '@tomic/table-page',
+          replacement: path.resolve(__dirname, '../table-page/src'),
+        },
+        {
           find: '@tomic/table',
           replacement: path.resolve(__dirname, '../table/src/index.ts'),
         },
@@ -193,14 +215,14 @@ export default defineConfig(({ mode }) => {
           find: '@integration-host/table/createTableFromSpec',
           replacement: path.resolve(
             __dirname,
-            'src/chunks/TablePage/createTableFromSpec.ts',
+            '../table-page/src/TablePage/createTableFromSpec.ts',
           ),
         },
         {
           find: '@integration-host/table/tableTemplates',
           replacement: path.resolve(
             __dirname,
-            'src/chunks/TablePage/tableTemplates.ts',
+            '../table-page/src/TablePage/tableTemplates.ts',
           ),
         },
         { find: /^loro-crdt$/, replacement: 'loro-crdt/web' },
@@ -346,7 +368,13 @@ export default defineConfig(({ mode }) => {
             .replaceAll('__APP_DESCRIPTION__', appDescription),
       },
       !isVitest && webfontDownload(),
-      !isVitest && wuchale(),
+      !isVitest &&
+        wuchale({
+          configPath: path.resolve(
+            __dirname,
+            '../resource-ui/wuchale.config.js',
+          ),
+        }),
       // Native React Compiler (oxc-transform-react). Must run before JSX
       // transforms; this plugin does compiler + TS + JSX + Fast Refresh in one
       // pass. Replace with `react({ compiler: true })` once plugin-react 6.1.0
@@ -652,7 +680,12 @@ export default defineConfig(({ mode }) => {
       // dynamic import ("Outdated Optimize Dep" → "Failed to fetch dynamically
       // imported module: CollaborativeEditor.tsx"). Crawling the chunk roots at
       // boot pre-optimizes everything, so first-open is warm and e2e is stable.
-      entries: ['./index.html', './src/chunks/**/*.{ts,tsx}'],
+      entries: [
+        './index.html',
+        './src/chunks/**/*.{ts,tsx}',
+        '../resource-ui/src/chunks/**/*.{ts,tsx}',
+        '../table-page/src/**/*.{ts,tsx}',
+      ],
     },
     test: {
       setupFiles: ['./src/test-setup.ts'],

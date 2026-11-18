@@ -1,7 +1,7 @@
 import { FaCheck } from 'react-icons/fa6';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { CodeBlock } from '../CodeBlock';
-import { Details } from '../Details';
+import { Details } from '@tomic/ui/components/Details';
 import {
   Dialog,
   DialogTitle,
@@ -9,11 +9,11 @@ import {
   DialogActions,
   useDialog,
 } from '../Dialog';
-import { Column } from '../Row';
+import { Column } from '@tomic/ui/components/Row';
 import { useCallback, useEffect, useState } from 'react';
-import Markdown from '../datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import { useStore } from '@tomic/react';
-import { InlineErrMessage } from '../forms/InputStyles';
+import { InlineErrMessage } from '@tomic/ui/components/forms/InputStyles';
 import { useSettings } from '../../helpers/AppSettings';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../helpers/navigation';

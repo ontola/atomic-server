@@ -1,6 +1,6 @@
 import { collections, core } from '@tomic/react';
 import { useState, useCallback, FormEvent, useEffect, FC } from 'react';
-import { Button } from '../../../../Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   useDialog,
   Dialog,
@@ -9,7 +9,10 @@ import {
   DialogActions,
 } from '../../../../Dialog';
 import Field from '../../../Field';
-import { InputWrapper, InputStyled } from '../../../InputStyles';
+import {
+  InputWrapper,
+  InputStyled,
+} from '@tomic/ui/components/forms/InputStyles';
 import { CustomResourceDialogProps } from '../../useNewResourceUI';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
 import { ResourceSelector } from '../../../ResourceSelector';

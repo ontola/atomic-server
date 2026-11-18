@@ -6,11 +6,14 @@ import {
   DialogTitle,
   useDialog,
 } from '../../../../Dialog';
-import { Button } from '../../../../Button';
-import { Column, Row } from '../../../../Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ErrorBlock } from '../../../../ErrorLook';
 import Field from '../../../Field';
-import { InputStyled, InputWrapper } from '../../../InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { useSettings } from '../../../../../helpers/AppSettings';
 import { getManagedPortalUrl } from '../../../../../helpers/managed/cloudSync';
 import { useNavigateWithTransition } from '../../../../../hooks/useNavigateWithTransition';

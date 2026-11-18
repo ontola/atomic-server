@@ -1,15 +1,18 @@
 import { Resource, type JSONValue } from '@tomic/react';
 import { useEffect, useState, type JSX } from 'react';
 import { FaPlus, FaTrash } from 'react-icons/fa6';
-import Field from '@components/forms/Field';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { Column, Row } from '@components/Row';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   IconButton,
   IconButtonVariant,
-} from '@components/IconButton/IconButton';
-import { useDebounce } from '@helpers/useDebounce';
+} from '@tomic/ui/components/IconButton/IconButton';
+import { useDebounce } from '@tomic/resource-ui/helpers/useDebounce';
 import { AddButton } from './StringListEditor';
 import { useFieldOptions } from './useFieldOptions';
 import { FieldPair } from './FieldPair';

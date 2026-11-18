@@ -1,6 +1,6 @@
-import { Button } from '@components/Button';
-import { useDialog, Dialog } from '@components/Dialog';
-import { SearchBox } from '@components/forms/SearchBox';
+import { Button } from '@tomic/ui/components/Button';
+import { useDialog, Dialog } from '@tomic/resource-ui/components/Dialog/index';
+import { SearchBox } from '@tomic/resource-ui/components/forms/SearchBox/index';
 import type { PickResourceArgs } from '@tomic/plugin';
 import { useState, useRef, useEffect } from 'react';
 import { styled } from 'styled-components';

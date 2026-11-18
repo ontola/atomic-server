@@ -2,7 +2,7 @@ import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { useCurrentAgent, useResource, useStore } from '@tomic/react';
 import React, { useEffect, useRef } from 'react';
 import { useCurrentSubject } from '@helpers/useCurrentSubject';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import { useResourcePicker } from './useResourcePicker';
 import { useFilePicker } from './useFilePicker';
 import type { UIPluginData } from '@components/CustomViewProvider';

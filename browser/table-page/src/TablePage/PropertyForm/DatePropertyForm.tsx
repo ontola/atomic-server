@@ -1,0 +1,50 @@
+import { Datatype, core, dataBrowser, urls, useString } from '@tomic/react';
+import { Suspense, useEffect, useState, type JSX } from 'react';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
+import { DateFormatPicker } from './Inputs/DateFormatPicker.js';
+import { PropertyCategoryFormProps } from './PropertyCategoryFormProps.js';
+
+export function DatePropertyForm({
+  resource,
+}: PropertyCategoryFormProps): JSX.Element {
+  const [includeTime, setIncludeTime] = useState(
+    resource.get(core.properties.datatype) === Datatype.TIMESTAMP,
+  );
+  const [dateFormat, setDateFormat] = useString(
+    resource,
+    urls.properties.constraints.dateFormat,
+  );
+
+  useEffect(() => {
+    const type = includeTime ? Datatype.TIMESTAMP : Datatype.DATE;
+
+    (async () => {
+      await resource.set(core.properties.datatype, type);
+      await resource.set(core.properties.isA, [
+        dataBrowser.classes.formattedDate,
+      ]);
+
+      if (dateFormat === undefined) {
+        await resource.set(
+          dataBrowser.properties.dateFormat,
+          urls.instances.dateFormats.localNumeric,
+        );
+      }
+    })();
+  }, [dateFormat, includeTime]);
+
+  return (
+    <Suspense>
+      <CheckboxLabel>
+        <Checkbox onChange={setIncludeTime} checked={includeTime} />
+        <span>Include Time</span>
+      </CheckboxLabel>
+
+      <DateFormatPicker
+        value={dateFormat}
+        onChange={setDateFormat}
+        withTime={includeTime}
+      />
+    </Suspense>
+  );
+}

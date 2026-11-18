@@ -7,8 +7,8 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '@components/Dialog';
-import { Button } from '@components/Button';
+} from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
 import { paths } from '../../routes/paths';
 import { addMarketplace, validateCatalogUrl } from '@helpers/pluginCatalogUrl';
 

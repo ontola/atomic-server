@@ -1,6 +1,6 @@
 import { styled } from 'styled-components';
 import { useStore, type Resource } from '@tomic/react';
-import { LoaderBlock } from '@components/Loader';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 import { AppFrame } from './AppFrame';
 
 /**

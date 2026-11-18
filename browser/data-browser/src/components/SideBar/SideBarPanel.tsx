@@ -1,13 +1,13 @@
 import { styled } from 'styled-components';
 import { FaChevronDown } from 'react-icons/fa6';
-import { Collapse } from '../Collapse';
+import { Collapse } from '@tomic/ui/components/Collapse';
 import { useRef, useState, type JSX } from 'react';
-import { useResizable } from '@hooks/useResizable';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useResizable } from '@tomic/ui/hooks/useResizable';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { useLongPress } from '@hooks/useLongPress';
 import { FaCheck } from 'react-icons/fa6';
-import { DropdownMenu } from '../Dropdown';
-import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
+import { DropdownMenu } from '@tomic/resource-ui/components/Dropdown/index';
+import { AutoOpenTrigger } from '@tomic/ui/components/Dropdown/AutoOpenTrigger';
 import { Panel, panelTitle, usePanelList } from './usePanelList';
 import { SIDEBAR_BAR_HEIGHT, SIDEBAR_BAR_HEIGHT_TOUCH } from './SidebarCSSVars';
 

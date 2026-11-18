@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'browser/ui/**'
+      - 'browser/resource-ui/**'
+      - 'browser/table-page/**'
+      - 'browser/data-browser/src/AtomicResourceUIHost.tsx'
       - 'browser/utils/**'
       - 'browser/lib/src/EventManager.ts'
       - 'browser/lib/src/calendar-date.ts'
@@ -38,7 +41,11 @@ jobs:
         working-directory: browser
       - run: pnpm --filter @tomic/data-browser typecheck
         working-directory: browser
-      - run: pnpm exec vitest run src/components/sharedUI.test.tsx src/components/Spinner.test.tsx src/components/Dialog/DialogGlobalContextProvider.test.tsx src/components/Dropdown/positionMenu.test.tsx src/components/Dropdown/DefaultTrigger.test.tsx src/hooks/useResizable.test.tsx src/hooks/useBackToClose.test.tsx src/chunks/TablePage/ExpandedRowDialog.test.tsx src/chunks/TablePage/ColumnFilterDropdown.test.tsx --maxWorkers=2
+      - run: pnpm exec vitest run src/components/sharedUI.test.tsx src/oxc-workspace-ui.test.ts src/components/Dialog/DialogGlobalContextProvider.test.tsx src/components/Dropdown/positionMenu.test.tsx src/components/Dropdown/DefaultTrigger.test.tsx src/hooks/useResizable.test.tsx --maxWorkers=2
         working-directory: browser/data-browser
+      - run: pnpm --filter @tomic/resource-ui test
+        working-directory: browser
+      - run: pnpm exec vitest run src/TablePage/ExpandedRowDialog.test.tsx src/TablePage/ColumnFilterDropdown.test.tsx --maxWorkers=2
+        working-directory: browser/table-page
       - run: pnpm pack --pack-destination /tmp/ui-package && node scripts/check-package.mjs /tmp/ui-package/tomic-ui-*.tgz
         working-directory: browser/ui

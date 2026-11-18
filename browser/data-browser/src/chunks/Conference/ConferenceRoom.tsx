@@ -8,11 +8,11 @@ import {
   FaVideo,
   FaVideoSlash,
 } from 'react-icons/fa6';
-import { Column, Row } from '../../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   IconButton,
   IconButtonVariant,
-} from '../../components/IconButton/IconButton';
+} from '@tomic/ui/components/IconButton/IconButton';
 import { AgentAvatar } from '../../components/Presence/AgentAvatar';
 import { joinCall, type PeerState } from './callTransport';
 

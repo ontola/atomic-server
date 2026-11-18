@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FaChevronRight } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Collapse } from '@components/Collapse';
+import { Collapse } from '@tomic/ui/components/Collapse';
 import type { AtomicUIMessage } from './types';
 
 const SUMMARY_TAG_RE = /<\/?conversation-summary>/g;

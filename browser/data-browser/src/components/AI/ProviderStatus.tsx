@@ -1,6 +1,6 @@
 import * as React from 'react';
 import styled, { useTheme } from 'styled-components';
-import { Row } from '@components/Row';
+import { Row } from '@tomic/ui/components/Row';
 import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
 
 export interface ProviderStatusProps {

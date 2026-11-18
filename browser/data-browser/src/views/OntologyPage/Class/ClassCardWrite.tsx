@@ -6,12 +6,12 @@ import { urls, useArray, useProperty, useResource } from '@tomic/react';
 import { useCallback, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaCube } from 'react-icons/fa6';
-import { Column, Row } from '../../../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { OntologyDescription } from '../OntologyDescription';
 import { PropertyLineWrite } from '../Property/PropertyLineWrite';
-import InputSwitcher from '../../../components/forms/InputSwitcher';
+import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
 import { AddPropertyButton } from './AddPropertyButton';
-import { ErrorChipInput } from '../../../components/forms/ErrorChip';
+import { ErrorChipInput } from '@tomic/resource-ui/components/forms/ErrorChip';
 import { useOntologyContext } from '../OntologyContext';
 import { TargetableCard } from '../TargetableCard';
 

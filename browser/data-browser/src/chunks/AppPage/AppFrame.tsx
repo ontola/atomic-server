@@ -18,9 +18,9 @@ import {
   isWithinApp,
   type HostReply,
 } from './hostStore';
-import { LoaderBlock } from '@components/Loader';
-import { Button } from '@components/Button';
-import { Row } from '@components/Row';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
 import { newContextItem, useAISidebar } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
 

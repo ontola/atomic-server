@@ -7,7 +7,7 @@ import {
   type Resource,
 } from '@tomic/react';
 import { ImportReferences } from './ImportReferences';
-import { ResourceInline } from '../../views/ResourceInline/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 
 export function ImportResolutionNotice({ resource }: { resource: Resource }) {
   const store = useStore();

@@ -2,14 +2,14 @@
 import React from 'react';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
-import { ControlLockProvider } from '../hooks/useControlLock';
+import { ControlLockProvider } from '@tomic/ui/hooks/useControlLock';
 import {
   useControlLock,
   useHasControlLock,
 } from '@tomic/ui/hooks/useControlLock';
-import { DialogTreeContextProvider } from './Dialog/dialogContext';
+import { DialogTreeContextProvider } from '@tomic/ui/components/Dialog/dialogContext';
 import { useDialogTreeInfo } from '@tomic/ui/components/Dialog/dialogContext';
-import { CurrentBackgroundColor } from '../globalCssVars';
+import { CurrentBackgroundColor } from '@tomic/ui/globalCssVars';
 import { CurrentBackgroundColor as sharedBackgroundColor } from '@tomic/ui/globalCssVars';
 
 afterEach(cleanup);

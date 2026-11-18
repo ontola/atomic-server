@@ -10,7 +10,7 @@ import {
 } from '@tomic/react';
 import { useEffect, useState } from 'react';
 import type React from 'react';
-import { AtomicLink } from '@components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import styled from 'styled-components';
 import { TableList } from '@components/TableList';
 

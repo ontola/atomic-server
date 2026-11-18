@@ -2,11 +2,14 @@ import { forms, useNumber, type Resource } from '@tomic/react';
 import { useEffect, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaXmark } from 'react-icons/fa6';
-import Field from '@components/forms/Field';
-import { IconButton } from '@components/IconButton/IconButton';
-import { Column, Row } from '@components/Row';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { useDateTimeInput } from '@components/forms/hooks/useDateTimeInput';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { Column, Row } from '@tomic/ui/components/Row';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { useDateTimeInput } from '@tomic/resource-ui/components/forms/hooks/useDateTimeInput';
 import { formatScheduleMoment, getFormAvailability } from './formSchedule';
 
 /** How often the status line re-evaluates its "now". Only runs while the

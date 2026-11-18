@@ -109,7 +109,9 @@
     "workbox-window": "^7.4.1",
     "wuchale": "^0.25.6",
     "yjs": "^13.6.30",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@tomic/resource-ui": "workspace:*",
+    "@tomic/table-page": "workspace:*"
   },
   "devDependencies": {
     "@sentry/vite-plugin": "^5.4.1",
@@ -163,7 +165,7 @@
     "test": "vitest run --exclude scripts/integration-mcp.test.mjs && node --test scripts/integration-mcp.test.mjs",
     "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json",
     "check:react-compiler": "node scripts/check-react-compiler.mjs",
-    "clean-translations": "pnpm exec wuchale --clean",
+    "clean-translations": "pnpm --dir ../resource-ui clean-translations",
     "check:translations": "node scripts/check-translations.mjs"
   }
 }

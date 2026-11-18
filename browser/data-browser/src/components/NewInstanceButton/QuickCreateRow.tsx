@@ -9,8 +9,8 @@ import {
 import type { CSSProperties, JSX } from 'react';
 import { css, keyframes, styled } from 'styled-components';
 import { transparentize } from 'polished';
-import { Row } from '../Row';
-import { IconButton } from '../IconButton/IconButton';
+import { Row } from '@tomic/ui/components/Row';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { dataBrowser } from '@tomic/react';
 import { useNewRoute } from '../../helpers/useNewRoute';

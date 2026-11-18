@@ -9,7 +9,7 @@ import {
 } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import { AtomicLink } from '../../components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { CommitDetail } from '../../components/CommitDetail';
 import { ViewProps } from './FolderDisplayStyle';
 import { getIconForClass } from '../../helpers/iconMap';
