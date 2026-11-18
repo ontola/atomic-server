@@ -1,3 +1,4 @@
+import type { RowActionKind } from '@tomic/table';
 import {
   Datatype,
   type JSONValue,
@@ -20,7 +21,7 @@ import { localCalendarDate } from '@helpers/dates/calendarDate';
  * and "Yes/No" set a value, a grocery list toggles, and an inventory counts up
  * and down. Nothing in the catalogue needed a fifth *per-row* verb.
  */
-export type RowActionKind = 'setNow' | 'setValue' | 'toggle' | 'increment';
+export type { RowActionKind } from '@tomic/table';
 
 /** One configured action, stored on the View in `view-row-actions`. */
 export interface RowActionSpec {

@@ -2910,3 +2910,8 @@ Existing installs whose secret was already discarded require reinstalling;
 this does not rotate an app identity or repair provider delegations. New online
 installations still work with older nodes; automatic replay requires a node
 that advertises the initialization-only protocol.
+
+### Create-button field extraction
+
+- `browser/table/src/QuickAddFields.test.tsx` preserves the existing flat draft, numeric conversion, single-preset behavior and input identity.
+- `browser/data-browser/src/chunks/TablePage/quickAdd.test.ts` retains stored-spec parsing and completeness coverage; host dialog/save lifecycle stays unchanged.
