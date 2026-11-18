@@ -1,5 +1,11 @@
 import { Resource, urls, useNumber, useString } from '@tomic/react';
-import { useCallback, useId, type JSX } from 'react';
+import {
+  useCallback,
+  type JSX,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from 'react';
+import { PropertyPrecisionField } from '@tomic/table';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import { useValidation } from '@components/forms/formValidation/useValidation';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
@@ -12,7 +18,6 @@ interface DecimalPlacesInputProps {
 export function DecimalPlacesInput({
   resource,
 }: DecimalPlacesInputProps): JSX.Element {
-  const id = useId();
   const { error, setError, setTouched } = useValidation();
   // No `commit`: the dialog saves (or creates a new property) on confirm.
   const [_, setDataType] = useString(resource, urls.properties.datatype);
@@ -51,24 +56,40 @@ export function DecimalPlacesInput({
   );
 
   return (
-    <>
-      <FormGroupHeading as='label' htmlFor={id}>
-        Decimal Places
-      </FormGroupHeading>
-      <div>
-        <InputWrapper $invalid={error !== undefined}>
-          <InputStyled
-            id={id}
-            type='number'
-            defaultValue={decimalPlaces}
-            min={0}
-            max={20}
-            onBlur={setTouched}
-            onChange={handleDecimalPointChange}
-          />
-        </InputWrapper>
-        {error && <ErrorChip>{error}</ErrorChip>}
-      </div>
-    </>
+    <PropertyPrecisionField
+      value={decimalPlaces}
+      label='Decimal Places'
+      error={error}
+      onChange={handleDecimalPointChange}
+      onBlur={setTouched}
+      Input={PrecisionInput}
+      Heading={PrecisionHeading}
+      Error={ErrorChip}
+    />
+  );
+}
+
+function PrecisionInput({
+  $invalid,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { $invalid?: boolean }) {
+  return (
+    <InputWrapper $invalid={$invalid}>
+      <InputStyled {...props} />
+    </InputWrapper>
+  );
+}
+
+function PrecisionHeading({
+  htmlFor,
+  children,
+}: {
+  htmlFor: string;
+  children: ReactNode;
+}) {
+  return (
+    <FormGroupHeading as='label' htmlFor={htmlFor}>
+      {children}
+    </FormGroupHeading>
   );
 }
