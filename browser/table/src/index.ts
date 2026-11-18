@@ -64,3 +64,10 @@ export type {
 export type { JSONValue } from './value.js';
 
 export { TableHeadingWrapper } from './chunks/TableEditor/TableHeading.js';
+export {
+  TableRowActionFields,
+  type TableRowActionFieldsProps,
+  type TableRowActionKind,
+  type TableRowActionTarget,
+} from './RowActionFields.js';
+export type { RowActionKind } from './rowActionTypes.js';
