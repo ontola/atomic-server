@@ -48,6 +48,8 @@ export interface TableFilterBarProps {
   }>;
 }
 
+const defaultOperatorLabel = (operator: TableFilter['operator']) => operator;
+
 /** The actual active-filter row. Backend descriptors supply labels/types and
  * reference leaves; chip editing, missing targets and Add candidates stay here. */
 export function TableFilterBar({
@@ -58,7 +60,7 @@ export function TableFilterBar({
   onValueChange,
   onOperatorChange,
   onRemove,
-  operatorLabel = operator => operator,
+  operatorLabel = defaultOperatorLabel,
   AddMenu = DefaultAddMenu,
   messages,
 }: TableFilterBarProps) {
