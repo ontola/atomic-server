@@ -19,6 +19,12 @@ more.
   on pushes to `develop`, `v*` tags and `workflow_dispatch` only. To test a PR
   branch, dispatch it: `gh workflow run main.yml --ref <branch>` (or the
   equivalent GitHub API call). A docs-only change needs no dispatch.
+- **One-run hosted CI.** When the self-hosted runner is unavailable, explicitly
+  select the existing full hosted lane with
+  `gh workflow run main.yml --ref <branch> -f github_hosted=true`. This changes
+  no repository variable, keeps all E2E specs, and never retries a failed suite
+  automatically. The private downstream atomic-saas job remains skipped on
+  hosted runs under the existing policy; report that coverage separately.
 - **Paired atomic-saas branch.** The `Downstream` job in `main.yml` builds
   ontola/atomic-saas against your commit. It uses an atomic-saas branch with
   the *same name* as yours only if that branch has an open PR; otherwise it
