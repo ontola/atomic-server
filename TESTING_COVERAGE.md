@@ -1096,6 +1096,17 @@ native clients.
 
 ### Save durability and identity lifecycle regressions
 
+- `replica-evidence.test.ts` exercises the public pure evidence evaluator:
+  default unsupported, incomplete evidence unknown, supported but nonqualifying
+  evidence pending, and trusted exact-version persistent evidence satisfied.
+  Adversarial cases include wrong resource/version, null versions, same-store
+  sessions/generation changes, shared-device versus separate-storage policies,
+  unknown/untrusted provenance, stale generations, memory/failed barriers,
+  duplicates, policy exceptions and detached immutable results. These are SDK
+  contract tests using adapter fixtures, not real peer durability or independent
+  storage proofs. Built-in wire producers, persisted replica identities,
+  crash/reopen, retention, blob/key/dependency closure and backup recovery remain
+  outside this coverage (#2537/#2538).
 - `save-receipt.test.ts` checks the additive `saveWithReceipt` contract through
   real Resource/outbox code with controlled write/transport completion. It covers
   captured local and accepted server versions, later edits, absent evidence,

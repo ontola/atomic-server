@@ -46,6 +46,15 @@ asserts nothing; memory backends and custom host transports cannot masquerade as
 durable local storage or a server endpoint. Identity generations fence receipt
 completion across account replacement, including a switch away and back. This
 does not add a delivery queue or independent-replica/server-fsync evidence.
+`evaluateReplicaEvidence` separately evaluates adapter-supplied exact-version
+barrier observations under an explicit storage/device independence policy. Its
+immutable unsupported/unknown/pending/satisfied result is a pure observation, not
+another registry or sync engine. Built-in transports still supply no independent
+replica evidence; `SaveReceipt` only selects a target, and server acceptance is
+not a persistence barrier. Native replica identity/generation and authenticated
+wire producers remain future runtime/sync work (#2537/#2538), separate from the
+TablePage extraction. Exact equality is conservative; causal frontier coverage,
+retention and recoverable-backup claims are outside this slice.
 See [sign-at-drain.md](./completed/sign-at-drain.md) for the outbox decision. Do not restore
 the superseded signed-at-every-save queue design.
 
