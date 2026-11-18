@@ -148,6 +148,7 @@ export interface SaveReceipt {
 
 type SaveCompletion = {
   generation: number;
+  databaseGeneration: number;
   acceptEvidence?: boolean;
   local?: LocalSaveReceipt;
   server?: ServerSaveReceipt;
@@ -3801,6 +3802,7 @@ export class Resource<C extends OptionalClass = any> {
     // Capture before waiting for another save or signing asynchronously.
     const completion: SaveCompletion = {
       generation: this.store.getIdentityGeneration(),
+      databaseGeneration: this.store.getClientDbGeneration(),
     };
     const release = opts.background
       ? undefined
@@ -3852,7 +3854,7 @@ export class Resource<C extends OptionalClass = any> {
     this._inflightSave = this.saveOnce(completion).then(status => {
       this.assertSaveIdentity(completion);
 
-      return Object.freeze({
+      const receipt: SaveReceipt = Object.freeze({
         status,
         subject: this.subject,
         ...(status !== 'noop' && completion.local
@@ -3862,6 +3864,12 @@ export class Resource<C extends OptionalClass = any> {
           ? { server: completion.server }
           : {}),
       });
+      // A new peer connection must not attribute an earlier database's save
+      // to its own source identity, including a switch away and back.
+      if (completion.databaseGeneration === this.store.getClientDbGeneration())
+        this.store.notifySaveReceipt(receipt);
+
+      return receipt;
     });
 
     try {

@@ -49,12 +49,17 @@ does not add a delivery queue or independent-replica/server-fsync evidence.
 `evaluateReplicaEvidence` separately evaluates adapter-supplied exact-version
 barrier observations under an explicit storage/device independence policy. Its
 immutable unsupported/unknown/pending/satisfied result is a pure observation, not
-another registry or sync engine. Built-in transports still supply no independent
-replica evidence; `SaveReceipt` only selects a target, and server acceptance is
-not a persistence barrier. Native replica identity/generation and authenticated
-wire producers remain future runtime/sync work (#2537/#2538), separate from the
-TablePage extraction. Exact equality is conservative; causal frontier coverage,
-retention and recoverable-backup claims are outside this slice.
+another registry or sync engine. Browser WebRTC peers automatically produce
+correlated persistent-storage observations through
+`BrowserPeerOptions.onReplicaReceipt`; physical independence still requires the
+caller's policy. `SaveReceipt` selects a target; server acceptance is not a
+persistence barrier. Persistent Redb identity/generation is exposed through the
+worker; the browser
+producer verifies target coverage and flushes before responding. Other transports
+and backup guarantees remain future runtime/sync work (#2537/#2538), separate from
+the TablePage extraction. The evaluator matches exact targets; the browser
+producer proves that its stored state covers the requested frontier. Retention
+and recoverable-backup claims remain outside this slice.
 See [sign-at-drain.md](./completed/sign-at-drain.md) for the outbox decision. Do not restore
 the superseded signed-at-every-save queue design.
 

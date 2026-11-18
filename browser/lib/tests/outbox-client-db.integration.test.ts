@@ -33,6 +33,10 @@ beforeAll(async () => {
 
 afterAll(() => db.destroy());
 
+it('does not advertise a persistent replica identity from the real WASM memory backend', async () => {
+  expect(await db.getReplicaIdentity('atomic:memory-replica')).toBeUndefined();
+});
+
 async function newAgent(): Promise<Agent> {
   const keys = await Agent.generateKeyPair();
 

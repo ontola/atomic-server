@@ -26,6 +26,7 @@
  */
 
 import { randomUUID } from './uuid.js';
+import type { ReplicaIdentity } from './replica-evidence.js';
 import {
   publishIndexMigration,
   type IndexMigrationProgress,
@@ -255,6 +256,7 @@ const REPEATABLE_RPC_TYPES = new Set([
   'getDriveSubjects',
   'indexPendingSearch',
   'getVersionVectorsForSubjects',
+  'getReplicaIdentity',
   'outboxEntries',
 ]);
 
@@ -1028,6 +1030,15 @@ export class ClientDbWorker {
   async putResources(jsonAds: string[]): Promise<void> {
     if (jsonAds.length === 0) return;
     await this.call('putResources', { jsonAds });
+  }
+
+  /** Persistent drive-scoped identity shared by all tabs of this database.
+   * Memory backends and older WASM builds return undefined. This does not
+   * establish physical independence from any other store. */
+  async getReplicaIdentity(
+    drive: string,
+  ): Promise<ReplicaIdentity | undefined> {
+    return (await this.call('getReplicaIdentity', { drive })) ?? undefined;
   }
 
   createPeerSession(

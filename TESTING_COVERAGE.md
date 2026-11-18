@@ -458,6 +458,20 @@ verifies Clippy dispatch, staged input, and failure propagation; this fixture do
 
 ## Browser WebRTC transport (issue #1396)
 
+Automatic storage receipts (#2538/#2586): `peer-receipts.test.ts` and browser
+connection regressions cover capability gating, exact saved versions, correlated
+nonces, bounded retry/rotation, identity/database replacement, callback isolation
+and legacy compatibility. Native browser-peer and Redb tests cover authenticated
+state-vector coverage, authorization, failed flush, pending write batches,
+memory exclusion and persisted scoped identity across reopen/clone/recreation.
+`verify-peer-receipts.mjs` exercises two real Chromium contexts with authenticated
+WebRTC and OPFS; discovery/SDP alone is relayed in-process. It observes automatic
+receipts for consecutive save versions without application probes, then verifies
+same-store tabs, leader handoff and database reopen. It does not prove device
+independence, power-loss survival, current retention, blobs or complete recovery.
+The Node/WASM outbox integration suite also checks that the real memory backend
+returns no persistent replica identity.
+
 `browser/lib/src/webrtc-transport.test.ts` covers frame fragmentation/order,
 backpressure and cancellation, bounded queues, caller buffer ownership, malformed
 input and close behavior. `browser/e2e/scripts/verify-webrtc.mjs` establishes real
@@ -1104,9 +1118,9 @@ native clients.
   unknown/untrusted provenance, stale generations, memory/failed barriers,
   duplicates, policy exceptions and detached immutable results. These are SDK
   contract tests using adapter fixtures, not real peer durability or independent
-  storage proofs. Built-in wire producers, persisted replica identities,
-  crash/reopen, retention, blob/key/dependency closure and backup recovery remain
-  outside this coverage (#2537/#2538).
+  storage proofs. The evaluator tests alone do not cover wire producers, persisted identities,
+  crash/reopen, retention, blob/key/dependency closure or backup recovery. Browser
+  producer coverage is described under Browser WebRTC transport (#2537/#2538).
 - `save-receipt.test.ts` checks the additive `saveWithReceipt` contract through
   real Resource/outbox code with controlled write/transport completion. It covers
   captured local and accepted server versions, later edits, absent evidence,

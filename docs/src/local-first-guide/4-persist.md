@@ -167,8 +167,78 @@ observations of completed operations, not independently verifiable certificates.
 These receipts do not prove that a server flushed its disk or that an independent
 second replica has the change. Tabs sharing one client database are one stored
 copy, browser storage can be cleared or evicted, and a resource receipt does not
-cover attachment bytes or all its linked resources. The SDK can assess explicit replica evidence as described below; built-in
-transports do not yet produce it.
+cover attachment bytes or all its linked resources. The SDK assesses replica evidence separately. Authenticated browser peers can
+automatically produce the version-specific storage receipts described below.
+
+## Automatic browser peer receipts
+
+`BrowserPeerSync` automatically requests storage receipts from compatible,
+authenticated browser peers. It uses the exact local and server versions captured
+by completed saves, and checks stored versions during periodic reconciliation and
+reconnection. Applications do not need to send a probe or construct an observation.
+
+```ts
+import { BrowserPeerSync, evaluateReplicaEvidence } from '@tomic/lib';
+
+const peers = new BrowserPeerSync(store, {
+  drive, room, signalingUrl, expectedPeer,
+  onReplicaReceipt(receipt) {
+    const signal = evaluateReplicaEvidence(
+      {
+        subject: receipt.observation.barrier!.subject,
+        version: receipt.observation.barrier!.version,
+        source: receipt.source,
+        scope: 'device',
+      },
+      [receipt.observation],
+      // Supply your explicit trusted independence policy as a third argument.
+    );
+    console.info(signal.status); // 'unknown' without that policy
+  },
+});
+```
+
+The immutable `BrowserReplicaReceipt` callback contains `observation`, the local
+`source` storage identity, authenticated `peerAgent`, `drive`, and `connectionId`.
+The `source` identifies the active local backing store for independence comparison;
+the callback alone does not prove that store currently retains the target version.
+Keep that context when your policy correlates the observation with a trusted peer
+and configured storage/device relationship. Authentication identifies the reporter;
+it does not establish that the peer is honest about storage or physically separate.
+The SDK therefore does not automatically turn a received receipt into `satisfied`.
+The callback observes completed evidence; it does not delay or strengthen `save()`.
+
+The receiver checks that its stored resource state contains every operation in the
+requested version, verifies drive/read access, and completes a persistent-storage
+flush before replying. A later stored frontier can cover an older requested version:
+`barrier.version` names that checked target, not necessarily the whole receiver
+snapshot. A late C1 response remains evidence for C1 after the editor reaches C2.
+Missing state, unresolved dependencies, deletion, memory storage and failed flushes
+produce no positive receipt. Receipt requests are bounded and retried alongside
+ordinary sync; they never publish unsigned edits or bypass normal authorization.
+Probing is best effort and connection-scoped: old targets can be dropped on queue
+overflow or retry exhaustion, so a callback is not guaranteed for every save.
+
+This optional capability is currently implemented for browser WebRTC peers using
+the Rust-backed persistent client database. Legacy peers continue normal syncing
+without these receipt frames. Native Iroh full-sync confirmation and HTTP/WS server
+acceptance remain separate contracts. No callback alone is not a replication failure
+or evidence that a peer has retained nothing.
+
+`await store.getClientDb()?.getReplicaIdentity(drive)` exposes the same drive-scoped
+local identity used by the producer. Its private seed and generation are stored
+atomically in the backing database before they are advertised; no global device
+identifier is broadcast. Tabs sharing that database and later leaders report one
+identity. Different drives receive different pseudonyms. Database recreation gets
+new metadata; byte-for-byte copies retain the copied identity and conservatively
+count as the same replica. Graph and Vault imports do not import identity metadata.
+Memory and older backends return no persistent identity.
+
+Replies must match a live request's nonce, drive, subject and version. Changing the
+agent, database or connection invalidates outstanding requests, including switching
+away and back. Callback evidence is not persisted as a retention ledger. Reconnection
+can produce new evidence, and current retention or backup recovery still needs its
+own policy and verification.
 
 ## Assess independent-replica evidence
 
@@ -196,7 +266,7 @@ A missing or `null` version cannot satisfy this version-specific requirement.
 
 | Signal | Meaning |
 | --- | --- |
-| `unsupported` | No observation provider supports this evidence contract. This is the default with the built-in transports. |
+| `unsupported` | No observation provider supports this evidence contract. This is the default when no observations are supplied. |
 | `unknown` | A provider might support it, but required identity, provenance, generation or independence information is missing or cannot be trusted. |
 | `pending` | A supported provider has not supplied a qualifying completed barrier for this target. This does not mean the SDK scheduled a transfer or that replication will eventually succeed. |
 | `satisfied` | At least one supplied observation meets the selected policy for this exact target. |
@@ -209,7 +279,8 @@ cache or subscriptions and does not change `getSaveState()`.
 ### Integrate a trusted storage adapter
 
 An adapter can pass `ReplicaObservation` records and a `ReplicaEvidencePolicy`.
-These are integration interfaces, not a built-in remote receipt producer:
+The browser peer callback supplies this evidence automatically. Other adapters
+can implement the same integration interfaces:
 
 ```ts
 import {
@@ -279,10 +350,10 @@ acceptance by an authority. Disconnecting does not undo a historical write.
 Resetting storage, deleting data or changing trust requires fresh adapter evidence
 and policy assessment before presenting a current-copy claim.
 
-Persistent storage identities and authenticated wire receipt producers remain
-follow-up work in [#2538](https://github.com/ontola/atomic-server/issues/2538),
-following the [#2537 design](https://github.com/ontola/atomic-server/pull/2537) and
-[#2244 contract discussion](https://github.com/ontola/atomic-server/pull/2244).
+The browser producer follows the [#2537 design](https://github.com/ontola/atomic-server/pull/2537)
+and [#2244 contract discussion](https://github.com/ontola/atomic-server/pull/2244).
+Additional transports and backup/retention guarantees remain follow-up work in
+[#2538](https://github.com/ontola/atomic-server/issues/2538).
 Existing commit acknowledgements, peer counts and full-sync timestamps must not
 be converted into this evidence without the missing storage and trust facts.
 

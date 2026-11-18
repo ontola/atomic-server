@@ -1,11 +1,24 @@
 import { authorizeBrowserInvite } from './browser-peer-invite.js';
 import type { Agent } from './agent.js';
 import type { ClientDbWorker } from './client-db.js';
-import type { Store } from './store.js';
+import { StoreEvents, type Store } from './store.js';
+import {
+  PeerReceiptRequests,
+  type BrowserReplicaReceipt,
+} from './peer-receipts.js';
+
+export type { BrowserReplicaReceipt } from './peer-receipts.js';
 import { createAuthentication } from './authentication.js';
 import { isLoopbackHost } from './urls.js';
 import { WebRtcPeer } from './webrtc-peer.js';
-import { Tag, decodeCommit, encodeAuth, encodeSync } from './ws-v2.js';
+import {
+  Tag,
+  decodeAuthOk,
+  CAP_BROWSER_STORAGE_RECEIPTS,
+  decodeCommit,
+  encodeAuth,
+  encodeSync,
+} from './ws-v2.js';
 import type { WebRtcTransport } from './webrtc-transport.js';
 
 export interface BrowserPeerOptions {
@@ -18,6 +31,9 @@ export interface BrowserPeerOptions {
   invitation?: string;
   iceServers?: RTCIceServer[];
   onStatus?: (status: string) => void;
+  /** Authenticated completed storage barriers; policy must still establish
+   * independence. No historical persistence or current retention is implied. */
+  onReplicaReceipt?: (receipt: BrowserReplicaReceipt) => void;
 }
 
 export function randomPeerToken(): string {
@@ -88,6 +104,8 @@ export class BrowserPeerSync {
   private identity?: Promise<string>;
   private readonly agent: Agent;
   private readonly db: ClientDbWorker;
+  private readonly identityGeneration: number;
+  private readonly databaseGeneration: number;
 
   constructor(
     private readonly store: Store,
@@ -99,6 +117,8 @@ export class BrowserPeerSync {
       throw new Error('Sign in and enable local storage before peer sync');
     this.agent = agent;
     this.db = db;
+    this.identityGeneration = store.getIdentityGeneration();
+    this.databaseGeneration = store.getClientDbGeneration();
     if (!/^[a-f0-9]{64}$/.test(options.room))
       throw new Error('Invalid peer invitation');
     const url = new URL(options.signalingUrl);
@@ -159,7 +179,9 @@ export class BrowserPeerSync {
     if (
       this.stopped ||
       this.store.getAgent() !== this.agent ||
-      this.store.getClientDb() !== this.db
+      this.store.getClientDb() !== this.db ||
+      this.store.getIdentityGeneration() !== this.identityGeneration ||
+      this.store.getClientDbGeneration() !== this.databaseGeneration
     ) {
       this.close();
 
@@ -270,6 +292,15 @@ export class BrowserPeerSync {
   }
 
   private dial(id: string): void {
+    if (
+      this.store.getIdentityGeneration() !== this.identityGeneration ||
+      this.store.getClientDbGeneration() !== this.databaseGeneration
+    ) {
+      this.close();
+
+      return;
+    }
+
     // A deterministic initiator avoids simultaneous offers and retry glare.
     if (
       this.stopped ||
@@ -385,6 +416,11 @@ class BrowserPeerConnection {
   private session?: number;
   private reconcileTimer?: ReturnType<typeof setInterval>;
   private unsubscribe?: () => void;
+  private unsubscribeReceipts?: () => void;
+  private receipts?: PeerReceiptRequests;
+  private readonly identityGeneration: number;
+  private readonly databaseGeneration: number;
+  private readonly connectionId = randomPeerToken();
   private stopped = false;
 
   constructor(
@@ -395,10 +431,56 @@ class BrowserPeerConnection {
     private readonly changed: () => void,
     private readonly failure: (error: unknown) => void,
   ) {
+    this.identityGeneration = store.getIdentityGeneration();
+    this.databaseGeneration = store.getClientDbGeneration();
     this.peer = new WebRtcPeer({ iceServers: options.iceServers });
+    const receipts = new PeerReceiptRequests({
+      drive: this.options.drive,
+      connectionId: this.connectionId,
+      current: () => this.current(),
+      getSource: () => this.db.getReplicaIdentity(this.options.drive),
+      canSend: subject =>
+        this.session === undefined
+          ? Promise.resolve(false)
+          : this.db.canSendPeerFrame(this.session, subject),
+      send: async bytes => {
+        const pipe = await this.peer.transport;
+        if (this.current()) await pipe.send(bytes);
+      },
+      onReceipt: this.options.onReplicaReceipt,
+    });
+    this.receipts = receipts;
+    // Subscribe before authentication, preserving each exact save version while
+    // the handshake or local identity lookup is still in flight.
+    this.unsubscribeReceipts = this.store.on(
+      StoreEvents.SaveReceipt,
+      receipt => {
+        if (!this.current()) return;
+        const resource = this.store.resources.get(receipt.subject);
+
+        if (
+          receipt.subject === this.options.drive ||
+          resource?.get('https://atomicdata.dev/properties/drive') ===
+            this.options.drive
+        ) {
+          receipts.observe(receipt);
+          void receipts.tick();
+        }
+      },
+    );
     void this.peer.transport
       .then(pipe => this.run(this.peer, pipe))
       .catch(error => this.fail(error));
+  }
+
+  private current(): boolean {
+    return (
+      !this.stopped &&
+      this.store.getAgent() === this.agent &&
+      this.store.getClientDb() === this.db &&
+      this.store.getIdentityGeneration() === this.identityGeneration &&
+      this.store.getClientDbGeneration() === this.databaseGeneration
+    );
   }
 
   private onReady(path: string): void {
@@ -412,16 +494,16 @@ class BrowserPeerConnection {
     this.ready = false;
     clearInterval(this.reconcileTimer);
     this.unsubscribe?.();
+    this.unsubscribeReceipts?.();
+    this.receipts?.close();
     this.peer.close();
     if (this.session !== undefined)
       void this.db.closePeerSession(this.session).catch(() => {});
   }
 
   private async run(peer: WebRtcPeer, pipe: WebRtcTransport): Promise<void> {
-    const current = () =>
-      !this.stopped &&
-      this.store.getAgent() === this.agent &&
-      this.store.getClientDb() === this.db;
+    const current = () => this.current();
+    const receipts = this.receipts!;
     const binding = await peer.channelBinding();
     const challenge = `${binding}:${randomPeerToken()}`;
     const hasSnapshot = !!(
@@ -447,6 +529,8 @@ class BrowserPeerConnection {
     let challenged = false;
     let authenticated = false;
     let accepted = false;
+    let peerAgent: string | undefined;
+    let receiptCapability = false;
     let started = false;
     let pendingAuth: Record<string, unknown> | undefined;
     const timeout = setTimeout(() => {
@@ -485,6 +569,12 @@ class BrowserPeerConnection {
           if (!challenged || accepted)
             throw new Error('Unexpected authentication acknowledgement');
           accepted = true;
+          receiptCapability = decodeAuthOk(frame.subarray(1)).includes(
+            CAP_BROWSER_STORAGE_RECEIPTS,
+          );
+        } else if (frame[0] === Tag.STORAGE_RECEIPT_RESPONSE) {
+          if (authenticated && accepted && receiptCapability)
+            await receipts.receive(frame);
         } else {
           if (frame[0] === Tag.AUTH && !authenticated) {
             if (frame.length > 8192)
@@ -507,9 +597,11 @@ class BrowserPeerConnection {
           }
 
           const output = await this.db!.handlePeerFrame(session, frame);
+          if (!current()) break;
 
           if (frame[0] === Tag.AUTH) {
             authenticated = true;
+            peerAgent = output.peerAgent;
 
             // Rust verified the issuer against the link's pinned identity. Only
             // now may this connection receive the bearer invitation.
@@ -540,25 +632,35 @@ class BrowserPeerConnection {
 
         if (authenticated && accepted && !started) {
           started = true;
+          if (receiptCapability && peerAgent) receipts.enable(peerAgent);
           clearTimeout(timeout);
           const path = await peer.connectionPath();
           this.onReady(path);
           let syncing = false;
 
           const reconcile = async () => {
-            if (!current() || syncing) return;
+            if (!current()) {
+              this.fail(new Error('Peer session identity changed'));
+
+              return;
+            }
+
+            if (syncing) return;
             syncing = true;
 
             try {
               const state = await this.store.computeDriveSyncState(
                 this.options.drive,
               );
+              if (!current()) return;
               if (
                 Object.keys(state.resources).length &&
                 !(await this.db.canSendPeerFrame(session, this.options.drive))
               )
                 throw new Error('Peer access removed');
-              if (current())
+
+              if (current()) {
+                receipts.seed(state);
                 await pipe.send(
                   encodeSync(
                     this.options.drive,
@@ -569,6 +671,8 @@ class BrowserPeerConnection {
                     }),
                   ),
                 );
+                await receipts.tick();
+              }
             } finally {
               syncing = false;
             }
@@ -626,6 +730,7 @@ class BrowserPeerConnection {
       }
     } finally {
       clearTimeout(timeout);
+      if (!current()) this.close();
     }
 
     if (current()) this.fail(new Error('Peer disconnected; reconnecting'));
