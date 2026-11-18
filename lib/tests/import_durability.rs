@@ -2,8 +2,8 @@
 #![cfg(feature = "db-redb")]
 use atomic_lib::{urls, Db, Resource, Storelike, Value};
 use std::path::Path;
-const CHILD: &str = "ATOMIC_IMPORT_CRASH_DIR";
 const SYNC_CHILD: &str = "ATOMIC_SYNC_CRASH_DIR";
+const CHILD: &str = "ATOMIC_IMPORT_CRASH_DIR";
 async fn open(path: &Path) -> Db {
     Db::init_redb_file(path, None, &path.join("uploads"))
         .await

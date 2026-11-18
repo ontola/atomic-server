@@ -18,6 +18,79 @@ import { createFromCatalog, before, waitForSynced } from './test-utils';
 test.describe('apps', () => {
   test.beforeEach(before);
 
+  test('an app confirms external and resource navigation in host UI', async ({
+    page,
+    context,
+  }) => {
+    await page.route(
+      url =>
+        url.pathname === '/plugin-ui' &&
+        url.searchParams.get('format') === 'client',
+      route =>
+        route.fulfill({
+          body: readFileSync(
+            resolve(
+              __dirname,
+              '../../../server/src/plugins/assets/view-client.js',
+            ),
+            'utf8',
+          ),
+          contentType: 'application/javascript',
+          headers: { 'Access-Control-Allow-Origin': '*' },
+        }),
+    );
+    await context.route('https://example.com/**', route =>
+      route.fulfill({ body: '<title>External destination</title>' }),
+    );
+    await newApp(page);
+    const original = page.url();
+    await setAppSource(page, NAVIGATION_APP);
+    await page.reload();
+    const app = page.frameLocator('iframe[title="App"]');
+    await expect(
+      app.getByRole('button', { name: 'External link' }),
+    ).toBeVisible({ timeout: 60_000 });
+    await app.getByRole('button', { name: 'External link' }).click();
+    await expect(page.getByRole('dialog')).toContainText('example.com');
+    expect(context.pages()).toHaveLength(1);
+    expect(page.url()).toBe(original);
+
+    if (process.env.HOST_PORT_SHOTS) {
+      for (const [label, width] of [
+        ['desktop', 1280],
+        ['mobile', 390],
+      ] as const) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.screenshot({
+          path: resolve(
+            process.env.HOST_PORT_SHOTS,
+            `host-external-${label}.png`,
+          ),
+        });
+      }
+
+      await page.setViewportSize({ width: 1200, height: 800 });
+    }
+
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(app.getByRole('status')).toHaveText('cancelled');
+    await app.getByRole('button', { name: 'External link' }).click();
+    const opened = context.waitForEvent('page');
+    await page.getByRole('button', { name: 'Open link', exact: true }).click();
+    const popup = await opened;
+    await popup.waitForLoadState();
+    expect(await popup.evaluate(() => window.opener)).toBeNull();
+    await popup.close();
+    await app.getByRole('button', { name: 'Open this resource' }).click();
+    await expect(page.getByRole('dialog')).toContainText('leaving the app');
+    expect(page.url()).toBe(original);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(app.getByRole('status')).toHaveText('cancelled');
+    await app.getByRole('button', { name: 'Open this resource' }).click();
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
   for (const client of ['served', 'v1 fixture'] as const) {
     test(`an app renders in its frame and writes its own data (${client})`, async ({
       page,
@@ -140,6 +213,11 @@ test.describe('apps', () => {
 
     await main.getByRole('button', { name: 'Add view' }).click();
     await page.getByRole('menuitem', { name: 'New app' }).click();
+    // This test only displays the existing rows; it grants no editing rights.
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Read-only', exact: true })
+      .click();
 
     // The app now renders these rows, in a tab of its own...
     await expect(main.locator('iframe[title="App"]')).toBeVisible();
@@ -225,6 +303,70 @@ test.describe('apps', () => {
     await expect(
       page.frameLocator('iframe[title="App"]').getByRole('listitem'),
     ).toHaveCount(1);
+  });
+
+  test('a value an app removes is gone, for the app and on the server', async ({
+    page,
+  }) => {
+    await newApp(page);
+
+    // `resource.remove(p).save()` from inside the frame, then a fresh read —
+    // what an importing app does when a source clears a field.
+    await setAppSource(
+      page,
+      `export async function view({ root, store }) {
+        const NAME = 'https://atomicdata.dev/properties/name';
+        const DESCRIPTION = 'https://atomicdata.dev/properties/description';
+        const out = document.createElement('output');
+        root.append(out);
+        try {
+          const made = await store.newResource({
+            propVals: { [NAME]: 'Row', [DESCRIPTION]: 'Goes away' },
+          });
+          const row = await store.getResource(made.subject);
+          row.remove(DESCRIPTION);
+          await row.save();
+          const after = await store.getResource(made.subject);
+          out.dataset.subject = made.subject;
+          out.textContent = 'description: ' + String(after.get(DESCRIPTION));
+        } catch (e) {
+          out.textContent = 'error: ' + e.message;
+        }
+      }`,
+    );
+    await page.reload();
+
+    const app = page.frameLocator('iframe[title="App"]');
+    const out = app.locator('output');
+    await expect(out).toHaveText(/^(description|error): /, { timeout: 60_000 });
+    await expect(out).toHaveText('description: undefined');
+
+    // And the server's copy, fetched over HTTP rather than the WebSocket the
+    // host's refresh uses, so a stale page copy cannot pass for it.
+    const subject = (await out.getAttribute('data-subject'))!;
+    const onServer = await page.evaluate(async (s: string) => {
+      const store = (
+        window as unknown as {
+          store: {
+            fetchResourceFromServer(
+              s: string,
+              o: { noWebSocket: boolean; forceOverride: boolean },
+            ): Promise<{ getPropVals(): Record<string, unknown> }>;
+          };
+        }
+      ).store;
+      const resource = await store.fetchResourceFromServer(s, {
+        noWebSocket: true,
+        forceOverride: true,
+      });
+
+      return resource.getPropVals();
+    }, subject);
+
+    expect(onServer['https://atomicdata.dev/properties/name']).toBe('Row');
+    expect(
+      onServer['https://atomicdata.dev/properties/description'],
+    ).toBeUndefined();
   });
 
   test('an app that breaks says so, and offers to have it fixed', async ({
@@ -495,6 +637,18 @@ async function setAppSource(
  * An app that asks the host for UI and says what came back, so the test can
  * read the answer from inside the frame.
  */
+const NAVIGATION_APP = `export async function view({ root, store }) {
+  const said = document.createElement('p'); said.setAttribute('role', 'status');
+  const button = (label, action) => {
+    const b = document.createElement('button'); b.textContent = label;
+    b.onclick = async () => { said.textContent = (await action()).status; };
+    root.append(b);
+  };
+  button('External link', () => store.openExternal('https://example.com/docs'));
+  button('Open this resource', async () => store.openResource((await store.getContext()).subject));
+  root.append(said);
+}`;
+
 const HOST_UI_APP = `export async function view({ root, store }) {
   const said = document.createElement('p');
   said.setAttribute('role', 'status');

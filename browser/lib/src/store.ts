@@ -33,6 +33,11 @@ import {
 import { Client, isOwnServerUrl, type FileOrFileLike } from './client.js';
 import { isOriginBackoffError, noteOriginReachable } from './origin-backoff.js';
 import {
+  fetchTableChanges,
+  type TableChangesOptions,
+  type TableChangesPage,
+} from './table-changes.js';
+import {
   CommitBuilder,
   commitIdOf,
   isCommitSubject,
@@ -80,6 +85,7 @@ import { WSClient } from './websockets.js';
 import { LoroLoader } from './loro-loader.js';
 import { loroCall } from './loro-context.js';
 import { withDeadline } from './withDeadline.js';
+import { isLoopbackHost } from './loopback.js';
 
 /** How long a connected store waits on its local database before asking the server. */
 const LOCAL_READ_DEADLINE_MS = 1_000;
@@ -376,10 +382,11 @@ export interface CommitLogEntry {
   /**
    * - `pending`  — locally signed, queued, not yet posted to the server.
    * - `sent`     — server accepted the commit.
+   * - `local`    — saved locally without sending to a server.
    * - `failed`   — server rejected, or the network call threw.
    * - `received` — incoming commit pushed to us by the server.
    */
-  status: 'pending' | 'sent' | 'failed' | 'received';
+  status: 'pending' | 'sent' | 'local' | 'failed' | 'received';
   subject: string;
   signer?: string;
   previousCommit?: string;
@@ -813,6 +820,12 @@ export class Store {
 
   /** Current Agent, used for signing commits. Is required for posting things. */
   private agent?: Agent;
+  private identityGeneration = 0;
+
+  /** @internal Fences asynchronous saves, including A→B→A identity changes. */
+  public getIdentityGeneration(): number {
+    return this.identityGeneration;
+  }
   /** Mapped from origin to websocket */
   private webSockets: Map<string, WSClient>;
 
@@ -1234,8 +1247,21 @@ export class Store {
   public registerLocalOnlyDrive(drive: string): void {
     const normalized = this.normalizeSubject(drive);
 
+    if (this.localOnlyDrives.has(normalized)) return;
+
     this.localOnlyDrives.add(normalized);
+    this._syncedDrives.delete(normalized);
+    this._driveSyncs.delete(normalized);
+
+    if (
+      this._lastDriveSync &&
+      this.normalizeSubject(this._lastDriveSync.drive) === normalized
+    ) {
+      this._lastDriveSync = undefined;
+    }
+
     this.persistLocalOnlyDrives();
+    this.emitSyncStatus();
   }
 
   /** The drive a subject belongs to, for naming it to the person. */
@@ -1388,6 +1414,7 @@ export class Store {
     if (!this.localOnlyDrives.delete(this.normalizeSubject(drive))) return;
 
     this.persistLocalOnlyDrives();
+    this.emitSyncStatus();
   }
 
   /** Remember the local-only drives across reloads. Full or blocked storage
@@ -1900,6 +1927,15 @@ export class Store {
   private drainOutboxSubject = async (subject: string): Promise<void> => {
     let entry = this.outbox.getEntry(subject);
     if (!entry) return;
+    const generation = this.identityGeneration;
+
+    const assertCurrent = () => {
+      if (this.identityGeneration !== generation) {
+        throw new RequestCancelledError(
+          'Identity changed during commit delivery',
+        );
+      }
+    };
 
     // A `_new:` subject has no derived DID yet — it must be sign-genesis'd
     // (which renames it to `did:ad:<sig>`) before it can be POSTed. The
@@ -1951,10 +1987,29 @@ export class Store {
           ?.appliedCommitSignatures.add(genesis.signature);
       }
 
+      const serverTransport = this.commitTransport === undefined;
       const created = await this.postCommit(genesis, endpoint);
+      assertCurrent();
       // Publish the acknowledgement before ResourceSaved listeners decide
       // whether this new resource can be subscribed on the server.
       this.outbox.clearGenesis(subject);
+
+      if (serverTransport && this.identityGeneration === generation) {
+        try {
+          this.resources
+            .get(subject)
+            ?.recordServerAcceptance(
+              endpoint,
+              genesis,
+              LoroLoader.Loro.decodeImportBlobMeta(genesis.loroUpdate!, false)
+                .partialEndVersionVector,
+              generation,
+            );
+        } catch (error) {
+          console.warn('Could not record the accepted genesis receipt', error);
+        }
+      }
+
       const commitId = commitIdOf(created);
       const resource = this.resources.get(subject);
 
@@ -2009,6 +2064,7 @@ export class Store {
       // OPFS-first, then server. Throws on hard failure (offline DID,
       // network error) — the outbox failure/backoff machinery takes over.
       resource = await this.getResource(subject);
+      assertCurrent();
 
       if (resource.error) {
         throw resource.error;
@@ -2084,6 +2140,7 @@ export class Store {
         try {
           const { jsonAd, snapshot } =
             await this.clientDb.getResourceWithSnapshot(subject);
+          assertCurrent();
 
           if (jsonAd) {
             this.hydrateResourceFromJson(subject, JSON.parse(jsonAd));
@@ -2102,6 +2159,7 @@ export class Store {
 
           if (refreshed) resource = refreshed;
         } catch (e) {
+          if (e instanceof RequestCancelledError) throw e;
           console.warn(
             `[Outbox] OPFS rehydrate before offline drain failed for ${subject}:`,
             e,
@@ -2164,7 +2222,9 @@ export class Store {
     const { bytes: delta, versionAfterExport } = exported;
     const builder = new CommitBuilder(subject);
     builder.setLoroUpdate(delta);
+    assertCurrent();
     const commit = await builder.sign(agent);
+    assertCurrent();
 
     // Registered before the POST, not after the ack: the server echoes the
     // commit to this connection too, and under load that echo lands before
@@ -2175,9 +2235,11 @@ export class Store {
     }
 
     let created: Commit;
+    const serverTransport = this.commitTransport === undefined;
 
     try {
       created = await this.postCommit(commit, endpoint);
+      assertCurrent();
     } catch (e) {
       // Pending-deps rejection: the delta we just sent starts past ops the
       // server never received (an earlier commit was lost after the save
@@ -2237,6 +2299,19 @@ export class Store {
       this.addResource(resource, { skipCommitCompare: true });
     } else {
       this.outbox.markDirty(subject);
+    }
+
+    if (serverTransport && this.identityGeneration === generation) {
+      try {
+        resource.recordServerAcceptance(
+          endpoint,
+          commit,
+          versionAfterExport,
+          generation,
+        );
+      } catch (error) {
+        console.warn('Could not record the accepted update receipt', error);
+      }
     }
 
     this.notifyResourceSaved(resource);
@@ -4937,28 +5012,54 @@ export class Store {
 
     const ws = this.getWebSocketForSubject(fetchSubject);
 
+    let useHttp = true;
+
     if (
+      (!opts.method || opts.method === 'GET') &&
       !opts.fromProxy &&
       !opts.noWebSocket &&
       supportsWebSockets() &&
       ws?.readyState === WebSocket.OPEN
     ) {
+      // OPEN is not proof that the peer can answer: a blocked sync worker or
+      // a half-open connection used to hold every table query for ten seconds.
+      // Give a healthy local socket one round trip, then use the existing
+      // authenticated HTTP read path. Remote nodes get a normal WAN budget.
+      const controller = new AbortController();
+      let expired = false;
+      const timer = setTimeout(() => {
+        expired = true;
+        controller.abort(
+          new RequestCancelledError('WebSocket read yielded to HTTP'),
+        );
+      }, this.webSocketReadDeadlineMs(fetchSubject));
+
       try {
-        await ws.fetch(fetchSubject);
+        await ws.fetch(fetchSubject, { signal: controller.signal });
+        useHttp = false;
       } catch (error) {
-        // A hook may already have installed a loading placeholder. Settle it
-        // so concurrent getResource callers receive the failure, not a timeout.
-        const pending = this.getResolved(subject);
+        // Only our own deadline enables fallback. An explicit refusal (401,
+        // 404, etc.) is an answer and must retain its original meaning.
+        if (!expired) {
+          const pending = this.getResolved(subject);
 
-        if (pending && !this.hasRenderableContent(pending)) {
-          this.failResource(subject, asError(error));
+          if (pending && !this.hasRenderableContent(pending)) {
+            this.failResource(
+              subject,
+              error instanceof Error ? error : new Error(String(error)),
+            );
 
-          return pending as Resource<C>;
+            return pending as Resource<C>;
+          }
+
+          throw error;
         }
-
-        throw error;
+      } finally {
+        clearTimeout(timer);
       }
-    } else {
+    }
+
+    if (useHttp) {
       const signInfo = this.agent
         ? { agent: this.agent, serverURL: this.getServerUrl() }
         : undefined;
@@ -5180,6 +5281,25 @@ export class Store {
     ]);
 
     return mergeHistoryAttributions(remote, local);
+  }
+
+  /**
+   * Rows of `table` that changed since `opts.since`, including rows that
+   * left it (tombstones), each with its Loro version. Without `since`, lists
+   * every current row. Page through with the returned `cursor` while
+   * `hasMore`. Throws {@link TableChangesCursorExpiredError} when the cursor
+   * is older than the server's retention: resync without `since`.
+   * `GET /changes` on the connected server (atomic-server #1850).
+   */
+  public async getTableChanges(
+    table: string,
+    opts: TableChangesOptions = {},
+  ): Promise<TableChangesPage> {
+    if (!this.serverUrl) {
+      throw new Error('getTableChanges needs a server');
+    }
+
+    return fetchTableChanges(this.serverUrl, this.getAgent(), table, opts);
   }
 
   private async fetchHistoryAttributionFromServer(
@@ -6074,10 +6194,20 @@ export class Store {
   ): void {
     this._driveSyncInProgress = false;
     this._driveSyncPulling = false;
+
+    // An acknowledgement can arrive after a drive was made local-only (or
+    // after its HTTP origin became foreign). Settle progress without keeping
+    // a receipt that could incorrectly certify a later promotion.
+    if (!this.isLiveSyncedDrive(drive)) {
+      this.emitSyncStatus();
+
+      return;
+    }
+
     this._lastDriveSync = { drive, count, timestamp };
 
     if (drive) {
-      this._syncedDrives.add(drive);
+      this._syncedDrives.add(this.normalizeSubject(drive));
       this._driveSyncs.set(this.normalizeSubject(drive), {
         drive,
         count,
@@ -6120,7 +6250,16 @@ export class Store {
     this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
 
     if (drive) {
-      this._syncedDrives.delete(drive);
+      this._syncedDrives.delete(this.normalizeSubject(drive));
+      this._driveSyncs.delete(this.normalizeSubject(drive));
+
+      if (
+        this._lastDriveSync &&
+        this.normalizeSubject(this._lastDriveSync.drive) ===
+          this.normalizeSubject(drive)
+      ) {
+        this._lastDriveSync = undefined;
+      }
     }
 
     this.emitSyncStatus();
@@ -6143,6 +6282,16 @@ export class Store {
     return this._driveSyncInProgress
       ? LOCAL_READ_DEADLINE_DURING_SYNC_MS
       : LOCAL_READ_DEADLINE_MS;
+  }
+
+  /** How long an individual WebSocket GET waits before yielding to HTTP.
+   * Override alongside localReadDeadlineMs when adapting read budgets. */
+  public webSocketReadDeadlineMs(subject: string): number {
+    const hostname = new URL(
+      /^https?:/.test(subject) ? subject : this.getServerUrl(),
+    ).hostname;
+
+    return isLoopbackHost(hostname) ? 50 : 1_000;
   }
 
   /** True once a drive sync has finished FOR THIS DRIVE in this session.
@@ -6171,7 +6320,9 @@ export class Store {
 
   /** The server started sending resources for a drive sync. */
   public startDriveSyncPull(): void {
+    if (this._driveSyncPulling) return;
     this._driveSyncPulling = true;
+    this.emitSyncStatus();
   }
 
   /** The finished sync of the open drive when there is one, else the most
@@ -6187,7 +6338,7 @@ export class Store {
   public hasCompletedDriveSyncFor(drive: string | undefined): boolean {
     if (!drive) return false;
 
-    return this._syncedDrives.has(drive);
+    return this._syncedDrives.has(this.normalizeSubject(drive));
   }
 
   /**
@@ -6511,10 +6662,16 @@ export class Store {
    * might have security implications for your application.
    */
   public setAgent(agent: Agent | undefined): void {
+    if (this.agent !== agent) this.identityGeneration++;
+
     // The current drive is an account context, not a server preference. Clear
     // it before reauthenticating, so the next identity never subscribes or
     // reconciles the previous identity's private workspace.
-    if (this.agent && this.agent.subject !== agent?.subject) this.setDrive('');
+    if (this.agent?.subject !== agent?.subject) {
+      this.clearDriveSyncReceipts();
+      if (this.agent) this.setDrive('');
+    }
+
     this.agent = agent;
 
     // The outbox is identity-scoped: rebind to this agent's own queue so a new
@@ -6875,6 +7032,7 @@ export class Store {
     // overwriting them, which surfaces the previous server's error on the new
     // server's card.
     if (previous && previous !== url) {
+      this.clearDriveSyncReceipts();
       const stale = this.webSockets.get(previous);
 
       if (stale) {
@@ -7499,6 +7657,13 @@ export class Store {
     );
   }
 
+  private clearDriveSyncReceipts(): void {
+    this._syncedDrives.clear();
+    this._driveSyncs.clear();
+    this._lastDriveSync = undefined;
+    this._lastDriveSyncError = undefined;
+  }
+
   private emitSyncStatus(): void {
     this.eventManager.emit(StoreEvents.SyncStatusChanged, this.getSyncStatus());
   }
@@ -7637,7 +7802,7 @@ export class Store {
 
   public logLocalOnlyCommitSettled(commit: Commit): void {
     this.pushCommitLog(
-      this.buildCommitLogEntry(commit, 'outgoing', 'sent'),
+      this.buildCommitLogEntry(commit, 'outgoing', 'local'),
       commit.loroUpdate,
     );
   }
@@ -7827,11 +7992,13 @@ export class Store {
 
   /** Push a resource's blob; a failure is shown once per resource, not per retry. */
   private pushBlobOrNotify(resource: Resource): Promise<void> {
-    return this.maybePushBlobForResource(resource).catch(e => {
-      console.warn('[Store] blob push failed', resource.subject, e);
+    return this.maybePushBlobForResource(resource)
+      .catch(e => {
+        console.warn('[Store] blob push failed', resource.subject, e);
 
-      this.notifyErrorOnce(`blob:${resource.subject}`, e);
-    });
+        this.notifyErrorOnce(`blob:${resource.subject}`, e);
+      })
+      .finally(() => this.emitSyncStatus());
   }
 
   /**
@@ -8439,6 +8606,8 @@ export class Store {
   /** Resources were stored without a notification each (see
    *  `WSClient.applyPulledStates`): re-run the queries that are still alive. */
   public notifyBulkApplied(): void {
+    this.emitSyncStatus();
+
     for (const ref of this.bulkRefreshables) {
       const collection = ref.deref();
 

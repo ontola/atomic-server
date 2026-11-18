@@ -270,8 +270,8 @@ async fn announce_drives_pkarr(
     Ok(())
 }
 
-// Increase the maximum payload size (for POSTing a body, for example) to 50MB
-pub(crate) const PAYLOAD_MAX: usize = 50_242_880;
+// Keep the HTTP upload limit in sync with the Iroh blob response limit.
+pub(crate) const PAYLOAD_MAX: usize = atomic_lib::sync::protocol::SERVER_UPLOAD_MAX_BYTES;
 pub(crate) const SERVER_VERSION_HEADER: &str = "X-Atomic-Server-Version";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -501,6 +501,17 @@ where
     #[cfg(feature = "wasm-plugins")]
     crate::plugins::sync_worker::spawn(appstate.clone());
 
+    // Sends what plugin routes enqueued (#1719). Only at `read-write`: at a
+    // lower level the queued jobs stay on disk until the gate reopens.
+    #[cfg(feature = "plugin-routes")]
+    if appstate
+        .config
+        .plugin_routes
+        .allows(crate::plugin_routes::PluginRoutesLevel::ReadWrite)
+    {
+        crate::plugins::route_delivery::spawn(appstate.route_delivery.clone());
+    }
+
     // Embedder hook: the store, indexes and transports are up, but the HTTP
     // server hasn't started accepting connections yet. A managed-node wrapper
     // (atomic-saas/managed-node) uses this to flip the `managed` flag, install
@@ -620,6 +631,11 @@ where
                 message.push_str("Anyone who can reach this node can create a Drive on it.\n\n");
             }
         }
+    }
+
+    if let Some(notice) = config.plugin_routes.startup_notice() {
+        tracing::info!("{}", notice);
+        message.push_str(&format!("{}\n\n", notice));
     }
 
     if config.opts.https {

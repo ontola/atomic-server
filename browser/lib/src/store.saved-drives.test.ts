@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { server } from './ontologies/server.js';
-import { testStore } from './test-store.js';
+import { mockLocalPersistence, testStore } from './test-store.js';
 
 /**
  * What happens to a drive that cannot be recorded.
@@ -53,6 +53,7 @@ describe('recording a new drive on the personal drive', () => {
 
 it('a local-only additional drive never posts its data to the selected server', async () => {
   const { store, posted } = await testStore();
+  mockLocalPersistence(store);
   await store.ensurePrivateDrive();
   posted.length = 0;
   const drive = await store.createDrive('Browser collaboration', {

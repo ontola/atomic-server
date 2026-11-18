@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [
+      {
+        "id": "read",
+        "path": "/storage/{*rest}",
+        "methods": ["GET", "HEAD"],
+        "principal": "installation",
+        "auth": "bearer",
+        "authOptional": true,
+        "cors": "any-origin-no-credentials"
+      }
+    ],
+    "tokens": [{ "name": "storage" }]
+  }
+}

@@ -17,6 +17,120 @@ use crate::{Db, Storelike};
 
 use super::protocol;
 
+/// Read-through verification view. Fetches are cached here and never write to
+/// the backing Db while subject locks are held.
+struct EnvelopeOverlay<'a> {
+    db: &'a Db,
+    staged: std::collections::HashMap<String, crate::Resource>,
+    fetched: std::sync::Mutex<std::collections::HashMap<String, crate::Resource>>,
+}
+
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+impl Storelike for EnvelopeOverlay<'_> {
+    async fn add_atoms(&self, _: Vec<crate::Atom>) -> crate::errors::AtomicResult<()> {
+        Err("read-only envelope overlay".into())
+    }
+    fn add_drive_mapping(&self, _: &str, _: &crate::Value) -> crate::errors::AtomicResult<()> {
+        Err("read-only envelope overlay".into())
+    }
+    fn remove_drive_mapping(&self, _: &str) -> crate::errors::AtomicResult<()> {
+        Err("read-only envelope overlay".into())
+    }
+    fn get_base_domain(&self) -> Option<String> {
+        self.db.get_base_domain()
+    }
+    fn get_server_url(&self) -> String {
+        self.db.get_server_url()
+    }
+    fn get_default_agent(&self) -> crate::errors::AtomicResult<crate::agents::Agent> {
+        self.db.get_default_agent()
+    }
+    fn lens_index(&self) -> Option<std::sync::Arc<crate::lens::LensIndex>> {
+        self.db.lens_index()
+    }
+    async fn add_resource_opts(
+        &self,
+        resource: &crate::Resource,
+        check: bool,
+        _: bool,
+        overwrite: bool,
+    ) -> crate::errors::AtomicResult<()> {
+        if check {
+            resource.check_required_props(self).await?;
+        }
+        let key = self.normalize_subject(resource.get_subject()).pure_id();
+        let mut cache = self.fetched.lock().map_err(|_| "overlay cache poisoned")?;
+        if overwrite || !cache.contains_key(&key) {
+            cache.insert(key, resource.clone());
+        }
+        Ok(())
+    }
+    fn all_resources(&self, _: bool) -> Box<dyn Iterator<Item = crate::Resource> + Send> {
+        Box::new(std::iter::empty())
+    }
+    async fn get_resource(
+        &self,
+        subject: &crate::Subject,
+    ) -> crate::errors::AtomicResult<crate::Resource> {
+        let normalized = self.normalize_subject(subject);
+        let key = normalized.pure_id();
+        if let Some(resource) = self.staged.get(&key) {
+            return Ok(resource.clone());
+        }
+        if let Some(resource) = self
+            .fetched
+            .lock()
+            .map_err(|_| "overlay cache poisoned")?
+            .get(&key)
+            .cloned()
+        {
+            return Ok(resource);
+        }
+        if let Ok(resource) = self.db.get_resource_shallow(&normalized) {
+            return Ok(resource);
+        }
+        let origin = self
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".into());
+        let resolved = normalized.resolve(&origin);
+        let path = normalized.path();
+        let same_authority = self.get_base_domain().as_deref().is_some_and(|base| {
+            let strip = |s: &str| {
+                s.trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .trim_end_matches('/')
+                    .to_string()
+            };
+            let base = strip(base);
+            let target = strip(&resolved);
+            target == base || target.starts_with(&format!("{base}/"))
+        });
+        if normalized.is_did()
+            || crate::identifiers::is_identifier_resolution_path(&path)
+            || crate::identifiers::is_atomic_identifier(&resolved)
+            || crate::Subject::from_raw(&resolved, self.get_base_domain().as_deref()).is_local()
+            || same_authority
+        {
+            return Err(crate::errors::AtomicError::not_found(format!(
+                "Resource {resolved} not found locally"
+            )));
+        }
+        self.fetch_resource(&resolved, self.get_default_agent().ok().as_ref())
+            .await
+    }
+    async fn remove_resource(&self, _: &crate::Subject) -> crate::errors::AtomicResult<()> {
+        Err("read-only envelope overlay".into())
+    }
+    async fn query(
+        &self,
+        _: &crate::storelike::Query,
+    ) -> crate::errors::AtomicResult<crate::storelike::QueryResult> {
+        Err("read-only envelope overlay".into())
+    }
+    fn set_default_agent(&self, _: crate::agents::Agent) {}
+}
+
 /// What an `AUTH` frame's `requestedSubject` has to name for this session.
 ///
 /// The signature covers `"{requestedSubject} {timestamp}"`, so the subject
@@ -423,32 +537,8 @@ pub async fn handle_frame_full_for_caps(
             // readable subjects both so it can match the client's and so an
             // anonymous socket learns nothing about a drive it cannot read.
             Some(sync) if sync.probe => {
-                // A first upload has no readable root here yet. Invite its
-                // full reconcile only when the same admission gate used by
-                // SYNC_PUSH allows bootstrapping it. Existing private drives
-                // still go through the read check below; no inventory or
-                // resource is created by this probe.
-                let drive =
-                    crate::Subject::from_raw(&sync.drive, store.get_base_domain().as_deref());
-                if store.get_resource(&drive).await.is_err_and(|error| {
-                    error.error_type == crate::errors::AtomicErrorType::NotFoundError
-                }) && admit_unknown_drive(store, &sync.drive, agent)
-                {
-                    return HandleOutput {
-                        frames: vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))],
-                        ..Default::default()
-                    };
-                }
-                match drive_sync_hash_for_wire_version(
-                    store,
-                    &sync.drive,
-                    agent,
-                    wire,
-                    sync.hash_version,
-                )
-                .await
-                {
-                    Ok(server_hash) if server_hash == sync.drive_hash => {
+                match drive_probe_hash(store, &sync.drive, agent, wire, sync.hash_version).await {
+                    Ok(Some(server_hash)) if server_hash == sync.drive_hash => {
                         vec![protocol::encode_sync_ok(&wire.subject(&sync.drive))]
                     }
                     Ok(_) => vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))],
@@ -587,40 +677,11 @@ pub async fn handle_frame_full_for_caps(
                 // too, since enrollment/quota state can change between the
                 // request and this response.
                 match store.take_pending_blob_request(&resp.hash) {
-                    // Blobs are content-addressed: the bytes must hash to the
-                    // key they are stored under, or any session that answers
-                    // a pending request poisons what every later reader of
-                    // that hash gets.
-                    Some(_drive) if blake3::hash(&resp.bytes).as_bytes() != &resp.hash => {
-                        tracing::warn!(
-                            "BLOB_RESPONSE: bytes do not hash to {}, dropped",
-                            hex::encode(resp.hash)
-                        );
-                        vec![]
-                    }
-                    Some(drive) if store.sync_policy().admit_drive_write(&drive) => {
-                        match store.put_blob(&resp.hash, &resp.bytes).await {
-                            Ok(()) => vec![],
-                            Err(error) => {
-                                tracing::warn!("BLOB_RESPONSE: storage failed: {error}");
-                                vec![protocol::encode_error(
-                                    0,
-                                    protocol::error_code::UNKNOWN,
-                                    "Blob storage failed",
-                                )]
-                            }
-                        }
-                    }
                     Some(drive) => {
-                        tracing::warn!(
-                            "BLOB_RESPONSE: drive {} not admitted by sync policy, dropping blob",
-                            drive
-                        );
-                        vec![protocol::encode_error(
-                            0,
-                            protocol::error_code::UNKNOWN,
-                            "Drive not admitted for sync",
-                        )]
+                        match write_requested_blob(store, &drive, &resp.hash, &resp.bytes).await {
+                            Ok(()) => vec![],
+                            Err(response) => response.into_iter().collect(),
+                        }
                     }
                     None => {
                         tracing::warn!(
@@ -653,6 +714,83 @@ pub async fn handle_frame_full_for_caps(
         subscribe: None,
         unsubscribe: None,
     }
+}
+
+/// A missing drive has no readable inventory to hash yet. Ask for a full
+/// reconcile only when importing it could be admitted, without performing any
+/// of the enrollment or grace bookkeeping reserved for actual writes.
+async fn drive_probe_hash(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+    hash_version: u8,
+) -> Result<Option<String>, String> {
+    let subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+    let key = subject.pure_id();
+    match store
+        .kv
+        .get(Tree::Resources, key.as_bytes())
+        .map_err(|e| e.to_string())?
+    {
+        Some(_) => {
+            // get_resource can fall back after a row decode failure. Such a
+            // failure is not absence and must never authorize bootstrap.
+            store
+                .get_resource_shallow(&subject)
+                .map_err(|e| e.to_string())?;
+            drive_sync_hash_for_wire_version(store, drive, agent, wire, hash_version)
+                .await
+                .map(Some)
+        }
+        None => {
+            if !crate::identifiers::is_resource_id(&key)
+                || matches!(agent, crate::agents::ForAgent::Public)
+                || super::tombstones::try_is_tombstoned(store, &key).map_err(|e| e.to_string())?
+            {
+                return Err("not readable".to_string());
+            }
+            let policy = store.sync_policy();
+            if policy.preview_unknown_drive(&key, agent) {
+                Ok(None)
+            } else {
+                Err(policy.not_enrolled_message(&key))
+            }
+        }
+    }
+}
+
+/// Store bytes for a request whose connection or transport has already matched
+/// the hash to a drive. Recheck current admission and the content hash.
+pub(super) async fn write_requested_blob(
+    store: &Db,
+    drive: &str,
+    hash: &[u8; 32],
+    bytes: &[u8],
+) -> Result<(), Option<Vec<u8>>> {
+    if blake3::hash(bytes).as_bytes() != hash {
+        tracing::warn!(
+            "BLOB_RESPONSE: bytes do not hash to {}, dropped",
+            hex::encode(hash)
+        );
+        return Err(None);
+    }
+    if !store.sync_policy().admit_drive_write(drive) {
+        tracing::warn!("BLOB_RESPONSE: drive {drive} not admitted by sync policy, dropping blob");
+        return Err(Some(protocol::encode_error(
+            0,
+            protocol::error_code::UNKNOWN,
+            "Drive not admitted for sync",
+        )));
+    }
+    store.put_blob(hash, bytes).await.map_err(|error| {
+        tracing::warn!("BLOB_RESPONSE: storage failed: {error}");
+        Some(protocol::encode_error(
+            0,
+            protocol::error_code::UNKNOWN,
+            "Blob storage failed",
+        ))
+    })
 }
 
 /// `SUB <subject>`: parse, `check_read`, and tell the transport to register.
@@ -2296,8 +2434,47 @@ pub async fn import_sync_push(
         }
     }
 
+    let lenses = store.lenses();
+    let staged_resources = staged
+        .iter()
+        .map(|(resource, _)| {
+            let mut projected = resource.clone();
+            if !lenses.is_empty()
+                && projected
+                    .get_propvals()
+                    .keys()
+                    .any(|prop| lenses.touches(prop))
+            {
+                projected.apply_lenses(&lenses);
+            }
+            (normalize(resource.get_subject().as_str()), projected)
+        })
+        .collect();
+    let overlay = EnvelopeOverlay {
+        db: store,
+        staged: staged_resources,
+        fetched: Default::default(),
+    };
+    let mut verified = Vec::new();
+    for envelope in &push.envelopes {
+        if !imported.contains(&normalize(&envelope.subject)) {
+            continue;
+        }
+        match crate::envelopes::verify_envelope(&overlay, &envelope.subject, &envelope.json).await {
+            Ok(envelope) => verified.push(envelope),
+            Err(e) => tracing::warn!(
+                "import_sync_push: envelope for {} rejected: {e}",
+                &envelope.subject[..envelope.subject.len().min(30)]
+            ),
+        }
+    }
+    let envelope_ops = crate::envelopes::stage_verified_envelopes(store, &overlay.staged, verified)
+        .map_err(|error| SyncPushRejected {
+            drive: push.drive.clone(),
+            reason: format!("Failed to stage SYNC_PUSH envelopes: {error}"),
+        })?;
     let post_commit = store
-        .persist_replicated_resources_prepared(staged, false, Some(&push.drive))
+        .persist_replicated_resources_with_envelopes(staged, false, Some(&push.drive), envelope_ops)
         .await
         .map_err(|error| SyncPushRejected {
             drive: push.drive.clone(),
@@ -2306,21 +2483,14 @@ pub async fn import_sync_push(
     drop(_subject_guards);
     store.finish_replicated_resources(post_commit).await;
 
-    // Envelopes ride with the entries they sign. Only a subject imported
-    // above may receive one (same admission as its entry), and each is
-    // verified before it is kept; a bad one is dropped, never the push.
-    for envelope in &push.envelopes {
-        if !imported.contains(&normalize(&envelope.subject)) {
-            continue;
-        }
-        if let Err(e) =
-            crate::envelopes::import_envelope(store, &envelope.subject, &envelope.json).await
-        {
-            tracing::warn!(
-                "import_sync_push: envelope for {} rejected: {e}",
-                &envelope.subject[..envelope.subject.len().min(30)]
-            );
-        }
+    // A LAST chunk is the completed transfer's durability boundary. Make the preceding
+    // projection and its accepted envelopes durable before the caller sends
+    // SYNC_OK; this also covers an empty terminator chunk.
+    if push.last {
+        store.flush().map_err(|error| SyncPushRejected {
+            drive: push.drive.clone(),
+            reason: format!("Failed to durably flush SYNC_PUSH: {error}"),
+        })?;
     }
 
     // A LAST chunk is the completed transfer's durability boundary. Make the preceding
@@ -2479,6 +2649,176 @@ mod bootstrap_and_sub_tests {
     fn empty_push(drive: &str) -> protocol::DecodedSyncPush {
         let frame = protocol::encode_sync_push(drive, &[], true);
         protocol::decode_sync_push(&frame[1..]).unwrap()
+    }
+
+    #[tokio::test]
+    async fn first_drive_probe_requests_reconcile_then_imports_on_open() {
+        let source = Db::init_temp("first_probe_source").await.unwrap();
+        let (alice, drive) = source.setup("Alice").await.unwrap();
+        let child = source
+            .create_resource(crate::urls::FOLDER, &drive, "Offline note", None)
+            .await
+            .unwrap();
+        let sink = Db::init_temp("first_probe_sink").await.unwrap();
+        let mut agent = ForAgent::from(alice);
+        for wire in [WireScheme::CANONICAL, WireScheme::LEGACY] {
+            for hash_version in [1, 2] {
+                let wire_drive = wire.subject(&drive);
+                let empty_hash = if hash_version == 1 {
+                    compute_drive_hash(&Default::default())
+                } else {
+                    compute_drive_hash_v2(&Default::default())
+                };
+                let frame = if hash_version == 1 {
+                    protocol::encode_sync_probe(&wire_drive, &empty_hash)
+                } else {
+                    protocol::encode_sync_probe_v2(&wire_drive, &empty_hash)
+                };
+                let out = handle_frame_full_for_caps(&frame, &sink, &mut agent, wire).await;
+                assert_eq!(out.frames[0], protocol::encode_sync_resend(&wire_drive));
+                assert!(sink
+                    .kv
+                    .get(Tree::Resources, drive.as_bytes())
+                    .unwrap()
+                    .is_none());
+                assert!(sink
+                    .kv
+                    .get(Tree::LoroSnapshots, drive.as_bytes())
+                    .unwrap()
+                    .is_none());
+            }
+        }
+        let subjects: Vec<String> = collect_drive_subjects(&source, &drive.as_str().into())
+            .await
+            .into_iter()
+            .collect();
+        let snapshots = collect_readable_snapshots(&source, &agent, &subjects).await;
+        let items = drive_items_for(&source, &drive, &agent).await.unwrap();
+        let vvs = items
+            .into_iter()
+            .map(|(s, vv)| (s, vv.into_iter().collect()))
+            .collect();
+        let frame = protocol::encode_sync_sparse(&drive, "client-hash", &vvs);
+        let frames = handle_frame_full(&frame, &sink, &mut agent).await.frames;
+        let diff = frames
+            .iter()
+            .find_map(|frame| protocol::decode_sync_diff(&frame[1..]))
+            .unwrap();
+        assert!(diff.pull.contains(&drive));
+        assert!(diff.pull.contains(&child));
+        let entries: Vec<(&str, &[u8])> = snapshots
+            .iter()
+            .map(|(s, b)| (s.as_str(), b.as_slice()))
+            .collect();
+        let frame = protocol::encode_sync_push(&drive, &entries, true);
+        let out = handle_frame_full(&frame, &sink, &mut agent).await;
+        assert_eq!(out.frames[0], protocol::encode_sync_ok(&drive));
+        let imported = sink.get_resource(&drive.as_str().into()).await.unwrap();
+        crate::hierarchy::check_read(&sink, &imported, &agent)
+            .await
+            .unwrap();
+        let imported_child = sink.get_resource(&child.as_str().into()).await.unwrap();
+        assert_eq!(
+            imported_child.get(crate::urls::NAME).unwrap().to_string(),
+            "Offline note"
+        );
+    }
+
+    async fn probe(db: &Db, drive: &str, mut agent: ForAgent) -> Vec<u8> {
+        handle_frame_full(&protocol::encode_sync_probe(drive, "hash"), db, &mut agent)
+            .await
+            .frames
+            .remove(0)
+    }
+
+    fn assert_probe_refused(frame: &[u8], drive: &str) {
+        assert_eq!(frame[0], tag::ERROR);
+        let error = protocol::decode_error(&frame[1..]).unwrap();
+        assert_eq!(error.request_id, 0);
+        assert_eq!(error.code, error_code::UNAUTHORIZED_READ);
+        assert!(error
+            .message
+            .starts_with(&format!("SYNC refused for {drive}: ")));
+    }
+
+    #[tokio::test]
+    async fn first_drive_probe_refuses_public_private_tombstoned_and_nonresource() {
+        let db = Db::init_temp("first_probe_refusals").await.unwrap();
+        let (alice, private_drive) = db.setup("Alice").await.unwrap();
+        let stranger = db.create_agent(Some("Stranger")).await.unwrap();
+        let agent = ForAgent::from(alice);
+        assert_probe_refused(
+            &probe(&db, "atomic:missing", ForAgent::Public).await,
+            "atomic:missing",
+        );
+        assert_probe_refused(
+            &probe(&db, &private_drive, ForAgent::from(stranger)).await,
+            &private_drive,
+        );
+        super::super::tombstones::record_tombstone(&db, "atomic:deleted");
+        for drive in [
+            "did:ad:deleted",
+            "atomic:agent:missing",
+            "did:ad:blob:missing",
+            "atomic:node:missing",
+            "did:ad:commit:missing",
+            "atomic:future:missing",
+            "atomic:",
+            "https://example.test/absent",
+        ] {
+            assert_probe_refused(&probe(&db, drive, agent.clone()).await, drive);
+        }
+    }
+
+    #[tokio::test]
+    async fn first_drive_probe_previews_owner_and_allowlist_without_enrollment() {
+        use crate::sync::policy::{AllowlistPolicy, SyncPolicy};
+        let db = Db::init_temp("first_probe_policy").await.unwrap();
+        let (owner, _) = db.setup("Owner").await.unwrap();
+        let stranger = db.create_agent(Some("Stranger")).await.unwrap();
+        let policy = Arc::new(OwnerPolicy::new(owner.subject.to_string()));
+        db.set_sync_policy(policy.clone());
+        let drive = "atomic:newownerdrive";
+        assert_probe_refused(&probe(&db, drive, ForAgent::from(stranger)).await, drive);
+        assert_eq!(
+            probe(&db, drive, ForAgent::from(owner.clone())).await[0],
+            tag::SYNC_RESEND
+        );
+        assert!(
+            !policy.drive_is_allowed(drive),
+            "a probe must not enroll the owner's drive"
+        );
+
+        let policy = Arc::new(AllowlistPolicy::new());
+        db.set_sync_policy(policy.clone());
+        assert_eq!(
+            probe(&db, drive, ForAgent::from(owner.clone())).await[0],
+            tag::SYNC_RESEND
+        );
+        assert!(!policy.drive_is_allowed(drive));
+        policy.set_grace(std::time::Duration::ZERO);
+        assert_probe_refused(
+            &probe(&db, drive, ForAgent::from(owner.clone())).await,
+            drive,
+        );
+        policy.set_drive_policies([(drive, Some(100))]);
+        assert_eq!(
+            probe(&db, drive, ForAgent::from(owner.clone())).await[0],
+            tag::SYNC_RESEND
+        );
+        policy.record_drive_usage([(drive, 100)]);
+        assert_probe_refused(&probe(&db, drive, ForAgent::from(owner)).await, drive);
+    }
+
+    #[tokio::test]
+    async fn first_drive_probe_refuses_a_corrupt_stored_resource_row() {
+        let db = Db::init_temp("first_probe_corrupt").await.unwrap();
+        let (alice, _) = db.setup("Alice").await.unwrap();
+        let drive = "atomic:corrupt";
+        db.kv
+            .insert(Tree::Resources, drive.as_bytes(), b"invalid propvals")
+            .unwrap();
+        assert_probe_refused(&probe(&db, drive, ForAgent::from(alice)).await, drive);
     }
 
     /// A pushed envelope is kept only when it is verified and names a subject

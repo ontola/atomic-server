@@ -152,6 +152,10 @@ that turned out to be already done, or blocked by a finding, say so inline.
   unchanged. The live-write `Err(_) => true` ACL skip is gone.
   ([`foss-public-host-mode.md`](./foss-public-host-mode.md),
   [`serverless-p2p.md`](./serverless-p2p.md))
+- [x] (2026-10-06) — First-upload hash probes (#2116) preview bootstrap
+  admission without enrolling or starting grace, then request full sync.
+  Stored unreadable and tombstoned drives stay refused. A current browser
+  probe refusal terminates the drive's in-progress state.
 - [x] (2026-09-04) — F6: the unchecked replica applier (`ws_apply`'s old
   `apply_commit_json`) turned out to be reachable only through the pre-v2
   `COMMIT` text frame, which no server sends. It is deleted, along with the

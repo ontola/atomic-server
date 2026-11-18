@@ -1,10 +1,11 @@
-import { Collection } from '@tomic/react';
+import type { IndexedTableRows } from '@tomic/table';
+
 import { CellIndex } from '@chunks/TableEditor';
 
 /** Groups cell payloads (a Property, a TableColumn, …) by their row's subject. */
 export const transformToPropertiesPerSubject = async <T>(
   cells: CellIndex<T>[],
-  collection: Collection,
+  collection: IndexedTableRows,
 ): Promise<Record<string, T[]>> => {
   const result: Record<string, T[]> = {};
 

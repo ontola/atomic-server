@@ -439,6 +439,7 @@ pub struct Db {
     probe_cache: Arc<write_log::ProbeCache>,
     /// Optional remote file storage. Configure before sharing this Db.
     pub blob_backend: Option<Arc<dyn blob_backend::BlobBackend>>,
+    verified_blobs: Arc<blob_backend::VerificationCache>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
     /// The key this node wraps stored secrets with, set once at startup.
     ///
@@ -447,6 +448,16 @@ pub struct Db {
     /// know about encryption is indistinguishable, on disk, from one nobody
     /// meant to protect.
     node_key: Arc<std::sync::OnceLock<[u8; crate::vault::keys::KEK_LEN]>>,
+    /// The integration proxy origin this node's plugins reach through
+    /// `ctx.http` (ontola/atomic-plugins#54). The server's host signs requests
+    /// to it with the installation's app agent, and lets exactly this origin
+    /// through the loopback check. `None` means no proxy is configured.
+    integration_proxy: Arc<RwLock<Option<String>>>,
+    /// Operator sidecars plugins reach through declared `atomic-sidecar:`
+    /// operations, by name: the loopback base URL from
+    /// `ATOMIC_PLUGIN_SIDECARS`. Empty unless the server was built with the
+    /// `plugin-routes` feature and runs at `read-write`.
+    plugin_sidecars: Arc<RwLock<std::collections::BTreeMap<String, String>>>,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
     endpoints: Vec<Endpoint>,
     /// List of class extenders.
@@ -505,6 +516,9 @@ pub struct Db {
     /// (`crate::envelopes`). `Latest` by default; a node that wants a signed
     /// audit log runs `All`.
     envelope_retention: Arc<RwLock<crate::envelopes::EnvelopeRetention>>,
+    /// Writer lock and tombstone retention of the per-table change list
+    /// (`crate::change_log`).
+    pub(crate) change_log: Arc<crate::change_log::ChangeLog>,
     /// Short-lived hash → (drive-subject, requested-at) map for blob hashes
     /// the server has asked a peer for (via `BLOB_REQUEST`, emitted from
     /// `import_sync_push` for an already-admitted drive). Consulted when
@@ -603,11 +617,15 @@ impl Db {
         Db {
             path,
             blob_backend: None,
+            verified_blobs: Default::default(),
             kv: Arc::new(compressed_kv::CompressedKv::with_log(kv, write_log.clone())),
             write_log,
             probe_cache: Default::default(),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
+            integration_proxy: Default::default(),
+            plugin_sidecars: Default::default(),
+            change_log: Default::default(),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
             on_commit: None,
@@ -847,118 +865,22 @@ impl Db {
         entries: Vec<(Resource, Option<Vec<u8>>)>,
         defer_search: bool,
     ) -> AtomicResult<()> {
-        let has_import_identity = entries
+        let has_identity = entries
             .iter()
             .any(|(resource, _)| crate::import_identity::identity(resource).is_some());
         let resources = self
-            .persist_replicated_resources_prepared(entries, defer_search, None)
+            .persist_replicated_resources_prepared_opts(
+                entries,
+                defer_search,
+                None,
+                Transaction::new(),
+            )
             .await?;
         self.finish_replicated_resources(resources).await;
-        // The public batch API is also used by live UPDATE imports, whose
-        // localId receipts must survive a process kill before acknowledgement.
-        // One flush covers the whole batch.
-        if has_import_identity {
+        if has_identity {
             self.flush()?;
         }
         Ok(())
-    }
-
-    /// Apply a replicated batch while its caller holds any subject locks that
-    /// protect the snapshots it resolved. The returned resources still need
-    /// lens activation and change notifications; callers that also hold locks
-    /// must release them before [`Self::finish_replicated_resources`].
-    pub(crate) async fn persist_replicated_resources_prepared(
-        &self,
-        entries: Vec<(Resource, Option<Vec<u8>>)>,
-        defer_search: bool,
-        admitted_drive: Option<&str>,
-    ) -> AtomicResult<Vec<Resource>> {
-        let mut last: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-        for (i, (resource, _)) in entries.iter().enumerate() {
-            last.insert(self.normalize_subject(resource.get_subject()).pure_id(), i);
-        }
-        // Import review holds these same locks while reading every copy. Take
-        // them in a stable order, after sync's subject locks, so a batch never
-        // exposes a half-written localId group and concurrent batches cannot
-        // deadlock each other.
-        let mut identity_keys: Vec<String> = entries
-            .iter()
-            .enumerate()
-            .filter(|(i, (resource, _))| {
-                last.get(&self.normalize_subject(resource.get_subject()).pure_id()) == Some(i)
-            })
-            .filter_map(|(_, (resource, _))| {
-                crate::import_identity::identity(resource)
-                    .map(|(parent, id)| crate::import_identity::lock_key(&parent, &id))
-            })
-            .collect();
-        identity_keys.sort();
-        identity_keys.dedup();
-
-        let batched: Vec<Resource> = {
-            let mut _identity_guards = Vec::with_capacity(identity_keys.len());
-            for key in &identity_keys {
-                _identity_guards.push(self.subject_locks.lock(key).await);
-            }
-
-            let mut transaction = Transaction::new();
-            let mut batched = Vec::new();
-            let mut events = Vec::new();
-            for (i, (resource, snapshot)) in entries.iter().enumerate() {
-                let key = self.normalize_subject(resource.get_subject()).pure_id();
-                if last.get(&key) != Some(&i) {
-                    continue;
-                }
-                let before = transaction.len();
-                let changed = self
-                    .build_projection_tx(
-                        resource,
-                        false,
-                        true,
-                        true,
-                        snapshot.clone(),
-                        &mut transaction,
-                    )
-                    .await?;
-                if defer_search {
-                    let mut added = transaction.split_off(before);
-                    added.retain(|op| !crate::search::is_search_op(op));
-                    transaction.extend(added);
-                    transaction.push(crate::search::pending_marker(&key));
-                }
-                if let Some(changed) = changed {
-                    events.extend(
-                        drive_events::PendingEvent::new_for_drive(
-                            self,
-                            resource,
-                            false,
-                            changed,
-                            admitted_drive,
-                        )
-                        .await,
-                    );
-                }
-                batched.push(resource.clone());
-            }
-            if !batched.is_empty() {
-                self.apply_transaction_with_source(&mut transaction, None, events)?;
-            }
-            batched
-        };
-        Ok(batched)
-    }
-
-    pub(crate) async fn finish_replicated_resources(&self, resources: Vec<Resource>) {
-        for resource in resources {
-            self.note_lens_related(&resource).await;
-            let _ = self.db_events.send(DbEvent::Changed {
-                subject: resource.get_subject().without_params(),
-                delta: None,
-                source_id: crate::sync::ws_apply::current_import_source(),
-                is_new: false,
-                from_commit: false,
-            });
-        }
     }
 
     async fn persist_replicated(
@@ -980,6 +902,112 @@ impl Db {
         };
         self.persist_resource_projection(resource, false, true, true, snapshot)
             .await
+    }
+
+    /// The caller holds subject locks from snapshot reads through this write.
+    /// Return notifications for delivery after those locks have been released.
+    pub(crate) async fn persist_replicated_resources_with_envelopes(
+        &self,
+        entries: Vec<(Resource, Option<Vec<u8>>)>,
+        defer_search: bool,
+        admitted_drive: Option<&str>,
+        envelopes: Transaction,
+    ) -> AtomicResult<Vec<Resource>> {
+        self.persist_replicated_resources_prepared_opts(
+            entries,
+            defer_search,
+            admitted_drive,
+            envelopes,
+        )
+        .await
+    }
+
+    async fn persist_replicated_resources_prepared_opts(
+        &self,
+        entries: Vec<(Resource, Option<Vec<u8>>)>,
+        defer_search: bool,
+        admitted_drive: Option<&str>,
+        envelopes: Transaction,
+    ) -> AtomicResult<Vec<Resource>> {
+        let mut last = HashMap::new();
+        for (i, (resource, _)) in entries.iter().enumerate() {
+            last.insert(self.normalize_subject(resource.get_subject()).pure_id(), i);
+        }
+        let entries: Vec<_> = entries
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, entry)| {
+                (last.get(&self.normalize_subject(entry.0.get_subject()).pure_id()) == Some(&i))
+                    .then_some(entry)
+            })
+            .collect();
+        // Signed commits acquire subject locks before identity locks too.
+        // Stable ordering also lets two overlapping replica batches coexist.
+        let mut identity_keys: Vec<_> = entries
+            .iter()
+            .filter_map(|(resource, _)| {
+                crate::import_identity::identity(resource)
+                    .map(|(parent, id)| crate::import_identity::lock_key(&parent, &id))
+            })
+            .collect();
+        identity_keys.sort();
+        identity_keys.dedup();
+        let mut identity_guards = Vec::with_capacity(identity_keys.len());
+        for key in &identity_keys {
+            identity_guards.push(self.subject_locks.lock(key).await);
+        }
+        let mut transaction = Transaction::new();
+        let mut events = Vec::new();
+        let mut resources = Vec::with_capacity(entries.len());
+        for (resource, snapshot) in entries {
+            let before = transaction.len();
+            let changed = self
+                .build_projection_tx(&resource, false, true, true, snapshot, &mut transaction)
+                .await?;
+            if defer_search {
+                let key = self.normalize_subject(resource.get_subject()).pure_id();
+                let mut added = transaction.split_off(before);
+                added.retain(|op| !crate::search::is_search_op(op));
+                transaction.extend(added);
+                transaction.push(crate::search::pending_marker(&key));
+            }
+            if let Some(changed) = changed {
+                events.extend(
+                    drive_events::PendingEvent::new_for_drive(
+                        self,
+                        &resource,
+                        false,
+                        changed,
+                        admitted_drive,
+                    )
+                    .await,
+                );
+            }
+            resources.push(resource);
+        }
+        transaction.extend(envelopes);
+        if !transaction.is_empty() {
+            self.apply_transaction_with_source(&mut transaction, None, events)?;
+        }
+        drop(identity_guards);
+        Ok(resources)
+    }
+
+    pub(crate) async fn finish_replicated_resources(&self, resources: Vec<Resource>) {
+        for resource in resources {
+            self.note_lens_related(&resource).await;
+            self.notify_replicated_resource(&resource);
+        }
+    }
+
+    fn notify_replicated_resource(&self, resource: &Resource) {
+        let _ = self.db_events.send(DbEvent::Changed {
+            subject: resource.get_subject().without_params(),
+            delta: None,
+            source_id: crate::sync::ws_apply::current_import_source(),
+            is_new: false,
+            from_commit: false,
+        });
     }
 
     async fn persist_resource_projection(
@@ -1026,6 +1054,22 @@ impl Db {
     /// Everything [`Self::persist_resource_projection`] writes for one
     /// resource, appended to `transaction` instead of applied: the index
     /// entries, the Loro snapshot and the row.
+    pub(crate) fn projected_propvals(&self, subject: &str, tx: &Transaction) -> Option<PropVals> {
+        if let Some(op) = tx
+            .iter()
+            .rev()
+            .find(|op| op.tree == Tree::Resources && op.key == subject.as_bytes())
+        {
+            return op
+                .val
+                .as_deref()
+                .and_then(|bytes| decode_propvals(bytes).ok());
+        }
+        self.get_propvals_canonical(subject)
+            .ok()
+            .map(|(_, props)| props)
+    }
+
     async fn build_projection_tx(
         &self,
         resource: &Resource,
@@ -3072,7 +3116,7 @@ impl Db {
     /// `atomic:` spelling. Opening a store rewrites every `did:ad:` key
     /// (`canonical_scheme::migrate_if_needed`) and every write keys by
     /// [`Subject::pure_id`], so a legacy spelling only needs normalizing.
-    fn get_propvals_canonical(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
+    pub(crate) fn get_propvals_canonical(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
         let key = crate::identifiers::canonicalize_scheme(subject);
         let propvals = self.get_propvals(&key)?;
         Ok((key, propvals))
@@ -4002,12 +4046,24 @@ impl Db {
         self.apply_transaction_with_source(transaction, None, Vec::new())
     }
 
-    fn apply_transaction_with_source(
+    pub(crate) fn apply_transaction_with_source(
         &self,
         transaction: &mut Transaction,
         source_id: Option<&str>,
         events: Vec<drive_events::PendingEvent>,
     ) -> AtomicResult<()> {
+        let log_ops = self.transaction_change_log_ops(transaction)?;
+        let log_guard = if log_ops.is_empty() {
+            None
+        } else {
+            Some(
+                self.change_log
+                    .lock
+                    .lock()
+                    .map_err(|_| "change log lock poisoned")?,
+            )
+        };
+        self.stage_change_log(&log_ops, transaction)?;
         // A change's query edges ride in its drive event, in the same batch, so
         // a trigger that was down or lagging replays them from its cursor. A
         // sorted member moving positions has a delete and insert in this
@@ -4063,6 +4119,7 @@ impl Db {
             self.queue_drive_event(event, &mut sequence, transaction)?;
         }
         self.kv.apply_batch(transaction)?;
+        drop(log_guard);
         drop(sequence);
 
         for op in transaction.iter() {
@@ -6462,5 +6519,50 @@ mod remote_not_found_tests {
         }
 
         assert_eq!(hits.load(Ordering::SeqCst), 2);
+    }
+}
+
+impl Db {
+    /// Sets the integration proxy origin (`scheme://host[:port]`) plugins may
+    /// reach, or clears it. Validating it is the server's job; this only holds it.
+    pub fn set_integration_proxy(&self, origin: Option<String>) {
+        if let Ok(mut slot) = self.integration_proxy.write() {
+            *slot = origin;
+        }
+    }
+
+    /// The configured integration proxy origin, if any.
+    pub fn integration_proxy(&self) -> Option<String> {
+        self.integration_proxy
+            .read()
+            .ok()
+            .and_then(|slot| slot.clone())
+    }
+
+    /// Sets the operator sidecars (name to loopback base URL) plugins may
+    /// reach. Validating them is the server's job; this only holds them.
+    pub fn set_plugin_sidecars(&self, sidecars: std::collections::BTreeMap<String, String>) {
+        if let Ok(mut slot) = self.plugin_sidecars.write() {
+            *slot = sidecars;
+        }
+    }
+
+    /// The base URL of the operator sidecar with this name, if configured.
+    pub fn plugin_sidecar(&self, name: &str) -> Option<String> {
+        self.plugin_sidecars
+            .read()
+            .ok()
+            .and_then(|slot| slot.get(name).cloned())
+    }
+
+    /// Wraps host-held key material (a plugin route's installation key) the
+    /// way plugin secrets are wrapped: with the node key, when there is one.
+    pub fn wrap_node_secret(&self, value: &str) -> AtomicResult<String> {
+        self.wrap_secret(value)
+    }
+
+    /// Opens what [`Db::wrap_node_secret`] wrapped.
+    pub fn unwrap_node_secret(&self, stored: &str) -> AtomicResult<String> {
+        self.unwrap_secret(stored)
     }
 }

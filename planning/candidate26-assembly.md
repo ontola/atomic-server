@@ -1,0 +1,15 @@
+# Candidate26 source assembly
+
+This candidate previews current develop, the existing candidate25 plugin host baseline, the frozen45 review-ready authored PR deltas, and only dependencies required to keep existing Atomic Plugins and ELFA consumers working. It is not a clean extraction-only LOC claim and does not merge any review PR into develop.
+
+`candidate26-sources.json` freezes source heads, effective patch bases, stable source patch IDs, dependency exclusions, compatibility carryovers and policy supersessions. Source deltas use merge-base with the declared base;2415 notably usesaca3106 rather than subtracting a newer base tip. No original PR branch is rewritten.
+
+All legacy TablePage review branches remain separate for trekmeester. Design2537, unrelated GitHub Syncables2522, resource copy UI2576, disputed explicit-save removal2582 and range/form guard proposal2583 are excluded. Required range APIs are taken from2540 while preserving explicit text-format save.
+
+This integration preserves current plugin APIs and72 ELFA imports, including complete saved-view tabs, NativeCell raw drafts across remount, numeric precision/range drafts, quick-add helper signatures and extra preset preservation. Test changes follow explicitly included improvement policies; original move-only assertions remain on their source branches.
+
+Local validation so far: complete SDK and dependency builds, SDK TypeScript, broad Atomic Data Browser TypeScript, all workspace lint/format checks, packed table/UI installation and rendering in a clean external consumer, and preliminary72/72 ELFA public import inventory pass. Saved-view scope and app-grant tests40/40 pass, including asynchronous saved-subject delivery only after attachment, failure returning no grant target, and explicit retry retaining the prepared resource. Plugin-host integration115 tests pass across proxy, host requests, confirmed navigation, importer resolution/review and binary encoding compatibility. The complete table package suite passes211/211 tests across43 files; focused SDK suites pass121 receipt/read/WebSocket/destination tests and77 save/outbox/persistence tests. OwnWASM, normal commit hook and final latest-develop merge are recorded at completion.
+
+The TablePage CI workflow preserves UI/utils triggers and graph ordering, builds both private packages, installs both preview archives and checks that host and grid share one UI module instance. Existing plugin route features and Main full coverage remain enabled.
+
+The original2504 synchronous callbacks coexist with candidate plugin APIs through tracked queue receipts: createView/setViewKind still return a saved subject or undefined as in candidate25, while failures remain visible and retryable in the metadata queue. React act fixtures explicitly ignore asynchronous return values when not awaiting them, preventing test-root contamination; no owner/readiness/loading guard was relaxed. The shared active alias and public candidate tag remain unchanged until parent orchestration completes all gates.

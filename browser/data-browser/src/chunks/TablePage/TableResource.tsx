@@ -1,3 +1,11 @@
+import { useTableRowSelection } from '@tomic/table';
+import { QuickAddDialog } from './QuickAddDialog';
+import { writeAtomicQuickAddConfiguration } from './atomicQuickAddConfiguration';
+import type { QuickAddSpec } from './quickAdd';
+import { RowActionDialog } from './RowActionDialog';
+import { DerivedColumnDialog } from './DerivedColumnDialog';
+import { writeAtomicConfiguredColumn } from './atomicConfiguredColumn';
+import { useTableNavigation } from '@tomic/table';
 import {
   core,
   dataBrowser,
@@ -14,8 +22,10 @@ import {
 } from '@tomic/react';
 import type { CellIndex } from '@chunks/TableEditor';
 import toast from 'react-hot-toast';
+import { ViewSaveError } from './ViewSaveError';
 import { styled } from 'styled-components';
 import { AppFrame } from '@chunks/AppPage/AppFrame';
+import { AfterCommitBar } from '@chunks/AppPage/AfterCommitBar';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
 import { useHandleClearCells } from '@chunks/TablePage/helpers/useHandleClearCells';
 import { useHandleColumnResize } from '@chunks/TablePage/helpers/useHandleColumnResize';
@@ -41,8 +51,10 @@ import {
   type TableColumn,
 } from '@chunks/TablePage/useTableColumns';
 import { useTableData } from '@chunks/TablePage/useTableData';
+import { AtomicTableNavigation } from './AtomicTableNavigation';
 import {
   useId,
+  useLayoutEffect,
   useState,
   useCallback,
   useEffect,
@@ -59,6 +71,9 @@ import { CellSelectionMenu } from './CellSelectionMenu';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS } from './tableViewKinds';
+import { AtomicColumnCreationDialog } from './AtomicColumnCreationDialog';
+import { AtomicColumnEditDialog } from './AtomicColumnEditDialog';
+import { AtomicColumnRemovalDialog } from './AtomicColumnRemovalDialog';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { RowCommentButton } from './RowCommentButton';
 import { KanbanView } from './Kanban/KanbanView';
@@ -76,9 +91,8 @@ import { useRowActions } from './useRowActions';
 import { rowActionKey, type RowActionSpec } from './rowActions';
 import { QuickAddBar } from './QuickAddBar';
 import { useTableAggregates } from './useTableAggregates';
-import { getTableDrive } from './tableDrive';
+import { toAtomicTableAggregateOptions } from './atomicTableQuery';
 import { TableTotalsFooter } from './TableTotalsFooter';
-import { toAggregation } from './tableAggregates';
 import { stringToSlug } from '@helpers/stringToSlug';
 import { orderColumns, reorderColumnKeys } from './columnOrder';
 import { TableSummaryBar } from './TableSummaryBar';
@@ -131,17 +145,29 @@ const queryIdentity = (
     s: [sortBy ?? null, !!sortDesc],
   });
 
-export const TableResource: React.FC<TableResourceProps> = ({
+export const TableResource: React.FC<TableResourceProps> = props => (
+  <AtomicTableNavigation>
+    <TableResourceContent {...props} />
+  </AtomicTableNavigation>
+);
+
+const TableResourceContent: React.FC<TableResourceProps> = ({
   resource,
   viewSubject,
   embedded,
 }) => {
   const store = useStore();
   const titleId = useId();
-  const canWrite = useCanWrite(resource);
+  const canWriteResource = useCanWrite(resource);
 
   const {
     tableClass,
+    viewReady,
+    viewError,
+    viewSaving,
+    viewSaveError,
+    retryViewSave,
+    enqueueViewWrite,
     sorting,
     setSortBy,
     filters,
@@ -162,6 +188,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     deleteView,
     reorderViews,
     collection,
+    answeredQuery: answeredQueryState,
     ready,
     invalidateCollection,
     viewKind,
@@ -189,10 +216,16 @@ export const TableResource: React.FC<TableResourceProps> = ({
     viewRowActions,
     setViewRowActions,
     viewQuickAdd,
-    setViewQuickAdd,
     queryFilters,
     queryExpressionFilters,
+    query,
   } = useTableData(resource, viewSubject, embedded);
+  const canWrite = canWriteResource && viewReady;
+  const { location: configuredLocation } = useTableNavigation();
+  const requestedViewScope = JSON.stringify([
+    resource.subject,
+    embedded ? (viewSubject ?? null) : (configuredLocation.view ?? null),
+  ]);
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
     tableClass,
@@ -541,14 +574,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   );
 
   // Rebuilt every render (it carries a quantized `now`), so keyed on content.
-  const aggregationKey = JSON.stringify(
-    toAggregation(
-      viewAggregates,
-      viewGroupByColumn,
-      viewGroupGranularity,
-      derivedSpecs,
-    ) ?? null,
-  );
+  const aggregationKey = JSON.stringify(query.aggregation ?? null);
   const aggregation = useMemo(
     () => (JSON.parse(aggregationKey) as Aggregation | null) ?? undefined,
     [aggregationKey],
@@ -556,17 +582,18 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   // Totals ride their own query so they can be re-read on every edit without
   // clearing the grid's pages. See `useTableAggregates`.
-  const viewAggregateOutcomes = useTableAggregates({
-    property: core.properties.parent,
-    value: resource.subject,
-    filters: queryFilters,
-    expressionFilters: queryExpressionFilters,
-    aggregation,
-    drive: getTableDrive(store, resource) ?? store.getDrive(),
-    server: resource.subject.startsWith('http')
-      ? new URL(resource.subject).origin
-      : undefined,
-  });
+  const viewAggregateOutcomes = useTableAggregates(
+    toAtomicTableAggregateOptions(
+      {
+        ...query,
+        scope: { ...query.scope, drive: query.scope.drive ?? store.getDrive() },
+        aggregation,
+      },
+      resource.subject.startsWith('http')
+        ? new URL(resource.subject).origin
+        : undefined,
+    ),
+  );
 
   // Under the quick filter, the totals cover the rows that match — the rows on
   // screen, and the ones the footer counts.
@@ -788,10 +815,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
     sorting.sortDesc,
   );
   const answeredQuery = queryIdentity(
-    collection.filters,
-    collection.expressionFilters,
-    collection.sortBy,
-    collection.sortDesc,
+    answeredQueryState.filters,
+    answeredQueryState.expressionFilters,
+    answeredQueryState.sortBy,
+    answeredQueryState.sortDesc,
   );
 
   // A count captured under a different query says nothing about this one.
@@ -1124,34 +1151,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // sorting changes which rows are visible, so the ticks would point at rows
   // the person can no longer see: they only count for the query they were made
   // under.
-  const [selection, setSelection] = useState<{
-    queryKey: string;
-    rows: ReadonlySet<string>;
-  }>({ queryKey, rows: new Set() });
-  const selectedRows = useMemo<ReadonlySet<string>>(
-    () => (selection.queryKey === queryKey ? selection.rows : new Set()),
-    [selection, queryKey],
-  );
-
-  const toggleRowSelected = useCallback(
-    (subject: string) => {
-      setSelection(prev => {
-        const next = new Set(prev.queryKey === queryKey ? prev.rows : []);
-
-        if (!next.delete(subject)) {
-          next.add(subject);
-        }
-
-        return { queryKey, rows: next };
-      });
-    },
-    [queryKey],
-  );
-
-  const clearRowSelection = useCallback(
-    () => setSelection({ queryKey, rows: new Set() }),
-    [queryKey],
-  );
+  const { selectedRows, toggleRowSelected, clearRowSelection } =
+    useTableRowSelection(
+      JSON.stringify([resource.subject, tableClass.subject, queryKey]),
+    );
 
   const deleteRowSubjects = useCallback(
     async (subjects: string[]) => {
@@ -1275,6 +1278,169 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [canWrite, collection, memberCount, newRowSubjects],
   );
 
+  const [columnRemoval, setColumnRemoval] = useState<{
+    owner: string;
+    property: string;
+  }>();
+  const requestColumnRemoval = useCallback(
+    (property: string) => {
+      setColumnRemoval({ owner: tableClass.subject, property });
+    },
+    [tableClass.subject],
+  );
+
+  const [columnEdit, setColumnEdit] = useState<{
+    owner: string;
+    property: string;
+  }>();
+  const requestColumnEdit = useCallback(
+    (property: string) => {
+      setColumnEdit({ owner: tableClass.subject, property });
+    },
+    [tableClass.subject],
+  );
+
+  const [columnCreation, setColumnCreation] = useState<{
+    owner: string;
+    table: string;
+    view?: string;
+    category: string;
+  }>();
+  const requestColumnCreation = useCallback(
+    (category: string) => {
+      setColumnCreation({
+        owner: tableClass.subject,
+        table: resource.subject,
+        view: activeView,
+        category,
+      });
+    },
+    [tableClass.subject, resource.subject, activeView],
+  );
+  const creationScope = useRef({
+    owner: tableClass.subject,
+    table: resource.subject,
+    view: activeView,
+    showColumn,
+  });
+  useLayoutEffect(() => {
+    creationScope.current = {
+      owner: tableClass.subject,
+      table: resource.subject,
+      view: activeView,
+      showColumn,
+    };
+  }, [tableClass.subject, resource.subject, activeView, showColumn]);
+
+  type ConfiguredRequest = {
+    table: string;
+    owner: string;
+    scope: string;
+    definitions: string;
+    properties: Property[];
+  } & (
+    | { kind: 'action'; original?: RowActionSpec }
+    | { kind: 'quick-add'; original?: QuickAddSpec }
+    | {
+        kind: 'computed';
+        original?: DerivedColumnSpec;
+        implicit?: { specs: DerivedColumnSpec[]; signature: string };
+      }
+  );
+  const definitions = JSON.stringify(
+    allColumns.map(property => [
+      property.subject,
+      property.datatype,
+      property.allowsOnly,
+    ]),
+  );
+  const [configuredColumn, setConfiguredColumn] = useState<ConfiguredRequest>();
+
+  const requestQuickAddEdit = () => {
+    if (!canWrite) return;
+    setConfiguredColumn({
+      kind: 'quick-add',
+      original: viewQuickAdd ? structuredClone(viewQuickAdd) : undefined,
+      table: resource.subject,
+      owner: tableClass.subject,
+      scope: requestedViewScope,
+      definitions,
+      properties: [...allColumns],
+    });
+  };
+
+  const requestRowActionEdit = useCallback(
+    (spec?: RowActionSpec) => {
+      if (!canWrite) return;
+      setConfiguredColumn({
+        kind: 'action',
+        original: spec ? structuredClone(spec) : undefined,
+        table: resource.subject,
+        owner: tableClass.subject,
+        scope: requestedViewScope,
+        definitions,
+        properties: [...allColumns],
+      });
+    },
+    [
+      canWrite,
+      resource.subject,
+      tableClass.subject,
+      requestedViewScope,
+      definitions,
+      allColumns,
+    ],
+  );
+  const implicitSignature = JSON.stringify([
+    viewKind,
+    viewGroupBy ?? null,
+    viewEndProp ?? null,
+  ]);
+  const requestDerivedColumnEdit = useCallback(
+    (spec?: DerivedColumnSpec) => {
+      if (!canWrite) return;
+      setConfiguredColumn({
+        kind: 'computed',
+        original: spec ? structuredClone(spec) : undefined,
+        ...(!viewDerivedColumnsSet && isTimer
+          ? {
+              implicit: {
+                specs: structuredClone(derivedSpecs),
+                signature: implicitSignature,
+              },
+            }
+          : {}),
+        table: resource.subject,
+        owner: tableClass.subject,
+        scope: requestedViewScope,
+        definitions,
+        properties: [...allColumns],
+      });
+    },
+    [
+      canWrite,
+      resource.subject,
+      tableClass.subject,
+      requestedViewScope,
+      definitions,
+      allColumns,
+      viewDerivedColumnsSet,
+      isTimer,
+      derivedSpecs,
+      implicitSignature,
+    ],
+  );
+  const configuredCanSave =
+    !!configuredColumn &&
+    canWrite &&
+    configuredColumn.table === resource.subject &&
+    configuredColumn.owner === tableClass.subject &&
+    configuredColumn.scope === requestedViewScope &&
+    configuredColumn.definitions === definitions &&
+    (configuredColumn.kind !== 'computed' ||
+      !configuredColumn.implicit ||
+      configuredColumn.implicit.signature === implicitSignature);
+
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
       selectedRows,
@@ -1291,6 +1457,11 @@ export const TableResource: React.FC<TableResourceProps> = ({
       setFilterOperator,
       removeFilter,
       hideColumn,
+      requestColumnRemoval,
+      requestColumnEdit,
+      requestColumnCreation,
+      requestRowActionEdit,
+      requestDerivedColumnEdit,
       showColumn,
       splitLanguageSubjects: viewSplitLanguages,
       toggleSplitLanguages,
@@ -1332,6 +1503,11 @@ export const TableResource: React.FC<TableResourceProps> = ({
       setFilterOperator,
       removeFilter,
       hideColumn,
+      requestColumnRemoval,
+      requestColumnEdit,
+      requestColumnCreation,
+      requestRowActionEdit,
+      requestDerivedColumnEdit,
       showColumn,
       viewSplitLanguages,
       toggleSplitLanguages,
@@ -1428,6 +1604,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
   );
 
   const handleClearCells = useHandleClearCells(
+    resource,
+    tableClass,
     rowCollection,
     addItemsToHistoryStack,
   );
@@ -1517,8 +1695,15 @@ export const TableResource: React.FC<TableResourceProps> = ({
     <TablePageContext value={tablePageContext}>
       <TablePresenceContext value={presenceValue}>
         <TableCalendarRowContext value={calendarRow}>
+          {viewError && <p role='alert'>{viewError}</p>}
+          <ViewSaveError
+            message={viewSaveError}
+            saving={viewSaving}
+            retry={retryViewSave}
+          />
           {!embedded && (
             <TableViewTabs
+              table={resource.subject}
               rowClass={tableClass.subject}
               views={views}
               activeView={activeView}
@@ -1537,9 +1722,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
               hideColumn={hideColumn}
               lockedColumns={lockedColumns}
               lockedReason={lockedReason}
-              canWrite={canWrite}
+              canWrite={canWriteResource}
               quickAdd={viewQuickAdd}
-              setQuickAdd={setViewQuickAdd}
+              requestQuickAddEdit={requestQuickAddEdit}
               quickFilter={
                 showsRows
                   ? { value: quickFilterText, onChange: setQuickFilterText }
@@ -1558,7 +1743,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
               derivedColumns={derivedSpecs}
             />
           )}
-          {quickFilter.active &&
+          {!viewError &&
+            quickFilter.active &&
             !quickFilter.loading &&
             quickFilter.matches.length === 0 && (
               <NoMatches role='status'>
@@ -1570,6 +1756,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
            *  will be rejected is worse than none. */}
           {viewQuickAdd && canWrite && (
             <QuickAddBar
+              scope={JSON.stringify([resource.subject, activeView])}
               spec={viewQuickAdd}
               tableSubject={resource.subject}
               tableClass={tableClass}
@@ -1577,12 +1764,18 @@ export const TableResource: React.FC<TableResourceProps> = ({
               onRowCreated={notifyEntryCreated}
             />
           )}
-          {appView !== undefined ? (
+          {viewError ? null : appView !== undefined ? (
             // An app rendering this table's rows. It sits beside the Table tab
             // rather than in place of it: adding a way to look at rows never
             // takes one away, and the table is always one tab over.
             <AppViewWrapper>
+              <AfterCommitBar
+                app={appView}
+                table={resource.subject}
+                tableName={resource.title}
+              />
               <AppFrame
+                view={activeView}
                 app={appView}
                 drive={store.getDrive()!}
                 table={resource.subject}
@@ -1699,6 +1892,186 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 />
               )}
             </>
+          )}
+          {configuredColumn?.kind === 'quick-add' && (
+            <QuickAddDialog
+              open
+              classProperties={configuredColumn.properties}
+              editing={configuredColumn.original}
+              scope={JSON.stringify([
+                configuredColumn.scope,
+                configuredColumn.owner,
+                configuredColumn.kind,
+              ])}
+              canSave={configuredCanSave}
+              bindShow={show => {
+                if (!show)
+                  setConfiguredColumn(current =>
+                    current === configuredColumn ? undefined : current,
+                  );
+              }}
+              onSave={candidate => {
+                if (!configuredCanSave)
+                  throw Error(
+                    'The selected view or column definitions changed.',
+                  );
+                const desired = candidate
+                  ? structuredClone(candidate)
+                  : undefined;
+
+                return enqueueViewWrite((view, intent) =>
+                  writeAtomicQuickAddConfiguration(
+                    store,
+                    configuredColumn.table,
+                    configuredColumn.owner,
+                    view,
+                    configuredColumn.original,
+                    desired,
+                    intent,
+                  ),
+                );
+              }}
+            />
+          )}
+          {configuredColumn?.kind === 'action' && (
+            <RowActionDialog
+              open
+              classProperties={configuredColumn.properties}
+              editing={configuredColumn.original}
+              scope={JSON.stringify([
+                configuredColumn.scope,
+                configuredColumn.owner,
+                configuredColumn.kind,
+                configuredColumn.original?.id ?? null,
+              ])}
+              canSave={configuredCanSave}
+              bindShow={show => {
+                if (!show)
+                  setConfiguredColumn(current =>
+                    current === configuredColumn ? undefined : current,
+                  );
+              }}
+              onSave={candidate => {
+                if (!configuredCanSave)
+                  throw Error(
+                    'The selected view or column definitions changed.',
+                  );
+                const edit = structuredClone({
+                  kind: 'action' as const,
+                  candidate,
+                  original: configuredColumn.original,
+                });
+
+                return enqueueViewWrite((view, intent) =>
+                  writeAtomicConfiguredColumn(
+                    store,
+                    configuredColumn.table,
+                    configuredColumn.owner,
+                    view,
+                    edit,
+                    intent,
+                  ),
+                );
+              }}
+            />
+          )}
+          {configuredColumn?.kind === 'computed' && (
+            <DerivedColumnDialog
+              open
+              classProperties={configuredColumn.properties}
+              editing={configuredColumn.original}
+              scope={JSON.stringify([
+                configuredColumn.scope,
+                configuredColumn.owner,
+                configuredColumn.kind,
+                configuredColumn.original?.id ?? null,
+              ])}
+              canSave={configuredCanSave}
+              bindShow={show => {
+                if (!show)
+                  setConfiguredColumn(current =>
+                    current === configuredColumn ? undefined : current,
+                  );
+              }}
+              onSave={candidate => {
+                if (!configuredCanSave)
+                  throw Error(
+                    'The selected view or column definitions changed.',
+                  );
+                const edit = structuredClone({
+                  kind: 'computed' as const,
+                  candidate,
+                  original: configuredColumn.original,
+                  implicit: configuredColumn.implicit,
+                });
+
+                return enqueueViewWrite((view, intent) =>
+                  writeAtomicConfiguredColumn(
+                    store,
+                    configuredColumn.table,
+                    configuredColumn.owner,
+                    view,
+                    edit,
+                    intent,
+                  ),
+                );
+              }}
+            />
+          )}
+          {columnCreation && (
+            <AtomicColumnCreationDialog
+              owner={columnCreation.owner}
+              category={columnCreation.category}
+              scope={JSON.stringify([
+                columnCreation.table,
+                columnCreation.view ?? null,
+                columnCreation.owner,
+                columnCreation.category,
+              ])}
+              canSave={
+                columnCreation.owner === tableClass.subject &&
+                columnCreation.table === resource.subject &&
+                columnCreation.view === activeView
+              }
+              onClose={() =>
+                setColumnCreation(current =>
+                  current === columnCreation ? undefined : current,
+                )
+              }
+              onCreated={subject => {
+                const current = creationScope.current;
+                if (
+                  current.owner === columnCreation.owner &&
+                  current.table === columnCreation.table &&
+                  current.view === columnCreation.view
+                )
+                  current.showColumn(subject);
+              }}
+            />
+          )}
+          {columnEdit && (
+            <AtomicColumnEditDialog
+              owner={columnEdit.owner}
+              property={columnEdit.property}
+              currentOwner={tableClass.subject}
+              onClose={() =>
+                setColumnEdit(current =>
+                  current === columnEdit ? undefined : current,
+                )
+              }
+            />
+          )}
+          {columnRemoval && (
+            <AtomicColumnRemovalDialog
+              owner={columnRemoval.owner}
+              property={columnRemoval.property}
+              currentOwner={tableClass.subject}
+              onClose={() =>
+                setColumnRemoval(current =>
+                  current === columnRemoval ? undefined : current,
+                )
+              }
+            />
           )}
           <ExpandedRowDialog
             subject={expandedRowSubject ?? unknownSubject}

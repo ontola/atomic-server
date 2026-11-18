@@ -111,20 +111,28 @@ msgid "AI Agents"
 msgstr "Agentes de IA"
 
 #: src/chunks/AI/ConfigEditorDialog.tsx
+#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/AppPage/ConnectDialog.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 #: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/RowGrantDialog.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
@@ -151,6 +159,7 @@ msgstr "Agentes de IA"
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Conversation/NewMessageDialog.tsx
 #: src/views/Installation/AssignRights.tsx
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/PluginView/useResourcePicker.tsx
@@ -266,10 +275,10 @@ msgstr "Compacta automáticamente la conversación cuando los tokens de entrada 
 #: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/DashboardPage/DashboardBlock.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 #: src/chunks/TablePage/ColumnSpecHeading.tsx
 #: src/chunks/TablePage/ColumnSpecHeading.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
@@ -314,6 +323,7 @@ msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/LocalNetworkNotice.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Continue"
 msgstr "Continuar"
 
@@ -534,8 +544,6 @@ msgstr "No configurado"
 
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/AI/ProviderStatus.tsx
-#: src/components/SideBar/syncStatus.tsx
-#: src/components/SideBar/syncStatus.tsx
 #: src/routes/ConnectAgentRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -697,10 +705,6 @@ msgstr "Ontologías"
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "App"
 msgstr "App"
-
-#: src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "ActivadorPredeterminado"
 
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
@@ -933,9 +937,21 @@ msgstr "Crear cuenta y aceptar"
 msgid "I already have an account"
 msgstr "Ya tengo una cuenta"
 
+#: src/chunks/AppPage/AfterCommitBar.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/File/ConvertToDocumentButton.tsx
+#: src/views/Installation/AfterCommitTables.tsx
 #: src/views/PeerInvitePage.tsx
 msgid "Retry"
 msgstr "Reintentar"
@@ -1142,6 +1158,7 @@ msgstr "Error al guardar: {0}"
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
 #: src/components/Cloud/DriveAddress.tsx
 #: src/components/ProfileForm.tsx
 #: src/views/Canvas/CanvasPage.tsx
@@ -1865,6 +1882,7 @@ msgstr "Elige si este recurso aparece en tus favoritos."
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
+#: src/components/HostUI/hostUI.tsx
 #: src/routes/IntegrationStore.tsx
 #: src/routes/SettingsAgent.tsx
 #: src/routes/SettingsAgent.tsx
@@ -2184,6 +2202,7 @@ msgid "<0/> Note"
 msgstr "<0/> Nota"
 
 #: src/actions/appMenuItems.tsx
+#: src/chunks/Plugins/RouteWriteApproval.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/routes/IntegrationStore.tsx
 #: src/routes/SettingsAgent.tsx
@@ -2283,11 +2302,13 @@ msgstr "Permitir todas las lecturas realizadas por este complemento"
 msgid "Allow all writes done by this plugin"
 msgstr "Permitir todas las escrituras realizadas por este complemento"
 
+#: src/routes/RouteConsentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
 msgstr "Denegar"
 
 #: src/components/ConnectAppForm.tsx
+#: src/routes/RouteConsentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow"
 msgstr "Permitir"
@@ -3138,6 +3159,7 @@ msgstr "Ver"
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Filter"
 msgstr "Filtrar"
 
@@ -3146,21 +3168,17 @@ msgid "Hide in this view"
 msgstr "Ocultar en esta vista"
 
 #. 0: ' '
-#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Remove <0/> from{0} <1/>"
 msgstr "Eliminar <0/> de{0} <1/>"
 
-#: src/chunks/TablePage/TableHeadingMenu.tsx
-msgid "<0/> Delete property and its children"
-msgstr "<0/> Eliminar la propiedad y sus hijos"
-
-#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Delete property"
 msgstr "Eliminar propiedad"
 
 #: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Remove column"
 msgstr "Eliminar columna"
 
@@ -3208,10 +3226,6 @@ msgstr "Vista predeterminada"
 msgid "Row is incomplete or has invalid data"
 msgstr "La fila está incompleta o tiene datos no válidos"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Open resource"
-msgstr "Abrir recurso"
-
 #: src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
 msgstr "Derechos insuficientes para ver el recurso"
@@ -3225,21 +3239,13 @@ msgstr "Buscar"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/connectableDrives.ts
+#: src/helpers/driveData.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
 #: src/helpers/managed/refusedDrive.ts
 msgid "Disabled"
 msgstr "Desactivado"
-
-#: src/components/forms/MinMaxInput.tsx
-#: src/components/forms/MinMaxInput.tsx
-msgid "Value should be a round number."
-msgstr "El valor debe ser un número entero."
-
-#: src/components/forms/MinMaxInput.tsx
-msgid "Min must be a less than max"
-msgstr "El mínimo debe ser menor que el máximo"
 
 #: src/routes/History/VersionContent.tsx
 msgid "Document body"
@@ -3325,11 +3331,6 @@ msgstr "Moneda"
 msgid "Range"
 msgstr "Rango"
 
-#. 0: ' '; 1: selectedCategory ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1) \\: ''; 2: ' '
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
-msgid "New{0} {1}{2} Column"
-msgstr "Nueva{0} {1}{2} Columna"
-
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Invalid Name"
 msgstr "Nombre inválido"
@@ -3341,10 +3342,6 @@ msgstr "Nueva columna"
 #: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "Resource type:"
 msgstr "Tipo de recurso:"
-
-#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
-msgid "<0/> Allow multiple values"
-msgstr "<0/> Permitir múltiples valores"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
@@ -3403,10 +3400,6 @@ msgstr "Largo"
 #: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Relative"
 msgstr "Relativo"
-
-#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
-msgid "Value must be between 0 and 20."
-msgstr "El valor debe estar entre 0 y 20."
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Decimal Places"
@@ -3716,11 +3709,6 @@ msgstr "Contexto adicional. Haz referencia a estos en tu contenido principal par
 msgid "There was an error in the editor, please refresh the page to continue.{0} <0>Refresh</0>"
 msgstr "Ha habido un error en el editor. Por favor, refresque la página para continuar.{0} <0>Refrescar</0>"
 
-#. 0: propertyLabel; 1: rowIndex + 1
-#: src/chunks/TablePage/TableCell.tsx
-msgid "{0}, row {1}"
-msgstr "{0}, fila {1}"
-
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Are you sure you want to delete the <0/> view? This only removes the view, not the rows."
 msgstr "¿Seguro que quieres eliminar la vista <0/>? Esto solo elimina la vista, no las filas."
@@ -3729,11 +3717,6 @@ msgstr "¿Seguro que quieres eliminar la vista <0/>? Esto solo elimina la vista,
 #: src/chunks/TablePage/useTableView.ts
 msgid "{0} copy"
 msgstr "{0} copia"
-
-#. 0: p; 1: theme.animation.duration
-#: src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
 
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
@@ -3799,11 +3782,6 @@ msgstr "Intenta recargar la página. Si el problema persiste, es posible que otr
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0}/M input tokens"
 msgstr "{0}/M tokens de entrada"
-
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
 
 #. 0: subject
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
@@ -3944,6 +3922,8 @@ msgid "Could not copy — select and copy the code manually."
 msgstr "No se ha podido copiar: selecciona y copia el código manualmente."
 
 #: src/chunks/AppPage/ConnectDialog.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
@@ -4094,7 +4074,10 @@ msgstr "Abrir espacio de trabajo"
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
@@ -4873,12 +4856,13 @@ msgstr "Una a la vez"
 msgid "Stop the running entry when another starts"
 msgstr "Detener la entrada en curso cuando se inicia otra"
 
+#: src/chunks/DashboardPage/useBlockQuery.ts
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Timer/useTimerColumns.tsx
+#: src/chunks/TablePage/useTableData.ts
 msgid "Duration"
 msgstr "Duración"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Toggle properties"
@@ -4936,6 +4920,7 @@ msgstr "Nueva columna calculada"
 
 #: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Add column"
 msgstr "Añadir columna"
@@ -5146,6 +5131,7 @@ msgstr "Aún no hay datos"
 
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 #: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
@@ -5372,9 +5358,6 @@ msgstr "Obteniendo un código…"
 msgid "Android"
 msgstr "Android"
 
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
 #: src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -5444,6 +5427,7 @@ msgstr "La bóveda en la nube no está disponible aquí: {0}."
 
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Disconnect"
 msgstr "Desconectar"
 
@@ -5453,6 +5437,7 @@ msgstr "Volver a conectar"
 
 #: src/helpers/browserPeerSync.ts
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Not connected"
 msgstr "Sin conexión"
 
@@ -5491,19 +5476,6 @@ msgstr "{0} recursos"
 msgid "{0} of {1}"
 msgstr "{0} de {1}"
 
-#. 0: syncedAgo
-#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
-#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Synced {0}"
-msgstr "Sincronizado {0}"
-
-#: src/routes/SyncRoute.tsx
-msgid "Synced just now"
-msgstr "Sincronizado ahora mismo"
-
 #: src/routes/SyncRoute.tsx
 msgid "This server"
 msgstr "Este servidor"
@@ -5534,11 +5506,6 @@ msgstr "Vinculado"
 #: src/routes/SyncRoute.tsx
 msgid "Paired device"
 msgstr "Dispositivo vinculado"
-
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Not synced yet"
-msgstr "Aún no se ha sincronizado"
 
 #. 0: label; 1: detail
 #: src/actions/runAction.ts
@@ -6491,6 +6458,7 @@ msgstr "Empezar en blanco"
 msgid "Use {0} template"
 msgstr "Usar la plantilla {0}"
 
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
@@ -6527,10 +6495,6 @@ msgstr "No hay coincidencias. Prueba otra búsqueda o pídele a la IA que lo cre
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "Preguntar a la IA"
-
-#: src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Cargando"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -7259,12 +7223,15 @@ msgstr "Propuesta cancelada."
 msgid "Review this external action before approving it."
 msgstr "Revisa esta acción externa antes de aprobarla."
 
+#: src/chunks/AppPage/AppImporterRun.tsx
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Preparing preview…"
 msgstr "Preparando vista previa…"
 
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Preview import"
 msgstr "Vista previa de la importación"
@@ -7487,6 +7454,8 @@ msgstr "Elige qué vista se abre cuando visitas este espacio de trabajo."
 
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/chunks/TablePage/TablePage.tsx
+#: src/views/Installation/InstallationConnections.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Connections"
 msgstr "Conexiones"
 
@@ -7960,6 +7929,7 @@ msgid "Resume"
 msgstr "Reanudar"
 
 #: src/chunks/FormBuilder/FormAccessSection.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
 #: src/components/ConnectedAppsCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -8545,7 +8515,9 @@ msgid "Pinned to <0/>"
 msgstr "Fijado en <0/>"
 
 #. 0: pending.release.url
+#. 0: release
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
 msgid "from {0}"
 msgstr "de {0}"
 
@@ -8703,6 +8675,7 @@ msgstr "Configurar"
 msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr "La configuración crea una tabla de {0} para este importador. Aún no se importa nada."
 
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "File to import"
 msgstr "Archivo para importar"
@@ -8717,7 +8690,7 @@ msgid "Open imported data"
 msgstr "Abrir datos importados"
 
 #. 0: bytes
-#: src/chunks/PluginRuns/FileImport.tsx
+#: src/chunks/PluginRuns/importFile.ts
 msgid "{0} bytes"
 msgstr "{0} bytes"
 
@@ -8976,10 +8949,12 @@ msgid "Find a column…"
 msgstr "Buscar una columna…"
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Find a column to filter by"
 msgstr "Buscar una columna por la que filtrar"
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "No column matches"
 msgstr "No coincide ninguna columna"
 
@@ -9202,6 +9177,7 @@ msgid "Click or drag to open"
 msgstr "Haz clic o arrastra para abrir"
 
 #: src/actions/appMenuItems.tsx
+#: src/components/CloudVaultWatcher.tsx
 msgid "Open sync settings"
 msgstr "Abrir ajustes de sincronización"
 
@@ -10191,6 +10167,7 @@ msgstr "Te has perdido un mensaje mientras no estabas"
 msgid "You missed {0} messages while you were away"
 msgstr "Te has perdido {0} mensajes mientras no estabas"
 
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
 msgid "Not now"
@@ -10242,7 +10219,9 @@ msgid "This backup is sealed in this browser only. {0} is not holding a copy, so
 msgstr "Esta copia de seguridad está sellada solo en este navegador. {0} no guarda ninguna copia, así que un dispositivo nuevo no podría permitirte volver a entrar."
 
 #. 0: platform
+#. 0: name
 #: src/chunks/AppPage/ConnectDialog.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Connect {0}"
 msgstr "Conectar {0}"
 
@@ -10413,6 +10392,10 @@ msgstr "Sincronización: {0}"
 #. 0: appTitle
 #. 0: appTitle
 #. 0: appTitle
+#. 0: appTitle
+#. 0: appTitle
+#: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUI.tsx
 #: src/components/HostUI/hostUI.tsx
 #: src/components/HostUI/hostUI.tsx
 #: src/components/HostUI/hostUIDialogs.tsx
@@ -11455,11 +11438,6 @@ msgstr "Referencia de configuración"
 msgid "by {0}"
 msgstr "por {0}"
 
-#. 0: ' '; 1: /^https?:\\\\/\\\\//.test(release) ? ( <a href={release} target='_blank' rel='noreferrer'> {release} </a> ) \\: ( release )
-#: src/views/Installation/InstallationPage.tsx
-msgid "from{0} {1}"
-msgstr "Desde{0} {1}"
-
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "<0/> wants to read a resource that is not contained in the current scope."
 msgstr "<0/> quiere leer un recurso que no está contenido en el ámbito actual."
@@ -11692,15 +11670,17 @@ msgstr "No se puede mover una propiedad a otro elemento padre."
 msgid "Could not change datatype: {0}"
 msgstr "No se ha podido cambiar el tipo de datos: {0}"
 
-#. 0: (err as Error).message
+#. 0: error.message
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Failed to save column: {0}"
 msgstr "No se ha podido guardar la columna: {0}"
 
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Minimum"
 msgstr "Mínimo"
 
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Maximum"
 msgstr "Máximo"
@@ -11890,7 +11870,6 @@ msgid "Add a device"
 msgstr "Añadir un dispositivo"
 
 #: src/components/Spinner.tsx
-#: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Cargando"
 
@@ -11968,6 +11947,7 @@ msgid "Connect an app"
 msgstr "Conectar una aplicación"
 
 #: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/RouteConsentRoute.tsx
 msgid "This link is incomplete. Start again from the app that sent you here."
 msgstr "Este enlace está incompleto. Empieza de nuevo desde la aplicación que te envió aquí."
 
@@ -12363,10 +12343,6 @@ msgstr "Archivo de copia de seguridad"
 #: src/helpers/managed/vaultFile.ts
 msgid "This is not an Atomic vault backup file. Pick a file ending in .atomic-vault."
 msgstr "Este no es un archivo de copia de seguridad de la bóveda de Atomic. Elige un archivo que termine en .atomic-vault."
-
-#: src/helpers/managed/vaultFile.ts
-msgid "Atomic vault backup"
-msgstr "Copia de seguridad de la bóveda de Atomic"
 
 #: src/helpers/managed/vaultFile.ts
 msgid "This backup file is incomplete. Download it again."
@@ -12844,10 +12820,6 @@ msgstr "Añadir un comentario"
 msgid "Open the comments for this resource"
 msgstr "Abrir los comentarios de este recurso"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Row menu"
-msgstr "Menú de fila"
-
 #: src/views/Drive/DriveHome.tsx
 msgid "Commented"
 msgstr "Comentado"
@@ -12889,7 +12861,7 @@ msgstr "No existe la columna «{0}».{1}"
 msgid "Formula"
 msgstr "Fórmula"
 
-#. 0: Object.keys(slugs).join(', ') || 'none yet'
+#. 0: identifiers.join(', ') || 'none yet'
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 msgid "Combine columns with + - * / and functions: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Dates are milliseconds, a missing value leaves the cell empty, and 1/2 is 0 (write 1.0/2). Columns you can use: {0}."
 msgstr "Combina columnas con + - * / y funciones: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Las fechas se expresan en milisegundos, un valor ausente deja la celda vacía y 1/2 es 0 (escribe 1.0/2). Columnas que puedes usar: {0}."
@@ -13416,17 +13388,10 @@ msgstr "Exportar enlaces de invitación"
 msgid "Lane options"
 msgstr "Opciones de la columna"
 
-#: src/chunks/TablePage/TableFilterBar.tsx
-msgid "Add filter"
-msgstr "Añadir filtro"
-
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Edit column"
 msgstr "Editar columna"
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Añadir vista"
 
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
@@ -13551,3 +13516,902 @@ msgstr "Los archivos están incluidos. Se cifran en este dispositivo igual que t
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "Se pueden eliminar {0} de historial antiguo. No se pierde nada de lo que puedes ver."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The first Cloud Vault backup failed."
+msgstr "La primera copia de seguridad en Cloud Vault falló."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault hasn’t completed the first backup yet."
+msgstr "Cloud Vault aún no ha completado la primera copia de seguridad."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "This workspace has no confirmed Cloud Vault copy."
+msgstr "Este espacio de trabajo aún no tiene una copia confirmada en Cloud Vault."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Retry backup"
+msgstr "Reintentar copia de seguridad"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No copy of this drive could be verified in Cloud Vault or on an external server."
+msgstr "No se pudo verificar ninguna copia de esta unidad en Cloud Vault ni en un servidor externo."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was more than 24 hours ago."
+msgstr "La última sincronización completa verificada con el servidor fue hace más de 24 horas."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was at least 7 days ago."
+msgstr "La última sincronización completa verificada con el servidor fue hace al menos 7 días."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "A full sync with the server could not be verified."
+msgstr "No se pudo verificar una sincronización completa con el servidor."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is more than 24 hours old."
+msgstr "La última copia de seguridad verificada tiene más de 24 horas."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is at least 7 days old."
+msgstr "La última copia de seguridad verificada tiene al menos 7 días."
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "No backup from the last 7 days could be verified."
+msgstr "No se pudo verificar ninguna copia de seguridad de los últimos 7 días."
+
+#: src/routes/IntegrationStore.tsx
+msgid "# plugin needs server features this server doesn’t have."
+msgid_plural "# plugins need server features this server doesn’t have."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Sign in to answer this request."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Loading the request…"
+msgstr ""
+
+#. 0: ' '; 1: ' '
+#: src/routes/RouteConsentRoute.tsx
+msgid "<0/> asks to give{0} <1/> a token for its{1} <2/> endpoints."
+msgstr ""
+
+#. 0: ' '
+#: src/routes/RouteConsentRoute.tsx
+msgid "<0/> asks to issue a token for its{0} <1/> endpoints."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "No specific permissions."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "With these permissions"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allowing…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Denying…"
+msgstr ""
+
+#. 0: ask.redirectOrigin
+#: src/routes/RouteConsentRoute.tsx
+msgid "You can revoke the token later from the plugin. After you answer, you go back to {0}."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allow access?"
+msgstr ""
+
+#. 0: ago
+#. 0: syncedAgo
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync {0}"
+msgstr "Última sincronización completa {0}"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Last full sync just now"
+msgstr "Última sincronización completa ahora mismo"
+
+#. 0: formatTimeAgo(new Date(lastActivity)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Last sync activity {0}"
+msgstr "Última actividad de sincronización {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Saved locally"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "This app"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "{0} wants to change 1 row"
+msgstr ""
+
+#. 0: appName; 1: rows
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "{0} wants to change {1} rows"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "Allow all edits by this view on this table"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "Apply"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "Decline"
+msgstr ""
+
+#. 0: tableName
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "<0/> stopped following changes to {0}: <1/>"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+#: src/components/HostUI/hostUI.tsx
+msgid "Open link"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to open <0/> in a new tab. <1/>"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Open a link"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/TablePage/RowGrantDialog.tsx
+msgid "Allow editing"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Let this app edit rows"
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Choose file"
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Import with this app"
+msgstr ""
+
+#. 0: ' '
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import <0/> with{0} <1/>. You review the changes before anything is saved."
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
+msgstr ""
+
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "It also keeps its own sync information on the rows. That is not shown as columns, only under \"Kept by apps\" when you open a row. "
+msgstr ""
+
+#. 0: extras
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. {0}You can take this back from the tab's menu."
+msgstr ""
+
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "<0/> is told when rows change, also when this tab is closed."
+msgstr ""
+
+#: src/chunks/DashboardPage/useBlockQuery.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Saved view is unavailable in this table."
+msgstr ""
+
+#: src/chunks/DashboardPage/useBlockQuery.ts
+#: src/chunks/TablePage/useTableData.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Saved view configuration is invalid."
+msgstr ""
+
+#. 0: offer.path .map(step => lensNames.get(step.lens) ?? step.lens) .join(', then ')
+#: src/chunks/Pieces/usePieceOffers.ts
+msgid "Through {0}"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "the resource in the config key <0/>, which is not set"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Set <0/> in the config below to the resource that should receive these items, or leave this unchecked."
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Let <0/> add items to <1/> when other servers send them"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Incoming items"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "The plugin gets write rights on these resources, and may only change or delete what it added. Revoking or uninstalling it takes the rights back. Unchecked, anything sent to these endpoints is refused."
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Route writes"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Serving"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Paused"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retired"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Turned off"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Not active"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Errors"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Public endpoints are turned off on this server"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Its URLs answer 404 and its deliveries wait. Its data, keys and tokens are kept, and it comes back without a new review once the server allows it."
+msgstr ""
+
+#. 0: status; 1: when(at); 2: message
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Last error ({0}, {1}): {2}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No address yet: <0/> is not set."
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Deliveries waiting: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Requests (24 h): <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Errors (24 h): <0/>"
+msgstr ""
+
+#. 0: failure.attempts
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Dead letter (gave up after attempt {0})"
+msgstr ""
+
+#. 0: failure.attempts; 1: when(failure.nextAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retrying (attempt {0}), next at {1}"
+msgstr ""
+
+#. 0: failure.attempts
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retrying (attempt {0})"
+msgstr ""
+
+#. 0: failure.error ?? ''
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No answer; it may have arrived. {0}"
+msgstr ""
+
+#. 0: failure.status; 1: failure.error ?? ''
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Answered {0}. {1}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "<0/> to <1/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sent today: <0/>"
+msgstr ""
+
+#. 0: cap
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sent today: <0/> of {0}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Queued: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sending: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Delivered (24 h): <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Dead letters: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Deliveries"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Waiting for tomorrow’s cap: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Held while the endpoints are off: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No failed deliveries."
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Recent failures"
+msgstr ""
+
+#. 0: when(token.issuedAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Issued {0}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No scopes"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Scopes: <0/>"
+msgstr ""
+
+#. 0: when(expiresAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Expires {0}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Revoke token"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Issued tokens"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Refresh"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No tokens issued."
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Endpoints"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Token revoked"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+msgid "Move incoming items"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+msgid "This config stores what other servers send somewhere else. Approve the new place to move the plugin’s write rights there, or save without it to stop accepting these items."
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+msgid "Save config"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers sign in with their Atomic agent."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Other servers sign their requests (HTTP Signatures)."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers present an access token this plugin issued."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers present an access token bound to their key (DPoP)."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Anyone can call it, without signing in."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin answers as itself, with the rights this installation grants it."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin answers as the caller, with the caller’s rights."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin answers with public data only."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Served at <0/>. This address becomes the plugin’s public identity."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Served on this drive’s own host name, next to its resources. That address becomes the plugin’s public identity."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Served at its own address under the server’s routes origin, which this server has not set (<0/>). That address becomes the plugin’s public identity."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The server must run with <0/> or higher."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The server must run with <0/>."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Answers for <0/> names only."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Stores what callers send in <0/>."
+msgstr ""
+
+#. 0: route.enqueues.join(', ')
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Can send requests to other servers: {0}"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Only this plugin answers this address on its host."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Shared with other plugins on its host; this plugin answers only its own entries."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Stores incoming data: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers add resources to <0/> unattended."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The server keeps the private key; the plugin can only ask it to sign."
+msgstr ""
+
+#. 0: key.alg
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Signing key: <0/> ({0})"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin issues access tokens to other apps; the server stores them."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Access tokens: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "A raw port the server operator opens for this plugin."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Network port: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The operator binds it with <0/>."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "A service the server operator runs next to the server."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Local service: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The operator names it in <0/>."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Public endpoints"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Anyone on the internet can call these endpoints; this plugin decides what they may see."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Needs public endpoints"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Requirements unknown"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "This server couldn’t read what this release needs. The review checks it before installing."
+msgstr ""
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Menú de fila"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Abrir recurso"
+
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
+msgid "Delete property and its children"
+msgstr ""
+
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
+msgid "Removing column…"
+msgstr ""
+
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
+msgid "Column removal is unavailable. Check access and the selected table."
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "The view or column definitions changed. Close this editor and reopen it."
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Retry to finish saving this change. Closing leaves any partially applied save pending."
+msgstr ""
+
+#: src/chunks/TablePage/ExpandedRowDialog.tsx
+msgid "Kept by apps"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Choose a compatible column and a valid preset value."
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Additional stored presets are retained. This form edits the first preset."
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Enter a finite number."
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/RowGrantDialog.tsx
+msgid "Let {0} edit rows?"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Unavailable column"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Filter value"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "This column is unavailable."
+msgstr ""
+
+#. 0: message
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Could not save view changes: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Retry view save"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Read-only"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Añadir vista"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "This table is read-only."
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "{0} stopped following changes to this table"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "{0} wants to change rows"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Stop {0} editing rows"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "It keeps showing the rows, read-only."
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Let {0} edit rows"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Rename view"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Sync this table with"
+msgstr ""
+
+#. 0: offer.pendingReview .map(l => lensNames.get(l) ?? l) .join(', ')
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Waiting for review of {0}"
+msgstr ""
+
+#: src/components/HostUI/hostUI.tsx
+msgid "This app wants to open a link in a new tab."
+msgstr ""
+
+#. 0: ask.url.host
+#: src/components/HostUI/hostUI.tsx
+msgid "Open {0}?"
+msgstr ""
+
+#. 0: ask.title
+#: src/components/HostUI/hostUI.tsx
+msgid "This app wants to open {0}, leaving the app."
+msgstr ""
+
+#: src/components/HostUI/hostUI.tsx
+msgid "Leave this app?"
+msgstr ""
+
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
+msgid "Not syncing with a server"
+msgstr ""
+
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
+msgid "Sync not confirmed"
+msgstr ""
+
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
+msgid "Synced with server"
+msgstr ""
+
+#: src/components/SideBar/syncStatus.tsx
+msgid "Changes not yet synced"
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "No proposed edits are waiting."
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "One proposed edit is waiting for review."
+msgstr ""
+
+#. 0: waiting
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "{0} proposed edits are waiting for review."
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "Tables it follows"
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "One row waiting"
+msgstr ""
+
+#. 0: sub.pending.rows
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "{0} rows waiting"
+msgstr ""
+
+#. 0: table.title || 'this table'
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "Stopped following changes to {0}: <0/>"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connected · <0/>"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Disconnecting…"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use existing connection"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use this connection"
+msgstr ""
+
+#. 0: proxyOrigin
+#: src/views/Installation/InstallationConnections.tsx
+msgid "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connect an account"
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} connected"
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} disconnected"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Config saved, rights moved"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Config saved"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "from <0/>"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Set <0/> to the resource that should receive incoming items. The plugin's route grant stores them there, so this config can't be saved without it."
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+#: src/chunks/DashboardPage/blocks/StatBlock.tsx
+msgid "The configured measurement is unavailable."
+msgstr ""
+
+#: src/chunks/TablePage/EditorCells/JSONCell.tsx
+msgid "Preview shortened. Open edit dialog for complete JSON."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+msgid "Property attachment is unavailable. Check access and the selected table."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+msgid "Attachment started. Retry to finish adding this property to the table."
+msgstr ""
+
+#. 0: kind
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "New {0} Column"
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Preparing column…"
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Column creation is unavailable. Check access and the selected table."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Column definition saved. Retry to finish adding it to the table."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "Column editing is unavailable. Check access and the selected table."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "This draft is locked after a partial save. Retry to finish saving."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
+msgid "Number format"
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
+msgid "Allow multiple values"
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+msgid "Text format"
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Date format"
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
+msgid "Enter a whole number between 0 and 20, or leave empty."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Enter whole numbers or leave the bounds empty."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Enter finite numbers or leave the bounds empty."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Bounds cannot be negative."
+msgstr ""
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Minimum must not exceed maximum."
+msgstr ""

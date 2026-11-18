@@ -13,7 +13,7 @@ pub fn start_server(name: &str) -> u16 {
 /// `start_server` with extra CLI flags appended, for suites that exercise a
 /// non-default option (a small rate limit, a host mode).
 pub fn start_server_with_args(name: &str, extra_args: &[&str]) -> u16 {
-    spawn_server(name, extra_args, None)
+    spawn_server(name, extra_args, None, |_| {})
 }
 
 /// `start_server_with_args`, also handing back the running server's store, for
@@ -21,17 +21,27 @@ pub fn start_server_with_args(name: &str, extra_args: &[&str]) -> u16 {
 /// inspect blobs) while the server keeps serving.
 pub fn start_server_with_store(name: &str, extra_args: &[&str]) -> (u16, atomic_lib::Db) {
     let (tx, rx) = std::sync::mpsc::channel();
-    let port = spawn_server(name, extra_args, Some(tx));
+    let port = spawn_server(name, extra_args, Some(tx), |_| {});
     let store = rx
         .recv_timeout(Duration::from_secs(120))
         .expect("server did not come up");
     (port, store)
 }
 
+#[cfg(feature = "plugin-routes")]
+pub fn start_server_with(
+    name: &str,
+    extra_args: &[&str],
+    configure: impl FnOnce(&mut atomic_server::config::Config),
+) -> u16 {
+    spawn_server(name, extra_args, None, configure)
+}
+
 fn spawn_server(
     name: &str,
     extra_args: &[&str],
     store_tx: Option<std::sync::mpsc::Sender<atomic_lib::Db>>,
+    configure: impl FnOnce(&mut atomic_server::config::Config),
 ) -> u16 {
     let unique = format!("{}_{}", name, atomic_lib::utils::random_string(10));
     let port = pick_port();
@@ -61,6 +71,7 @@ fn spawn_server(
 
     let mut config = atomic_server::config::build_config(opts).expect("config failed");
     config.search_index_path = format!("./.temp/{unique}/search").into();
+    configure(&mut config);
 
     std::thread::spawn(move || {
         let rt = actix_web::rt::System::new();

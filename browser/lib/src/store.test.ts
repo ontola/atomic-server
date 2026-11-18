@@ -923,7 +923,11 @@ describe('Store', () => {
   it('normalizes the default root parent when creating resources', async ({
     expect,
   }) => {
-    const store = new Store({ serverUrl: 'https://myserver.dev' });
+    const store = new Store({
+      serverUrl: 'https://myserver.dev',
+      connect: false,
+    });
+    await bootstrapCoreVocab(store);
 
     const resource = await store.newResource({ did: false });
 

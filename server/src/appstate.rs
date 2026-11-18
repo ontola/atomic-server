@@ -55,6 +55,21 @@ pub struct AppState {
     /// In-flight commit counter and load signal, shared by `POST /commit`
     /// and the WebSocket `COMMIT` frame. See `crate::write_load`.
     pub write_load: Arc<crate::write_load::WriteLoad>,
+    /// Which installation answers which plugin route; see
+    /// `plugins::route_registry`.
+    #[cfg(feature = "plugin-routes")]
+    pub route_registry: Arc<plugins::route_registry::RouteRegistry>,
+    /// Admission, limits and status for running plugin routes; see
+    /// `plugins::route_exec`.
+    #[cfg(feature = "plugin-routes")]
+    pub route_exec: Arc<plugins::route_exec::RouteExecutor>,
+    /// The durable queue of route-enqueued deliveries; see
+    /// `plugins::route_delivery`. Its worker runs only at `read-write`.
+    #[cfg(feature = "plugin-routes")]
+    pub route_delivery: Arc<plugins::route_delivery::DeliveryQueue>,
+    /// The version 2 request signatures this node accepted and that are still
+    /// fresh, so none is accepted twice; see `crate::replay_cache`.
+    pub replay_cache: Arc<crate::replay_cache::ReplayCache>,
 }
 
 impl AppState {
@@ -94,6 +109,33 @@ impl AppState {
         // the clear during startup and then silently left that way.
         store.set_node_key(crate::node_key::load_or_create(&config.config_dir)?);
 
+        // Validated here so a typo stops the server at boot rather than
+        // surfacing as a refused plugin request at 3am.
+        if let Some(raw) = &config.opts.integration_proxy_url {
+            let proxy = crate::plugins::egress::ProxyOrigin::parse(raw)?;
+            store.set_integration_proxy(Some(proxy.origin().to_string()));
+        }
+        // Operator sidecars (`ATOMIC_PLUGIN_SIDECARS`), which declared
+        // `atomic-sidecar:` operations reach. Startup already refused them
+        // below `read-write` or without the feature; this is the one place the
+        // host learns their loopback URLs.
+        #[cfg(feature = "plugin-routes")]
+        if config.plugin_routes.level() == crate::plugin_routes::PluginRoutesLevel::ReadWrite {
+            store.set_plugin_sidecars(
+                config
+                    .plugin_routes
+                    .sidecars()
+                    .iter()
+                    .map(|s| {
+                        (
+                            s.name.clone(),
+                            s.url.as_str().trim_end_matches('/').to_string(),
+                        )
+                    })
+                    .collect(),
+            );
+        }
+
         // `config.toml` holds this server's agent secret and was created
         // world-readable by every version before this one. Narrowed on every
         // boot rather than at setup, so an existing installation is fixed by
@@ -117,6 +159,16 @@ impl AppState {
         // Register all built-in class extenders
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
         store.add_endpoint(plugins::invite::invite_endpoint())?;
+        // Before the installation extender: an activation whose routes
+        // collide is refused before anything is materialized.
+        #[cfg(feature = "plugin-routes")]
+        let route_registry = {
+            let registry = Arc::new(plugins::route_registry::RouteRegistry::new(
+                config.plugin_routes.clone(),
+            ));
+            store.add_class_extender(plugins::route_registry::build_extender(registry.clone()))?;
+            registry
+        };
         store.add_endpoint(plugins::conversations::conversations_endpoint())?;
         // One registry for every runtime: modules loaded below and by an
         // Installation's activation reach the same apps as `/host/call`.
@@ -127,6 +179,7 @@ impl AppState {
             config.plugin_cache_path.clone(),
             #[cfg(feature = "wasm-plugins")]
             host_abi.clone(),
+            config.plugin_routes.clone(),
         ))?;
         store.add_class_extender(plugins::files::build_file_extender(
             config.uploads_path.clone(),
@@ -139,6 +192,9 @@ impl AppState {
             &store,
             host_abi.clone(),
         ))?;
+        // Revokes an app's row grant when its View goes or stops showing it.
+        #[cfg(feature = "wasm-plugins")]
+        store.add_class_extender(plugins::app_row_grant::build_view_extender())?;
 
         // Owned here rather than in the AppState literal below, because the
         // `/server` endpoint closes over them to report this node's status.
@@ -215,11 +271,35 @@ impl AppState {
             &host_abi,
         )
         .await?;
+        // The routes of the installations this node owns, re-checked against
+        // the gates as they are now.
+        #[cfg(feature = "plugin-routes")]
+        match route_registry.rebuild(&store).await {
+            Ok(0) => {}
+            Ok(active) => tracing::info!("plugin routes: {active} active installation(s)"),
+            Err(e) => tracing::warn!("could not restore plugin routes: {e}"),
+        }
 
         // Who may put a *new* Drive here. Installed after populate so the scan
         // below sees every Drive already on disk, and before anything binds so
         // no request can slip in under the default open policy.
         crate::host_mode::install_policy(&store, &config.host_mode).await;
+
+        store.set_table_change_retention(std::time::Duration::from_secs(
+            config
+                .opts
+                .table_change_retention_days
+                .saturating_mul(24 * 60 * 60),
+        ));
+
+        // The durable `afterCommit` hook (#1851): with the flag off, the
+        // store writes no wake-up marker at all.
+        #[cfg(feature = "wasm-plugins")]
+        if let Err(e) =
+            plugins::after_commit::rebuild_index(&store, config.opts.plugin_after_commit)
+        {
+            tracing::warn!("afterCommit: could not build the subscription index: {e}");
+        }
 
         match atomic_lib::envelopes::EnvelopeRetention::parse(&config.opts.envelope_retention) {
             Some(retention) => store.set_envelope_retention(retention),
@@ -280,6 +360,37 @@ impl AppState {
         );
         let captcha = Arc::new(crate::captcha::AltchaVerifier::from_store(&store));
 
+        #[cfg(feature = "plugin-routes")]
+        let route_exec = Arc::new(
+            plugins::route_exec::RouteExecutor::default()
+                .with_key_fetch(Arc::new(plugins::route_auth::EgressFetch {
+                    loopback: config.plugin_delivery_loopback,
+                    peer_ca: config.plugin_e2e_peer_ca.clone(),
+                }))
+                .with_quotas(plugins::route_writes::Quotas::from_opts(&config.opts))
+                .with_max_blob_bytes(config.opts.plugin_route_max_blob_bytes)
+                .with_egress_seams(
+                    config.plugin_delivery_loopback,
+                    config.plugin_e2e_peer_ca.clone(),
+                )
+                .with_dpop(plugins::route_dpop::DpopVerifier::new(
+                    plugins::route_dpop::Issuers::parse(config.opts.solid_oidc_issuers.as_deref())
+                        .map_err(|e| format!("--solid-oidc-issuers: {e}"))?,
+                )),
+        );
+        #[cfg(feature = "plugin-routes")]
+        let route_delivery = Arc::new(plugins::route_delivery::DeliveryQueue::new(
+            store.clone(),
+            config.opts.plugin_route_deliveries_per_day,
+            Arc::new(plugins::route_delivery::RegistryHost {
+                registry: route_registry.clone(),
+                db: store.clone(),
+            }),
+            Arc::new(plugins::route_delivery::EgressTransport {
+                loopback: config.plugin_delivery_loopback,
+                peer_ca: config.plugin_e2e_peer_ca.clone(),
+            }),
+        ));
         Ok(AppState {
             store,
             config,
@@ -296,6 +407,13 @@ impl AppState {
             host_abi,
             #[cfg(feature = "wasm-plugins")]
             leases: Arc::new(crate::plugins::lease::Leases::system()),
+            #[cfg(feature = "plugin-routes")]
+            route_registry,
+            #[cfg(feature = "plugin-routes")]
+            route_exec,
+            #[cfg(feature = "plugin-routes")]
+            route_delivery,
+            replay_cache: Arc::new(Default::default()),
         })
     }
 

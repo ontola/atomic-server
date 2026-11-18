@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { FaCheck, FaKey, FaTrash } from 'react-icons/fa6';
 import {
   errorMessageFromResponse,
+  signedRequestInit,
   signRequest,
   useStore,
   type DeclaredSecret,
@@ -421,20 +422,25 @@ async function request(
   if (!agent) return { ok: false, error: 'Not signed in' };
 
   try {
-    // A request with a body is signed over its method and exact body, so a
-    // captured header cannot be replayed with another body.
-    const headers = await signRequest(
+    const method = (init.method ?? 'GET').toUpperCase();
+    // Reads sign with version 1; every write is a v2-only route, signed over
+    // the method, URL and exactly this body.
+    const response = await fetch(
       url,
-      agent,
-      {},
-      typeof init.body === 'string'
-        ? { method: init.method ?? 'POST', body: init.body }
-        : undefined,
+      method === 'GET'
+        ? {
+            ...init,
+            headers: {
+              ...(await signRequest(url, agent, {})),
+              'Content-Type': 'application/json',
+            },
+          }
+        : await signedRequestInit(url, agent, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: init.body as string | undefined,
+          }),
     );
-    const response = await fetch(url, {
-      ...init,
-      headers: { ...headers, 'Content-Type': 'application/json' },
-    });
 
     if (!response.ok) {
       return {

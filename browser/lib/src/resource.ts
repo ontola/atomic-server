@@ -38,6 +38,10 @@ import {
 import { checkResourceConstraints } from './class-constraints.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
+import {
+  lensEndpointKeysAllowedInRenders,
+  RENDERS_SHORTNAME,
+} from './lens-endpoint-key.js';
 import { isUnauthorized, RequestCancelledError } from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
@@ -116,13 +120,42 @@ export const unknownSubject = 'unknown-subject';
  *  - `'persisted'` — the server acknowledged the commit (or a local-only
  *                    resource was durably saved to the local database).
  *  - `'offline'`   — server unreachable; saved locally, drain retries
- *                    on reconnect (also returned for a child queued
- *                    behind an unsaved parent).
+ *                    on reconnect.
+ *  - `'queued'`    — waiting for an unsaved parent; no persistence claim.
  *  - `'noop'`      — nothing to save.
- * Server refusals and queued writes without acknowledgement reject; background
+ * Server refusals and unacknowledged remote drains reject; background
  * retries continue according to the outbox policy.
  */
-export type SaveResult = 'persisted' | 'offline' | 'noop';
+export type SaveResult = 'persisted' | 'offline' | 'queued' | 'noop';
+
+/** Evidence of a completed durable local snapshot write. */
+export interface LocalSaveReceipt {
+  /** Encoded Loro version in that snapshot; null for unversioned metadata. */
+  readonly version: string | null;
+}
+
+export interface ServerSaveReceipt {
+  readonly endpoint: string;
+  readonly commit: string;
+  /** Encoded accepted Loro version, excluding later edits. */
+  readonly version: string;
+}
+
+/** Completed boundaries of one save. Missing evidence asserts nothing. */
+export interface SaveReceipt {
+  readonly status: SaveResult;
+  readonly subject: string;
+  readonly local?: LocalSaveReceipt;
+  /** Acceptance does not prove server fsync, backup or replica independence. */
+  readonly server?: ServerSaveReceipt;
+}
+
+type SaveCompletion = {
+  generation: number;
+  acceptEvidence?: boolean;
+  local?: LocalSaveReceipt;
+  server?: ServerSaveReceipt;
+};
 
 /**
  * Origin tag attached to Loro commits the runtime writes for housekeeping
@@ -294,6 +327,9 @@ export class Resource<C extends OptionalClass = any> {
    *  creates on mount — is never POSTed: it's just GC'd when discarded.
    *  `save()` moves it into the outbox to drain. See sign-at-drain. */
   private _pendingGenesis?: Commit;
+  /** Signed local-only commits awaiting a successful snapshot write. Retain
+   * them across storage failures so retry persists and publishes the same work. */
+  private _pendingLocalCommits: Commit[] = [];
 
   /** Loro CRDT document backing this resource. Lazily initialized. */
   private _loroDoc?: LoroDoc;
@@ -2166,9 +2202,11 @@ export class Resource<C extends OptionalClass = any> {
    *    relies on that difference (see `hydrateResourceFromJson`).
    * Whether `save()` has work to do is the wider question answered in
    * `saveOnce`: this flag, a pending genesis, or an outbox entry.
+   * Signed local-only commits whose snapshot write failed also count: signing
+   * advances the cursor, but those edits still need persistence on retry.
    */
   public hasUnsavedChanges(): boolean {
-    return this._dirty;
+    return this._dirty || this._pendingLocalCommits.length > 0;
   }
 
   /** Clear the dirty flag after a successful drain has signed + POSTed
@@ -3632,12 +3670,14 @@ export class Resource<C extends OptionalClass = any> {
    * The commit is signed at drain time by the outbox, not here.
    */
   /**
-   * Persist this resource. Resolves once the change is durable:
+   * Save this resource and report how far the save progressed:
    *
    *  - `'persisted'` — the server acknowledged the commit (or a local-only
    *                    resource was durably saved to the local database).
    *  - `'offline'`   — server unreachable; saved to clientDb, the drain
    *                    retries on reconnect.
+   *  - `'queued'`    — waiting for an unsaved parent; neither local
+   *                    persistence nor server acceptance has completed.
    *  - `'noop'`      — nothing to save (no unsaved changes, nothing
    *                    pending).
    *
@@ -3744,7 +3784,8 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /** The save currently running, so a concurrent `save()` waits for it. */
-  private _inflightSave?: Promise<SaveResult>;
+  private _inflightSave?: Promise<SaveReceipt>;
+  private _saveCompletion?: SaveCompletion;
 
   /**
    * Save now. A direct call is an explicit user action (Create, dialog
@@ -3754,39 +3795,90 @@ export class Resource<C extends OptionalClass = any> {
    * are spaced to the pace like the outbox's own drains.
    */
   public async save(opts: { background?: boolean } = {}): Promise<SaveResult> {
+    return (await this.saveWithReceipt(opts)).status;
+  }
+
+  /** Save through the normal pipeline, reporting only completed boundaries.
+   * Versions describe the saved snapshots, not later edits. No-op and parent
+   * batching produce no new evidence. Missing evidence is not a guarantee. */
+  public async saveWithReceipt(
+    opts: { background?: boolean } = {},
+  ): Promise<SaveReceipt> {
+    // Capture before waiting for another save or signing asynchronously.
+    const completion: SaveCompletion = {
+      generation: this.store.getIdentityGeneration(),
+    };
     const release = opts.background
       ? undefined
       : this.store.outbox.holdExplicit(this.subject);
 
     try {
-      return await this.saveSerialized();
+      return await this.saveSerialized(completion);
     } finally {
       release?.();
     }
   }
 
-  private async saveSerialized(): Promise<SaveResult> {
-    // Two saves running at once each sign their own commit from the same
-    // state. For a draft that is two genesis certificates, so two subjects
-    // for one resource: the second rename evicts the first, and every alias
-    // that pointed at it dangles. Queue behind the running save instead; the
-    // second pass finds nothing left to sign and reports `noop`.
+  private assertSaveIdentity(completion: SaveCompletion): void {
+    if (this.store.getIdentityGeneration() !== completion.generation) {
+      throw new RequestCancelledError('Identity changed during save');
+    }
+  }
+
+  /** @internal Called after transport acceptance, with the sent version. */
+  public recordServerAcceptance(
+    endpoint: string,
+    commit: Commit,
+    version: VersionVector,
+    generation: number,
+  ): void {
+    const completion = this._saveCompletion;
+    if (!completion?.acceptEvidence || completion.generation !== generation)
+      return;
+    this.assertSaveIdentity(completion);
+    completion.server = Object.freeze({
+      endpoint,
+      commit: commitSubject(commit.signature),
+      version: encodeB64(version.encode()),
+    });
+  }
+
+  private async saveSerialized(
+    completion: SaveCompletion,
+  ): Promise<SaveReceipt> {
+    // Serialize saves without sharing evidence with a subsequent no-op caller.
     if (this._inflightSave) {
       await this._inflightSave.catch(() => undefined);
 
-      return this.saveSerialized();
+      return this.saveSerialized(completion);
     }
 
-    this._inflightSave = this.saveOnce();
+    this.assertSaveIdentity(completion);
+    this._saveCompletion = completion;
+    this._inflightSave = this.saveOnce(completion).then(status => {
+      this.assertSaveIdentity(completion);
+
+      return Object.freeze({
+        status,
+        subject: this.subject,
+        ...(status !== 'noop' && completion.local
+          ? { local: completion.local }
+          : {}),
+        ...(status !== 'noop' && completion.server
+          ? { server: completion.server }
+          : {}),
+      });
+    });
 
     try {
       return await this._inflightSave;
     } finally {
       this._inflightSave = undefined;
+      this._saveCompletion = undefined;
     }
   }
 
-  private async saveOnce(): Promise<SaveResult> {
+  private async saveOnce(completion: SaveCompletion): Promise<SaveResult> {
     const hasChanges = this.hasUnsavedChanges();
 
     if (
@@ -3804,7 +3896,14 @@ export class Resource<C extends OptionalClass = any> {
     const closeSave = perfSpan('resource.save');
 
     try {
-      return await this._saveInner(hasChanges);
+      return await this._saveInner(hasChanges, completion);
+    } catch (error) {
+      // Local-only saves and failed offline fallbacks also need an observable
+      // error: neither may appear idle or safely queued after a failed write.
+      this.commitError =
+        error instanceof Error ? error : new Error(String(error));
+      this.applyToStore('local-pre-push');
+      throw error;
     } finally {
       closeSave();
       this._saveDepth--;
@@ -3812,7 +3911,10 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
-  private async _saveInner(hasChanges: boolean): Promise<SaveResult> {
+  private async _saveInner(
+    hasChanges: boolean,
+    completion: SaveCompletion,
+  ): Promise<SaveResult> {
     const agent = this.store.getAgent();
 
     if (!agent) {
@@ -3841,19 +3943,22 @@ export class Resource<C extends OptionalClass = any> {
       this._lastCommit = this.get(properties.commit.lastCommit)?.toString();
     }
 
-    // If the parent of this resource is new we can't save yet so we add it to a batched that gets saved when the parent does.
+    // An unsaved parent must be saved first. This in-memory batch is not
+    // evidence that the child has been persisted anywhere.
     if (this.isParentNew()) {
       this.store.batchResource(this.subject);
 
-      return 'offline';
+      return 'queued';
     }
+
+    completion.acceptEvidence = true;
 
     // Local-only drives: sign-at-save. Same signing pipeline as the
     // drain (so history, attribution, and the Loro save cursor behave
     // identically), but the commit is materialized locally instead of
     // POSTed — these subjects never reach a server.
     if (this.store.isLocalOnlySubject(this.subject)) {
-      return this.saveLocalOnly(agent, hasChanges);
+      return this.saveLocalOnly(agent, hasChanges, completion);
     }
 
     try {
@@ -3886,6 +3991,7 @@ export class Resource<C extends OptionalClass = any> {
         // parse string as URL") and retries forever.
         try {
           const genesis = await this.signChanges(agent);
+          this.assertSaveIdentity(completion);
           this.store.outbox.setGenesisCommit(this.subject, genesis);
         } catch (e) {
           if (
@@ -3901,7 +4007,7 @@ export class Resource<C extends OptionalClass = any> {
 
       if (!this.store.canCommit) {
         // Offline: the snapshot and the outbox entry are written together.
-        await this.saveOffline(hasChanges);
+        await this.saveOffline(hasChanges, completion);
 
         return 'offline';
       }
@@ -3923,6 +4029,7 @@ export class Resource<C extends OptionalClass = any> {
       const entry = this.store.outbox.getEntry(this.subject);
       const savingVersion = this._loroDoc?.oplogVersion().toJSON();
       await this.store.syncDirtyResources();
+      this.assertSaveIdentity(completion);
 
       if (entry?.lastAttemptFailure) {
         throw entry.lastAttemptFailure.cause;
@@ -3952,7 +4059,11 @@ export class Resource<C extends OptionalClass = any> {
       // canvas, a second comments folder). A local database that is stuck
       // behind another tab gets a short wait, then the save reports success.
       await withDeadline(
-        this.persistToClientDb(),
+        this.persistToClientDb(undefined, {
+          onDurable: receipt => {
+            completion.local = receipt;
+          },
+        }),
         LOCAL_MIRROR_AFTER_ACK_DEADLINE_MS,
         false,
       );
@@ -3971,13 +4082,11 @@ export class Resource<C extends OptionalClass = any> {
           );
         }
 
-        await this.saveOffline();
+        await this.saveOffline(false, completion);
 
         return 'offline';
       }
 
-      this.commitError = e;
-      this.applyToStore('local-pre-push');
       throw e;
     }
   }
@@ -3994,8 +4103,9 @@ export class Resource<C extends OptionalClass = any> {
   private async saveLocalOnly(
     agent: Agent,
     hasChanges: boolean,
+    completion: SaveCompletion,
   ): Promise<SaveResult> {
-    const settled: Commit[] = [];
+    const settled = this._pendingLocalCommits;
     const genesis = this._pendingGenesis;
     this._pendingGenesis = undefined;
 
@@ -4026,11 +4136,24 @@ export class Resource<C extends OptionalClass = any> {
 
     for (const commit of settled) {
       this.setLastCommitValue(commitSubject(commit.signature));
-      this.store.logLocalOnlyCommitSettled(commit);
     }
 
-    await this.persistToClientDb();
-    for (const commit of settled) this.store.publishPeerCommit(commit);
+    this.assertSaveIdentity(completion);
+    await this.persistToClientDb(undefined, {
+      required: true,
+      onDurable: receipt => {
+        completion.local = receipt;
+      },
+    });
+
+    while (settled.length > 0) {
+      const commit = settled[0];
+      this.store.logLocalOnlyCommitSettled(commit);
+      this.store.publishPeerCommit(commit);
+      // A listener can throw. Keep this and later envelopes retryable until
+      // both notifications finish; duplicate signatures are safe to replay.
+      settled.shift();
+    }
 
     this.commitError = undefined;
     this.loading = false;
@@ -4055,7 +4178,12 @@ export class Resource<C extends OptionalClass = any> {
    *    both or neither. The entry changes in memory only after that write,
    *    so `pendingDirtyCount > 0` still means the edit is durable.
    */
-  private async saveOffline(markDirty = false): Promise<void> {
+  private async saveOffline(
+    markDirty: boolean,
+    completion: SaveCompletion,
+  ): Promise<void> {
+    this.assertSaveIdentity(completion);
+
     // Server sets createdAt on apply; we need it locally for sort.
     if (this.get(commits.properties.createdAt) === undefined) {
       this.setCreatedAtValue(Date.now());
@@ -4088,7 +4216,13 @@ export class Resource<C extends OptionalClass = any> {
     await this.store.outbox.recordOfflineSave(
       this.subject,
       { baseVersion, dirty: markDirty },
-      outbox => this.persistToClientDb(outbox),
+      outbox =>
+        this.persistToClientDb(outbox, {
+          required: true,
+          onDurable: receipt => {
+            completion.local = receipt;
+          },
+        }),
     );
 
     this.commitError = undefined;
@@ -4111,15 +4245,24 @@ export class Resource<C extends OptionalClass = any> {
    *
    * `outbox` rows are written in the same worker message and flush, when
    * the outbox lives in this database. Resolves `true` when they were.
+   * With `required`, unavailable storage rejects instead of skipping the write.
    *
    * @internal store-level / offline-persistence only.
    */
   public async persistToClientDb(
     outbox?: ClientDbOutboxWrite,
+    options: {
+      required?: boolean;
+      onDurable?: (receipt: LocalSaveReceipt) => void;
+    } = {},
   ): Promise<boolean> {
     // The identity database can be between workers while its key is derived.
     // A save must not resolve in that gap without writing its snapshot.
-    const identity = this.store.getAgent()?.subject;
+    const identity = this.store.getAgent();
+    const generation = this.store.getIdentityGeneration();
+    const isCurrent = () =>
+      this.store.getAgent() === identity &&
+      this.store.getIdentityGeneration() === generation;
     await this.store.waitForClientDb(10_000);
 
     const opening = this.store.getClientDb();
@@ -4135,12 +4278,24 @@ export class Resource<C extends OptionalClass = any> {
       await opening.whenOpen(LOCAL_COPY_OPEN_WAIT_MS);
     }
 
-    if (this.store.getAgent()?.subject !== identity) {
-      throw new Error('Identity changed before local persistence');
+    if (!isCurrent()) {
+      throw new RequestCancelledError(
+        'Identity changed before local persistence',
+      );
     }
 
     const clientDb = this.store.getClientDb();
-    if (!clientDb || clientDb.unsupportedEnvironment) return false;
+
+    if (!clientDb || clientDb.unsupportedEnvironment) {
+      if (options.required) {
+        throw new Error(
+          'Changes could not be saved on this device. Keep this window open and retry when storage or the server is available.',
+        );
+      }
+
+      // An online save can succeed on server acceptance without a local cache.
+      return false;
+    }
 
     // Rows for the queue's own database only; otherwise the outbox writes
     // them itself once this resolves.
@@ -4158,6 +4313,7 @@ export class Resource<C extends OptionalClass = any> {
     const snapshot = doc
       ? loroCall('export', doc, () => doc.export({ mode: 'snapshot' }))
       : undefined;
+    const version = doc ? encodeB64(doc.oplogVersion().encode()) : null;
 
     // Await the OPFS write — when `save()` resolves the edit MUST survive a
     // reload. A non-awaited write left a reload reading OPFS before the
@@ -4172,6 +4328,17 @@ export class Resource<C extends OptionalClass = any> {
         exact: true,
         outbox: withOutbox,
       });
+
+      if (!isCurrent() || this.store.getClientDb() !== clientDb) {
+        throw new RequestCancelledError(
+          'Identity or database changed during local persistence',
+        );
+      }
+
+      if (clientDb.supportsDurablePersistence === true) {
+        options.onDurable?.(Object.freeze({ version }));
+      }
+
       closePersist();
 
       return !!withOutbox;
@@ -4251,7 +4418,11 @@ export class Resource<C extends OptionalClass = any> {
         tagDatatype = fullProp.datatype;
 
         try {
-          validateDatatype(value, fullProp.datatype);
+          validateDatatype(value, fullProp.datatype, {
+            allowLensEndpointKeys:
+              fullProp.shortname === RENDERS_SHORTNAME &&
+              lensEndpointKeysAllowedInRenders(),
+          });
         } catch (e) {
           if (e instanceof Error) {
             e.message = `Error validating ${fullProp.shortname} with value ${value} for ${this.subject}: ${e.message}`;

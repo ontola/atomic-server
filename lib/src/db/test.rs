@@ -13,19 +13,21 @@ use tokio::sync::OnceCell;
 /// Test-only KV adapter that makes sync's acknowledgement durability visible
 /// without relying on redb's filesystem timing.
 struct CountingKv {
-    inner: super::redb_store::RedbStore,
+    inner: Arc<dyn super::kv_store::KvStore>,
     flushes: AtomicUsize,
     applies: AtomicUsize,
     fail_flush: AtomicBool,
+    fail_apply: AtomicBool,
 }
 
 impl CountingKv {
-    fn new() -> Self {
+    fn new(inner: Arc<dyn super::kv_store::KvStore>) -> Self {
         Self {
-            inner: super::redb_store::RedbStore::new_memory().unwrap(),
+            inner,
             flushes: AtomicUsize::new(0),
             applies: AtomicUsize::new(0),
             fail_flush: AtomicBool::new(false),
+            fail_apply: AtomicBool::new(false),
         }
     }
     fn reset(&self) {
@@ -107,6 +109,9 @@ impl super::kv_store::KvStore for CountingKv {
         operations: &[super::trees::Operation],
     ) -> crate::errors::AtomicResult<()> {
         self.applies.fetch_add(1, Ordering::SeqCst);
+        if self.fail_apply.load(Ordering::SeqCst) {
+            return Err("injected apply failure".into());
+        }
         self.inner.apply_batch(operations)
     }
     fn flush(&self) -> crate::errors::AtomicResult<()> {
@@ -122,7 +127,9 @@ impl super::kv_store::KvStore for CountingKv {
 }
 
 async fn counting_db() -> (Db, Arc<CountingKv>) {
-    let kv = Arc::new(CountingKv::new());
+    let kv = Arc::new(CountingKv::new(Arc::new(
+        super::redb_store::RedbStore::new_memory().unwrap(),
+    )));
     let db = Db::from_kv(std::path::PathBuf::new(), kv.clone(), None)
         .open()
         .await
@@ -137,9 +144,12 @@ async fn counting_db() -> (Db, Arc<CountingKv>) {
 async fn local_id_push(
     last: bool,
 ) -> (crate::sync::protocol::DecodedSyncPush, crate::agents::Agent) {
-    let source = Db::init_temp(&format!("sync_push_counting_source_{}", std::process::id()))
-        .await
-        .unwrap();
+    let source = Db::init_temp(&format!(
+        "sync_push_counting_source_{}",
+        crate::utils::random_string(12)
+    ))
+    .await
+    .unwrap();
     let (agent, drive) = source.setup("Counting source").await.unwrap();
     let mut entries = Vec::new();
     let drive_snapshot = source
@@ -174,6 +184,544 @@ async fn local_id_push(
         crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap(),
         agent,
     )
+}
+
+async fn envelope_push() -> (crate::sync::protocol::DecodedSyncPush, crate::agents::Agent) {
+    let source = Db::init_temp(&format!(
+        "sync_envelope_batch_{}",
+        crate::utils::random_string(12)
+    ))
+    .await
+    .unwrap();
+    let (agent, drive) = source.setup("Envelope source").await.unwrap();
+    let note = source
+        .create_resource(urls::FOLDER, &drive, "note", None)
+        .await
+        .unwrap();
+    let subjects = [&drive, &note];
+    let snapshots: Vec<_> = subjects
+        .iter()
+        .map(|subject| {
+            source
+                .kv
+                .get(Tree::LoroSnapshots, subject.as_bytes())
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+    let json: Vec<_> = subjects
+        .iter()
+        .map(|subject| {
+            crate::envelopes::latest_envelope(&source, subject)
+                .unwrap()
+                .json
+        })
+        .collect();
+    let entries: Vec<_> = subjects
+        .iter()
+        .zip(&snapshots)
+        .map(|(subject, snapshot)| (subject.as_str(), snapshot.as_slice()))
+        .collect();
+    let envelopes: Vec<_> = subjects
+        .iter()
+        .zip(&json)
+        .map(|(subject, envelope)| (subject.as_str(), envelope.as_str()))
+        .collect();
+    let frame =
+        crate::sync::protocol::encode_sync_push_with_envelopes(&drive, &entries, &envelopes, true);
+    (
+        crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap(),
+        agent,
+    )
+}
+
+/// Both signed envelopes and projections must reach the physical backend in
+/// one atomic batch, including through the compression adapter.
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_batches_envelopes_with_projections() {
+    let (push, agent) = envelope_push().await;
+    let physical = Arc::new(super::redb_store::RedbStore::new_memory().unwrap());
+    let counter = Arc::new(CountingKv::new(physical));
+    let sink = Db::from_kv(std::path::PathBuf::new(), counter.clone(), None)
+        .open()
+        .await
+        .unwrap();
+    counter.reset();
+    crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent), false)
+        .await
+        .unwrap();
+    assert_eq!(
+        counter.applies.load(Ordering::SeqCst),
+        1,
+        "envelopes and projections share one backend transaction"
+    );
+    for entry in &push.entries {
+        assert_eq!(crate::envelopes::envelopes(&sink, &entry.subject).len(), 1);
+        assert!(sink
+            .kv
+            .get(Tree::LoroSnapshots, entry.subject.as_bytes())
+            .unwrap()
+            .is_some());
+    }
+}
+
+/// A sync transaction must keep envelope batching, drive-routed events, and
+/// probe invalidation together even for a child whose parent is newly staged.
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_envelopes_share_batch_with_drive_events_and_write_log() {
+    let (push, agent) = envelope_push().await;
+    let child = "atomic:envelope-event-unstamped-child";
+    let mut resource = Resource::new(child.into());
+    resource
+        .set_unsafe(
+            urls::PARENT.into(),
+            Value::AtomicUrl(push.drive.clone().into()),
+        )
+        .unwrap();
+    resource
+        .set_unsafe(urls::NAME.into(), Value::String("child".into()))
+        .unwrap();
+    let snapshot = resource.build_state_doc().unwrap().export_snapshot();
+    let mut entries: Vec<_> = push
+        .entries
+        .iter()
+        .map(|entry| (entry.subject.as_str(), entry.loro_bytes.as_slice()))
+        .collect();
+    entries.push((child, snapshot.as_slice()));
+    let envelopes: Vec<_> = push
+        .envelopes
+        .iter()
+        .map(|entry| (entry.subject.as_str(), entry.json.as_str()))
+        .collect();
+    let frame = crate::sync::protocol::encode_sync_push_with_envelopes(
+        &push.drive,
+        &entries,
+        &envelopes,
+        true,
+    );
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    let (sink, counter) = counting_db().await;
+    sink.enable_drive_events(&push.drive).unwrap();
+    let generation = sink.write_log().generation();
+    counter.reset();
+    crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent), false)
+        .await
+        .unwrap();
+    assert_eq!(counter.applies.load(Ordering::SeqCst), 1);
+    assert_eq!(counter.flushes.load(Ordering::SeqCst), 1);
+    assert!(
+        sink.write_log().generation() > generation,
+        "the committed projections invalidate sync probes"
+    );
+    assert!(sink
+        .drive_events(&push.drive, 0, 100)
+        .iter()
+        .any(|event| event.subject == child));
+    for envelope in &push.envelopes {
+        assert_eq!(
+            crate::envelopes::envelopes(&sink, &envelope.subject).len(),
+            1
+        );
+    }
+}
+
+/// A property carried later in the same frame is available while parsing an
+/// earlier envelope, even though it has not been persisted yet.
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_envelope_uses_staged_property() {
+    let (push, agent) = envelope_push().await;
+    let property = "https://example.test/properties/pushed-property";
+    let mut prop = crate::schema::Property {
+        class_type: None,
+        data_type: crate::datatype::DataType::String,
+        shortname: "pushed-property".into(),
+        subject: property.into(),
+        description: "test property".into(),
+        allows_only: None,
+    }
+    .to_resource()
+    .unwrap();
+    prop.set_unsafe(
+        urls::DRIVE_PROP.into(),
+        Value::AtomicUrl(push.drive.clone().into()),
+    )
+    .unwrap();
+    let snapshot = prop.build_state_doc().unwrap().export_snapshot();
+    let mut json: serde_json::Value = serde_json::from_str(&push.envelopes[1].json).unwrap();
+    json[property] = serde_json::Value::String("extra".into());
+    let json = serde_json::to_string(&json).unwrap();
+    let mut entries: Vec<_> = push
+        .entries
+        .iter()
+        .map(|entry| (entry.subject.as_str(), entry.loro_bytes.as_slice()))
+        .collect();
+    entries.push((property, snapshot.as_slice()));
+    let envelopes = [(push.envelopes[1].subject.as_str(), json.as_str())];
+    let frame = crate::sync::protocol::encode_sync_push_with_envelopes(
+        &push.drive,
+        &entries,
+        &envelopes,
+        false,
+    );
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    let (sink, _) = counting_db().await;
+    crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent), false)
+        .await
+        .unwrap();
+    assert_eq!(
+        crate::envelopes::envelopes(&sink, &push.envelopes[0].subject).len(),
+        1
+    );
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_envelope_uses_staged_local_signer() {
+    let (push, agent) = envelope_push().await;
+    let (sink, _) = counting_db().await;
+    let sink = sink.clone_with_url("http://localhost".into());
+    let signer = "internal:/pushed-signer";
+    let mut profile = agent.to_resource().unwrap();
+    profile.set_subject(signer.to_string());
+    profile
+        .set_unsafe(
+            urls::DRIVE_PROP.into(),
+            Value::AtomicUrl(push.drive.clone().into()),
+        )
+        .unwrap();
+    let snapshot = profile.build_state_doc().unwrap().export_snapshot();
+    let parsed = crate::parse::parse_json_ad_commit_resource(&push.envelopes[1].json, &sink)
+        .await
+        .unwrap();
+    let mut commit = crate::Commit::from_resource(parsed).unwrap();
+    commit.signer = "http://localhost/pushed-signer".into();
+    commit.is_genesis = None;
+    commit.signature = None;
+    let signed = commit
+        .serialize_deterministically_json_ad(&sink)
+        .await
+        .unwrap();
+    commit.signature = Some(
+        crate::commit::sign_message(
+            &signed,
+            agent.private_key.as_deref().unwrap(),
+            &agent.public_key,
+        )
+        .unwrap(),
+    );
+    let json = commit
+        .into_resource(&sink)
+        .await
+        .unwrap()
+        .to_json_ad(None)
+        .unwrap();
+    let round_trip = crate::Commit::from_resource(
+        crate::parse::parse_json_ad_commit_resource(&json, &sink)
+            .await
+            .unwrap(),
+    )
+    .unwrap()
+    .serialize_deterministically_json_ad(&sink)
+    .await
+    .unwrap();
+    let before: serde_json::Value = serde_json::from_str(&signed).unwrap();
+    let after: serde_json::Value = serde_json::from_str(&round_trip).unwrap();
+    let before = before.as_object().unwrap();
+    let after = after.as_object().unwrap();
+    let keys: std::collections::BTreeSet<_> = before.keys().chain(after.keys()).collect();
+    for key in keys {
+        assert_eq!(
+            before.get(key),
+            after.get(key),
+            "round-tripped signature field {key}"
+        );
+    }
+    let (oracle, _) = counting_db().await;
+    let oracle = oracle.clone_with_url("http://localhost".into());
+    oracle
+        .add_resource_opts(&profile, false, true, true)
+        .await
+        .unwrap();
+    crate::envelopes::import_envelope(&oracle, &push.envelopes[1].subject, &json)
+        .await
+        .expect("local signer fixture verifies after profile is stored");
+    let mut entries: Vec<_> = push
+        .entries
+        .iter()
+        .map(|entry| (entry.subject.as_str(), entry.loro_bytes.as_slice()))
+        .collect();
+    entries.push((signer, snapshot.as_slice()));
+    let envelopes = [(push.envelopes[1].subject.as_str(), json.as_str())];
+    let frame = crate::sync::protocol::encode_sync_push_with_envelopes(
+        &push.drive,
+        &entries,
+        &envelopes,
+        false,
+    );
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent), false)
+        .await
+        .unwrap();
+    assert_eq!(
+        crate::envelopes::envelopes(&sink, &push.envelopes[0].subject).len(),
+        1
+    );
+}
+
+/// Remote schema needed to parse an outer envelope field is fetched into the
+/// verification cache, without adding a second database write.
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_envelope_fetches_property_without_persisting_it() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let property = format!("http://{}/property", listener.local_addr().unwrap());
+    let prop = crate::schema::Property {
+        class_type: None,
+        data_type: crate::datatype::DataType::String,
+        shortname: "remote-property".into(),
+        subject: property.clone(),
+        description: "remote test property".into(),
+        allows_only: None,
+    }
+    .to_resource()
+    .unwrap();
+    let body = prop.to_json_ad(None).unwrap();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = [0; 4096];
+        let mut used = 0;
+        loop {
+            assert!(
+                used < request.len(),
+                "HTTP request headers exceed test buffer"
+            );
+            let read = socket.read(&mut request[used..]).await.unwrap();
+            assert!(
+                read > 0,
+                "connection closed before HTTP request headers ended"
+            );
+            used += read;
+            if request[..used].windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                break;
+            }
+        }
+        let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/ad+json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+        socket.write_all(response.as_bytes()).await.unwrap();
+    });
+    let (push, agent) = envelope_push().await;
+    let mut json: serde_json::Value = serde_json::from_str(&push.envelopes[1].json).unwrap();
+    json[&property] = serde_json::Value::String("extra".into());
+    let json = serde_json::to_string(&json).unwrap();
+    let entries: Vec<_> = push
+        .entries
+        .iter()
+        .map(|entry| (entry.subject.as_str(), entry.loro_bytes.as_slice()))
+        .collect();
+    let envelopes = [(push.envelopes[1].subject.as_str(), json.as_str())];
+    let frame = crate::sync::protocol::encode_sync_push_with_envelopes(
+        &push.drive,
+        &entries,
+        &envelopes,
+        false,
+    );
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    let physical = Arc::new(super::redb_store::RedbStore::new_memory().unwrap());
+    let counter = Arc::new(CountingKv::new(physical));
+    let sink = Db::from_kv(std::path::PathBuf::new(), counter.clone(), None)
+        .open()
+        .await
+        .unwrap();
+    counter.reset();
+    crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent), false)
+        .await
+        .unwrap();
+    server.await.unwrap();
+    assert_eq!(counter.applies.load(Ordering::SeqCst), 1);
+    assert!(sink
+        .get_resource_shallow(&property.as_str().into())
+        .is_err());
+    assert_eq!(
+        crate::envelopes::envelopes(&sink, &push.envelopes[0].subject).len(),
+        1
+    );
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_and_standalone_import_share_subject_lock() {
+    let (push, agent) = envelope_push().await;
+    let (sink, _) = counting_db().await;
+    let subject = push.envelopes[1].subject.clone();
+    let json = push.envelopes[1].json.clone();
+    let guard = sink
+        .subject_locks
+        .lock(&Subject::from_raw(&subject, None).pure_id())
+        .await;
+    let sync_store = sink.clone();
+    let standalone_store = sink.clone();
+    let sync = async move {
+        crate::sync::engine::import_sync_push(&push, &sync_store, &ForAgent::from(agent), false)
+            .await
+    };
+    let standalone =
+        async move { crate::envelopes::import_envelope(&standalone_store, &subject, &json).await };
+    tokio::pin!(sync, standalone);
+    assert!(futures::poll!(&mut sync).is_pending());
+    assert!(futures::poll!(&mut standalone).is_pending());
+    drop(guard);
+    let (sync_result, standalone_result) = tokio::join!(sync, standalone);
+    sync_result.unwrap();
+    standalone_result.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[timeout(120000)]
+async fn sync_push_changed_notification_sees_envelope() {
+    let (push, agent) = envelope_push().await;
+    let (sink, _) = counting_db().await;
+    let mut receiver = sink.db_events.subscribe();
+    let reader = sink.clone();
+    let expected = push.envelopes[1].subject.clone();
+    let observer = tokio::spawn(async move {
+        loop {
+            if let DbEvent::Changed { subject, .. } = receiver.recv().await.unwrap() {
+                if subject.pure_id() == Subject::from_raw(&expected, None).pure_id() {
+                    return (
+                        reader.get_resource_shallow(&subject).is_ok(),
+                        crate::envelopes::envelopes(&reader, &expected).len(),
+                    );
+                }
+            }
+        }
+    });
+    crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent), false)
+        .await
+        .unwrap();
+    assert_eq!(observer.await.unwrap(), (true, 1));
+}
+
+/// Compare a multi-envelope push with the public sequential importer, including
+/// reverse wire order and a duplicate. Both retention modes must agree.
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_envelope_retention_matches_sequential_import() {
+    let source = Db::init_temp(&format!(
+        "sync_envelope_order_{}",
+        crate::utils::random_string(12)
+    ))
+    .await
+    .unwrap();
+    source.set_envelope_retention(crate::envelopes::EnvelopeRetention::All);
+    let (agent, drive) = source.setup("Retention source").await.unwrap();
+    let note = source
+        .create_resource(urls::FOLDER, &drive, "note", None)
+        .await
+        .unwrap();
+    for name in ["first", "second"] {
+        let mut resource = source.get_resource(&note.clone().into()).await.unwrap();
+        resource
+            .set(urls::NAME.into(), Value::String(name.into()), &source)
+            .await
+            .unwrap();
+        resource.save_locally(&source).await.unwrap();
+    }
+    let snapshots: Vec<_> = [&drive, &note]
+        .iter()
+        .map(|subject| {
+            source
+                .kv
+                .get(Tree::LoroSnapshots, subject.as_bytes())
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+    let entries = [
+        (drive.as_str(), snapshots[0].as_slice()),
+        (note.as_str(), snapshots[1].as_slice()),
+    ];
+    let rows = crate::envelopes::envelopes(&source, &note);
+    assert_eq!(rows.len(), 3);
+    let ordered = [&rows[2].json, &rows[0].json, &rows[1].json, &rows[2].json];
+    let envelopes: Vec<_> = ordered
+        .iter()
+        .map(|json| (note.as_str(), json.as_str()))
+        .collect();
+    let frame =
+        crate::sync::protocol::encode_sync_push_with_envelopes(&drive, &entries, &envelopes, false);
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    let plain = crate::sync::protocol::encode_sync_push(&drive, &entries, false);
+    let plain = crate::sync::protocol::decode_sync_push(&plain[1..]).unwrap();
+    for mode in [
+        crate::envelopes::EnvelopeRetention::Latest,
+        crate::envelopes::EnvelopeRetention::All,
+    ] {
+        let (sink, _) = counting_db().await;
+        let (oracle, _) = counting_db().await;
+        sink.set_envelope_retention(mode);
+        oracle.set_envelope_retention(mode);
+        crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent.clone()), false)
+            .await
+            .unwrap();
+        crate::sync::engine::import_sync_push(
+            &plain,
+            &oracle,
+            &ForAgent::from(agent.clone()),
+            false,
+        )
+        .await
+        .unwrap();
+        for json in &ordered {
+            crate::envelopes::import_envelope(&oracle, &note, json)
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            crate::envelopes::envelopes(&sink, &note),
+            crate::envelopes::envelopes(&oracle, &note)
+        );
+    }
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_envelope_batch_failure_is_atomic() {
+    let (push, agent) = envelope_push().await;
+    let (sink, counter) = counting_db().await;
+    sink.enable_drive_events(&push.drive).unwrap();
+    let generation = sink.write_log().generation();
+    counter.reset();
+    counter.fail_apply.store(true, Ordering::SeqCst);
+    let mut events = sink.db_events.subscribe();
+    assert!(
+        crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent), false)
+            .await
+            .is_err()
+    );
+    assert_eq!(counter.applies.load(Ordering::SeqCst), 1);
+    assert_eq!(counter.flushes.load(Ordering::SeqCst), 0);
+    assert_eq!(sink.write_log().generation(), generation);
+    assert!(sink.drive_events(&push.drive, 0, 100).is_empty());
+    for entry in &push.entries {
+        assert!(sink
+            .kv
+            .get(Tree::Resources, entry.subject.as_bytes())
+            .unwrap()
+            .is_none());
+        assert!(sink
+            .kv
+            .get(Tree::LoroSnapshots, entry.subject.as_bytes())
+            .unwrap()
+            .is_none());
+        assert!(crate::envelopes::envelopes(&sink, &entry.subject).is_empty());
+    }
+    assert!(
+        events.try_recv().is_err(),
+        "a failed transaction publishes no events"
+    );
 }
 
 #[tokio::test]
@@ -421,6 +969,106 @@ async fn sync_push_merges_independent_same_subject_deltas_and_keeps_history() {
         replay.get_history().len() >= 3,
         "the replayable snapshot retains the base and both independent deltas"
     );
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_projection_failure_is_not_acknowledged_or_partially_applied() {
+    let (push, agent) = local_id_push(true).await;
+    let (sink, counter) = counting_db().await;
+    counter.fail_apply.store(true, Ordering::SeqCst);
+    let error = crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::from(agent), false)
+        .await
+        .unwrap_err();
+    assert!(error.reason.contains("persist SYNC_PUSH batch"));
+    assert_eq!(counter.applies.load(Ordering::SeqCst), 1);
+    assert_eq!(counter.flushes.load(Ordering::SeqCst), 0);
+    for entry in &push.entries {
+        assert!(sink
+            .kv
+            .get(Tree::Resources, entry.subject.as_bytes())
+            .unwrap()
+            .is_none());
+        assert!(sink
+            .kv
+            .get(Tree::LoroSnapshots, entry.subject.as_bytes())
+            .unwrap()
+            .is_none());
+    }
+}
+
+/// A newly replicated table is not in the KV yet when its rows are staged.
+/// Its row logs must still share the same transaction as the projections.
+#[tokio::test]
+#[timeout(120000)]
+async fn sync_push_new_table_and_rows_keep_change_log_entries_in_one_batch() {
+    let (sink, counter) = counting_db().await;
+    let (_, drive) = sink.setup("Batch table logs").await.unwrap();
+    let table = "atomic:sync-batch-table";
+    let class = "atomic:sync-batch-class";
+    let mut entries = Vec::new();
+    let mut table_resource = Resource::new(table.into());
+    table_resource
+        .set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::TABLE.into()]),
+        )
+        .unwrap();
+    table_resource
+        .set_unsafe(urls::CLASSTYPE_PROP.into(), Value::AtomicUrl(class.into()))
+        .unwrap();
+    table_resource
+        .set_unsafe(
+            urls::DRIVE_PROP.into(),
+            Value::AtomicUrl(drive.clone().into()),
+        )
+        .unwrap();
+    entries.push((
+        table.to_string(),
+        table_resource.build_state_doc().unwrap().export_snapshot(),
+    ));
+    for n in 0..2 {
+        let subject = format!("atomic:sync-batch-table-row-{n}");
+        let mut row = Resource::new(subject.clone());
+        row.set_unsafe(urls::IS_A.into(), Value::ResourceArray(vec![class.into()]))
+            .unwrap();
+        row.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        row.set_unsafe(urls::NAME.into(), Value::String(format!("Row {n}")))
+            .unwrap();
+        entries.push((subject, row.build_state_doc().unwrap().export_snapshot()));
+    }
+    let refs: Vec<_> = entries
+        .iter()
+        .map(|(subject, bytes)| (subject.as_str(), bytes.as_slice()))
+        .collect();
+    let frame = crate::sync::protocol::encode_sync_push(&drive, &refs, true);
+    let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+    counter.reset();
+    assert_eq!(
+        crate::sync::engine::import_sync_push(&push, &sink, &ForAgent::Sudo, false)
+            .await
+            .unwrap()
+            .0,
+        3
+    );
+    assert_eq!(counter.applies.load(Ordering::SeqCst), 1);
+    let prefix = format!("e\0{table}\0");
+    let logs: Vec<_> = sink
+        .kv
+        .scan_prefix(Tree::TableChanges, prefix.as_bytes())
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(
+        logs.len(),
+        2,
+        "row logs exist before a read can backfill them"
+    );
+    for (_, bytes) in logs {
+        let entry: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(entry["kind"], "created");
+        assert!(entry["version"].is_object());
+    }
 }
 
 // `#[timeout(120000)]` below: under dagger Main, nextest runs beside e2e

@@ -22,7 +22,7 @@ interface TableFilterBarProps {
   derivedColumns: DerivedColumnSpec[];
 }
 
-const AddFilterTrigger = buildDefaultTrigger(<FaPlus />, () => 'Add filter');
+const AddFilterTrigger = buildDefaultTrigger(<FaPlus />, 'Add filter');
 
 /**
  * The row of active filter chips shown above the table columns. Hidden when no
@@ -85,12 +85,6 @@ export function TableFilterBar({
         const column = filter.property
           ? columnBySubject.get(filter.property)
           : undefined;
-
-        // A filter whose column is gone (a computed column that was
-        // removed) renders nothing rather than an unlabelled chip.
-        if (!column && !derived) {
-          return null;
-        }
 
         return (
           <TableFilterChip

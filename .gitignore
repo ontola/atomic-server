@@ -64,3 +64,5 @@ CLAUDE.local.md
 AGENTS.local.md
 
 /e2e-test-results
+# Local plugin lane data (node keys, databases); never committed.
+.lane-store/

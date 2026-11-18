@@ -97,6 +97,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           groupByColumn: 'Status',
           default: true,
         },
+        { name: 'Issues', kind: 'issues', groupByColumn: 'Status' },
         { name: 'All issues', kind: 'table' },
       ],
     },

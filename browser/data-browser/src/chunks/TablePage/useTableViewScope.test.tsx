@@ -1,0 +1,909 @@
+// @vitest-environment jsdom
+// @wc-ignore-file
+import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import {
+  Store,
+  StoreContext,
+  LoroLoader,
+  core,
+  dataBrowser,
+  Datatype,
+  unknownSubject,
+} from '@tomic/react';
+import { TableNavigationProvider } from '@tomic/table';
+import { useTableView } from './useTableView';
+import { useTableData } from './useTableData';
+
+vi.mock('@tomic/react', async importOriginal => ({
+  ...(await importOriginal<typeof import('@tomic/react')>()),
+  useCanWrite: () => true,
+}));
+afterEach(cleanup);
+beforeAll(async () => {
+  const wasm = await readFile(
+    createRequire(import.meta.url).resolve('loro-crdt/web/loro_wasm_bg.wasm'),
+  );
+  const web = await import('loro-crdt/web');
+  await web.default({ module_or_path: wasm });
+  await LoroLoader.initializeLoro();
+});
+
+async function setup({
+  requested,
+  defaultOnly = false,
+  foreignOwner = false,
+  implicit = false,
+}: {
+  requested?: string;
+  defaultOnly?: boolean;
+  foreignOwner?: boolean;
+  implicit?: boolean;
+} = {}) {
+  const store = new Store({ serverUrl: 'https://example.com', connect: false });
+
+  for (const [subject, type] of [
+    [core.properties.parent, Datatype.ATOMIC_URL],
+    [core.properties.name, Datatype.STRING],
+    [core.properties.classtype, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.tableViews, Datatype.RESOURCEARRAY],
+    [dataBrowser.properties.tableDefaultView, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.viewKind, Datatype.STRING],
+    [dataBrowser.properties.viewFilters, Datatype.JSON],
+    [dataBrowser.properties.viewSortBy, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.viewDashboard, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.viewSortDesc, Datatype.BOOLEAN],
+    [dataBrowser.properties.viewGroupBy, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.viewEndProp, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.viewDerivedColumns, Datatype.JSON],
+    [dataBrowser.properties.viewAggregates, Datatype.JSON],
+  ]) {
+    const property = await store.newResource({ subject, noParent: true });
+    await property.set(core.properties.datatype, type, false);
+    await property.set(core.properties.shortname, 'test-property', false);
+    await property.set(core.properties.description, 'Test metadata', false);
+    await store.getProperty(subject);
+  }
+
+  const table = await store.newResource({
+    subject: 'https://example.com/table',
+    noParent: true,
+  });
+  const view = await store.newResource({
+    subject: 'https://example.com/view',
+    noParent: true,
+  });
+  await view.set(
+    core.properties.parent,
+    foreignOwner ? 'https://example.com/other-table' : table.subject,
+    false,
+  );
+  await view.set(core.properties.name, 'Owned view', false);
+  await view.set(dataBrowser.properties.viewKind, 'table', false);
+  if (!implicit)
+    await table.set(
+      defaultOnly
+        ? dataBrowser.properties.tableDefaultView
+        : dataBrowser.properties.tableViews,
+      defaultOnly ? view.subject : [view.subject],
+      false,
+    );
+  const save = vi.spyOn(table, 'save').mockResolvedValue('persisted');
+  const viewSave = vi.spyOn(view, 'save').mockResolvedValue('persisted');
+  const destroy = vi.spyOn(view, 'destroy').mockResolvedValue(undefined);
+  const navigate = vi.fn();
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <StoreContext.Provider value={store}>
+      <TableNavigationProvider
+        value={{ location: { view: requested }, navigate }}
+      >
+        {children}
+      </TableNavigationProvider>
+    </StoreContext.Provider>
+  );
+  const hook = renderHook(() => useTableView(table), { wrapper });
+
+  return {
+    ...hook,
+    table,
+    view,
+    store,
+    save,
+    viewSave,
+    destroy,
+    wrapper,
+    navigate,
+  };
+}
+
+it('does not resolve a foreign URL view to the default or fetch its config', async () => {
+  const state = await setup({ requested: 'https://example.com/foreign-view' });
+  await waitFor(() => expect(state.result.current.viewError).toBeTruthy());
+  expect(state.result.current.viewReady).toBe(false);
+  expect(state.result.current.activeView).toBeUndefined();
+  expect(state.result.current.view.subject).toBe(unknownSubject);
+});
+
+it('preserves a legacy default-only view and verifies its owner', async () => {
+  const state = await setup({ defaultOnly: true });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  expect(state.result.current.activeView).toBe(state.view.subject);
+  expect(state.result.current.views).toEqual([state.view.subject]);
+});
+
+it('keeps a missing view query unready even when the row class is known', async () => {
+  const state = await setup({ requested: 'https://example.com/foreign-view' });
+  const rowClass = await state.store.newResource({
+    subject: 'https://example.com/row-class',
+    noParent: true,
+  });
+  await state.table.set(core.properties.classtype, rowClass.subject, false);
+  const data = renderHook(() => useTableData(state.table), {
+    wrapper: state.wrapper,
+  });
+  await waitFor(() => expect(data.result.current.viewError).toBeTruthy());
+  expect(data.result.current.tableClass.subject).toBe(rowClass.subject);
+  expect(data.result.current.query.scope.rowClass).toBeUndefined();
+  expect(data.result.current.ready).toBe(false);
+});
+
+it('rejects a linked record belonging to another table before changing it', async () => {
+  const state = await setup({ foreignOwner: true });
+  await waitFor(() => expect(state.result.current.viewError).toBeTruthy());
+  await act(async () => {
+    state.result.current.renameView('Wrong scope');
+    state.result.current.duplicateView(state.view.subject);
+    state.result.current.deleteView(state.view.subject);
+    state.result.current.setViewKind(state.view.subject, 'calendar');
+    await Promise.resolve();
+  });
+  expect(state.viewSave).not.toHaveBeenCalled();
+  expect(state.save).not.toHaveBeenCalled();
+  expect(state.destroy).not.toHaveBeenCalled();
+});
+
+it('does not mutate the table when a view target or reorder is foreign', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const set = vi.spyOn(state.table, 'set');
+  const create = vi.spyOn(state.store, 'newResource');
+  await act(async () => {
+    const foreign = 'https://example.com/foreign-view';
+    state.result.current.deleteView(foreign);
+    state.result.current.duplicateView(foreign);
+    state.result.current.setViewKind(foreign, 'calendar');
+    state.result.current.reorderViews([foreign]);
+    state.result.current.reorderViews([]);
+    await Promise.resolve();
+  });
+  expect(create).not.toHaveBeenCalled();
+  expect(set).not.toHaveBeenCalled();
+  expect(state.save).not.toHaveBeenCalled();
+});
+
+it('materializes one implicit view for concurrent first column/config changes', async () => {
+  const state = await setup({ implicit: true });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  let complete!: (view: typeof state.view) => void;
+  const create = vi.spyOn(state.store, 'newResource').mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        complete = resolve;
+      }),
+  );
+  act(() => {
+    state.result.current.setViewColumns(['https://example.com/property']);
+    state.result.current.renameView('Renamed default');
+  });
+  await waitFor(() => expect(create).toHaveBeenCalledOnce());
+  await act(async () => {
+    complete(state.view);
+  });
+  await waitFor(() =>
+    expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([
+      state.view.subject,
+    ]),
+  );
+  expect(create).toHaveBeenCalledOnce();
+  await waitFor(() =>
+    expect(state.view.get(core.properties.name)).toBe('Renamed default'),
+  );
+  expect(state.view.get(dataBrowser.properties.viewColumns)).toEqual([
+    'https://example.com/property',
+  ]);
+});
+
+it('retains failed configuration writes and serializes later changes behind explicit retry', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  state.viewSave.mockRejectedValueOnce(Error('offline'));
+  act(() => state.result.current.renameView('Retained name'));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('offline'),
+  );
+  act(() =>
+    state.result.current.setViewColumns(['https://example.com/property']),
+  );
+  expect(state.viewSave).toHaveBeenCalledTimes(1);
+  expect(state.view.get(dataBrowser.properties.viewColumns)).toBeUndefined();
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  await waitFor(() => expect(state.viewSave).toHaveBeenCalledTimes(3));
+  expect(state.view.get(core.properties.name)).toBe('Retained name');
+  expect(state.view.get(dataBrowser.properties.viewColumns)).toEqual([
+    'https://example.com/property',
+  ]);
+});
+
+it('retries a failed implicit-view attachment using the same prepared resource', async () => {
+  const state = await setup({ implicit: true });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const create = vi
+    .spyOn(state.store, 'newResource')
+    .mockResolvedValueOnce(state.view);
+  state.save.mockRejectedValueOnce(Error('attachment failed'));
+  act(() => state.result.current.renameView('Retained default'));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('attachment failed'),
+  );
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.view.get(core.properties.name)).toBe('Retained default'),
+  );
+  expect(create).toHaveBeenCalledOnce();
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([
+    state.view.subject,
+  ]);
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+});
+
+it('rechecks view ownership when retrying a retained configuration write', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  state.viewSave.mockRejectedValueOnce(Error('offline'));
+  act(() => state.result.current.renameView('Retained name'));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('offline'),
+  );
+  await act(async () => {
+    await state.view.set(
+      core.properties.parent,
+      'https://example.com/other-table',
+      false,
+    );
+  });
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).not.toBe('offline'),
+  );
+  expect(state.result.current.viewSaveError).toBeTruthy();
+  expect(state.viewSave).toHaveBeenCalledTimes(1);
+});
+
+it('retains filter edits made while an implicit-view attachment is paused', async () => {
+  const state = await setup({ implicit: true });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  vi.spyOn(state.store, 'newResource').mockResolvedValueOnce(state.view);
+  state.save.mockRejectedValueOnce(Error('attachment failed'));
+  const property = 'https://example.com/property';
+  act(() => {
+    state.result.current.addFilter(property);
+  });
+  act(() => {
+    state.result.current.setFilterValue(property, 'first');
+  });
+  await waitFor(
+    () => expect(state.result.current.viewSaveError).toBe('attachment failed'),
+    { timeout: 3000 },
+  );
+  expect(state.result.current.filters[0].value).toBe('first');
+  act(() => state.result.current.setFilterValue(property, 'latest'));
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 700));
+  });
+  act(() => state.result.current.retryViewSave());
+  await waitFor(
+    () =>
+      expect(state.view.get(dataBrowser.properties.viewFilters)).toEqual([
+        { property, operator: 'eq', value: 'latest' },
+      ]),
+    { timeout: 3000 },
+  );
+});
+
+it('retries explicit view creation without preparing or saving another definition', async () => {
+  const state = await setup({ implicit: true });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const create = vi
+    .spyOn(state.store, 'newResource')
+    .mockResolvedValueOnce(state.view);
+  state.save.mockRejectedValueOnce(Error('attach failed'));
+  let completion!: Promise<string | undefined>;
+  act(() => {
+    completion = state.result.current.createView('table', 'New view');
+  });
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('attach failed'),
+  );
+  await expect(completion).resolves.toBeUndefined();
+  act(() => state.result.current.setActiveView(state.view.subject));
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  await waitFor(() => expect(state.save).toHaveBeenCalledTimes(2));
+  expect(create).toHaveBeenCalledOnce();
+  expect(state.viewSave).toHaveBeenCalledOnce();
+  expect(state.navigate).toHaveBeenCalledTimes(1);
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([
+    state.view.subject,
+  ]);
+});
+
+it('retains a prepared copy after attachment fails', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  await state.view.set(
+    dataBrowser.properties.viewDashboard,
+    'https://example.com/dashboard',
+    false,
+  );
+  const copy = await state.store.newResource({
+    subject: 'https://example.com/copy',
+    noParent: true,
+  });
+  await copy.set(core.properties.parent, state.table.subject, false);
+  const copySave = vi.spyOn(copy, 'save').mockResolvedValue('persisted');
+  const create = vi
+    .spyOn(state.store, 'newResource')
+    .mockResolvedValueOnce(copy);
+  state.save.mockRejectedValueOnce(Error('copy attachment failed'));
+  act(() => state.result.current.duplicateView(state.view.subject));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('copy attachment failed'),
+  );
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  await waitFor(() => expect(state.save).toHaveBeenCalledTimes(2));
+  expect(create).toHaveBeenCalledOnce();
+  expect(
+    create.mock.calls[0][0]?.propVals?.[dataBrowser.properties.viewDashboard],
+  ).toBe('https://example.com/dashboard');
+  expect(copySave).toHaveBeenCalledOnce();
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([
+    state.view.subject,
+    copy.subject,
+  ]);
+});
+
+it('retries destroy after confirmed detachment without overwriting subsequently added tabs', async () => {
+  const state = await setup({ requested: 'https://example.com/view' });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  state.destroy.mockRejectedValueOnce(Error('destroy denied'));
+  act(() => state.result.current.deleteView(state.view.subject));
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('destroy denied'),
+  );
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([]);
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableViews,
+      ['https://example.com/later-view'],
+      false,
+    );
+  });
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  expect(state.destroy).toHaveBeenCalledTimes(2);
+  expect(state.save).toHaveBeenCalledOnce();
+  expect(state.table.get(dataBrowser.properties.tableViews)).toEqual([
+    'https://example.com/later-view',
+  ]);
+});
+
+it('retains an in-place type-change decision when saving its optimistic metadata fails', async () => {
+  const state = await setup();
+  const other = await state.store.newResource({
+    subject: 'https://example.com/other-view',
+    noParent: true,
+  });
+  await other.set(core.properties.parent, state.table.subject, false);
+  await other.set(dataBrowser.properties.viewKind, 'table', false);
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableViews,
+      [state.view.subject, other.subject],
+      false,
+    );
+  });
+  await waitFor(() => expect(state.result.current.views).toHaveLength(2));
+  const create = vi.spyOn(state.store, 'newResource');
+  state.viewSave.mockRejectedValueOnce(Error('type save failed'));
+  act(() => {
+    void state.result.current.setViewKind(state.view.subject, 'calendar');
+  });
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBe('type save failed'),
+  );
+  expect(state.view.get(dataBrowser.properties.viewKind)).toBe('calendar');
+  act(() => state.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(state.result.current.viewSaveError).toBeUndefined(),
+  );
+  expect(state.viewSave).toHaveBeenCalledTimes(2);
+  expect(create).not.toHaveBeenCalled();
+});
+
+it('does not count a foreign linked record as a replacement for the last Table view', async () => {
+  const state = await setup();
+  const foreign = await state.store.newResource({
+    subject: 'https://example.com/foreign-linked-view',
+    noParent: true,
+  });
+  await foreign.set(
+    core.properties.parent,
+    'https://example.com/other-table',
+    false,
+  );
+  await foreign.set(dataBrowser.properties.viewKind, 'table', false);
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableViews,
+      [state.view.subject, foreign.subject],
+      false,
+    );
+  });
+  await waitFor(() => expect(state.result.current.views).toHaveLength(2));
+  act(() => state.result.current.deleteView(state.view.subject));
+  expect(state.save).not.toHaveBeenCalled();
+  expect(state.destroy).not.toHaveBeenCalled();
+});
+
+it('reacts to a local owner change before a save or remote store notification', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  await act(async () => {
+    await state.view.set(
+      core.properties.parent,
+      'https://example.com/other-table',
+      false,
+    );
+  });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(false));
+  expect(state.result.current.viewError).toBeTruthy();
+  expect(state.viewSave).not.toHaveBeenCalled();
+});
+
+it('keeps a malformed saved filter from falling back to an unfiltered row query', async () => {
+  const state = await setup();
+  const rowClass = await state.store.newResource({
+    subject: 'https://example.com/row-class',
+    noParent: true,
+  });
+  await act(async () => {
+    await state.table.set(core.properties.classtype, rowClass.subject, false);
+    await state.view.set(
+      dataBrowser.properties.viewFilters,
+      [
+        {
+          property: 'https://example.com/property',
+          value: 'one',
+          operator: 'unsupported',
+        },
+      ],
+      false,
+    );
+  });
+  const data = renderHook(() => useTableData(state.table), {
+    wrapper: state.wrapper,
+  });
+  await waitFor(() =>
+    expect(data.result.current.viewError).toBe(
+      'Saved view configuration is invalid.',
+    ),
+  );
+  expect(data.result.current.query.scope.rowClass).toBeUndefined();
+  expect(data.result.current.ready).toBe(false);
+});
+
+it('keeps parsed config arrays stable across unrelated local view metadata changes', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const columns = state.result.current.viewColumnOrder;
+  const derived = state.result.current.viewDerivedColumns;
+  await act(async () => {
+    await state.view.set(
+      core.properties.description,
+      'Unrelated description',
+      false,
+    );
+  });
+  expect(state.result.current.viewColumnOrder).toBe(columns);
+  expect(state.result.current.viewDerivedColumns).toBe(derived);
+});
+
+it('hydrates an owned unnamed legacy view before declaring its query ready', async () => {
+  const state = await setup();
+  const filters = [
+    {
+      property: 'https://example.com/property',
+      operator: 'eq',
+      value: 'retained',
+    },
+  ];
+  await act(async () => {
+    await state.view.set(dataBrowser.properties.viewFilters, filters, false);
+    state.view.remove(core.properties.name);
+  });
+  state.unmount();
+  const readyFilters: unknown[] = [];
+  const reopened = renderHook(
+    () => {
+      const current = useTableView(state.table);
+      if (current.viewReady) readyFilters.push(current.filters);
+
+      return current;
+    },
+    { wrapper: state.wrapper },
+  );
+  await waitFor(() => expect(reopened.result.current.viewReady).toBe(true));
+  await waitFor(() => expect(reopened.result.current.filters).toEqual(filters));
+  expect(readyFilters.length).toBeGreaterThan(0);
+  expect(
+    readyFilters.every(
+      value => JSON.stringify(value) === JSON.stringify(filters),
+    ),
+  ).toBe(true);
+});
+
+it('keeps a late implicit-view creation from changing another table session', async () => {
+  const state = await setup({ implicit: true });
+  state.unmount();
+  const other = await state.store.newResource({
+    subject: 'https://example.com/second-table',
+    noParent: true,
+  });
+  const hook = renderHook(({ table }) => useTableView(table), {
+    initialProps: { table: state.table },
+    wrapper: state.wrapper,
+  });
+  await waitFor(() => expect(hook.result.current.viewReady).toBe(true));
+  let complete!: (view: typeof state.view) => void;
+  vi.spyOn(state.store, 'newResource').mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        complete = resolve;
+      }),
+  );
+  act(() => hook.result.current.renameView('First table view'));
+  await waitFor(() => expect(complete).toBeTypeOf('function'));
+  hook.rerender({ table: other });
+  await waitFor(() => expect(hook.result.current.viewReady).toBe(true));
+  await act(async () => {
+    complete(state.view);
+  });
+  await waitFor(() =>
+    expect(state.view.get(core.properties.name)).toBe('First table view'),
+  );
+  expect(hook.result.current.viewReady).toBe(true);
+  expect(hook.result.current.activeView).toBeUndefined();
+  expect(hook.result.current.filters).toEqual([]);
+  expect(other.get(dataBrowser.properties.tableViews)).toBeUndefined();
+});
+
+it('adopts incoming pristine filters without creating a draft or saving them again', async () => {
+  const state = await setup();
+  const filters = [
+    {
+      property: 'https://example.com/property',
+      operator: 'eq',
+      value: 'incoming',
+    },
+  ];
+  await act(async () => {
+    await state.view.set(dataBrowser.properties.viewFilters, filters, false);
+  });
+  await waitFor(() => expect(state.result.current.filters).toEqual(filters));
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 650));
+  });
+  expect(state.viewSave).not.toHaveBeenCalled();
+});
+
+it('retains each view draft when switching before its debounce finishes', async () => {
+  const state = await setup();
+  const other = await state.store.newResource({
+    subject: 'https://example.com/other-view',
+    noParent: true,
+  });
+  await other.set(core.properties.parent, state.table.subject, false);
+  await other.set(core.properties.name, 'Other view', false);
+  await other.set(dataBrowser.properties.viewKind, 'table', false);
+  vi.spyOn(other, 'save').mockResolvedValue('persisted');
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableViews,
+      [state.view.subject, other.subject],
+      false,
+    );
+  });
+  const property = 'https://example.com/property';
+  act(() => {
+    state.result.current.addFilter(property);
+  });
+  act(() => {
+    state.result.current.setFilterValue(property, 'first view');
+  });
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableDefaultView,
+      other.subject,
+      false,
+    );
+  });
+  await waitFor(() =>
+    expect(state.result.current.activeView).toBe(other.subject),
+  );
+  expect(state.result.current.filters).toEqual([]);
+  act(() => {
+    state.result.current.addFilter(property);
+  });
+  act(() => {
+    state.result.current.setFilterValue(property, 'second view');
+  });
+  await act(async () => {
+    await state.table.set(
+      dataBrowser.properties.tableDefaultView,
+      state.view.subject,
+      false,
+    );
+  });
+  await waitFor(() =>
+    expect(state.result.current.activeView).toBe(state.view.subject),
+  );
+  expect(state.result.current.filters[0].value).toBe('first view');
+  await waitFor(() =>
+    expect(other.get(dataBrowser.properties.viewFilters)).toEqual([
+      { property, operator: 'eq', value: 'second view' },
+    ]),
+  );
+});
+
+it('keeps the captured failed save available after leaving and returning to its table', async () => {
+  const state = await setup();
+  state.unmount();
+  const other = await state.store.newResource({
+    subject: 'https://example.com/second-table',
+    noParent: true,
+  });
+  const otherView = await state.store.newResource({
+    subject: 'https://example.com/second-view',
+    noParent: true,
+  });
+  await otherView.set(core.properties.parent, other.subject, false);
+  await otherView.set(core.properties.name, 'Other table view', false);
+  await otherView.set(dataBrowser.properties.viewKind, 'table', false);
+  await other.set(
+    dataBrowser.properties.tableViews,
+    [otherView.subject],
+    false,
+  );
+  const hook = renderHook(({ table }) => useTableView(table), {
+    initialProps: { table: state.table },
+    wrapper: state.wrapper,
+  });
+  state.viewSave.mockRejectedValueOnce(Error('offline'));
+  act(() => hook.result.current.renameView('Retained first table name'));
+  await waitFor(() =>
+    expect(hook.result.current.viewSaveError).toBe('offline'),
+  );
+  hook.rerender({ table: other });
+  await waitFor(() =>
+    expect(hook.result.current.activeView).toBe(otherView.subject),
+  );
+  expect(hook.result.current.viewSaveError).toBeUndefined();
+  hook.rerender({ table: state.table });
+  await waitFor(() =>
+    expect(hook.result.current.viewSaveError).toBe('offline'),
+  );
+  act(() => hook.result.current.retryViewSave());
+  await waitFor(() =>
+    expect(hook.result.current.viewSaveError).toBeUndefined(),
+  );
+  expect(state.viewSave).toHaveBeenCalledTimes(2);
+  expect(otherView.get(core.properties.name)).toBe('Other table view');
+});
+
+it('persists newer edits after the page unmounts during an in-flight save', async () => {
+  const state = await setup();
+  let complete!: (value: 'persisted') => void;
+  state.viewSave.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        complete = resolve;
+      }),
+  );
+  const property = 'https://example.com/property';
+  act(() => {
+    state.result.current.addFilter(property);
+    state.result.current.setFilterValue(property, 'first');
+  });
+  await waitFor(() => expect(complete).toBeTypeOf('function'));
+  act(() => state.result.current.setFilterValue(property, 'newer'));
+  state.unmount();
+  await act(async () => {
+    complete('persisted');
+  });
+  await waitFor(() => expect(state.viewSave).toHaveBeenCalledTimes(2));
+  expect(state.view.get(dataBrowser.properties.viewFilters)).toEqual([
+    { property, operator: 'eq', value: 'newer' },
+  ]);
+});
+
+it('blocks the actual query when a valued filter names a removed computed column', async () => {
+  const state = await setup();
+  await act(async () => {
+    await state.view.set(
+      dataBrowser.properties.viewFilters,
+      [{ derived: 'removed', operator: 'gt', value: '2' }],
+      false,
+    );
+  });
+  const data = renderHook(() => useTableData(state.table), {
+    wrapper: state.wrapper,
+  });
+  await waitFor(() =>
+    expect(data.result.current.viewError).toBe(
+      'Saved view configuration is invalid.',
+    ),
+  );
+  expect(data.result.current.query.scope.rowClass).toBeUndefined();
+  expect(data.result.current.ready).toBe(false);
+});
+
+it('resolves implicit timer duration identically for actual row filters and totals', async () => {
+  const state = await setup();
+  await act(async () => {
+    await state.view.set(dataBrowser.properties.viewKind, 'timer', false);
+    await state.view.set(
+      dataBrowser.properties.viewGroupBy,
+      'https://example.com/start',
+      false,
+    );
+    await state.view.set(
+      dataBrowser.properties.viewEndProp,
+      'https://example.com/end',
+      false,
+    );
+    await state.view.set(
+      dataBrowser.properties.viewFilters,
+      [{ derived: 'duration', operator: 'gt', value: '2' }],
+      false,
+    );
+    await state.view.set(
+      dataBrowser.properties.viewAggregates,
+      [{ id: 'total', derived: 'duration', function: 'sum' }],
+      false,
+    );
+  });
+  const data = renderHook(() => useTableData(state.table), {
+    wrapper: state.wrapper,
+  });
+  await waitFor(() => expect(data.result.current.viewReady).toBe(true));
+  const query = data.result.current.query;
+  expect(query.expressionFilters[0].value).toBe(7_200_000);
+  expect(query.aggregation?.aggregates[0].expression).toEqual(
+    query.expressionFilters[0].expression,
+  );
+  expect(
+    state.view.get(dataBrowser.properties.viewDerivedColumns),
+  ).toBeUndefined();
+  await act(async () => {
+    await state.view.set(dataBrowser.properties.viewDerivedColumns, [], false);
+  });
+  await waitFor(() => expect(data.result.current.viewReady).toBe(false));
+  expect(data.result.current.query.scope.rowClass).toBeUndefined();
+});
+
+it('renames the explicitly captured inactive tab without renaming the active view', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const other = await state.store.newResource({
+    subject: 'https://example.com/other-view',
+    noParent: true,
+  });
+  await other.set(core.properties.parent, state.table.subject, false);
+  await other.set(core.properties.name, 'Other', false);
+  await other.set(dataBrowser.properties.viewKind, 'table', false);
+  const saveOther = vi.spyOn(other, 'save').mockResolvedValue('persisted');
+  await act(async () => {
+    await state.table.push(
+      dataBrowser.properties.tableViews,
+      [other.subject],
+      true,
+    );
+  });
+  const activeName = state.view.get(core.properties.name);
+  act(() => state.result.current.renameView('Renamed other', other.subject));
+  await waitFor(() => expect(saveOther).toHaveBeenCalledOnce());
+  expect(other.get(core.properties.name)).toBe('Renamed other');
+  expect(state.view.get(core.properties.name)).toBe(activeName);
+  expect(state.viewSave).not.toHaveBeenCalled();
+});
+it('refuses an explicitly named tab with a foreign table owner before changing its name', async () => {
+  const state = await setup({ foreignOwner: true });
+  await waitFor(() => expect(state.result.current.viewError).toBeTruthy());
+  const original = state.view.get(core.properties.name);
+  act(() => state.result.current.renameView('Wrong owner', state.view.subject));
+  await waitFor(() => expect(state.result.current.viewSaveError).toBeTruthy());
+  expect(state.view.get(core.properties.name)).toBe(original);
+  expect(state.viewSave).not.toHaveBeenCalled();
+});
+
+it('does not rename a captured tab removed while its resource is loading', async () => {
+  const state = await setup();
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  const originalName = state.view.get(core.properties.name);
+  const getResource = state.store.getResource.bind(state.store);
+  let finishLoading!: () => void;
+  const loading = new Promise<typeof state.view>(resolve => {
+    finishLoading = () => resolve(state.view);
+  });
+  const fetch = vi
+    .spyOn(state.store, 'getResource')
+    .mockImplementation(subject =>
+      subject === state.view.subject ? loading : getResource(subject),
+    );
+
+  act(() =>
+    state.result.current.renameView('Stale rename', state.view.subject),
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith(state.view.subject));
+  await act(async () => {
+    await state.table.set(dataBrowser.properties.tableViews, [], false);
+    finishLoading();
+  });
+
+  await waitFor(() => expect(state.result.current.viewSaveError).toBeTruthy());
+  expect(state.view.get(core.properties.name)).toBe(originalName);
+  expect(state.viewSave).not.toHaveBeenCalled();
+  fetch.mockRestore();
+});
+
+it('returns the saved view identity to an app-grant caller', async () => {
+  const state = await setup({ implicit: true });
+  await waitFor(() => expect(state.result.current.viewReady).toBe(true));
+  vi.spyOn(state.store, 'newResource').mockResolvedValueOnce(state.view);
+  let finishAttachment!: () => void;
+  state.save.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        finishAttachment = () => resolve('persisted');
+      }),
+  );
+  let completed!: Promise<string | undefined>;
+  let settled = false;
+  act(() => {
+    completed = state.result.current.createView('table', 'New view');
+  });
+  void completed.then(() => {
+    settled = true;
+  });
+  await waitFor(() => expect(state.save).toHaveBeenCalledOnce());
+  expect(settled).toBe(false);
+  await act(async () => {
+    finishAttachment();
+    expect(await completed).toBe(state.view.subject);
+  });
+  expect(state.save).toHaveBeenCalledOnce();
+});

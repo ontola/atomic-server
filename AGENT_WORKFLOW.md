@@ -19,6 +19,12 @@ more.
   on pushes to `develop`, `v*` tags and `workflow_dispatch` only. To test a PR
   branch, dispatch it: `gh workflow run main.yml --ref <branch>` (or the
   equivalent GitHub API call). A docs-only change needs no dispatch.
+- **One-run hosted CI.** When the self-hosted runner is unavailable, explicitly
+  select the existing full hosted lane with
+  `gh workflow run main.yml --ref <branch> -f github_hosted=true`. This changes
+  no repository variable, keeps all E2E specs, and never retries a failed suite
+  automatically. The private downstream atomic-saas job remains skipped on
+  hosted runs under the existing policy; report that coverage separately.
 - **Paired atomic-saas branch.** The `Downstream` job in `main.yml` builds
   ontola/atomic-saas against your commit. It uses an atomic-saas branch with
   the *same name* as yours only if that branch has an open PR; otherwise it
@@ -39,8 +45,9 @@ That branch is moved forward from numbered candidates,
 - Host branches (`claude/plugin-*-host`, based on a candidate) come in with a
   `git merge --no-ff`.
 - `develop`-based PRs come in with `git cherry-pick -x` of **only the PR's own
-  commits**. Never merge `develop` into a candidate: `develop` has many commits
-  the candidates lack.
+  commits**. Candidates through 23 were maintained separately from `develop`. Candidate24
+  merges Candidate23 with develop at the owner's explicit request; future
+  candidates should retain both histories.
 - Note hand edits in the commit message. Put merge-resolution notes in PR
   comments.
 - Once the candidate's CI is green, post its SHA on atomic-plugins#227. The

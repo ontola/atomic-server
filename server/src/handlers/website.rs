@@ -35,36 +35,16 @@ fn base_origin(state: &AppState) -> AtomicServerResult<url::Url> {
             "Website hosting is disabled. Configure ATOMIC_WEBSITE_ORIGIN on your server.",
         )
     })?;
-    let url = url::Url::parse(raw)
-        .map_err(|_| AtomicServerError::bad_request("Invalid website origin"))?;
-    let host = url.host_str().unwrap_or("");
-    let api = url::Url::parse(&state.config.get_origin())
-        .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
-    let api_host = api.host_str().unwrap_or("");
-    let overlaps = |other: &str| {
-        host == other
-            || host.ends_with(&format!(".{other}"))
-            || other.ends_with(&format!(".{host}"))
-    };
-    let local = host.ends_with(".localhost") && matches!(api_host, "localhost" | "127.0.0.1");
-    if host.is_empty()
-        || !matches!(url.scheme(), "http" | "https")
-        || (url.scheme() == "http" && !host.ends_with(".localhost"))
-        || !url.username().is_empty()
-        || url.password().is_some()
-        || url.path() != "/"
-        || url.query().is_some()
-        || url.fragment().is_some()
-        || (!local && overlaps(api_host))
-        || state
-            .config
-            .opts
-            .base_domain
-            .as_deref()
-            .is_some_and(overlaps)
-    {
-        return Err(AtomicServerError::bad_request("Use a separate HTTPS website domain (or http://sites.localhost:PORT for development), outside API/drive domains."));
-    }
+    url::Url::parse(raw).map_err(|_| AtomicServerError::bad_request("Invalid website origin"))?;
+    let others: Vec<&str> = state
+        .config
+        .opts
+        .base_domain
+        .as_deref()
+        .into_iter()
+        .collect();
+    let url = crate::helpers::separate_origin(raw, &state.config.get_origin(), &others)
+        .ok_or_else(|| AtomicServerError::bad_request("Use a separate HTTPS website domain (or http://sites.localhost:PORT for development), outside API/drive domains."))?;
     Ok(url)
 }
 fn public_url(state: &AppState, project: &str) -> AtomicServerResult<String> {
@@ -254,6 +234,11 @@ pub async fn preview(
 pub fn control_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/website-hosting")
+            // Its POSTs (assets, deployments, activate) require a v2 signature.
+            .wrap(actix_web::middleware::from_fn(
+                crate::require_v2::require_v2,
+            ))
+            .app_data(web::JsonConfig::default().limit(MAX_BYTES))
             .app_data(web::PayloadConfig::new(2_000_000))
             .service(
                 web::resource("/assets/{hash}")
@@ -437,6 +422,29 @@ mod tests {
         }
         req
     }
+    /// A JSON POST with a version 2 signature, which these routes require.
+    /// Signed a millisecond apart at least, so resending the same body is a
+    /// new proof rather than a replay.
+    fn signed_post(state: &AppState, path: &str, json: &serde_json::Value) -> test::TestRequest {
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let url = format!("{}{path}", state.config.get_origin());
+        let body = json.to_string();
+        let headers = atomic_lib::client::get_authentication_headers_v2(
+            "POST",
+            &url,
+            body.as_bytes(),
+            &state.store.get_default_agent().unwrap(),
+        )
+        .unwrap();
+        let mut req = test::TestRequest::post()
+            .uri(path)
+            .insert_header(("Content-Type", "application/json"))
+            .set_payload(body);
+        for (key, value) in headers {
+            req = req.insert_header((key, value));
+        }
+        req
+    }
     #[actix_web::test]
     async fn hosting_requires_auth_and_separates_public_content_from_control() {
         let mut f = fixture("website_http").await;
@@ -485,14 +493,8 @@ mod tests {
         )
         .await;
         assert!(!forbidden.status().is_success());
-        let result = test::call_service(
-            &app,
-            signed(&state, &upload)
-                .method(Method::POST)
-                .set_json(&package)
-                .to_request(),
-        )
-        .await;
+        let result =
+            test::call_service(&app, signed_post(&state, &upload, &package).to_request()).await;
         if !result.status().is_success() {
             panic!("upload failed: {:?}", test::read_body(result).await);
         }
@@ -526,24 +528,12 @@ mod tests {
         );
         let body =
             serde_json::json!({"expectedRevision":uploaded["state"]["revision"],"deployment":id});
-        let live = test::call_service(
-            &app,
-            signed(&state, &activate)
-                .method(Method::POST)
-                .set_json(&body)
-                .to_request(),
-        )
-        .await;
+        let live =
+            test::call_service(&app, signed_post(&state, &activate, &body).to_request()).await;
         assert!(live.status().is_success());
         let live: serde_json::Value = test::read_body_json(live).await;
-        let stale = test::call_service(
-            &app,
-            signed(&state, &activate)
-                .method(Method::POST)
-                .set_json(&body)
-                .to_request(),
-        )
-        .await;
+        let stale =
+            test::call_service(&app, signed_post(&state, &activate, &body).to_request()).await;
         assert_eq!(stale.status(), 409);
         let page = test::call_service(
             &app,
@@ -580,16 +570,12 @@ mod tests {
         }
         let disable =
             serde_json::json!({"expectedRevision":live["state"]["revision"],"deployment":null});
-        assert!(test::call_service(
-            &app,
-            signed(&state, &activate)
-                .method(Method::POST)
-                .set_json(&disable)
-                .to_request()
-        )
-        .await
-        .status()
-        .is_success());
+        assert!(
+            test::call_service(&app, signed_post(&state, &activate, &disable).to_request())
+                .await
+                .status()
+                .is_success()
+        );
         assert_eq!(
             test::call_service(
                 &app,

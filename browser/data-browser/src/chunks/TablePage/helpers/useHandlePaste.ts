@@ -1,10 +1,5 @@
-import {
-  Datatype,
-  Resource,
-  useStore,
-  Collection,
-  commits,
-} from '@tomic/react';
+import type { IndexedTableRows } from '@tomic/table';
+import { Datatype, Resource, useStore, commits } from '@tomic/react';
 import { useCallback } from 'react';
 import { CellPasteData } from '@chunks/TableEditor';
 import { resolvePasteValue } from '../dataTypeMaps';
@@ -19,7 +14,7 @@ import {
 
 export function useHandlePaste(
   table: Resource,
-  collection: Collection,
+  collection: IndexedTableRows,
   tableClass: Resource,
   invalidateCollection: () => void,
   addHistoryItemBatchToStack: (historyItemBatch: HistoryItemBatch) => void,

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [
+      {
+        "id": "inbox",
+        "path": "/inbox",
+        "methods": ["POST"],
+        "auth": "http-signature",
+        "authOptional": true,
+        "body": "json"
+      }
+    ]
+  }
+}

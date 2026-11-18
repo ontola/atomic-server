@@ -1,0 +1,257 @@
+[
+  {
+    "name": "v3 without http installs on a default build",
+    "file": "v3-no-http.json",
+    "node": {
+      "compiled": false,
+      "level": "off",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": null
+  },
+  {
+    "name": "v2 installs on a default build",
+    "file": "v2-js-extension.json",
+    "node": {
+      "compiled": false,
+      "level": "off",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": null
+  },
+  {
+    "name": "read-only route on a default build",
+    "file": "v3-read-only-route.json",
+    "node": {
+      "compiled": false,
+      "level": "off",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": {
+      "type": "host-feature-unavailable",
+      "feature": "plugin-routes",
+      "needed": "read-only",
+      "compiled": false,
+      "level": "off",
+      "surfaces": [
+        "route `GET,HEAD /.well-known/webfinger`",
+        "route `GET /users/{name}`",
+        "well-known `webfinger`"
+      ],
+      "listeners": [],
+      "sidecars": []
+    },
+    "message": "This plugin opens public endpoints on the server (route `GET,HEAD /.well-known/webfinger`, route `GET /users/{name}`, well-known `webfinger`). This AtomicServer was built without plugin routes, so the plugin can't be installed here."
+  },
+  {
+    "name": "read-only route on a feature build at off",
+    "file": "v3-read-only-route.json",
+    "node": {
+      "compiled": true,
+      "level": "off",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": {
+      "type": "host-feature-unavailable",
+      "feature": "plugin-routes",
+      "needed": "read-only",
+      "compiled": true,
+      "level": "off",
+      "surfaces": [
+        "route `GET,HEAD /.well-known/webfinger`",
+        "route `GET /users/{name}`",
+        "well-known `webfinger`"
+      ],
+      "listeners": [],
+      "sidecars": []
+    },
+    "message": "This plugin opens public endpoints on the server (route `GET,HEAD /.well-known/webfinger`, route `GET /users/{name}`, well-known `webfinger`). The server operator hasn't enabled them. To allow it, start AtomicServer with `--plugin-routes read-only` (or `ATOMIC_PLUGIN_ROUTES=read-only`)."
+  },
+  {
+    "name": "read-only route at read-only",
+    "file": "v3-read-only-route.json",
+    "node": {
+      "compiled": true,
+      "level": "read-only",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": null
+  },
+  {
+    "name": "inbox POST at off names every surface",
+    "file": "v3-activitypub.json",
+    "node": {
+      "compiled": true,
+      "level": "off",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": {
+      "type": "host-feature-unavailable",
+      "feature": "plugin-routes",
+      "needed": "read-write",
+      "compiled": true,
+      "level": "off",
+      "surfaces": [
+        "route `GET,HEAD /users/{name}`",
+        "route `POST /users/{name}/inbox`",
+        "route `GET /nodeinfo`",
+        "route `PUT,DELETE /files/{*rest}`",
+        "well-known `nodeinfo`",
+        "write target `inbox-items`",
+        "key `actor-key`",
+        "token store `storage`",
+        "delivery `deliver`"
+      ],
+      "listeners": [],
+      "sidecars": []
+    },
+    "message": "This plugin opens public endpoints on the server (route `GET,HEAD /users/{name}`, route `POST /users/{name}/inbox`, route `GET /nodeinfo`, route `PUT,DELETE /files/{*rest}`, well-known `nodeinfo`, write target `inbox-items`, key `actor-key`, token store `storage`, delivery `deliver`). The server operator hasn't enabled them. To allow it, start AtomicServer with `--plugin-routes read-write` (or `ATOMIC_PLUGIN_ROUTES=read-write`)."
+  },
+  {
+    "name": "inbox POST at read-only names read-write",
+    "file": "v3-activitypub.json",
+    "node": {
+      "compiled": true,
+      "level": "read-only",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": {
+      "type": "host-feature-unavailable",
+      "feature": "plugin-routes",
+      "needed": "read-write",
+      "compiled": true,
+      "level": "read-only",
+      "surfaces": [
+        "route `POST /users/{name}/inbox`",
+        "route `PUT,DELETE /files/{*rest}`",
+        "write target `inbox-items`",
+        "key `actor-key`",
+        "token store `storage`",
+        "delivery `deliver`"
+      ],
+      "listeners": [],
+      "sidecars": []
+    },
+    "message": "This plugin opens public endpoints on the server (route `POST /users/{name}/inbox`, route `PUT,DELETE /files/{*rest}`, write target `inbox-items`, key `actor-key`, token store `storage`, delivery `deliver`). The server operator hasn't enabled them. To allow it, start AtomicServer with `--plugin-routes read-write` (or `ATOMIC_PLUGIN_ROUTES=read-write`)."
+  },
+  {
+    "name": "inbox POST at read-write",
+    "file": "v3-activitypub.json",
+    "node": {
+      "compiled": true,
+      "level": "read-write",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": null
+  },
+  {
+    "name": "listener the operator did not bind",
+    "file": "v3-listener.json",
+    "node": {
+      "compiled": true,
+      "level": "read-write",
+      "routesOrigin": null,
+      "listeners": [
+        "other"
+      ],
+      "sidecars": []
+    },
+    "refusal": {
+      "type": "host-feature-unavailable",
+      "feature": "plugin-routes",
+      "needed": "read-write",
+      "compiled": true,
+      "level": "read-write",
+      "surfaces": [
+        "listener `willow-wgps`"
+      ],
+      "listeners": [
+        "willow-wgps"
+      ],
+      "sidecars": []
+    },
+    "message": "This plugin opens public endpoints on the server (listener `willow-wgps`). The server operator hasn't configured them. To allow it, add `willow-wgps:<port>` to `ATOMIC_PLUGIN_LISTENERS`."
+  },
+  {
+    "name": "listener the operator bound",
+    "file": "v3-listener.json",
+    "node": {
+      "compiled": true,
+      "level": "read-write",
+      "routesOrigin": null,
+      "listeners": [
+        "willow-wgps"
+      ],
+      "sidecars": []
+    },
+    "refusal": null
+  },
+  {
+    "name": "sidecar the operator did not name",
+    "file": "v3-sidecar.json",
+    "node": {
+      "compiled": true,
+      "level": "read-write",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": {
+      "type": "host-feature-unavailable",
+      "feature": "plugin-routes",
+      "needed": "read-write",
+      "compiled": true,
+      "level": "read-write",
+      "surfaces": [
+        "sidecar `pds`"
+      ],
+      "listeners": [],
+      "sidecars": [
+        "pds"
+      ]
+    },
+    "message": "This plugin opens public endpoints on the server (sidecar `pds`). The server operator hasn't configured them. To allow it, add `pds=http://127.0.0.1:<port>` to `ATOMIC_PLUGIN_SIDECARS`."
+  },
+  {
+    "name": "sidecar below read-write asks for the level first",
+    "file": "v3-sidecar.json",
+    "node": {
+      "compiled": true,
+      "level": "read-only",
+      "routesOrigin": null,
+      "listeners": [],
+      "sidecars": []
+    },
+    "refusal": {
+      "type": "host-feature-unavailable",
+      "feature": "plugin-routes",
+      "needed": "read-write",
+      "compiled": true,
+      "level": "read-only",
+      "surfaces": [
+        "sidecar `pds`"
+      ],
+      "listeners": [],
+      "sidecars": [
+        "pds"
+      ]
+    },
+    "message": "This plugin opens public endpoints on the server (sidecar `pds`). The server operator hasn't enabled them. To allow it, start AtomicServer with `--plugin-routes read-write` (or `ATOMIC_PLUGIN_ROUTES=read-write`)."
+  }
+]

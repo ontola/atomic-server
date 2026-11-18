@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 3,
+  "name": "hello-route",
+  "namespace": "fixtures",
+  "capabilities": [
+    {
+      "name": "storage",
+      "reason": "Keeps nothing; a JS extension declares at least one capability in these fixtures."
+    }
+  ],
+  "http": {
+    "mount": "drive-prefix",
+    "routes": [
+      {
+        "id": "hello",
+        "path": "/hello/{name}",
+        "methods": ["GET", "HEAD"],
+        "principal": "anonymous",
+        "auth": "none"
+      }
+    ],
+    "reason": "Says hello at /_routes/<slug>/hello/<name>. A fixture for the plugin-routes gates, registry and route execution."
+  }
+}

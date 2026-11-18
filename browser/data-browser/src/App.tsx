@@ -6,6 +6,7 @@ import { getAgentFromIDB, saveAgentToIDB } from './helpers/agentStorage';
 import { shouldLock } from './helpers/deviceLock';
 import { registerCustomCreateActions } from './components/forms/NewForm/CustomCreateActions';
 import { registerCustomDeleteDialogs } from './components/ResourceContextMenu/customDeleteDialogs';
+import { registerPiecesValidation } from '@chunks/Pieces/piecesFlag';
 import { serverURLStorage } from './helpers/serverURLStorage';
 import { driveStorage } from './helpers/driveStorage';
 import { isRunningInTauri } from './helpers/tauri';
@@ -251,6 +252,7 @@ declare global {
 
 registerCustomCreateActions();
 registerCustomDeleteDialogs();
+registerPiecesValidation();
 // Register global event handlers.
 registerHandlers(store);
 

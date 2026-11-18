@@ -689,5 +689,130 @@
     "name": "v2 destination class requiring an undeclared property",
     "file": "v2-destination-schema-unknown-property.json",
     "error": "class bank-statement names an undeclared property"
+  },
+  {
+    "name": "v2 proxy platform with a proxy-relative operation",
+    "file": "v2-proxy.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "proxy": [
+        "clockify"
+      ],
+      "operations": [
+        {
+          "id": "me",
+          "method": "GET",
+          "url": "atomic-proxy:/clockify/api/v1/user",
+          "effect": "read"
+        }
+      ],
+      "secrets": []
+    }
+  },
+  {
+    "name": "v1 proxy platform",
+    "file": "v1-proxy.json",
+    "serialized": {
+      "schemaVersion": 1,
+      "proxy": [
+        "clockify"
+      ],
+      "operations": [
+        {
+          "id": "entries",
+          "method": "GET",
+          "url": "atomic-proxy:/clockify/api/v1/workspaces/{number}/time-entries",
+          "effect": "read"
+        }
+      ],
+      "secrets": []
+    }
+  },
+  {
+    "name": "v2 proxy operation for an undeclared platform",
+    "file": "v2-proxy-undeclared-platform.json",
+    "error": "does not declare proxy platform"
+  },
+  {
+    "name": "v2 proxy platform that is not an identifier",
+    "file": "v2-proxy-bad-platform.json",
+    "error": "proxy platforms must be"
+  },
+  {
+    "name": "v2 duplicate proxy platform",
+    "file": "v2-proxy-duplicate-platform.json",
+    "error": "proxy platforms must be"
+  },
+  {
+    "name": "v2 proxy operation with a dot segment",
+    "file": "v2-proxy-operation-traversal.json",
+    "error": "atomic-proxy: URLs"
+  },
+  {
+    "name": "v2 proxy operation with a query",
+    "file": "v2-proxy-operation-query.json",
+    "error": "atomic-proxy: URLs"
+  },
+  {
+    "name": "v2 accepts a file as base64",
+    "file": "v2-accepts-base64.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "secrets": [],
+      "operations": [],
+      "accepts": [
+        {
+          "extensions": [
+            ".willow"
+          ],
+          "as": "base64",
+          "maxBytes": 1000000
+        }
+      ]
+    }
+  },
+  {
+    "name": "v2 accepts without `as` reads text and serializes without it",
+    "file": "v2-accepts-default-text.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "secrets": [],
+      "operations": [],
+      "accepts": [
+        {
+          "extensions": [
+            ".sta"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "v2 accepts `as` that is not a string",
+    "file": "v2-accepts-as-not-string.json",
+    "error": "accepts entries must be read"
+  },
+  {
+    "name": "v2 accepts `as` is case-sensitive",
+    "file": "v2-accepts-as-upper-case.json",
+    "error": "accepts entries must be read"
+  },
+  {
+    "name": "v2 extension exporting afterCommit",
+    "file": "v2-extension-after-commit.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "entrypoints": {
+        "run": true,
+        "afterCommit": true
+      },
+      "secrets": [],
+      "operations": []
+    }
+  },
+  {
+    "name": "v2 server extension may not declare afterCommit",
+    "file": "v2-server-extension-after-commit.json",
+    "error": "entrypoints.afterCommit is for world extension"
   }
 ]

@@ -83,7 +83,14 @@ pub mod tag {
     /// Responder → invitee: `[0x53] [json {"drive": "...", "write": bool}]`,
     /// after the rights were granted to the `AUTH`-ed agent.
     pub const INVITE_OK: u8 = 0x53;
+    /// Iroh only: ask whether the peer durably holds the named drive state.
+    pub const VERIFY_FULL_SYNC: u8 = 0x54;
+    /// Iroh only: echo a matching verification request after checking storage.
+    pub const FULL_SYNC_CONFIRMED: u8 = 0x55;
 }
+
+/// Iroh peers with this capability can check full drive storage after syncing.
+pub const CAP_PEER_FULL_SYNC: &str = "peer-full-sync";
 
 /// Feature names a responder advertises in the `AUTH_OK` payload and both
 /// peers advertise in `HELLO`, so a client can adapt to what the other side
@@ -293,6 +300,8 @@ pub mod error_code {
     /// lacks `canonical-scheme`, so it predates v0.41.0-beta.8 and will stop
     /// working in a coming release. Log it and carry on.
     pub const DEPRECATED_CLIENT: u16 = 14;
+    /// Activating an Installation was refused by the node plugin-route gates.
+    pub const HOST_FEATURE_UNAVAILABLE: u16 = 16;
 }
 
 /// Pull the `retry_after_ms=<n>` hint out of a `BUSY` error message (or an
@@ -306,6 +315,39 @@ pub fn retry_after_ms_from_message(message: &str) -> Option<u64> {
 /// The message text of a `BUSY` refusal for a retry delay in milliseconds.
 pub fn busy_message(retry_after_ms: u64) -> String {
     format!("Server busy; retry_after_ms={retry_after_ms}")
+}
+
+/// Separates an error message from the typed problem (RFC 9457 fields, as
+/// JSON) that may follow it. Commit errors travel as one string on both wire
+/// paths (the `ERROR` frame's message, the `/commit` Error resource's
+/// `description`), so a refusal with structured fields appends them after
+/// this marker rather than changing either format. A client that knows the
+/// marker splits it off; one that doesn't still shows the sentence first.
+pub const PROBLEM_MARKER: &str = "\nproblem+json: ";
+
+/// `message` with `problem` appended after [`PROBLEM_MARKER`].
+pub fn with_problem(message: &str, problem: &serde_json::Value) -> String {
+    format!("{message}{PROBLEM_MARKER}{problem}")
+}
+
+/// The human message and, if one follows [`PROBLEM_MARKER`], the typed
+/// problem. Anything a caller wrapped around the message (a prefix, or text
+/// after the JSON) is tolerated: the message is everything before the marker,
+/// the problem the first JSON value after it.
+pub fn split_problem(message: &str) -> (&str, Option<serde_json::Value>) {
+    let Some(at) = message.find(PROBLEM_MARKER) else {
+        return (message, None);
+    };
+    let rest = &message[at + PROBLEM_MARKER.len()..];
+    let problem = serde_json::Deserializer::from_str(rest)
+        .into_iter::<serde_json::Value>()
+        .next()
+        .and_then(Result::ok)
+        .filter(serde_json::Value::is_object);
+    match problem {
+        Some(problem) => (&message[..at], Some(problem)),
+        None => (message, None),
+    }
 }
 
 /// Decode the payload of an `ERROR` frame (slice *after* the tag byte):
@@ -350,6 +392,12 @@ pub fn classify_commit_error(message: &str) -> u16 {
     // client-side for review/rebase instead of retrying indefinitely.
     if message.contains("Commit's Loro update produced no state changes") {
         return error_code::CAUSALITY_CONFLICT;
+    }
+
+    if let (_, Some(problem)) = split_problem(message) {
+        if problem.get("type").and_then(|t| t.as_str()) == Some("host-feature-unavailable") {
+            return error_code::HOST_FEATURE_UNAVAILABLE;
+        }
     }
 
     // Admission refusals are not transport failures. They can recover after
@@ -432,14 +480,21 @@ pub mod sync_push_flags {
 pub const SYNC_PUSH_MAX_ENTRIES: usize = 100;
 pub const SYNC_PUSH_MAX_BYTES: usize = 1_048_576; // 1 MB
 
+/// Maximum file size accepted by the server's HTTP upload handler.
+pub const SERVER_UPLOAD_MAX_BYTES: usize = 50_242_880;
+
+/// A BLOB_RESPONSE begins with one tag byte and a 32-byte content hash.
+const BLOB_RESPONSE_HEADER_BYTES: usize = 1 + 32;
+
 /// Max length-prefixed frame `peer.rs` will read off an **authenticated**
 /// Iroh QUIC stream before giving up on the connection — bounds the
 /// `vec![0u8; len]` allocation against an attacker-controlled `u32` length
 /// prefix. Shared by the live-sync loop and an initiator's own post-AUTH
 /// `SYNC_*` response reads (cheap inconsistency sweep, planning/unified-sync.md
 /// Phase 0b) — both run only after the peer has already proven its identity,
-/// so a generous cap doesn't expand who can trigger the allocation.
-pub const IROH_FRAME_MAX_BYTES: usize = 50_000_000;
+/// so a generous cap doesn't expand who can trigger the allocation. Allow
+/// the largest accepted upload to fit in a single BLOB_RESPONSE.
+pub const IROH_FRAME_MAX_BYTES: usize = SERVER_UPLOAD_MAX_BYTES + BLOB_RESPONSE_HEADER_BYTES;
 
 /// Same purpose, but for frames read from a peer that has **not yet**
 /// authenticated: the accept-side dispatch loop (`handle_stream`), whose
@@ -1264,7 +1319,7 @@ pub fn encode_blob_request(hash: &[u8; 32]) -> Vec<u8> {
 
 /// Encode a BLOB_RESPONSE message: [0x35] [hash: [u8; 32]] [bytes...]
 pub fn encode_blob_response(hash: &[u8; 32], bytes: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(1 + 32 + bytes.len());
+    let mut buf = Vec::with_capacity(BLOB_RESPONSE_HEADER_BYTES + bytes.len());
     buf.push(tag::BLOB_RESPONSE);
     buf.extend_from_slice(hash);
     buf.extend_from_slice(bytes);
@@ -1829,6 +1884,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn candidate_host_refusals_do_not_alias_released_protocol_errors() {
+        // Candidate-only plugin endpoints must not reinterpret invitations or
+        // the released-client deprecation notice when both host lines combine.
+        assert_eq!(error_code::INVITE_REFUSED, 13);
+        assert_eq!(error_code::DEPRECATED_CLIENT, 14);
+        assert_ne!(
+            error_code::HOST_FEATURE_UNAVAILABLE,
+            error_code::INVITE_REFUSED
+        );
+        assert_ne!(
+            error_code::HOST_FEATURE_UNAVAILABLE,
+            error_code::DEPRECATED_CLIENT
+        );
+    }
+
+    #[test]
     fn sync_push_envelopes_round_trip_and_stay_invisible_without_the_flag() {
         let entries: [(&str, &[u8]); 2] = [("did:ad:x", &[1, 2]), ("did:ad:y", &[3])];
         let envelopes = [("did:ad:x", "{\"a\":1}"), ("did:ad:x", "{\"b\":2}")];
@@ -2137,6 +2208,32 @@ mod tests {
             classify_commit_error("some other error"),
             error_code::UNKNOWN
         );
+        let refusal = with_problem(
+            "This plugin opens public endpoints on the server (route `GET /x`).",
+            &serde_json::json!({"type": "host-feature-unavailable", "needed": "read-only"}),
+        );
+        assert_eq!(
+            classify_commit_error(&format!("Commit refused: {refusal}")),
+            error_code::HOST_FEATURE_UNAVAILABLE
+        );
+    }
+
+    #[test]
+    fn a_problem_splits_off_its_message() {
+        let problem =
+            serde_json::json!({"type": "host-feature-unavailable", "surfaces": ["a, (b)"]});
+        let message = with_problem("Refused.", &problem);
+        assert_eq!(split_problem(&message), ("Refused.", Some(problem.clone())));
+        // A wrapper's prefix stays with the message, a suffix is dropped.
+        let wrapped = format!("Hook failed: {message}. Try again");
+        assert_eq!(
+            split_problem(&wrapped),
+            ("Hook failed: Refused.", Some(problem))
+        );
+        assert_eq!(split_problem("plain"), ("plain", None));
+        // A marker without JSON after it is just text.
+        let broken = format!("x{PROBLEM_MARKER}not json");
+        assert_eq!(split_problem(&broken), (broken.as_str(), None));
     }
 
     /// The message a table row gets when its class never reached this server.

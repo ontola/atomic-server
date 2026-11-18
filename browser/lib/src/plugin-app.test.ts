@@ -258,6 +258,33 @@ describe('createApp', () => {
     ]);
   });
 
+  it('declares the row extras it was given, and none by default', async () => {
+    const { store, resources } = fakeStore();
+    const extras = [
+      'https://example.com/google-etag',
+      'https://example.com/sync-baseline',
+    ];
+
+    const plain = await createApp(store, {
+      drive: 'drive',
+      name: 'Plain',
+      source: SOURCE,
+    });
+    const syncing = await createApp(store, {
+      drive: 'drive',
+      name: 'Calendar',
+      source: SOURCE,
+      rowExtras: extras,
+    });
+
+    expect(Object.values(resources.get(syncing.app) ?? {})).toContainEqual(
+      extras,
+    );
+    expect(Object.values(resources.get(plain.app) ?? {})).not.toContainEqual(
+      extras,
+    );
+  });
+
   it('carries the source it was given', async () => {
     const { store, resources } = fakeStore();
 
@@ -378,4 +405,48 @@ describe('describeApp / updateApp', () => {
     expect(after.emoji).toBe('✅');
     expect(after.source).toBe(SOURCE);
   });
+});
+
+it('installs a hidden view without manufacturing a table or row class', async () => {
+  const { store, resources } = fakeStore();
+  const created = await createApp(store, {
+    drive: 'drive',
+    name: 'Keep View',
+    source: SOURCE,
+    dataKind: 'none',
+    installationHidden: true,
+  });
+  expect(created.data).toBeUndefined();
+  expect(created.rowClass).toBeUndefined();
+  expect(resources.get(created.app)?.[core.properties.parent]).toBe(
+    'drive-ontology',
+  );
+  expect(
+    [...resources.values()].some(values =>
+      (values[core.properties.isA] as string[])?.includes(
+        dataBrowser.classes.table,
+      ),
+    ),
+  ).toBe(false);
+  const ownOntology = resources.get(created.ontology)!;
+  expect(ownOntology[core.properties.classes]).toEqual([]);
+});
+
+it('creates a root folder dataset with native rights for the same app identity', async () => {
+  const { store, resources } = fakeStore();
+  const created = await createApp(store, {
+    drive: 'drive',
+    name: 'Google Keep',
+    source: SOURCE,
+    dataKind: 'folder',
+    installationHidden: true,
+  });
+  const folder = resources.get(created.data)!;
+  expect(folder[core.properties.parent]).toBe('drive');
+  expect(folder[core.properties.isA]).toEqual([dataBrowser.classes.folder]);
+  expect(folder[core.properties.write]).toContain(created.agent);
+  expect(folder[core.properties.read]).toContain(created.agent);
+  expect(resources.get(created.app)?.[core.properties.parent]).toBe(
+    'drive-ontology',
+  );
 });

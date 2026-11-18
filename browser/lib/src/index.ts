@@ -56,6 +56,7 @@ export * from './genesis.js';
 export * from './commit.js';
 export * from './error.js';
 export * from './withDeadline.js';
+export { isLoopbackHost } from './loopback.js';
 export * from './pkarr.js';
 export * from './datatypes.js';
 export * from './class-constraints.js';
@@ -86,6 +87,7 @@ export {
   serializeLockfile,
   type Lockfile,
 } from './schema-lockfile.js';
+export * from './lens-endpoint-key.js';
 export * from './safeHref.js';
 export { EventManager } from './EventManager.js';
 export * from './parse.js';
@@ -139,6 +141,17 @@ export {
   parseHistoryAttribution,
 } from './history-attribution.js';
 export type { Attribution, HistoryAttribution } from './history-attribution.js';
+export {
+  fetchTableChanges,
+  parseTableChangesPage,
+  TableChangesCursorExpiredError,
+} from './table-changes.js';
+export type {
+  TableChange,
+  TableChangeKind,
+  TableChangesOptions,
+  TableChangesPage,
+} from './table-changes.js';
 export type {
   ClientDbOutboxWrite,
   ClientDbQueryOpts,
@@ -258,6 +271,7 @@ export {
   readSchema,
   schemaValue,
   createApp,
+  APP_RESOURCE_VIEW_SHORTNAME,
   describeApp,
   updateApp,
   type AppDescription,
@@ -271,6 +285,7 @@ export {
   compareVersions,
   fetchCatalogAppModule,
   installCatalogApp,
+  migrateCatalogAppLayout,
   parseCatalogApp,
   readInstalledCatalogApps,
   resolveModuleUrl,
@@ -294,6 +309,7 @@ export {
   type DeclaredConfig,
   type DeclaredConfigField,
   type DeclaredAccept,
+  type AcceptEncoding,
   type DeclaredDestination,
   type DeclaredDestinationTable,
   DEFAULT_ACCEPT_MAX_BYTES,
@@ -302,7 +318,57 @@ export {
   type ManifestWorld,
   type PluginManifest,
   type PluginManifestV2,
+  type PluginManifestV3,
 } from './plugin-manifest.js';
+export {
+  acceptFor,
+  readUpload,
+  decodeUploadText,
+  encodeBase64,
+  type PluginUpload,
+} from './plugin-upload.js';
+export {
+  checkGate,
+  checkHostFeatures,
+  derivedRequires,
+  hostFeatureMessage,
+  hostFeatureUnavailableError,
+  httpGate,
+  isWildcardHost,
+  parseHostFeatureUnavailable,
+  parsePluginRoutesStatus,
+  requiresGate,
+  HOST_FEATURE_UNAVAILABLE,
+  HostFeatureUnavailableError,
+  REQUIRES_UNKNOWN,
+  type CatalogRequires,
+  type DeclaredHttp,
+  type DeclaredKey,
+  type DeclaredOperatorNamed,
+  type DeclaredRoute,
+  type DeclaredWellKnown,
+  type DeclaredWriteTarget,
+  type GateSurface,
+  type HostFeatureUnavailable,
+  type PluginRoutesLevel,
+  type PluginRoutesStatus,
+  type ReleaseGate,
+  type RouteAuth,
+  type RouteMethod,
+  type RouteMount,
+  type RoutePrincipal,
+} from './plugin-manifest-http.js';
+export {
+  parseRouteStatus,
+  parseRouteTokens,
+  type DeliveryFailure,
+  type DeliveryHealth,
+  type InstallationRouteState,
+  type InstallationRouteStatus,
+  type RouteHealth,
+  type RouteLastError,
+  type RouteToken,
+} from './plugin-route-status.js';
 export {
   pluginConfigFor,
   pluginConfigProblems,
@@ -350,6 +416,9 @@ export {
 export {
   installRelease,
   updateInstallationRelease,
+  withdrawRouteWriteRights,
+  saveInstallationConfig,
+  type SaveConfigOptions,
   publishZipRelease,
   readInstallationReview,
   grantsFor,
@@ -364,6 +433,24 @@ export {
   type ReleaseReference,
   type ReviewCapability,
 } from './plugin-install.js';
+export {
+  ROUTE_WRITES_GRANT,
+  UnresolvedWriteTargetError,
+  capabilityGrantNames,
+  fetchPluginAgent,
+  giveRouteWriteRights,
+  grantsWithRouteWrites,
+  newWriteTargets,
+  removeRouteWriteRights,
+  resolveWriteTargetParent,
+  resolveWriteTargetParents,
+  routeGrantOf,
+  routeWriteParentsOf,
+  routeWriteRightsDiff,
+  routeWriteConfigChange,
+  type InstallationGrant,
+  type RouteWriteConfigChange,
+} from './plugin-route-grant.js';
 export * from './integration-actions.js';
 
 export { taskSchema } from './task-schema.js';
@@ -396,6 +483,7 @@ export * from './import-resolution.js';
 export * from './import-reference-review.js';
 
 export {
+  destinationOwnerOf,
   destinationTablesFor,
   provisionDestination,
   type DestinationConfig,
@@ -415,6 +503,8 @@ export {
 
 // The expansion functions live in `@tomic/lib/calendar-recurrence.js`: they
 // pull in the Temporal polyfill (~120 kB), which most apps never need.
+// Keep the established root validation API available to provider integrations.
+export { validateCalendarEvent } from './calendar-recurrence.js';
 export type {
   CalendarTime,
   CalendarEvent,
@@ -439,3 +529,8 @@ export {
   prepareAppPackageImport,
 } from './app-package.js';
 export type { AppPackage } from './app-package.js';
+
+export {
+  resolveResourceAppView,
+  resolveDefaultResourceAppView,
+} from './resource-app-view.js';

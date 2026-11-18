@@ -1,6 +1,6 @@
+import type { IndexedTableRows } from '@tomic/table';
 import {
-  Collection,
-  JSONValue,
+  type JSONValue,
   Property,
   Resource,
   core,
@@ -52,7 +52,7 @@ interface KanbanViewProps {
   allColumns: Property[];
   /** The view's visible columns, in order (used for card field previews). */
   columns: Property[];
-  collection: Collection;
+  collection: IndexedTableRows;
   ready: boolean;
   viewGroupBy: string | undefined;
   setViewGroupBy: (property: string) => void;

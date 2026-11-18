@@ -18,9 +18,30 @@
  * Replaces #1657's relay of LocalThought rotating connection codes (flag day,
  * decision 6 of #54): nothing credential-like is kept in this page's storage
  * any more, only a PKCE verifier for the ten minutes of a handoff.
+ *
+ * The proxy keeps each connection's provider credential sealed under a key it
+ * does not store (ontola/atomic-plugins#730). This page derives that key from
+ * the user's vault proof and the connection id, which it chooses itself, and
+ * sends it once at redeem. A frame gets a **key grant** with each capability:
+ * the key encrypted to the proxy, naming the app agent, which the frame passes
+ * on in `x-connection-key` without being able to read it. See
+ * `connectionKeys.ts`.
  */
 
-import { agentSubject, decodeB64, signRequest, type Agent } from '@tomic/react';
+import {
+  AGENT_VAULT_PROOF_MESSAGE,
+  agentSubject,
+  decodeB64,
+  signRequest,
+  type Agent,
+} from '@tomic/react';
+import {
+  deriveConnectionKey,
+  newConnectionId,
+  rawConnectionKey,
+  sealGrant,
+} from './connectionKeys';
+import { agentVaultProof } from './managed/vault';
 
 const PENDING = 'atomic-proxy-connect-v2:';
 const MAX_BODY = 10 * 1024 * 1024;
@@ -40,6 +61,11 @@ export interface ConnectScope {
   app: string;
   /** The app's own agent (`atomic:agent:…`), which gets the delegation. */
   appAgent: string;
+  /**
+   * `app` is an Installation: once delegated, the return records
+   * `integrationConnections[platform]` on it (#1700, answer 3).
+   */
+  recordOnInstallation?: boolean;
 }
 
 interface PendingConnect extends ConnectScope {
@@ -67,9 +93,26 @@ export interface ProxyConnection {
   delegations: { agent: string; label?: string }[];
 }
 
+/** One row of `runtimes` in `GET /connections`. */
+export interface ProxyRuntime {
+  agent: string;
+  app: string;
+  label?: string | null;
+  created_at?: string | number;
+  last_used_at?: string | number | null;
+}
+
+/** The proxy refuses longer labels. */
+const MAX_LABEL = 200;
+
 /** What the frame gets: the capability, and where to use it. */
 export interface MintedCapability {
   capability: string;
+  /**
+   * The `x-connection-key` value the frame sends with the capability: a key
+   * grant (`s1.…`) naming the app agent, valid as long as the capability.
+   */
+  connectionKey: string;
   /** The proxy origin, the capability's `aud`. */
   aud: string;
   /** Unix seconds. */
@@ -88,6 +131,12 @@ export interface ProxyHost {
   connections(platform: string): Promise<ConnectionReference[]>;
   /** The configured proxy's origin: the only place `proxyFetch` may go. */
   origin: string;
+  /**
+   * Takes this app's delegation off its `platform` connections, and off
+   * `also` (connection ids the host knows about, such as an Installation's
+   * recorded one). Never deletes a connection. Returns the connection ids.
+   */
+  disconnect(platform: string, also?: readonly string[]): Promise<string[]>;
 }
 
 /** An error the proxy returned: `{error, message}` and the HTTP status. */
@@ -103,6 +152,14 @@ export class ProxyError extends Error {
 
 export const isPlatformId = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-z0-9-]{1,80}$/.test(value);
+
+/** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
+export function platformName(id: string): string {
+  return id
+    .split('-')
+    .map(word => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
+    .join(' ');
+}
 
 export const base64url = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes))
@@ -193,6 +250,9 @@ export function capabilityClaims(claims: {
 }
 
 export class ProxyConnections {
+  /** The proxy's grant public key, fetched once per page. */
+  private grantKey?: Promise<string>;
+
   constructor(
     private storage: Storage,
     /** The proxy origin. */
@@ -211,6 +271,52 @@ export class ProxyConnections {
       agent,
       subject: agent.getPublicKey().then(key => agentSubject(key)),
     };
+  }
+
+  /**
+   * The key of `connectionId` at this proxy, derived from the user's vault
+   * proof. Every device holding the agent derives the same one.
+   */
+  private async connectionKey(connectionId: string): Promise<Uint8Array> {
+    const { agent } = this.user();
+    const proof = await agentVaultProof(agent, AGENT_VAULT_PROOF_MESSAGE);
+
+    return deriveConnectionKey(proof, this.origin, connectionId);
+  }
+
+  /** `GET /connection-key-grants/key`, unsigned: the key grants go to. */
+  private proxyGrantKey(): Promise<string> {
+    this.grantKey ??= (async () => {
+      const response = await this.http(
+        new URL('/connection-key-grants/key', this.origin).href,
+        {
+          credentials: 'omit',
+          redirect: 'error',
+          signal: AbortSignal.timeout(TIMEOUT),
+        },
+      );
+      const body = parseBody(await limitedText(response)) as {
+        public_key?: unknown;
+        info?: unknown;
+      } | null;
+
+      if (
+        !response.ok ||
+        typeof body?.public_key !== 'string' ||
+        !/^[A-Za-z0-9_-]{43}$/.test(body.public_key) ||
+        body.info !== 'integration-proxy-connection-key-grant-v1'
+      )
+        throw new Error(
+          'The integration proxy publishes no connection-key grant key. It may run an older version.',
+        );
+
+      return body.public_key;
+    })();
+    this.grantKey.catch(() => {
+      this.grantKey = undefined;
+    });
+
+    return this.grantKey;
   }
 
   /** One call to the proxy, signed v2 with the user key. */
@@ -336,9 +442,14 @@ export class ProxyConnections {
    * (`error=access_denied`) drops the pending handoff and still returns
    * there, so the app can offer to connect again.
    */
-  async finish(
-    params: URLSearchParams,
-  ): Promise<{ returnTo: string; connected: boolean; connectionId?: string }> {
+  async finish(params: URLSearchParams): Promise<{
+    returnTo: string;
+    connected: boolean;
+    connectionId?: string;
+    platform: string;
+    app: string;
+    recordOnInstallation: boolean;
+  }> {
     const state = params.get('integration_state') ?? '';
     const c = this.pending(state);
     // Consumed before anything else: the verifier is single-use either way.
@@ -354,32 +465,35 @@ export class ProxyConnections {
 
     const code = params.get('connection_code');
 
+    const scope = {
+      returnTo: c.returnTo,
+      platform: c.platform,
+      app: c.app,
+      recordOnInstallation: c.recordOnInstallation === true,
+    };
+
     if (!code || code.length > 4096) {
-      return { returnTo: c.returnTo, connected: false };
+      return { ...scope, connected: false };
     }
 
+    // This page chooses the id, because the key is derived from it.
+    const connectionId = newConnectionId();
     const result = (await this.call('POST', '/connect/redeem', {
       code,
       code_verifier: c.codeVerifier,
+      connection_id: connectionId,
+      connection_key: rawConnectionKey(await this.connectionKey(connectionId)),
     })) as { connection_id?: unknown; platform?: unknown } | null;
 
     if (result?.platform !== c.platform)
       throw new Error('The proxy connected a different platform than asked.');
 
-    if (
-      typeof result.connection_id !== 'string' ||
-      !result.connection_id ||
-      result.connection_id.length > 512
-    )
-      throw new Error('The proxy returned an invalid connection id.');
+    if (result.connection_id !== connectionId)
+      throw new Error('The proxy returned a different connection id.');
 
-    await this.delegate(result.connection_id, c.appAgent, c.label);
+    await this.delegate(connectionId, c.appAgent, c.label);
 
-    return {
-      returnTo: c.returnTo,
-      connected: true,
-      connectionId: result.connection_id,
-    };
+    return { ...scope, connected: true, connectionId };
   }
 
   /** This user's connections at the proxy, with their delegations. */
@@ -436,6 +550,74 @@ export class ProxyConnections {
     );
   }
 
+  /**
+   * This user's runtimes at the proxy (`runtimes` of `GET /connections`):
+   * node agents that may act for an installation's app id.
+   */
+  async runtimes(): Promise<ProxyRuntime[]> {
+    const result = (await this.call('GET', '/connections')) as {
+      runtimes?: unknown;
+    } | null;
+    const rows = Array.isArray(result?.runtimes) ? result.runtimes : [];
+
+    return (rows as ProxyRuntime[]).filter(
+      row => typeof row?.agent === 'string' && typeof row.app === 'string',
+    );
+  }
+
+  /**
+   * Registers a node's agent as a runtime of installation `app`
+   * (`POST /runtimes {app, agent, label?}`), signed by the owner. The proxy
+   * upserts on (owner, agent), so registering again is harmless.
+   */
+  async registerRuntime(app: string, agent: string, label?: string) {
+    await this.call('POST', '/runtimes', {
+      app: canonicalAgent(app),
+      agent: canonicalAgent(agent),
+      ...(label ? { label: [...label].slice(0, MAX_LABEL).join('') } : {}),
+    });
+  }
+
+  /** Removes a runtime; the proxy refuses that agent from then on. */
+  async unregisterRuntime(agent: string) {
+    await this.call(
+      'DELETE',
+      `/runtimes/${encodeURIComponent(canonicalAgent(agent))}`,
+    );
+  }
+
+  /**
+   * Takes `appAgent`'s delegation off every `platform` connection delegated
+   * to it, and off `also`, one `DELETE /connections/{id}/agents/{agent}`
+   * each. Only this app loses access: the connection stays, with any other
+   * app's delegation, because deleting it is the person's call on a page, not
+   * an app's. A delegation the proxy no longer has (404) counts as gone.
+   * Returns the connection ids it was taken off.
+   */
+  async disconnectApp(
+    appAgent: string,
+    platform: string,
+    also: readonly string[] = [],
+  ): Promise<string[]> {
+    if (!isPlatformId(platform)) throw new Error('Invalid platform');
+    const ids = [
+      ...new Set([
+        ...(await this.delegated(appAgent, platform)).map(r => r.connectionId),
+        ...also,
+      ]),
+    ];
+
+    for (const id of ids) {
+      try {
+        await this.undelegate(id, appAgent);
+      } catch (e) {
+        if (!(e instanceof ProxyError && e.status === 404)) throw e;
+      }
+    }
+
+    return ids;
+  }
+
   /** Deletes a connection at the proxy, and with it every delegation. */
   async revoke(connectionId: string) {
     await this.call(
@@ -486,9 +668,19 @@ export class ProxyConnections {
       exp,
     });
     const sig = await agent.signBytes(message);
+    // The grant names the app, not the frame key: the capability (signed by
+    // `cnf`) is what binds a request to this frame, and it expires with it.
+    const connectionKey = await sealGrant({
+      proxyPublicKey: await this.proxyGrantKey(),
+      connectionId,
+      sub: app,
+      key: await this.connectionKey(connectionId),
+      exp,
+    });
 
     return {
       capability: `${base64url(new TextEncoder().encode(json))}.${sig}`,
+      connectionKey,
       aud: this.origin,
       exp,
       connectionId,
@@ -503,6 +695,8 @@ export class ProxyConnections {
       capability: async request =>
         this.mintCapability({ ...request, appAgent: await appAgent() }),
       connections: async platform => this.delegated(await appAgent(), platform),
+      disconnect: async (platform, also) =>
+        this.disconnectApp(await appAgent(), platform, also),
     };
   }
 }

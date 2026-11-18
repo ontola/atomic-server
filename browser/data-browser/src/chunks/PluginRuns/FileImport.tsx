@@ -1,12 +1,9 @@
 import { useEffect, useId, useState } from 'react';
 import {
-  executeServerPlugin,
   provisionDestination,
   pluginConfigFor,
   pluginConfigProblems,
   useStore,
-  DEFAULT_ACCEPT_MAX_BYTES,
-  type DeclaredAccept,
   type DeclaredDestination,
   type JSONObject,
   type PluginManifest,
@@ -20,14 +17,25 @@ import { Input, ErrMessage } from '@components/forms/InputStyles';
 import { AtomicLink } from '@components/AtomicLink';
 import { pluginClassesFor } from './runScript';
 import { RunPluginDialog } from './RunPluginDialog';
+import {
+  acceptAttribute,
+  formatBytes,
+  maxBytes,
+  previewImport,
+  readUpload,
+} from './importFile';
+
+export { decode } from './importFile';
 
 /**
  * The generic entry point for a plugin that declares `accepts`: choose a file,
  * preview what the plugin proposes for it, approve.
  *
- * The host owns acquisition: it enforces the declared size, decodes the file
- * and hands it over as `input.upload`. The plugin runs on the server (it may
- * need `ctx.query`/`ctx.read` to recognise earlier imports), and nothing is
+ * The host owns acquisition: it enforces the declared size on the file's
+ * bytes, reads the file as its `accepts` entry declares (decoded text, or
+ * base64 of the exact bytes) and hands it over as `input.upload`. The plugin
+ * runs on the server (it may need `ctx.query`/`ctx.read` to recognise earlier
+ * imports), and nothing is
  * written until the proposal is approved in {@link RunPluginDialog}. A plugin
  * that also declares a `destination` gets a Set up step first, which creates
  * its tables and stores them as the plugin's config.
@@ -102,34 +110,16 @@ export function FileImport({
     setImported(false);
 
     try {
-      const max = maxBytes(accepts);
-      if (file.size > max)
-        throw new Error(
-          `This file is ${formatBytes(file.size)}; this importer accepts at most ${formatBytes(max)}. Export a shorter period.`,
-        );
-      const text = decode(await file.arrayBuffer());
-      const result = await executeServerPlugin(store, {
-        drive,
-        plugin: resource.subject,
-        source,
-        input: {
-          upload: {
-            name: file.name,
-            mediaType: file.type,
-            size: file.size,
-            text,
-          },
+      const upload = await readUpload(file, accepts);
+      setVerdict(
+        await previewImport(store, {
+          drive,
+          plugin: resource.subject,
+          source,
           config,
-          trigger: {
-            kind: 'manual',
-            at: Date.now(),
-            subject: resource.subject,
-          },
-        },
-      });
-      if (result.error || !result.verdict)
-        throw new Error(result.error ?? 'The importer returned no preview.');
-      setVerdict(result.verdict);
+          upload,
+        }),
+      );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -251,39 +241,6 @@ function firstTable(config: JSONObject | undefined): string | undefined {
     typeof first.table === 'string'
     ? first.table
     : undefined;
-}
-
-function maxBytes(accepts: DeclaredAccept[]): number {
-  return Math.max(
-    0,
-    ...accepts.map(accept => accept.maxBytes ?? DEFAULT_ACCEPT_MAX_BYTES),
-  );
-}
-
-function acceptAttribute(accepts: DeclaredAccept[]): string | undefined {
-  const values = accepts.flatMap(accept => [
-    ...(accept.extensions ?? []),
-    ...(accept.mediaTypes ?? []),
-  ]);
-
-  return values.length ? values.join(',') : undefined;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024)
-    return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-
-  return `${bytes} bytes`;
-}
-
-/** UTF-8 when the file is valid UTF-8; older bank exports are often Windows-1252. */
-export function decode(bytes: ArrayBuffer): string {
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    return new TextDecoder('windows-1252').decode(bytes);
-  }
 }
 
 async function storedConfig(

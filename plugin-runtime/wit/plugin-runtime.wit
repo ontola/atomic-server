@@ -20,6 +20,15 @@ interface host {
   per function, so the ABI can grow without a new runtime build.
   */
   abi: func(function: string, args: string) -> result<string, error>;
+  /**
+  Host-held crypto for plugin routes: `keys.publicKey`, `keys.sign`,
+  `tokens.issue`, `tokens.verify`, `tokens.revoke`, `tokens.requestConsent`,
+  `willow.subspace`, `willow.source`, `willow.authorise`, `willow.list`,
+  and `blobs.fetch` (a remote file into the blob store).
+  `request` and the result are JSON. Private keys and token hashes stay in
+  the host; other runs get an error.
+  */
+  host-call: func(name: string, request: string) -> result<string, string>;
 }
 
 world plugin-runtime {

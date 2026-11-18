@@ -15,6 +15,9 @@
     "tsBuildInfoFile": "./node_modules/.cache/tsconfig.build.tsbuildinfo",
     "strictNullChecks": true,
     "paths": {
+      "@tomic/table": ["../table/src/index.ts"],
+      "@tomic/ui": ["../ui/src/index.ts"],
+      "@tomic/ui/*": ["../ui/src/*"],
       "@components/*": ["./src/components/*"],
       "@views/*": ["./src/views/*"],
       "@hooks/*": ["./src/hooks/*"],

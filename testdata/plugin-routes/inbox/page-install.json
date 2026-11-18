@@ -1,0 +1,20 @@
+{
+  "description": "What the install review writes when the installer approves the inbox fixture's route writes: the Installation's grants verbatim, and the right it gives the Installation's agent on each write target's parent (config.inbox), in a commit the installer signs. The browser's tests (browser/lib/src/plugin-route-grant.test.ts) check that the page produces exactly this; the server's (route_writes::http_tests) install it and POST.",
+  "grants": [
+    "storage",
+    {
+      "route-writes": [
+        {
+          "id": "inbox-items",
+          "parent": "config:inbox",
+          "classes": ["https://atomicdata.dev/classes/PlainText"]
+        }
+      ]
+    }
+  ],
+  "rights": {
+    "on": "config:inbox",
+    "property": "https://atomicdata.dev/properties/write",
+    "adds": "pluginAgent"
+  }
+}

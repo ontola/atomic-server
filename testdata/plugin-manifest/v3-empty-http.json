@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "entrypoints": {
+    "run": true
+  },
+  "http": {
+    "mount": "installation-origin",
+    "routes": [],
+    "wellKnown": []
+  }
+}

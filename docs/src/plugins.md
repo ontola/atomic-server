@@ -14,7 +14,7 @@ For more information on how to create a plugin, see [Creating Plugins](plugins/c
 Three classes describe a plugin's life on a server:
 
 - A **Release** is an immutable, content-addressed package: JS source (`atomic-js/1`) or a WASM zip (`wasip2/1`), its manifest, and a `releaseId` (`blake3:…` over every field). It lives at `<server>/releases/<id>` on the server it was published to, and can be fetched from any other server.
-- A **Listing** is a marketplace entry pointing at a Release: name, emoji, description, domains, standards. Every Listing the public can read on a server is part of that server's Store; `GET /plugin-catalog` returns them. Any drive of Listings is a marketplace.
+- A **Listing** is a marketplace entry pointing at a Release: name, emoji, description, domains, standards. Every Listing the public can read on a server is part of that server's Store; `GET /plugin-catalog` returns them as `{ "entries": [...], "hostFeatures": {...} }`, where `hostFeatures.pluginRoutes` says whether this server lets plugins open public endpoints (see [Plugin public endpoints](atomicserver/installation.md#plugin-public-endpoints-opt-in)). Any drive of Listings is a marketplace.
 - An **Installation** is one installed Release on one Drive. It pins the `release` URL and its `releaseId`, holds the `grants` you approved, your `config`, and an `installationStatus` (`draft`, `active`, `paused`, `revoked`). Committing it as `active` is the single install trigger for both runtimes; `paused` stops the plugin without uninstalling it, keeping its files, its config and the agent it signs as; `revoked` or destroying the resource uninstalls it and retires that agent. Updating a plugin means pointing the same Installation at a newer Release, which keeps everything the plugin already owns.
 
 ## Apps that use a drive
@@ -22,6 +22,11 @@ Three classes describe a plugin's life on a server:
 A native app that has its own repository and writes its own classes into a drive (a Flutter council app, say) is not a plugin and is never run by the server, so it leaves no trace in the drive by itself. It records itself as an **ExternalApp** (`https://atomicdata.dev/classes/ExternalApp`), a child of the drive. Required: `name` and `homepage`. Recommended: `emoji`, `description`, `openUrlTemplate` (a URL containing `{subject}`, replaced by the URL-encoded subject of a resource) and `handlesClasses` (the class URLs the app can open).
 
 The web app lists the ExternalApps under 'Apps in this drive' in the drive settings, and adds 'Open in <app>' to the menu of a resource whose class is in `handlesClasses`. Nothing is activated or granted: it is a label, not an Installation. In Dart, `store.registerApp(...)` from `atomic_store` creates or updates it, and is safe to call on every start.
+
+The Apps page accepts both a JSON array of Listings from `GET /plugin-catalog`
+and an object with that array in `entries`. Additional response metadata, such
+as `hostFeatures`, does not change the listings. A response without a listings
+array shows a catalog error while the rest of the page stays available.
 
 ## Installing a plugin
 

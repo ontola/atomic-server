@@ -3,11 +3,15 @@
 /// The version of this library, for an app to show in its About / device views.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[cfg(feature = "db")]
+pub mod after_commit_wake;
 pub mod agents;
 /// **Internal:** aggregation helpers; outside the application API contract.
 pub mod aggregate;
 pub mod atoms;
 pub mod authentication;
+#[cfg(feature = "db")]
+pub mod change_log;
 /// **Internal:** chat log models; outside the application API contract.
 pub mod chat_log;
 /// **Internal:** schema constraints; outside the application API contract.

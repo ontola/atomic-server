@@ -34,6 +34,8 @@ export interface NodeClientDbOptions {
 }
 
 export class NodeClientDb {
+  /** Whether completed writes include a reload-durable storage flush. */
+  readonly supportsDurablePersistence: boolean = false;
   private db: WasmModule | null = null;
   private wasm: WasmModule | null = null;
   private opts: NodeClientDbOptions;

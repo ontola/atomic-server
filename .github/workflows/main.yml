@@ -3,6 +3,11 @@ on:
     branches: [develop]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      github_hosted:
+        description: Use full GitHub-hosted CI for this run (downstream SaaS is skipped)
+        type: boolean
+        default: false
 
 # Feature-branch pushes do not trigger CI. Dispatch full validation explicitly
 # on a temporary branch containing the exact PR heads to test together.
@@ -24,7 +29,8 @@ concurrency:
 # Trusted heavy CI defaults to Mancave so its Dagger cache stays warm. The
 # selector and result jobs use hosted runners to avoid queueing a few seconds
 # of control work behind long Mancave builds. If Mancave is offline, heavy CI
-# queues; set CI_RUNNER_OVERRIDE = ["ubuntu-latest"] to explicitly use hosted runners.
+# queues; select github_hosted for one dispatched run, or set the repository-wide
+# CI_RUNNER_OVERRIDE = ["ubuntu-latest"] to explicitly use hosted runners.
 # Deployments retain their existing runners.
 #
 # The old variable name, CI_RUNNER, is set to ["ubuntu-latest"] on purpose.
@@ -49,12 +55,19 @@ jobs:
         env:
           FORCE_RUNNER: ${{ vars.CI_RUNNER_OVERRIDE }}
           EVENT_NAME: ${{ github.event_name }}
+          HOSTED_INPUT: ${{ github.event.inputs.github_hosted || 'false' }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "pull_request" ] || [ "$EVENT_NAME" = "pull_request_target" ]; then
             echo "PR event — forcing GitHub-hosted (never run untrusted code on Mancave)"
+            echo "host=hosted" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$HOSTED_INPUT" = "true" ]; then
+            echo "Explicit dispatch input — forcing GitHub-hosted for this run"
             echo "host=hosted" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -212,6 +225,9 @@ jobs:
       # a `cargo check` needs them on disk; contents are irrelevant here.
       - name: Build the data-browser embed
         working-directory: atomic-server/browser
+        env:
+          # Skip hook setup before pnpm's Husky shim invokes wslpath on WSL.
+          HUSKY: "0"
         run: |
           pnpm install --frozen-lockfile
           pnpm run build

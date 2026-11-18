@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [
+      {
+        "id": "r",
+        "path": "/x",
+        "methods": [
+          "GET"
+        ]
+      }
+    ],
+    "wellKnown": [
+      {
+        "name": "change-password",
+        "kind": "exclusive",
+        "route": "r"
+      }
+    ]
+  }
+}

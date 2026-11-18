@@ -1,0 +1,11 @@
+{
+  "method": "Preserve nonempty current translations; restore missing values by context, msgid and plural identity from frozen source heads and plugin baseline. No new translations invented.",
+  "restored": {
+    "id.po": 17,
+    "en.po": 0,
+    "es.po": 17,
+    "fr.po": 17,
+    "nl.po": 17,
+    "de.po": 17
+  }
+}

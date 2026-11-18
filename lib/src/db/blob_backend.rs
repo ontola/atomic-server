@@ -6,7 +6,10 @@ use super::{
 };
 use crate::errors::AtomicResult;
 use async_trait::async_trait;
-use std::sync::Arc;
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 /// One stored blob, as listed for garbage collection.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,6 +34,12 @@ pub trait BlobBackend: Send + Sync {
     async fn put(&self, key: &[u8], bytes: &[u8]) -> AtomicResult<()>;
     /// Metadata only: usage accounting must not download every file.
     async fn size(&self, key: &[u8]) -> AtomicResult<Option<u64>>;
+
+    /// Fresh strong object version and size, if this backend can provide one.
+    /// A version must change whenever bytes change. None disables caching.
+    async fn verification_token(&self, _key: &[u8]) -> AtomicResult<Option<(u64, String)>> {
+        Ok(None)
+    }
 
     // Garbage collection (planning/s3-blob-storage.md, "GC / refcounting").
     // The defaults refuse, so a backend written before GC existed keeps
@@ -199,6 +208,82 @@ impl BlobBackend for RedbBlobBackend {
     }
 }
 
+struct VerifiedBlob {
+    backend: Arc<dyn BlobBackend>,
+    key: [u8; 32],
+    token: (u64, String),
+}
+
+#[derive(Default)]
+pub(crate) struct VerificationCache(Mutex<VecDeque<VerifiedBlob>>);
+
+impl Db {
+    /// Verify bytes at a content-addressed key. A versioned backend may reuse
+    /// an earlier hash check only after a fresh HEAD of that same object.
+    pub async fn verified_blob(&self, key: &[u8; 32]) -> AtomicResult<bool> {
+        let Some(backend) = &self.blob_backend else {
+            return Ok(self
+                .get_blob(key)
+                .await?
+                .is_some_and(|bytes| blake3::hash(&bytes).as_bytes() == key));
+        };
+        let token_result = backend.verification_token(key).await;
+        if token_result.is_err() {
+            self.verified_blobs
+                .0
+                .lock()
+                .map_err(|_| "Verification cache poisoned")?
+                .retain(|entry| !(Arc::ptr_eq(&entry.backend, backend) && entry.key == *key));
+        }
+        let token = token_result?;
+        if let Some(token) = &token {
+            let cache = self
+                .verified_blobs
+                .0
+                .lock()
+                .map_err(|_| "Verification cache poisoned")?;
+            if cache.iter().any(|entry| {
+                Arc::ptr_eq(&entry.backend, backend) && entry.key == *key && entry.token == *token
+            }) {
+                return Ok(true);
+            }
+        }
+        self.verified_blobs
+            .0
+            .lock()
+            .map_err(|_| "Verification cache poisoned")?
+            .retain(|entry| !(Arc::ptr_eq(&entry.backend, backend) && entry.key == *key));
+        let Some(bytes) = backend.get(key).await? else {
+            return Ok(false);
+        };
+        if blake3::hash(&bytes).as_bytes() != key {
+            return Ok(false);
+        }
+        if let Some(token) = token {
+            if token.0 != bytes.len() as u64
+                || backend.verification_token(key).await? != Some(token.clone())
+            {
+                return Ok(false);
+            }
+            let mut cache = self
+                .verified_blobs
+                .0
+                .lock()
+                .map_err(|_| "Verification cache poisoned")?;
+            cache.retain(|entry| !(Arc::ptr_eq(&entry.backend, backend) && entry.key == *key));
+            if cache.len() >= 512 {
+                cache.pop_front();
+            }
+            cache.push_back(VerifiedBlob {
+                backend: backend.clone(),
+                key: *key,
+                token,
+            });
+        }
+        Ok(true)
+    }
+}
+
 impl Db {
     /// The backend in use: the configured remote one, else the local tree.
     pub fn blob_store(&self) -> Arc<dyn BlobBackend> {
@@ -252,5 +337,74 @@ impl Db {
             migrated += 1;
         }
         Ok(migrated)
+    }
+}
+
+#[cfg(test)]
+mod verification_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    struct Versioned {
+        bytes: Mutex<Option<Vec<u8>>>,
+        revision: AtomicUsize,
+        reads: AtomicUsize,
+        fail_head: AtomicBool,
+    }
+    #[async_trait]
+    impl BlobBackend for Versioned {
+        async fn get(&self, _: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
+            self.reads.fetch_add(1, Ordering::Relaxed);
+            Ok(self.bytes.lock().unwrap().clone())
+        }
+        async fn put(&self, _: &[u8], bytes: &[u8]) -> AtomicResult<()> {
+            *self.bytes.lock().unwrap() = Some(bytes.to_vec());
+            self.revision.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+        async fn size(&self, _: &[u8]) -> AtomicResult<Option<u64>> {
+            Ok(self.bytes.lock().unwrap().as_ref().map(|v| v.len() as u64))
+        }
+        async fn verification_token(&self, _: &[u8]) -> AtomicResult<Option<(u64, String)>> {
+            if self.fail_head.load(Ordering::Relaxed) {
+                return Err("HEAD failed".into());
+            }
+            Ok(self.bytes.lock().unwrap().as_ref().map(|v| {
+                (
+                    v.len() as u64,
+                    self.revision.load(Ordering::Relaxed).to_string(),
+                )
+            }))
+        }
+    }
+
+    #[tokio::test]
+    async fn cache_requires_fresh_matching_version_and_backend_identity() {
+        let backend = Arc::new(Versioned {
+            bytes: Mutex::new(None),
+            revision: AtomicUsize::new(0),
+            reads: AtomicUsize::new(0),
+            fail_head: AtomicBool::new(false),
+        });
+        let mut db = Db::init_redb(None).await.unwrap();
+        db.blob_backend = Some(backend.clone());
+        let hash = blake3::hash(b"good");
+        db.put_blob(hash.as_bytes(), b"good").await.unwrap();
+        assert!(db.verified_blob(hash.as_bytes()).await.unwrap());
+        assert!(db.verified_blob(hash.as_bytes()).await.unwrap());
+        assert_eq!(backend.reads.load(Ordering::Relaxed), 1);
+        backend.fail_head.store(true, Ordering::Relaxed);
+        assert!(db.verified_blob(hash.as_bytes()).await.is_err());
+        backend.fail_head.store(false, Ordering::Relaxed);
+        db.put_blob(hash.as_bytes(), b"evil").await.unwrap();
+        assert!(!db.verified_blob(hash.as_bytes()).await.unwrap());
+        let other = Arc::new(Versioned {
+            bytes: Mutex::new(Some(b"evil".to_vec())),
+            revision: AtomicUsize::new(1),
+            reads: AtomicUsize::new(0),
+            fail_head: AtomicBool::new(false),
+        });
+        db.blob_backend = Some(other);
+        assert!(!db.verified_blob(hash.as_bytes()).await.unwrap());
     }
 }

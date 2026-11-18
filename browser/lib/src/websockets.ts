@@ -306,6 +306,13 @@ export class WSClient {
       current: () => boolean;
     }
   >();
+  /** Both server acknowledgement and final inbound chunk are needed. */
+  private activeReconciles = new Set<string>();
+  private confirmationProbes = new Set<string>();
+  private pendingReconcile = new Map<
+    string,
+    { waitingForAcks: number; waitingForPull: boolean }
+  >();
   /** Pending `RBSR_ITEMS` inventory responses, answered in order. */
   private _inventoryQueue: Array<(items: DriveItem[]) => void> = [];
   /** What the server said it speaks, from its `AUTH_OK` payload. */
@@ -451,6 +458,9 @@ export class WSClient {
     // only inside the connect handshake misses it. Idempotent server-side.
     this._driveUnsub = store.on(StoreEvents.DriveChanged, () => {
       this._pendingSyncState.clear();
+      this.pendingReconcile.clear();
+      this.activeReconciles.clear();
+      this.confirmationProbes.clear();
       this.subscribeToDrive();
       void this.reconcileSubscribedDrive();
     });
@@ -482,6 +492,9 @@ export class WSClient {
     this.authPromise = Promise.resolve();
 
     const createSocket = () => {
+      this.pendingReconcile.clear();
+      this.activeReconciles.clear();
+      this.confirmationProbes.clear();
       this.connection.abort(new RequestCancelledError('WebSocket replaced'));
       this.rejectAllPending('WebSocket replaced', true);
       this.connection = new AbortController();
@@ -509,6 +522,9 @@ export class WSClient {
         // Explicit close already tears down this client synchronously. Its
         // later event must not overwrite a replacement socket's live state.
         if (this._closed || ws !== this.ws) return;
+        this.pendingReconcile.clear();
+        this.activeReconciles.clear();
+        this.confirmationProbes.clear();
         this.connection.abort(new RequestCancelledError('WebSocket closed'));
 
         if (!opened) {
@@ -654,6 +670,9 @@ export class WSClient {
 
   public close(): void {
     this._closed = true;
+    this.pendingReconcile.clear();
+    this.activeReconciles.clear();
+    this.confirmationProbes.clear();
     this.connection.abort(
       new RequestCancelledError('WebSocket closed by client'),
     );
@@ -970,7 +989,10 @@ export class WSClient {
   }
 
   /** Sends a GET message for some resource over websockets. */
-  public async fetch(subject: string): Promise<Resource> {
+  public async fetch(
+    subject: string,
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<Resource> {
     // Ensure auth has been kicked off before sending the GET. `authPromise`
     // starts as a resolved promise (not undefined), so `await this.authPromise`
     // alone is a no-op when nobody has called `authenticate()` yet — that
@@ -982,7 +1004,11 @@ export class WSClient {
     // refetch on the next `setAgent`. `authenticate()` is idempotent: it
     // returns immediately if there's no agent or we've already authenticated
     // as the current one, and reuses the in-flight promise otherwise.
-    await this.authenticate();
+    if (opts.signal) {
+      await waitForConnection(this.authenticate(), opts.signal);
+    } else {
+      await this.authenticate();
+    }
 
     if (this.readyState !== WebSocket.OPEN) {
       throw new AtomicError(
@@ -999,10 +1025,13 @@ export class WSClient {
 
     return new Promise((resolve, reject) => {
       const close = perfSpan('ws.GET', { subject: subject.slice(0, 200) });
+      const abort = () =>
+        this.takePending(requestId)?.reject(
+          opts.signal?.reason ??
+            new RequestCancelledError('WebSocket GET cancelled'),
+        );
       const timer = setTimeout(() => {
-        this.pendingGets.delete(requestId);
-        close({ err: 'timeout' });
-        reject(
+        this.takePending(requestId)?.reject(
           new Error(`GET "${subject}" timed out after ${REQUEST_TIMEOUT}ms.`),
         );
       }, REQUEST_TIMEOUT);
@@ -1010,15 +1039,25 @@ export class WSClient {
       this.pendingGets.set(requestId, {
         subject,
         resolve: (r: Resource) => {
+          opts.signal?.removeEventListener('abort', abort);
           close('ok');
           resolve(r);
         },
         reject: (e: unknown) => {
+          opts.signal?.removeEventListener('abort', abort);
           close({ err: e instanceof Error ? e.message : String(e) });
           reject(e);
         },
         timer,
       });
+      opts.signal?.addEventListener('abort', abort, { once: true });
+
+      if (opts.signal?.aborted) {
+        abort();
+
+        return;
+      }
+
       this.sendBinary(encodeGet(requestId, this.wireSubject(subject)));
     });
   }
@@ -1312,16 +1351,28 @@ export class WSClient {
         } else if (msg.code === ErrorCode.SYNC_REJECTED) {
           // Our SYNC_PUSH was refused as a whole (no write right on the
           // drive, quota, not enrolled). Nothing we sent landed and no
-          // SYNC_OK will follow for it. `handleSyncDiff` may already have
-          // reported the drive as synced (it does so as soon as the
-          // server has nothing left to push), so correct that: the drive
-          // is NOT in sync and the local edits stay where they are, to be
-          // offered again on the next handshake.
+          // SYNC_OK will follow for it. Keep the local edits and permit a
+          // later reconcile to retry.
           console.error('[WS] SYNC_PUSH rejected:', msg.message);
-          this.store.failDriveSync(
-            this.driveFromRejection(msg.message),
-            msg.message,
-          );
+          const drive = this.driveFromRejection(msg.message);
+          this.abandonReconcile(drive, msg.message);
+        } else if (
+          msg.code === ErrorCode.UNAUTHORIZED_READ &&
+          /^SYNC refused for (\S+): .+$/su.test(msg.message)
+        ) {
+          // Probe errors have no request id. Match only the server's SYNC
+          // refusal shape and the still-current probe, so subscription errors
+          // and responses from an earlier identity or drive cannot fail sync.
+          const drive = /^SYNC refused for (\S+): /u.exec(msg.message)![1];
+          const pendingKey = this._pendingSyncState.has(drive)
+            ? drive
+            : canonicalizeScheme(drive);
+          const pending = this._pendingSyncState.get(pendingKey);
+          this._pendingSyncState.delete(pendingKey);
+
+          if (pending?.current()) {
+            this.store.failDriveSync(pendingKey, msg.message);
+          }
         } else if (
           msg.code === ErrorCode.AUTH_REQUIRED ||
           msg.code === ErrorCode.UNAUTHORIZED_READ
@@ -1333,6 +1384,14 @@ export class WSClient {
           // anonymous viewer of a shared page would see one on every
           // navigation. Logged so it is diagnosable.
           console.warn('[WS] refused:', msg.message);
+          const drive = this.store.getDrive();
+
+          if (
+            drive &&
+            this.activeReconciles.has(this.store.normalizeSubject(drive))
+          ) {
+            this.abandonReconcile(drive, msg.message);
+          }
         } else {
           this.rejectAllPending(msg.message);
           this.store.notifyError(msg.message);
@@ -1447,6 +1506,11 @@ export class WSClient {
           break;
         }
 
+        // A cancelled/timed-out GET is no longer an ingress source. In
+        // particular, an older query page must not replace the HTTP answer
+        // that recovered it. Real subscription pushes have request id zero.
+        if (msg.requestId && !(msg.flags & Flags.PUSH)) break;
+
         // Subscription push: same call, different `source`. The
         // commit-id dedup inside `applyIncoming` replaces the
         // hand-rolled `isExisting + prevCommit` echo check that
@@ -1544,11 +1608,22 @@ export class WSClient {
         const msg = decodeSyncOk(payload);
 
         if (msg) {
-          this.store.finishDriveSync(
+          const drive = this.store.normalizeSubject(
             canonicalizeScheme(msg.drive),
-            0,
-            Date.now(),
           );
+          const pending = this.pendingReconcile.get(drive);
+          if (!pending && !this.activeReconciles.has(drive)) break;
+
+          if (pending) {
+            if (pending.waitingForAcks < 0) break;
+            if (pending.waitingForAcks > 0) pending.waitingForAcks--;
+            if (pending.waitingForAcks > 0 || pending.waitingForPull) break;
+            this.pendingReconcile.delete(drive);
+          }
+
+          this.activeReconciles.delete(drive);
+          this.confirmationProbes.delete(drive);
+          this.store.finishDriveSync(drive, 0, Date.now());
         }
 
         break;
@@ -1572,7 +1647,17 @@ export class WSClient {
         const msg = decodeSyncPush(payload);
 
         if (msg) {
-          if (msg.entries.length > 0) this.store.startDriveSyncPull();
+          const driveKey = this.store.normalizeSubject(
+            canonicalizeScheme(msg.drive),
+          );
+
+          if (
+            msg.entries.length > 0 &&
+            (this.pendingReconcile.has(driveKey) ||
+              this.activeReconciles.has(driveKey))
+          ) {
+            this.store.startDriveSyncPull();
+          }
 
           // Per-entry `getResourceLoading + importLoroUpdate +
           // setSource + addResources({skipCommitCompare:true})`
@@ -1646,13 +1731,29 @@ export class WSClient {
             const drive = canonicalizeScheme(msg.drive);
             const count = msg.entries.length;
 
+            const current = this.connectionGuard();
+
             const finish = () => {
-              this.store.finishDriveSync(drive, count, Date.now());
+              if (!current()) return;
 
               if (this.pulledInBulk) {
                 this.pulledInBulk = false;
                 this.store.notifyBulkApplied();
               }
+
+              const key = this.store.normalizeSubject(drive);
+              const pending = this.pendingReconcile.get(key);
+              if (!pending && !this.activeReconciles.has(key)) return;
+
+              if (pending) {
+                pending.waitingForPull = false;
+                if (pending.waitingForAcks !== 0) return;
+                this.pendingReconcile.delete(key);
+              }
+
+              this.activeReconciles.delete(key);
+              this.confirmationProbes.delete(key);
+              this.store.finishDriveSync(drive, count, Date.now());
             };
 
             const clientDb = this.store.getClientDb();
@@ -2089,6 +2190,8 @@ export class WSClient {
   private _vvSyncRuns = new Map<string, Promise<void>>();
 
   private startVVSync(drive: string, explicit = false): Promise<void> {
+    if (this.activeReconciles.has(this.store.normalizeSubject(drive)))
+      return Promise.resolve();
     const running = this._vvSyncRuns.get(drive);
 
     if (running) return running;
@@ -2255,6 +2358,7 @@ export class WSClient {
       });
       if (!current() || (!explicit && !this.canAutomaticallySyncDrive(drive)))
         return;
+      this.activeReconciles.add(this.store.normalizeSubject(drive));
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
@@ -2272,7 +2376,11 @@ export class WSClient {
       perfMark('ws.SYNC.probe.sent');
     } catch (e) {
       close({ err: String(e) });
-      if (current()) console.warn('[WS] VV sync failed:', e);
+
+      if (current()) {
+        console.warn('[WS] VV sync failed:', e);
+        this.abandonReconcile(drive, 'Sync not confirmed');
+      }
     }
   }
 
@@ -2381,6 +2489,11 @@ export class WSClient {
     const current = this.connectionGuard();
     if (!current()) return;
     const clientDb = this.store.getClientDb();
+    const driveKey = this.store.normalizeSubject(diff.drive);
+    this.pendingReconcile.set(driveKey, {
+      waitingForAcks: diff.pull.length > 0 ? -1 : 0,
+      waitingForPull: diff.push.length > 0,
+    });
 
     for (const subject of diff.remove ?? []) {
       const envelope = diff.removeCommits?.[subject];
@@ -2464,31 +2577,61 @@ export class WSClient {
       }
 
       try {
-        for (const frame of encodeSyncPushChunks(
+        const frames = encodeSyncPushChunks(
           this.wireSubject(diff.drive),
           entries.map(entry => ({
             ...entry,
             subject: this.wireSubject(entry.subject),
           })),
           this.wireSubjectMap(envelopes),
-        )) {
+        );
+        this.pendingReconcile.get(driveKey)!.waitingForAcks = frames.length;
+
+        for (const frame of frames) {
           this.sendBinary(frame);
         }
       } catch (e) {
         console.warn('[WS] SYNC_PUSH send failed:', e);
+        this.abandonReconcile(driveKey, 'Sync not confirmed');
 
         return;
       }
     }
 
-    // If server has nothing to push, sync is done
-    if (diff.push.length === 0) {
-      this.store.finishDriveSync(
-        this.store.normalizeSubject(diff.drive),
-        entries.length,
-        Date.now(),
-      );
+    if (entries.length === 0 && diff.push.length === 0) {
+      // A diff with only removals (or no transferable snapshots) has no
+      // follow-up chunk or acknowledgement. Re-probe after local writes
+      // settle, once; a repeated mismatch is unknown, not a receipt.
+      if (this.confirmationProbes.has(driveKey)) {
+        this.abandonReconcile(driveKey, 'Sync not confirmed');
+
+        return;
+      }
+
+      this.confirmationProbes.add(driveKey);
+
+      try {
+        await clientDb?.flush?.();
+      } catch {
+        if (current()) this.abandonReconcile(driveKey, 'Sync not confirmed');
+
+        return;
+      }
+
+      if (!current() || !this.store.isLiveSyncedDrive(driveKey)) return;
+      this.pendingReconcile.delete(driveKey);
+      await this.runVVSync(driveKey, true);
     }
+  }
+
+  private abandonReconcile(drive: string, message: string): void {
+    const key = this.store.normalizeSubject(drive);
+    this.pendingReconcile.delete(key);
+    this.activeReconciles.delete(key);
+    this.confirmationProbes.delete(key);
+    this._pendingSyncState.delete(drive);
+    this._pendingSyncState.delete(key);
+    this.store.failDriveSync(drive, message);
   }
 
   // ---- Private: helpers ----

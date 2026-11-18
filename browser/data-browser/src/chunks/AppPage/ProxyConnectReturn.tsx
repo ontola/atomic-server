@@ -2,18 +2,20 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { StoreEvents, useStore, type Agent } from '@tomic/react';
 import { getIntegrationProxy } from '@helpers/integrationProxy';
 import { ProxyConnections } from '@helpers/proxyConnections';
+import { finishProxyReturn } from '@helpers/installationConnections';
 
 /**
  * Where an app's proxy connection comes back to.
  *
  * The integration proxy only returns to `/app/integrations`, with
  * `integration_state`. When that state is a handoff this browser started for
- * an app (`AppFrame`'s connect dialog), this takes over the page before any
- * route renders — so no route's own return handling sees it — redeems the
- * code signed with the user key (which makes the user the connection's owner),
+ * an app (`AppFrame`'s connect bar), this takes over the page before any route
+ * renders — so no route's own return handling sees it — redeems the code
+ * signed with the user key (which makes the user the connection's owner),
  * delegates the connection to the app, and goes back to the app, which then
- * finds the connection by reference. Any other page load renders `children`
- * untouched.
+ * finds the connection by reference. For an Installation it also records
+ * `integrationConnections[platform]` on it, signed by the user. Any other page
+ * load renders `children` untouched.
  */
 export function ProxyConnectReturn({
   children,
@@ -87,9 +89,9 @@ function redeemOnce(
 
   // Redeeming is signed with the user key, which may still be loading this
   // early in a page load.
-  const redemption = waitForAgent(store)
-    .then(() => connections.finish(params))
-    .then(({ returnTo }) => returnTo);
+  const redemption = waitForAgent(store).then(() =>
+    finishProxyReturn(store, connections, params),
+  );
   redemptions.set(state, redemption);
 
   const forget = () =>

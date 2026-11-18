@@ -373,6 +373,12 @@ impl PluginHost for JsAbi {
     async fn abi(&mut self, function: &str, args: &str) -> Result<String, HostError> {
         self.dispatch(function, args).await
     }
+    async fn host_call(&mut self, name: String, request: String) -> Result<String, String> {
+        self.host.host_call(name, request).await
+    }
+    async fn run_context(&mut self) -> serde_json::Map<String, Json> {
+        self.host.run_context().await
+    }
     async fn resource_grants(&mut self) -> ResourceGrants {
         self.host.resource_grants().await
     }

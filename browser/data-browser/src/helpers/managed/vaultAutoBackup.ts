@@ -32,6 +32,13 @@ import {
 } from './session';
 import { evaluateIdentityReconciliation } from './reconcile';
 import { nodeVault } from './nodeVault';
+import {
+  beginFirstVaultBackup,
+  confirmFirstVaultBackup,
+  failFirstVaultBackup,
+  forgetFirstVaultBackup,
+  getFirstVaultBackupStatus,
+} from './vaultFirstBackupStatus';
 import { isRunningInTauri } from '../tauri';
 import { keepUnhostedRestoreLocal, reopenRestoredDrive } from '../driveData';
 import { asError } from '@tomic/react';
@@ -132,6 +139,8 @@ export function setVaultOptOut(driveSubject: string, optedOut: boolean): void {
   } catch {
     // Storage disabled: the choice lasts the session, which is all we can do.
   }
+
+  if (optedOut) forgetFirstVaultBackup(driveSubject);
 }
 
 export function isVaultOptedOut(driveSubject: string): boolean {
@@ -197,6 +206,18 @@ export type EnsureVaultOutcome =
   | { status: 'failed'; error: Error }
   | BackupOutcome;
 
+/** Managed signup continues while the first backup runs. */
+export function startFirstVaultBackup(
+  store: Store,
+  driveSubject: string,
+): void {
+  const agentSubject = store.getAgent()?.subject;
+
+  if (!agentSubject || isVaultOptedOut(driveSubject)) return;
+  beginFirstVaultBackup(agentSubject, driveSubject);
+  void ensureVaultBackup(store, driveSubject);
+}
+
 /**
  * Enrol `driveSubject` in Cloud Vault if it is not yet, and back it up now.
  *
@@ -222,12 +243,21 @@ export function ensureVaultBackup(
 
   if (existing) return existing;
 
+  const agentSubject = store.getAgent()?.subject;
   const pass = ensureVaultBackupOnce(store, driveSubject, deps)
     .then(outcome => {
       // Skips are by design, but the reason is exactly what someone looking
       // at a Sync page that still says "off" needs to see.
       if (outcome.status === 'skipped') {
         console.info('[cloud-vault] backup skipped:', outcome.reason);
+      }
+
+      if (
+        agentSubject &&
+        store.getAgent()?.subject === agentSubject &&
+        outcome.status === 'failed'
+      ) {
+        failFirstVaultBackup(agentSubject, driveSubject);
       }
 
       return outcome;
@@ -253,9 +283,8 @@ type VaultChangeListener = (driveSubject: string) => void;
 const vaultChangeListeners = new Set<VaultChangeListener>();
 
 /**
- * Called when a drive's enrollment or backup changed through the automatic
- * path, so a screen that shows the vault's status (the Sync page) re-reads it
- * rather than keeping the "off" it rendered a moment earlier.
+ * Called when a drive's enrollment or backup changes, so other views can
+ * re-read the current Vault status.
  */
 export function onVaultChanged(listener: VaultChangeListener): () => void {
   vaultChangeListeners.add(listener);
@@ -265,7 +294,7 @@ export function onVaultChanged(listener: VaultChangeListener): () => void {
   };
 }
 
-function notifyVaultChanged(driveSubject: string): void {
+export function notifyVaultChanged(driveSubject: string): void {
   for (const listener of vaultChangeListeners) listener(driveSubject);
 }
 
@@ -301,6 +330,25 @@ async function accountChangedSince(
     );
   } catch {
     return false;
+  }
+}
+
+/** A previous pass or another device may have confirmed the first copy. */
+async function refreshFirstVaultBackupStatus(
+  deps: VaultAutoBackupDeps,
+  agentSubject: string,
+  driveSubject: string,
+  drivePseudonym: string,
+  signal: AbortSignal,
+): Promise<void> {
+  if (!getFirstVaultBackupStatus(agentSubject, driveSubject)) return;
+
+  const state = await deps
+    .getVaultState(drivePseudonym, signal)
+    .catch(() => null);
+
+  if (!signal.aborted && state && state.confirmed_objects > 0) {
+    confirmFirstVaultBackup(agentSubject, driveSubject);
   }
 }
 
@@ -450,6 +498,21 @@ async function ensureVaultBackupOnce(
       },
     });
     signal.throwIfAborted();
+
+    if (outcome.status === 'backed-up') {
+      confirmFirstVaultBackup(agentSubject, driveSubject);
+    } else {
+      // A no-op alone says nothing about what the service holds.
+      await refreshFirstVaultBackupStatus(
+        deps,
+        agentSubject,
+        driveSubject,
+        held.drivePseudonym,
+        signal,
+      );
+      signal.throwIfAborted();
+    }
+
     notifyVaultChanged(driveSubject);
     clearVaultFull(store, driveSubject);
 
@@ -457,6 +520,7 @@ async function ensureVaultBackupOnce(
   } catch (error) {
     // A stale key or enrollment must not be reused after a failure; the next
     // attempt re-derives both from the control plane.
+    const drivePseudonym = enrolled.get(driveSubject)?.drivePseudonym;
     enrolled.delete(driveSubject);
 
     if (
@@ -468,6 +532,18 @@ async function ensureVaultBackupOnce(
         status: 'skipped',
         reason: 'backup cancelled by account change',
       };
+    }
+
+    if (drivePseudonym) {
+      // An upload may have been confirmed before a local cursor write or a
+      // later upload failed. Keep the marker only if no copy is known.
+      await refreshFirstVaultBackupStatus(
+        deps,
+        agent.subject,
+        driveSubject,
+        drivePseudonym,
+        signal,
+      );
     }
 
     console.warn('[cloud-vault] backup failed', error);

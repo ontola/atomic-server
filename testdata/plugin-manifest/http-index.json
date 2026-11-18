@@ -1,0 +1,736 @@
+[
+  {
+    "name": "v3 without http",
+    "file": "v3-no-http.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": []
+    },
+    "gate": {
+      "needed": "none",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": []
+    },
+    "requires": [
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v3 with an empty http block",
+    "file": "v3-empty-http.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": []
+    },
+    "gate": {
+      "needed": "none",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": []
+    },
+    "requires": [
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v3 read-only route",
+    "file": "v3-read-only-route.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [],
+      "http": {
+        "routes": [
+          {
+            "id": "webfinger",
+            "path": "/.well-known/webfinger",
+            "methods": [
+              "GET",
+              "HEAD"
+            ],
+            "accept": [
+              "application/jrd+json"
+            ],
+            "cors": "any-origin-no-credentials"
+          },
+          {
+            "id": "profile",
+            "path": "/users/{name}",
+            "methods": [
+              "GET"
+            ]
+          }
+        ],
+        "wellKnown": [
+          {
+            "name": "webfinger",
+            "kind": "shared",
+            "match": {
+              "resourcePrefix": "acct:"
+            },
+            "route": "webfinger"
+          }
+        ],
+        "reason": "Answers WebFinger lookups for this drive's handles."
+      }
+    },
+    "gate": {
+      "needed": "read-only",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET,HEAD /.well-known/webfinger`",
+          "needs": "read-only"
+        },
+        {
+          "surface": "route `GET /users/{name}`",
+          "needs": "read-only"
+        },
+        {
+          "surface": "well-known `webfinger`",
+          "needs": "read-only"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-only",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "webfinger claim with rels",
+    "file": "v3-webfinger-rels.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [],
+      "http": {
+        "mount": "drive-host",
+        "routes": [
+          {
+            "id": "webfinger",
+            "path": "/webfinger",
+            "methods": [
+              "GET",
+              "HEAD"
+            ],
+            "cors": "any-origin-no-credentials"
+          }
+        ],
+        "wellKnown": [
+          {
+            "name": "webfinger",
+            "kind": "shared",
+            "match": {
+              "resourcePrefix": "acct:",
+              "rels": [
+                "self",
+                "http://webfinger.net/rel/profile-page"
+              ]
+            },
+            "route": "webfinger"
+          }
+        ],
+        "reason": "Answers WebFinger for this drive's actor, next to other claims for the same accounts."
+      }
+    },
+    "gate": {
+      "needed": "read-only",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET,HEAD /webfinger`",
+          "needs": "read-only"
+        },
+        {
+          "surface": "well-known `webfinger`",
+          "needs": "read-only"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-only",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v3 activitypub",
+    "file": "v3-activitypub.json",
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET,HEAD /users/{name}`",
+          "needs": "read-only"
+        },
+        {
+          "surface": "route `POST /users/{name}/inbox`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "route `GET /nodeinfo`",
+          "needs": "read-only"
+        },
+        {
+          "surface": "route `PUT,DELETE /files/{*rest}`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "well-known `nodeinfo`",
+          "needs": "read-only"
+        },
+        {
+          "surface": "write target `inbox-items`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "key `actor-key`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "token store `storage`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "delivery `deliver`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-write",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v3 optional bearer",
+    "file": "v3-optional-bearer.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [],
+      "http": {
+        "routes": [
+          {
+            "id": "read",
+            "path": "/storage/{*rest}",
+            "methods": [
+              "GET",
+              "HEAD"
+            ],
+            "principal": "installation",
+            "auth": "bearer",
+            "authOptional": true,
+            "cors": "any-origin-no-credentials"
+          }
+        ],
+        "tokens": [
+          {
+            "name": "storage"
+          }
+        ]
+      }
+    },
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET,HEAD /storage/{*rest}`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "token store `storage`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-write",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v3 optional dpop",
+    "file": "v3-optional-dpop.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [],
+      "http": {
+        "routes": [
+          {
+            "id": "pod",
+            "path": "/pod/{*rest}",
+            "methods": [
+              "GET",
+              "HEAD"
+            ],
+            "auth": "dpop",
+            "authOptional": true
+          }
+        ]
+      }
+    },
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET,HEAD /pod/{*rest}`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-write",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v3 listener",
+    "file": "v3-listener.json",
+    "gate": {
+      "needed": "read-write",
+      "listeners": [
+        "willow-wgps"
+      ],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "listener `willow-wgps`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "operator-listener:willow-wgps",
+      "plugin-routes:read-write",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v3 sidecar",
+    "file": "v3-sidecar.json",
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [
+        "pds"
+      ],
+      "surfaces": [
+        {
+          "surface": "sidecar `pds`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "host-credentials",
+      "operator-sidecar:pds",
+      "plugin-routes:read-write",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v3 sidecar with sidecar-relative operations",
+    "file": "v3-sidecar-operation.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [
+        {
+          "id": "query",
+          "method": "POST",
+          "url": "atomic-sidecar:/nextgraph/v1/query",
+          "effect": "read"
+        },
+        {
+          "id": "update",
+          "method": "POST",
+          "url": "atomic-sidecar:/nextgraph/v1/update",
+          "effect": "write"
+        }
+      ],
+      "http": {
+        "sidecars": [
+          {
+            "name": "nextgraph",
+            "reason": "Reads and writes NextGraph documents through the operator's wallet"
+          }
+        ]
+      }
+    },
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [
+        "nextgraph"
+      ],
+      "surfaces": [
+        {
+          "surface": "sidecar `nextgraph`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "operator-sidecar:nextgraph",
+      "plugin-routes:read-write",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "sidecar operation for an undeclared sidecar",
+    "file": "v3-sidecar-operation-undeclared.json",
+    "error": "does not declare sidecar 'nextgraph'"
+  },
+  {
+    "name": "sidecar operation with a query",
+    "file": "v3-sidecar-operation-query.json",
+    "error": "atomic-sidecar: URLs"
+  },
+  {
+    "name": "sidecar operation with a name that is not a sidecar name",
+    "file": "v3-sidecar-operation-bad-name.json",
+    "error": "atomic-sidecar: URLs"
+  },
+  {
+    "name": "v2 fixtures need no gate",
+    "file": "v2-js-extension.json",
+    "gate": {
+      "needed": "none",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": []
+    },
+    "requires": [
+      "host-credentials",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v2 server extension without run",
+    "file": "v2-wasm-server-extension.json",
+    "gate": {
+      "needed": "none",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": []
+    },
+    "requires": [
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v3 fetches",
+    "file": "v3-fetches.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [
+        {
+          "id": "fetch-file",
+          "method": "GET",
+          "url": "https://*/{*rest}",
+          "effect": "read"
+        },
+        {
+          "id": "notify",
+          "method": "POST",
+          "url": "https://*/ocm/notifications",
+          "effect": "write"
+        }
+      ],
+      "http": {
+        "mount": "drive-prefix",
+        "routes": [
+          {
+            "id": "shares",
+            "path": "/ocm/shares",
+            "methods": [
+              "POST"
+            ],
+            "auth": "http-signature",
+            "body": "json",
+            "enqueues": [
+              "notify"
+            ],
+            "fetches": [
+              "fetch-file"
+            ]
+          }
+        ]
+      }
+    },
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `POST /ocm/shares`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "delivery `notify`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "fetch `fetch-file`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-write",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "v2 with an http block",
+    "file": "v3-http-in-v2.json",
+    "error": "the http block needs schemaVersion 3"
+  },
+  {
+    "name": "unknown http field",
+    "file": "v3-http-unknown-field.json",
+    "error": "unknown field `ports`"
+  },
+  {
+    "name": "unknown mount",
+    "file": "v3-bad-mount.json",
+    "error": "unknown variant `api-origin`"
+  },
+  {
+    "name": "regex in a path",
+    "file": "v3-path-regex.json",
+    "error": "route path"
+  },
+  {
+    "name": "path without a leading slash",
+    "file": "v3-path-relative.json",
+    "error": "route path"
+  },
+  {
+    "name": "rest segment not last",
+    "file": "v3-path-rest-not-last.json",
+    "error": "route path"
+  },
+  {
+    "name": "dot-dot segment",
+    "file": "v3-path-traversal.json",
+    "error": "route path"
+  },
+  {
+    "name": "repeated parameter",
+    "file": "v3-path-repeated-param.json",
+    "error": "route path"
+  },
+  {
+    "name": "33 routes",
+    "file": "v3-too-many-routes.json",
+    "error": "at most 32 routes"
+  },
+  {
+    "name": "overlapping routes",
+    "file": "v3-routes-overlap.json",
+    "error": "routes `any` and `me` overlap"
+  },
+  {
+    "name": "rest overlapping a literal",
+    "file": "v3-routes-overlap-rest.json",
+    "error": "routes `files` and `meta` overlap"
+  },
+  {
+    "name": "duplicate route id",
+    "file": "v3-route-duplicate-id.json",
+    "error": "route IDs must be names"
+  },
+  {
+    "name": "unknown method",
+    "file": "v3-route-bad-method.json",
+    "error": "route methods"
+  },
+  {
+    "name": "no methods",
+    "file": "v3-route-no-methods.json",
+    "error": "route methods"
+  },
+  {
+    "name": "caller without atomic auth",
+    "file": "v3-caller-without-atomic.json",
+    "error": "principal caller requires auth atomic"
+  },
+  {
+    "name": "installation principal on drive-prefix",
+    "file": "v3-drive-prefix-installation.json",
+    "error": "drive-prefix mount"
+  },
+  {
+    "name": "unknown auth",
+    "file": "v3-route-bad-auth.json",
+    "error": "unknown variant `cookie`"
+  },
+  {
+    "name": "bearer without a token store",
+    "file": "v3-bearer-without-tokens.json",
+    "error": "auth bearer requires http.tokens"
+  },
+  {
+    "name": "authOptional without auth bearer",
+    "file": "v3-auth-optional-without-bearer.json",
+    "error": "authOptional requires auth bearer, dpop or atomic"
+  },
+  {
+    "name": "authOptional on http-signature",
+    "file": "v3-auth-optional-http-signature.json",
+    "error": "authOptional requires auth bearer, dpop or atomic"
+  },
+  {
+    "name": "body too large",
+    "file": "v3-body-too-large.json",
+    "error": "maxBodyBytes"
+  },
+  {
+    "name": "undeclared write target",
+    "file": "v3-undeclared-write-target.json",
+    "error": "writes must name declared writeTargets"
+  },
+  {
+    "name": "write target without classes",
+    "file": "v3-write-target-no-classes.json",
+    "error": "write target"
+  },
+  {
+    "name": "write target with a bad parent",
+    "file": "v3-write-target-bad-parent.json",
+    "error": "write target"
+  },
+  {
+    "name": "enqueue of an undeclared operation",
+    "file": "v3-enqueue-undeclared.json",
+    "error": "enqueues must name declared write operations"
+  },
+  {
+    "name": "wildcard operation that no route enqueues",
+    "file": "v3-wildcard-not-enqueued.json",
+    "error": "wildcard-host operations must be listed in a route's enqueues or fetches"
+  },
+  {
+    "name": "well-known name off the allowlist",
+    "file": "v3-well-known-not-allowed.json",
+    "error": "well-known name"
+  },
+  {
+    "name": "shared claim of an exclusive name",
+    "file": "v3-well-known-wrong-kind.json",
+    "error": "well-known name"
+  },
+  {
+    "name": "well-known claim of an undeclared route",
+    "file": "v3-well-known-no-route.json",
+    "error": "well-known claims must name a declared route"
+  },
+  {
+    "name": "bad key name",
+    "file": "v3-key-bad-name.json",
+    "error": "key names"
+  },
+  {
+    "name": "unknown key algorithm",
+    "file": "v3-key-bad-alg.json",
+    "error": "unknown variant `md5`"
+  },
+  {
+    "name": "duplicate token name",
+    "file": "v3-token-duplicate.json",
+    "error": "token names"
+  },
+  {
+    "name": "listener in an extension",
+    "file": "v3-listener-in-extension.json",
+    "error": "http.listeners requires world server-extension"
+  },
+  {
+    "name": "bad sidecar name",
+    "file": "v3-sidecar-bad-name.json",
+    "error": "sidecar names"
+  },
+  {
+    "name": "duplicate webfinger rel",
+    "file": "v3-webfinger-rels-duplicate.json",
+    "error": "match.rels"
+  },
+  {
+    "name": "rels on an exclusive claim",
+    "file": "v3-rels-not-webfinger.json",
+    "error": "match.rels"
+  },
+  {
+    "name": "fetches naming a write operation",
+    "file": "v3-fetches-write-operation.json",
+    "error": "fetches must name declared GET operations with effect read"
+  },
+  {
+    "name": "fetches naming a POST operation",
+    "file": "v3-fetches-post.json",
+    "error": "fetches must name declared GET operations with effect read"
+  },
+  {
+    "name": "v3 willow key",
+    "file": "v3-willow-key.json",
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET /willow.drop`",
+          "needs": "read-only"
+        },
+        {
+          "surface": "Willow signing key `willow`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-write",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "willow key must be ed25519",
+    "file": "v3-willow-key-rsa.json",
+    "error": "must be ed25519"
+  },
+  {
+    "name": "willow key bad namespace",
+    "file": "v3-willow-key-bad-namespace.json",
+    "error": "willow.namespace must be"
+  }
+]

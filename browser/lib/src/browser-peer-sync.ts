@@ -1,9 +1,10 @@
 import { authorizeBrowserInvite } from './browser-peer-invite.js';
+import { isLoopbackHost } from './loopback.js';
 import type { Agent } from './agent.js';
 import type { ClientDbWorker } from './client-db.js';
 import type { Store } from './store.js';
 import { createAuthentication } from './authentication.js';
-import { isLoopbackHost } from './urls.js';
+
 import { WebRtcPeer } from './webrtc-peer.js';
 import { Tag, decodeCommit, encodeAuth, encodeSync } from './ws-v2.js';
 import type { WebRtcTransport } from './webrtc-transport.js';

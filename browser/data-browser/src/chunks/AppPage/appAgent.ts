@@ -1,5 +1,6 @@
 import {
   errorMessageFromResponse,
+  server,
   signRequest,
   type Store,
 } from '@tomic/react';
@@ -45,6 +46,11 @@ export async function appAgentOf(
     const agent = store.getAgent();
 
     if (!agent) throw new Error('Sign in to use integration connections.');
+
+    const recorded = (await store.getResource(options.app)).get(
+      server.properties.integrationAppAgent,
+    );
+    if (typeof recorded === 'string' && recorded) return recorded;
 
     const url = new URL('/app-agent', store.getServerUrl());
     url.searchParams.set('drive', options.drive);

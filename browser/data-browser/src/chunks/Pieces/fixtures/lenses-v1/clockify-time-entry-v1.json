@@ -1,0 +1,107 @@
+{
+  "@id": "https://ontola.github.io/atomic-plugins/ontology/lenses/clockify-time-entry-v1",
+  "lensFormat": 1,
+  "release": "https://ontola.github.io/atomic-plugins/ontology/lenses/v1",
+  "name": "Clockify time entry ↔ Time entry",
+  "description": "A completed Clockify time entry, as syncables reads it through the Clockify overlays, and the shared time-entry-v1 class: description, start, end and billable.",
+  "source": {
+    "record": {
+      "provider": "clockify.me",
+      "resource": "timeEntry",
+      "openapi": "APIs/clockify.me/1.0.0-readonly"
+    }
+  },
+  "target": {
+    "class": "https://ontola.github.io/atomic-plugins/ontology/classes/time-entry-v1"
+  },
+  "mapping": {
+    "version": 2,
+    "fields": [
+      {
+        "source": "/description",
+        "target": "https://atomicdata.dev/properties/name"
+      },
+      {
+        "source": "/timeInterval/start",
+        "target": "https://ontola.github.io/atomic-plugins/ontology/properties/work-start",
+        "convert": "iso-seconds-to-ms"
+      },
+      {
+        "source": "/timeInterval/end",
+        "target": "https://ontola.github.io/atomic-plugins/ontology/properties/work-end",
+        "convert": "iso-seconds-to-ms"
+      },
+      {
+        "source": "/billable",
+        "target": "https://ontola.github.io/atomic-plugins/ontology/properties/work-billable"
+      }
+    ]
+  },
+  "limits": [
+    "No domain guard: the code lens refuses running timers, locked entries, non-REGULAR entries (breaks, time off) and intervals that end before they start; this mapping maps any record it is given.",
+    "The description is copied as is: the code lens trims it and shows an empty one as \"Time entry\", and writes \"Time entry\" back as an empty description.",
+    "projectId is not mapped: work-project links to a work-project-v1 row, which needs an identity map from provider ids to rows, not a value converter. The code lens also drops taskId when the project changes.",
+    "A changed start or end must be whole seconds (Clockify's precision); the code lens additionally checks the provider's locked, custom-field and project restrictions before a write.",
+    "A missing description, start or end in the table leaves the provider value unchanged; removal is not expressible.",
+    "Moving the start or end leaves timeInterval.duration as it was; the provider recomputes it, and the code lens does not update it either."
+  ],
+  "implementation": "integrations/timesheets/devonian/clockify/lens/algebra.ts",
+  "examples": [
+    {
+      "source": {
+        "id": "entry-1",
+        "description": "Write the report",
+        "billable": true,
+        "projectId": "project-1",
+        "taskId": "task-1",
+        "tagIds": [
+          "tag-1"
+        ],
+        "type": "REGULAR",
+        "timeInterval": {
+          "start": "2026-10-05T09:00:00Z",
+          "end": "2026-10-05T10:30:00Z",
+          "duration": "PT1H30M"
+        }
+      },
+      "target": {
+        "https://atomicdata.dev/properties/name": "Write the report",
+        "https://ontola.github.io/atomic-plugins/ontology/properties/work-start": 1791190800000,
+        "https://ontola.github.io/atomic-plugins/ontology/properties/work-end": 1791196200000,
+        "https://ontola.github.io/atomic-plugins/ontology/properties/work-billable": true
+      },
+      "edits": [
+        {
+          "target": {
+            "https://atomicdata.dev/properties/name": "Write the report",
+            "https://ontola.github.io/atomic-plugins/ontology/properties/work-start": 1791190800000,
+            "https://ontola.github.io/atomic-plugins/ontology/properties/work-end": 1791198000000,
+            "https://ontola.github.io/atomic-plugins/ontology/properties/work-billable": false
+          },
+          "source": {
+            "id": "entry-1",
+            "description": "Write the report",
+            "billable": false,
+            "projectId": "project-1",
+            "taskId": "task-1",
+            "tagIds": [
+              "tag-1"
+            ],
+            "type": "REGULAR",
+            "timeInterval": {
+              "start": "2026-10-05T09:00:00Z",
+              "end": "2026-10-05T11:00:00Z",
+              "duration": "PT1H30M"
+            }
+          }
+        },
+        {
+          "target": {
+            "https://ontola.github.io/atomic-plugins/ontology/properties/work-end": 1791198000500
+          },
+          "error": "precision"
+        }
+      ]
+    }
+  ]
+}

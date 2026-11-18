@@ -83,6 +83,33 @@ async function queued(agent: Agent): Promise<Array<Record<string, unknown>>> {
 }
 
 describe('outbox in the WASM client database', () => {
+  it.each([false, true])(
+    'does not claim durable local storage for a memory-backed save (local-only: %s)',
+    async localOnly => {
+      const { store, posted } = await tab(await newAgent(), false);
+      const doc = await store.newResource({
+        isA: server.classes.drive,
+        noParent: true,
+        propVals: { [core.properties.name]: 'Memory-backed edit' },
+      });
+      if (localOnly) store.registerLocalOnlyDrive(doc.subject);
+
+      const receipt = await doc.saveWithReceipt();
+      await db.flush();
+      const stored = await db.getResourceWithSnapshot(doc.subject);
+
+      expect(receipt.status).toBe(localOnly ? 'persisted' : 'offline');
+      expect(receipt.subject).toBe(doc.subject);
+      expect(receipt.local).toBeUndefined();
+      expect(receipt.server).toBeUndefined();
+      expect(JSON.parse(stored.jsonAd!)[core.properties.name]).toBe(
+        'Memory-backed edit',
+      );
+      expect(stored.snapshot?.length).toBeGreaterThan(0);
+      expect(posted).toHaveLength(0);
+    },
+  );
+
   it('an offline edit survives a reload and drains on reconnect', async () => {
     const agent = await newAgent();
     const first = await tab(agent, true);

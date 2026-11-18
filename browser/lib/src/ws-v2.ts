@@ -142,6 +142,12 @@ export const ErrorCode = {
    *  a client that predates `canonical-scheme`: the connection keeps working
    *  but will stop being supported. Log it; never fail a request over it. */
   DEPRECATED_CLIENT: 14,
+  /** A commit activating a plugin Installation (install, upgrade, resume)
+   *  was refused because the release opens public endpoints this node's
+   *  plugin-routes gates don't allow. The message carries the typed problem
+   *  (`AtomicError.problem`). Blocking, not terminal: the operator can open
+   *  the gates. */
+  HOST_FEATURE_UNAVAILABLE: 16,
 } as const;
 
 /** The `retry_after_ms=<n>` hint of a BUSY error message (or an HTTP error

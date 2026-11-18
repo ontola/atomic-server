@@ -14,6 +14,26 @@ truth for tag bytes and layouts) and `browser/lib/src/ws-v2.ts`
 (TypeScript). A golden-vector file pins the two together; see
 [Conformance](#conformance).
 
+## SYNC_PUSH durability
+
+The receiver stages accepted resource changes within one SYNC_PUSH frame and
+validates the accompanying signed envelopes against that staged state. Resource,
+snapshot and query/search index projections, retained envelopes, and change-log
+and drive-event records are applied in one storage transaction. Resource-change
+notifications follow that transaction, so listeners can read the retained
+envelopes with the new resource state.
+
+Envelope validation can use schema and signer resources from the same frame.
+External schema fetched during validation is cached for that frame; these reads
+do not create separate persistent resources in the receiver.
+
+Malformed or invalidly signed envelopes are dropped while valid resource
+projections proceed. A storage failure rejects the import. Intermediate
+acknowledgements indicate receipt; the final LAST frame (including an empty
+terminator) calls the durability flush before successful completion. A flush
+failure rejects completion but does not undo an already applied transaction.
+Frame admission and cross-drive permissions are unchanged.
+
 ## Overview and transports
 
 A frame is `[tag: u8] [payload...]`. There is no envelope, no version
@@ -222,6 +242,20 @@ keys and runs the full reconcile. The drive hash is SHA-256 over
 counters ordered by the sorted peer set (`engine::compute_drive_hash`; the
 browser builds the byte-identical string and hashes it with
 `crypto.subtle`).
+
+For a resource drive this node has never stored, a probe answers
+`SYNC_RESEND` when the authenticated session's hosting policy permits its
+first upload. The receiver then sends the full version vectors, allowing
+the normal `SYNC_DIFF` / `SYNC_PUSH` exchange to import the drive. This
+preview does not enroll the drive or start a managed bootstrap grace
+window; actual import still performs admission checks. A missing drive
+never answers `SYNC_OK`, even for an empty-inventory hash.
+
+Existing unreadable drives, destroyed drives and denied bootstrap attempts
+answer `ERROR UNAUTHORIZED_READ` (`SYNC refused for <drive>: <reason>`).
+The browser records a current probe refusal as a failed drive sync rather
+than leaving its progress indicator running. Subscription refusals retain
+their separate handling.
 
 ### SYNC_DIFF (0x32)
 
@@ -526,9 +560,21 @@ Everything else is open to an anonymous socket and gated per subject by
 | `10` | `IMMUTABLE_COMMIT` | The commit's subject is itself a Commit, which can never be edited. Terminal: drop the entry; nothing is lost. |
 | `11` | `CAUSALITY_CONFLICT` | A new Loro write lost against stored state. Keep the local edit; stop sending the same stale update until it is rebased. |
 | `12` | `BUSY` | The node is overloaded with writes, or the agent spent its write rate budget. Refused **before** any work; nothing landed. The message carries `retry_after_ms=<n>`. Not a failure: keep the edit, wait, send one merged delta, and do not retry over another transport. See [Write load and pacing](#write-load-and-pacing). |
+| `13` | `INVITE_REFUSED` | An Iroh invitation was refused; no access was granted. |
 | `14` | `DEPRECATED_CLIENT` | A notice, not a refusal, sent with `request_id` 0 in answer to the `HELLO` to a client that predates `canonical-scheme` (see [Versioning and capabilities](#versioning-and-capabilities)). The connection stays usable; log it and carry on. A client that predates the code sees an unknown code with request id 0. |
 
-Codes `1` to `4` and `9` to `12` come from `classify_commit_error`, which pattern-matches the
+| `16` | `HOST_FEATURE_UNAVAILABLE` | A commit activating a plugin Installation (install, upgrade, resume) was refused because the release opens public endpoints this node's plugin-routes gates don't allow. Blocking, not terminal: the operator can open the gates. The message carries the typed problem (see below). Over HTTP, `/commit` answers `409`. |
+
+A refusal with structured fields appends them to the message: the sentence,
+then `\nproblem+json: `, then one JSON object with RFC 9457 fields (`type`,
+`detail` and the problem's own). The `/commit` Error resource's
+`description` carries the same string. A client splits at the marker and
+shows the sentence; one that doesn't know the marker still shows the sentence
+first. Code `16` carries the `host-feature-unavailable` problem this way:
+`{ type, feature, needed, compiled, level, surfaces, listeners, sidecars,
+detail }`, the same fields `/plugin-release-pin` answers with.
+
+Codes `1` to `4` and `9` to `13` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
 are **not** classified and go out as `UNKNOWN` with a descriptive message: an
 invalid frame of any kind, `No state`, a failed `GET` lookup,

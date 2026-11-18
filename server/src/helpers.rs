@@ -330,7 +330,7 @@ pub async fn get_client_agent_for_signed_url(
 ) -> AtomicServerResult<ForAgent> {
     let origin = crate::context::RequestContext::new(req, appstate).origin;
     let full_url = format!("{}{}", origin, req.uri());
-    get_client_agent(req.headers(), appstate, &full_url).await
+    get_client_agent_of(req, appstate, &full_url).await
 }
 
 /// `Cache-Control` for responses that must never be cached or replayed. Every
@@ -341,6 +341,27 @@ pub async fn get_client_agent_for_signed_url(
 /// published — the builder said published, visitors kept the old answer, and
 /// nothing on the wire explained why.
 pub const NO_STORE: &str = "no-store, no-cache, must-revalidate, private";
+
+/// The agent this request is from: the one [crate::require_v2::require_v2]
+/// verified, on a route that requires a version 2 signature, and otherwise
+/// what [get_client_agent] reads from the headers or cookie.
+pub async fn get_client_agent_of(
+    req: &actix_web::HttpRequest,
+    appstate: &AppState,
+    requested_subject: &str,
+) -> AtomicServerResult<ForAgent> {
+    if let Some(verified) = verified_agent(req) {
+        return Ok(verified);
+    }
+    get_client_agent(req.headers(), appstate, requested_subject).await
+}
+
+fn verified_agent(req: &actix_web::HttpRequest) -> Option<ForAgent> {
+    use actix_web::HttpMessage;
+    req.extensions()
+        .get::<crate::require_v2::VerifiedAgent>()
+        .map(|verified| verified.0.clone())
+}
 
 /// [get_client_agent] for a handler that knows the body it acts on, so it
 /// also accepts a version 2 request signature (`x-atomic-signature-version:
@@ -353,6 +374,9 @@ pub async fn get_client_agent_for_request(
     appstate: &AppState,
     requested_subject: &str,
 ) -> AtomicServerResult<ForAgent> {
+    if let Some(verified) = verified_agent(req) {
+        return Ok(verified);
+    }
     let request = SignedRequest {
         method: req.method().as_str(),
         body,
@@ -468,6 +492,41 @@ fn session_cookies_from_header(header: &HeaderValue) -> AtomicServerResult<Vec<S
     }
 
     Ok(found)
+}
+
+/// Parses `raw` as a public origin that must stay apart from this server's own
+/// names: the API origin (`api_origin`) and every host in `others` (the base
+/// domain, other dedicated origins), including their subdomains in either
+/// direction. HTTPS only, except `http://*.localhost` in development, where
+/// a `*.localhost` origin may share `localhost` with the API. No credentials,
+/// path, query or fragment. `None` when any rule fails.
+///
+/// Used for `ATOMIC_WEBSITE_ORIGIN` and `ATOMIC_ROUTES_ORIGIN`: content
+/// served there must never be same-site with the app.
+pub fn separate_origin(raw: &str, api_origin: &str, others: &[&str]) -> Option<url::Url> {
+    let url = url::Url::parse(raw).ok()?;
+    let host = url.host_str().unwrap_or("");
+    let api = url::Url::parse(api_origin).ok()?;
+    let api_host = api.host_str().unwrap_or("");
+    let overlaps = |other: &str| {
+        host == other
+            || host.ends_with(&format!(".{other}"))
+            || other.ends_with(&format!(".{host}"))
+    };
+    let local = host.ends_with(".localhost") && matches!(api_host, "localhost" | "127.0.0.1");
+    let refused = host.is_empty()
+        || !matches!(url.scheme(), "http" | "https")
+        || (url.scheme() == "http" && !host.ends_with(".localhost"))
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.path() != "/"
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || (!local && overlaps(api_host))
+        || others
+            .iter()
+            .any(|other| !other.is_empty() && overlaps(other));
+    (!refused).then_some(url)
 }
 
 #[cfg(test)]

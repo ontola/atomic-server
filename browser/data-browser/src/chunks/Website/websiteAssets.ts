@@ -1,5 +1,10 @@
 // @wc-ignore-file
-import { hexToBytes, signRequest, type Store } from '@tomic/lib';
+import {
+  hexToBytes,
+  signedRequestInit,
+  signRequest,
+  type Store,
+} from '@tomic/lib';
 
 export interface WebsiteAsset {
   hash: string;
@@ -35,21 +40,21 @@ async function assetRequest(
   const url = new URL(`/website-hosting/assets/${hash}`, store.getServerUrl());
   url.searchParams.set('project', project);
   url.searchParams.set('drive', drive);
-  // The signature covers these exact bytes, so read the blob once and send
-  // what was signed.
-  const bytes = body ? new Uint8Array(await body.arrayBuffer()) : undefined;
-  const headers = await signRequest(
-    url.toString(),
-    agent,
-    {},
-    bytes ? { method: 'POST', body: bytes } : undefined,
-  );
+  // A read signs with version 1; an upload requires version 2, over exactly
+  // these bytes.
+  const signed = body
+    ? await signedRequestInit(url.toString(), agent, {
+        method: 'POST',
+        body: new Uint8Array(await body.arrayBuffer()),
+      })
+    : {
+        method: 'GET',
+        headers: await signRequest(url.toString(), agent, {}),
+      };
   const response = await fetch(url, {
-    method: bytes ? 'POST' : 'GET',
-    headers,
+    ...signed,
     credentials: 'omit',
     redirect: 'error',
-    body: bytes,
   });
   if (!response.ok)
     throw new Error(

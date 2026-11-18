@@ -91,13 +91,22 @@ function Harness({
       <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
         <DropdownPortalContext.Provider value={portal}>
           <TableViewTabs
+            table='atomic:table'
             rowClass='https://example.com/classes/piece'
             views={views}
             activeView={active}
             setActiveView={setActive}
             reorderViews={setViews}
-            createView={createView}
-            setViewKind={setViewKind}
+            createView={async (...args) => {
+              createView(...args);
+
+              return undefined;
+            }}
+            setViewKind={async (...args) => {
+              setViewKind(args[0], args[1]);
+
+              return undefined;
+            }}
             duplicateView={() => undefined}
             deleteView={() => undefined}
             viewName=''
@@ -111,7 +120,7 @@ function Harness({
             lockedReason=''
             canWrite
             quickAdd={undefined}
-            setQuickAdd={() => undefined}
+            requestQuickAddEdit={() => undefined}
           />
           <div ref={portal} />
         </DropdownPortalContext.Provider>
@@ -130,7 +139,15 @@ async function setup(views: Array<[string, string]>) {
 
   const setViewKind = vi.fn();
   render(
-    <Harness store={store} initial={subjects} setViewKind={setViewKind} />,
+    <Harness
+      store={store}
+      initial={subjects}
+      setViewKind={async (...args) => {
+        setViewKind(args[0], args[1]);
+
+        return undefined;
+      }}
+    />,
   );
 
   return { setViewKind };

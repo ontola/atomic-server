@@ -24,10 +24,14 @@ mod jsonerrors;
 pub mod mcp;
 mod metrics;
 pub mod node_key;
+pub mod plugin_routes;
 pub mod plugins;
 pub mod rate_limit;
+mod replay_cache;
+mod require_v2;
 pub mod routes;
 pub mod serve;
+pub mod trusted_proxies;
 pub mod vector_search;
 pub mod write_load;
 // #[cfg(feature = "search")]

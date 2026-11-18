@@ -55,6 +55,10 @@ const ASKS_THE_PERSON = new Set([
   'pickFile',
   'form',
   'proxyConnect',
+  'openExternal',
+  'openResourceConfirmed',
+  'runImporter',
+  'requestRowAccess',
 ]);
 
 /** A MouseEvent or `{ x, y }`, as a point in this frame. */
@@ -249,6 +253,36 @@ export const store = {
     return send('data', {});
   },
 
+  /**
+   * Whether this app may edit the rows of the table it is a view of.
+   *
+   * Showing an app as a table's view lets it read the rows, not change them.
+   * Someone who can edit the table allows that, when they add the app as a
+   * view or when the app asks with `requestRowAccess()`. Resolves to
+   * `{ status: 'granted', grantedBy, grantedAt, via, extras }`,
+   * `{ status: 'none' }`, or `{ status: 'unavailable' }` when the app is not
+   * shown as a table's view.
+   * With a grant, `resource.save()` on a row of that table may set the
+   * table's columns (the row class's properties), and `newResource` may add a
+   * row of that class. Deleting rows is never included. `extras` lists the
+   * properties the app declared on its App resource as `row-extras` (a sync's
+   * provider id, ETag, baseline) that this grant also lets it write on those
+   * rows. When the app declares more than the grant covers,
+   * `requestRowAccess()` asks the person again.
+   */
+  async rowAccess() {
+    return send('rowAccess', {});
+  },
+
+  /**
+   * Asks the person, in the host's own UI, to let this app edit the table's
+   * rows. Resolves to `{ status: 'granted' }` or `{ status: 'denied', reason }`
+   * (they said no, or cannot edit the table themselves).
+   */
+  async requestRowAccess() {
+    return send('requestRowAccess', {});
+  },
+
   async getResource(subject) {
     const result = await send('get', { subject });
 
@@ -394,6 +428,56 @@ export const store = {
   },
 
   /**
+   * Opens an http(s) link in a new tab, after the person confirms it.
+   *
+   * This frame has no popup rights, so `window.open` and `target="_blank"`
+   * do nothing here. The host shows the destination's host in full and asks;
+   * resolves to `{ status: 'opened' }` once it opened the link (with no
+   * opener and no referrer), or `{ status: 'cancelled' }`. Anything but
+   * http(s), or a link with a user name or password in it, is refused.
+   */
+  async openExternal(url) {
+    return send('openExternal', { url: String(url) });
+  },
+
+  /**
+   * Shows a resource in the host page, leaving this app. Only a resource the
+   * person can already read; resolves to `{ status: 'opened', subject }`,
+   * and refuses agents, commits, blobs and anything that is not a subject.
+   */
+  async openResource(subject) {
+    return send('openResourceConfirmed', { subject });
+  },
+
+  /**
+   * This app's own importer: the plugin whose Set up created the table this
+   * app is a view of. The host finds it; an app cannot run anyone else's.
+   */
+  importer: {
+    /**
+     * Runs the importer on a file and lets the person review what it
+     * proposes, in the host's own review. Nothing is written unless they
+     * apply it.
+     *
+     * Pass `file: { name, mediaType, text }` for a file the app already has
+     * (`{ name, mediaType, base64 }` when the importer's `accepts` entry for
+     * it declares `as: 'base64'`), or nothing to have the host show its own
+     * file picker (this frame is
+     * sandboxed and cannot hand over a picked `File`). Resolves to
+     * `{ status: 'applied', importer, created, updated, destroyed, failed, errors }`,
+     * or `{ status: 'cancelled' | 'nothing', importer }`, or
+     * `{ status: 'blocked', importer, errors }`. Rejects when this app has no
+     * importer (it is not shown as a view of an importer's table).
+     */
+    async run({ file, importer } = {}) {
+      return send('runImporter', {
+        ...(file ? { file } : {}),
+        ...(importer ? { importer } : {}),
+      });
+    },
+  },
+
+  /**
    * The integration proxy (ontola/atomic-plugins#54).
    *
    * This frame calls the proxy itself, but never holds a credential that
@@ -523,6 +607,54 @@ export const store = {
     async connect({ platform }) {
       return send('proxyConnect', { platform });
     },
+
+    /**
+     * Stops this app using `platform`: takes this app's delegation off its
+     * connections at the proxy (and, for an Installation, forgets the
+     * recorded one). The connection itself stays, since other apps may use
+     * it; deleting it is up to the person, on a page. Resolves to
+     * `{ status: 'disconnected', platform, connectionIds }`.
+     */
+    async disconnect({ platform }) {
+      const result = await send('proxyDisconnect', { platform });
+
+      for (const key of [...capabilities.keys()]) {
+        if (JSON.parse(key)[0] === platform) capabilities.delete(key);
+      }
+
+      return result;
+    },
+  },
+
+  /**
+   * This app's public endpoints (plugin routes), for the person viewing it
+   * when they may edit the app. The view never calls a route itself.
+   */
+  routes: {
+    /**
+     * `readRouteStatus`: `{ state, degraded, refusal, level, mount, routes,
+     * deliveries }`. Per route its `url`, `methods`, `auth`,
+     * `requests24h`, `errors24h`, `lastError`, `queueDepth` and
+     * `oldestQueueFailure`; `deliveries` has the queue's counts, today's
+     * use of the daily cap and the last failures. `null` when the server
+     * has no plugin routes.
+     */
+    async status() {
+      return send('readRouteStatus', {});
+    },
+
+    /** The tokens this app's routes issued: `{ tokens: [{ id, name, scopes, ... }] }`, never their values. */
+    async tokens() {
+      return send('routeTokens', {});
+    },
+
+    /** Revokes one issued token. Resolves to `{ revoked }`. */
+    async revokeToken(tokenId) {
+      if (typeof tokenId !== 'string' || tokenId === '')
+        throw new Error('revokeToken takes a token id');
+
+      return send('revokeRouteToken', { tokenId });
+    },
   },
 };
 
@@ -608,7 +740,8 @@ async function capabilityFor(platform, connectionId, fresh) {
   if (
     !minted ||
     typeof minted.capability !== 'string' ||
-    typeof minted.aud !== 'string'
+    typeof minted.aud !== 'string' ||
+    typeof minted.connectionKey !== 'string'
   ) {
     throw new Error('The host returned no capability.');
   }
@@ -618,19 +751,31 @@ async function capabilityFor(platform, connectionId, fresh) {
   return minted;
 }
 
-/** Version 2 request signature headers, signed with this frame's key. */
-async function signV2(method, url, body) {
+/**
+ * Version 2 request signature headers, signed with this frame's key. With a
+ * `connectionKey` (the key grant the host minted with the capability) the
+ * request also sends it as `x-connection-key`, and the signature covers its
+ * SHA-256 as a sixth line, so it cannot be swapped in transit.
+ */
+async function signV2(method, url, body, connectionKey) {
   const { privateKey, publicKey, agent } = await getFrameKey();
   const timestamp = Date.now();
   const bytes = new TextEncoder().encode(body ?? '');
   const digest = hex(await crypto.subtle.digest('SHA-256', bytes));
-  const message = [
-    'atomic-request-v2',
-    method,
-    url,
-    String(timestamp),
-    digest,
-  ].join('\n');
+  const lines = ['atomic-request-v2', method, url, String(timestamp), digest];
+
+  if (connectionKey !== undefined) {
+    lines.push(
+      hex(
+        await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(connectionKey),
+        ),
+      ),
+    );
+  }
+
+  const message = lines.join('\n');
   const signature = b64url(
     await crypto.subtle.sign(
       { name: 'Ed25519' },
@@ -645,6 +790,9 @@ async function signV2(method, url, body) {
     'x-atomic-timestamp': String(timestamp),
     'x-atomic-signature': signature,
     'x-atomic-signature-version': '2',
+    ...(connectionKey !== undefined
+      ? { 'x-connection-key': connectionKey }
+      : {}),
   };
 }
 
@@ -711,7 +859,7 @@ async function proxyRequest({
     const url = proxyTarget(cap.aud, connectionId, platform, path, query).href;
     const headers = {
       Authorization: `Capability ${cap.capability}`,
-      ...(await signV2(verb, url, body)),
+      ...(await signV2(verb, url, body, cap.connectionKey)),
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(ifMatch ? { 'If-Match': ifMatch } : {}),
     };

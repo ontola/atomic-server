@@ -18,46 +18,14 @@ export type { FilterOperator };
  * filters are kept in the UI (so the chip stays visible while editing) but
  * skipped by the query.
  */
-export interface TableFilter {
-  /** The stored property this constrains. Absent for a computed column. */
-  property?: string;
-  /**
-   * The id of a computed column of this view, when the constraint is on a value
-   * computed per row — "logged more than an hour", "due". The store evaluates the
-   * column's expression over the rows the index narrows to, so paging and the
-   * totals describe the filtered set.
-   */
-  derived?: string;
-  operator: FilterOperator;
-  value: string;
-}
+import type { TableFilter } from '@tomic/table';
 
-/**
- * How a filter is identified while it's being edited: a property subject, or a
- * computed column as `derived:<id>` — the same convention `view-column-order`
- * uses for the columns that aren't properties.
- *
- * A single key keeps the chips, the setters and the "already filtered" check
- * working for both kinds without every one of them growing a branch.
- */
-export function filterKey(filter: TableFilter): string {
-  return filter.derived
-    ? derivedFilterKey(filter.derived)
-    : (filter.property ?? '');
-}
-
-export function derivedFilterKey(id: string): string {
-  return `derived:${id}`;
-}
-
-/** The target a key names: a stored property, or a computed column. */
-export function parseFilterKey(
-  key: string,
-): Pick<TableFilter, 'property' | 'derived'> {
-  return key.startsWith('derived:')
-    ? { derived: key.slice('derived:'.length) }
-    : { property: key };
-}
+export {
+  filterKey,
+  derivedFilterKey,
+  parseFilterKey,
+  type TableFilter,
+} from '@tomic/table';
 
 /**
  * The operators a computed column offers. Its value is always a number, so the

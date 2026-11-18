@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [
+    {
+      "id": "lookup",
+      "method": "POST",
+      "url": "https://files.example/lookup",
+      "effect": "read"
+    }
+  ],
+  "http": {
+    "mount": "drive-prefix",
+    "routes": [
+      {
+        "id": "shares",
+        "path": "/ocm/shares",
+        "methods": ["POST"],
+        "auth": "http-signature",
+        "body": "json",
+        "fetches": ["lookup"]
+      }
+    ]
+  }
+}

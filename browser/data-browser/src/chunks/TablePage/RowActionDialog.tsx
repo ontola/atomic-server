@@ -1,23 +1,24 @@
+import type { TablePropertyDialogPresentation } from '@tomic/table';
 import { core, useResource, useString, type Property } from '@tomic/react';
-import { useEffect, useState, type JSX } from 'react';
-import { styled } from 'styled-components';
+import type { InputHTMLAttributes, JSX } from 'react';
 import {
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  useDialog,
-} from '@components/Dialog';
-import { Button } from '@components/Button';
+  TableRowActionFields,
+  TablePropertyDialog,
+  type TablePropertyEditorProps,
+  type TableViewWriteReceipt,
+} from '@tomic/table';
+import { AtomicPropertyFrame } from './PropertyForm/AtomicPropertyFrame';
+import {
+  type ConfiguredColumnDialogDraft,
+  saveConfiguredColumnDraft,
+} from './configuredColumnDialog';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { PropertyOption } from './DerivedColumnDialog';
 import {
   ROW_ACTION_GENERATORS,
   ROW_ACTION_KINDS,
-  isRowActionComplete,
   propertiesForRowAction,
   rowActionValueInput,
-  type RowActionKind,
   type RowActionSpec,
 } from './rowActions';
 
@@ -27,7 +28,9 @@ interface Props {
   classProperties: Property[];
   /** Set when editing; absent when adding. */
   editing?: RowActionSpec;
-  onSave: (spec: RowActionSpec) => void;
+  onSave: (spec: RowActionSpec) => TableViewWriteReceipt;
+  scope: string;
+  canSave?: boolean;
 }
 
 /**
@@ -41,171 +44,85 @@ export function RowActionDialog({
   classProperties,
   editing,
   onSave,
+  scope,
+  canSave = true,
 }: Props): JSX.Element {
-  const [dialogProps, show, hide, isOpen] = useDialog({ bindShow });
+  return (
+    <TablePropertyDialog<ConfiguredColumnDialogDraft<RowActionSpec>>
+      open={open}
+      scope={scope}
+      canSave={canSave}
+      title={editing ? 'Edit action' : 'Add an action'}
+      Frame={RowActionFrame}
+      Editor={AtomicRowActionEditor}
+      prepare={() => ({
+        initial: editing ? structuredClone(editing) : undefined,
+        properties: [...classProperties],
+        values: new Map(),
+      })}
+      save={draft => saveConfiguredColumnDraft(draft, onSave)}
+      isDraftLocked={draft => !!draft.receipt}
+      onClose={() => bindShow(false)}
+      onDismiss={draft => {
+        draft?.receipt?.abandon();
+      }}
+      messages={{
+        save: 'Save',
+        saveLocked: 'Retry',
+        cancel: 'Cancel',
+        cancelLocked: 'Close',
+        retry: 'Retry',
+        unavailable:
+          'The view or column definitions changed. Close this editor and reopen it.',
+        locked:
+          'Retry to finish saving this change. Closing leaves any partially applied save pending.',
+      }}
+    />
+  );
+}
 
-  const [kind, setKind] = useState<RowActionKind>('setNow');
-  const [label, setLabel] = useState('');
-  const [property, setProperty] = useState('');
-  const [value, setValue] = useState('');
-
-  useEffect(() => {
-    if (open) {
-      show();
-    }
-  }, [open, show]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    setKind(editing?.kind ?? 'setNow');
-    setLabel(editing?.label ?? '');
-    setProperty(editing?.property ?? '');
-    setValue(editing?.value === undefined ? '' : String(editing.value));
-    // Only on open: re-syncing while the dialog is up would overwrite what is
-    // being typed every time a commit lands.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
-  const generator = ROW_ACTION_GENERATORS[kind];
-  const targets = propertiesForRowAction(classProperties, kind);
-  const valueField = rowActionValueInput(kind);
-  const target = classProperties.find(p => p.subject === property);
-
-  const draft: RowActionSpec = {
-    id: editing?.id ?? '',
-    label: label || generator.defaultLabel,
+function AtomicRowActionEditor({
+  draft,
+  disabled,
+  onValidationChange,
+}: TablePropertyEditorProps<ConfiguredColumnDialogDraft<RowActionSpec>>) {
+  const classProperties = draft.properties;
+  const kinds = ROW_ACTION_KINDS.map(kind => ({
     kind,
-    property,
-    ...(valueField
-      ? {
-          value:
-            valueField.input === 'number' ? Number(value) : (value as string),
-        }
-      : {}),
-  };
-
-  const complete = isRowActionComplete(draft) && !!property;
+    title: ROW_ACTION_GENERATORS[kind].title,
+    description: ROW_ACTION_GENERATORS[kind].description,
+    defaultLabel: ROW_ACTION_GENERATORS[kind].defaultLabel,
+    valueField: rowActionValueInput(kind),
+    targets: propertiesForRowAction(classProperties, kind).map(property => ({
+      key: property.subject,
+      option: <PropertyOption key={property.subject} property={property} />,
+      values: property.allowsOnly?.map(tag => ({
+        key: tag,
+        option: <TagOption key={tag} subject={tag} />,
+      })),
+    })),
+  }));
 
   return (
-    <Dialog {...dialogProps}>
-      <DialogTitle>
-        <h2>{editing ? 'Edit action' : 'Add an action'}</h2>
-      </DialogTitle>
-      <DialogContent>
-        <Fields>
-          <Field>
-            <label htmlFor='row-action-kind'>Does what</label>
-            <StyledSelect
-              id='row-action-kind'
-              data-testid='action-config-kind'
-              value={kind}
-              onChange={e => {
-                const next = e.target.value as RowActionKind;
-                setKind(next);
-                // The target and the literal both belong to the previous verb —
-                // a step of 1 means nothing to "mark done".
-                setProperty('');
-                setValue('');
-              }}
-            >
-              {ROW_ACTION_KINDS.map(k => (
-                <option key={k} value={k}>
-                  {ROW_ACTION_GENERATORS[k].title}
-                </option>
-              ))}
-            </StyledSelect>
-            <Hint>{generator.description}</Hint>
-          </Field>
-
-          <Field>
-            <label htmlFor='row-action-property'>To column</label>
-            <StyledSelect
-              id='row-action-property'
-              data-testid='action-config-property'
-              value={property}
-              onChange={e => {
-                setProperty(e.target.value);
-                setValue('');
-              }}
-            >
-              <option value=''>Pick a column…</option>
-              {/* Labelled by human title, the same as the computed-column
-               *  dialog and the column menus. */}
-              {targets.map(p => (
-                <PropertyOption key={p.subject} property={p} />
-              ))}
-            </StyledSelect>
-            {targets.length === 0 && (
-              <Hint>
-                This table has no column of the right kind for that yet.
-              </Hint>
-            )}
-          </Field>
-
-          {valueField && (
-            <Field>
-              <label htmlFor='row-action-value'>{valueField.label}</label>
-              {/* A select column's options are its own tags, so offer those
-               *  rather than asking for a subject to be typed. */}
-              {target && target.allowsOnly?.length ? (
-                <StyledSelect
-                  id='row-action-value'
-                  data-testid='action-config-value'
-                  value={value}
-                  onChange={e => setValue(e.target.value)}
-                >
-                  <option value=''>Pick an option…</option>
-                  {target.allowsOnly.map(tag => (
-                    <TagOption key={tag} subject={tag} />
-                  ))}
-                </StyledSelect>
-              ) : (
-                <InputWrapper>
-                  <InputStyled
-                    id='row-action-value'
-                    data-testid='action-config-value'
-                    type={valueField.input === 'number' ? 'number' : 'text'}
-                    value={value}
-                    onChange={e => setValue(e.target.value)}
-                  />
-                </InputWrapper>
-              )}
-            </Field>
-          )}
-
-          <Field>
-            <label htmlFor='row-action-label'>Button says</label>
-            <InputWrapper>
-              <InputStyled
-                id='row-action-label'
-                data-testid='action-config-label'
-                value={label}
-                placeholder={generator.defaultLabel}
-                onChange={e => setLabel(e.target.value)}
-              />
-            </InputWrapper>
-          </Field>
-        </Fields>
-      </DialogContent>
-      <DialogActions>
-        <Button subtle onClick={() => hide()}>
-          Cancel
-        </Button>
-        <Button
-          data-testid='action-config-save'
-          disabled={!complete}
-          onClick={() => {
-            onSave(draft);
-            hide();
-          }}
-        >
-          Save
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <TableRowActionFields
+      initial={draft.initial}
+      kinds={kinds}
+      Input={ActionInput}
+      disabled={disabled}
+      messages={{
+        kind: 'Does what',
+        property: 'To column',
+        pickProperty: 'Pick a column…',
+        pickOption: 'Pick an option…',
+        label: 'Button says',
+        noTargets: 'This table has no column of the right kind for that yet.',
+        invalidNumber: 'Enter a finite number.',
+      }}
+      onChange={(candidate, valid) => {
+        draft.values.set('candidate', candidate);
+        onValidationChange(valid);
+      }}
+    />
   );
 }
 
@@ -217,32 +134,14 @@ export function TagOption({ subject }: { subject: string }): JSX.Element {
   return <option value={subject}>{shortname ?? tag.title}</option>;
 }
 
-const Fields = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${p => p.theme.size(2)};
-`;
+function ActionInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <InputWrapper>
+      <InputStyled {...props} />
+    </InputWrapper>
+  );
+}
 
-const Field = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${p => p.theme.size(1)};
-
-  label {
-    font-size: 0.85rem;
-    color: ${p => p.theme.colors.textLight};
-  }
-`;
-
-const Hint = styled.span`
-  font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const StyledSelect = styled.select`
-  padding: 0.4rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
-`;
+function RowActionFrame(props: TablePropertyDialogPresentation) {
+  return <AtomicPropertyFrame {...props} saveTestId='action-config-save' />;
+}

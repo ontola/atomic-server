@@ -1,3 +1,56 @@
+Grid extraction and shared helpers: `browser/table/src` retains the existing grid,
+keyboard, selection and primitive-editor tests. The SDK's EventManager and civil
+calendar tests move with their implementations to `browser/utils/src` (nine
+cases). Both SDK and UI builds include the private helper modules' declarations;
+packed-consumer checks verify the grid uses the host's UI module instance.
+TableCell's local fixture seeds createdAt metadata to avoid external HTTP reads
+while asserting cell commits. These changes do not introduce new state policies.
+
+Shared UI extraction: `browser/data-browser/src/components/sharedUI.test.tsx`
+checks that compatibility paths and the extracted package share keyboard locks,
+the dialog tree and generated background CSS variables. Existing spinner,
+dropdown positioning/trigger, resize, Back-to-close, expanded-row and column-filter
+tests exercise the same implementation through host entry points.
+`browser/ui/scripts/check-package.mjs` mounts compiled controls in a clean packed
+consumer and verifies NodeNext declarations without application source aliases.
+Bounded WebSocket reads: `browser/lib/src/store.read-fallback.test.ts` covers a stalled OPEN socket recovering over authenticated HTTP, local/remote authority budgets, concurrent read deduplication, healthy sockets avoiding duplicate requests, explicit authorization refusal, fallback failure settling loading, and POST using HTTP once. `websockets.test.ts` covers abort during authentication, abort after GET, rejection of a late GET response, and continued subscription pushes. These are library and binary-frame tests; they do not establish a browser paint time for the private SyncD drive. Bulk GET_MANY uses a separate timeout.
+
+Confirmed app navigation: mounted `HostUI/hostNavigation.test.tsx` covers
+no opening/navigation before confirmation, cancellation, punycode display,
+safe new-tab flags, unreadable and non-resource refusal, late-read
+supersession, and compatibility of `store.ui.openResource`. External URL
+validation has scheme/credential/length tests. `viewProtocol.test.ts` covers
+both SDKs waiting for confirmed navigation/importer operations. The focused
+`apps.spec.ts` browser journey covers host confirmation, popup isolation and
+desktop/mobile screenshots.
+
+App-run imports: `appImporter.test.ts` checks the table-owned importer,
+configuration, file limits, foreign importer refusal, text-only boundary and
+summary. `plugin-destination.test.ts` checks actual destination ownership.
+`AppImporterRun.test.tsx` checks that preview starts only after confirmation,
+and the reply waits for the review callback, plus cancellation and refusal.
+`app-importer.spec.ts` is the browser journey for preview/review/apply, host
+picker cancellation and foreign importer refusal.
+
+App-only proxy disconnection: `proxyConnections.test.ts` verifies every v2
+signature, removal of only the app's delegations, preservation of shared
+connections and another app's delegation, invalid-platform refusal and
+already-gone delegation handling. `hostStore.test.ts` covers the frame entry
+point and refusals. `viewProtocol.test.ts` checks the wire operation and the
+generated client's capability-cache invalidation before a subsequent refusal.
+
+Cloud Vault backup download (#2560): `browser/data-browser/src/helpers/managed/vaultFile.test.ts` exercises the save picker with File System Access suffix validation, preserves the suggested `.atomic-vault` filename, parses the streamed bytes to verify their contents, and checks cancellation and picker-error propagation. This is a simulated picker contract test; the physical macOS Save dialog is not covered.
+
+Quick-add queue scope (#2550): `browser/table/src/QuickAddBar.test.tsx` covers serial Enter submissions, preserved typed drafts, failure continuation without automatic retry, stale success notification suppression and retained original-request failure reporting after a scope change, and synchronous subscriber enqueueing. Accepted requests retain their original backend callbacks; this in-memory queue does not establish durable storage.
+
+Row-action configuration (#2552): `browser/table/src/RowActionFields.test.tsx` verifies unfinished numeric drafts and original action identity, target resets, subscribed allowed-value removal/restoration (including an empty allowed list), and unrestricted literals.
+
+Row selection: `browser/table/src/rowSelectionState.test.tsx` checks retained snapshots and stale callbacks across selection scopes. `RowSelection.test.tsx` checks read-only permission transitions, clearing a read-only selection, lock/unlock, and row-checkbox events staying out of grid-cell activation. These component checks do not prove backend authorization or deletion persistence.
+
+Shared view tabs: `browser/table/src/views/ViewTabs.test.tsx` mounts tabs without an Atomic Store or theme, checks selection/disabled state and rename commit-once, trim, blur, blank/unchanged rejection and Escape cancellation. `browser/data-browser/src/chunks/TablePage/TableViewTabs.test.tsx` exercises the Atomic resource/menu adapter; ELFA native-browser tests cover its separate NextGraph adapter. These tests do not establish drag-order persistence or menu/backend parity for external consumers.
+
+Table workspace package: `browser/table/src/chunks/TableEditor/*.test.tsx`, helper and height-hook tests own the extracted grid interaction/loading coverage. `browser/data-browser/src/chunks/TablePage/EditorCells/DateCell.test.tsx` and `TruncatedText.test.tsx` verify the Atomic display/editor adapters. The dedicated `table-package.yml` lane lints, typechecks, tests and packs the package, then installs it in a clean temporary consumer to mount it and check NodeNext declarations without Data Browser aliases or backend services. Full table/server integration remains in the main pipeline.
+
 Resource.set(undefined) (#2315): `browser/lib/src/resource.set-undefined.test.ts` covers removing optional string/date values with default and known-datatype validation, avoiding unnecessary Property reads, exactly one LocalChange event, removal in an exported/reopened Loro snapshot, and rejection of invalid non-undefined values. These are library unit checks; no server is required.
 
 Chat log entries (2026-10-09, `planning/chat-log.md`): `lib/tests/chat_log.rs` applies signed commits through the real rights path for a `ChatLog` page: an author adds, edits and deletes own entries; a member cannot touch another's entry, claim or forge one, or change page properties; a writer on the chat moderates; page genesis grants no `write` and refuses a self-granted one; entries more than ten minutes ahead of the server clock are rejected. `lib/src/db/test.rs` checks entries reach no propval, index or search row, and `measure_chat_log_entry_bytes` (ignored) prints bytes per message. `browser/lib/src/chat-log.test.ts` covers the TS helpers and that entry changes ride in a saved commit's `loroUpdate`. Step 2 (group chat and comments in the log): `browser/lib/tests/chat-log.integration.test.ts` runs two agents against a real server (an appender adds, edits and removes own entries, is refused on another's, a writer moderates). `helpers/chatLog.test.ts` covers entry ids, the merge and window of old messages and entries, and the page choice; `messageNotification.test.ts` covers entry notifications. Playwright: `chat-log.spec.ts` (entry, edit, reply, copy link, delete, reload, a second member seeing entries and edits live and no edit buttons on another's), `e2e.spec.ts` chatroom, `offline-chatroom.spec.ts`, `chat-mention.spec.ts`, `table-row-comments.spec.ts` (comment and count as entries) and `notifications.spec.ts` (chat, reply and comment toasts for entries, unseen badge). Migration of existing messages (`planning/chat-log.md`, "Existing messages"): `lib/src/db/chat_migration_test.rs` checks grouping by chat and by commented item, the split at 256 with the oldest on the first page, authors and times kept, deterministic keys, replies mapped across pages and left alone for an outside target, follow events keeping their kind, an edited message getting `e`, the old resource and its genesis commit row, snapshot, envelopes and indexes gone, a re-run being a no-op, a run that stopped after the pages and a straggler arriving meanwhile, the slices resuming from the stored state, a member editing own migrated entry and not another's while the chat owner can, a cache of a hosted drive only dropping rows that have their entry, opening a store migrating it, and the bytes per message before and after (`migrating_a_chat_shrinks_the_store`). `client-db.worker.migration.test.ts` covers the worker running the message slices after the index rebuild with progress and the local-only drives; `migratedEntryKey` has one test vector in Rust and TS; `helpers/chatLog.test.ts` covers hiding migrated old messages. Playwright: `chat-log-migration.spec.ts` shows old Message resources, then the same chat once their entries exist (stale copies hidden, one without an entry still listed, order kept); `meetings.spec.ts` covers follow events as entries. Not covered: the browser worker migrating a local-only drive end to end (WASM and OPFS), a real server restart with old messages in an e2e run, and an edited message's genesis commit row (kept). Not covered: concurrent edits of one entry by two members, a chat past one page (256 entries) in the browser, scrolling to a linked entry (not built), and DMs (later step).
@@ -6,6 +59,13 @@ AI chat in the log (`planning/chat-log.md`, "Step 3: AI chat"): `lib/src/db/ai_c
 
 Date-only values (#1795, 2026-09-25): `browser/data-browser/src/helpers/dates/calendarDate.test.tsx` renders a `date` value through `ValueComp` (row dialog, resource page), the table cell, a min/max aggregate, day and month group headings and the history diff, in Europe/Amsterdam and America/New_York. Each must show the same civil day with no time. The tests set `process.env.TZ` themselves, so they fail on the bug in any CI zone.
 Row dialog fields (#1796, 2026-09-25): `browser/data-browser/src/components/PropVal.test.tsx` checks that the row dialog labels a value with its property's name (or a readable shortname when it has none), with the shortname in the tooltip. The label must not be a link, the property opens in a new tab, and the edited checkbox gets its accessible name from the label. Resource pages keep the linked shortname. `browser/e2e/tests/row-dialog.spec.ts` covers the same in a real Grocery list and runs axe (`label`, `link-name`) on the open dialog. It also covers the `ValueFormEdit` key warning through the browser-diagnostics fixture: that warning only shows with the wuchale transform, which vitest does not run.
+SYNC_PUSH candidate backport: counting/failing KV tests in `lib/src/db/test.rs` verify per-frame atomic projection/index application, import identity durability, staged table change logs and parent admission, wire-order duplicate-subject delta merging, empty-LAST flush failure and write failure propagation. `lib/tests/import_durability.rs` aborts and reopens the real store after LAST to verify resources, snapshots, envelopes and indexes. This does not establish a 100 ms sync target.
+
+SYNC_PUSH envelope batching: `lib/src/db/test.rs` counts writes below `CompressedKv` to verify that signed envelopes and projections share one physical transaction. Injected apply failure leaves no imported resources, snapshots or envelopes and publishes no change notification. Tests cover same-frame Property and signer resources, external schema fetching without persistent writes, shared subject-lock blocking, notification visibility, and comparison of multi-envelope Latest/All retention with sequential imports, including reversed and duplicate input. `lib/src/envelopes.rs` covers staged genesis reconstruction and unreadable retained rows exposed by equal-timestamp replacement. These checks establish transaction and validation behavior, not a latency target or independent confirmation of fsync completion.
+
+Schema-backed JSON table previews: `schemaJSONPreview.test.ts` covers prose, labeled booleans/lists, local references, nulls, order, unsupported schemas, bounded long wrappers and output bounds. `resource.nested-json-null.test.ts` verifies JSON nulls survive an exported/reopened Loro snapshot (fails on candidate22 before the narrow upstream fix). The Rust `json_nulls_survive_snapshots_and_list_edits` regression covers nested object/list null snapshot round trips and indexed list insertion. Native Playwright checks readable cells, full editing, bounded tooltips and row geometry at desktop/mobile sizes; grid loading is tested separately.
+
+Bounded WebSocket reads: `browser/lib/src/store.read-fallback.test.ts` covers stalled OPEN sockets and authentication recovering over authenticated HTTP, local/remote budgets, deduplication, healthy sockets, explicit refusal, fallback failure, and POST using HTTP once. `websockets.test.ts` covers cancellation, ignored late responses and retained subscription pushes. Library/frame tests do not establish browser paint latency. Bulk GET_MANY retains its own timeout.
 
 Server descriptor budget (2026-09-22): `server/src/serve.rs` tests the HTTP
 connection budget at small, staging-sized, and effectively unlimited process
@@ -209,6 +269,13 @@ The runner must use Vite's worker bundling: copying only its entry with `?url`
 left shared library imports missing in production. The publish-button assertion
 also catches an obsolete English catalog entry rendering an empty label.
 
+Queued child saves (#2538): `browser/lib/src/commit.test.ts` checks that saving a
+child before its parent returns `queued` without posting or requesting local
+persistence, retains its edits, and later posts parent then child and clears
+pending work. `renderWebsite.test.ts` checks that website publication rejects
+both `offline` and `queued` results. These unit checks establish save-result
+handling, not OPFS crash durability or independent replica coverage.
+
 Save acknowledgement: `browser/lib/src/save-acknowledgement.test.ts` reproduces
 an online genesis POST failure reported as persisted. It verifies pending/backoff
 saves return offline and a later acknowledged retry preserves the subject.
@@ -220,6 +287,38 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
+Server marketplace discovery: `helpers/pluginListings.test.ts` covers legacy
+Listing arrays, catalog envelopes with `entries` and `hostFeatures`, empty
+catalogs, invalid top-level responses and normalization of listing text and
+collection fields. `integration-store-install.spec.ts` checks
+search and Installation review with both response formats, and that invalid
+catalog data shows an alert while the Apps page remains available.
+
+Table cell editing: `TablePage/TableCell.test.tsx` supplies column and
+`createdAt` property metadata locally and asserts that editing makes no HTTP
+requests. The date-commit case exercises the real first-edit timestamp setter
+without depending on external metadata requests.
+
+Stored table-view configuration: `browser/table/src/views/configuration.test.ts`
+covers backend-free legacy formula decoding, permissive saved formats, raw
+action values, quick-add JSON, aggregate specs and column/filter identities.
+The existing Atomic parser/row-action suites exercise compatibility re-exports;
+formula execution still needs the real WASM evaluator.
+
+Filter-chip presentation: `browser/table/src/filters/FilterChip.test.tsx`
+covers host value/operator/removal callbacks and the existing numeric/date/now
+input policy. Actual-component Chromium checks cover edit/readback, operator
+selection, Escape/reopen/removal and desktop/mobile layout; these are component
+fixtures, not a claim of full backend-integrated TablePage coverage.
+
+Table format controls: `browser/table/src/schema/PropertyFormatFields.test.tsx`
+checks the existing date radio choices/previews and uncontrolled precision input,
+including host change/blur callbacks, bounds and error rendering.
+
+Quick-add presentation: `browser/table/src/QuickAddBar.test.tsx` checks the
+existing local serial queue, preservation of newly typed text, and reporting a
+failed request while continuing already accepted submissions.
+
 Plugin discovery: `PluginRuns/pluginCatalog.test.tsx` covers parsing the remote
 plugin catalog, which entries unlock "Show experimental plugins" (entries
 that need API plugins don't), and a remounted hook rendering the cached catalog
@@ -227,9 +326,246 @@ on its first render without fetching again; `helpers/integrationVisibility.test.
 stored preferences. `integration-visibility.spec.ts` checks no "Show API
 plugins" toggle is offered.
 
+Plugin-routes gates (#1711): `server/src/plugin_routes.rs` unit tests cover the
+three levels, the startup refusals (no `plugin-routes` feature; listeners or
+sidecars below `read-write`), routes-origin validation, the catalog report,
+and that no release feature set (nor atomic.place's) turns the feature on.
+`config.rs` tests parse the flag and, in child processes, the env var;
+`tests/it/server_cli.rs` checks the binary exits non-zero on
+`ATOMIC_PLUGIN_ROUTES=read-only` without the feature. CI runs the lib tests
+and clippy once more with `--features plugin-routes`. Not covered: no e2e
+build has the feature yet (nothing is served behind it before #1714).
+
+Manifest v3 `http` block (#1712): `testdata/plugin-manifest/http-index.json`
+(accepted and rejected cases, the gate each needs, the derived `requires`) and
+`http-refusals.json` (one case per refusal message of the design's 0.4) run
+against both `server/src/plugins/manifest.rs` and
+`browser/lib/src/plugin-manifest-http.test.ts`. `release-ids.json` pins the
+release ids of every accepted v1/v2 fixture, computed before v3 existed.
+`plugin.rs` installation tests check that an install and an upgrade of a
+gated release are refused on the test node (gate `off`) and that the old
+release stays; `plugin_release_test.rs` checks `/plugin-release-pin` answers
+`409` with the typed problem, and the catalog's `requires`. The refused
+install and upgrade commits carry the typed problem after their message
+(`protocol::split_problem`), classify as `HOST_FEATURE_UNAVAILABLE` and answer
+`409` over HTTP with it in the Error resource (#1743).
+`the_catalog_derives_requires_for_a_release_it_has_not_cached` covers a listed
+release missing from the cache (derived from its local `Release` resource),
+one whose resource hashes to another id and one on an unreachable server (both
+`"unknown"`). Not covered: an install on a node with the gates open (the test
+fixture's config is fixed at `off`), a remote `Release` that answers, and the
+per-request budget of remote fetches.
+
+Catalog and install review for gated plugins (#1713): the lib test
+`plugin-manifest-http.test.ts` checks that a catalog entry's derived
+`requires` gives the same verdict as its manifest for every
+`http-refusals.json` case (`requiresGate` + `checkGate`), and parses
+`hostFeatures`. In the data-browser, `catalogGate.test.ts` covers hidden (not
+compiled, or a server without `hostFeatures`), marked (level too low, listener
+not bound) and listed; `PublicEndpoints.test.tsx` renders the "Public
+endpoints" section from `v3-activitypub.json` and the review dialog both
+refusing up front and showing a thrown `HostFeatureUnavailableError` (the
+`409`) inline with Install disabled, and the same for a refused Installation
+commit (an `AtomicError` carrying the problem). The lib's
+`plugin-install.test.ts` checks `installRelease` and
+`updateInstallationRelease` raise `HostFeatureUnavailableError` from a refused
+commit and that a refused install leaves nothing in the outbox;
+`plugin-manifest-http.test.ts` maps both commit transports' errors.
+`catalogGate.test.ts` checks an entry with `requires: "unknown"` is marked,
+never hidden. Not covered: an e2e test against a default
+build (hidden plugin, refused direct link; there is no direct plugin link
+yet), and the upgrade review's diff of surfaces.
+
+Plugin route registry (#1714): `server/src/plugins/route_registry.rs` unit
+tests cover slugs, `{param}`/`{*rest}` matching, both mounts, reserved paths
+(`/.well-known/` names, the API origin outside `/_routes/<slug>/`, and a check
+that direct and macro-registered routes in `routes.rs` are on the reserved list,
+including develop's forms, genesis, host calls, MCP and OAuth endpoints), collisions naming
+the other installation, pause/revoke/degraded answers and level `off`.
+`handlers/plugin_routes.rs` runs real installs through the app: 200 on a
+match, 405, 503 + `Retry-After`, 410 after revoke, the routes host, refusal
+before anything is materialized, no registration from a peer's import, and a
+restart restoring or degrading routes. `plugins/route_levels_test.rs` installs
+the shared fixture `testdata/plugin-routes/hello-route/` at every build and
+level. `lib/src/commit.rs` checks, in every build, that nothing can be created
+under `/_routes/`. `tests/it/plugin_routes.rs` (only with `--features
+plugin-routes`) installs over HTTP on a real server and gets both mounts'
+answers, the fixture's `Hello, world` among them. Not covered: removed
+routes answering `410` after an upgrade, and a peer `COMMIT` applied outside a
+sync import scope (the owner check relies on that scope).
+
+Plugin route execution (#1715): `server/src/plugins/route_exec.rs` runs real
+installs through the app: a route verdict with intents refused at `read-only`
+and `read-write` with nothing applied, the deadline and fuel and memory
+exhaustion answering `503`, body limits and content types (`413`, `415`,
+`400`), request and response header filtering through the server's CORS
+layers, declared CORS, HTML refused on `drive-prefix`, and the route status
+counts. `route_levels_test.rs` gets `200 Hello, alice` at both open levels;
+`tests/it/plugin_routes.rs` gets `200 Hello, world` from a real server. Not
+covered: the `installation` principal's reads, `ctx.http` from a route, the
+pool and per-installation concurrency limits under real load, and the
+`/plugin-route-status` endpoint over HTTP (its counts are unit-tested).
+
+Well-known claims and the `drive-host` mount (#1716): `route_registry.rs` unit
+tests dispatch claims on a drive's hosts, an installation's own origin and
+(with the operator's grant) the API origin; `webfinger` by `resourcePrefix`
+(404 unmatched, 400 without `resource`), generated `host-meta`; a second
+exclusive claim or an overlapping prefix refused naming the holder;
+server-owned and unlisted names refused; the paths a `drive-host` route may
+not take; nothing at level `off`. `handlers/plugin_routes.rs` runs the shared
+fixture `testdata/plugin-routes/well-known/` on a host bound to the drive
+(nodeinfo, webfinger, host-meta, fall-through to the drive, not on the API
+origin, gone when paused), two installations sharing `webfinger` each running
+only for their own queries, install-time refusals, and the drive-owner and
+resource-path checks. `route_levels_test.rs` runs that fixture at every build
+and level; `tests/it/plugin_routes.rs` gets nodeinfo, webfinger (with CORS)
+and host-meta from a claimed name on a real server. Not covered: a
+`drive-host` route or claim over HTTP on a real server (binding a host needs a
+signed `/bind-drive` on that host), and resources created later at a route's
+path (they are shadowed on the drive's hosts by design).
+
+Route writes (#1717): `server/src/plugins/route_writes.rs` runs the shared
+fixture `testdata/plugin-routes/inbox/` through the app at `read-write`: a
+POST stored under the configured inbox, signed by the installation's agent,
+with `routeProvenance`; an update and a delete of its own item; a create
+under another parent or with another class, and an update or delete of a
+resource someone else created, refused (`502`) with nothing written; the
+per-caller quota answering `429` with `Retry-After` and nothing written; no
+route grant answering `403`; a grant that does not cover the release's
+write targets, or level `read-only`, refusing the install. The quota ledger
+(windows, refunds, `0` = off) and `check_grants` with the route grant are
+unit-tested. `tests/it/plugin_routes.rs` POSTs to a real server and reads
+the item back through the route and from the store. Not covered: the daily
+and byte quotas end to end (only in the ledger's unit test), concurrent
+requests racing one quota, and a write that fails halfway (`500`).
+
+The route grant from the install review: `testdata/plugin-routes/inbox/page-install.json`
+is what the page writes (the grants verbatim, and `write` on the inbox for the
+installation's agent). `browser/lib/src/plugin-route-grant.test.ts` checks
+`installRelease` produces exactly that, signed by the installer; that a
+`config:` target that doesn't resolve refuses before anything is committed;
+that revoking takes the agent off the parent and leaves other writers; and
+that an upgrade replaces the grant and moves the rights. A config edit on the
+Installation page that moves a `config:` target (#1758): the same file checks
+`routeWriteConfigChange` finds the moved targets and refuses an unresolved one,
+and that `saveInstallationConfig` moves `write` to the new parent when
+approved, drops the grant and the rights when declined, commits nothing for an
+unresolved target and only saves when nothing moves.
+`RouteWriteMoveDialog.test.tsx` checks the dialog marks the new parent New,
+starts unchecked and saves with the choice.
+`route_writes::http_tests::a_page_shaped_install_stores_a_post` installs that
+fixture and POSTs (`2xx`). `RouteWriteApproval.test.tsx` covers the review:
+unchecked by default, the targets passed only once approved, install disabled
+while a target doesn't resolve, not offered below `read-write`, and an update
+kept approved or asked again. Not covered: a Playwright run of install, POST
+and revoke (done by hand for #1717's follow-up), and a Playwright run of the
+config edit (done by hand for #1758).
+
+Host crypto (#1718): `server/src/plugins/http_signatures.rs` checks the
+published vectors in `testdata/http-signatures/vectors.json` (draft-cavage-12
+appendix C, RFC 9421 B.2.1, B.2.3, B.2.6 and 4.3; B.2.2's `@query-param` is
+refused), reproduces the deterministic ones by signing, and holds signatures
+to the host's policy (coverage, ±5 min, body digest). `route_auth.rs` covers
+key fetch caching, the negative cache, refetch after rotation, key documents,
+and the egress guard refusing loopback, private and metadata addresses.
+`route_keys.rs` and `route_tokens.rs` cover generation, signing (checked
+independently with the `rsa` crate), wrapping at rest, erasing, hashed
+tokens, and consent requests and codes. `route_crypto_test.rs` runs the
+inbox fixture through the app: a signed POST filling `request.caller` and
+provenance in both schemes; another key, another body, a stale date and no
+signature each `401` without a fetch or a sandbox run; the host signing with
+the installation key and verifying its own `keyId` locally; bearer tokens
+issued, used, listed, revoked; the consent flow approved, replayed and
+denied; no key material in anything the plugin sees or answers; keys and
+tokens erased on revocation. `tests/it/plugin_routes.rs` delivers one signed
+POST end to end on a real server. The consent page's two calls have a
+vitest in `hostStore.test.ts` only for the token ops; the page itself is not
+e2e-tested. Not covered: DPoP and `auth: atomic` (not implemented), ECDSA
+keys, and a real remote key fetch (the egress fetcher is only tested
+refusing).
+
+Delivery queue (#1719): `server/src/plugins/route_delivery_test.rs` runs the
+queue against a fake installation with a loopback stub (through the real
+egress transport, with its loopback test seam) or a scripted transport:
+enqueue, send and settle; the egress guard refusing loopback without the
+seam and private and metadata addresses with it (dead letters, one attempt);
+backoff with jitter per attempt up to the dead letter after 12; which
+answers retry (`5xx`, `429` with `Retry-After` holding the host, timeouts as
+uncertain) and which end the job (`404`, redirects); a job surviving a
+reopened store, with the attempt that was in flight retried as uncertain;
+the daily cap deferring to the next UTC day without dropping; at most two
+requests in flight per destination host; idempotency keys (explicit, and
+derived from the content) while queued, after delivery and once forgotten;
+held and resumed jobs, and a gone installation's jobs dropped; RSA (cavage)
+and Ed25519 (RFC 9421) signatures verified against the installation's public
+key; the refusals of `prepare`. Through the app with the inbox fixture's
+`POST /deliver`: a route enqueues, the worker sends a signed POST that
+verifies with the key `/actor` publishes, `/plugin-route-status` shows the
+queue before and after; a refused delivery refuses the whole verdict,
+intents included; pausing holds and revoking drops; a restart at
+`read-only` degrades the installation and holds its jobs, and a restart at
+`read-write` sends them. `tests/it/plugin_routes.rs` has a real server's
+worker deliver a signed POST to a loopback receiver. Not covered: more than
+16 deliveries in flight, the queue-full `503`, a DNS name that resolves to a
+private address (only literal addresses are tested), and enqueues from query
+triggers (not implemented).
+
+Blob bodies (#1720): `server/src/plugins/route_blobs_test.rs` runs the shared
+fixture `testdata/plugin-routes/files/` (remoteStorage-like `PUT`/`GET
+/files/{*path}`) through the app at `read-write`: a 2 MiB upload stored in
+the blob store with the handler seeing only `{ hash, size, type, subject }`;
+a blob response with its content type, `ETag`, `nosniff`, the sandboxing CSP
+and the right length (also for `HEAD`); `304` and `412` for conditional
+`GET`s, and `If-None-Match: *` / a stale `If-Match` on `PUT` answering `412`
+with nothing stored; the operator's cap and a route's `maxBodyBytes`
+answering `413` with nothing stored; blob bytes counted in the daily byte
+quota (`429`); a foreign blob refused both as a response and as a value in a
+route write, and served once a File under the write target holds it; no
+route grant answering `403` before anything is read; HTML and SVG refused on
+`drive-prefix`; the blob release refused at `read-only`, where a GET-only
+release still serves a blob its installation stored. `route_blobs.rs` unit
+tests cover hash parsing, the limit, and the precondition rules.
+`tests/it/plugin_routes.rs` PUTs 2 MiB to a real server and GETs it back
+byte for byte, with `HEAD`, `304`, `412` and `413` over HTTP. Not covered: a
+body streamed without `Content-Length` (chunked; the limit is checked per
+chunk), an S3 blob backend, and two uploads racing the byte quota.
+
+Endpoint health (#1721): `EndpointHealth.test.tsx` renders the Installation
+page's Endpoints section from server-shaped `/plugin-route-status` bodies:
+nothing yet (zero counts, URLs with copy buttons, method and auth), a route
+with errors and its last error, the queue (depth, today's cap use, a retry
+and a dead letter), the gates off (`hostFeatureMessage`'s words and the
+switch as code), degraded for another reason, and a token revoked after
+confirming; the container renders nothing without plugin routes or routes,
+drops a revoked token, and shows a read error. `hostStore.test.ts` covers the
+view op `readRouteStatus` (answered, `null` on a server without plugin
+routes, refused before any request for someone who can't write the app) and
+`viewProtocol.test.ts` that `store.routes.*` sends the three route ops.
+`route_delivery_test` checks the status carries each route's path, methods
+and auth, the mount, and no `refusal` when the gates are open. Not covered:
+`refusal` on a degraded installation through the handler (only by hand, with
+a restart at `read-only`), and an e2e run of the section.
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.
+
+Drive apps call the integration proxy through the host. `proxyConnections.test.ts`
+covers PKCE, signed redemption and delegation, one-time handoff consumption,
+and frame-bound capabilities. `hostStore.test.ts` checks that the host relays
+requests only to the configured proxy origin and proxy routes.
+
+The generic snapshot mapper and shared integration proxy mock are tested in
+the [Atomic Plugins repository](https://github.com/ontola/atomic-plugins/tree/main/integrations/localthought).
+The mapper tests cover import proposals and stable identities. The mock tests
+cover signed requests and frame capabilities with synthetic data.
+Run them from an Atomic Plugins checkout.
+
+```sh
+node integrations/tooling/link-atomic-server.mjs
+node integrations/tooling/run-lane.mjs localthought --tier unit
+node --test integrations/localthought/mock-proxy.test.mjs
+```
 
 Finding another table (#1807): `TablePage/ColumnFilterDropdown.test.tsx`
 (jsdom) checks the table's column-filter menu names its input "Find a column…"
@@ -238,6 +574,102 @@ search overlay with the query on Enter. `components/overlayState.test.ts`
 checks the pre-filled search query is dropped on close and on a plain open.
 The labelled header search button is not covered beyond `test-utils.ts`
 still finding it by its `Search (` title.
+Host signing of `ctx.http` to the integration proxy (ontola/atomic-plugins#54,
+decisions 8 and 12): `plugins::host_core` tests send a real request to a
+one-shot loopback server standing in for the configured proxy and verify its
+v2 signature (method, full URL with query, body hash) as the installation's
+app agent on this node, that plugin-supplied `x-atomic-*` headers are replaced,
+that an installation with no app agent on this node is refused before
+connecting, and that other loopback origins stay refused even when a manifest
+declares them. `plugins::egress` tests pin the exception to exactly the
+configured origin (another port, the other scheme, another loopback address,
+`localhost` for `127.0.0.1`, and credentials in the URL are all refused). They
+also use a table resolver to check that a proxy *name* may resolve to a
+private, CGNAT, ULA or loopback address (`host.docker.internal`, a LAN host),
+resolved once and pinned, while another name, port or scheme resolving to the
+same address is refused, and link-local/metadata is refused even when it is
+the configured proxy. End to end, `it plugin_proxy` starts a real server with
+`--integration-proxy-url` pointing at a loopback stub, pins and installs a JS
+release over HTTP, runs it through `POST /plugin-run`, and checks that
+`ctx.http("atomic-proxy:/demo/items")` arrives as `GET
+/proxy/conn-1/demo/items` with a v2 signature from the installation's node
+agent, that the plugin gets the stub's response, and that an undeclared
+platform is refused before connecting.
+`app_endpoints_test::an_active_installation_reports_its_agent_on_this_node`
+checks `GET /app-agent` reports the identity activation mints for a JS
+Installation. Not covered: a real integration proxy (atomic-plugins#122)
+accepting these requests, delegations and `POST /runtimes`, and a second node.
+
+Installation identities for the proxy (#1700, answers 1–3):
+`plugins::installation_identity` tests commit real Installations and check that
+a keyless `integrationAppAgent` is stored, refused when it is not an agent id,
+and can be added but never changed; that activation publishes the node's agent
+once on an `InstallationRuntime` child, written by that agent and writable by
+it; that `integrationConnections` must map platforms to id strings; and that a
+server-side JS run gets `ctx.app` and `ctx.connections` from the Installation,
+over whatever the caller sent. `browser/lib/src/plugin-install.test.ts` checks
+`installRelease` records a fresh `atomic:agent:` in the genesis with no key
+material. `data-browser/src/helpers/installationRuntimes.test.ts` checks the
+page's side against a fake proxy that mirrors atomic-plugins#122's routes and
+verifies every v2 signature: `POST /runtimes {app, agent, label}` for each
+runtime child whose genesis the named agent signed, nothing posted again in
+the same page or when the proxy already lists it, a re-post when the label
+changes, `DELETE /runtimes/{agent}` on revoke, and a retry after a proxy error.
+`chunks/AppPage/appAgent.test.ts` checks that `appAgentOf` prefers the
+Installation's `integrationAppAgent` and falls back to `GET /app-agent`.
+`helpers/installationConnections.test.ts` checks connecting a platform on an
+Installation against a fake proxy: `/connect`, the signed redeem and the
+delegation to the app id end in `integrationConnections[platform]` written on
+the Installation (and a frame's own connect writes nothing); reusing an
+existing connection delegates and records it; disconnecting calls
+`DELETE /connections/{id}/agents/{app}` and removes the key (the property once
+empty), keeping it when the proxy refuses; and a plain Installation (no
+`proxy` in the manifest, no recorded connection) makes zero fetches to the
+proxy. `views/Installation/InstallationConnections.test.tsx` checks the
+controls are hidden from non-writers and the connected state per platform.
+Not covered: a real proxy accepting the page's calls, the `/connect` return
+end to end in a browser, a second node publishing its own runtime child, and
+syncing those children between nodes.
+
+`atomic-proxy:` URLs (#1700, answer 4): the shared fixtures in
+`testdata/plugin-manifest/` (Rust `shared_manifest_conformance` and the
+`plugin-manifest.test.ts` mirror) cover `proxy` platforms and proxy-relative
+operations, including undeclared platforms, bad names, duplicates, dot
+segments and queries. `manifest::proxy_relative_tests` covers the URL parser.
+`host_core` tests send a proxy-relative request to a one-shot loopback proxy
+and check the resolved `/proxy/{connection}/{platform}/...` request line and
+its v2 signature. They also check refusals, before any connection, for an
+undeclared platform, no delegated connection, no configured proxy, no
+matching operation and a dot segment.
+
+Fail-closed app identity (#1644) with installation identities (#1700,
+answer 8): `plugins::installation::tests` resolve an Installation this node
+activated whose entry point names its app id and another node's published
+agent (runs as this node's agent), the same Installation as synced data on a
+node that never activated it (refused, and so is its entry point), and a
+`createApp` agent with no key here under an activated Installation (still
+refused). `scheduler` tests (from #1644) cover the run path. Not covered: two
+real nodes syncing an Installation.
+
+A wasip2 class extender is refused at the integration proxy, by URL and by
+`atomic-proxy:`, even when its manifest lists the proxy origin (#1700, answer
+5): `host_core::tests::a_class_extender_is_refused_at_the_proxy_and_told_why`.
+
+Version 2 required on state-changing endpoints, with replay protection
+(#1700, piece 6 and answer 7): `app_endpoints_test::state_changing_routes_refuse_v1_and_cookies_and_accept_v2`
+sends every route on the list (including all 13 `/integration-action*`
+routes and the `DELETE`s) a v1 signature, a session cookie and a v2
+signature through the real router and middleware; `a_replayed_v2_request_is_refused`
+replays a captured v2 request byte for byte; `reads_on_v2_routes_still_accept_v1`
+covers `GET`. `replay_cache::tests` cover the window edges, a proof signed
+ahead of the server clock, and a full cache. `server/tests/it/iroh_pairing.rs`
+posts `/iroh-sync` with v2 between two real servers. The browser callers are
+covered with mocked signing (`plugin-server`, `plugin-install`,
+`plugin-connection`, `integration-actions`, `hostingClient`, `hostStore`,
+`managedServer`, `pairing`), and `authentication-v2.test.ts` verifies what
+`signedRequestInit` produces. Not covered: a real browser against a real
+server for these writes (the Playwright suite exercises some of them
+end-to-end), and a restart forgetting the cache.
 
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
@@ -260,27 +692,13 @@ setup declarations: detached round-trips, supported constraints, malformed schem
 choice hints and rejection of unknown keywords before form/model use. `AppSetup/setup.test.ts`
 checks that credential values are redacted from reported host errors and that no setup
 actions are registered.
+checks schema parity, repository and Notion UUID validation, and credential-link constraints.
 The provider setup E2E (`app-setup.spec.ts`) moved to atomic-plugins. Live
 authentication, installation recovery and arbitrary authored setup execution
 are not covered here.
 
-`integrations/localthought/settings.test.ts` verifies that reconnects cannot reuse
-legacy installation identities, while repeated imports on one connection remain
-stable. The LocalThought Vitest config has an explicit root so all six suites
-also execute when invoked from outside the repository (including `/`).
-
-LocalThought browser migration: `integrations/localthought/browser.test.ts`
-covers secret-free selected-platform redirects, S256 PKCE, one-time redemption,
-actor/drive/platform ownership, cancellation, expiry, rotation before dispatch,
-pagination, uncertain-response refusal and cross-origin pagination refusal.
-`browser-smoke.mjs` exercised the complete mock consent/import/review/OPFS/reload
-journey through the WASM engine, which was removed in #1618; it fails until
-the proxy calls move into the plugin iframe. Local installation/schema lookup tests reject missing or
-incomplete local databases rather than inferring permission to create duplicates.
-The proxy redirect work has 60 passing Rust tests including PostgreSQL-backed
-consent/replay, optional credential grants, callback binding and redemption expiry.
-CORS was verified with the earlier live browser flow; the new secret-free flow
-still requires matching proxy/frontend deployments and live verification.
+`runtimeIntegrationConfig.test.ts` covers the integration-proxy setting, the
+deployment default and rejection of invalid proxy origins.
 
 The standalone browser-only Devonian demo (`chunks/DevonianDemo/`, the
 `/app/devonian-demo` route, and `browser/e2e/tests/devonian-issue-sync.spec.mts`)
@@ -536,6 +954,7 @@ declares, and an undeclared secret still has somewhere to go. The trigger HTTP
 response regression `response_filters_round_trip_into_updates` ensures GET
 filter values can be sent back to POST. Provider connection flows (GitHub,
 the mock-proxy Pets flow) moved to atomic-plugins.
+Notion, the mock-proxy Pets flow) moved to atomic-plugins.
 Run it against a production build to catch missing translation catalog entries:
 Vite dev extracts them automatically and can hide blank production labels.
 
@@ -620,12 +1039,22 @@ Two things worth knowing about the runners:
 | Legacy `set`/`push`/`remove` commit rejection is on the parsed commit's properties: a signed commit carrying `set` is refused under hub and peer policy, a value quoting the deprecated URLs applies, a commit *on* the `set` Property reaches the ownership gate | `lib/src/sync/tests.rs` (`ingest_commit_rejects_legacy_field_commits`, `ingest_commit_accepts_values_that_mention_legacy_fields`) |
 | A fresh server store gets the core models without `--initialize` (`Db` open seeds them) | `server/src/tests.rs` (`fresh_store_gets_core_models_without_initialize`) |
 | Missing-drive bootstrap (OQ5): `Public` never creates a drive, Owner mode enrolls only the owner, open node admits an authenticated first-sync | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`), `peer.rs` (`live_write_admission_tests`) |
+| Hash-first initial upload: permitted absent drive requests full reconciliation and persists root/child; stored private, tombstoned, non-resource and policy-denied probes remain refused; policy preview does not enroll or start grace | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`), `lib/src/sync/policy.rs` |
+| A refused current hash probe exits client sync progress; legacy subject spelling resolves; stale and unrelated subscription refusals do not fail the current drive | `browser/lib/src/websockets.test.ts` |
+| A read-only bootstrap preview uses the canonical drive key, so alternate DID or HTTP spellings cannot bypass an enrolled drive's quota or start grace | `lib/src/sync/policy.rs` (`probe_preview_cannot_bypass_quota_by_respelling_a_drive`) |
 | Engine-owned `SUB`/`UNSUB`: granted `SUB` is a session command, unreadable `SUB` answers `ERROR UNAUTHORIZED_READ` | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`) |
 | Signed `SYNC_DIFF.removeCommits`: envelope applies regardless of connection agent, tampered envelope does not delete, envelope only handed to drive readers, replay after re-creation refused | `lib/src/sync/peer.rs` (`initiator_trust_tests`), `engine.rs` (`bootstrap_and_sub_tests`), `tombstones.rs`, `protocol.rs` |
 | `SyncSession` over an in-process `AtomicTransport` holds `AUTH` across frames | `lib/src/sync/session.rs` |
 | Signed envelopes per resource: `latest`/`all` retention, time order, not indexed, verified attribution per Loro token, tampered envelope unverified, two writers, destroy fold | `lib/src/envelopes.rs` |
 | `GET /history-attribution` names the verified signer and is read-gated | `server/tests/it/history_attribution.rs` |
 | Attribution parse / version lookup / server+local merge | `browser/lib/src/history-attribution.test.ts` |
+| Per-table change list (#1850): created/updated/deleted kinds for create, edit, move out, move in, destroy; one entry per row; per-row Loro version; bounded pages and a row edited between pages; tombstone pruning expires older cursors (410); classtype change rebuilds; backfill of pre-existing rows; replicated (`persist_replicated_resource`) and sync-removed rows; table destroy drops its log; readers without table read learn nothing; restart durability | `lib/src/change_log_test.rs` |
+| `GET /changes`: row listed with version, stranger refused, typed `INVALID_CURSOR` / `CURSOR_EXPIRED` | `server/src/tests.rs` (`table_changes_endpoint`) |
+| `afterCommit` wake-ups (#1851): a change to a subscribed table writes a marker in the same batch, others none; commits coalesce; replicated and sync-removed rows wake; no index, no marker; head cursor skips existing rows | `lib/src/change_log_test.rs` |
+| Durable `afterCommit` (#1851), fixture plugin from a release shown as a table's view: initial delivery at the head, then each change with kind and version; paused installation skipped without counting, catches up; a throw redelivers the same page (`attempt` 2); 8 failures stop the table with the cursor unchanged, Retry delivers the same page; a finished journal is acknowledged once without a rerun; `CURSOR_EXPIRED` → `reset: 'expired'`; 210 rows in three pages not counted by the cap; the loop cap stops it; own writes under a grant apply signed by the app agent and are not delivered back, a person's edit after them is; without a grant writes wait, the table pauses, Apply / Allow all (`hook-review` grant) / Decline, then it catches up; out-of-scope writes held and not allowable in general; `ctx.changes` refused for another table; `view-kind` by hand subscribes nothing, a kind change ends it; the sweep recovers a lost marker; grant backfill; flag off → nothing; an edit survives a hard restart (subprocess) and is delivered; revoking ends the subscription on the next tick and drops its proposal, pausing does not; uninstalling ends it at the sweep; losing read ends it when the table's rights change, a row edit does not; a stale proposal is refused on review, or discarded by the worker, and the page reruns on the new release; a person's edit while a proposal waits survives the reviewed write and is delivered, not dropped as an echo (#1907) | `server/src/plugins/after_commit_test.rs` |
+| `entrypoints.afterCommit` accepted in `extension`, refused in `server-extension`; `onResourceGet`/`beforeCommit` unknown | `server/src/plugins/manifest.rs`, `testdata/plugin-manifest/index.json` (shared with `browser/lib/src/plugin-manifest.test.ts`) |
+| `afterCommit` UI: the dialog line; review bar with Apply / Allow all (only in scope) / Decline; warning with Retry; Read-only still follows, Allow editing does not send a second request; Installation count | `browser/data-browser/src/chunks/AppPage/AfterCommitBar.test.tsx`, `afterCommit.test.ts`, `chunks/TablePage/appViewGrant.test.ts`. **Gap:** no `browser/lib` integration test and no Playwright spec; the Installation page section and the tab mark are only covered by screenshots |
+| Change list client: parse, request shape, 410 → `TableChangesCursorExpiredError` | `browser/lib/src/table-changes.test.ts`. **Gap:** no `browser/lib` integration test against a real server, and no plugin host call yet (#1851) |
 | Engine-level two-store sync, private drives, blobs, live push | `lib/src/sync/tests.rs` |
 | Drive hashing; a filtered `SYNC` (`subjects`) diffs like the full one | `lib/src/sync/tests.rs` |
 | Remote update merge, drive-spoof rejection, tombstones | `lib/src/sync/ws_apply.rs`, `tombstones.rs` |
@@ -644,6 +1073,10 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Paired peer + its relay/direct addresses survive a kill | `lib/tests/identity_durability.rs` |
 | Two whole servers pair via `POST /iroh-sync` and reconcile | `server/tests/it/iroh_pairing.rs` |
 | `/iroh-sync` refuses malformed node ids with a UI-showable error | `server/tests/it/iroh_pairing.rs` |
+| An interrupted file write preserves the previous full sync date, then reconnecting with matching file metadata fetches the missing bytes and advances the date | `lib/src/sync/iroh_e2e.rs` |
+| The accepting Iroh peer retries a failed file write while the connection stays open | `lib/src/sync/iroh_e2e.rs` |
+| An Iroh peer stores the exact bytes of a file at the HTTP upload limit | `lib/src/sync/iroh_e2e.rs` |
+| Sync settings shows the selected drive's confirmed date for one peer and sync activity for another | `browser/e2e/tests/peer-full-sync-status.spec.ts` |
 
 ### Glue
 
@@ -1096,6 +1529,27 @@ native clients.
 
 ### Save durability and identity lifecycle regressions
 
+- `save-receipt.test.ts` checks the additive `saveWithReceipt` contract through
+  real Resource/outbox code with controlled write/transport completion. It covers
+  captured local and accepted server versions, later edits, absent evidence,
+  optional mirror failures/deadlines, identity/database replacement, custom host
+  transports, no-op/concurrent calls and accepted-commit bookkeeping failures.
+  The actual WASM memory-backend cases in
+  `tests/outbox-client-db.integration.test.ts` verify offline/local-only writes
+  produce readable stored JSON/snapshots but no local durability receipt. Existing
+  `client-db-durable-put.test.ts` checks worker acknowledgement follows flush.
+  These establish attribution and completion boundaries, not new browser crash
+  durability, server fsync or independent replica guarantees (#2538).
+- `local-save-persistence.test.ts` checks required offline/local-only save
+  persistence through the real Resource/signing/outbox path with a stubbed worker
+  boundary: missing, unsupported and failing storage reject; edits and signed
+  local-only genesis/history remain retryable; recovery clears the save error;
+  saved notifications and peer publication wait for the write to finish.
+  Snapshot-only persistence retains the internal outbox-written boolean meaning.
+  `save-status-coordinator.test.ts` distinguishes failed local writes from normal
+  queued remote work. Existing save-acknowledgement tests retain optional online
+  mirror failure/timeout coverage. These tests validate completion/error handling,
+  not a new OPFS crash guarantee or independent replica receipt (#2538).
 - `save-acknowledgement.test.ts` exercises `Resource.save()` through the real
   outbox with a stubbed commit transport: server refusals (including terminal
   drops), backoff, blocked entries and cancellation cannot report persistence.
@@ -1245,6 +1699,35 @@ the reader's active drive to receive live updates.
 
 ### Per-drive Cloud Server display
 
+`components/SideBar/syncStatus.test.tsx` mounts the sidebar status hook against a
+real Store. It covers a connected server with a local-only selected drive,
+registration/promotion, selected-drive receipts, foreign/absent drives, server
+and identity changes, unsaved edits, a later edit during an unacknowledged save,
+new/removed resources, the embedded desktop node, and red progress/warning states. Counters
+remain store-wide. These tests do not establish Cloud Vault or peer durability.
+`local-only-drive.test.ts` distinguishes locally settled commits from server
+acceptance. `websockets.test.ts` covers deferred flushes across context changes
+and late `SYNC_OK`/`SYNC_DIFF` responses after a drive becomes local-only.
+It also covers all-chunk acknowledgement, both orders of bidirectional sync,
+bounded remove-only verification, rejected transfers, and retry after terminal
+authentication, send and flush failures.
+`sidebar-drive-sync.spec.ts` uses a real server connection and local database to
+exercise the red local-only indicator, Sync page explanation, local activity
+wording, save/reload persistence, and switching back to a server-synced drive.
+Account/drive routing preferences remain browser-wide; #2411 owns isolation and
+the two-identity shared-drive transition tests. These indicator tests do not
+establish that isolation.
+Ordinary server resource-state receipts do not establish attachment presence.
+`components/SideBar/driveConfirmation.test.tsx` exercises the separate exact-hash
+copy check, stale responses, context/DB changes, missing/old/malformed endpoints,
+retry and local-only exclusions. Rust `sync::confirmation` tests check stored
+files and chunks, missing/corrupt bytes, strict reads and a drive-scoped inventory;
+the handler test exercises signed requests and rejects foreign drives. Object
+revision-cache tests require fresh presence/revision checks and rehash changed
+content. The browser attachment journey deliberately acknowledges a blob PUT
+without storing its bytes, requires red with the real confirmation endpoint,
+then uploads the bytes and waits for a confirmed copy.
+
 `driveSyncStatus.test.ts` rejects another drive's sync timestamp and scopes
 asynchronous hosting/usage results to the selected drive and server. It covers
 unenrolled/local drives and shared drives confirmed directly by their node.
@@ -1337,10 +1820,13 @@ Atomic uncertain-write recovery, query-outbox performance/retention at scale and
 the Dagger container gate. Queue storage prevents loss; it does not imply
 cross-system exactly-once execution or automatic reconciliation of uncertain writes.
 
-### Live connector query snapshots
+### Live connector query snapshots and Notion pilot
 
 Moved to atomic-plugins with `integrations/github-issues` (its live tests
 and fixture suites). `uuid_paths_are_single_canonical_segments` still
+Moved to atomic-plugins with `integrations/github-issues` and
+`integrations/notion` (their live tests, fixture suites and
+`notion_sync_tests.rs`). `uuid_paths_are_single_canonical_segments` still
 covers constrained UUID authorization and path-escape rejection here.
 
 ### Named integration actions
@@ -1415,6 +1901,12 @@ tests cover terminal acknowledgement without writes. The browser uses synthetic
 consumer responses to check inspection, required reason and one explicit abandon
 request; the JS client test checks the signed request fields. Deleted-automation
 reconciliation and per-run (rather than per-worker) concurrency remain open.
+
+Notion setup UX and proxy migration: the provider and its tests moved to
+atomic-plugins, and so did its browser sync host (`async-plugin.ts` and
+`browser-sync.ts`; their only importer here, `browserPluginSync.ts`, went with
+the LocalThought removal). Their tests (bounded receipt replay, refusal to
+replay a lost write, converged checkpoints) run there.
 
 Runtime feature coverage: `cargo check -p atomic-server` and
 `cargo check -p atomic-server --no-default-features --features light` validate
@@ -1802,6 +2294,19 @@ requests, even if a server request would have succeeded.
   on a free port, and preserves its report/build logs. `--preview` opts into Vite.
   Failure traces are retained. Real Cloud Vault integration requires an explicitly
   supplied `ATOMIC_VAULT_PORTAL_URL`; the runner never discovers unrelated portals.
+- `vault-first-backup-status.spec.ts` uses the real signup, local database, and
+  Vault export with a mocked account service and object store. It holds and
+  fails the first storage PUT, also tests an enrollment refusal, verifies a
+  local edit survives reload with the notice, and keeps the notice visible
+  until a retry is confirmed. A later failed backup retains the last success
+  time in Sync settings. Turning off a confirmed Vault backup for a
+  browser-only workspace shows a hard warning that survives reload and links
+  to Sync settings. The spec checks a medium warning at two days, a hard
+  warning at eight days, and a manual backup of an unchanged drive writing
+  a new confirmed checkpoint that clears the warning.
+- `server-full-sync-warning.spec.ts` saves a folder to a standalone Atomic
+  Server with Cloud Vault off and checks that a verified full sync clears the
+  drive warning, including after reload.
 
 ## Boolean reads and managed development origins
 
@@ -2028,6 +2533,27 @@ window, clears its deadline on completion, and rejects a host that stays silent.
 The packaged adapter additionally tests canonical requests, caller-supplied policy
 spoofing, subscription acknowledgements and unsupported operations.
 
+App frame navigation (#1734, #1735): `helpers/extensions/externalLink.test.ts`
+checks `openExternal` accepts only http(s) links without credentials, keeps
+the full (punycode) host the confirm bar shows, and opens with
+`noopener,noreferrer`. `hostStore.test.ts` checks `openResource` refuses
+agents, commits, blobs, nodes and non-subjects before loading anything, and
+refuses a resource the person's store cannot read. `viewProtocol.test.ts`
+checks the generated client sends both ops and waits on the person without a
+deadline. Not covered by an automated browser test: the confirm bar itself
+and the navigation (checked by hand with a throwaway Playwright script).
+
+App frame `store.proxy.disconnect({platform})` (#1736):
+`helpers/proxyConnections.test.ts` checks `disconnectApp` against the
+signature-verifying fake proxy: only `DELETE /connections/{id}/agents/{app}`
+calls, another app's delegation on the same connection kept, no connection
+deleted, a 404 counted as gone. `hostStore.test.ts` checks `proxyDisconnect`
+passes an Installation's recorded connection id along and removes
+`integrationConnections[platform]` (keeping other platforms), writes nothing
+for a `createApp` app, and refuses without a proxy or with a bad platform.
+`viewProtocol.test.ts` checks the frame drops its cached capabilities for the
+platform. Not covered: a real proxy, and the op in a browser.
+
 App frame `store.getMany(subjects)` (#1737): `hostStore.test.ts` checks it
 answers in order through the same store read as `get` (same state after a
 local change), reports an unreadable subject in its place without failing the
@@ -2092,13 +2618,6 @@ cancelled on teardown. Old plugin-name grants are deliberately not migrated.
 `store_host::destroy_identity_tests` checks the signer of the persisted destroy
 commit. It failed with the server signer before `Resource::destroy_as` was used;
 installation deletion must use the same selected identity as create/update.
-LocalThought: the browser and fixture tests cover selected-platform consent,
-PKCE redemption, one-time handoff consumption, rotating proxy credentials,
-duplicate-page rejection, typed paginated previews, and Calendar UTC date-range
-validation. The new redirect flow uses a synthetic fixture identity. These
-automated checks do not certify live LocalThought login, consent, redemption or
-provider writes; matching deployment evidence is tracked separately in PR and
-release verification.
 
 Google Calendar one-way projection and its E2E (`google-calendar-import.spec.mts`)
 were removed with the Calendar lens; there is no Calendar import coverage here.
@@ -2115,13 +2634,13 @@ were removed with the Calendar lens; there is no Calendar import coverage here.
   (#1804): "moved from" on the new day, a placeholder on the original day with
   the same original-instance key (also when the new day is off the grid), and
   no mark for a same-day time change or a cancellation.
+  recurring all-day spans clipped to the visible grid.
 
 The bundled Google Calendar (Devonian) lens and its end-to-end coverage
 (`browser/e2e/tests/google-calendar-import.spec.ts`, which drove the retired
 `devonian-google-calendar` card) were removed along with the `devonian`
-dependency. LocalThought imports (including Google Calendar) are currently
-broken (see the gap under Plugin discovery), so there is no e2e coverage of a
-recurring-series import.
+dependency. The Calendar drive app and its provider integration tests live in
+[Atomic Plugins](https://github.com/ontola/atomic-plugins/tree/main/integrations/calendar).
 
 The actionable fidelity audit is `docs/imports/google-calendar-gap-report.md`.
 Live Google equivalence for historical/exotic recurrence rules remains outside
@@ -2134,7 +2653,7 @@ number by keyboard, or a click on the day's empty space) shows every event and
 opens each row on top of it. How many chips fit is measured, so it needs a
 real browser; jsdom can't cover it.
 
-All-day ranges: `browser/lib/src/calendar-date.test.ts` covers civil-date
+All-day ranges: `browser/utils/src/calendar-date.test.ts` covers civil-date
 validation, exclusive single/multi-day ends, leap days, DST dates and year
 boundaries; run under UTC, America/Los_Angeles and Pacific/Kiritimati.
 
@@ -2144,17 +2663,9 @@ History: this section documented the Rust tests of the vendored Syncables
 crate and its WASM bridge. Both were removed in #1618, together with the
 browser-side OpenAPI-driven import they backed.
 
-`integrations/localthought/browser.test.ts` covers consumer-owned request budgets,
-Retry-After handling with rotating credentials, deadline rejection, and separate
-catalog selections with explicit caller precedence.
-
 GitHub and Clockify implementations, fixture suites and
+GitHub, Notion and Clockify implementations, fixture suites and
 certification live in atomic-plugins.
-
-`integrations/localthought/settings.test.ts` covers runtime proxy selection,
-deployment-default fallback, URL validation without losing the previous setting,
-origin-separated connection keys and migration of legacy connections only for
-the matching proxy and owner.
 
 
 
@@ -2331,13 +2842,6 @@ and no community catalog fetch while disabled. Existing plugin browser tests exp
 through Settings. Cross-device preference sync uses normal private-drive sync;
 a dedicated multi-device preference test is not yet present.
 
-## Local Thought browser refresh
-
-- `integrations/localthought/browser.test.ts`: one provider request for validation,
-  no pagination/retry or import, credential rotation, and denied/throttled/failed
-  access checks.
-- No app-side coverage: the data-browser's LocalThought sync was removed; it
-  returns as plugins running in their own iframe.
 Portable app definitions: `browser/lib/src/app-package.test.ts` loads a standalone
 JSON fixture through the shared importer, planner and apply engine with in-memory
 storage. It verifies nested placement, native localId, repeat import, conflicting
@@ -2799,6 +3303,36 @@ same `Agent.fromSecret` parser used by the local welcome form. It verifies
 the identity and public key. Browser sign-in and data recovery are separate
 flows.
 
+## Drive app runs its own importer (#1739)
+
+| Flow | Layer | Where |
+| --- | --- | --- |
+| Which importer an app may run: the owner of the table it shows, from any of its destination tables; none on its own page or an unrelated table; a named foreign importer refused; Set up required; app file shape and size checked | vitest | `browser/data-browser/src/chunks/AppPage/hostStore.test.ts` |
+| A host that cannot draw the review refuses `runImporter` instead of applying unseen | vitest | same |
+| Summary: applied counts by kind and failed-change errors; cancelled, nothing and blocked | vitest | same |
+| The owning plugin of a destination table (single and keyed); a table merely parked under the plugin has none | vitest | `browser/lib/src/plugin-destination.test.ts` |
+| `store.importer.run()` sends `runImporter` with no 60 s timeout | vitest | `browser/plugin/src/viewProtocol.test.ts` |
+| App button → host bar → host picker or app file → review → apply writes rows → summary in the app; cancel; refused file; foreign importer | Playwright | `browser/e2e/tests/app-importer.spec.ts` |
+
+Not covered: an Installation-based (wasip2) importer, and the money app itself (ontola/atomic-plugins#148 has its own e2e).
+
+## App row grants for a table's view (#1740, 2026-09-25)
+
+`server/src/handlers/app_row_grant_test.rs` runs `/app-row-grant` and
+`/app-write` against a real store: adding the view with a grant lets the app
+save and remove a row property and create a row (signed by the app);
+`view-kind` alone grants nothing; a request confirmed as `via: request` works;
+the record has `grantedBy` (the signer), `grantedAt` and `via`; a grant needs a
+gesture, a View of that table showing the app, and a granter who can edit the
+table; it reaches neither another table, the table itself, its views, rights,
+non-column properties nor `destroy`; revoking from the menu, destroying the
+View, or switching its kind away and back all refuse further writes.
+`hostStore.test.ts` covers the frame ops (`rowAccess`, a bare host refusing
+`requestRowAccess`, row writes going to the server, deletes refused),
+`rowGrant.test.ts` the in-app request, and `appViewGrant.test.ts` the "+ Add
+view" / "View type" confirmation choices. Gap: no Playwright test clicks the
+confirmation; the money app's host E2E (atomic-plugins#148) is the natural one.
+
 ## Hidden-tab liveness and presence after reconnect (#1800)
 
 `browser/lib/src/liveness.test.ts` replays the WS liveness timer at a hidden
@@ -2888,10 +3422,47 @@ Installation scopes (2026-10-16, host ABI step 2): `server/src/plugins/host_abi/
 ## Agent page
 
 `browser/e2e/tests/agent-page.spec.ts` (full suite, not `@smoke`) opens another agent's page: the conversation started from its Send message button is listed, a private note typed there survives a reload and is not on the other agent's own page, and a resource that agent created in a shared folder shows under Created (as a resource row), and favoriting the agent from its page menu lists it in the sidebar Favorites. Your own agent page has no messages and no notes. `hasMember` is unit tested in `conversations.test.ts`. Not covered: the Created list is by creator, not by last editor (no index of who edited what, see `planning/auditability-loro-history.md` "Secondary indexes"), and the note's `PlainText` also shows in the private drive's resource list.
+Row extras (#1849): the `app_row_grant` tests in
+`server/src/handlers/app_row_grant_test.rs` (13 in all) add four for extras —
+a granted app writes the extras it declared in `row-extras` and nothing else;
+extras reach neither another app's properties nor another table; an app cannot
+claim another app's or forbidden properties as extras; and a wider declaration
+needs a new grant (the old one kept as `superseded`) while a narrower one
+applies at once. `browser/lib/src/plugin-app.test.ts` checks the App declares
+the extras it was given and none by default; `useRowExtras.test.ts` reads an app's declaration
+(none when absent or without the plugin vocabulary) and collects the extras of
+every app shown as one of a table's views; `rowGrant.test.ts` covers the request
+naming the extras, an answer at once when the grant covers them, a new request
+when the declaration widened, and a pre-extras grant covering none. Gap:
+nothing automated checks the row dialog's read-only "Kept by apps" fold or that
+the table shows no extra columns.
 
 Sync probe hash cache: Rust unit tests in `lib/src/db/write_log.rs` check that an unchanged drive is served from the cache (hit counter) and equals a cold computation, and that an edit, a new child, a move out of and into the drive, a ring overflow, `clear_tree` and a committed batch each force a recompute, while a write in another drive and an uncommitted batch do not. Agents keep separate entries (Public and a stranger still get an error after the owner is cached). Not covered: a change to a `drive`-stamp resource outside the drive, and the HTTP-URL drive path (never cached).
 
 ## Batched SYNC_PUSH persistence
+
+Search body extraction: `body_text_reuses_live_state_and_preserves_snapshot_fallback`
+checks loaded and snapshot-only state, live edits ahead of the saved snapshot,
+properties-only legacy docs, corrupt fallback bytes and empty resources.
+`body_text_preserves_prosemirror_precedence_in_loaded_state` checks rich-text
+precedence over the legacy body container. The ignored
+`measure_body_text_state_reuse` compares extraction with the previous
+export/reload path; it is a microbenchmark, not an initial-sync latency claim.
+`lib/benches/sync_import_bench.rs` exercises the full native reconcile/import
+pipeline with signed envelopes and a file-backed receiver, through LAST flush
+and complete title/body searches. After timing it checks projections, document
+state, version vectors, history metadata and envelope equality against the
+sender, then repeats validation after reopening. It excludes network/TLS and
+browser/OPFS; a normal reopen does not establish crash durability. See the
+adjacent benchmark notes and per-run measurements for the comparison limits.
+
+Borrowed staged retention: the 42 envelope tests cover audit inheritance,
+unknown ancestors, staged genesis replacement, unreadable rows and rejected
+proofs. A frozen-frame diagnostic trial validates full state, projections,
+version vectors, history metadata, exact retained envelopes, complete title/body
+searches and reopen for all 20 runs. Method, all samples and the scope limits
+are in `lib/benches/envelope_retention_profile/README.md`; receiver timing is
+not total network/browser sync latency or a crash-durability test.
 
 `db::test::sync_push_batches_local_ids_and_flushes_only_at_last` uses a counting
 KV adapter to verify that localId resources share one projection transaction,
@@ -2929,3 +3500,63 @@ Existing installs whose secret was already discarded require reinstalling;
 this does not rotate an app identity or repair provider delegations. New online
 installations still work with older nodes; automatic replay requires a node
 that advertises the initialization-only protocol.
+Resource-level drive-app views: `resource-app-view.test.ts` checks readable
+same-drive App bindings, hidden installation ancestry and foreign/cyclic
+renderer rejection. It also checks that table-only `renders` declarations never
+replace item resource pages; default resource views use `resource-renders` only.
+`catalog-app-layout.test.ts` covers in-place table-to-folder
+migration, repeated migration, note/baseline/identity preservation, the missing
+host-identity guard and refusal to use an unrelated app-data pointer as a native
+grant. `plugin-app.test.ts` covers hidden view-only installation without a table
+or row class and folder creation with native access for the existing app key.
+`hostStore.test.ts` distinguishes resource context from table grants, checks
+native app-key access to a moved dataset and refuses unrelated writes. These
+are offline tests; production deployment and live provider behavior are separate
+acceptance steps.
+
+
+`appFrameIdentity.test.tsx` reproduces a table-view guest reading an absent grant
+before Add view's grant POST finishes. The acknowledged grant notification remounts
+the guest so it reads current permission; revocation remounts it again. Initial permission loading never remounts a guest or fetches a second
+status; acknowledgements for unrelated apps, tables and drives are ignored.
+Individual-resource views never fetch or borrow a table grant. This uses the existing grant notification path,
+with no permission polling or provider operations.
+
+
+Permission-change frame lifecycle regressions also cover a guest awaiting its
+own requestRowAccess response: its acknowledged request does not remount that
+same view before the table-binding continuation finishes; other views still
+refresh. The calendar-public-api regression validates a provider event through
+the root library export used by the Calendar integration.
+
+
+Property-name content split: `browser/table/src/schema/PropertyNameField.test.tsx`
+covers existing versus provisional shortnames, raw callbacks, fixed input identity
+and delayed focus reset when the resource changes. The Atomic host retains its
+error wrapper and baseline text-format save. No new persistence guarantee.
+
+
+Table format extraction (#2539): `browser/table/src/schema/PropertyChoiceField.test.tsx`
+checks controlled radio selection; `browser/table/src/chunks/TablePage/EditorCells/FloatCell.test.tsx`
+checks decimal, exponent and comma input commit without truncation or writes while typing.
+`browser/data-browser/src/chunks/TablePage/PropertyForm/NumberPropertyForm.test.tsx`
+uses real Atomic Resources to preserve number-draft initialization without saving and
+text-format changes with the clean host's explicit save. These are compatibility
+checks for code moves, not new schema-validation or persistence semantics.
+
+
+### Create-button field extraction
+
+- `browser/table/src/QuickAddFields.test.tsx` preserves the existing flat draft, numeric conversion, single-preset behavior and input identity.
+- `browser/data-browser/src/chunks/TablePage/quickAdd.test.ts` retains stored-spec parsing and completeness coverage; host dialog/save lifecycle stays unchanged.
+
+Property-name accessibility proposal: `browser/table/src/schema/PropertyNameField.test.tsx`
+covers accessible error relations, raw names, disabled input and baseline delayed
+selection after resource changes. The Atomic text-format regression retains the
+explicit save; removing it is a separate held proposal under #2538.
+
+
+Range-field content split: `browser/table/src/schema/PropertyRangeField.test.tsx`
+characterizes baseline floor conversion with an uncontrolled visible draft,
+empty-bound/blur callbacks and original max-only/equal-limit validation quirks.
+This move does not fix those policies or alter PropertyForm submission.

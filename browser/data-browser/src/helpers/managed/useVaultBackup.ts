@@ -1,4 +1,5 @@
 import type { Store } from '@tomic/react';
+import { BACKUP_DAY_MS } from '../driveProtection';
 import { getManagedAccount } from './session';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -28,7 +29,12 @@ import {
   suggestedFileName,
 } from './vaultFile';
 import { restoreDriveToSnapshot } from './vaultRestore';
-import { onVaultChanged, setVaultOptOut } from './vaultAutoBackup';
+import {
+  notifyVaultChanged,
+  onVaultChanged,
+  setVaultOptOut,
+} from './vaultAutoBackup';
+import { confirmFirstVaultBackup } from './vaultFirstBackupStatus';
 
 /**
  * Cloud Vault state for one drive, ready to bind to a UI.
@@ -218,10 +224,16 @@ export function useVaultBackup({
         return;
       }
 
+      const details = await getVaultState(enrollment.drive_pseudonym);
+
+      if (agentSubject && details.confirmed_objects > 0) {
+        confirmFirstVaultBackup(agentSubject, driveSubject);
+      }
+
       setStatus({
         state: 'on',
-        enrollment,
-        details: await getVaultState(enrollment.drive_pseudonym),
+        enrollment: details.enrollment ?? enrollment,
+        details,
       });
     } catch (e) {
       // Not signed in, no portal configured, offline. All of these mean "we
@@ -229,7 +241,7 @@ export function useVaultBackup({
       // enable button here would produce a confusing failure on click.
       setStatus({ state: 'unavailable', reason: (e as Error).message });
     }
-  }, [driveSubject]);
+  }, [agentSubject, driveSubject]);
 
   // The automatic path (sign-in, the boot watcher) may enrol this drive after
   // the first read came back "off"; re-read when it says so.
@@ -342,6 +354,7 @@ export function useVaultBackup({
         driveKeyEpoch: keyEpoch,
         refreshDriveKey: () => refreshKey(enrollment.drive_pseudonym),
       });
+      notifyVaultChanged(driveSubject!);
       await refresh();
     });
   }, [
@@ -367,6 +380,7 @@ export function useVaultBackup({
       // Backup is on for everyone by default; switching it off here must not
       // be undone by the next sign-in (see vaultAutoBackup.ts).
       setVaultOptOut(driveSubject!, true);
+      notifyVaultChanged(driveSubject!);
       await refresh();
     });
   }, [run, status, driveSubject, refresh]);
@@ -376,6 +390,8 @@ export function useVaultBackup({
 
     await run(async () => {
       const key = await ensureKey(status.enrollment.drive_pseudonym);
+      const lastBackupAt = status.enrollment.last_backup_at;
+
       await runVaultBackup({
         db: db!,
         driveSubject: driveSubject!,
@@ -384,7 +400,12 @@ export function useVaultBackup({
         driveKey: key.driveKey,
         driveKeyEpoch: key.keyEpoch,
         refreshDriveKey: () => refreshKey(status.enrollment.drive_pseudonym),
+        // A manual backup renews an older recovery point even when there are
+        // no new edits to upload.
+        forceCheckpoint:
+          !lastBackupAt || Date.now() - lastBackupAt * 1000 > BACKUP_DAY_MS,
       });
+      notifyVaultChanged(driveSubject!);
       await refresh();
     });
   }, [
@@ -421,6 +442,7 @@ export function useVaultBackup({
               currentStateOnly,
             }),
         });
+        notifyVaultChanged(driveSubject!);
         await refresh();
 
         return result;

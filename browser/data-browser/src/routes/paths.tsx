@@ -30,11 +30,13 @@ export const pathNames = {
   pruneTests: '/prunetests',
   linkOpenRouter: '/link-openrouter',
   devDrive: '/dev-drive',
+  piecesDemo: '/pieces-demo',
   invite: '/invite',
   signOut: '/sign-out',
   connectAgent: '/connect-agent',
   authorizeMcp: '/authorize-mcp',
   sendIdentity: '/send-identity',
+  routeConsent: '/route-consent',
 } as const;
 export const paths = {
   welcome: `${pathNames.app}${pathNames.welcome}`,
@@ -68,4 +70,5 @@ export const paths = {
   linkOpenRouter: `${pathNames.app}${pathNames.linkOpenRouter}`,
   devDrive: `${pathNames.app}${pathNames.devDrive}`,
   signOut: `${pathNames.app}${pathNames.signOut}`,
+  piecesDemo: `${pathNames.app}${pathNames.piecesDemo}`,
 } as const;

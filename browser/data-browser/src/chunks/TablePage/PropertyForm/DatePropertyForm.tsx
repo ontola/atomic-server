@@ -1,6 +1,7 @@
 import { Datatype, core, dataBrowser, urls, useString } from '@tomic/react';
 import { Suspense, useEffect, useState, type JSX } from 'react';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
+import { TablePropertyFields } from '@tomic/table';
+import { Checkbox } from '@components/forms/Checkbox';
 import { DateFormatPicker } from './Inputs/DateFormatPicker';
 import { PropertyCategoryFormProps } from './PropertyCategoryFormProps';
 
@@ -35,15 +36,21 @@ export function DatePropertyForm({
 
   return (
     <Suspense>
-      <CheckboxLabel>
-        <Checkbox onChange={setIncludeTime} checked={includeTime} />
-        <span>Include Time</span>
-      </CheckboxLabel>
-
-      <DateFormatPicker
-        value={dateFormat}
-        onChange={setDateFormat}
-        withTime={includeTime}
+      <TablePropertyFields
+        messages={{ includeTime: 'Include Time' }}
+        model={{
+          kind: 'date',
+          includeTime,
+          onIncludeTimeChange: setIncludeTime,
+          Checkbox,
+          formats: (
+            <DateFormatPicker
+              value={dateFormat}
+              onChange={setDateFormat}
+              withTime={includeTime}
+            />
+          ),
+        }}
       />
     </Suspense>
   );

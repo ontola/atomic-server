@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [
+    {
+      "id": "fetch-file",
+      "method": "GET",
+      "url": "https://*/{*rest}",
+      "effect": "read"
+    },
+    {
+      "id": "notify",
+      "method": "POST",
+      "url": "https://*/ocm/notifications",
+      "effect": "write"
+    }
+  ],
+  "http": {
+    "mount": "drive-prefix",
+    "routes": [
+      {
+        "id": "shares",
+        "path": "/ocm/shares",
+        "methods": ["POST"],
+        "auth": "http-signature",
+        "body": "json",
+        "enqueues": ["notify"],
+        "fetches": ["fetch-file"]
+      }
+    ]
+  }
+}

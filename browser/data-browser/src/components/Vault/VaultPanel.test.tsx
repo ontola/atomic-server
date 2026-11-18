@@ -75,6 +75,21 @@ it('shows the bar and quota when the vault is the only service', () => {
   expect(screen.queryByTestId('vault-included-note')).toBeNull();
 });
 
+it('keeps the last successful backup visible when a later action fails', () => {
+  const vault = vaultWith(1000);
+
+  if (vault.status.state !== 'on') throw new Error('Expected an active vault');
+
+  vault.status.enrollment.last_backup_at = Math.floor(Date.now() / 1000);
+  vault.error = 'Vault upload failed';
+  show(1000, false, vault);
+
+  expect(screen.getByTestId('vault-summary').textContent).toMatch(
+    /^Backed up /,
+  );
+  expect(screen.getByText('Vault upload failed')).toBeTruthy();
+});
+
 it('brings the bar back when included but nearly full', () => {
   show(Math.round(QUOTA * 0.95), true);
 

@@ -13,6 +13,8 @@ import { useLocale } from '@components/LocaleContext';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
 import { useStore } from '@tomic/react';
+import { externalLink, openInNewTab } from '@helpers/extensions/externalLink';
+import { resourceToOpen, resourceNavigationURL } from './hostNavigation';
 import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
 import type { HostReply } from '@chunks/AppPage/hostStore';
 import { AppFormDialog, AskedBy, PickResourceDialog } from './hostUIDialogs';
@@ -108,12 +110,21 @@ export function useHostUI({
     setAsk(next);
   }, []);
 
-  const finish = useCallback((done: UIAsk, result: unknown) => {
+  const finish = useCallback((done: UIAsk, result: unknown, error?: string) => {
     if (askRef.current !== done) return;
-    done.reply({ id: done.id, result });
+    done.reply({ id: done.id, ...(error ? { error } : { result }) });
     askRef.current = undefined;
     setAsk(undefined);
   }, []);
+
+  useEffect(
+    () => () => {
+      const previous = askRef.current;
+      previous?.reply({ id: previous.id, result: cancelledResult(previous) });
+      askRef.current = undefined;
+    },
+    [],
+  );
 
   const handle = useCallback(
     (request: UIRequest, post: (reply: HostReply) => void): boolean => {
@@ -173,6 +184,40 @@ export function useHostUI({
               subject: parseSubject(request),
             });
             break;
+
+          case 'openExternal':
+            open({
+              kind: 'openExternal',
+              id: request.id,
+              reply: post,
+              url: externalLink(request.url),
+            });
+            break;
+
+          case 'openResourceConfirmed': {
+            const waiting: UIAsk = {
+              kind: 'openResourceConfirmed',
+              id: request.id,
+              reply: post,
+              subject:
+                typeof request.subject === 'string' ? request.subject : '',
+            };
+            open(waiting);
+            void resourceToOpen(store, request.subject).then(
+              resource => {
+                if (askRef.current !== waiting) return;
+                const ready = {
+                  ...waiting,
+                  subject: resource.subject,
+                  title: resource.title,
+                };
+                askRef.current = ready;
+                setAsk(ready);
+              },
+              (error: Error) => finish(waiting, undefined, error.message),
+            );
+            break;
+          }
 
           case 'openResource':
             now.navigate(constructOpenURL(parseSubject(request)));
@@ -243,7 +288,7 @@ export function useHostUI({
 
       return true;
     },
-    [open, frame],
+    [open, frame, store, finish],
   );
 
   /** A new file from disk, uploaded under the app, answers the ask. */
@@ -296,6 +341,42 @@ export function useHostUI({
     forwardKey,
     element: (
       <>
+        {ask?.kind === 'openExternal' && (
+          <ConfirmationDialog
+            key={String(ask.id)}
+            show
+            title={`Open ${ask.url.host}?`}
+            confirmLabel='Open link'
+            onConfirm={() => {
+              openInNewTab(ask.url);
+              finish(ask, { status: 'opened' });
+            }}
+            onCancel={() => finish(ask, { status: 'cancelled' })}
+          >
+            <AskedBy>Asked by {appTitle}</AskedBy>
+            <p>This app wants to open a link in a new tab.</p>
+            <p style={{ overflowWrap: 'anywhere' }}>{ask.url.href}</p>
+          </ConfirmationDialog>
+        )}
+        {ask?.kind === 'openResourceConfirmed' && ask.title !== undefined && (
+          <ConfirmationDialog
+            key={String(ask.id)}
+            show
+            title='Leave this app?'
+            confirmLabel='Open'
+            onConfirm={() => {
+              navigate(resourceNavigationURL(ask.subject));
+              finish(ask, { status: 'opened', subject: ask.subject });
+            }}
+            onCancel={() =>
+              finish(ask, { status: 'cancelled', subject: ask.subject })
+            }
+          >
+            <AskedBy>Asked by {appTitle}</AskedBy>
+            <p>This app wants to open {ask.title}, leaving the app.</p>
+            <p style={{ overflowWrap: 'anywhere' }}>{ask.subject}</p>
+          </ConfirmationDialog>
+        )}
         {ask?.kind === 'confirm' && (
           <ConfirmationDialog
             key={String(ask.id)}
@@ -383,6 +464,8 @@ type UIAsk = {
   reply: (reply: HostReply) => void;
 } & (
   | { kind: 'confirm'; confirm: ConfirmAsk }
+  | { kind: 'openExternal'; url: URL }
+  | { kind: 'openResourceConfirmed'; subject: string; title?: string }
   | { kind: 'menu'; at: Point; items: MenuEntry[] }
   | { kind: 'share'; subject: string }
   | { kind: 'pickResource'; pick: PickResourceAsk }
@@ -397,6 +480,8 @@ const UI_OPS = new Set([
   'resourceMenu',
   'share',
   'openResource',
+  'openExternal',
+  'openResourceConfirmed',
   'environment',
   'pickResource',
   'pickFile',
@@ -405,6 +490,9 @@ const UI_OPS = new Set([
 
 /** What an ask answers when a newer one replaces it. */
 function cancelledResult(ask: UIAsk): unknown {
+  if (ask.kind === 'openExternal') return { status: 'cancelled' };
+  if (ask.kind === 'openResourceConfirmed')
+    return { status: 'cancelled', subject: ask.subject };
   if (ask.kind === 'confirm') return false;
   if (ask.kind === 'share') return true;
 

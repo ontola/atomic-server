@@ -55,10 +55,20 @@ export function ChartBlock({ block, config }: BlockProps): JSX.Element {
     ? query.derivedColumns.find(c => c.id === spec.derived)
     : undefined;
 
-  const groups = outcome?.groups ?? [];
+  const groups = query.ready ? (outcome?.groups ?? []) : [];
   // Bars are scaled against the largest value, not against zero-to-max of the
   // axis: a chart of one bucket should still show a full bar.
   const max = groups.reduce((m, g) => Math.max(m, Math.abs(g.value ?? 0)), 0);
+
+  if (query.error || (query.ready && spec && chart?.field && !aggregation)) {
+    return (
+      <BlockShell block={block} label={config.label}>
+        <Empty role='alert'>
+          {query.error ?? 'The configured measurement is unavailable.'}
+        </Empty>
+      </BlockShell>
+    );
+  }
 
   if (!spec || !chart?.field) {
     return (
@@ -70,7 +80,9 @@ export function ChartBlock({ block, config }: BlockProps): JSX.Element {
 
   return (
     <BlockShell block={block} label={config.label}>
-      {groups.length === 0 ? (
+      {!query.ready ? (
+        <Empty>Loading…</Empty>
+      ) : groups.length === 0 ? (
         <Empty>No data yet</Empty>
       ) : (
         <Bars>

@@ -18,6 +18,7 @@ test('ci validates E2E overrides before work and forwards all budget arguments',
   const calls = [];
   for (const name of [
     'jsLint',
+    'jsTypecheck',
     'rustFmt',
     'docsPublish',
     'typedocPublish',
@@ -28,18 +29,83 @@ test('ci validates E2E overrides before work and forwards all budget arguments',
     'rustTest',
   ])
     pipeline[name] = async () => calls.push(name);
+  pipeline.rustBuild = (...args) => {
+    assert.deepEqual(args, [false, 'x86_64-unknown-linux-musl', true]);
+
+    return { sync: async () => calls.push('e2eBuild') };
+  };
 
   let endToEndArgs;
   pipeline.endToEnd = async (...args) => (endToEndArgs = args);
 
   await pipeline.ci('token', false, 'hosted', 'light', 3, 4, 0, true, 'run-7');
-  assert.deepEqual(endToEndArgs, ['token', 'light', 3, 4, 0, '', true, 'run-7']);
+  assert.deepEqual(endToEndArgs, [
+    'token',
+    'light',
+    3,
+    4,
+    0,
+    '',
+    true,
+    'run-7',
+  ]);
 
   calls.length = 0;
   await assert.rejects(() =>
     pipeline.ci('token', false, 'hosted', 'full', -1, 0, -1, false),
   );
   assert.deepEqual(calls, []);
+});
+
+test('ci builds E2E in parallel but starts browsers only after the other checks finish', async () => {
+  const pipeline = new AtomicServer(source());
+  const started = [];
+  const gates = new Map();
+  const turn = () => new Promise(resolve => setImmediate(resolve));
+  for (const name of ['jsLint', 'jsTypecheck', 'rustFmt'])
+    pipeline[name] = async () => {};
+  for (const name of [
+    'docsPublish',
+    'typedocPublish',
+    'jsTest',
+    'jsTestIntegration',
+    'flutterTest',
+    'rustClippy',
+    'rustTest',
+    'e2eBuild',
+  ]) {
+    let release;
+    const promise = new Promise(resolve => (release = resolve));
+    gates.set(name, release);
+    pipeline[name] = async () => {
+      started.push(name);
+      await promise;
+    };
+  }
+
+  pipeline.rustBuild = () => ({ sync: pipeline.e2eBuild });
+  pipeline.endToEnd = async () => started.push('endToEnd');
+  const result = pipeline.ci('token');
+  await turn();
+  assert.deepEqual(
+    new Set(started),
+    new Set([...gates.keys()].filter(name => name !== 'rustTest')),
+  );
+
+  gates.get('rustClippy')();
+  await turn();
+  assert.equal(started.includes('rustTest'), true);
+  for (const [name, release] of gates)
+    if (name !== 'flutterTest' && name !== 'e2eBuild') release();
+  await turn();
+  assert.equal(started.includes('endToEnd'), false);
+
+  gates.get('e2eBuild')();
+  await turn();
+  assert.equal(started.includes('endToEnd'), false);
+  gates.get('flutterTest')();
+  assert.equal(await result, 'CI pipeline completed successfully');
+  assert.equal(started.at(-1), 'endToEnd');
 });
 
 test('lint source setup avoids WASM while build setup includes it', async () => {

@@ -1,0 +1,12 @@
+{
+  "@id": "https://ontola.github.io/atomic-plugins/ontology/lenses/v1",
+  "lensFormat": 1,
+  "name": "Shared lens catalog, release 1",
+  "description": "The first lens catalog release: declarative forms of the four passive lens prototypes from ontola/atomic-plugins#271 and #365. Each is a subset of its code lens; its limits say what it leaves out. Declared, not verified: no host loads this catalog yet.",
+  "lenses": [
+    "https://ontola.github.io/atomic-plugins/ontology/lenses/clockify-time-entry-v1",
+    "https://ontola.github.io/atomic-plugins/ontology/lenses/todoist-task-issue-v1",
+    "https://ontola.github.io/atomic-plugins/ontology/lenses/raindrop-bookmark-v1",
+    "https://ontola.github.io/atomic-plugins/ontology/lenses/solid-bookmark-v1"
+  ]
+}
