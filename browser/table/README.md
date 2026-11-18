@@ -260,3 +260,8 @@ filter bar uses this recovery path, so removing a missing computed constraint
 restores the scoped query without editing raw metadata. Backend-specific value
 and reference adapters retain their responsibilities; the full filter-menu/page
 orchestration and renderer port remain open.
+
+`TableFilterBar` moves existing active-chip dispatch, hidden-field retention,
+missing-target recovery and Add candidate ordering. Atomic supplies its existing
+menu and metadata/value leaves. Busy locking, unsupported-operator repair,
+searchable fallback menus and fallback styling are separate behavior changes.

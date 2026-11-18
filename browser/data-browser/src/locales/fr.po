@@ -3182,6 +3182,7 @@ msgstr "Vrai"
 msgid "False"
 msgstr "Faux"
 
+#: src/chunks/TablePage/TableFilterBar.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Remove filter"
 msgstr "Supprimer le filtre"
@@ -13431,10 +13432,12 @@ msgstr "Tout"
 msgid "Value…"
 msgstr "Valeur…"
 
-#: src/chunks/TablePage/TableFilterChip.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
 msgid "Unavailable column"
 msgstr ""
 
+#: src/chunks/TablePage/TableFilterBar.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "This column is unavailable."
 msgstr ""

@@ -408,3 +408,9 @@ controller performs that metadata change. Tests cover the package control and
 actual Atomic page-context removal path in the dedicated CI lane. This recovery
 is for unresolved targets; malformed stored configuration and the remaining
 full-page/schema/renderer services still need extraction.
+
+## Active-filter bar extraction split
+
+- [x] Move existing dispatch and preserve inherited recovery/Atomic leaves.
+- [ ] Review busy guards, operator repair, candidate deduplication and new
+  fallback menu/styling separately.

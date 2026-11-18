@@ -228,3 +228,10 @@ export {
   type TableFilterChipProps,
   type TableFilterPopoverProps,
 } from './filters/FilterChip.js';
+
+export {
+  TableFilterBar,
+  type TableFilterBarProps,
+  type TableFilterTarget,
+  type TableFilterAddMenuProps,
+} from './filters/FilterBar.js';
