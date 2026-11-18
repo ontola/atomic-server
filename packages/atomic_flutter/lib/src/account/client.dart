@@ -8,6 +8,10 @@ import 'identity_handback.dart';
 /// Explicit, provider-neutral account linking. Constructing this client never
 /// makes a network request. Credentials stay bound to one HTTPS origin.
 class AtomicAccountClient {
+  /// The error text of a session the portal no longer accepts; callers renew
+  /// the session when they see it.
+  static const sessionExpired = 'Sign in again to continue';
+
   AtomicAccountClient(String provider, {http.Client? client})
       : origin = providerOrigin(provider),
         _http = client ?? http.Client();
@@ -211,7 +215,7 @@ class AtomicAccountClient {
   Map<String, dynamic> _object(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       if (response.statusCode == 401) {
-        throw StateError('Sign in again to continue');
+        throw StateError(sessionExpired);
       }
       if (response.statusCode == 429) {
         throw StateError('Too many attempts. Try again shortly');
@@ -307,8 +311,15 @@ class AtomicAccountClient {
     return AtomicLinkProgress.pending;
   }
 
-  Future<Map<String, dynamic>> account() async =>
-      _object(await _request('GET', 'me'));
+  Future<Map<String, dynamic>> account() async {
+    final response = await _request('GET', 'me');
+    // The portal answers a session it no longer knows with 204 (signed out),
+    // not 401: an empty body is an expired session, not a broken reply.
+    if (response.statusCode == 204) {
+      throw StateError(sessionExpired);
+    }
+    return _object(response);
+  }
 
   /// Recover the existing identity; never creates or replaces a user's backup.
   /// Passkey/code-only accounts must use their existing manual recovery path.
@@ -524,7 +535,7 @@ class AtomicAccountClient {
           message = json['error'] as String;
         }
       } catch (_) {}
-      if (response.statusCode == 401) message = 'Sign in again to continue';
+      if (response.statusCode == 401) message = sessionExpired;
       throw StateError(message);
     }
     yield* parseCompletionChunks(response.stream.transform(utf8.decoder));
