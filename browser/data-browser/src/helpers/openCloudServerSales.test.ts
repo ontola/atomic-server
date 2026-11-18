@@ -8,11 +8,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock('./openExternal', () => ({ openExternal: state.openExternal }));
 vi.mock('./managed/cloudSync', () => ({
-  getManagedPortalUrl: () => state.portal,
-}));
-vi.mock('./managed/api', () => ({
-  getRememberedManagedPortalUrl: () => null,
-  safePortalUrl: (u: string | null) => u ?? undefined,
+  resolvePortalUrl: () => state.portal,
 }));
 
 const { openCloudServerSales } = await import('./openCloudServerSales');

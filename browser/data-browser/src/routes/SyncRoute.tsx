@@ -91,11 +91,7 @@ import {
   getManagedAccount,
   type ManagedAccount,
 } from '../helpers/managed/session';
-import {
-  managedFetch,
-  getRememberedManagedPortalUrl,
-  safePortalUrl,
-} from '../helpers/managed/api';
+import { managedFetch } from '../helpers/managed/api';
 import {
   envelopeWrapperKinds,
   getRecoverySecret,
@@ -138,7 +134,7 @@ import {
   ensureManagedSession,
   driveHasCloudEnrollment,
   isCloudSyncAvailable,
-  getManagedPortalUrl,
+  resolvePortalUrl,
 } from '../helpers/managed/cloudSync';
 import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
@@ -1373,10 +1369,7 @@ function SyncPage() {
    */
   // Never the opaque `acct_` id: the address, else a generic label.
   const accountAddressLabel = useAccountAddress();
-  const accountPortalUrl =
-    safePortalUrl(
-      getManagedPortalUrl(managedInfo) ?? getRememberedManagedPortalUrl(),
-    ) ?? null;
+  const accountPortalUrl = resolvePortalUrl(managedInfo);
 
   async function promoteDrive() {
     if (!status.drive || promoting) return;

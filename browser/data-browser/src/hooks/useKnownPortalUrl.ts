@@ -1,9 +1,7 @@
 // @wc-ignore-file
 import { useEffect, useState } from 'react';
 import { useSettings } from '../helpers/AppSettings';
-import { safePortalUrl } from '../helpers/managed/api';
-import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
-import { getRememberedProvider } from '../helpers/managed/deviceLink';
+import { resolvePortalUrl } from '../helpers/managed/cloudSync';
 import { fetchManagedInfo } from '../helpers/managedServer';
 
 /**
@@ -13,20 +11,14 @@ import { fetchManagedInfo } from '../helpers/managedServer';
  */
 export function useKnownPortalUrl(): string | null {
   const { baseURL } = useSettings();
-  const [url, setUrl] = useState<string | null>(
-    () =>
-      safePortalUrl(getManagedPortalUrl() ?? getRememberedProvider()) ?? null,
-  );
+  const [url, setUrl] = useState<string | null>(() => resolvePortalUrl());
 
   useEffect(() => {
     let cancelled = false;
     void fetchManagedInfo(baseURL).then(info => {
       if (cancelled) return;
 
-      setUrl(
-        safePortalUrl(getManagedPortalUrl(info) ?? getRememberedProvider()) ??
-          null,
-      );
+      setUrl(resolvePortalUrl(info));
     });
 
     return () => {
