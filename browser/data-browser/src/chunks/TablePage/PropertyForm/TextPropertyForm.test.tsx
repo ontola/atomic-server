@@ -26,7 +26,7 @@ beforeAll(async () => {
   await LoroLoader.initializeLoro();
 });
 
-it('retains the explicit baseline save when a text format is selected', async () => {
+it('does not invoke explicit save after choosing a text format', async () => {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
   const draft = await store.newResource({
     subject: '_new:column-draft',
@@ -43,5 +43,5 @@ it('retains the explicit baseline save when a text format is selected', async ()
   await waitFor(() =>
     expect(draft.get(core.properties.datatype)).toBe(Datatype.MARKDOWN),
   );
-  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(save).not.toHaveBeenCalled();
 });

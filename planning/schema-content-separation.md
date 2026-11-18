@@ -11,3 +11,11 @@
 
 No Resource/Store/useValue contract or ELFA submodule change. This legacy-base
 proposal still needs later clean-base restacking/full integration CI.
+
+
+## Held text-format save proposal (#2538)
+
+This child isolates the explicit save removal from original #2498. It is not a
+merge candidate until the persistence/editing contract is resolved. Removing
+this call alone does not guarantee a private draft or durable local storage;
+set() can independently enqueue existing owned resources. No UI markup changes.
