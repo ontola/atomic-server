@@ -190,3 +190,13 @@ managed development server URL with the isolated server’s URL. The temporary
 harness retains the original direct Google stylesheet (as production does)
 because this environment’s Node development-font proxy returns HTTP502. No
 backend operations or record persistence are mocked.
+
+The embed size gate exposed fragmentation after the package move: the exact
+`bd4fa0ed` baseline used 49 eager chunks / 980.6KB gzip; the ungrouped extraction
+used 91 / 1009.3KB, over the existing 1000KB budget. The embed build now groups
+only Rolldown’s statically reachable `$initial` modules. Lazy feature code stays
+lazy; first-use code is 2 chunks / 958.5KB gzip and the directory is 14.53MB,
+within both unchanged budgets. Baseline and new built embeds initialize their
+public API and render the same existing mock-host folder fixture without module
+execution errors. That smoke check is not backend/persistence acceptance; the
+11 native browser journeys above use the real owned Atomic server.
