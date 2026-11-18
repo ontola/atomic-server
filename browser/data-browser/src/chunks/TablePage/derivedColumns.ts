@@ -20,33 +20,14 @@ import { formatClock } from './helpers/formatDuration';
  * and in the store alike) over `vars`, which bind the identifiers it uses to
  * property subjects: `coalesce(until, now()) - start`.
  */
-export interface DerivedColumnSpec {
-  /** Stable identity within the view — the grid column key. */
-  id: string;
-  /** Heading label. */
-  label: string;
-  formula: string;
-  /** Identifier used in the formula → property subject. */
-  vars: Record<string, string>;
-  /** Column width in px. */
-  width?: number;
-  /** What the number means, for formatting. Defaults to a plain number. */
-  valueKind?: DerivedValueKind;
-}
+import { type DerivedColumnSpec, type DerivedValueKind } from '@tomic/table';
 
-/**
- * What kind of number a formula produces. Decides how a value and a total over
- * the column are formatted, which statistics are offered for it, and (for a
- * filter) what the value input asks for.
- */
-export type DerivedValueKind =
-  | 'duration'
-  | 'days'
-  | 'number'
-  | 'date'
-  | 'boolean';
-
-export const DEFAULT_DERIVED_WIDTH = 120;
+export {
+  DEFAULT_DERIVED_WIDTH,
+  parseDerivedColumnSpecs,
+  type DerivedColumnSpec,
+  type DerivedValueKind,
+} from '@tomic/table';
 
 /** `3d ago` / `today` / `in 5d` — a days-since reads as a distance, not a count. */
 function formatDays(days: number): string {
@@ -324,117 +305,4 @@ export function specFromFormula(
     ...(rest.valueKind ? { valueKind: rest.valueKind } : {}),
     ...(rest.width ? { width: rest.width } : {}),
   };
-}
-
-// --- Reading what is stored -------------------------------------------------
-
-type LegacyArgs = Record<string, string | number | undefined>;
-
-/** The five fixed generators this replaced: their arguments and the formula each meant. */
-const LEGACY: Record<
-  string,
-  [
-    args: string[],
-    formula: (v: string[]) => string,
-    valueKind: DerivedValueKind,
-  ]
-> = {
-  difference: [['from', 'to'], v => `${v[1]} - ${v[0]}`, 'duration'],
-  elapsed: [
-    ['from', 'until'],
-    v => (v[1] ? `coalesce(${v[1]}, now()) - ${v[0]}` : `now() - ${v[0]}`),
-    'duration',
-  ],
-  daysSince: [['from'], v => `days(now() - ${v[0]})`, 'days'],
-  product: [['a', 'b'], v => `${v[0]} * ${v[1]}`, 'number'],
-  offset: [['from', 'days'], v => `${v[0]} + ${v[1]} * 86400000.0`, 'date'],
-};
-
-/** A spec stored as `{ kind, args }`, as the same formula the store converts it to. */
-function fromLegacy(kind: string, args: LegacyArgs) {
-  const [names, formula, valueKind] = LEGACY[kind] ?? [];
-  const vars: Record<string, string> = {};
-  const operands = names?.map(name => {
-    const arg = args[name];
-
-    if (typeof arg === 'number') {
-      return `(${Number.isInteger(arg) ? arg.toFixed(1) : arg})`;
-    }
-
-    if (typeof arg === 'string' && arg) {
-      vars[`v${Object.keys(vars).length}`] = arg;
-
-      return `v${Object.keys(vars).length - 1}`;
-    }
-  });
-
-  // Only a running duration may leave an argument (the end) empty.
-  if (!operands?.slice(0, kind === 'elapsed' ? 1 : undefined).every(Boolean)) {
-    return undefined;
-  }
-
-  return { formula: formula(operands as string[]), vars, valueKind };
-}
-
-function readSpec(value: unknown): DerivedColumnSpec | undefined {
-  if (typeof value !== 'object' || value === null) {
-    return undefined;
-  }
-
-  const spec = value as Record<string, unknown>;
-
-  if (typeof spec.id !== 'string' || typeof spec.label !== 'string') {
-    return undefined;
-  }
-
-  const base = {
-    id: spec.id,
-    label: spec.label,
-    ...(typeof spec.width === 'number' ? { width: spec.width } : {}),
-  };
-
-  if (typeof spec.formula === 'string') {
-    const vars = spec.vars ?? {};
-    const isVars =
-      typeof vars === 'object' &&
-      vars !== null &&
-      Object.values(vars).every(v => typeof v === 'string');
-
-    return isVars
-      ? {
-          ...base,
-          formula: spec.formula,
-          vars: vars as Record<string, string>,
-          ...(typeof spec.valueKind === 'string'
-            ? { valueKind: spec.valueKind as DerivedValueKind }
-            : {}),
-        }
-      : undefined;
-  }
-
-  const args = spec.args as LegacyArgs | undefined;
-
-  return typeof spec.kind === 'string' && typeof args === 'object' && args
-    ? ({ ...base, ...fromLegacy(spec.kind, args) } as DerivedColumnSpec)
-    : undefined;
-}
-
-/**
- * Reads the specs stored on a View, converting the older `{ kind, args }` form
- * to formulas. Anything malformed is dropped rather than thrown: hand-edited (or
- * assistant-written) config must not be able to take the whole table down with
- * it.
- */
-export function parseDerivedColumnSpecs(
-  value: JSONValue | undefined,
-): DerivedColumnSpec[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return (value as unknown[]).flatMap(item => {
-    const spec = readSpec(item);
-
-    return spec?.formula ? [spec] : [];
-  });
 }
