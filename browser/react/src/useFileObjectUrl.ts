@@ -2,6 +2,7 @@ import {
   hexToBytes,
   isBlobSubject,
   blobHashHex,
+  isLoopbackHost,
   server,
   type Resource,
 } from '@tomic/lib';
@@ -52,6 +53,43 @@ function rememberUrl(db: object, blobDid: string, url: string) {
     entries.delete(oldest);
 
     if (evicted) URL.revokeObjectURL(evicted);
+  }
+}
+
+/** A recovered native file must not reuse a cached failed download. */
+function refreshedNativeUrl(url: string | undefined, revision: number) {
+  if (!url || revision === 0) return url;
+
+  try {
+    const parsed = new URL(url);
+    if (
+      !['http:', 'https:'].includes(parsed.protocol) ||
+      !isLoopbackHost(parsed.hostname) ||
+      !parsed.pathname.startsWith('/download/') ||
+      parsed.username ||
+      parsed.password ||
+      [...parsed.searchParams.keys()].some(key =>
+        /^(sig(nature)?|token|authorization|credential|expires|x-amz-.+|x-goog-.+)$/i.test(
+          key,
+        ),
+      )
+    )
+      return url;
+
+    // Append to the original spelling so rendition parameters and fragments
+    // keep their exact encoding. Arbitrary remote/signed URLs stay untouched.
+    const fragment = url.indexOf('#');
+    const head = fragment < 0 ? url : url.slice(0, fragment);
+    const tail = fragment < 0 ? '' : url.slice(fragment);
+    const separator = head.includes('?')
+      ? /[?&]$/.test(head)
+        ? ''
+        : '&'
+      : '?';
+
+    return `${head}${separator}_atomic_file_recovery=${revision}${tail}`;
+  } catch {
+    return url;
   }
 }
 
@@ -112,15 +150,21 @@ export function useBlobObjectUrl(
     agentSubject: typeof agentSubject;
     driveSubject: typeof driveSubject;
     recoveryRevision: number;
+    nativePresent: boolean;
     url?: string;
   }>();
 
   useEffect(
     () =>
-      store.onFileContentRecoveryChanged?.(() =>
-        setRecoveryRevision(revision => revision + 1),
-      ),
-    [store],
+      store.onFileContentRecoveryChanged?.(hash => {
+        if (
+          !hash ||
+          hash.toLowerCase() ===
+            (blobDid && blobHashHex(blobDid)?.toLowerCase())
+        )
+          setRecoveryRevision(revision => revision + 1);
+      }),
+    [store, blobDid],
   );
 
   useEffect(() => {
@@ -136,7 +180,7 @@ export function useBlobObjectUrl(
       store.getDrive?.() === selectedDrive &&
       store.getAgent?.()?.subject === agentSubject;
 
-    const settled = (url?: string) => {
+    const settled = (url?: string, nativePresent = false) => {
       if (!current()) return;
 
       setResolved({
@@ -147,6 +191,7 @@ export function useBlobObjectUrl(
         agentSubject,
         driveSubject,
         recoveryRevision,
+        nativePresent,
         url,
       });
     };
@@ -157,11 +202,17 @@ export function useBlobObjectUrl(
         if (!hashHex) return;
         const hash = hexToBytes(hashHex);
         let bytes = await clientDb?.getBlob(hash);
+        let nativePresent = false;
         if (!current()) return;
 
         if (!bytes && hasRecovery) {
-          await store.recoverMissingFileContents(hashHex, driveSubject);
+          const recovered = await store.recoverMissingFileContents(
+            hashHex,
+            driveSubject,
+          );
           if (!current()) return;
+
+          nativePresent = !clientDb && recovered;
 
           bytes = await clientDb?.getBlob(hash);
           if (!current()) return;
@@ -178,7 +229,7 @@ export function useBlobObjectUrl(
 
         if (url && clientDb) rememberUrl(clientDb, cacheKey!, url);
 
-        settled(url);
+        settled(url, nativePresent);
       } catch {
         settled();
       }
@@ -221,5 +272,10 @@ export function useBlobObjectUrl(
     return undefined;
   }
 
-  return resolved.url ?? fallbackUrl;
+  return (
+    resolved.url ??
+    (resolved.nativePresent
+      ? refreshedNativeUrl(fallbackUrl, recoveryRevision)
+      : fallbackUrl)
+  );
 }

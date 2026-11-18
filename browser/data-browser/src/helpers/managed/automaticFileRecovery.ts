@@ -1,7 +1,11 @@
 // @wc-ignore-file
 import { canonicalIdentifier, StoreEvents, type Store } from '@tomic/lib';
 import { isRunningInTauri } from '../tauri';
-import { nodeVault, requestNodeFileContents } from './nodeVault';
+import {
+  nodeVault,
+  onNodeFileContents,
+  requestNodeFileContents,
+} from './nodeVault';
 import {
   getManagedAccount,
   onManagedLogout,
@@ -34,6 +38,7 @@ type RecoveryDeps = {
     signal: AbortSignal,
   ) => Promise<Credentials | null>;
   repair: typeof repairDriveFiles;
+  onFilesStored?: (callback: (hash: string | null) => void) => () => void;
 };
 
 const defaults: RecoveryDeps = {
@@ -65,6 +70,7 @@ const defaults: RecoveryDeps = {
     return { ...key, drivePseudonym: enrollment.drive_pseudonym };
   },
   repair: repairDriveFiles,
+  onFilesStored: onNodeFileContents,
 };
 
 type Pending = {
@@ -106,6 +112,43 @@ export function startAutomaticFileRecovery(
     knownDrive = store.getDrive();
     controller = new AbortController();
     store.retryFileContentRecovery();
+  };
+
+  // A stored file must not wait behind a different file's slow Vault request.
+  const probePresent = async (
+    drive: string,
+    job: DriveJob,
+    hash: string,
+    pending: Pending,
+  ) => {
+    const scope = controller;
+    const db = deps.db(store);
+    const agent = store.getAgent();
+    const selected = store.getDrive();
+    const current = () =>
+      !disposed &&
+      !scope.signal.aborted &&
+      controller === scope &&
+      deps.db(store) === db &&
+      store.getAgent() === agent &&
+      store.getDrive() === selected &&
+      drives.get(drive) === job &&
+      job.pending.get(hash) === pending;
+
+    if (!canRepairDriveFiles(db) || !agent) return;
+
+    try {
+      const referenced = (await db.vaultFileHashes(drive)).some(
+        value => value.toLowerCase() === hash,
+      );
+      if (!current()) return;
+      const present = referenced && (await db.vaultBlobPresent(hash));
+      if (!current() || (referenced && !present)) return;
+      pending.resolve(present);
+      job.pending.delete(hash);
+    } catch {
+      // The ordinary bounded job remains responsible for failures.
+    }
   };
 
   const run = async (drive: string, job: DriveJob) => {
@@ -290,7 +333,9 @@ export function startAutomaticFileRecovery(
     const promise = new Promise<boolean>(settle => {
       resolve = settle;
     });
-    job.pending.set(hash, { promise, resolve });
+    const pending = { promise, resolve };
+    job.pending.set(hash, pending);
+    if (job.running) void probePresent(drive, job, hash, pending);
     schedule(drive, job);
 
     return promise;
@@ -311,6 +356,31 @@ export function startAutomaticFileRecovery(
       store.retryFileContentRecovery();
     }
   });
+  const offFilesStored = deps.onFilesStored?.(hash => {
+    if (disposed) return;
+
+    if (
+      deps.db(store) !== knownDb ||
+      store.getAgent() !== knownAgent ||
+      store.getDrive() !== knownDrive
+    ) {
+      reset();
+
+      return;
+    }
+
+    for (const [drive, job] of drives) {
+      if (hash === null) job.retryAfter.clear();
+      else job.retryAfter.delete(hash);
+
+      for (const [pendingHash, pending] of job.pending) {
+        if (hash === null || hash === pendingHash)
+          void probePresent(drive, job, pendingHash, pending);
+      }
+    }
+
+    store.retryFileContentRecovery(hash ?? undefined);
+  });
   window.addEventListener('online', reset);
   window.addEventListener('pagehide', reset);
 
@@ -324,6 +394,7 @@ export function startAutomaticFileRecovery(
     offSession();
     offLogout();
     offVault();
+    offFilesStored?.();
     window.removeEventListener('online', reset);
     window.removeEventListener('pagehide', reset);
   };

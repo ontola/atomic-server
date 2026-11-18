@@ -15,6 +15,7 @@
 // agent's key already is. See `desktop/src/lib.rs`.
 import { decodeB64, encodeB64 } from '@tomic/lib';
 import { invoke } from '@tauri-apps/api/core';
+import { isRunningInTauri } from '../tauri';
 import type {
   RestoreOutcome,
   SegmentKind,
@@ -32,6 +33,44 @@ import type {
  * meaning on both sides.
  */
 type SealedObject = { objectKey: string; sealed: string };
+
+/** Native persistence is a hint to recheck current drive references and bytes. */
+export function onNodeFileContents(
+  callback: (hash: string | null) => void,
+): () => void {
+  if (!isRunningInTauri()) return () => {};
+
+  let disposed = false;
+  let unlisten: (() => void) | undefined;
+  void import('@tauri-apps/api/event')
+    .then(({ listen }) =>
+      listen<unknown>('atomic-file-content-stored', event => {
+        if (disposed || !event.payload || typeof event.payload !== 'object')
+          return;
+        const hash = (event.payload as { hash?: unknown }).hash;
+        if (
+          hash === null ||
+          (typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash))
+        )
+          callback(hash);
+      }),
+    )
+    .then(stop => {
+      if (disposed) stop();
+      else {
+        unlisten = stop;
+        // Cover bytes stored before async listener registration completed.
+        callback(null);
+      }
+    })
+    .catch(() => {});
+
+  return () => {
+    disposed = true;
+    unlisten?.();
+    unlisten = undefined;
+  };
+}
 
 /** Ask existing native peer links for the drive's missing file contents. */
 export async function requestNodeFileContents(

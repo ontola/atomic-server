@@ -11,6 +11,8 @@ const DRIVE = 'atomic:drive';
 const disposers: (() => void)[] = [];
 
 function fixture() {
+  let filesStored: (hash: string | null) => void = () => {};
+  const offFilesStored = vi.fn();
   const state = {
     agent: { subject: 'atomic:agent:alice' },
     drive: DRIVE,
@@ -52,6 +54,11 @@ function fixture() {
     },
   } as unknown as Store;
   const deps = {
+    onFilesStored: (callback: (hash: string | null) => void) => {
+      filesStored = callback;
+
+      return offFilesStored;
+    },
     db: () => currentDb,
     peers: vi.fn(
       async (
@@ -93,6 +100,8 @@ function fixture() {
     store,
     deps,
     dispose,
+    filesStored: (hash: string | null) => filesStored(hash),
+    offFilesStored,
     recover: (hash: string, drive?: string) => handler(hash, drive),
     emit: (event: string) =>
       listeners.get(event)?.forEach(callback => callback()),
@@ -110,6 +119,86 @@ afterEach(() => {
 });
 
 describe('automatic recovery for displayed files', () => {
+  it('rechecks a late native file immediately after the exact timeout while its cooldown is active', async () => {
+    const f = fixture();
+    f.deps.account.mockImplementation(() => new Promise(() => {}));
+    const first = f.recover(A);
+    await vi.advanceTimersByTimeAsync(30_100);
+    expect(await first).toBe(false);
+    f.state.local.add(A);
+    expect(await f.recover(A)).toBe(false);
+    f.filesStored(A);
+    expect(f.store.retryFileContentRecovery).toHaveBeenLastCalledWith(A);
+    const late = f.recover(A);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await late).toBe(true);
+    expect(f.deps.repair).not.toHaveBeenCalled();
+  });
+
+  it('clears only the stored hash’s cooldown and clears all cooldowns on a lag hint', async () => {
+    const f = fixture();
+    f.deps.account.mockImplementation(() => new Promise(() => {}));
+    const first = f.recover(A);
+    const second = f.recover(B);
+    await vi.advanceTimersByTimeAsync(30_100);
+    expect(await first).toBe(false);
+    expect(await second).toBe(false);
+    f.state.local.add(A);
+    f.state.local.add(B);
+    f.filesStored(A);
+    expect(await f.recover(B)).toBe(false);
+    const late = f.recover(A);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await late).toBe(true);
+    f.filesStored(null);
+    expect(f.store.retryFileContentRecovery).toHaveBeenLastCalledWith(
+      undefined,
+    );
+    const afterLag = f.recover(B);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await afterLag).toBe(true);
+  });
+
+  it('serves late bytes without waiting for or aborting another file’s active repair', async () => {
+    const f = fixture();
+    f.state.email = null;
+    const first = f.recover(A);
+    await vi.advanceTimersByTimeAsync(5_500);
+    expect(await first).toBe(false);
+    f.state.email = 'alice@example.test';
+    const repaired =
+      Promise.withResolvers<Awaited<ReturnType<typeof f.deps.repair>>>();
+    f.deps.repair.mockReturnValueOnce(repaired.promise);
+    let secondFinished = false;
+    const second = f.recover(B).then(value => {
+      secondFinished = true;
+
+      return value;
+    });
+    await vi.advanceTimersByTimeAsync(5_500);
+    const signal = f.deps.repair.mock.calls[0][0].signal;
+    f.state.local.add(A);
+    f.filesStored(A);
+    const late = f.recover(A);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await late).toBe(true);
+    expect(secondFinished).toBe(false);
+    expect(signal?.aborted).toBe(false);
+    f.state.local.add(B);
+    repaired.resolve({ total: 1, repaired: 1, missing: [], unreadable: 0 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await second).toBe(true);
+  });
+
+  it('ignores late native notifications after disposal', () => {
+    const f = fixture();
+    f.dispose();
+    expect(f.offFilesStored).toHaveBeenCalledOnce();
+    vi.mocked(f.store.retryFileContentRecovery).mockClear();
+    f.filesStored(A);
+    expect(f.store.retryFileContentRecovery).not.toHaveBeenCalled();
+  });
+
   it('releases the preview when the managed account lookup never answers', async () => {
     const f = fixture();
     f.deps.account.mockImplementation(() => new Promise(() => {}));

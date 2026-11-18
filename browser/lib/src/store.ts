@@ -7627,7 +7627,7 @@ export class Store {
     hash: string,
     drive?: string,
   ) => Promise<boolean>;
-  private fileContentRecoveryListeners = new Set<() => void>();
+  private fileContentRecoveryListeners = new Set<(hash?: string) => void>();
 
   /** Install the app's recovery path for a file whose bytes are absent locally. */
   public setFileContentRecovery(
@@ -7645,11 +7645,13 @@ export class Store {
   }
 
   /** Retry mounted file readers after connectivity or recovery availability changes. */
-  public retryFileContentRecovery(): void {
-    for (const listener of this.fileContentRecoveryListeners) listener();
+  public retryFileContentRecovery(hash?: string): void {
+    for (const listener of this.fileContentRecoveryListeners) listener(hash);
   }
 
-  public onFileContentRecoveryChanged(listener: () => void): () => void {
+  public onFileContentRecoveryChanged(
+    listener: (hash?: string) => void,
+  ): () => void {
     this.fileContentRecoveryListeners.add(listener);
 
     return () => {

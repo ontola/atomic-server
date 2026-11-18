@@ -1,14 +1,79 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const invoke = vi.fn();
+const listen = vi.fn();
+const native = vi.hoisted(() => ({ value: false }));
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...a: unknown[]) => invoke(...a),
 }));
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: (...args: unknown[]) => listen(...args),
+}));
+vi.mock('../tauri', () => ({ isRunningInTauri: () => native.value }));
 
-const { nodeVault, requestNodeFileContents } = await import('./nodeVault');
+const { nodeVault, onNodeFileContents, requestNodeFileContents } =
+  await import('./nodeVault');
 
 beforeEach(() => {
   invoke.mockReset();
+  listen.mockReset();
+  native.value = false;
+});
+
+describe('native stored-file notifications', () => {
+  it('does not register a native listener in an ordinary browser', async () => {
+    const callback = vi.fn();
+    const stop = onNodeFileContents(callback);
+    await Promise.resolve();
+    expect(listen).not.toHaveBeenCalled();
+    expect(callback).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it('rechecks after listener registration and forwards only valid stored-file hints', async () => {
+    native.value = true;
+    const unlisten = vi.fn();
+    listen.mockResolvedValue(unlisten);
+    const callback = vi.fn();
+    const stop = onNodeFileContents(callback);
+    await vi.waitFor(() => expect(callback).toHaveBeenCalledWith(null));
+    expect(listen).toHaveBeenCalledWith(
+      'atomic-file-content-stored',
+      expect.any(Function),
+    );
+    const handler = listen.mock.calls[0][1];
+    callback.mockClear();
+    for (const payload of [
+      undefined,
+      {},
+      { hash: 42 },
+      { hash: 'AA'.repeat(32) },
+      { hash: 'not-a-hash' },
+    ])
+      handler({ payload });
+    expect(callback).not.toHaveBeenCalled();
+    handler({ payload: { hash: 'ab'.repeat(32) } });
+    handler({ payload: { hash: null } });
+    expect(callback.mock.calls).toEqual([['ab'.repeat(32)], [null]]);
+    stop();
+    expect(unlisten).toHaveBeenCalledOnce();
+    handler({ payload: { hash: 'cd'.repeat(32) } });
+    expect(callback).toHaveBeenCalledTimes(2);
+  });
+
+  it('disposes a listener whose asynchronous registration finishes after shutdown', async () => {
+    native.value = true;
+    const registration = Promise.withResolvers<() => void>();
+    listen.mockReturnValue(registration.promise);
+    const callback = vi.fn();
+    const unlisten = vi.fn();
+    const stop = onNodeFileContents(callback);
+    await vi.waitFor(() => expect(listen).toHaveBeenCalledOnce());
+    stop();
+    registration.resolve(unlisten);
+    await vi.waitFor(() => expect(unlisten).toHaveBeenCalledOnce());
+    expect(callback).not.toHaveBeenCalled();
+  });
 });
 
 /**

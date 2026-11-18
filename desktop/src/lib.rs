@@ -1,3 +1,4 @@
+mod blob_events;
 mod menu;
 mod system_tray;
 // The NFS virtual drive is unix-only: `nfsserve` does not build for windows
@@ -722,6 +723,7 @@ pub fn run() {
       };
 
       let config_clone = config.clone();
+      let blob_event_handle = app.handle().clone();
       let _ = node_for_server
         .config_file
         .set(config.config_file_path.clone());
@@ -733,6 +735,11 @@ pub fn run() {
         let result = rt.block_on(atomic_server_lib::serve::serve_with_hook(
           config_clone,
           |appstate| {
+            let writes = appstate.store.subscribe_blob_writes();
+            actix_rt::spawn(blob_events::relay(writes, move |payload| {
+              use tauri::Emitter;
+              let _ = blob_event_handle.emit_to("main", blob_events::EVENT, payload);
+            }));
             let _ = node_for_server.store.set(appstate.store.clone());
           },
         ));

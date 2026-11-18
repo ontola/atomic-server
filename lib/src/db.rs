@@ -455,6 +455,9 @@ pub struct Db {
     on_commit: Option<Arc<HandleCommit>>,
     /// Broadcast channel for all resource mutations.
     db_events: tokio::sync::broadcast::Sender<DbEvent>,
+    /// Successfully stored content hashes. Separate from resource mutations:
+    /// receiving file bytes does not change graph state or its sync history.
+    blob_writes: tokio::sync::broadcast::Sender<[u8; 32]>,
     /// Presence arriving from a peer. Deliberately NOT `db_events`: presence is
     /// ephemeral and must never reach the store, and every consumer of
     /// `DbEvent` writes or indexes. Cursor positions merged into the CRDT would
@@ -612,6 +615,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            blob_writes: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
@@ -3040,6 +3044,12 @@ impl Db {
     /// Subscribe to all DB events (changes, deletions).
     pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<DbEvent> {
         self.db_events.subscribe()
+    }
+
+    /// Subscribe to hashes after their file contents have been stored.
+    /// A lagging reader must recheck the local store for missed writes.
+    pub fn subscribe_blob_writes(&self) -> tokio::sync::broadcast::Receiver<[u8; 32]> {
+        self.blob_writes.subscribe()
     }
 
     /// Presence arriving from peers. See [`EphemeralEvent`].

@@ -31,10 +31,10 @@ function fixture({ native = false, provider = true } = {}) {
     provider,
   };
   const recover = vi.fn(async (_hash: string, _drive?: string) => false);
-  const listeners = new Set<() => void>();
+  const listeners = new Set<(hash?: string) => void>();
 
-  const changed = () => {
-    for (const listener of listeners) listener();
+  const changed = (hash?: string) => {
+    for (const listener of listeners) listener(hash);
   };
 
   const store = {
@@ -43,7 +43,7 @@ function fixture({ native = false, provider = true } = {}) {
     getAgent: () => ({ subject: state.agent }),
     hasFileContentRecovery: () => state.provider,
     recoverMissingFileContents: recover,
-    onFileContentRecoveryChanged: (listener: () => void) => {
+    onFileContentRecoveryChanged: (listener: (hash?: string) => void) => {
       listeners.add(listener);
 
       return () => listeners.delete(listener);
@@ -55,8 +55,16 @@ function fixture({ native = false, provider = true } = {}) {
   return { state, recover, wrapper, changed };
 }
 
-function Preview({ blob = BLOB, drive }: { blob?: string; drive?: string }) {
-  const url = useBlobObjectUrl(blob, FALLBACK, 'image/png', drive);
+function Preview({
+  blob = BLOB,
+  drive,
+  fallback = FALLBACK,
+}: {
+  blob?: string;
+  drive?: string;
+  fallback?: string;
+}) {
+  const url = useBlobObjectUrl(blob, fallback, 'image/png', drive);
 
   return createElement('output', { 'data-testid': 'url' }, url ?? 'waiting');
 }
@@ -271,6 +279,87 @@ it('returns the native fallback immediately when no provider exists', () => {
   render(createElement(Preview), { wrapper: f.wrapper });
   expect(screen.getByTestId('url').textContent).toBe(FALLBACK);
   expect(f.recover).not.toHaveBeenCalled();
+});
+
+it('refreshes the native loopback download URL after bytes arrive following a failed attempt', async () => {
+  const f = fixture({ native: true });
+  const fallback = `http://localhost:9883/download/files/${HASH}?w=100&f=webp#preview`;
+  render(createElement(Preview, { fallback }), { wrapper: f.wrapper });
+  await waitFor(() =>
+    expect(screen.getByTestId('url').textContent).toBe(fallback),
+  );
+  f.recover.mockResolvedValue(true);
+  act(() => f.changed(HASH));
+  await waitFor(() =>
+    expect(screen.getByTestId('url').textContent).not.toBe(fallback),
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId('url').textContent).not.toBe('waiting'),
+  );
+  const refreshed = new URL(screen.getByTestId('url').textContent!);
+  expect(refreshed.origin).toBe('http://localhost:9883');
+  expect(refreshed.pathname).toBe(`/download/files/${HASH}`);
+  expect(refreshed.searchParams.get('w')).toBe('100');
+  expect(refreshed.searchParams.get('f')).toBe('webp');
+  expect(refreshed.hash).toBe('#preview');
+  expect([...refreshed.searchParams.keys()]).toHaveLength(3);
+  expect(f.recover).toHaveBeenCalledTimes(2);
+});
+
+it('does not restart an in-flight preview when another hash arrives', async () => {
+  const f = fixture({ native: true });
+  const pending = Promise.withResolvers<boolean>();
+  f.recover.mockReturnValue(pending.promise);
+  render(createElement(Preview), { wrapper: f.wrapper });
+  await waitFor(() => expect(f.recover).toHaveBeenCalledOnce());
+  await act(async () => f.changed(OTHER_HASH));
+  expect(f.recover).toHaveBeenCalledOnce();
+  await act(async () => pending.resolve(false));
+});
+
+it('matches lowercase arrival notifications for an uppercase legacy blob hash', async () => {
+  const f = fixture({ native: true });
+  render(
+    createElement(Preview, { blob: `atomic:blob:${HASH.toUpperCase()}` }),
+    { wrapper: f.wrapper },
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId('url').textContent).toBe(FALLBACK),
+  );
+  await act(async () => f.changed(HASH));
+  await waitFor(() => expect(f.recover).toHaveBeenCalledTimes(2));
+});
+
+it.each([
+  'https://cdn.example.test/download/file?signature=unchanged#preview',
+  'http://localhost.example.test/download/file',
+  'http://localhost:9883/other/file',
+  'http://localhost:9883/download/file?X-Amz-Signature=unchanged',
+])(
+  'preserves external or signed fallback URLs after native recovery: %s',
+  async fallback => {
+    const f = fixture({ native: true });
+    f.recover.mockResolvedValue(true);
+    render(createElement(Preview, { fallback }), { wrapper: f.wrapper });
+    await waitFor(() =>
+      expect(screen.getByTestId('url').textContent).toBe(fallback),
+    );
+    await act(async () => f.changed(HASH));
+    await waitFor(() => expect(f.recover).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('url').textContent).toBe(fallback);
+  },
+);
+
+it('keeps the original native fallback when the arrival hint does not confirm present bytes', async () => {
+  const f = fixture({ native: true });
+  const fallback = `http://localhost:9883/download/files/${HASH}`;
+  render(createElement(Preview, { fallback }), { wrapper: f.wrapper });
+  await waitFor(() =>
+    expect(screen.getByTestId('url').textContent).toBe(fallback),
+  );
+  await act(async () => f.changed(HASH));
+  await waitFor(() => expect(f.recover).toHaveBeenCalledTimes(2));
+  expect(screen.getByTestId('url').textContent).toBe(fallback);
 });
 
 it('keeps server output pending for local lookups and immediate for native fallback', () => {

@@ -57,6 +57,20 @@ The channel is unauthenticated — anything that can reach the port can execute
 JS in the webview — which is why it binds to loopback rather than the plugin's
 default `0.0.0.0`.
 
+### File contents arriving after a preview timeout
+
+The embedded node subscribes to `Db::subscribe_blob_writes` before exposing
+the store to the webview. After a successful file write, it sends
+`atomic-file-content-stored` to the main window with the content hash.
+A lagged receiver sends a general recheck hint. These notifications do not
+change resource history.
+
+The native recovery service clears the matching file's retry cooldown and
+asks mounted previews to check current drive references and local presence.
+A confirmed local file gets a fresh loopback download URL so the webview
+does not reuse an earlier failed response. The listener also requests a
+recheck when registration completes, covering bytes that arrived during startup.
+
 ### Environment overrides are baked in at build time
 
 `beforeBuildCommand` is a normal vite production build, so it reads `.env` and
