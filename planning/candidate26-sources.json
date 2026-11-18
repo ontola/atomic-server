@@ -124,7 +124,7 @@
       "sha": "5460706d9e1163ff26d1f35cd147a3c0ea791e5c",
       "effectivePatchBase": "707c86e46535205af111bd74514637013d286ec4",
       "sourcePatchId": "bd230483890446031240276b16a9d63e334a2388",
-      "candidateDisposition": "Included own delta with integration conflict resolutions"
+      "candidateDisposition": "Included own delta and current develop squash a450; richer plugin installation scope preserved"
     },
     {
       "n": 2497,
@@ -932,7 +932,6 @@
       "purpose": "Per-run full hosted CI override"
     }
   ],
-  "pendingLatestDevelop": "a450e20fc0d949958ec8187724dfa6c9423a8f66",
   "legacyCompatibilityCarryovers": [
     {
       "sha": "9d2b5b49d1321778bb8a86ab1a7e19ea0a8bf8e0",
@@ -986,7 +985,9 @@
     "2585 is additional validation infrastructure beyond frozen45PR queue: explicit per-dispatch full GitHub-hosted Main lane, no global settings change.",
     "Latest developa450 (2490 squash) must be merged after initial hook-checked aggregate commit so final candidate includes current develop ancestry.",
     "WASM compilation restored candidate25 parse_json_ad_commit_resource unchanged for envelope verification while preserving newer develop bulk-import parser; replicated-resource transaction wrapper returns Ok after optional identity flush.",
-    "Packed-consumer test composes the complete legacy API fixture with canonical shared UI installation and CSSVar instance assertion; overlapping fixture fragments are consolidated."
+    "Packed-consumer test composes the complete legacy API fixture with canonical shared UI installation and CSSVar instance assertion; overlapping fixture fragments are consolidated.",
+    "Latest developa450 is2490 squash; final merge retains richer candidate installation connection scope and current v2 endpoint/replay documentation while preserving client-held connection keys. Merge requires no source changes beyond the hook-checked aggregate.",
+    "All-target fixture integration retains complete candidate25 changes-endpoint test and complete2413 confirmation test as separate functions, removes duplicated identical import-durability SYNC_CHILD declaration, and adapts legacy snapshot collector fixture to current3-argument read-authorization API. No assertions or permission guards removed."
   ],
   "localValidation": {
     "sdkTypecheck": "pass",
@@ -1018,8 +1019,24 @@
       "files": 8,
       "passed": 77
     },
-    "ownWasmBuild": "in progress",
-    "normalCommitHook": "pending",
-    "latestDevelopMerge": "pending"
-  }
+    "ownWasmBuild": "pass: own worktree wasm-pack0.15.0, Rust1.98.1, Binaryen117",
+    "normalCommitHook": "pass: staged workspace frontend lint and all-target Clippy light,wasm-plugins with-Dwarnings",
+    "latestDevelopMerge": "a450e20fc0d949958ec8187724dfa6c9423a8f66 merged with no source-tree change",
+    "formulaTests": {
+      "files": 2,
+      "passed": 54,
+      "wasm": "Built from candidate source in this worktree"
+    },
+    "realWasmOutboxTests": {
+      "files": 1,
+      "passed": 6
+    },
+    "elfaCommittedImportInventory": {
+      "ref": "958b8fe6581cba4d2560bf921fe325ad5fa76fac",
+      "required": 72,
+      "missing": 0
+    }
+  },
+  "latestDevelop": "a450e20fc0d949958ec8187724dfa6c9423a8f66",
+  "initialHookCheckedAggregate": "958b8fe6581cba4d2560bf921fe325ad5fa76fac"
 }
