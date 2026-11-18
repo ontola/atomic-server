@@ -2910,3 +2910,11 @@ Existing installs whose secret was already discarded require reinstalling;
 this does not rotate an app identity or repair provider delegations. New online
 installations still work with older nodes; automatic replay requires a node
 that advertises the initialization-only protocol.
+
+Table format extraction (#2539): `browser/table/src/schema/PropertyChoiceField.test.tsx`
+checks controlled radio selection; `browser/table/src/chunks/TablePage/EditorCells/FloatCell.test.tsx`
+checks decimal, exponent and comma input commit without truncation or writes while typing.
+`browser/data-browser/src/chunks/TablePage/PropertyForm/NumberPropertyForm.test.tsx`
+uses real Atomic Resources to preserve number-draft initialization without saving and
+text-format changes with the clean host's explicit save. These are compatibility
+checks for code moves, not new schema-validation or persistence semantics.

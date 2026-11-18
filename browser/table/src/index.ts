@@ -64,3 +64,10 @@ export type {
 export type { JSONValue } from './value.js';
 
 export { TableHeadingWrapper } from './chunks/TableEditor/TableHeading.js';
+
+export { FloatCell } from './chunks/TablePage/EditorCells/FloatCell.js';
+export {
+  PropertyChoiceField,
+  type PropertyChoiceFieldProps,
+  type PropertyChoice,
+} from './schema/PropertyChoiceField.js';
