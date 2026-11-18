@@ -60,4 +60,4 @@ only in the broad run; isolated pristine-base and feature checks pass, and its
 cause remains unresolved. Baseline/feature inventories were verified (1095/1107)
 after forced recompilation to avoid stale Cargo artifact reuse.
 Final input-boundary regressions, library rebuild, and real Chromium acceptance also pass.
-The required pre-commit lint/Clippy and exact-commit CI remain release gates. This plan stays until that gate passes.
+Required staged-snapshot workspace lint and Clippy pass. Exact-commit CI remains a release gate. This plan stays until that gate passes.
