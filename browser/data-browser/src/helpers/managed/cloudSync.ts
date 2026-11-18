@@ -1,4 +1,7 @@
-import { getRuntimeManagedPortalUrl } from './api';
+import {
+  getRememberedManagedPortalUrl,
+  getRuntimeManagedPortalUrl,
+} from './api';
 // Turning on hosted sync for a local or server-hosted drive —
 // the Cloud Server action on the /sync page. This is the bridge between
 // the open-core connection layer (connect a server, promote a local drive) and
@@ -47,6 +50,19 @@ export function getManagedPortalUrl(info?: ManagedInfo | null): string | null {
   if (info?.portalUrl) return info.portalUrl;
 
   return null;
+}
+
+/**
+ * The account portal this install knows of, safe to open: the runtime/build
+ * portal, else what `info` (the connected node) reports, else the one
+ * remembered from an earlier sign-in. Null on a self-hosted install.
+ */
+export function resolvePortalUrl(info?: ManagedInfo | null): string | null {
+  return (
+    safePortalUrl(
+      getManagedPortalUrl(info) ?? getRememberedManagedPortalUrl(),
+    ) ?? null
+  );
 }
 
 /**

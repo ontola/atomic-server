@@ -1,7 +1,6 @@
 import {
   getManagedApiBase,
   getManagedDeviceToken,
-  getRememberedManagedPortalUrl,
   rememberManagedPortalUrl,
   safePortalUrl,
   setManagedDeviceToken,
@@ -265,10 +264,6 @@ export function isDeviceLinked(): boolean {
  */
 export function rememberProvider(portalUrl: string): void {
   rememberManagedPortalUrl(trimSlashes(portalUrl));
-}
-
-export function getRememberedProvider(): string | null {
-  return getRememberedManagedPortalUrl();
 }
 
 /** Where the user approves. The provider owns this path; we only address it. */

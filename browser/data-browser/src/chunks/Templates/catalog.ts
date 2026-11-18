@@ -2,6 +2,9 @@
 import { TABLE_TEMPLATES } from '../TablePage/tableTemplates';
 import type { TemplateDefinition, TemplatePart } from './model';
 const version = '1';
+
+/** The Welcome drive's first document; stored as written, never translated. */
+export const WELCOME_DOC_NAME = 'Start here';
 const table = (id: string, name?: string): TemplatePart => ({
   key: id,
   kind: 'template',
@@ -119,7 +122,7 @@ export const TEMPLATE_CATALOG: TemplateDefinition[] = [
       {
         key: 'welcome',
         kind: 'document',
-        name: 'Start here',
+        name: WELCOME_DOC_NAME,
         text: [
           'Welcome to Atomic. This is a small drive to play in, at your own pace. There is nothing you have to do.',
           '# Try it',

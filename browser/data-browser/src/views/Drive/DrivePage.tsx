@@ -7,15 +7,20 @@ import { EditableTitle } from '@components/EditableTitle';
 import { useVisibleDriveChildren } from '@hooks/useVisibleDriveChildren';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { PrivateDriveBadge } from '@components/Drives/PrivateDriveBadge';
-import { ResourceCoverImage } from '@components/ResourceDecorations';
-import { Column, Row } from '@components/Row';
+import {
+  IconPickerDialog,
+  ResourceCoverImage,
+  TitleDecorationAffordances,
+} from '@components/ResourceDecorations';
+import { Column } from '@components/Row';
+import { IconButton } from '@components/IconButton/IconButton';
 import {
   DriveSwitcher,
   DriveSwitcherChevronTrigger,
 } from '@components/SideBar/DriveSwitcher';
 import { styled } from 'styled-components';
 import { useDialog } from '@components/Dialog/useDialog';
-import { FaGear, FaRegStar, FaStar } from 'react-icons/fa6';
+import { FaGear } from 'react-icons/fa6';
 import { useEffect, useState, type JSX } from 'react';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { useSavedDriveToggle } from '@hooks/useSavedDriveToggle';
@@ -24,8 +29,8 @@ import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { FileDropZone } from '@components/forms/FileDropzone/FileDropzone';
+import { GettingStartedPanel } from '@components/SideBar/GettingStartedPanel';
 import { DriveSettingsDialog } from './DriveSettingsDialog';
-import { GettingStartedCard } from './GettingStartedCard';
 import { EmptyDriveStart } from './EmptyDriveStart';
 import {
   ActivityFeed,
@@ -42,6 +47,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
     resource.subject,
   );
   const [dialogProps, showSettings, , settingsOpen] = useDialog();
+  const [iconPickerOpen, setIconPickerOpen] = useState<boolean>();
 
   const vectorIndexing = useVectorIndexStatus();
 
@@ -53,7 +59,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
     canEdit && (filling || (empty && subResources.length === 0));
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
   const { privateDrive } = usePrivateDrive();
-  const [isSaved, toggleSaved] = useSavedDriveToggle(resource.subject);
+  const [isSaved] = useSavedDriveToggle(resource.subject);
   const [, addToHistory] = useDriveHistory();
   const canSave = !!privateDrive && !isPrivateDrive;
 
@@ -76,10 +82,10 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
         <ContainerNarrow>
           <Column gap='2rem'>
             <Header>
-              <Row align='center' wrapItems gap='1rem'>
+              <TitleArea>
                 <EditableTitle
                   resource={resource}
-                  withDecorations
+                  pointedAt
                   // Its subject is derived from your key: there is exactly one and
                   // it cannot be swapped. A name like "Q3 Launch" on it would be a
                   // name that lies about what the thing is.
@@ -89,56 +95,48 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                       : undefined
                   }
                 />
-                <DriveSwitcher Trigger={DriveSwitcherChevronTrigger} />
                 {isPrivateDrive && <PrivateDriveBadge />}
                 {vectorIndexing && <VectorIndexingIndicator />}
-              </Row>
-              <Row align='center' wrapItems gap='0.75rem'>
+              </TitleArea>
+              <Actions>
+                <DriveSwitcher Trigger={DriveSwitcherChevronTrigger} />
+                <TitleDecorationAffordances
+                  resource={resource}
+                  onPickIcon={() => setIconPickerOpen(true)}
+                  bare
+                />
+                <IconButton
+                  title='Drive settings'
+                  aria-label='Drive settings'
+                  size='1.1em'
+                  onClick={showSettings}
+                  data-testid='drive-settings-button'
+                >
+                  <FaGear />
+                </IconButton>
                 <DrivePeople />
                 {baseURL !== resource.subject && (
                   <Button subtle onClick={() => setBaseURL(resource.subject)}>
                     Set as current drive
                   </Button>
                 )}
-                {canSave && (
-                  <Button
-                    subtle
-                    onClick={toggleSaved}
-                    aria-pressed={isSaved}
-                    data-testid='drive-save-button'
-                  >
-                    {isSaved ? (
-                      <>
-                        <FaStar /> In My drives
-                      </>
-                    ) : (
-                      <>
-                        <FaRegStar /> Add to My drives
-                      </>
-                    )}
-                  </Button>
-                )}
-                <Button
-                  subtle
-                  onClick={showSettings}
-                  data-testid='drive-settings-button'
-                >
-                  <FaGear /> Drive settings
-                </Button>
-              </Row>
+              </Actions>
             </Header>
 
             {showStart && (
               <EmptyDriveStart drive={resource.subject} onActive={setFilling} />
             )}
 
-            <GettingStartedCard drive={resource} canEdit={canEdit} />
-
             <ValueFormAddButton
               resource={resource}
               propertyURL={core.properties.description}
               datatype={Datatype.MARKDOWN}
               buttonLabel='Add description'
+            />
+
+            <GettingStartedPanel
+              key={`getting-started-page:${resource.subject}`}
+              placement='page'
             />
 
             <ActivityFeed
@@ -167,6 +165,13 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
           </Column>
         </ContainerNarrow>
       </FileDropZone>
+      {iconPickerOpen !== undefined && (
+        <IconPickerDialog
+          resource={resource}
+          show={iconPickerOpen}
+          onShowChange={setIconPickerOpen}
+        />
+      )}
       <DriveSettingsDialog
         drive={resource}
         dialogProps={dialogProps}
@@ -203,8 +208,30 @@ export default DrivePage;
 
 const Header = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem 1rem;
+`;
+
+/** Takes the room the buttons leave; the title wraps inside it. */
+const TitleArea = styled.div`
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.5rem 1rem;
+
+  h1 {
+    margin: 0;
+  }
+`;
+
+const Actions = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-left: auto;
 `;

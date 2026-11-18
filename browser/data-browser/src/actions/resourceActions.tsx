@@ -568,7 +568,11 @@ export const resourceActions: ActionDefinition[] = [
         await ctx.resource.destroy();
 
         if (ctx.drive) {
-          removeRecentResource(ctx.drive, ctx.subject);
+          removeRecentResource(
+            ctx.store.getAgent()?.subject,
+            ctx.drive,
+            ctx.subject,
+          );
         }
 
         ctx.onAfterDelete?.();

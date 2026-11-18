@@ -41,7 +41,7 @@ import {
   accountAddress,
   getManagedAccount,
 } from '../../helpers/managed/session';
-import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import { resolvePortalUrl } from '../../helpers/managed/cloudSync';
 import { safePortalUrl } from '../../helpers/managed/api';
 import {
   fetchManagedInfo,
@@ -86,10 +86,7 @@ import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey, FaXmark } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
-import {
-  canHoldProviderCookie,
-  getRememberedProvider,
-} from '../../helpers/managed/deviceLink';
+import { canHoldProviderCookie } from '../../helpers/managed/deviceLink';
 import {
   Shell,
   CardTitle,
@@ -176,13 +173,12 @@ export function GettingStartedFlow({
    * stays strict: only a node that says it is managed sends people to a portal.
    * Restoring one is different — the portal is the *only* route, so a screen
    * that cannot name one has nothing to offer at all. Resolved through
-   * `getManagedPortalUrl`, so a build-time override counts even before any
+   * `resolvePortalUrl`, so a build-time override counts even before any
    * server has answered, which is the state a wiped browser is in. Null on a
    * self-hosted install, where the button stays hidden rather than dead.
    */
-  const [knownPortalUrl, setKnownPortalUrl] = useState<string | null>(
-    () =>
-      safePortalUrl(getManagedPortalUrl() ?? getRememberedProvider()) ?? null,
+  const [knownPortalUrl, setKnownPortalUrl] = useState<string | null>(() =>
+    resolvePortalUrl(),
   );
 
   useEffect(() => {
@@ -194,10 +190,7 @@ export function GettingStartedFlow({
       // The remembered provider covers the desktop and Android apps: their
       // embedded node names no portal, and the build may not either, but a
       // device that linked once knows exactly where its account lives.
-      setKnownPortalUrl(
-        safePortalUrl(getManagedPortalUrl(info) ?? getRememberedProvider()) ??
-          null,
-      );
+      setKnownPortalUrl(resolvePortalUrl(info));
     });
 
     return () => {
