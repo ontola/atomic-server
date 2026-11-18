@@ -28,6 +28,7 @@ import 'native_views.dart';
 import 'warm_resource_web_view.dart';
 import 'meeting_call.dart';
 import 'meeting_call_overlay.dart';
+import 'live_meeting_banner.dart' show InMeetingBar;
 import 'slide_back_route.dart';
 import 'home_sections.dart' show HomeSection, HomeSectionEntry;
 import 'list_and_field.dart' show readableHorizontalPadding;
@@ -436,6 +437,21 @@ class ShellController extends ChangeNotifier {
     return _show(navigator, route, overList: true);
   }
 
+  /// Opens [meeting] (the strip of [InMeetingBar]), unless it is on top
+  /// already.
+  void openMeeting(AssistantApi api, String meeting) {
+    final top = _top;
+    if (top != null && _details[top] == meeting) return;
+    openDetail(
+      (_) => openResourceView(
+          api: api,
+          drive: lead.drive ?? drive.value,
+          subject: meeting,
+          classUrl: meetingClass),
+      subject: meeting,
+    );
+  }
+
   /// Shows [kind] in the list pane ([ShellPage.home] or a search); only in
   /// the split layout. A folded list pane comes back.
   void showList(String kind) {
@@ -740,8 +756,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     key: _barKey,
     child: _MeasureHeight(
       height: _barHeight,
-      child: _FrozenBottomPadding(
-          child: AppBottomBar(api: widget.api, shell: _shell)),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        InMeetingBar(
+          call: _call,
+          lead: _shell.lead,
+          follow: _shell.follow,
+          onOpen: (meeting) => _shell.openMeeting(widget.api, meeting),
+        ),
+        _FrozenBottomPadding(
+            child: AppBottomBar(api: widget.api, shell: _shell)),
+      ]),
     ),
   );
 
