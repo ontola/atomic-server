@@ -18,6 +18,8 @@ import { useDialogTreeInfo } from './Dialog/dialogContext.js';
 import { useControlLock } from '../hooks/useControlLock.js';
 import { floatingSurface, floatingSurfaceAppear } from './floatingSurface.js';
 
+export { Trigger as PopoverTrigger } from '@radix-ui/react-popover';
+
 export interface PopoverProps {
   Trigger: ReactNode;
   open?: boolean;
