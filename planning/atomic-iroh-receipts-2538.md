@@ -26,7 +26,7 @@ bounded, ephemeral evidence; there is no receipt ledger.
 - [x] Add negotiated native production and generation-fenced automatic requests.
 - [x] Expose per-store receipts and document the developer contract.
 - [x] Verify adversarial cases and real native bulk/live/reopen behavior.
-- [ ] Complete required checks and independent review.
+- [x] Complete required local checks and independent review.
 - [ ] Publish stacked PR and follow exact-commit CI.
 - [ ] Remove this plan only once required CI passes.
 
@@ -37,8 +37,8 @@ printer. After reproducing and fixing three target-lookup/correlation failures,
 all 25 focused receipt tests pass. Final cross-process bulk/live/kill-and-reopen
 acceptance passes (its child entry point is intentionally ignored by the parent
 test runner). Rebuilt WASM and real Chromium receipt/handoff/reopen checks pass.
-Rust formatting and independent review pass; required commit-hook Clippy and
-exact-commit CI remain gates.
+Rust formatting, independent review and required staged-snapshot workspace
+Clippy pass. Exact-commit CI remains a gate; retain this plan until it passes.
 
 Cross-process diagnostics established that independently encoded Loro vectors
 can differ bytewise while naming identical counters. The acceptance test compares
