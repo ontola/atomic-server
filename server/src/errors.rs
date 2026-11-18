@@ -59,6 +59,17 @@ impl AtomicServerError {
         }
     }
 
+    /// This error with a refusal code (see [`Self::code`]).
+    pub fn with_code(mut self, code: u16) -> Self {
+        if code != 0 {
+            let mut res = Resource::new("subject".into());
+            let _ = res.set_class(urls::ERROR);
+            let _ = res.set_unsafe(urls::ERROR_CODE.into(), Value::Integer(code.into()));
+            self.error_resource = Some(Box::new(res));
+        }
+        self
+    }
+
     /// A refusal the caller can act on, answered as 400 rather than 500.
     pub fn bad_request(message: impl Into<String>) -> Self {
         Self {
@@ -92,7 +103,7 @@ impl ResponseError for AtomicServerError {
             // A managed node refusing enrollment/quota is an expected
             // admission decision, not an internal failure or a request to
             // sign in again.
-            error_code::SYNC_REJECTED | error_code::NOT_ENROLLED => return StatusCode::FORBIDDEN,
+            error_code::SYNC_REJECTED => return StatusCode::FORBIDDEN,
             _ => {}
         }
         match self.error_type {
@@ -252,8 +263,8 @@ mod admission_error_tests {
 
     #[test]
     fn the_code_travels_with_the_error_not_the_wording() {
-        let error = refusal("any wording at all", error_code::NOT_ENROLLED);
-        assert_eq!(error.code(), error_code::NOT_ENROLLED);
+        let error = refusal("any wording at all", error_code::SYNC_REJECTED);
+        assert_eq!(error.code(), error_code::SYNC_REJECTED);
         assert_eq!(error.status_code(), StatusCode::FORBIDDEN);
         let body = String::from_utf8(
             actix_web::body::to_bytes(error.error_response().into_body())
@@ -263,7 +274,7 @@ mod admission_error_tests {
                 .to_vec(),
         )
         .unwrap();
-        assert!(body.contains("errorCode\":18"), "{body}");
+        assert!(body.contains("errorCode\":6"), "{body}");
     }
 
     #[test]

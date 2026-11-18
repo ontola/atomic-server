@@ -519,7 +519,7 @@ Everything else is open to an anonymous socket and gated per subject by
 | `3` | `UNAUTHORIZED_WRITE` | The signer has no write right on the target or its parents. Blocking, not terminal. |
 | `4` | `MISSING_CLASS` | The commit names a class this node does not hold, so validation cannot run. Blocking, not terminal: the class may still arrive. |
 | `5` | `AUTH_REQUIRED` | The frame needs an authenticated session. `request_id = 0`. |
-| `6` | `SYNC_REJECTED` | A commit was refused by node quota policy, or a `SYNC_PUSH` was refused as a whole. Keep local edits; stop unbounded retries. Commits carry their request ID; `SYNC_PUSH` uses `request_id = 0` and message `SYNC_PUSH rejected for drive <drive>: <reason>`. |
+| `6` | `SYNC_REJECTED` | A commit was refused by node enrollment/quota policy ("not enrolled" is told apart from quota by its message), or a `SYNC_PUSH` was refused as a whole. Keep local edits; stop unbounded retries. Commits carry their request ID; `SYNC_PUSH` uses `request_id = 0` and message `SYNC_PUSH rejected for drive <drive>: <reason>`. |
 | `7` | `UNAUTHORIZED_READ` | A subscription or a read-side reconcile frame was refused. `request_id = 0`. Message: `<FRAME> refused for <subject>: <reason>`. |
 | `8` | `AUTH_FAILED` | An `AUTH` frame was refused. `request_id = 0`. |
 | `9` | `INVALID_SIGNATURE` | A `COMMIT` whose signature does not verify against its signer's key, or that has none. Terminal for that envelope: sign again. |
@@ -531,7 +531,6 @@ Everything else is open to an anonymous socket and gated per subject by
 | `15` | `RESULT_TOO_LARGE` | A `GET_MANY` entry that was not fetched because the entries before it filled the batch's byte budget (32 MiB). Nothing is wrong with the subject: ask for it again, on its own or in a smaller batch. |
 | `16` | `PENDING_DEPS` | A commit's Loro delta starts past ops the node never received, so none of it applied. Retrying the same delta cannot succeed: drop the save cursor and send a self-contained snapshot. |
 | `17` | `MISSING_PARENT` | The node does not hold the resource's parent. Blocking: park the entry; a finished resync of the drive re-arms it. |
-| `18` | `NOT_ENROLLED` | The node does not host the drive a commit or `SYNC_PUSH` names. Blocking like `SYNC_REJECTED`, kept apart because the person can act on it. Servers before this code sent `SYNC_REJECTED`. |
 | `19` | `DESTROY_SETTLED` | A destroy with nothing left to do: the resource is already gone, or was re-created after the destroy was signed. An acknowledgement for the sender. |
 
 The code is set where the refusal is raised (`AtomicError::code`) and no layer

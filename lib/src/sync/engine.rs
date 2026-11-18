@@ -1948,15 +1948,13 @@ pub struct SyncPushRejected {
     pub drive: String,
     /// Human-readable reason; goes on the wire in the `ERROR` frame.
     pub reason: String,
-    /// The [`protocol::error_code`] the `ERROR` frame carries.
-    pub code: u16,
 }
 
 impl SyncPushRejected {
-    /// The `ERROR` frame (`request_id = 0`) that answers the push instead of
-    /// `SYNC_OK`.
+    /// The `ERROR` frame (`request_id = 0`, [`protocol::error_code::SYNC_REJECTED`])
+    /// that answers the push instead of `SYNC_OK`.
     pub fn to_error_frame(&self) -> Vec<u8> {
-        protocol::encode_error(0, self.code, &self.to_string())
+        protocol::encode_error(0, protocol::error_code::SYNC_REJECTED, &self.to_string())
     }
 }
 
@@ -2091,7 +2089,6 @@ pub async fn import_sync_push(
             return Err(SyncPushRejected {
                 drive: push.drive.clone(),
                 reason: format!("agent {for_agent} has no write right on the drive"),
-                code: protocol::error_code::SYNC_REJECTED,
             });
         }
         // Existing drive: allowlist/quota still apply. No bootstrap — that
@@ -2104,23 +2101,18 @@ pub async fn import_sync_push(
                 decision,
                 for_agent
             );
-            let (reason, code) = match decision {
-                super::policy::AdmitDecision::OverQuota => (
+            let reason = match decision {
+                super::policy::AdmitDecision::OverQuota => {
                     format!(
                         "drive {} is over its storage quota on this node",
                         push.drive
-                    ),
-                    protocol::error_code::SYNC_REJECTED,
-                ),
-                _ => (
-                    policy.not_enrolled_message(&push.drive),
-                    protocol::error_code::NOT_ENROLLED,
-                ),
+                    )
+                }
+                _ => policy.not_enrolled_message(&push.drive),
             };
             return Err(SyncPushRejected {
                 drive: push.drive.clone(),
                 reason,
-                code,
             });
         }
     } else if !admit_unknown_drive(store, &push.drive, for_agent) {
@@ -2129,21 +2121,14 @@ pub async fn import_sync_push(
             push.drive,
             for_agent
         );
-        let (reason, code) = if matches!(for_agent, crate::agents::ForAgent::Public) {
-            (
-                "unauthenticated agent cannot create a drive".to_string(),
-                protocol::error_code::SYNC_REJECTED,
-            )
+        let reason = if matches!(for_agent, crate::agents::ForAgent::Public) {
+            "unauthenticated agent cannot create a drive".to_string()
         } else {
-            (
-                policy.not_enrolled_message(&push.drive),
-                protocol::error_code::NOT_ENROLLED,
-            )
+            policy.not_enrolled_message(&push.drive)
         };
         return Err(SyncPushRejected {
             drive: push.drive.clone(),
             reason,
-            code,
         });
     }
 
@@ -2408,7 +2393,6 @@ pub async fn import_sync_push(
         .map_err(|error| SyncPushRejected {
             drive: push.drive.clone(),
             reason: format!("Failed to persist SYNC_PUSH batch: {error}"),
-            code: protocol::error_code::SYNC_REJECTED,
         })?;
     drop(_subject_guards);
     store.finish_replicated_resources(post_commit).await;
@@ -2437,7 +2421,6 @@ pub async fn import_sync_push(
         store.flush().map_err(|error| SyncPushRejected {
             drive: push.drive.clone(),
             reason: format!("Failed to durably flush SYNC_PUSH: {error}"),
-            code: protocol::error_code::SYNC_REJECTED,
         })?;
     }
 

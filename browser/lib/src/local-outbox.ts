@@ -266,11 +266,10 @@ export function legacyRefusalCode(message: string): number {
 
   if (has('parked as pending')) return ErrorCode.PENDING_DEPS;
 
-  if (has('is not enrolled for sync on this node')) {
-    return ErrorCode.NOT_ENROLLED;
-  }
-
-  if (has('has reached its storage quota on this node')) {
+  if (
+    has('is not enrolled for sync on this node') ||
+    has('has reached its storage quota on this node')
+  ) {
     return ErrorCode.SYNC_REJECTED;
   }
 
@@ -303,19 +302,11 @@ export function legacyRefusalCode(message: string): number {
 
 /**
  * What a refusal is: the server's `code` when this client knows it, else the
- * wording read by {@link legacyRefusalCode}. A server that predates
- * `NOT_ENROLLED` answered it with `SYNC_REJECTED`, so that one code is also
- * checked against the text.
+ * wording read by {@link legacyRefusalCode}.
  */
 export function refusalCode(message: string, code?: number): number {
   if (code === undefined || !KNOWN_ERROR_CODES.has(code)) {
     return legacyRefusalCode(message);
-  }
-
-  if (code === ErrorCode.SYNC_REJECTED) {
-    return legacyRefusalCode(message) === ErrorCode.NOT_ENROLLED
-      ? ErrorCode.NOT_ENROLLED
-      : code;
   }
 
   return code;
@@ -360,7 +351,6 @@ export function isUnrecoverableCommitError(
     case ErrorCode.UNAUTHORIZED_WRITE:
     case ErrorCode.MISSING_CLASS:
     case ErrorCode.SYNC_REJECTED:
-    case ErrorCode.NOT_ENROLLED:
     case ErrorCode.MISSING_PARENT:
     case ErrorCode.INVALID_SIGNATURE:
     case ErrorCode.CAUSALITY_CONFLICT:
@@ -375,11 +365,15 @@ export function isUnrecoverableCommitError(
 export const isPendingDepsRefusal = (message: string, code?: number) =>
   refusalCode(message, code) === ErrorCode.PENDING_DEPS;
 
-/** The node does not host the drive. */
+/** The node does not host the drive. It has no code of its own: it is a
+ *  `SYNC_REJECTED` (quota is the other) told apart by its text, so a client
+ *  that predates any change here reads it alike. */
 export const isNotEnrolledRefusal = (
   message: string | undefined,
   code?: number,
-) => refusalCode(message ?? '', code) === ErrorCode.NOT_ENROLLED;
+) =>
+  !!message?.includes('is not enrolled for sync on this node') &&
+  refusalCode(message, code) === ErrorCode.SYNC_REJECTED;
 
 /** Whether a thrown error is a not-enrolled refusal (reads its `code`). */
 export const isNotEnrolledError = (error: unknown) =>

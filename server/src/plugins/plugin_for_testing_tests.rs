@@ -185,6 +185,7 @@ async fn schema_renames_sync_both_directions_without_rebinding() {
         store: db.clone(),
         for_agent: agent,
         signing_as: None,
+        refusal_code: Default::default(),
     };
     let local_name = |db: atomic_lib::Db, subject: String| async move {
         db.get_resource(&subject.as_str().into())

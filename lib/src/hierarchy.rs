@@ -473,7 +473,11 @@ pub fn check_rights<'a>(
     for_agent_enum: &'a ForAgent,
     right: Right,
 ) -> AsyncResult<'a, AtomicResult<String>> {
-    check_rights_impl(store, resource, for_agent_enum, right, None)
+    Box::pin(async move {
+        check_rights_impl(store, resource, for_agent_enum, right, None)
+            .await
+            .map_err(|e| code_write_denial(e, right))
+    })
 }
 
 fn check_rights_impl<'a, S: Storelike>(

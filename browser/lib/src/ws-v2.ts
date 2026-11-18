@@ -152,10 +152,6 @@ export const ErrorCode = {
   /** The server does not hold the resource's parent. Parked; a finished
    *  resync of the drive re-arms it. */
   MISSING_PARENT: 17,
-  /** The server does not host the drive. Parked like `SYNC_REJECTED`, kept
-   *  apart because the person can act on it. Servers before this code sent
-   *  `SYNC_REJECTED`. */
-  NOT_ENROLLED: 18,
   /** A destroy with nothing left to do (already gone, or the subject was
    *  re-created after it was signed): an acknowledgement. */
   DESTROY_SETTLED: 19,

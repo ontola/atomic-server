@@ -1320,10 +1320,7 @@ export class WSClient {
           // Nothing is pending on it, so neither `rejectAllPending` nor a
           // toast is right.
           console.warn(`[WS] ${msg.message}`);
-        } else if (
-          msg.code === ErrorCode.SYNC_REJECTED ||
-          msg.code === ErrorCode.NOT_ENROLLED
-        ) {
+        } else if (msg.code === ErrorCode.SYNC_REJECTED) {
           // Our SYNC_PUSH was refused as a whole (no write right on the
           // drive, quota, not enrolled). Nothing we sent landed and no
           // SYNC_OK will follow for it. `handleSyncDiff` may already have

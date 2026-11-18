@@ -54,9 +54,8 @@ describe('commit refusal codes (shared fixture)', () => {
     expect(isSettledDestroyRefusal(message, row.code)).toBe(
       !!row.settlesDestroy,
     );
-    expect(isNotEnrolledRefusal(message, row.code)).toBe(
-      row.name === 'NOT_ENROLLED',
-    );
+    // Not-enrolled has no code of its own: it is SYNC_REJECTED plus its text.
+    expect(isNotEnrolledRefusal(message, row.code)).toBe(false);
     expect(isMissingParentRefusal(message, row.code)).toBe(
       row.name === 'MISSING_PARENT',
     );

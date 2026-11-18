@@ -115,7 +115,6 @@ impl CommitRefused {
             error_code::UNAUTHORIZED_WRITE
                 | error_code::MISSING_CLASS
                 | error_code::SYNC_REJECTED
-                | error_code::NOT_ENROLLED
                 | error_code::MISSING_PARENT
                 | error_code::INVALID_SIGNATURE
                 | error_code::CAUSALITY_CONFLICT

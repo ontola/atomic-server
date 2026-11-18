@@ -336,7 +336,7 @@ export interface StoreSyncStatus {
     timestamp: number;
   };
   /** Set when the server refused the last SYNC_PUSH for a drive
-   *  (`SYNC_REJECTED` or `NOT_ENROLLED`: no write right, quota). Local edits
+   *  (`SYNC_REJECTED`: no write right, quota, not enrolled). Local edits
    *  are kept and offered again on the next handshake. Cleared by the
    *  next successful sync of that drive. */
   lastDriveSyncError?: {

@@ -1355,7 +1355,7 @@ impl Commit {
                                 return Err(AtomicError::from(
                                     policy.not_enrolled_message(&drive_subject),
                                 )
-                                .with_code(crate::sync::protocol::error_code::NOT_ENROLLED));
+                                .with_code(crate::sync::protocol::error_code::SYNC_REJECTED));
                             }
                         }
                         crate::sync::policy::AdmitDecision::OverQuota => {

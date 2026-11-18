@@ -64,6 +64,8 @@ export function grantFailureMessage(
   app: string,
   node: string,
 ): string {
+  const text = (error: unknown) =>
+    error instanceof Error ? error.message : String(error);
   const notEnrolled = failed.filter(f => isNotEnrolledError(f.error));
   const other = failed.filter(f => !isNotEnrolledError(f.error));
   const parts: string[] = [];

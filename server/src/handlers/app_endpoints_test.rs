@@ -475,9 +475,7 @@ async fn an_app_cannot_write_outside_itself() {
 
     assert_eq!(response.status(), 400);
     let body: serde_json::Value = serde_json::from_str(&body_of(response)).unwrap();
-    // The host reports failures as plain strings (`ApplyHost`), so this
-    // refusal carries no code; the message still names the denied right.
-    assert_eq!(body["https://atomicdata.dev/properties/errorCode"], 0);
+    assert_eq!(body["https://atomicdata.dev/properties/errorCode"], 3);
     assert!(
         body["https://atomicdata.dev/properties/description"]
             .as_str()

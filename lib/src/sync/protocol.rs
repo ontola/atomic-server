@@ -308,12 +308,6 @@ pub mod error_code {
     /// node that never received its root). Every retry fails identically:
     /// park the entry; a finished resync of the drive re-arms it.
     pub const MISSING_PARENT: u16 = 17;
-    /// The node does not host the drive the commit or push names. Parked like
-    /// [`SYNC_REJECTED`], but kept apart because the person can act on it
-    /// (keep the drive browser-only, ask the operator to enrol it), where a
-    /// quota refusal calls for something else. Before this code the node sent
-    /// `SYNC_REJECTED` for it.
-    pub const NOT_ENROLLED: u16 = 18;
     /// A destroy commit with nothing left to do: the resource is already gone
     /// here, or was re-created after the destroy was signed. The sender's goal
     /// is met, so treat it as an acknowledgement.

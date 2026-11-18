@@ -19,7 +19,6 @@
     { "name": "RESULT_TOO_LARGE", "code": 15, "disposition": "retry" },
     { "name": "PENDING_DEPS", "code": 16, "disposition": "retry", "snapshot": true },
     { "name": "MISSING_PARENT", "code": 17, "disposition": "park" },
-    { "name": "NOT_ENROLLED", "code": 18, "disposition": "park" },
     { "name": "DESTROY_SETTLED", "code": 19, "disposition": "retry", "settlesDestroy": true }
   ]
 }
