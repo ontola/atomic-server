@@ -295,6 +295,14 @@ catalog. The fresh final Chromium run passes all 12 journeys, including App/icon
 collection browsing, background sync, raw Table schema and 390px mobile actions.
 Exact-head server CI remains pending.
 
+The first full hosted run on `e10005512` (44324010397) passed its static gates
+but failed browser-test discovery: the fresh Dagger Playwright image copied the
+existing app SDK fixture, but omitted the new Syncables SVG/catalog fixtures.
+Both shards stopped with `ENOENT` before executing tests. The focused Linux
+workflow and private downstream build passed on that revision. Include the
+shared fixture directory in the full-suite container and cover its availability
+with the Dagger regression harness, then rerun full CI on the corrected head.
+
 The opt-in catalog, overlays and provider icon are published and byte-matched.
 The live integrations.atomic.place catalog-only update (run 44318123388) preserves
 all 17 providers and verifies its runtime binary and public connection key are
