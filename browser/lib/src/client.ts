@@ -3,6 +3,15 @@
 
 import { hasBrowserAPI } from './hasBrowserAPI.js';
 import {
+  decodeServerReceipt,
+  SERVER_RECEIPT_CAPABILITY,
+  SERVER_RECEIPT_HEADER,
+  SERVER_RECEIPT_MAX_FRAME,
+  serverReceiptEndpoint,
+  type ServerReceiptRequest,
+  type ServerReceiptWire,
+} from './server-receipts.js';
+import {
   checkAuthenticationCookie,
   setCookieAuthentication,
   signRequest,
@@ -164,6 +173,7 @@ function logFetchFailure(subject: string, e: unknown): void {
 }
 
 export class Client {
+  private receiptEndpoints = new Set<string>();
   private __fetchOverride?: typeof fetch;
   /** Called with the `X-Atomic-Pace-Ms` hint of every acknowledged
    *  `POST /commit`. The store points it at the outbox. */
@@ -537,11 +547,118 @@ export class Client {
 
     const pace = Number(response.headers?.get(PACE_HEADER));
 
+    try {
+      const receiptEndpoint = serverReceiptEndpoint(endpoint);
+      if (
+        !response.redirected &&
+        (!response.url ||
+          new URL(response.url).origin === new URL(endpoint).origin) &&
+        response.headers?.get(SERVER_RECEIPT_HEADER) ===
+          SERVER_RECEIPT_CAPABILITY
+      ) {
+        this.receiptEndpoints.add(receiptEndpoint);
+        while (this.receiptEndpoints.size > 128)
+          this.receiptEndpoints.delete(
+            this.receiptEndpoints.values().next().value!,
+          );
+      } else this.receiptEndpoints.delete(receiptEndpoint);
+    } catch {
+      /* Capability discovery cannot change commit acceptance. */
+    }
+
     if (response.headers?.get(PACE_HEADER) && Number.isFinite(pace)) {
       this.paceListener?.(pace);
     }
 
     return parseCommitJSON(body);
+  }
+
+  /** @internal A successful commit response negotiates the optional adapter. */
+  public clearStorageReceiptCapabilities(): void {
+    this.receiptEndpoints.clear();
+  }
+
+  public supportsStorageReceipts(endpoint: string): boolean {
+    return this.receiptEndpoints.has(serverReceiptEndpoint(endpoint));
+  }
+
+  /** @internal Optional proof request, independent of commit acceptance. */
+  public async requestStorageReceipt(
+    endpoint: string,
+    request: ServerReceiptRequest,
+    agent: Agent,
+    signal: AbortSignal,
+    current: () => boolean,
+  ): Promise<ServerReceiptWire | undefined> {
+    if (!this.supportsStorageReceipts(endpoint) || !current()) return;
+    const body = JSON.stringify(request);
+    if (new TextEncoder().encode(body).length >= SERVER_RECEIPT_MAX_FRAME)
+      return;
+    const headers = await signRequest(
+      endpoint,
+      agent,
+      { 'Content-Type': 'application/json' },
+      { method: 'POST', body },
+    );
+    if (!current()) return;
+    const response = await this.fetch(endpoint, {
+      method: 'POST',
+      body,
+      headers,
+      signal,
+      redirect: 'error',
+    });
+    if (
+      !current() ||
+      response.redirected ||
+      (response.url && response.url !== endpoint)
+    )
+      return;
+    if ([404, 405, 501].includes(response.status))
+      this.receiptEndpoints.delete(endpoint);
+    if (response.status !== 200) return;
+
+    if (response.body) {
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          size += value.length;
+
+          if (size >= SERVER_RECEIPT_MAX_FRAME || !current()) {
+            await reader.cancel();
+
+            return;
+          }
+
+          chunks.push(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      return current()
+        ? decodeServerReceipt(
+            new TextDecoder('utf-8', { fatal: true }).decode(bytes),
+          )
+        : undefined;
+    }
+
+    const text = await response.text();
+
+    return current() ? decodeServerReceipt(text) : undefined;
   }
 
   /**

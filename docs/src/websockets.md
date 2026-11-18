@@ -138,7 +138,7 @@ logged and dropped, not answered.
 | `0x51` | `CALL_RESULT` | Iroh responder | the dialer of the `CALL`. |
 | `0x52` | `INVITE` | Iroh dialer, after `AUTH` | `atomic_lib::sync::invite`. Iroh only; the WS server answers it with an `ERROR`. |
 | `0x53` | `INVITE_OK` | Iroh responder | the dialer of the `INVITE`. A refusal is an `ERROR` with code 13 (`INVITE_REFUSED`). |
-| `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated browser or native Iroh peer | Session advertising the transport-specific storage-receipt capability. |
+| `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated browser, native Iroh or WS client | Session advertising the transport-specific storage-receipt capability. |
 | `0x57` | `STORAGE_RECEIPT` | authenticated browser or native Iroh peer | Correlated live request on that same connection. |
 
 ## Frame layouts
@@ -361,7 +361,7 @@ read. `max_usages` of the token is not counted: that needs state shared by all
 the inviter's devices. In the link form of the Flutter package this is
 `atomic:invite?token=<token>`; the web app does not parse that form yet.
 
-### Peer storage receipts (0x56 / 0x57)
+### Storage receipts (0x56 / 0x57)
 
 Browser sessions advertise `browser-storage-receipts-v1` in `AUTH_OK`. Native
 Iroh sessions advertise `iroh-storage-receipts-v1` in their `AUTH_OK` / `HELLO`
@@ -410,6 +410,32 @@ The SDK delivers immutable observations automatically; callers still choose and
 validate their independence policy. Different IDs or authenticated agents alone
 are not evidence of separate devices. This receipt covers resource metadata only,
 not blobs, deletion/tombstone recovery, keys, retention or a recoverable backup.
+
+#### HTTP/WebSocket server adapter
+
+The server adapter separately advertises `server-storage-receipts-v1` in WS
+`AUTH_OK`. A client opts in through `HELLO`; authenticated receipt requests use
+the same 0x56/0x57 JSON above. Server AUTH binds the origin, rather than a single
+drive: each receipt request must pass its own drive-membership and read checks.
+Reauthentication invalidates pending receipt work. This capability describes
+adapter support; a positive receipt still requires actual persistent storage.
+
+A successful HTTP `POST /commit` exposes
+`X-Atomic-Storage-Receipts: server-storage-receipts-v1` through CORS. Compatible
+clients can then send signed `POST /storage-receipt`, with the same request JSON
+and a 64 KiB body limit. Existing Atomic HTTP authentication binds the exact
+request URL. The response is 200 with the receipt JSON when the shared producer
+completes its proof, or 204 when no positive evidence is available. Authentication,
+authorization and malformed requests follow ordinary HTTP error handling.
+Responses are not a cacheable receipt service.
+
+The SDK automatically correlates nonce, drive, subject and exact version and
+publishes `StoreEvents.ServerReplicaReceipt`. Its envelope identifies the actual
+server origin, endpoint, HTTP/WS transport and client/session generations. An
+optional source identity is omitted for memory-only clients. HTTP/WS provenance
+depends on origin/transport trust, unlike an Iroh peer's verified QUIC identity.
+Receipt requests never change commit acknowledgement semantics, and old clients
+and servers continue ordinary saves and synchronization.
 
 ### EPHEMERAL (0x40)
 

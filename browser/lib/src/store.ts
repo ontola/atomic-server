@@ -1,4 +1,10 @@
 import { randomUUID } from './uuid.js';
+import {
+  ServerReceiptRequests,
+  serverReceiptEndpoint,
+  type ServerReceiptTransport,
+  type ServerReplicaReceipt,
+} from './server-receipts.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
@@ -400,6 +406,8 @@ export enum StoreEvents {
   ResourceSaved = 'resource-saved',
   /** @internal Immutable completed boundaries of one save invocation. */
   SaveReceipt = 'save-receipt',
+  /** Completed remote storage evidence; independence still requires policy. */
+  ServerReplicaReceipt = 'server-replica-receipt',
   /** User perform a Remove action */
   ResourceRemoved = 'resource-removed',
   /**
@@ -505,6 +513,7 @@ export interface CreateDriveOpts {
 type StoreEventHandlers = {
   [StoreEvents.ResourceSaved]: ResourceCallback;
   [StoreEvents.SaveReceipt]: (receipt: SaveReceipt) => void;
+  [StoreEvents.ServerReplicaReceipt]: (receipt: ServerReplicaReceipt) => void;
   [StoreEvents.ResourceRemoved]: SubjectCallback;
   [StoreEvents.ResourceManuallyCreated]: ResourceCallback;
   [StoreEvents.AgentChanged]: AgentCallback;
@@ -833,7 +842,75 @@ export class Store {
 
   /** @internal Emitted after finalization; observer failures cannot reject save. */
   public notifySaveReceipt(receipt: SaveReceipt): void {
+    // Capture before a listener can change account or database.
+    try {
+      this.serverReceiptRequests.observe(receipt);
+    } catch {
+      /* Optional evidence. */
+    }
+
     void this.eventManager.emit(StoreEvents.SaveReceipt, receipt);
+  }
+
+  private readonly serverReceiptRequests = new ServerReceiptRequests(this);
+  private serverReceiptEpoch = 0;
+
+  /** @internal Observer failures cannot change a save or its storage evidence. */
+  public notifyServerReplicaReceipt(receipt: ServerReplicaReceipt): void {
+    void this.eventManager
+      .emit(StoreEvents.ServerReplicaReceipt, receipt)
+      .catch(() => undefined);
+  }
+
+  /** @internal Actual endpoint and active authenticated connection provenance. */
+  public getServerReceiptTransport(
+    commitEndpoint: string,
+  ): ServerReceiptTransport | undefined {
+    if (this.noServer || this.commitTransport) return;
+
+    try {
+      const endpoint = serverReceiptEndpoint(commitEndpoint);
+      const ws = this.getWebSocketForEndpoint(commitEndpoint);
+      const session = ws?.getStorageReceiptSession();
+      if (ws && session)
+        return {
+          endpoint,
+          transport: 'websocket',
+          connectionId: session,
+          current: () => ws.getStorageReceiptSession() === session,
+          request: (request, _agent, signal) =>
+            ws.requestStorageReceipt(request, signal),
+        };
+      if (!this.client?.supportsStorageReceipts(endpoint)) return;
+      const epoch = this.serverReceiptEpoch;
+
+      return {
+        endpoint,
+        transport: 'http',
+        connectionId: `http:${endpoint}:${epoch}`,
+        current: () =>
+          this.serverReceiptEpoch === epoch &&
+          this.client.supportsStorageReceipts(endpoint),
+        request: (request, agent, signal, current) =>
+          this.client.requestStorageReceipt(
+            endpoint,
+            request,
+            agent,
+            signal,
+            current,
+          ),
+      };
+    } catch {
+      return;
+    }
+  }
+
+  /** @internal Only stored reconciliation versions, never a current edit. */
+  public seedServerReceiptTargets(
+    endpoint: string,
+    state: DriveSyncState,
+  ): void {
+    this.serverReceiptRequests.seed(endpoint, state);
   }
   /** Mapped from origin to websocket */
   private webSockets: Map<string, WSClient>;
@@ -1193,6 +1270,7 @@ export class Store {
   }
 
   public setClientDb(clientDb: ClientDbWorker | undefined): void {
+    if (this.clientDb !== clientDb) this.serverReceiptRequests.reset();
     if (this.clientDb !== clientDb) this.clientDbGeneration++;
     // `initClientDb` calls this three times per page load (eager,
     // post-init, post-init-error) to refresh sync status. Only the
@@ -6571,6 +6649,7 @@ export class Store {
    * might have security implications for your application.
    */
   public setAgent(agent: Agent | undefined): void {
+    if (this.agent !== agent) this.serverReceiptRequests.reset();
     if (this.agent !== agent) this.identityGeneration++;
     // The current drive is an account context, not a server preference. Clear
     // it before reauthenticating, so the next identity never subscribes or
@@ -6920,6 +6999,9 @@ export class Store {
    * `connect: false` keeps the socket closed — see `StoreOpts.connect`.
    */
   public setServerUrl(url: string, { connect = true } = {}): void {
+    this.serverReceiptEpoch++;
+    this.serverReceiptRequests.reset();
+    this.client?.clearStorageReceiptCapabilities();
     Client.tryValidSubject(url);
 
     if (url.substring(-1) === '/') {
@@ -7090,6 +7172,9 @@ export class Store {
 
   /** Close the WebSocket connection. Persists across refresh until reconnect(). */
   public disconnect(): void {
+    this.serverReceiptEpoch++;
+    this.serverReceiptRequests.reset();
+    this.client?.clearStorageReceiptCapabilities();
     const existing = this.webSockets.get(this.serverUrl);
 
     if (existing) {

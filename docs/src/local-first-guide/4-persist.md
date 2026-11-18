@@ -295,6 +295,63 @@ and receiving a receipt does not change the return contract of native saves or
 full-drive sync. Flutter/HTTP adapters must explicitly expose this Rust stream
 before their callers can consume it.
 
+## Observe HTTP/WebSocket server receipts
+
+`Store` automatically requests storage evidence from compatible servers after
+finalized saves and for drives being reconciled over WebSocket. Subscribe before
+saving:
+
+```ts
+import { StoreEvents, evaluateReplicaEvidence } from '@tomic/lib';
+
+const unsubscribe = store.on(StoreEvents.ServerReplicaReceipt, evidence => {
+  const barrier = evidence.observation.barrier!;
+  console.info(evidence.serverOrigin, evidence.transport, barrier.version);
+  const signal = evaluateReplicaEvidence(
+    {
+      subject: barrier.subject,
+      version: barrier.version,
+      source: evidence.source,
+      scope: 'storage',
+    },
+    [evidence.observation],
+    applicationReplicaPolicy, // Your trust, generation and independence policy.
+  );
+  console.info(signal.status);
+});
+
+const saved = await book.saveWithReceipt();
+// A server receipt can arrive later. Match its exact subject and version to
+// saved.local.version or saved.server.version according to your intended target.
+// Call unsubscribe() when this observer is no longer needed.
+```
+
+The exported `ServerReplicaReceipt` includes the immutable `observation`, optional
+local `source` identity, `endpoint`, `serverOrigin`, actual `transport` (`http` or
+`websocket`), `clientAgent`, `identityGeneration`, `databaseGeneration`, and
+`connectionId`. There is no fabricated peer-agent identity: server provenance
+comes from the configured HTTP/WebSocket origin and its transport security.
+Production applications should use HTTPS/WSS and apply their own endpoint trust
+policy. A client with only memory storage can receive a server receipt, but its
+`source` is absent; that cannot establish an independent second persistent copy.
+
+Servers advertise `server-storage-receipts-v1`. The separate receipt operation
+checks the requested applied-state frontier, drive and current read permission,
+then completes the same persistent Redb flush barrier used by peer receipts.
+The returned version is the exact requested version, even if newer edits are
+already stored. Ordinary HTTP `/commit` and WebSocket `COMMIT_OK` still mean
+acceptance; `SaveReceipt.server` does not become a disk-flush guarantee.
+
+Receipt work is bounded and best effort (128 queued targets, four concurrent
+requests, six-second deadlines and three attempts per target). Reconciliation
+inventories are visited in rotating slices. It runs separately from save completion;
+unsupported servers, authorization refusals, missing state or failed barriers
+produce no positive evidence. Account/database replacement and connection changes
+discard stale requests. Applications do not issue probes, and absence of an event
+does not prove replication failed. Observations are historical, with no replay or
+retention ledger. They cover resource state, not attachment bytes, keys, physical
+device independence, future retention or complete backup recovery.
+
 ## Assess independent-replica evidence
 
 `evaluateReplicaEvidence` answers a narrower question: does the supplied evidence

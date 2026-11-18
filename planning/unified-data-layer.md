@@ -57,8 +57,13 @@ persistence barrier. Persistent Redb identity/generation is exposed through the
 worker; the browser producer verifies target coverage and flushes before responding.
 Native Iroh peers also produce exact-target receipts through a per-Db subscription after bulk and during live sync, using the same persistence proof.
 Native targets are observed stored states rather than immutable save events.
-HTTP/WS receipt producers and backup guarantees remain future runtime/sync work
-(#2537/#2538), separate from the TablePage extraction. The evaluator matches exact targets; the browser
+HTTP/WS servers expose the same shared persistence proof through signed HTTP
+requests or negotiated WS frames. The SDK automatically emits
+`StoreEvents.ServerReplicaReceipt` after saves and during reconciliation, carrying
+server-origin provenance and account/database/connection context. Memory-only
+clients can receive remote evidence without a fabricated source identity.
+Backup guarantees remain future runtime/sync work (#2537/#2538), separate from
+the TablePage extraction. The evaluator matches exact targets; the browser
 producer proves that its stored state covers the requested frontier. Retention
 and recoverable-backup claims remain outside this slice.
 See [sign-at-drain.md](./completed/sign-at-drain.md) for the outbox decision. Do not restore

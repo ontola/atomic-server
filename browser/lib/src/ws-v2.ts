@@ -204,6 +204,7 @@ export const CLIENT_CAPABILITIES: readonly string[] = [
   'commit-ok-slim',
   'canonical-scheme',
   'commit-pace',
+  'server-storage-receipts-v1',
 ];
 
 /** What this client calls itself in its `HELLO`. Display only. */

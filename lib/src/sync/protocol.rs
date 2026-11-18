@@ -93,6 +93,8 @@ pub mod tag {
 pub const CAP_BROWSER_STORAGE_RECEIPTS_V1: &str = "browser-storage-receipts-v1";
 /// Native Iroh peers only; never part of the general WebSocket capabilities.
 pub const CAP_IROH_STORAGE_RECEIPTS_V1: &str = "iroh-storage-receipts-v1";
+/// Explicit HTTP/WebSocket server storage receipt adapter support.
+pub const CAP_SERVER_STORAGE_RECEIPTS_V1: &str = "server-storage-receipts-v1";
 pub const STORAGE_RECEIPT_BARRIER: &str = "atomic-redb-flush-v1";
 pub const STORAGE_RECEIPT_MAX_FRAME: usize = 64 * 1024;
 

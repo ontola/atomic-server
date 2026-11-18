@@ -52,6 +52,7 @@ export * from './uuid.js';
 export { decodeB64, encodeB64 } from './base64.js';
 export * from './authentication.js';
 export * from './client.js';
+export type { ServerReplicaReceipt } from './server-receipts.js';
 export * from './genesis.js';
 export * from './commit.js';
 export * from './error.js';

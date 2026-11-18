@@ -21,6 +21,7 @@ mod put_blob;
 mod rate_limit;
 mod replicate;
 mod server_cli;
+mod storage_receipts;
 mod sync;
 mod ws_auth_gate;
 mod ws_commit;
