@@ -6742,3 +6742,100 @@ async fn loro_only_put_rejects_a_snapshot_that_does_not_import() {
         .unwrap_err();
     assert!(err.to_string().contains("does not import"), "{err}");
 }
+
+/// A doc the signing tab never tagged (a server doc, or a property the tab had
+/// not loaded) holds a string that merely looks like a URL. The JSON-AD put
+/// typed it from the Property; the Loro-only put must too, in the row and in
+/// the indexes, not by the URL-shape guess (which makes it an atomicUrl).
+#[tokio::test]
+#[timeout(120000)]
+async fn loro_only_put_types_untagged_strings_from_their_property() {
+    let subject =
+        "did:ad:untaggedaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let unknown = "https://example.com/properties/not-in-this-store";
+    let url = "https://example.com/looks-like-a-link";
+
+    let mut authored = crate::Resource::new(subject.into());
+    for prop in [urls::DESCRIPTION, urls::NAME, unknown] {
+        authored
+            .set_unsafe(prop.into(), Value::String(url.into()))
+            .unwrap();
+    }
+    // A writer that did not tag (a tab that had not loaded the Property, a
+    // legacy doc): drop the tags the Rust writer added.
+    let tagged = authored.build_state_doc().unwrap().export_snapshot();
+    let raw = loro::LoroDoc::new();
+    raw.import(&tagged).unwrap();
+    let tags = raw.get_map("datatypes");
+    for key in tags.keys().collect::<Vec<_>>() {
+        tags.delete(&key).unwrap();
+    }
+    raw.commit();
+    let snapshot = raw.export(loro::ExportMode::Snapshot).unwrap();
+    assert!(
+        crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
+            .unwrap()
+            .get_all_datatypes()
+            .is_empty(),
+        "the premise: nothing tagged"
+    );
+
+    let old_store = Db::init_temp("loro_untagged_old").await.unwrap();
+    let json_ad = serde_json::json!({
+        "@id": subject, urls::DESCRIPTION: url, urls::NAME: url,
+    })
+    .to_string();
+    let mut parsed = crate::parse::parse_json_ad_resource(
+        &json_ad,
+        &old_store,
+        &crate::parse::ParseOpts {
+            skip_unknown_props: true,
+            save: crate::parse::SaveOpts::DontSave,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    parsed.restore_props_from_snapshot(&[unknown.to_string()], &snapshot);
+    old_store
+        .persist_replicated_resource_with_snapshot(&parsed, snapshot.clone())
+        .await
+        .unwrap();
+
+    let new_store = Db::init_temp("loro_untagged_new").await.unwrap();
+    new_store
+        .persist_replicated_loro_snapshot(subject, snapshot, None)
+        .await
+        .unwrap();
+
+    let subj: Subject = subject.into();
+    let variant = |store: &Db, prop: &str| {
+        let row = store.get_resource_shallow(&subj).unwrap();
+        let v = format!("{:?}", row.get(prop).unwrap());
+        v.split('(').next().unwrap().to_string()
+    };
+    for prop in [urls::DESCRIPTION, urls::NAME] {
+        assert_eq!(
+            variant(&old_store, prop),
+            variant(&new_store, prop),
+            "{prop}"
+        );
+    }
+    assert_eq!(variant(&new_store, urls::DESCRIPTION), "Markdown");
+    assert_eq!(variant(&new_store, urls::NAME), "String");
+    // A property this store does not know keeps the heuristic.
+    assert_eq!(variant(&new_store, unknown), "AtomicUrl");
+
+    for prop in [urls::DESCRIPTION, urls::NAME] {
+        let hits = |store: &Db| {
+            let q = Query::new_prop_val(prop, url);
+            let store = store.clone();
+            async move { store.query(&q).await.unwrap().subjects }
+        };
+        assert_eq!(
+            hits(&old_store).await,
+            hits(&new_store).await,
+            "{prop} query"
+        );
+    }
+}

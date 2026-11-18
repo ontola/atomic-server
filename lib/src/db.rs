@@ -823,6 +823,27 @@ impl Db {
         self.persist_replicated(resource, Some(snapshot)).await
     }
 
+    /// The `datatypes` tag a stored Property's datatype implies, for a value
+    /// the doc left untagged (a server doc, or a property the signing tab had
+    /// not loaded). `None` when the Property is not stored here, or its
+    /// datatype has no tag (numbers and booleans are not ambiguous).
+    fn property_tag(&self, property: &str) -> Option<&'static str> {
+        let (_, propvals) = self.get_propvals_canonical(property).ok()?;
+        let datatype = propvals.get(urls::DATATYPE_PROP)?.to_string();
+        Some(match crate::datatype::match_datatype(&datatype) {
+            crate::datatype::DataType::String => "string",
+            crate::datatype::DataType::Markdown => "markdown",
+            crate::datatype::DataType::Slug => "slug",
+            crate::datatype::DataType::Uri => "uri",
+            crate::datatype::DataType::Date => "date",
+            crate::datatype::DataType::Timestamp => "timestamp",
+            crate::datatype::DataType::AtomicUrl => "atomicUrl",
+            crate::datatype::DataType::ResourceArray => "resourceArray",
+            crate::datatype::DataType::Json => "json",
+            _ => return None,
+        })
+    }
+
     /// Store a resource from its Loro snapshot alone: the row, the index
     /// entries and the stored snapshot are all derived from the doc in one
     /// transaction (see [`Resource::from_loro_snapshot`]). `last_commit` is the
@@ -839,6 +860,7 @@ impl Db {
             snapshot.clone(),
             last_commit,
             Some(&self.lenses()),
+            Some(&|prop: &str| self.property_tag(prop)),
         )?;
         self.persist_replicated_resource_with_snapshot(&resource, snapshot)
             .await
@@ -859,6 +881,7 @@ impl Db {
                 snapshot.clone(),
                 last_commit.as_deref(),
                 Some(&lenses),
+                Some(&|prop: &str| self.property_tag(prop)),
             )?;
             entries.push((resource, Some(snapshot)));
         }

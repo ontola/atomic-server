@@ -51,6 +51,9 @@ impl Clone for Resource {
     }
 }
 
+/// Gives the `datatypes` tag a property's definition implies, or `None`.
+pub type TagResolver<'a> = dyn Fn(&str) -> Option<&'static str> + 'a;
+
 impl Resource {
     fn clone_loro_state(doc: &crate::loro::AtomicLoroDoc) -> crate::loro::AtomicLoroDoc {
         let snapshot = doc.export_snapshot();
@@ -103,11 +106,26 @@ impl Resource {
     }
 
     fn materialize_propvals_from_loro_doc(doc: &crate::loro::AtomicLoroDoc) -> PropVals {
+        Self::materialize_propvals_with_resolver(doc, None)
+    }
+
+    /// [`Self::materialize_propvals_from_loro_doc`], where `resolve_tag` gives
+    /// the tag a property's definition implies. It is asked only for a
+    /// property the doc left untagged, so an untagged string that merely looks
+    /// like a URL keeps the type its Property says.
+    fn materialize_propvals_with_resolver(
+        doc: &crate::loro::AtomicLoroDoc,
+        resolve_tag: Option<&TagResolver<'_>>,
+    ) -> PropVals {
         let mut propvals = PropVals::new();
         let datatypes = doc.get_all_datatypes();
 
         for (prop, loro_val) in doc.get_all_properties() {
-            let tag = datatypes.get(&prop).map(String::as_str);
+            let resolved = match datatypes.get(&prop) {
+                Some(_) => None,
+                None => resolve_tag.and_then(|resolve| resolve(&prop)),
+            };
+            let tag = datatypes.get(&prop).map(String::as_str).or(resolved);
             if let Some(atomic_val) = crate::loro::loro_value_to_atomic_value_tagged(&loro_val, tag)
             {
                 propvals.insert(prop.clone(), dedupe_rights(&prop, atomic_val));
@@ -360,18 +378,27 @@ impl Resource {
     /// value no doc holds (it is derived from the newest envelope, see
     /// [`Self::set_derived_last_commit`]) and is passed explicitly.
     ///
-    /// Fails when `snapshot` does not import; nothing is guessed from other
-    /// state.
+    /// Fails when `snapshot` does not import. `resolve_tag` types the values
+    /// the doc left untagged from their Property (see
+    /// [`Self::materialize_propvals_with_resolver`]); a property it does not
+    /// know keeps the heuristic.
     pub fn from_loro_snapshot(
         subject: &str,
         snapshot: Vec<u8>,
         last_commit: Option<&str>,
         lenses: Option<&crate::lens::LensIndex>,
+        resolve_tag: Option<&TagResolver<'_>>,
     ) -> AtomicResult<Resource> {
         let doc = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
             .map_err(|e| format!("Loro snapshot for '{subject}' does not import: {e}"))?;
         let mut resource = Resource::new(subject.to_string());
-        resource.apply_state_doc_with_lenses(doc, snapshot, lenses)?;
+        let mut propvals = Self::materialize_propvals_with_resolver(&doc, resolve_tag);
+        if let Some(lenses) = lenses {
+            lenses.apply_propvals(&mut propvals);
+        }
+        propvals.insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
+        resource.propvals = propvals;
+        resource.loro = Some(doc);
         if let Some(id) = last_commit.filter(|id| !id.is_empty()) {
             resource.set_derived_last_commit(Value::AtomicUrl(id.into()));
         }
