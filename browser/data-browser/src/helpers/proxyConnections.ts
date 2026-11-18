@@ -18,9 +18,30 @@
  * Replaces #1657's relay of LocalThought rotating connection codes (flag day,
  * decision 6 of #54): nothing credential-like is kept in this page's storage
  * any more, only a PKCE verifier for the ten minutes of a handoff.
+ *
+ * The proxy keeps each connection's provider credential sealed under a key it
+ * does not store (ontola/atomic-plugins#730). This page derives that key from
+ * the user's vault proof and the connection id, which it chooses itself, and
+ * sends it once at redeem. A frame gets a **key grant** with each capability:
+ * the key encrypted to the proxy, naming the app agent, which the frame passes
+ * on in `x-connection-key` without being able to read it. See
+ * `connectionKeys.ts`.
  */
 
-import { agentSubject, decodeB64, signRequest, type Agent } from '@tomic/react';
+import {
+  AGENT_VAULT_PROOF_MESSAGE,
+  agentSubject,
+  decodeB64,
+  signRequest,
+  type Agent,
+} from '@tomic/react';
+import {
+  deriveConnectionKey,
+  newConnectionId,
+  rawConnectionKey,
+  sealGrant,
+} from './connectionKeys';
+import { agentVaultProof } from './managed/vault';
 
 const PENDING = 'atomic-proxy-connect-v2:';
 const MAX_BODY = 10 * 1024 * 1024;
@@ -70,6 +91,11 @@ export interface ProxyConnection {
 /** What the frame gets: the capability, and where to use it. */
 export interface MintedCapability {
   capability: string;
+  /**
+   * The `x-connection-key` value the frame sends with the capability: a key
+   * grant (`s1.…`) naming the app agent, valid as long as the capability.
+   */
+  connectionKey: string;
   /** The proxy origin, the capability's `aud`. */
   aud: string;
   /** Unix seconds. */
@@ -193,6 +219,9 @@ export function capabilityClaims(claims: {
 }
 
 export class ProxyConnections {
+  /** The proxy's grant public key, fetched once per page. */
+  private grantKey?: Promise<string>;
+
   constructor(
     private storage: Storage,
     /** The proxy origin. */
@@ -211,6 +240,52 @@ export class ProxyConnections {
       agent,
       subject: agent.getPublicKey().then(key => agentSubject(key)),
     };
+  }
+
+  /**
+   * The key of `connectionId` at this proxy, derived from the user's vault
+   * proof. Every device holding the agent derives the same one.
+   */
+  private async connectionKey(connectionId: string): Promise<Uint8Array> {
+    const { agent } = this.user();
+    const proof = await agentVaultProof(agent, AGENT_VAULT_PROOF_MESSAGE);
+
+    return deriveConnectionKey(proof, this.origin, connectionId);
+  }
+
+  /** `GET /connection-key-grants/key`, unsigned: the key grants go to. */
+  private proxyGrantKey(): Promise<string> {
+    this.grantKey ??= (async () => {
+      const response = await this.http(
+        new URL('/connection-key-grants/key', this.origin).href,
+        {
+          credentials: 'omit',
+          redirect: 'error',
+          signal: AbortSignal.timeout(TIMEOUT),
+        },
+      );
+      const body = parseBody(await limitedText(response)) as {
+        public_key?: unknown;
+        info?: unknown;
+      } | null;
+
+      if (
+        !response.ok ||
+        typeof body?.public_key !== 'string' ||
+        !/^[A-Za-z0-9_-]{43}$/.test(body.public_key) ||
+        body.info !== 'integration-proxy-connection-key-grant-v1'
+      )
+        throw new Error(
+          'The integration proxy publishes no connection-key grant key. It may run an older version.',
+        );
+
+      return body.public_key;
+    })();
+    this.grantKey.catch(() => {
+      this.grantKey = undefined;
+    });
+
+    return this.grantKey;
   }
 
   /** One call to the proxy, signed v2 with the user key. */
@@ -358,27 +433,27 @@ export class ProxyConnections {
       return { returnTo: c.returnTo, connected: false };
     }
 
+    // This page chooses the id, because the key is derived from it.
+    const connectionId = newConnectionId();
     const result = (await this.call('POST', '/connect/redeem', {
       code,
       code_verifier: c.codeVerifier,
+      connection_id: connectionId,
+      connection_key: rawConnectionKey(await this.connectionKey(connectionId)),
     })) as { connection_id?: unknown; platform?: unknown } | null;
 
     if (result?.platform !== c.platform)
       throw new Error('The proxy connected a different platform than asked.');
 
-    if (
-      typeof result.connection_id !== 'string' ||
-      !result.connection_id ||
-      result.connection_id.length > 512
-    )
-      throw new Error('The proxy returned an invalid connection id.');
+    if (result.connection_id !== connectionId)
+      throw new Error('The proxy returned a different connection id.');
 
-    await this.delegate(result.connection_id, c.appAgent, c.label);
+    await this.delegate(connectionId, c.appAgent, c.label);
 
     return {
       returnTo: c.returnTo,
       connected: true,
-      connectionId: result.connection_id,
+      connectionId,
     };
   }
 
@@ -486,9 +561,19 @@ export class ProxyConnections {
       exp,
     });
     const sig = await agent.signBytes(message);
+    // The grant names the app, not the frame key: the capability (signed by
+    // `cnf`) is what binds a request to this frame, and it expires with it.
+    const connectionKey = await sealGrant({
+      proxyPublicKey: await this.proxyGrantKey(),
+      connectionId,
+      sub: app,
+      key: await this.connectionKey(connectionId),
+      exp,
+    });
 
     return {
       capability: `${base64url(new TextEncoder().encode(json))}.${sig}`,
+      connectionKey,
       aud: this.origin,
       exp,
       connectionId,
