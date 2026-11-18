@@ -137,6 +137,6 @@ export {
 
 export {
   PropertyRangeField,
-  validatePropertyRange,
+  parsePropertyRange,
   type PropertyRangeFieldProps,
 } from './schema/PropertyRangeField.js';

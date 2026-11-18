@@ -1,81 +1,67 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { InputHTMLAttributes, PropsWithChildren } from 'react';
 import {
+  parsePropertyRange,
   PropertyRangeField,
-  validatePropertyRange,
 } from './PropertyRangeField.js';
-
 afterEach(cleanup);
 
-function Input({
-  $invalid: _invalid,
-  ...props
-}: InputHTMLAttributes<HTMLInputElement> & { $invalid?: boolean }) {
-  return <input {...props} />;
-}
-
-function Container({ children }: PropsWithChildren) {
-  return <div>{children}</div>;
-}
-
-it('preserves baseline floor conversion while leaving the uncontrolled draft visible', () => {
-  const change = vi.fn();
-  const { rerender } = render(
-    <PropertyRangeField
-      Input={Input}
-      Container={Container}
-      minValue={2}
-      maxValue={8}
-      round
-      onChange={change}
-    />,
-  );
-  const minimum = screen.getByPlaceholderText('min') as HTMLInputElement;
-  fireEvent.change(minimum, { target: { value: '1.8' } });
-  expect(change).toHaveBeenLastCalledWith(1, 8);
-  rerender(
-    <PropertyRangeField
-      Input={Input}
-      Container={Container}
-      minValue={1}
-      maxValue={8}
-      round
-      onChange={change}
-    />,
-  );
-  expect(minimum.value).toBe('1.8');
+it('accepts max-only integer bounds and equal inclusive bounds, including zero', () => {
+  expect(parsePropertyRange('', '20', true)).toEqual({
+    min: undefined,
+    max: 20,
+    error: undefined,
+  });
+  expect(parsePropertyRange('0', '0', true)).toEqual({
+    min: 0,
+    max: 0,
+    error: undefined,
+  });
 });
-
-it('keeps opposite bounds, clears empty input and delegates blur unchanged', () => {
+it('rejects fractional integer bounds rather than silently flooring them', () => {
+  expect(parsePropertyRange('1.5', '', true).error).toBeDefined();
+  expect(parsePropertyRange('', '2.5', true).error).toBeDefined();
+});
+it('accepts fractional numeric ranges and rejects malformed/nonfinite input', () => {
+  expect(parsePropertyRange('-1.5', '2,5')).toEqual({
+    min: -1.5,
+    max: 2.5,
+    error: undefined,
+  });
+  for (const text of ['12abc', 'Infinity', '1e999', '-'])
+    expect(parsePropertyRange(text, '').error).toBeDefined();
+});
+it('checks ordering and nonnegative length bounds', () => {
+  expect(parsePropertyRange('3', '2').error).toBeDefined();
+  expect(parsePropertyRange('-1', '', true, true).error).toBeDefined();
+});
+it('retains invalid raw input without publishing a coerced schema value', () => {
   const change = vi.fn(),
-    blur = vi.fn();
+    error = vi.fn();
   render(
     <PropertyRangeField
-      Input={Input}
-      Container={Container}
-      minValue={2}
-      maxValue={8}
-      round
+      minValue={0}
+      integers
       onChange={change}
-      onBlur={blur}
+      onValidationError={error}
     />,
   );
-  const maximum = screen.getByPlaceholderText('max');
-  fireEvent.change(maximum, { target: { value: '' } });
-  fireEvent.blur(maximum);
+  const min = screen.getByRole('textbox', { name: 'Minimum' });
+  fireEvent.change(min, { target: { value: '-' } });
+  expect((min as HTMLInputElement).value).toBe('-');
+  expect(change).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert').textContent).toContain('whole numbers');
+  expect(error).toHaveBeenLastCalledWith(expect.any(String));
+  fireEvent.change(min, { target: { value: '2' } });
   expect(change).toHaveBeenLastCalledWith(2, undefined);
-  expect(blur).toHaveBeenCalledOnce();
+  expect(error).toHaveBeenLastCalledWith(undefined);
 });
-
-it('retains baseline max-only and equal-limit validation quirks for separate review', () => {
-  expect(validatePropertyRange(undefined, 4, true)).toBe(
-    'Value should be a round number.',
-  );
-  expect(validatePropertyRange(4, 4, true)).toBe('Min must be a less than max');
-  expect(validatePropertyRange(1, 4, true)).toBeUndefined();
-  expect(
-    validatePropertyRange(4, 4, true, { rounded: 'integer', order: 'order' }),
-  ).toBe('order');
+it('clears a bound as undefined and leaves the other bound intact', () => {
+  const change = vi.fn();
+  render(<PropertyRangeField minValue={0} maxValue={20} onChange={change} />);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Minimum' }), {
+    target: { value: '' },
+  });
+  expect(change).toHaveBeenLastCalledWith(undefined, 20);
 });

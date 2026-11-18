@@ -1,15 +1,9 @@
-import { Resource, useNumber } from '@tomic/react';
-import {
-  useCallback,
-  type InputHTMLAttributes,
-  type PropsWithChildren,
-  type JSX,
-} from 'react';
+import { Resource, useNumber, Datatype } from '@tomic/react';
+import { forwardRef, type InputHTMLAttributes, type JSX } from 'react';
+import { PropertyRangeField } from '@tomic/table';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import { useValidation } from '@components/forms/formValidation/useValidation';
-import { PropertyRangeField, validatePropertyRange } from '@tomic/table';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { Row } from '@components/Row';
 
 interface TableRangeInputProps {
   resource: Resource;
@@ -17,65 +11,50 @@ interface TableRangeInputProps {
   maxProp: string;
 }
 
-function RangeFieldInput({
-  $invalid,
-  ...props
-}: InputHTMLAttributes<HTMLInputElement> & { $invalid?: boolean }) {
-  return (
-    <InputWrapper $invalid={$invalid}>
-      <InputStyled {...props} />
-    </InputWrapper>
-  );
-}
-
-function RangeFieldContainer({ children }: PropsWithChildren) {
-  return (
-    <Row center gap='0.5rem'>
-      {children}
-    </Row>
-  );
-}
+const RangeInput = forwardRef<
+  HTMLInputElement,
+  InputHTMLAttributes<HTMLInputElement>
+>((props, ref) => (
+  <InputWrapper $invalid={props['aria-invalid'] === true}>
+    <InputStyled {...props} ref={ref} />
+  </InputWrapper>
+));
 
 export function TableRangeInput({
   resource,
   minProp,
   maxProp,
 }: TableRangeInputProps): JSX.Element {
-  const [minLength, setMinLength] = useNumber(resource, minProp);
-  const [maxLength, setMaxLength] = useNumber(resource, maxProp);
-
-  const { error, setError, setTouched } = useValidation();
-
-  const handleRangeChange = useCallback(
-    (min: number | undefined, max: number | undefined) => {
-      setMinLength(min);
-      setMaxLength(max);
-
-      // Form state only: the range is written to the table class's
-      // constraints when the dialog is confirmed.
-      setError(
-        validatePropertyRange(min, max, true, {
-          rounded: 'Value should be a round number.',
-          order: 'Min must be a less than max',
-        }),
-      );
-    },
-    [setMinLength, setMaxLength, setError],
+  const [min, setMin] = useNumber(resource, minProp);
+  const [max, setMax] = useNumber(resource, maxProp);
+  const { setError, setTouched } = useValidation();
+  const numeric = [Datatype.INTEGER, Datatype.FLOAT].includes(
+    resource.props.datatype as Datatype,
   );
 
   return (
-    <div>
-      <PropertyRangeField
-        Input={RangeFieldInput}
-        Container={RangeFieldContainer}
-        round
-        maxValue={maxLength}
-        minValue={minLength}
-        invalid={!!error}
-        onBlur={setTouched}
-        onChange={handleRangeChange}
-      />
-      {error && <ErrorChip>{error}</ErrorChip>}
-    </div>
+    <PropertyRangeField
+      key={resource.subject + ':' + resource.props.datatype}
+      minValue={min}
+      maxValue={max}
+      integers={resource.props.datatype !== Datatype.FLOAT}
+      nonNegative={!numeric}
+      messages={{
+        integer: 'Enter whole numbers or leave the bounds empty.',
+        number: 'Enter finite numbers or leave the bounds empty.',
+        nonNegative: 'Bounds cannot be negative.',
+        order: 'Minimum must not exceed maximum.',
+      }}
+      minLabel='Minimum'
+      maxLabel='Maximum'
+      Input={RangeInput}
+      Error={ErrorChip}
+      onBlur={setTouched}
+      onValidationError={setError}
+      onChange={(minimum, maximum) => {
+        setMin(minimum);
+        setMax(maximum);
+      }}
+    />
   );
 }

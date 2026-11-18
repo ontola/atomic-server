@@ -2814,9 +2814,3 @@ localId durability contract still uses one flush.
 Manual acceptance measurements and their limits are recorded in PR #2361.
 The private-dataset harness is kept outside the repository; it is not a CI
 speed assertion. Crash durability is covered by the abort test above.
-
-
-Range-field content split: `browser/table/src/schema/PropertyRangeField.test.tsx`
-characterizes baseline floor conversion with an uncontrolled visible draft,
-empty-bound/blur callbacks and original max-only/equal-limit validation quirks.
-This move does not fix those policies or alter PropertyForm submission.

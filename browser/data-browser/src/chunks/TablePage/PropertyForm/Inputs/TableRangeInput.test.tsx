@@ -101,22 +101,52 @@ async function setup(datatype: Datatype, form = false) {
   return { draft, validity, submit };
 }
 
-it('retains the baseline floor conversion on an unsaved float draft', async () => {
+it('preserves fractional float constraints on the unsaved Atomic draft', async () => {
   const { draft } = await setup(Datatype.FLOAT);
   const save = vi.spyOn(draft, 'save').mockResolvedValue('persisted');
-  fireEvent.change(screen.getByPlaceholderText('min'), {
+  fireEvent.change(screen.getByRole('textbox', { name: 'Minimum' }), {
     target: { value: '1.5' },
   });
-  await waitFor(() => expect(draft.get(dataBrowser.properties.min)).toBe(1));
+  await waitFor(() => expect(draft.get(dataBrowser.properties.min)).toBe(1.5));
   expect(save).not.toHaveBeenCalled();
 });
+it('blocks fractional integer constraints and keeps the raw input for correction', async () => {
+  const { draft, validity } = await setup(Datatype.INTEGER);
+  const input = screen.getByRole('textbox', { name: 'Minimum' });
+  fireEvent.change(input, { target: { value: '1.5' } });
+  expect((input as HTMLInputElement).value).toBe('1.5');
+  await waitFor(() => expect(validity).toHaveBeenLastCalledWith(false));
+  expect(draft.get(dataBrowser.properties.min)).toBeUndefined();
+});
+it('accepts a max-only integer constraint and equal inclusive bounds', async () => {
+  const { draft, validity } = await setup(Datatype.INTEGER);
+  await waitFor(() => expect(validity).toHaveBeenLastCalledWith(true));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Minimum' }), {
+    target: { value: '0' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Maximum' }), {
+    target: { value: '0' },
+  });
+  await waitFor(() => expect(draft.get(dataBrowser.properties.max)).toBe(0));
+  expect(draft.get(dataBrowser.properties.min)).toBe(0);
+  expect(validity).toHaveBeenLastCalledWith(true);
+});
 
-it('retains the baseline submit callback when range validation reports an error', async () => {
+it('does not confirm a property dialog via Enter/form submission while constraints are invalid', async () => {
   const { validity, submit } = await setup(Datatype.INTEGER, true);
-  fireEvent.change(screen.getByPlaceholderText('min'), {
-    target: { value: '20' },
+  fireEvent.change(screen.getByRole('textbox', { name: 'Minimum' }), {
+    target: { value: '-' },
   });
   await waitFor(() => expect(validity).toHaveBeenLastCalledWith(false));
-  fireEvent.submit(screen.getByPlaceholderText('New Column').closest('form')!);
+  const form = screen
+    .getByRole('textbox', { name: 'Column name' })
+    .closest('form')!;
+  fireEvent.submit(form);
+  expect(submit).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Minimum' }), {
+    target: { value: '1' },
+  });
+  await waitFor(() => expect(validity).toHaveBeenLastCalledWith(true));
+  fireEvent.submit(form);
   expect(submit).toHaveBeenCalledOnce();
 });
