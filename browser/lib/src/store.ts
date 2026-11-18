@@ -813,6 +813,12 @@ export class Store {
 
   /** Current Agent, used for signing commits. Is required for posting things. */
   private agent?: Agent;
+  private identityGeneration = 0;
+
+  /** @internal Fences asynchronous saves, including A→B→A identity changes. */
+  public getIdentityGeneration(): number {
+    return this.identityGeneration;
+  }
   /** Mapped from origin to websocket */
   private webSockets: Map<string, WSClient>;
 
@@ -1900,6 +1906,15 @@ export class Store {
   private drainOutboxSubject = async (subject: string): Promise<void> => {
     let entry = this.outbox.getEntry(subject);
     if (!entry) return;
+    const generation = this.identityGeneration;
+
+    const assertCurrent = () => {
+      if (this.identityGeneration !== generation) {
+        throw new RequestCancelledError(
+          'Identity changed during commit delivery',
+        );
+      }
+    };
 
     // A `_new:` subject has no derived DID yet — it must be sign-genesis'd
     // (which renames it to `did:ad:<sig>`) before it can be POSTed. The
@@ -1951,10 +1966,29 @@ export class Store {
           ?.appliedCommitSignatures.add(genesis.signature);
       }
 
+      const serverTransport = this.commitTransport === undefined;
       const created = await this.postCommit(genesis, endpoint);
+      assertCurrent();
       // Publish the acknowledgement before ResourceSaved listeners decide
       // whether this new resource can be subscribed on the server.
       this.outbox.clearGenesis(subject);
+
+      if (serverTransport && this.identityGeneration === generation) {
+        try {
+          this.resources
+            .get(subject)
+            ?.recordServerAcceptance(
+              endpoint,
+              genesis,
+              LoroLoader.Loro.decodeImportBlobMeta(genesis.loroUpdate!, false)
+                .partialEndVersionVector,
+              generation,
+            );
+        } catch (error) {
+          console.warn('Could not record the accepted genesis receipt', error);
+        }
+      }
+
       const commitId = commitIdOf(created);
       const resource = this.resources.get(subject);
 
@@ -2009,6 +2043,7 @@ export class Store {
       // OPFS-first, then server. Throws on hard failure (offline DID,
       // network error) — the outbox failure/backoff machinery takes over.
       resource = await this.getResource(subject);
+      assertCurrent();
 
       if (resource.error) {
         throw resource.error;
@@ -2084,6 +2119,7 @@ export class Store {
         try {
           const { jsonAd, snapshot } =
             await this.clientDb.getResourceWithSnapshot(subject);
+          assertCurrent();
 
           if (jsonAd) {
             this.hydrateResourceFromJson(subject, JSON.parse(jsonAd));
@@ -2102,6 +2138,7 @@ export class Store {
 
           if (refreshed) resource = refreshed;
         } catch (e) {
+          if (e instanceof RequestCancelledError) throw e;
           console.warn(
             `[Outbox] OPFS rehydrate before offline drain failed for ${subject}:`,
             e,
@@ -2164,7 +2201,9 @@ export class Store {
     const { bytes: delta, versionAfterExport } = exported;
     const builder = new CommitBuilder(subject);
     builder.setLoroUpdate(delta);
+    assertCurrent();
     const commit = await builder.sign(agent);
+    assertCurrent();
 
     // Registered before the POST, not after the ack: the server echoes the
     // commit to this connection too, and under load that echo lands before
@@ -2175,9 +2214,11 @@ export class Store {
     }
 
     let created: Commit;
+    const serverTransport = this.commitTransport === undefined;
 
     try {
       created = await this.postCommit(commit, endpoint);
+      assertCurrent();
     } catch (e) {
       // Pending-deps rejection: the delta we just sent starts past ops the
       // server never received (an earlier commit was lost after the save
@@ -2237,6 +2278,19 @@ export class Store {
       this.addResource(resource, { skipCommitCompare: true });
     } else {
       this.outbox.markDirty(subject);
+    }
+
+    if (serverTransport && this.identityGeneration === generation) {
+      try {
+        resource.recordServerAcceptance(
+          endpoint,
+          commit,
+          versionAfterExport,
+          generation,
+        );
+      } catch (error) {
+        console.warn('Could not record the accepted update receipt', error);
+      }
     }
 
     this.notifyResourceSaved(resource);
@@ -6500,6 +6554,7 @@ export class Store {
    * might have security implications for your application.
    */
   public setAgent(agent: Agent | undefined): void {
+    if (this.agent !== agent) this.identityGeneration++;
     // The current drive is an account context, not a server preference. Clear
     // it before reauthenticating, so the next identity never subscribes or
     // reconciles the previous identity's private workspace.

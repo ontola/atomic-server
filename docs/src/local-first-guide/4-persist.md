@@ -99,11 +99,76 @@ message. They describe work in progress, not a durable receipt for a particular
 version. Awaiting a `useValue` setter only waits for local processing; with
 `commit: true` it schedules a separate debounced save.
 
-These signals do not prove that a server flushed its disk or that an independent
+## Read version-specific receipts
+
+Use `saveWithReceipt()` when an action needs to know which version reached which
+boundary. It follows the same save pipeline and accepts the same `background`
+option as `save()`, which continues to return only its status string.
+
+```ts
+await book.set(titleProperty, 'A new title');
+const receipt = await book.saveWithReceipt();
+
+if (receipt.local) {
+  console.info('Local snapshot completed', receipt.local.version);
+}
+if (receipt.server) {
+  console.info(
+    'Server accepted this version',
+    receipt.server.endpoint,
+    receipt.server.commit,
+    receipt.server.version,
+  );
+}
+```
+
+The exported `SaveReceipt` contains `status`, `subject`, and optional `local` and
+`server` evidence. The result and its evidence objects are immutable.
+
+| Evidence | Meaning |
+| --- | --- |
+| `local.version` | The base64-encoded Loro version captured with the snapshot whose local database write and flush completed. `null` identifies unversioned metadata. |
+| `server.endpoint` | The actual commit endpoint used for the acknowledged request, including its origin and port. |
+| `server.commit` | The identifier derived from the accepted signed commit. |
+| `server.version` | The base64-encoded Loro version covered by that accepted commit. Later edits are excluded. |
+
+Inspect the evidence fields independently. An online save can have server
+evidence without local evidence when its optional local mirror fails or exceeds
+the deadline. A local-only or offline save can have local evidence without server
+evidence. The two versions may differ if another edit arrived between the server
+request and the local snapshot. Compare versions using Loro's `VersionVector`
+after decoding them; base64 strings are not ordered revision numbers.
+
+Missing evidence makes no guarantee. A `noop` does not return a previous save's
+receipts. A child waiting for its unsaved parent has neither evidence field,
+regardless of its status label. Concurrent saves serialize: a second call with
+no remaining work returns `noop`, not the first call's receipt.
+
+Local evidence requires a storage backend that explicitly supports persistent
+writes. The browser's OPFS worker supports this; the in-memory `NodeClientDb`
+used by test/headless harnesses does not. An unknown adapter makes no local
+durability claim. A custom host commit transport also makes no server-endpoint
+claim: its completion alone does not show that the configured server accepted
+anything.
+
+An identity change invalidates the save attempt, even if the app switches back
+to the original identity before completion. A local database replacement
+invalidates local completion. Rejection does not undo writes or requests that
+already began; these checks prevent stale completion evidence, rather than
+providing a transaction cancellation protocol. A receipt names its captured
+server endpoint; it does not certify a replacement server configured while the
+request was pending.
+Late completion of an optional local mirror cannot add evidence to an already
+returned receipt.
+
+Keep receipts with the identity and resource context of the call. They are
+observations of completed operations, not independently verifiable certificates.
+
+These receipts do not prove that a server flushed its disk or that an independent
 second replica has the change. Tabs sharing one client database are one stored
-copy. Browser storage can also be cleared or evicted. Version-specific local and
-remote receipts are follow-up work tracked in
-[issue #2538](https://github.com/ontola/atomic-server/issues/2538).
+copy, browser storage can be cleared or evicted, and a resource receipt does not
+cover attachment bytes or all its linked resources. Independent replica evidence
+remains follow-up work in [issue #2538](https://github.com/ontola/atomic-server/issues/2538).
 
 ## What you have
 

@@ -40,6 +40,12 @@ saves require a successful client-database write. Online saves keep their local
 mirror best effort after remote acceptance. See
 [the persistence guide](../docs/src/local-first-guide/4-persist.md) for the
 observable completion signals and remaining unsaved-parent exception.
+`Resource.saveWithReceipt` uses these same write/drain boundaries to return
+captured local snapshot and accepted server commit versions. Missing evidence
+asserts nothing; memory backends and custom host transports cannot masquerade as
+durable local storage or a server endpoint. Identity generations fence receipt
+completion across account replacement, including a switch away and back. This
+does not add a delivery queue or independent-replica/server-fsync evidence.
 See [sign-at-drain.md](./completed/sign-at-drain.md) for the outbox decision. Do not restore
 the superseded signed-at-every-save queue design.
 
