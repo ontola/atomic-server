@@ -89,3 +89,8 @@ export {
   type TableAggregate,
   type GroupGranularity,
 } from './views/configuration.js';
+
+export {
+  TableFilterChip,
+  type TableFilterChipProps,
+} from './filters/FilterChip.js';

@@ -242,6 +242,12 @@ action values, quick-add JSON, aggregate specs and column/filter identities.
 The existing Atomic parser/row-action suites exercise compatibility re-exports;
 formula execution still needs the real WASM evaluator.
 
+Filter-chip presentation: `browser/table/src/filters/FilterChip.test.tsx`
+covers host value/operator/removal callbacks and the existing numeric/date/now
+input policy. Actual-component Chromium checks cover edit/readback, operator
+selection, Escape/reopen/removal and desktop/mobile layout; these are component
+fixtures, not a claim of full backend-integrated TablePage coverage.
+
 Plugin discovery: `PluginRuns/pluginCatalog.test.tsx` covers parsing the remote
 plugin catalog, which entries unlock "Show experimental plugins" (entries
 that need API plugins don't), and a remounted hook rendering the cached catalog
