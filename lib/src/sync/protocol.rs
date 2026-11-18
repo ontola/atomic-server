@@ -83,6 +83,44 @@ pub mod tag {
     /// Responder → invitee: `[0x53] [json {"drive": "...", "write": bool}]`,
     /// after the rights were granted to the `AUTH`-ed agent.
     pub const INVITE_OK: u8 = 0x53;
+    /// Browser peer only: request a flush receipt for a resource frontier.
+    /// 0x54/0x55 belong to the separate Iroh full-drive confirmation proposal.
+    pub const STORAGE_RECEIPT_REQUEST: u8 = 0x56;
+    pub const STORAGE_RECEIPT: u8 = 0x57;
+}
+
+/// Advertised only by authenticated browser sessions with persistent storage.
+pub const CAP_BROWSER_STORAGE_RECEIPTS_V1: &str = "browser-storage-receipts-v1";
+pub const STORAGE_RECEIPT_BARRIER: &str = "atomic-redb-flush-v1";
+pub const STORAGE_RECEIPT_MAX_FRAME: usize = 64 * 1024;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StorageReceiptRequest {
+    pub nonce: String,
+    pub drive: String,
+    pub subject: String,
+    /// Requested frontier covered by stored state, not necessarily its latest VV.
+    pub version: String,
+}
+
+impl StorageReceiptRequest {
+    pub fn decode(payload: &[u8]) -> Option<Self> {
+        if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+            return None;
+        }
+        let request: Self = serde_json::from_slice(payload).ok()?;
+        (request.nonce.len() == 64
+            && request
+                .nonce
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            && !request.version.is_empty()
+            && request.version.len() <= 16 * 1024
+            && request.drive.len() <= 4096
+            && request.subject.len() <= 4096)
+            .then_some(request)
+    }
 }
 
 /// Feature names a responder advertises in the `AUTH_OK` payload and both

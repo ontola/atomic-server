@@ -173,6 +173,7 @@ export {
   BrowserPeerSync,
   randomPeerToken,
   type BrowserPeerOptions,
+  type BrowserReplicaReceipt,
 } from './browser-peer-sync.js';
 
 export { decodeBrowserInvite } from './browser-peer-invite.js';

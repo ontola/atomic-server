@@ -138,6 +138,8 @@ logged and dropped, not answered.
 | `0x51` | `CALL_RESULT` | Iroh responder | the dialer of the `CALL`. |
 | `0x52` | `INVITE` | Iroh dialer, after `AUTH` | `atomic_lib::sync::invite`. Iroh only; the WS server answers it with an `ERROR`. |
 | `0x53` | `INVITE_OK` | Iroh responder | the dialer of the `INVITE`. A refusal is an `ERROR` with code 13 (`INVITE_REFUSED`). |
+| `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated browser peer | Browser peer session advertising `browser-storage-receipts-v1`. |
+| `0x57` | `STORAGE_RECEIPT` | authenticated browser peer | Correlated live request on that same WebRTC connection. |
 
 ## Frame layouts
 
@@ -358,6 +360,48 @@ an ordinary `SYNC`, which the sync policy admits because the invitee can now
 read. `max_usages` of the token is not counted: that needs state shared by all
 the inviter's devices. In the link form of the Flutter package this is
 `atomic:invite?token=<token>`; the web app does not parse that form yet.
+
+### Browser storage receipts (0x56 / 0x57)
+
+This optional browser-peer extension is advertised as
+`browser-storage-receipts-v1` in `AUTH_OK` only when the actual backing store can
+supply a durable replica identity. It is not advertised globally by HTTP/WS or
+Iroh responders. Both directions must authenticate before the browser initiates
+requests. Old peers continue to sync normally without these frames; ordinary
+`COMMIT_OK` and `SYNC_OK` retain their existing meanings.
+
+```
+[0x56] [json {"nonce":"<64 lowercase hex>","drive":"atomic:…","subject":"atomic:…","version":"<base64 Loro VV>"}]
+[0x57] [json {"nonce":"…","drive":"…","subject":"…","version":"…","replica":{"storageId":"<64 lowercase hex>","generation":"<64 lowercase hex>"},"barrier":"atomic-redb-flush-v1"}]
+```
+
+Receipt requests are bounded to 64 KiB and version strings to 16 KiB. The requested
+frontier must be valid and nonempty. The Rust session checks authentication, the
+session's drive, current read permission, and a non-tombstoned stored resource whose
+**state** version vector covers the requested frontier. Announced or buffered operations with unresolved dependencies do not qualify. After coverage
+is established, the persistent flush must succeed and coverage/identity must still
+hold before any positive frame is constructed. Pending transaction overlays cannot
+serve as durable evidence. Missing or non-covering state returns no positive frame;
+normal synchronization can supply it and the requester can retry. Authorization,
+malformed-frame and flush errors follow the session's existing error handling.
+
+The named barrier is the persistent Redb store's Immediate commit/flush boundary,
+including its browser OPFS backing. Memory and unknown/custom backends cannot
+advertise it by merely returning success from a no-op flush. The identity seed and
+generation are created atomically in private store metadata and made durable before
+advertisement; only drive-scoped pseudonyms cross the wire. Reopen and tab-leader
+handoff preserve them, database recreation creates fresh metadata, and byte clones
+retain copied identity rather than claiming an independent copy.
+
+`version` in the positive response is the requested frontier the receiver proved
+it holds, even when the stored snapshot has advanced. The requester's live nonce,
+drive, subject and exact version must all match; a response never acknowledges a
+later local edit. Request correlation is scoped to the mutually authenticated,
+channel-bound session and invalidated on account/database replacement or disconnect.
+The SDK delivers immutable observations automatically; callers still choose and
+validate their independence policy. Different IDs or authenticated agents alone
+are not evidence of separate devices. This receipt covers resource metadata only,
+not blobs, deletion/tombstone recovery, keys, retention or a recoverable backup.
 
 ### EPHEMERAL (0x40)
 

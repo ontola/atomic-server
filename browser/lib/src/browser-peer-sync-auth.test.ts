@@ -90,6 +90,9 @@ it('authenticates to a browser peer with the canonical agent subject', async () 
   const store = {
     getAgent: () => agent,
     getClientDb: () => db,
+    getIdentityGeneration: () => 0,
+    getClientDbGeneration: () => 0,
+    on: () => () => {},
   } as unknown as Store;
 
   link = new BrowserPeerSync(store, {

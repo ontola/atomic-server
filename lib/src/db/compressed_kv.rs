@@ -27,7 +27,7 @@
 use crate::errors::AtomicResult;
 
 use super::{
-    kv_store::{KvIter, KvPair, KvStore},
+    kv_store::{KvIter, KvPair, KvStore, ReplicaIdentity},
     trees::{Method, Operation, Tree},
     write_log::{logged_subject, WriteLog},
 };
@@ -334,6 +334,10 @@ impl CompressedKv {
 }
 
 impl KvStore for CompressedKv {
+    fn replica_identity(&self, scope: &str) -> AtomicResult<Option<ReplicaIdentity>> {
+        self.inner.replica_identity(scope)
+    }
+
     fn get(&self, tree: Tree, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
         let found = self.inner.get(tree, key)?;
         match found {

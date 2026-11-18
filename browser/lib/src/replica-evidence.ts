@@ -153,9 +153,9 @@ function knownIdentity(identity: ReplicaIdentity | undefined): boolean {
   return !!identity?.storageId.trim() && !!identity.generation.trim();
 }
 
-/** Evaluate at-least-one independent historical replica barrier. No built-in
- * transport currently supplies these observations: omitted providers mean
- * unsupported. Server acceptance, legacy ACKs and memory flushes are not durable
+/** Evaluate at-least-one independent historical replica barrier. BrowserPeerSync
+ * can supply authenticated storage observations; omitted providers mean
+ * unsupported and independence still requires the caller's policy. Server acceptance, legacy ACKs and memory flushes are not durable
  * replica evidence. Later versions can produce conservative false negatives
  * because only exact version equality is supported. This pure function neither
  * verifies signatures nor discovers identities; the trusted policy owns that. */

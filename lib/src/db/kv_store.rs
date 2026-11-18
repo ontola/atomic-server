@@ -12,12 +12,27 @@ pub type KvPair = (Vec<u8>, Vec<u8>);
 /// Iterator over key-value pairs from a store.
 pub type KvIter = Box<dyn Iterator<Item = AtomicResult<KvPair>> + Send>;
 
+/// Durable backing-store identity, scoped to one replication relationship.
+/// A copied database retains its identity; different IDs do not prove independence.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplicaIdentity {
+    pub storage_id: String,
+    pub generation: String,
+}
+
 /// A storage backend for the Db.
 /// All methods operate on named trees (namespaces).
 ///
 /// Implementations must ensure that [`KvStore::apply_batch`] is atomic:
 /// either all operations succeed or none are applied.
 pub trait KvStore: Send + Sync {
+    /// Returns only identities whose metadata crossed a persistent barrier.
+    /// Memory and adapters without an explicit persistence contract stay unsupported.
+    fn replica_identity(&self, _scope: &str) -> AtomicResult<Option<ReplicaIdentity>> {
+        Ok(None)
+    }
+
     /// Get a value by key from a specific tree.
     fn get(&self, tree: Tree, key: &[u8]) -> AtomicResult<Option<Vec<u8>>>;
 

@@ -67,6 +67,7 @@ import {
   Resource,
   unknownSubject,
   type ResourceReadState,
+  type SaveReceipt,
 } from './resource.js';
 import {
   type SearchOpts,
@@ -397,6 +398,8 @@ export enum StoreEvents {
    * performs a save action.
    */
   ResourceSaved = 'resource-saved',
+  /** @internal Immutable completed boundaries of one save invocation. */
+  SaveReceipt = 'save-receipt',
   /** User perform a Remove action */
   ResourceRemoved = 'resource-removed',
   /**
@@ -501,6 +504,7 @@ export interface CreateDriveOpts {
  */
 type StoreEventHandlers = {
   [StoreEvents.ResourceSaved]: ResourceCallback;
+  [StoreEvents.SaveReceipt]: (receipt: SaveReceipt) => void;
   [StoreEvents.ResourceRemoved]: SubjectCallback;
   [StoreEvents.ResourceManuallyCreated]: ResourceCallback;
   [StoreEvents.AgentChanged]: AgentCallback;
@@ -818,6 +822,18 @@ export class Store {
   /** @internal Fences asynchronous saves, including A→B→A identity changes. */
   public getIdentityGeneration(): number {
     return this.identityGeneration;
+  }
+
+  private clientDbGeneration = 0;
+
+  /** @internal Fences peer sessions against database replacement and A→B→A. */
+  public getClientDbGeneration(): number {
+    return this.clientDbGeneration;
+  }
+
+  /** @internal Emitted after finalization; observer failures cannot reject save. */
+  public notifySaveReceipt(receipt: SaveReceipt): void {
+    void this.eventManager.emit(StoreEvents.SaveReceipt, receipt);
   }
   /** Mapped from origin to websocket */
   private webSockets: Map<string, WSClient>;
@@ -1177,6 +1193,7 @@ export class Store {
   }
 
   public setClientDb(clientDb: ClientDbWorker | undefined): void {
+    if (this.clientDb !== clientDb) this.clientDbGeneration++;
     // `initClientDb` calls this three times per page load (eager,
     // post-init, post-init-error) to refresh sync status. Only the
     // first call introduces a new worker; the others just want
