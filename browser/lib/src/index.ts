@@ -372,11 +372,10 @@ export {
   contactSchema,
   pipelineSchema,
   moneySchema,
+  preferencesSchema,
   sharedVocabularyOntologies,
   sharedVocabularyProperties,
 } from './shared-vocabularies.js';
-
-export { timeTrackingSchema } from './time-tracking-schema.js';
 
 export { executeServerPlugin } from './plugin-server.js';
 export {
