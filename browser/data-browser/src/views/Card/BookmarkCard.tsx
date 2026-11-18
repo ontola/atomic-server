@@ -8,7 +8,7 @@ import {
 } from '../../components/ExternalLink';
 import { CardViewProps } from './CardViewProps';
 import { ResourceCardTitle } from './ResourceCardTitle';
-import { Column } from '../../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 
 import type { JSX } from 'react';
 

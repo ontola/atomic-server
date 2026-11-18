@@ -8,7 +8,7 @@ import {
   useString,
 } from '@tomic/react';
 import { AtomicSelectInput } from '../../components/forms/AtomicSelectInput';
-import { BasicSelect } from '../../components/forms/BasicSelect';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import {
   createPropertyDraft,
   isContentAddressed,

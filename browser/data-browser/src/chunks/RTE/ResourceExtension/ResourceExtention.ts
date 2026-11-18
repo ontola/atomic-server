@@ -2,11 +2,11 @@ import { Extension, type Editor, type Range } from '@tiptap/react';
 import { Suggestion, type SuggestionOptions } from '@tiptap/suggestion';
 import type { Store } from '@tomic/react';
 import type { SuggestionItem } from '../types';
-import { getIconForClass } from '@helpers/iconMap';
+import { getIconForClass } from '@tomic/resource-ui/helpers/iconMap';
 import { PluginKey } from '@tiptap/pm/state';
 import { placeCaretAfterSelectedNode } from './placeCaretAfterSelectedNode';
-import { dismissableRenderer } from '../SlashMenu/CommandsExtension';
-import { findMentionSubjects } from '@helpers/mentionSearch';
+import { dismissableRenderer } from '@tomic/resource-ui/chunks/RTE/SlashMenu/CommandsExtension';
+import { findMentionSubjects } from '@tomic/resource-ui/helpers/mentionSearch';
 
 const resourceSuggestionPluginKey = new PluginKey('resourceSuggestion');
 

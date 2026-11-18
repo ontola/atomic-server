@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { FaFolderOpen } from 'react-icons/fa6';
-import { Button } from '../Button';
-import { Column, Row } from '../Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   getVirtualDriveStatus,
   openVirtualDrive,

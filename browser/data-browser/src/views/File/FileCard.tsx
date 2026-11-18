@@ -1,7 +1,7 @@
 import { useMemo, type JSX } from 'react';
-import { AtomicLink } from '../../components/AtomicLink';
-import { Column } from '../../components/Row';
-import { useFileInfo } from '../../hooks/useFile';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { Column } from '@tomic/ui/components/Row';
+import { useFileInfo } from '@tomic/resource-ui/hooks/useFile';
 import { CardViewProps } from '../Card/CardViewProps';
 import { ResourceCardTitle } from '../Card/ResourceCardTitle';
 import { ErrorBoundary } from '../ErrorPage';

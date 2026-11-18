@@ -1,5 +1,5 @@
-import { EditableTitle } from '@components/EditableTitle';
-import { ResourceCoverImage } from '@components/ResourceDecorations';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
+import { ResourceCoverImage } from '@tomic/resource-ui/components/ResourceDecorations';
 import { dataBrowser, useLoroDoc, useLoroReady, useStore } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import {

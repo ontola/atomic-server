@@ -2,7 +2,7 @@ import { type JSX } from 'react';
 import { useResource, dataBrowser, core } from '@tomic/react';
 import { styled, css } from 'styled-components';
 
-import Markdown from '../components/datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import ResourceCard from './Card/ResourceCard';
 
 interface ElementShowProps {

@@ -1,7 +1,7 @@
 import { Resource } from '@tomic/react';
 import type { JSX } from 'react';
 import { StringListEditor } from './StringListEditor';
-import { useFieldOptions } from './useFieldOptions';
+import { useFieldOptions } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
 import { Divider } from './Divider';
 
 interface MatrixOptionsProps {

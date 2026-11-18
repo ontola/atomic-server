@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useHotkeys } from 'react-hotkeys-hook';
 
 import { styled } from 'styled-components';
-import { useFileImageTransitionStyles } from '../views/File/useFileImageTransitionStyles';
+import { useFileImageTransitionStyles } from '@tomic/resource-ui/views/File/useFileImageTransitionStyles';
 import { useDialogGlobalContext } from './Dialog/DialogGlobalContextProvider';
 
 interface ImageViewerProps {

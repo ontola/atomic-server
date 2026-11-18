@@ -1,14 +1,14 @@
 import { useEffect, useState, type PropsWithChildren } from 'react';
 import { useStore } from '@tomic/react';
 import { styled } from 'styled-components';
-import { Button } from './Button';
+import { Button } from '@tomic/ui/components/Button';
 import { Margin } from './Card';
 import { ConnectDrivePicker } from './ConnectDrivePicker';
-import { ContainerNarrow } from './Containers';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
 import { ErrorLook } from './ErrorLook';
 import { Main } from './Main';
-import { Column, Row } from './Row';
-import { RadioInput } from './forms/RadioInput';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { RadioInput } from '@tomic/ui/components/forms/RadioInput';
 import { useAccountDriveCatalog } from '../hooks/useAccountDriveCatalog';
 import { usePrivateDrive } from '../hooks/usePrivateDrive';
 import { useSavedDrives } from '../hooks/useSavedDrives';

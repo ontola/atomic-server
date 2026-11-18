@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { core, useCollection, useStore, type Resource } from '@tomic/react';
 import type { ChangeOutcome, Problem } from '@tomic/react';
-import { Details } from '@components/Details';
-import { Column, Row } from '@components/Row';
-import { AtomicLink } from '@components/AtomicLink';
+import { Details } from '@tomic/ui/components/Details';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { onRunsChanged, pluginClassesFor, usePluginClass } from './runScript';
 
 /**

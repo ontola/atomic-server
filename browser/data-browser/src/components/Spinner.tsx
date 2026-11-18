@@ -1,25 +1,16 @@
-import { useEffect } from 'react';
 import {
-  Spinner as SharedSpinner,
+  Spinner as ResourceSpinner,
   type SpinnerProps,
-} from '@tomic/ui/components/Spinner';
+} from '@tomic/resource-ui/components/Spinner';
 import { holdBootSplash } from '../helpers/bootSplash';
 import { isEmbedded } from '../helpers/embedMode';
 
-/** Atomic's boot-splash policy around the shared loading indicator. */
-export function Spinner({
-  centered = false,
-  delay = centered && isEmbedded() ? 1000 : 0,
-  ...props
-}: SpinnerProps) {
-  useEffect(() => (centered ? holdBootSplash() : undefined), [centered]);
+/** Early shell screens can load before the resource-UI host provider. */
+const loadingPolicy = {
+  hold: holdBootSplash,
+  delay: (centered: boolean) => (centered && isEmbedded() ? 1000 : 0),
+};
 
-  return (
-    <SharedSpinner
-      {...props}
-      centered={centered}
-      delay={delay}
-      label='Loading'
-    />
-  );
+export function Spinner(props: SpinnerProps) {
+  return <ResourceSpinner {...props} loadingPolicy={loadingPolicy} />;
 }

@@ -2,7 +2,7 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import { AIProvider } from '@components/AI/aiContstants';
 import { OpenRouterModelSelector } from './ModelSelect/OpenRouterModelSelector';
 import { OllamaModelSelector } from './ModelSelect/OllamaModelSelector';
-import { Column } from '@components/Row';
+import { Column } from '@tomic/ui/components/Row';
 
 export default function ProviderModelSettings({
   provider,

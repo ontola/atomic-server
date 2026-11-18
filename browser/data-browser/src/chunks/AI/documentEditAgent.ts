@@ -12,7 +12,7 @@ import { applyPatchedJsonToLoroDocCollaborative } from '@chunks/RTE/applyPatched
 import {
   hasDocumentContent,
   readDocumentV2TiptapJson,
-} from '@chunks/RTE/readDocumentV2TiptapJson';
+} from '@tomic/resource-ui/chunks/RTE/readDocumentV2TiptapJson';
 import { flushSync } from 'react-dom';
 
 const EDIT_PROMPT = `## Role

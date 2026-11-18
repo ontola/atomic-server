@@ -1,5 +1,5 @@
 import { paths } from '../routes/paths';
-import { Button } from './Button';
+import { Button } from '@tomic/ui/components/Button';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 /**

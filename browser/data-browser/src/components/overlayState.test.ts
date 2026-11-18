@@ -4,7 +4,7 @@ import {
   openSearchOverlay,
   pendingSearchOverlayQuery,
   setOverlay,
-} from './overlayState';
+} from '@tomic/resource-ui/components/overlayState';
 
 it('opens search with a query, and forgets it once closed', () => {
   openSearchOverlay('content plan');

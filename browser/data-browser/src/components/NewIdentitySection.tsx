@@ -21,15 +21,18 @@ import { saveAgentResource } from '../helpers/startLocalIdentity';
 import { reopenRestoredDrive } from '../helpers/driveData';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
-import { Button } from './Button';
-import { Column, Row } from './Row';
-import { CodeBlock } from './CodeBlock';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { CodeBlock } from '@tomic/resource-ui/components/CodeBlock';
 import { SecretCodeBlock } from './SecretCodeBlock';
 import toast from 'react-hot-toast';
 import { FaDownload } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { InputStyled, InputWrapper } from './forms/InputStyles';
-import Field from './forms/Field';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import Field from '@tomic/resource-ui/components/forms/Field';
 import { PRODUCT_NAME } from '../helpers/managed';
 import { ProfileForm } from './ProfileForm';
 import {

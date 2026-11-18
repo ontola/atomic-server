@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { Button } from '@components/Button';
-import { Dialog, useDialog } from '@components/Dialog';
-import { SearchBox } from '@components/forms/SearchBox';
-import { NewFormDialog } from '@components/forms/NewForm/NewFormDialog';
+import { Button } from '@tomic/ui/components/Button';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { SearchBox } from '@tomic/resource-ui/components/forms/SearchBox/index';
+import { NewFormDialog } from '@tomic/resource-ui/components/forms/NewForm/NewFormDialog';
 import type { FormAsk, PickResourceAsk } from './hostUIRequests';
 
 /**

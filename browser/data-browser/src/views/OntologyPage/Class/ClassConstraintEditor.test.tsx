@@ -12,10 +12,13 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { ThemeProvider } from 'styled-components';
+
 import { Datatype, LoroLoader, Resource, Store, core } from '@tomic/lib';
 import { StoreContext, useResource } from '@tomic/react';
-import { buildTheme } from '../../../styling';
+import {
+  buildTheme,
+  ThemeProvider,
+} from '../../../../../resource-ui/test/providers';
 import { ClassConstraintEditor } from './ClassConstraintEditor';
 
 vi.mock('../../../helpers/AppSettings', () => ({

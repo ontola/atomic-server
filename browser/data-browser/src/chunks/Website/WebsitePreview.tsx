@@ -1,4 +1,4 @@
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { useWebsitePreviewHtml } from './useWebsitePreviewHtml';
 import { useEffect, useRef } from 'react';
 import searchViewUrl from './runtime/search-view.html?url';

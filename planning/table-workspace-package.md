@@ -101,3 +101,89 @@ The table/UI/helper packages are private. An npm release is not a prerequisite. 
 consume compiled modules while preserving the tested package boundary.
 `@tomic/table` returned npm 404 on 11 November 2026. SDK distributions embed the private pure helpers, so this extraction does not
 require a new registry package for existing SDK consumers.
+
+
+## Complete-page extraction boundary (resumed November 2026)
+
+The next extraction starts at `bd4fa0ed54c466e392b1d42e42480adba132b19d`,
+independently of the review-ready candidate stack. Its source ownership is:
+
+- `browser/table-page`: the entire TablePage subtree, plus DashboardPage because
+  its blocks embed TableResource. This includes the existing built-in views,
+  saved view tabs, query orchestration, history, forms, filters, exports and
+  resource-aware cell editors. Atomic becomes a real consumer of this page.
+- `browser/resource-ui`: whole shared SDK-aware forms, value renderers, record
+  fields, links, title/cover/file controls and their bounded editor dependencies.
+  Public `resource`/`property` JSX and existing SDK hooks retain their behavior.
+- `browser/ui` and `browser/utils`: canonical SDK-free controls and pure helpers;
+  moved resource code imports these implementations rather than copying them.
+
+A small host provider supplies router/search navigation, shell settings,
+comment-panel actions, executable app/workspace integration and the generic
+embedded-resource dispatcher. It does not supply built-in view implementations
+or replace forms/filters/history with host-rendered slots. Existing app-wide
+contexts keep one identity through compatibility re-exports. The generic column
+label helper belongs with resource fields, avoiding a resource-ui → page cycle.
+The stateless WASM loader currently located in managed-account recovery is a
+shared utility; account/session/passkey code does not belong in the page graph.
+
+Localization is part of this move: retain all six existing Atomic catalogs and
+translated values. Move the existing Wuchale runtime/catalog ownership into the
+SDK-aware dependency, scan both moved sources and the Atomic shell, and export
+its provider/runtime for packed consumers. The preloader must remain free of
+React imports. Locale loading must address the Atomic catalog without changing
+an unrelated host catalog. Verify a non-English interaction in both Atomic and
+a clean packed consumer; an English-only library fallback does not pass parity.
+
+Validation gates are import-boundary/cycle checks, focused existing behavior
+tests, canonical context identity, package declarations/packing, Atomic full-page
+consumption and actual desktop/mobile browser evidence. Heavy SDK/WASM/server
+or whole-app checks use `/tmp/atomic-candidate-heavy-check.lock` and are scheduled
+behind the candidate validation. This unfinished branch is not candidate26.
+
+Current future-branch validation:
+
+- [x] All 213 original TablePage/Dashboard source/test files accounted for.
+- [x] SDK/UI/grid/shared-resource/page distributions and declarations build.
+- [x] Whole Atomic app typecheck uses the extracted page and canonical contexts.
+- [x] Clean external packed consumer edits a real SDK Resource through
+  `InputString`, validates in Dutch, preserves a foreign Wuchale catalog and the
+  patched keyed-message helper, and checks NodeNext declarations.
+- [x] Six canonical catalogs preserve all 3041 active message IDs and translated
+  values per locale; a second clean is stable and the read-only audit is green.
+- [x] Shared resource behavior tests pass (41), and every moved page suite passes
+  (39 files, 545 tests) using this worktree’s real optimized formula WASM.
+- [x] Native production Atomic app build consumes the complete extracted page.
+- [x] Desktop/mobile Dutch page journeys use this worktree’s native server and
+  source frontend (real create/edit/computed/configuration persistence).
+- [x] Existing native browser regressions pass (9): forms, comments, templates,
+  filters, saved-view persistence, editing, bulk deletion and resource menus.
+- [ ] Complete normal commit hooks and publish a separate extraction PR.
+
+The generic app-wide resource menu and right comments panel remain shell
+services using the canonical shared trigger/state contexts. An external host
+must wire those real services; default contexts do not implement the UI. This
+boundary needs explicit review alongside the generic embedded-resource
+dispatcher, before declaring ELFA full-page behavior complete.
+
+
+The retained CSV export specifically requires Atomic's `/export` endpoint via
+`Store.getServerUrl()`. ELFA must implement a real export capability or expose
+an unavailable state; a placeholder server URL is not parity. Other SDK-native
+query, upload, permissions and history requirements remain subject to the same
+backend acceptance gate. The source extraction does not redesign these APIs.
+
+A native browser check also reproduces a baseline React Compiler issue: after
+a reload, a constant computed column can remain blank until its inputs change.
+Original and moved `DerivedCell` produce byte-identical compiler output: the
+`useFormulaReady()` return is ignored and is absent from the memo dependencies.
+Keep that readiness/state fix in a separate improvement PR; do not change the
+component during its extraction.
+
+Native browser harness notes: the E2E setup route is intentionally development
+only, so browser journeys use own Vite + own native server; production app and
+embedded-server builds are validated separately. Override the checked-in
+managed development server URL with the isolated server’s URL. The temporary
+harness retains the original direct Google stylesheet (as production does)
+because this environment’s Node development-font proxy returns HTTP502. No
+backend operations or record persistence are mocked.

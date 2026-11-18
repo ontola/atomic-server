@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { expect, it, vi } from 'vitest';
 import { StoreContext } from '@tomic/react';
-import { useUpload } from './useUpload';
+import { useUpload } from '@tomic/resource-ui/hooks/useUpload';
 
 const errorHandler = vi.fn();
 

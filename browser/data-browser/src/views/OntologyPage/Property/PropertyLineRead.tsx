@@ -4,9 +4,9 @@ import { styled } from 'styled-components';
 import Markdown from '../../../components/datatypes/Markdown';
 import { InlineDatatype } from '../InlineDatatype';
 import { ErrorLook } from '../../../components/ErrorLook';
-import { CARD_CONTAINER } from '../../../helpers/containers';
+import { CARD_CONTAINER } from '@tomic/ui/helpers/containers';
 import { dataTypeIconMap } from '../../../helpers/iconMap';
-import { Row } from '../../../components/Row';
+import { Row } from '@tomic/ui/components/Row';
 import { ClassConstraintSummary } from '../Class/ClassConstraintSummary';
 
 import type { JSX } from 'react';

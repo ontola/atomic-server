@@ -1,13 +1,13 @@
 import { lazy, Suspense, useState, type JSX } from 'react';
 import { Resource } from '@tomic/react';
 import { ImageViewer } from '../../components/ImageViewer';
-import { useFileInfo } from '../../hooks/useFile';
+import { useFileInfo } from '@tomic/resource-ui/hooks/useFile';
 import { styled } from 'styled-components';
-import { TextPreview } from './TextPreview';
+import { TextPreview } from '@tomic/resource-ui/views/File/TextPreview';
 import { displayFileSize } from './displayFileSize';
-import { Button } from '../../components/Button';
-import { isTextFile } from './fileTypeUtils';
-import { useFilePreviewSizeLimit } from '../../hooks/useFilePreviewSizeLimit';
+import { Button } from '@tomic/ui/components/Button';
+import { isTextFile } from '@tomic/resource-ui/views/File/fileTypeUtils';
+import { useFilePreviewSizeLimit } from '@tomic/resource-ui/hooks/useFilePreviewSizeLimit';
 
 const PDFViewer = lazy(() => import('../../chunks/PDFViewer'));
 

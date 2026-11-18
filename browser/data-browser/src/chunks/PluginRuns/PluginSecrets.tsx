@@ -8,10 +8,13 @@ import {
   useStore,
   type DeclaredSecret,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { BasicSelect } from '@components/forms/BasicSelect';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 
 /**
  * The credentials a plugin asked for.

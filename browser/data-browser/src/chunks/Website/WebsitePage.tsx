@@ -7,14 +7,14 @@ import {
   useStore,
   type Resource,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Row, Column } from '@components/Row';
-import { ResourceRow } from '@views/ResourceRow';
-import Field from '@components/forms/Field';
+import { Button } from '@tomic/ui/components/Button';
+import { Row, Column } from '@tomic/ui/components/Row';
+import { ResourceRow } from '@tomic/resource-ui/views/ResourceRow';
+import Field from '@tomic/resource-ui/components/forms/Field';
 import { FaPencil, FaPlus } from 'react-icons/fa6';
-import { AIIcon } from '@components/AI/AIIcon';
-import { CalculatedPageHeight } from '../../globalCssVars';
-import { ResourceSelector } from '@components/forms/ResourceSelector';
+import { AIIcon } from '@tomic/resource-ui/components/AI/AIIcon';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
+import { ResourceSelector } from '@tomic/resource-ui/components/forms/ResourceSelector/index';
 import { useAISidebar, newContextItem } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
 import { readWebsite, updateWebsite, type WebsiteConfig } from './websiteModel';

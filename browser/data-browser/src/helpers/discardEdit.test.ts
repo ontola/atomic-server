@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@tomic/react';
-import { discardEdit } from './discardEdit';
+import { discardEdit } from '@tomic/resource-ui/helpers/discardEdit';
 
 function fakeResource(current: unknown) {
   return {

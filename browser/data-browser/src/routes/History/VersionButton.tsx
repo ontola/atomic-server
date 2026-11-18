@@ -2,7 +2,7 @@ import type { Version } from '@tomic/react';
 
 import { DateTime } from '../../components/datatypes/DateTime';
 import { styled } from 'styled-components';
-import { ButtonClean } from '../../components/Button';
+import { ButtonClean } from '@tomic/ui/components/Button';
 
 export interface VersionButtonProps {
   version: Version;

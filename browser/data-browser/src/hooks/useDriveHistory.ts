@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useLocalStorage } from './useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 
 const MAX_DRIVE_HISTORY = 5;
 

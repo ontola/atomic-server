@@ -1083,6 +1083,14 @@ export class AtomicServer {
       .withFile('/repo/browser/utils/package.json', browser.file('utils/package.json'))
       .withFile('/repo/browser/table/package.json', browser.file('table/package.json'))
       .withFile(
+        '/repo/browser/resource-ui/package.json',
+        browser.file('resource-ui/package.json'),
+      )
+      .withFile(
+        '/repo/browser/table-page/package.json',
+        browser.file('table-page/package.json'),
+      )
+      .withFile(
         '/repo/browser/lib/package.json',
         browser.file('lib/package.json'),
       )
@@ -1351,6 +1359,14 @@ export class AtomicServer {
       .withFile('/app/ui/package.json', browser.file('ui/package.json'))
       .withFile('/app/utils/package.json', browser.file('utils/package.json'))
       .withFile('/app/table/package.json', browser.file('table/package.json'))
+      .withFile(
+        '/app/resource-ui/package.json',
+        browser.file('resource-ui/package.json'),
+      )
+      .withFile(
+        '/app/table-page/package.json',
+        browser.file('table-page/package.json'),
+      )
       .withFile('/app/lib/package.json', browser.file('lib/package.json'))
       .withFile('/app/react/package.json', browser.file('react/package.json'))
       .withFile('/app/svelte/package.json', browser.file('svelte/package.json'))

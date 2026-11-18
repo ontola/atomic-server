@@ -2,12 +2,12 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FaUser } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Button } from './Button';
-import { Column, Row } from './Row';
-import Field from './forms/Field';
-import { Input } from './forms/InputStyles';
-import { AvatarCropper } from './AvatarCropper';
-import { ErrorLook } from './ErrorLook';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { Input } from '@tomic/ui/components/forms/InputStyles';
+import { AvatarCropper } from '@tomic/resource-ui/components/AvatarCropper';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 import { asError } from '@tomic/react';
 
 /**

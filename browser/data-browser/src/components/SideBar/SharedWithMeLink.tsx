@@ -5,7 +5,7 @@ import {
   SideBarMenuRowIcon,
   SideBarMenuRowLabel,
 } from './SideBarMenuItem';
-import { AgentAvatar } from '../Presence/AgentAvatar';
+import { AgentAvatar } from '@tomic/resource-ui/components/Presence/AgentAvatar';
 import { getIconForClass } from '../../helpers/iconMap';
 import type { JSX } from 'react';
 

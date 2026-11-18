@@ -16,6 +16,14 @@
     "strictNullChecks": true,
     "paths": {
       "@tomic/table": ["../table/src/index.ts"],
+      "@tomic/table-page": ["../table-page/src/index.ts"],
+      "@tomic/table-page/*": ["../table-page/src/*"],
+      "@tomic/resource-ui": ["../resource-ui/src/index.ts"],
+      "@tomic/resource-ui/locale-runtime": [
+        "../resource-ui/src/locales/main.loader.js"
+      ],
+      "@tomic/resource-ui/locale-message": ["../resource-ui/src/locales/message.js"],
+      "@tomic/resource-ui/*": ["../resource-ui/src/*"],
       "@tomic/ui": ["../ui/src/index.ts"],
       "@tomic/ui/*": ["../ui/src/*"],
       "@components/*": ["./src/components/*"],

@@ -6,10 +6,10 @@ import {
   type PluginSyncSession,
   type ExternalOperationStatus,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column } from '@components/Row';
-import { Card } from '@components/Card';
-import { InputStyled } from '@components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import { Card } from '@tomic/ui/components/Card';
+import { InputStyled } from '@tomic/ui/components/forms/InputStyles';
 
 export function SyncRecovery({
   drive,

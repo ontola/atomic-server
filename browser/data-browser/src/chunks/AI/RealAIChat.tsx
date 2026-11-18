@@ -8,7 +8,7 @@ import { HostedAICredits } from './HostedAICredits';
 import { compactionTokens } from './usageMetadata';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { useAtomicMCPTools } from './useAtomicTools';
 import { skillTools, getSkillsSystemPromptPart } from './skills/skill';
 import { AIChatMessage } from './AIChatMessage';
@@ -23,9 +23,9 @@ import {
 } from './chatRunRegistry';
 import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
-import { IconButton } from '@components/IconButton/IconButton';
-import { Button } from '@components/Button';
-import { ButtonLink } from '@components/ButtonLink';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { Button } from '@tomic/ui/components/Button';
+import { ButtonLink } from '@tomic/resource-ui/components/ButtonLink';
 import { FaXmark, FaPaperclip, FaFile, FaSliders } from 'react-icons/fa6';
 import { ChatMessagesContainer } from '@components/ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
@@ -40,7 +40,7 @@ import {
   type AtomicUIMessage,
 } from './types';
 import { useAIAgentConfig } from './AgentConfig';
-import { BasicSelect } from '@components/forms/BasicSelect';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { MicrophoneSelect } from '@components/AI/MicrophoneSelect';
 import { MessageContextItem } from './MessageContextItem';
 
@@ -70,16 +70,16 @@ import type { MentionItem } from '@chunks/RTE/AIChatInput/types';
 import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
 import { useConversationSummary } from './useConversationSummary';
-import { Popover } from '@components/Popover';
+import { Popover } from '@tomic/ui/components/Popover';
 import { Trigger as PopoverTrigger } from '@radix-ui/react-popover';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
 import { useRAG } from './useRAG';
-import { useOnValueChange } from '@helpers/useOnValueChange';
-import { transition } from '@helpers/transition';
-import { useAIChanges } from '@components/AIChangesContext';
+import { useOnValueChange } from '@tomic/ui/helpers/useOnValueChange';
+import { transition } from '@tomic/ui/helpers/transition';
+import { useAIChanges } from '@tomic/resource-ui/components/AIChangesContext';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { Spinner } from '@components/Spinner';
 import { LiveConversation } from './LiveConversation';
 

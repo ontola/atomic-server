@@ -10,10 +10,14 @@ import {
 } from '@tomic/react';
 import { FC, useEffect, useState } from 'react';
 import { TabPanel, Tabs } from '../../../components/Tabs';
-import { Column, Row } from '../../../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { LabelText } from '../LabelText';
-import InputResourceArray from '../../../components/forms/InputResourceArray';
-import { CreateTagRow, EditableTag, Tag } from '../../../components/Tag';
+import InputResourceArray from '@tomic/resource-ui/components/forms/InputResourceArray';
+import {
+  CreateTagRow,
+  EditableTag,
+  Tag,
+} from '@tomic/resource-ui/components/Tag/index';
 import { useEnumHandlers } from './useEnumHandlers';
 import { filterAllowsOnly } from './filterAllowsOnly';
 

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from '../ConfirmationDialog';
-import { RadioGroup, RadioInput } from '../forms/RadioInput';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
+import { RadioGroup, RadioInput } from '@tomic/ui/components/forms/RadioInput';
 import type { VaultSnapshotUsage } from '../../helpers/managed/vault';
 
 function formatSnapshotTime(createdAt: number): string {

@@ -1,8 +1,8 @@
 import { ResourcePageProps } from '../ResourcePage';
 import { useCallback, type JSX } from 'react';
 import { urls, useCanWrite, useString } from '@tomic/react';
-import { EditableTitle } from '../../components/EditableTitle';
-import { ResourceCoverImage } from '../../components/ResourceDecorations';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
+import { ResourceCoverImage } from '@tomic/resource-ui/components/ResourceDecorations';
 import { styled } from 'styled-components';
 import { ContainerFull, ContainerNarrow } from '../../components/Containers';
 import { BookmarkPreview } from './BookmarkPreview';
@@ -11,7 +11,10 @@ import {
   ExternalLinkVariant,
 } from '../../components/ExternalLink';
 import { usePreview } from './usePreview';
-import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { ErrorLook } from '../../components/ErrorLook';
 
 export function BookmarkPage({ resource }: ResourcePageProps): JSX.Element {

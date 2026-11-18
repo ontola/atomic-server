@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stringToSlug } from './stringToSlug';
+import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
 
 describe('stringToSlug', () => {
   it('lowercases and joins words with single dashes', () => {

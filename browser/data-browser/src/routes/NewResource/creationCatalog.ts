@@ -1,5 +1,5 @@
 import { ai, canvas, core, dataBrowser, forms } from '@tomic/lib';
-import { TABLE_TEMPLATES } from '../../chunks/TablePage/tableTemplates';
+import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 import { templates } from '../../components/Template/template';
 
 export const BASIC_CREATIONS = [

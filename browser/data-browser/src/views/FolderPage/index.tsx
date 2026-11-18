@@ -7,8 +7,8 @@ import {
 } from '@tomic/react';
 import { useMemo } from 'react';
 import { styled } from 'styled-components';
-import { EditableTitle } from '../../components/EditableTitle';
-import { ResourceCoverImage } from '../../components/ResourceDecorations';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
+import { ResourceCoverImage } from '@tomic/resource-ui/components/ResourceDecorations';
 import { FileDropZone } from '../../components/forms/FileDropzone/FileDropzone';
 import { useNewRoute } from '../../helpers/useNewRoute';
 import { ResourcePageProps } from '../ResourcePage';
@@ -17,7 +17,7 @@ import { GridView } from './GridView';
 import { ListView } from './ListView';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 
-import { Column, Row } from '../../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 
 type PreferredFolderStyles = Record<string, string>;
 

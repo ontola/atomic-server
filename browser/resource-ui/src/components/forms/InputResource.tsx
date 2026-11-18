@@ -1,0 +1,41 @@
+import { InputProps } from './ResourceField.js';
+import { noNestedSupport, useSubject } from '@tomic/react';
+import { ResourceSelector } from './ResourceSelector/index.js';
+import { ErrorLook } from '../ErrorLook.js';
+
+import type { JSX } from 'react';
+
+/** Input field for a single Resource. Renders a dropdown select menu. */
+export function InputResource({
+  resource,
+  property,
+  commit,
+  commitDebounceInterval,
+  ...props
+}: InputProps): JSX.Element {
+  const [subject, setSubject] = useSubject(resource, property.subject, {
+    commit,
+    commitDebounce: commitDebounceInterval,
+  });
+
+  if (subject === noNestedSupport) {
+    return (
+      <ErrorLook>
+        Sorry, there is no support for editing nested resources yet
+      </ErrorLook>
+    );
+  }
+
+  return (
+    <div>
+      <ResourceSelector
+        isA={property.classType}
+        setSubject={setSubject}
+        value={subject}
+        allowsOnly={property.allowsOnly}
+        parent={resource.subject}
+        {...props}
+      />
+    </div>
+  );
+}

@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { afterEach, expect, it } from 'vitest';
-import { AvatarImg } from './AvatarImg';
+import { AvatarImg } from '@tomic/resource-ui/components/AvatarImg';
 
 afterEach(cleanup);
 

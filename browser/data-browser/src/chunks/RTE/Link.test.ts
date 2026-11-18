@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { find } from 'linkifyjs';
-import { Link } from './Link';
+import { Link } from '@tomic/resource-ui/chunks/RTE/Link';
 
 describe('shared editor link parser', () => {
   it('keeps telephone and web links working across editor lifecycles', () => {

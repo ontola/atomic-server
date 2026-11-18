@@ -1,7 +1,7 @@
 import { useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '@helpers/AppSettings';
 import { grantIdentity } from './grantIdentity';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 
 export interface PermissionScope {
   allowAll: boolean;

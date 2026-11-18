@@ -45,7 +45,7 @@ async function v1ElementsToTiptapDoc(
 ): Promise<{ doc: JSONContent; ownedParagraphs: Resource[] }> {
   const { MarkdownManager } = await import('@tiptap/markdown');
   const { getCollaborativeEditorSchema } =
-    await import('@chunks/RTE/getCollaborativeEditorSchema');
+    await import('@tomic/resource-ui/chunks/RTE/getCollaborativeEditorSchema');
 
   const { extensions } = getCollaborativeEditorSchema(store);
   const mdManager = new MarkdownManager({ extensions });

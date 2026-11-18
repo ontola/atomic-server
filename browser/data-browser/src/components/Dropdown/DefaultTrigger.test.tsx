@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { ThemeProvider, type DefaultTheme } from 'styled-components';
-import { buildDefaultTrigger } from './DefaultTrigger';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
 
 afterEach(cleanup);
 

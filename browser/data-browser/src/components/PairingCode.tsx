@@ -7,7 +7,7 @@ import {
   isLoopbackHost,
   type PairingEnvelope,
 } from '@tomic/lib';
-import { Button } from './Button';
+import { Button } from '@tomic/ui/components/Button';
 import { useSettings } from '../helpers/AppSettings';
 
 interface PairingCodeProps {

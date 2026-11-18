@@ -9,9 +9,12 @@ import {
 } from '@tomic/react';
 import { useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { InlineFormattedResourceList } from './InlineFormattedResourceList';
-import { isNeverEditableProp } from '../helpers/hiddenProperties';
-import { asSubject, formatPlainValue } from '../helpers/formatPlainValue';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
+import { isNeverEditableProp } from '@tomic/resource-ui/helpers/hiddenProperties';
+import {
+  asSubject,
+  formatPlainValue,
+} from '@tomic/resource-ui/helpers/formatPlainValue';
 
 export interface AllPropsSimpleProps {
   resource: Resource;

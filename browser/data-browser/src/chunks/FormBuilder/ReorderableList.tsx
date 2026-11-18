@@ -22,7 +22,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { FaGripVertical } from 'react-icons/fa6';
-import { useDragSensors } from '../TableEditor/hooks/useDragSensors';
+import { useDragSensors } from '@tomic/table';
 
 /**
  * Handed to `renderItem` so an item can host its own grip instead of the

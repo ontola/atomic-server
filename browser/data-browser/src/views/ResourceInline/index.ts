@@ -1,1 +1,1 @@
-export { ResourceInline } from './ResourceInline';
+export * from '@tomic/resource-ui/views/ResourceInline/index';

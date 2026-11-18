@@ -2,8 +2,13 @@ import { useEffect, useState, type JSX } from 'react';
 import { isLoopbackHost } from '@tomic/react';
 import { styled } from 'styled-components';
 import { FaCheck } from 'react-icons/fa6';
-import { Dialog, DialogContent, DialogTitle, useDialog } from './Dialog';
-import { Button } from './Button';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  useDialog,
+} from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
 
 interface ConnectServerDialogProps {
   /** Servers this browser already knows about; the active one is checked. */

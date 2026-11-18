@@ -10,9 +10,9 @@ import { useEffect, type JSX, type ReactNode } from 'react';
 import { styled } from 'styled-components';
 import { FaLinkSlash } from 'react-icons/fa6';
 import toast from 'react-hot-toast';
-import { Button } from '@components/Button';
-import Field from '@components/forms/Field';
-import { Column, Row } from '@components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   clearOptionsSource,
   optionsSourceMode,

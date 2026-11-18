@@ -13,11 +13,11 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column } from '@components/Row';
-import Field from '@components/forms/Field';
-import { Input, ErrMessage } from '@components/forms/InputStyles';
-import { AtomicLink } from '@components/AtomicLink';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { Input, ErrMessage } from '@tomic/ui/components/forms/InputStyles';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { pluginClassesFor } from './runScript';
 import { RunPluginDialog } from './RunPluginDialog';
 
