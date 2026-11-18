@@ -4,11 +4,13 @@ use std::sync::{Arc, Mutex};
 
 use atomic_lib::{
   vault::{
+    blob_export::{prepare_blob_export, seal_export_chunk},
     dek::DriveVaultKey,
-    sync::{blob_chunks, blob_id_hex, read_verified_blob, seal_blob_chunk, BLOB_SEAL_OVERHEAD},
   },
   Db,
 };
+
+pub(crate) use atomic_lib::vault::blob_export::BlobExportPlan as Plan;
 
 #[derive(Default)]
 pub(crate) struct BlobExport {
@@ -21,24 +23,6 @@ struct State {
   file: Option<(String, Arc<Vec<u8>>)>,
 }
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct Plan {
-  status: &'static str,
-  size: u64,
-  blob_id: String,
-  chunks: Vec<Chunk>,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Chunk {
-  index: u32,
-  offset: u64,
-  length: u64,
-  sealed_length: u64,
-}
-
 impl BlobExport {
   pub(crate) async fn open(
     &self,
@@ -47,39 +31,11 @@ impl BlobExport {
     key: &DriveVaultKey,
   ) -> Result<Plan, String> {
     let generation = self.clear()?;
-    let Some(bytes) = read_verified_blob(store, hash)
+    let (plan, bytes) = prepare_blob_export(store, hash, key)
       .await
-      .map_err(|e| e.to_string())?
-    else {
-      return Ok(Plan {
-        status: "missing",
-        size: 0,
-        blob_id: String::new(),
-        chunks: vec![],
-      });
-    };
-    let size = bytes.len() as u64;
-    let Some(chunks) = blob_chunks(size) else {
-      return Ok(Plan {
-        status: "tooLarge",
-        size,
-        blob_id: String::new(),
-        chunks: vec![],
-      });
-    };
-    let plan = Plan {
-      status: "ready",
-      size,
-      blob_id: blob_id_hex(key, &bytes),
-      chunks: chunks
-        .into_iter()
-        .map(|chunk| Chunk {
-          index: chunk.index,
-          offset: chunk.offset,
-          length: chunk.length,
-          sealed_length: chunk.length + BLOB_SEAL_OVERHEAD as u64,
-        })
-        .collect(),
+      .map_err(|e| e.to_string())?;
+    let Some(bytes) = bytes else {
+      return Ok(plan);
     };
     let mut state = self
       .state
@@ -107,11 +63,7 @@ impl BlobExport {
       .filter(|(opened, _)| *opened == hash.to_ascii_lowercase())
       .map(|(_, bytes)| bytes.clone())
       .ok_or("Call vaultBlobOpen for this file first.")?;
-    let chunk = blob_chunks(bytes.len() as u64)
-      .and_then(|chunks| chunks.get(index as usize).copied())
-      .ok_or("This file has no such chunk.")?;
-    let start = chunk.offset as usize;
-    seal_blob_chunk(key, &bytes[start..start + chunk.length as usize]).map_err(|e| e.to_string())
+    seal_export_chunk(key, &bytes, index).map_err(|e| e.to_string())
   }
 
   pub(crate) fn close(&self) -> Result<(), String> {
@@ -133,7 +85,7 @@ impl BlobExport {
 mod tests {
   use super::*;
   use atomic_lib::vault::sync::{
-    open_blob, restore_blob_group, BlobGroupOutcome, BLOB_CHUNK_BYTES,
+    blob_id_hex, open_blob, restore_blob_group, seal_blob_chunk, BlobGroupOutcome, BLOB_CHUNK_BYTES,
   };
   use std::collections::HashSet;
 

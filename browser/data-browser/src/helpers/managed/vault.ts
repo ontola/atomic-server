@@ -1738,17 +1738,20 @@ export async function restoreDriveBlobs({
 
   let done = 0;
 
-  for (const [id, parts] of groups) {
+  const refreshWanted = async () => {
+    if (!beforeRestore) return;
+
+    const current = new Set(await beforeRestore([...wanted]));
     signal?.throwIfAborted();
 
-    if (beforeRestore) {
-      const current = new Set(await beforeRestore([...wanted]));
-      signal?.throwIfAborted();
-
-      for (const hash of wanted) {
-        if (!current.has(hash)) wanted.delete(hash);
-      }
+    for (const hash of wanted) {
+      if (!current.has(hash)) wanted.delete(hash);
     }
+  };
+
+  for (const [id, parts] of groups) {
+    signal?.throwIfAborted();
+    await refreshWanted();
 
     if (wanted.size === 0) break;
 
@@ -1788,14 +1791,7 @@ export async function restoreDriveBlobs({
 
     // This can involve a fresh account check and a new local file inventory.
     // Keep its failures outside the unreadable-object catch.
-    if (beforeRestore) {
-      const current = new Set(await beforeRestore([...wanted]));
-      signal?.throwIfAborted();
-
-      for (const hash of wanted) {
-        if (!current.has(hash)) wanted.delete(hash);
-      }
-    }
+    await refreshWanted();
 
     signal?.throwIfAborted();
     if (wanted.size === 0) break;

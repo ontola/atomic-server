@@ -21,6 +21,11 @@ import {
 import { canRepairDriveFiles, repairDriveFiles } from './vaultFileRepair';
 import { loadVaultKeyOps } from './vaultKeyOps';
 import { onVaultChanged } from './vaultAutoBackup';
+import {
+  recoveryAwait,
+  recoveryDelay,
+  scanMissingReferenced,
+} from './fileRecoveryRuntime';
 
 type Credentials = DriveKeyHandle & { drivePseudonym: string };
 type RecoveryDeps = {
@@ -138,13 +143,21 @@ export function startAutomaticFileRecovery(
     if (!canRepairDriveFiles(db) || !agent) return;
 
     try {
-      const referenced = (await db.vaultFileHashes(drive)).some(
-        value => value.toLowerCase() === hash,
+      const guard = () => {
+        if (!current())
+          throw new DOMException('The recovery changed.', 'AbortError');
+      };
+
+      let resolved: boolean | undefined;
+      await recoveryAwait(
+        scanMissingReferenced(db, drive, [hash], guard, (_hash, present) => {
+          resolved = present;
+        }),
+        scope.signal,
+        guard,
       );
-      if (!current()) return;
-      const present = referenced && (await db.vaultBlobPresent(hash));
-      if (!current() || (referenced && !present)) return;
-      pending.resolve(present);
+      if (resolved === undefined) return;
+      pending.resolve(resolved);
       job.pending.delete(hash);
     } catch {
       // The ordinary bounded job remains responsible for failures.
@@ -186,38 +199,24 @@ export function startAutomaticFileRecovery(
       job.pending.delete(hash);
     };
 
-    const guarded = async <T>(operation: Promise<T> | T): Promise<T> => {
-      const result = await abortable(Promise.resolve(operation), signal);
-      assertCurrent();
-
-      return result;
-    };
+    const guarded = <T>(operation: Promise<T> | T) =>
+      recoveryAwait(operation, signal, assertCurrent);
 
     let attempted = [...job.pending.keys()];
 
     try {
       if (!canRepairDriveFiles(db) || !agent) return;
 
-      const missing = async () => {
-        assertCurrent();
-        const referenced = new Set(
-          (await guarded(db.vaultFileHashes(drive))).map(hash =>
-            hash.toLowerCase(),
+      const missing = () =>
+        guarded(
+          scanMissingReferenced(
+            db,
+            drive,
+            job.pending.keys(),
+            assertCurrent,
+            settle,
           ),
         );
-        const absent: string[] = [];
-
-        for (const hash of job.pending.keys()) {
-          assertCurrent();
-          if (!referenced.has(hash)) settle(hash, false);
-          else if (await guarded(db.vaultBlobPresent(hash))) settle(hash, true);
-          else absent.push(hash);
-        }
-
-        assertCurrent();
-
-        return absent;
-      };
 
       const asked = new Set<string>();
       const deadline = Date.now() + 5_000;
@@ -228,24 +227,21 @@ export function startAutomaticFileRecovery(
         next.forEach(hash => asked.add(hash));
         if (next.length)
           void deps.peers(store, drive, next, signal).catch(() => {});
-        await wait(250, signal);
+        await recoveryDelay(250, signal);
         hashes = await missing();
       }
 
       if (hashes.length === 0) return;
       attempted = hashes;
       const account = await guarded(deps.account(true));
-      assertCurrent();
       if (!account) return;
       const cacheKey = `${account}|${drive}`;
 
       if (!credentials.has(cacheKey)) {
         const recovered = await guarded(deps.credentials(store, drive, signal));
-        assertCurrent();
         credentials.set(cacheKey, recovered);
       }
 
-      assertCurrent();
       const key = credentials.get(cacheKey);
       if (!key) return;
 
@@ -253,7 +249,6 @@ export function startAutomaticFileRecovery(
         assertCurrent();
         if ((await guarded(deps.account())) !== account)
           throw new DOMException('The account changed.', 'AbortError');
-        assertCurrent();
       };
 
       await throwIfStale();
@@ -398,44 +393,4 @@ export function startAutomaticFileRecovery(
     window.removeEventListener('online', reset);
     window.removeEventListener('pagehide', reset);
   };
-}
-
-function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) {
-    void operation.catch(() => {});
-
-    return Promise.reject(signal.reason);
-  }
-
-  return new Promise((resolve, reject) => {
-    const abort = () => reject(signal.reason);
-    signal.addEventListener('abort', abort, { once: true });
-    operation.then(
-      value => {
-        signal.removeEventListener('abort', abort);
-        resolve(value);
-      },
-      error => {
-        signal.removeEventListener('abort', abort);
-        reject(error);
-      },
-    );
-  });
-}
-
-function wait(ms: number, signal: AbortSignal): Promise<void> {
-  signal.throwIfAborted();
-
-  return new Promise((resolve, reject) => {
-    const abort = () => {
-      clearTimeout(timer);
-      reject(signal.reason);
-    };
-
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', abort);
-      resolve();
-    }, ms);
-    signal.addEventListener('abort', abort, { once: true });
-  });
 }

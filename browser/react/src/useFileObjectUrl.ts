@@ -6,7 +6,7 @@ import {
   server,
   type Resource,
 } from '@tomic/lib';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from './hooks.js';
 
 const BLOB = 'https://atomicdata.dev/properties/blob';
@@ -142,14 +142,29 @@ export function useBlobObjectUrl(
   const [recoveryRevision, setRecoveryRevision] = useState(0);
   // The same bytes with a different type are a different object URL.
   const cacheKey = blobDid ? `${blobDid}|${mimetype ?? ''}` : undefined;
+  // A new input identity hides stale results before effect cleanup runs.
+  const request = useMemo(
+    () => ({
+      cacheKey,
+      clientDb,
+      store,
+      selectedDrive,
+      agentSubject,
+      driveSubject,
+      recoveryRevision,
+    }),
+    [
+      cacheKey,
+      clientDb,
+      store,
+      selectedDrive,
+      agentSubject,
+      driveSubject,
+      recoveryRevision,
+    ],
+  );
   const [resolved, setResolved] = useState<{
-    cacheKey: string;
-    clientDb: typeof clientDb;
-    store: typeof store;
-    selectedDrive: typeof selectedDrive;
-    agentSubject: typeof agentSubject;
-    driveSubject: typeof driveSubject;
-    recoveryRevision: number;
+    request: typeof request;
     nativePresent: boolean;
     url?: string;
   }>();
@@ -183,17 +198,7 @@ export function useBlobObjectUrl(
     const settled = (url?: string, nativePresent = false) => {
       if (!current()) return;
 
-      setResolved({
-        cacheKey: cacheKey!,
-        clientDb,
-        store,
-        selectedDrive,
-        agentSubject,
-        driveSubject,
-        recoveryRevision,
-        nativePresent,
-        url,
-      });
+      setResolved({ request, nativePresent, url });
     };
 
     (async () => {
@@ -249,6 +254,7 @@ export function useBlobObjectUrl(
     agentSubject,
     driveSubject,
     recoveryRevision,
+    request,
   ]);
 
   if (!blobDid || !isBlobSubject(blobDid) || (!clientDb && !hasRecovery))
@@ -259,18 +265,7 @@ export function useBlobObjectUrl(
   if (known) return known;
 
   // A result for the previous resource/database must never leak into this render.
-  if (
-    !resolved ||
-    resolved.cacheKey !== cacheKey ||
-    resolved.clientDb !== clientDb ||
-    resolved.store !== store ||
-    resolved.selectedDrive !== selectedDrive ||
-    resolved.agentSubject !== agentSubject ||
-    resolved.driveSubject !== driveSubject ||
-    resolved.recoveryRevision !== recoveryRevision
-  ) {
-    return undefined;
-  }
+  if (resolved?.request !== request) return undefined;
 
   return (
     resolved.url ??

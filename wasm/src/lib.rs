@@ -10,15 +10,15 @@ use atomic_lib::{
     parse::ParseOpts,
     runtime::{AtomicNode, IngestPolicy},
     storelike::{Query, QueryResult, Storelike},
+    vault::blob_export::{prepare_blob_export, seal_export_chunk},
     vault::dek::DriveVaultKey,
     vault::keys::{argon2id_derive_key, Argon2Params},
     vault::secret_envelope::{NewWrapper, SecretEnvelope, Unlock},
     vault::store::{MemoryVaultStore, VaultObjectStore},
     vault::sync::{
-        blob_chunks, blob_id_hex, commit_lane_state, drive_file_hashes, drive_prefix,
-        export_vault_segment, import_vault_batch, read_verified_blob, restore_blob_group,
-        seal_blob_chunk, BlobGroupOutcome, CheckpointPolicy, HistoryKeep, SegmentKind,
-        BLOB_SEAL_OVERHEAD,
+        commit_lane_state, drive_file_hashes, drive_prefix, export_vault_segment,
+        import_vault_batch, restore_blob_group, BlobGroupOutcome, CheckpointPolicy, HistoryKeep,
+        SegmentKind,
     },
     Db, Resource, Subject, Value,
 };
@@ -1354,32 +1354,6 @@ struct VaultObjectInput {
     sealed: Vec<u8>,
 }
 
-/// One slice of a file for upload.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct VaultBlobChunkInfo {
-    index: u32,
-    offset: u64,
-    /// Plaintext bytes in this chunk.
-    length: u64,
-    /// Bytes once sealed: what the control plane is told and charged.
-    sealed_length: u64,
-}
-
-/// What `vaultBlobOpen` found.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct VaultBlobPlan {
-    /// `ready`, `missing` (absent, empty, or not matching its hash) or
-    /// `tooLarge`.
-    status: &'static str,
-    size: u64,
-    /// The file's id in this vault: keyed BLAKE3 of its bytes, hex. Empty
-    /// unless `ready`.
-    blob_id: String,
-    chunks: Vec<VaultBlobChunkInfo>,
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct VaultImportResult {
@@ -1844,40 +1818,13 @@ impl ClientDb {
     ) -> Result<JsValue, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
         *self.blob_cache.borrow_mut() = None;
-        let status = |status, size, blob_id, chunks| VaultBlobPlan {
-            status,
-            size,
-            blob_id,
-            chunks,
-        };
-        let plan = match read_verified_blob(self.db(), hash_hex)
+        let (plan, bytes) = prepare_blob_export(self.db(), hash_hex, &key)
             .await
-            .map_err(to_js_err)?
-        {
-            None => status("missing", 0, String::new(), vec![]),
-            Some(bytes) => match blob_chunks(bytes.len() as u64) {
-                None => status("tooLarge", bytes.len() as u64, String::new(), vec![]),
-                Some(chunks) => {
-                    let plan = status(
-                        "ready",
-                        bytes.len() as u64,
-                        blob_id_hex(&key, &bytes),
-                        chunks
-                            .iter()
-                            .map(|c| VaultBlobChunkInfo {
-                                index: c.index,
-                                offset: c.offset,
-                                length: c.length,
-                                sealed_length: c.length + BLOB_SEAL_OVERHEAD as u64,
-                            })
-                            .collect(),
-                    );
-                    *self.blob_cache.borrow_mut() =
-                        Some((hash_hex.to_ascii_lowercase(), std::rc::Rc::new(bytes)));
-                    plan
-                }
-            },
-        };
+            .map_err(to_js_err)?;
+        if let Some(bytes) = bytes {
+            *self.blob_cache.borrow_mut() =
+                Some((hash_hex.to_ascii_lowercase(), std::rc::Rc::new(bytes)));
+        }
 
         serde_wasm_bindgen::to_value(&plan).map_err(to_js_err)
     }
@@ -1901,12 +1848,7 @@ impl ClientDb {
     ) -> Result<Vec<u8>, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
         let bytes = self.open_blob(hash_hex)?;
-        let chunk = blob_chunks(bytes.len() as u64)
-            .and_then(|chunks| chunks.get(index as usize).copied())
-            .ok_or_else(|| JsError::new("this file has no such chunk"))?;
-        let start = chunk.offset as usize;
-
-        seal_blob_chunk(&key, &bytes[start..start + chunk.length as usize]).map_err(to_js_err)
+        seal_export_chunk(&key, &bytes, index).map_err(to_js_err)
     }
 
     /// Release the file held by `vaultBlobOpen`.
