@@ -41,16 +41,16 @@ export function useLocalStorage<T>(
   // that changed after every write made effects depending on it loop (#2212).
   const valueRef = useRef(storedValue);
 
-  // The key (or storage) can change without a remount, for example when the
-  // identity behind a per-agent key switches. Re-read, or the old key's value
-  // would be shown and then written to the new key. Adjusting state during
-  // render is the React way to reset state on a prop change.
-  const [loadedFrom, setLoadedFrom] = useState({ key, storage });
+  // The key can change without a remount, for example when the identity behind
+  // a per-agent key switches. Re-read, or the old key's value would be shown
+  // and then written to the new key. Adjusting state during render is the React
+  // way to reset state on a prop change.
+  const [loadedKey, setLoadedKey] = useState(key);
 
-  if (loadedFrom.key !== key || loadedFrom.storage !== storage) {
+  if (loadedKey !== key) {
     const fresh = readItem(key, initialValue, storage);
 
-    setLoadedFrom({ key, storage });
+    setLoadedKey(key);
     setStoredValue(fresh);
     valueRef.current = fresh;
   }
