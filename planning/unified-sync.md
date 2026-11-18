@@ -74,6 +74,15 @@ is the shape around that call — see [Outbox modernization](#outbox-modernizati
 
 ## Remaining work (2026-09-04)
 
+Native server storage evidence (#2538, stacked on #2594) now belongs in
+`atomic_lib::client::ws_receipts`: the bounded requester observes stored state
+for followed drives, preserves exact captured targets and fences account/AUTH/
+connection changes. Native replication attaches it; Flutter's `SyncSession`
+only manages its lifecycle and forwards a continuous typed stream through
+`node.sync.watchReplicaReceipts()`. This is historical resource evidence, separate
+from successful sync, commit acceptance and complete backup recovery. Validation
+and remaining release gates live in `atomic-native-ws-receipts-2538.md`.
+
 ### Browser-to-browser transport (#1396, assessed 2026-09-09)
 
 **Status: application integration implemented on `codex/browser-webrtc-sync`.**

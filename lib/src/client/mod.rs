@@ -13,6 +13,8 @@ pub mod search;
 pub(crate) mod tls;
 #[cfg(feature = "ws")]
 pub mod ws;
+#[cfg(feature = "ws")]
+pub mod ws_receipts;
 
 /// Installs the ring rustls `CryptoProvider` as the process default, once.
 ///

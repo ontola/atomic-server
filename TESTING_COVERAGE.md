@@ -701,6 +701,41 @@ larger than the queue. HTTP adapter tests cover capability discovery, redirect
 refusal, signed-body requests and size limits. Existing WebSocket, save-receipt
 and commit-fallback regressions preserve normal save semantics.
 
+### Automatic native WebSocket and Flutter receipts (#2538/#2594)
+
+`server/tests/it/native_ws_receipts.rs` runs the native collector against the
+production persistent server. It covers bulk replication, already-matching
+state, consecutive live versions, offline outbox delivery, reconnect without
+another save, optional source identity for memory clients, and delegated
+authentication preserving distinct local and authenticated client identities.
+No application-issued receipt probes are used. Independently captured Loro
+frontiers are compared by all counters; byte-for-byte response correlation is
+tested in the requester itself.
+
+The `client::ws_receipts` and native WebSocket tests exercise correlation,
+unsupported peers, source-identity mismatches, canceled AUTH with delayed
+acknowledgements, account/handle isolation, and bounded retries. A real
+300-resource local inventory verifies queue saturation pauses its cursor and
+eventually visits every resource. Version normalization removes zero counters
+and keeps equivalent multi-peer frontiers stable across insertion orders.
+Flutter's `api::server_receipts` tests cover continuous bridge delivery, idle
+cancellation and per-handle/session filtering. Its opt-in
+`bridge_receipts_real_server` test uses `ATOMIC_TEST_SERVER` to run the actual
+bridge session against a built server, including outbox/reconnect behavior.
+`packages/atomic_store_flutter/test/replica_receipts_test.dart` checks typed
+mapping and stream lifecycle without requiring native FFI, including in Chrome.
+`replica_receipts_fake_test.dart` checks the public exports and fake adapter.
+
+These are historical metadata observations, not every-save acknowledgements.
+They do not establish power-loss survival, endpoint trust, independent hardware,
+future retention, attachment/key coverage or complete backup recovery. The
+Flutter server integration test must be explicitly selected with a built native
+server; the existing Flutter package workflow runs Dart tests and regenerated
+binding checks, not that native server test.
+The exact account-change interleaving during collector construction has been
+reviewed and fenced before any drive is followed, but does not have an injected
+barrier regression; tests cover subsequent account invalidation.
+
 ### Cross-process — covered since 2026-07
 
 Both matter because `iroh_transport` holds the router and node identity in
