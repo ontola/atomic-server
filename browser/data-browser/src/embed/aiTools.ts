@@ -24,6 +24,7 @@
  */
 import { asSchema } from 'ai';
 import type { AiReview } from './aiReview';
+import { withDeadline } from '@tomic/react';
 
 /** What the page needs of an AI SDK tool. */
 export interface EmbedAiTool {
@@ -297,29 +298,6 @@ export interface PromptValues {
  */
 export const PROMPT_PART_TIMEOUT_MS = 4_000;
 
-/** [read]'s value, or null when it fails or takes longer than [ms]. */
-async function within<T>(
-  read: () => Promise<T>,
-  ms: number,
-): Promise<T | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-
-  try {
-    return await Promise.race([
-      read(),
-      new Promise<null>(resolve => {
-        timer = setTimeout(() => resolve(null), ms);
-      }),
-    ]);
-  } catch (e) {
-    console.warn('[ai] prompt part failed', e);
-
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /**
  * The web chat's system prompt from its template: the same placeholders
  * replaced the same way (`prepareSystemPrompt` in `ClientOnlyTransport`).
@@ -334,8 +312,10 @@ export async function fillAgentPrompt(
   const wantsTree = prompt.includes('{{drive-structure}}');
   const wantsClasses = prompt.includes('{{custom-classes}}');
   const [tree, classes] = await Promise.all([
-    wantsTree ? within(values.driveTree, partTimeoutMs) : null,
-    wantsClasses ? within(values.customClasses, partTimeoutMs) : null,
+    wantsTree ? withDeadline(values.driveTree(), partTimeoutMs, null) : null,
+    wantsClasses
+      ? withDeadline(values.customClasses(), partTimeoutMs, null)
+      : null,
   ]);
 
   if (wantsTree) {
