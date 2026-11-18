@@ -64,3 +64,67 @@ export type {
 export type { JSONValue } from './value.js';
 
 export { TableHeadingWrapper } from './chunks/TableEditor/TableHeading.js';
+
+export { FloatCell } from './chunks/TablePage/EditorCells/FloatCell.js';
+export {
+  PropertyChoiceField,
+  type PropertyChoiceFieldProps,
+  type PropertyChoice,
+} from './schema/PropertyChoiceField.js';
+export {
+  TableRowSelectCheckbox,
+  TableRowSelectionActions,
+  type TableRowSelectCheckboxProps,
+  type TableRowSelectionActionsProps,
+} from './RowSelection.js';
+export {
+  TableRowActionFields,
+  type TableRowActionFieldsProps,
+} from './RowActionFields.js';
+export {
+  TableQuickAddFields,
+  quickAddDraftFromSpec,
+  quickAddSpecFromDraft,
+  isQuickAddDraftComplete,
+  type QuickAddDraft,
+  type TableQuickAddFieldsProps,
+} from './QuickAddFields.js';
+export type { QuickAddSpec, QuickAddPreset } from './quickAddTypes.js';
+export type {
+  RowActionKind,
+  TableRowActionKind,
+  TableRowActionTarget,
+} from './rowActionTypes.js';
+export {
+  PropertyDateFormatField,
+  type PropertyDateFormatOption,
+} from './schema/PropertyDateFormatField.js';
+export { PropertyPrecisionField } from './schema/PropertyPrecisionField.js';
+export { TableQuickAddBar, type TableQuickAddBarProps } from './QuickAddBar.js';
+export {
+  ROW_ACTION_KINDS,
+  DEFAULT_DERIVED_WIDTH,
+  AGGREGATE_FUNCTIONS,
+  filterKey,
+  derivedFilterKey,
+  parseFilterKey,
+  parseDerivedColumnSpecs,
+  parseRowActions,
+  parseQuickAdd,
+  parseAggregates,
+  parseColumnOrder,
+  type TableFilter,
+  type TableFilterOperator,
+  type TableAggregateFunction,
+  type TableSorting,
+  type DerivedColumnSpec,
+  type DerivedValueKind,
+  type RowActionSpec,
+  type TableAggregate,
+  type GroupGranularity,
+} from './views/configuration.js';
+
+export {
+  TableFilterChip,
+  type TableFilterChipProps,
+} from './filters/FilterChip.js';
