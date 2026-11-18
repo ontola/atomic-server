@@ -1,8 +1,10 @@
 import {
   useEffect,
+  useId,
   useRef,
   type ComponentType,
   type Ref,
+  type ReactNode,
   type InputHTMLAttributes,
 } from 'react';
 
@@ -10,28 +12,39 @@ export interface PropertyNameFieldProps {
   value: string;
   onChange: (value: string) => void;
   onBlur?: () => void;
+  error?: string;
   autoFocus?: boolean;
-  /** Preserve the original form's focus reset when its resource changes. */
+  /** Preserve focus selection when the owning resource changes. */
   focusKey?: string;
+  disabled?: boolean;
+  label?: string;
   placeholder?: string;
+  /** Host styling only; identity and persistence never pass through the input. */
+  Error?: ComponentType<{ id: string; role: 'alert'; children: ReactNode }>;
   Input?: ComponentType<
     InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }
   >;
 }
 
-/** Existing input and delayed focus behavior; the host retains its error UI. */
+/** The same controlled name field is used for Atomic and native schema drafts.
+ * Invalid names remain editable; submission is the enclosing form's decision. */
 export function PropertyNameField({
   value,
   onChange,
   onBlur,
+  error,
   autoFocus,
   focusKey,
+  disabled,
+  label = 'Column name',
   placeholder = 'New Column',
   Input,
+  Error: ErrorComponent,
 }: PropertyNameFieldProps) {
+  const id = useId();
   const ref = useRef<HTMLInputElement>(null);
   const Component = Input ?? 'input';
-
+  const ErrorMessage = ErrorComponent ?? 'span';
   useEffect(() => {
     if (!autoFocus) return;
     const timeout = window.setTimeout(() => {
@@ -43,18 +56,29 @@ export function PropertyNameField({
   }, [autoFocus, focusKey]);
 
   return (
-    <Component
-      ref={ref}
-      id='name-form'
-      type='text'
-      autoFocus={autoFocus}
-      data-dialog-autofocus={autoFocus ? true : undefined}
-      value={value}
-      onChange={event => onChange(event.target.value)}
-      placeholder={placeholder}
-      onFocus={autoFocus ? event => event.currentTarget.select() : undefined}
-      onBlur={onBlur}
-    />
+    <>
+      <Component
+        ref={ref}
+        id={id}
+        type='text'
+        aria-label={label}
+        aria-invalid={!!error}
+        aria-describedby={error ? id + '-error' : undefined}
+        disabled={disabled}
+        value={value}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        data-dialog-autofocus={autoFocus ? true : undefined}
+        onChange={event => onChange(event.target.value)}
+        onBlur={onBlur}
+        onFocus={autoFocus ? event => event.currentTarget.select() : undefined}
+      />
+      {error && (
+        <ErrorMessage id={id + '-error'} role='alert'>
+          {error}
+        </ErrorMessage>
+      )}
+    </>
   );
 }
 

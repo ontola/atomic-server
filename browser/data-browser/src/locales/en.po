@@ -13375,3 +13375,7 @@ msgstr "Give it a name, then fill it with a starter"
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Rename view"
 msgstr "Rename view"
+
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr "Column name"

@@ -158,3 +158,10 @@ necessary only before a future registry release, independently of this port.
 - [ ] Native creation/deletion undo, durable history and redo are not implemented.
   Native history resets on collection/schema change or reload. Schema forms and
   the rest of TablePage orchestration remain separate work.
+
+
+Name-field accessibility proposal: shared unique input/error IDs, accessible
+label and error relation, and disabled presentation. Retain baseline delayed
+focus reset on resource identity changes and explicit text-format save. The
+unrelated save-removal proposal is held separately under #2538. Legacy-base
+review only; not a full TablePage extraction or a clean integration dependency.

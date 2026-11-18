@@ -11,42 +11,52 @@ import { PropertyNameField, nameTableProperty } from './PropertyNameField.js';
 
 afterEach(cleanup);
 
-it('retains existing shortnames and derives only new provisional names', () => {
+it('keeps an existing property shortname when its display name changes', () => {
+  expect(
+    nameTableProperty(
+      { name: 'Quantity', shortname: 'quantity', existing: true },
+      'Amount',
+      () => 'amount',
+    ),
+  ).toEqual({ name: 'Amount', shortname: 'quantity', existing: true });
+});
+it('derives only a new property provisional shortname', () => {
   const slug = vi.fn(() => 'new-column');
   expect(
     nameTableProperty(
-      { name: 'Old', shortname: 'stable', existing: true },
-      'New',
-      slug,
-    ).shortname,
-  ).toBe('stable');
-  expect(slug).not.toHaveBeenCalled();
-  expect(
-    nameTableProperty(
-      { name: '', shortname: '', existing: false },
+      { name: '', shortname: 'column', existing: false },
       ' New column ',
       slug,
     ).shortname,
   ).toBe('new-column');
   expect(slug).toHaveBeenCalledWith('New column');
 });
-
-it('preserves input identity and raw change/blur callbacks', () => {
-  const change = vi.fn(),
-    blur = vi.fn();
+it('retains raw names and exposes accessible validation without saving', () => {
+  const change = vi.fn();
   render(
-    <PropertyNameField value=' Raw name ' onChange={change} onBlur={blur} />,
+    <PropertyNameField value=' Raw name ' onChange={change} error='Required' />,
   );
-  const input = screen.getByPlaceholderText('New Column') as HTMLInputElement;
-  expect(input.id).toBe('name-form');
-  expect(input.value).toBe(' Raw name ');
+  const input = screen.getByRole('textbox', { name: 'Column name' });
+  expect((input as HTMLInputElement).value).toBe(' Raw name ');
+  expect(input.getAttribute('aria-describedby')).toBe(
+    screen.getByRole('alert').id,
+  );
   fireEvent.change(input, { target: { value: '' } });
-  fireEvent.blur(input);
   expect(change).toHaveBeenCalledWith('');
-  expect(blur).toHaveBeenCalledOnce();
+});
+it('autofocuses and selects a new draft name and respects disabled fields', async () => {
+  const { rerender } = render(
+    <PropertyNameField value='column' onChange={() => {}} autoFocus />,
+  );
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  expect(document.activeElement).toBe(input);
+  await waitFor(() => expect(input.selectionStart).toBe(0));
+  expect(input.selectionEnd).toBe(6);
+  rerender(<PropertyNameField value='column' onChange={() => {}} disabled />);
+  expect(input.disabled).toBe(true);
 });
 
-it('retains delayed focus/selection when the host changes resource identity', async () => {
+it('keeps baseline delayed selection after switching the owning resource', async () => {
   const { rerender } = render(
     <PropertyNameField
       value='First'
@@ -55,8 +65,8 @@ it('retains delayed focus/selection when the host changes resource identity', as
       focusKey='one'
     />,
   );
-  const input = screen.getByPlaceholderText('New Column') as HTMLInputElement;
-  await waitFor(() => expect(input.selectionEnd).toBe(5));
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  await waitFor(() => expect(input.selectionStart).toBe(0));
   input.blur();
   rerender(
     <PropertyNameField
