@@ -374,3 +374,9 @@ TablePage CI lane. An actual local-drive dashboard renders a count/chart, blocks
 both on invalid/foreign metadata, and recovers after repair; screenshots stay
 outside Git. Full dashboard renderer extraction and native aggregation support
 remain open, with the full TablePage gate still preceding catalog discovery.
+
+## Typed filter-value extraction split
+
+- [x] Move existing typed layout and exact JSON/numeric blur policy.
+- [ ] Review raw numeric text, unknown-value recovery and new control policies
+  separately; these are not extraction prerequisites.

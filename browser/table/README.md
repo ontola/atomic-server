@@ -237,3 +237,9 @@ TablePage uses this compiler and reuses its aggregation for the totals query.
 Atomic dashboard stat/chart blocks also use this compiler for borrowed view
 filters and their own measures. Their host adapters retain ownership/loading
 checks and explicit unavailable states. The full page/renderer port remains open.
+
+`TableFilterValueInput` moves the existing datatype-aware query input. Atomic
+retains property metadata, reference search, tag labels and styled controls.
+Native numeric inputs and the existing JSON/numeric blur normalization are
+unchanged. Raw numeric drafts, unknown-option recovery and additional locking
+or backend canonicalization policies are separate behavior follow-ups.
