@@ -462,11 +462,11 @@ impl Resource {
                         self.get_subject(),
                         self.propvals.keys().collect::<Vec<_>>()
                     );
-                    return Err(format!(
+                    return Err(crate::errors::AtomicError::from(format!(
                         "Property {} missing. Is required in class {} ",
                         required_prop, class.subject
-                    )
-                    .into());
+                    ))
+                    .with_code(crate::sync::protocol::error_code::MISSING_REQUIRED_PROPERTY));
                 }
             }
         }
@@ -891,10 +891,14 @@ impl Resource {
                         ),
                         error_type: err.error_type.clone(),
                         subject: err.subject.clone(),
+                        code: crate::sync::protocol::error_code::MISSING_PARENT,
                     }),
                 }
             }
-            Err(e) => Err(format!("Parent of {} not found: {}", self.get_subject(), e).into()),
+            Err(e) => Err(
+                crate::errors::AtomicError::from(format!("Parent of {} not found: {}", self.get_subject(), e))
+                    .with_code(crate::sync::protocol::error_code::MISSING_PARENT),
+            ),
         }
     }
 

@@ -44,6 +44,21 @@ impl AtomicServerError {
         }
     }
 
+    /// Why a commit was refused, as one of `error_code`: set where the refusal
+    /// was raised (it rides on `error_resource`), or implied by the type for
+    /// the load and rate refusals.
+    pub fn code(&self) -> u16 {
+        use atomic_lib::sync::protocol::error_code;
+        match self.error_type {
+            AppErrorType::Busy | AppErrorType::TooManyRequests => error_code::BUSY,
+            _ => self
+                .error_resource
+                .as_ref()
+                .and_then(|r| r.get(urls::ERROR_CODE).ok()?.to_int().ok())
+                .map_or(error_code::UNKNOWN, |code| code as u16),
+        }
+    }
+
     /// A refusal the caller can act on, answered as 400 rather than 500.
     pub fn bad_request(message: impl Into<String>) -> Self {
         Self {
@@ -63,19 +78,22 @@ impl std::fmt::Debug for AtomicServerError {
 
 impl Error for AtomicServerError {}
 
+impl atomic_lib::sync::protocol::RefusalCode for AtomicServerError {
+    fn refusal_code(&self) -> u16 {
+        self.code()
+    }
+}
+
 impl ResponseError for AtomicServerError {
     fn status_code(&self) -> StatusCode {
-        if atomic_lib::sync::protocol::classify_commit_error(&self.message)
-            == atomic_lib::sync::protocol::error_code::CAUSALITY_CONFLICT
-        {
-            return StatusCode::CONFLICT;
-        }
-        // A managed node refusing enrollment/quota is an expected admission
-        // decision, not an internal failure or a request to sign in again.
-        if atomic_lib::sync::protocol::classify_commit_error(&self.message)
-            == atomic_lib::sync::protocol::error_code::SYNC_REJECTED
-        {
-            return StatusCode::FORBIDDEN;
+        use atomic_lib::sync::protocol::error_code;
+        match self.code() {
+            error_code::CAUSALITY_CONFLICT => return StatusCode::CONFLICT,
+            // A managed node refusing enrollment/quota is an expected
+            // admission decision, not an internal failure or a request to
+            // sign in again.
+            error_code::SYNC_REJECTED | error_code::NOT_ENROLLED => return StatusCode::FORBIDDEN,
+            _ => {}
         }
         match self.error_type {
             AppErrorType::NotFound => StatusCode::NOT_FOUND,
@@ -111,16 +129,11 @@ impl ResponseError for AtomicServerError {
             );
         }
 
-        // F5 (planning/unified-sync.md): classify against the same
-        // patterns the WS `ERROR` frame uses, so the outbox's drain error
-        // handling gets one structured code regardless of which transport
-        // posted the commit. Harmless (comes back UNKNOWN/0) for the vast
-        // majority of errors here that aren't commit-related at all — this
-        // handler serves every `AtomicServerError` in the server, not just
-        // `/commit`.
+        // The same code the WS `ERROR` frame carries, so a client's outbox
+        // decides alike whichever transport posted the commit. 0 (UNKNOWN)
+        // for the many errors here that are not commit refusals at all.
         if r.get(urls::ERROR_CODE).is_err() {
-            let code = atomic_lib::sync::protocol::classify_commit_error(&self.message);
-            let _ = r.set_unsafe(urls::ERROR_CODE.into(), Value::Integer(code as i64));
+            let _ = r.set_unsafe(urls::ERROR_CODE.into(), Value::Integer(self.code().into()));
         }
 
         let body = r.to_json_ad_with_url("").unwrap();
@@ -230,29 +243,41 @@ impl<T> From<std::sync::PoisonError<T>> for AtomicServerError {
 #[cfg(test)]
 mod admission_error_tests {
     use super::*;
+    use atomic_lib::{sync::protocol::error_code, AtomicError};
+    use futures::FutureExt;
+
+    fn refusal(message: &str, code: u16) -> AtomicServerError {
+        AtomicError::from(message).with_code(code).into()
+    }
 
     #[test]
-    fn managed_commit_errors_carry_a_blocking_code() {
-        for message in [
-            "Drive did:ad:private is not enrolled for sync on this node.",
-            "Drive did:ad:private has reached its storage quota on this node.",
-        ] {
-            let error: AtomicServerError = message.into();
-            assert_eq!(error.status_code(), StatusCode::FORBIDDEN);
-            assert_eq!(
-                atomic_lib::sync::protocol::classify_commit_error(&error.message),
-                atomic_lib::sync::protocol::error_code::SYNC_REJECTED
-            );
-        }
+    fn the_code_travels_with_the_error_not_the_wording() {
+        let error = refusal("any wording at all", error_code::NOT_ENROLLED);
+        assert_eq!(error.code(), error_code::NOT_ENROLLED);
+        assert_eq!(error.status_code(), StatusCode::FORBIDDEN);
+        let body = String::from_utf8(
+            actix_web::body::to_bytes(error.error_response().into_body())
+                .now_or_never()
+                .unwrap()
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        assert!(body.contains("\"errorCode\":18"), "{body}");
+    }
+
+    #[test]
+    fn quota_refusal_is_forbidden_and_text_alone_is_unclassified() {
+        let error = refusal("quota", error_code::SYNC_REJECTED);
+        assert_eq!(error.status_code(), StatusCode::FORBIDDEN);
+        let plain: AtomicServerError =
+            "Drive did:ad:private is not enrolled for sync on this node.".into();
+        assert_eq!(plain.code(), error_code::UNKNOWN);
     }
 
     #[test]
     fn causality_refusal_is_a_conflict() {
-        let error: AtomicServerError = "Commit's Loro update produced no state changes".into();
+        let error = refusal("stale", error_code::CAUSALITY_CONFLICT);
         assert_eq!(error.status_code(), StatusCode::CONFLICT);
-        assert_eq!(
-            atomic_lib::sync::protocol::classify_commit_error(&error.message),
-            atomic_lib::sync::protocol::error_code::CAUSALITY_CONFLICT
-        );
     }
 }

@@ -5115,11 +5115,11 @@ impl Storelike for Db {
                 if store.has_resource_locally(&commit_id)
                     && store.has_resource_locally(&commit.subject.pure_id())
                 {
-                    return Err(format!(
+                    return Err(crate::AtomicError::from(format!(
                         "Destroy commit for {} was already applied here; refusing replay",
                         commit.subject
-                    )
-                    .into());
+                    ))
+                    .with_code(crate::sync::protocol::error_code::DESTROY_SETTLED));
                 }
             }
         }

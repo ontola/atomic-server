@@ -3,7 +3,7 @@
 use crate::{
     agents::{decode_base64, encode_base64},
     datatype::DataType,
-    errors::AtomicResult,
+    errors::{AtomicError, AtomicResult},
     urls,
     values::SubResource,
     Atom, Resource, Storelike, Subject, Value,
@@ -495,7 +495,9 @@ impl Commit {
         let commit = self;
         let signature = match commit.signature.as_ref() {
             Some(sig) => sig,
-            None => return Err("No signature set".into()),
+            None => {
+                return Err(AtomicError::from("No signature set").with_code(crate::sync::protocol::error_code::INVALID_SIGNATURE))
+            }
         };
         let signer_subject = store.normalize_subject(&commit.signer);
         // For agent DIDs, the public key IS the DID — extract directly.
@@ -544,10 +546,11 @@ impl Commit {
         verifying_key
             .verify(stringified_commit.as_bytes(), &sig)
             .map_err(|_e| {
-                format!(
+                AtomicError::from(format!(
                     "Incorrect signature for Commit. This could be due to an error during signing or serialization of the commit. Compare this to the serialized commit in the server: {}",
                     stringified_commit,
-                )
+                ))
+                .with_code(crate::sync::protocol::error_code::INVALID_SIGNATURE)
             })?;
 
         // For a genesis DID resource, identity is verified one of two ways
@@ -790,11 +793,11 @@ impl Commit {
         // to a foreign domain, so say what happened before rights and admission
         // read it as one. Clients treat this message as settled.
         if is_new && commit.destroy.unwrap_or(false) && opts.validate_rights {
-            return Err(format!(
+            return Err(AtomicError::from(format!(
                 "Destroy commit for {} has no such resource to destroy on this node",
                 commit.subject
-            )
-            .into());
+            ))
+            .with_code(crate::sync::protocol::error_code::DESTROY_SETTLED));
         }
 
         if let Some(explicit_genesis) = commit.is_genesis {
@@ -803,19 +806,20 @@ impl Commit {
                 // from every device. Accept when the cert verifies and names
                 // this commit's signer; apply_changes merges the Loro update.
                 if !commit.repeat_genesis_is_mergeable()? {
-                    return Err(format!(
+                    return Err(AtomicError::from(format!(
                         "Commit for {} has is_genesis: true, but the resource already exists.",
                         commit.subject
-                    )
-                    .into());
+                    ))
+                    .with_code(crate::sync::protocol::error_code::GENESIS_COLLISION));
                 }
             }
             if !explicit_genesis && is_new {
-                return Err(format!(
+                let settled = commit.destroy.unwrap_or(false);
+                return Err(AtomicError::from(format!(
                     "Commit for {} has is_genesis: false, but the resource does not exist yet.",
                     commit.subject
-                )
-                .into());
+                ))
+                .with_code(if settled { crate::sync::protocol::error_code::DESTROY_SETTLED } else { 0 }));
             }
         }
 
@@ -847,10 +851,11 @@ impl Commit {
             .apply_changes(resource_old.clone())
             .await
             .map_err(|e| {
-                format!(
+                let message = format!(
                     "Error applying changes to Resource {}. {}",
                     commit.subject, e
-                )
+                );
+                e.wrap(message)
             })?;
 
         if is_content_addressed_id(commit.subject.as_str()) && !is_destroy {
@@ -894,14 +899,14 @@ impl Commit {
                 "[causality-guard] rejecting commit whose Loro update depends on ops missing from the stored doc (import left ops pending)"
             );
 
-            return Err(format!(
+            return Err(AtomicError::from(format!(
                 "Commit's Loro update depends on ops the server does not have — the update \
                  was parked as pending and none of its changes could be applied. An earlier \
                  commit from this client likely never arrived. Refetch the resource and \
                  re-send the missing changes. subject={}",
                 commit.subject,
-            )
-            .into());
+            ))
+            .with_code(crate::sync::protocol::error_code::PENDING_DEPS));
         }
 
         // Causality guard: a commit with a non-trivial loroUpdate that
@@ -1102,14 +1107,14 @@ impl Commit {
                         "[causality-guard] rejecting commit with non-trivial loroUpdate that produced no state changes (silent LWW loss)"
                     );
 
-                    return Err(format!(
+                    return Err(AtomicError::from(format!(
                         "Commit's Loro update produced no state changes — its writes were \
                          silently dropped by LWW against stored state. The client's Loro doc \
                          wasn't seeded from the server's current state. Refetch the resource \
                          and retry the commit. subject={} dropped={:?}",
                         commit.subject, dropped,
-                    )
-                    .into());
+                    ))
+                    .with_code(crate::sync::protocol::error_code::CAUSALITY_CONFLICT));
                 }
             }
         }
@@ -1347,14 +1352,17 @@ impl Commit {
                                 );
                                 policy.enroll_drive(&drive_subject);
                             } else {
-                                return Err(policy.not_enrolled_message(&drive_subject).into());
+                                return Err(AtomicError::from(
+                                    policy.not_enrolled_message(&drive_subject),
+                                )
+                                .with_code(crate::sync::protocol::error_code::NOT_ENROLLED));
                             }
                         }
                         crate::sync::policy::AdmitDecision::OverQuota => {
-                            return Err(format!(
+                            return Err(AtomicError::from(format!(
                                 "Drive {drive_subject} has reached its storage quota on this node."
-                            )
-                            .into());
+                            ))
+                            .with_code(crate::sync::protocol::error_code::SYNC_REJECTED));
                         }
                     }
                 }
@@ -1450,11 +1458,11 @@ impl Commit {
     fn reject_destroy_older_than_genesis(&self, resource_old: &Resource) -> AtomicResult<()> {
         if let Ok(genesis_at) = resource_old.get(urls::CREATED_AT).and_then(|v| v.to_int()) {
             if self.created_at + ACCEPTABLE_TIME_DIFFERENCE < genesis_at {
-                return Err(format!(
+                return Err(AtomicError::from(format!(
                     "Destroy commit for {} (created {}) predates the resource's genesis ({}); refusing replay",
                     self.subject, self.created_at, genesis_at
-                )
-                .into());
+                ))
+                .with_code(crate::sync::protocol::error_code::DESTROY_SETTLED));
             }
         }
         Ok(())
@@ -2670,9 +2678,9 @@ mod test {
             url: None,
         };
         let err = store.apply_commit(retry, &opts).await.unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("is_genesis: true, but the resource already exists"),
+        assert_eq!(
+            err.code,
+            crate::sync::protocol::error_code::GENESIS_COLLISION,
             "expected the old reject, got: {err}"
         );
     }
@@ -3236,6 +3244,27 @@ mod test {
         );
     }
 
+    /// A refusal carries its code from where it is raised; no layer reads the
+    /// message to find out what it was.
+    #[tokio::test]
+    async fn lookup_refusals_carry_their_code() {
+        use crate::sync::protocol::error_code;
+        let (store, _agent) = store_with_known_agent().await;
+
+        let class = store.get_class("https://localhost/no-such-class").await;
+        assert_eq!(class.unwrap_err().code, error_code::MISSING_CLASS);
+
+        let mut orphan = Resource::new("https://localhost/orphan".into());
+        orphan
+            .set_unsafe(
+                urls::PARENT.into(),
+                Value::AtomicUrl("https://localhost/no-such-parent".into()),
+            )
+            .unwrap();
+        let parent = orphan.get_parent(&store).await;
+        assert_eq!(parent.unwrap_err().code, error_code::MISSING_PARENT);
+    }
+
     /// Tampering with the signature of an otherwise valid commit must be
     /// rejected when signature validation is enabled.
     #[tokio::test]
@@ -3259,6 +3288,7 @@ mod test {
             ..CommitOpts::no_validations_no_index()
         };
         let err = store.apply_commit(commit, &opts).await.unwrap_err();
+        assert_eq!(err.code, crate::sync::protocol::error_code::INVALID_SIGNATURE, "{err}");
         assert!(
             err.to_string().to_lowercase().contains("signature"),
             "expected a signature error, got: {}",
@@ -3959,12 +3989,13 @@ mod test {
         let error = store
             .apply_commit(commit2, &OPTS)
             .await
-            .expect_err("an unseeded doc losing every write is still a rejection")
-            .to_string();
+            .expect_err("an unseeded doc losing every write is still a rejection");
+        assert_eq!(error.code, crate::sync::protocol::error_code::CAUSALITY_CONFLICT);
+        let error = error.to_string();
 
         assert!(
             error.contains("Commit's Loro update produced no state changes"),
-            "the rejection keeps the message the client and `classify_commit_error` match on: {error}"
+            "the rejection says what happened: {error}"
         );
         assert!(
             error.contains(crate::urls::NAME) && error.contains("sent") && error.contains("stored"),
@@ -4206,6 +4237,7 @@ mod test {
             .apply_commit(child_commit, &rights_opts())
             .await
             .expect_err("a stranger must not create children in someone else's drive");
+        assert_eq!(err.code, crate::sync::protocol::error_code::UNAUTHORIZED_WRITE, "{err}");
         assert!(
             store
                 .get_resource(&child_subject.as_str().into())
@@ -4983,10 +5015,10 @@ mod owner_mode_tests {
                 let e = db
                     .apply_commit(commit, &signed_opts(agent))
                     .await
-                    .expect_err("there is nothing to destroy")
-                    .to_string();
-                assert!(
-                    e.contains("no such resource to destroy"),
+                    .expect_err("there is nothing to destroy");
+                assert_eq!(
+                    e.code,
+                    crate::sync::protocol::error_code::DESTROY_SETTLED,
                     "{who} {raw}: {e}"
                 );
             }

@@ -1,0 +1,25 @@
+{
+  "comment": "Every ERROR code and what a client's outbox does with a commit refused under it. Read by lib/src/sync/outbox.rs (Rust) and browser/lib/src/local-outbox.test.ts (TypeScript), so the two cannot disagree. Add a row for every new code in protocol.rs `error_code` and ws-v2.ts `ErrorCode`; never renumber or reuse. disposition: retry = back off and send again (the default, and what a code the outbox does not know gets); park = keep the entry but stop retrying until a fresh edit; drop = the write can never apply, remove it. benign: a drop that loses nothing (log it, no toast). snapshot: retry with the whole snapshot, not the delta. settlesDestroy: for a destroy the refusal is an acknowledgement.",
+  "codes": [
+    { "name": "UNKNOWN", "code": 0, "disposition": "retry" },
+    { "name": "GENESIS_COLLISION", "code": 1, "disposition": "drop", "benign": true },
+    { "name": "MISSING_REQUIRED_PROPERTY", "code": 2, "disposition": "drop" },
+    { "name": "UNAUTHORIZED_WRITE", "code": 3, "disposition": "park" },
+    { "name": "MISSING_CLASS", "code": 4, "disposition": "park" },
+    { "name": "AUTH_REQUIRED", "code": 5, "disposition": "retry" },
+    { "name": "SYNC_REJECTED", "code": 6, "disposition": "park" },
+    { "name": "UNAUTHORIZED_READ", "code": 7, "disposition": "retry" },
+    { "name": "AUTH_FAILED", "code": 8, "disposition": "retry" },
+    { "name": "INVALID_SIGNATURE", "code": 9, "disposition": "park" },
+    { "name": "IMMUTABLE_COMMIT", "code": 10, "disposition": "drop", "benign": true },
+    { "name": "CAUSALITY_CONFLICT", "code": 11, "disposition": "park" },
+    { "name": "BUSY", "code": 12, "disposition": "retry" },
+    { "name": "INVITE_REFUSED", "code": 13, "disposition": "retry" },
+    { "name": "DEPRECATED_CLIENT", "code": 14, "disposition": "retry" },
+    { "name": "RESULT_TOO_LARGE", "code": 15, "disposition": "retry" },
+    { "name": "PENDING_DEPS", "code": 16, "disposition": "retry", "snapshot": true },
+    { "name": "MISSING_PARENT", "code": 17, "disposition": "park" },
+    { "name": "NOT_ENROLLED", "code": 18, "disposition": "park" },
+    { "name": "DESTROY_SETTLED", "code": 19, "disposition": "retry", "settlesDestroy": true }
+  ]
+}
