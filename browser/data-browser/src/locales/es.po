@@ -13210,7 +13210,6 @@ msgstr "Vuelve a tu dispositivo."
 msgid "Could not send your identity"
 msgstr "No se ha podido enviar tu identidad"
 
-#: src/components/Settings/DriveSettings.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx

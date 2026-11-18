@@ -13213,7 +13213,6 @@ msgstr "Kembali ke perangkat Anda."
 msgid "Could not send your identity"
 msgstr "Tidak dapat mengirim identitas Anda"
 
-#: src/components/Settings/DriveSettings.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx

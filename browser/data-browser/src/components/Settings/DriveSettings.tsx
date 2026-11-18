@@ -7,21 +7,17 @@ import {
   useProperty,
   useResource,
   useStore,
-  useTitle,
   type Resource,
   type Server,
 } from '@tomic/react';
 import { lazy, Suspense, useId, useState, type JSX } from 'react';
 import { FaXmark } from 'react-icons/fa6';
-import { LuChevronsUpDown } from 'react-icons/lu';
 import { styled } from 'styled-components';
 import { Button } from '@components/Button';
 import { ErrorLook } from '@components/ErrorLook';
 import { Column, Row } from '@components/Row';
 import { DrivesCard } from '@components/Drives/DrivesCard';
 import { NewInstanceButton } from '@components/NewInstanceButton';
-import { DriveSwitcher } from '@components/SideBar/DriveSwitcher';
-import type { DropdownTriggerProps } from '@components/Dropdown/DropdownTrigger';
 import {
   InputStyled,
   InputWrapper,
@@ -38,7 +34,6 @@ import { Tag } from '@components/Tag/Tag';
 import { CreateTagRow } from '@components/Tag/CreateTagRow';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { constructOpenURL } from '@helpers/navigation';
-import { driveDisplayName } from '@helpers/driveDisplayName';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { useGettingStartedAgent } from '../../views/Drive/GettingStartedCard';
@@ -49,34 +44,7 @@ import { SettingsSection } from './SettingsSection';
 
 const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 
-/** Shows the current drive's name; picking another drive happens in the menu. */
-function CurrentDriveTrigger({
-  onClick,
-  menuId,
-  isActive,
-  ref,
-  id,
-}: DropdownTriggerProps) {
-  const { drive } = useSettings();
-  const [title] = useTitle(useResource(drive));
-
-  return (
-    <Button
-      subtle
-      id={id}
-      aria-controls={menuId}
-      aria-expanded={isActive}
-      aria-haspopup='menu'
-      onClick={onClick}
-      ref={ref}
-      title='Switch Drive'
-    >
-      {driveDisplayName(title, drive)} <LuChevronsUpDown />
-    </Button>
-  );
-}
-
-/** The current drive: switching, its configuration, and the drives you have. */
+/** The drives you have, and the configuration of the current one. */
 export function DriveSettings(): JSX.Element {
   const { drive } = useSettings();
 
@@ -86,12 +54,11 @@ export function DriveSettings(): JSX.Element {
       id='drive'
       childSearchKeywords='drive drives switch current tags llm instructions ontology browser sync server apps plugins getting started my drives recently visited open url did new'
     >
+      {/* No drive switcher: the radio buttons in My drives pick the current
+          drive, and the settings below follow it. */}
       <Column gap='0.75rem'>
-        <Row>
-          <DriveSwitcher Trigger={CurrentDriveTrigger} />
-        </Row>
-        {drive && <CurrentDriveSettings subject={drive} />}
         <DriveLists />
+        {drive && <CurrentDriveSettings subject={drive} />}
       </Column>
     </SettingsSection>
   );
