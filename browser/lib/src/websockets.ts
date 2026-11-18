@@ -1279,6 +1279,16 @@ export class WSClient {
         const msg = decodeError(payload);
         if (!msg) break;
 
+        // A missing file on one server leaves other peers and Vault available.
+        // This frame does not refuse unrelated GETs, commits or authentication.
+        if (
+          msg.requestId === 0 &&
+          msg.code === ErrorCode.UNKNOWN &&
+          msg.message === 'Blob not found'
+        ) {
+          break;
+        }
+
         // A clock that runs ahead is refused on every AUTH and COMMIT; adopt
         // the server's time so the reconnect and the outbox's retry pass.
         learnServerClock(msg.message);
@@ -1695,7 +1705,28 @@ export class WSClient {
         const resp = decodeBlobResponse(payload);
 
         if (resp) {
-          this.store.getClientDb()?.putBlob(resp.hash, resp.bytes);
+          const db = this.store.getClientDb();
+          const current = this.connectionGuard();
+
+          if (db) {
+            void db
+              .blake3Hash(resp.bytes)
+              .then(async hash => {
+                if (
+                  current() &&
+                  this.store.getClientDb() === db &&
+                  hash.length === resp.hash.length &&
+                  hash.every((byte, index) => byte === resp.hash[index])
+                ) {
+                  await db.putBlob(resp.hash, resp.bytes);
+                  if (current() && this.store.getClientDb() === db)
+                    this.store.retryFileContentRecovery();
+                }
+              })
+              .catch(error =>
+                console.warn('[WS] file contents were not stored', error),
+              );
+          }
         }
 
         break;
@@ -2539,6 +2570,11 @@ export class WSClient {
         this.sendBinary(encodeBlobRequest(hash));
       }
     }
+  }
+
+  /** Send a drive-scoped request prepared by the local database. */
+  public requestFileContents(frame: Uint8Array): void {
+    if (this.readyState === WebSocket.OPEN) this.sendBinary(frame);
   }
 
   private tagListeners = new Map<number, () => void>();

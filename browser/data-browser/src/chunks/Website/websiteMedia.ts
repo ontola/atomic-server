@@ -27,6 +27,15 @@ export async function snapshotWebsiteImage(
     if (typeof blob === 'string' && isBlobSubject(blob)) {
       const hash = blobHashHex(blob);
       if (hash) bytes = await store.getClientDb()?.getBlob(hexToBytes(hash));
+
+      if (!bytes && hash && store.hasFileContentRecovery?.()) {
+        const drive = file.get('https://atomicdata.dev/properties/drive');
+        await store.recoverMissingFileContents(
+          hash,
+          typeof drive === 'string' ? drive : undefined,
+        );
+        bytes = await store.getClientDb()?.getBlob(hexToBytes(hash));
+      }
     }
 
     if (!bytes) {
