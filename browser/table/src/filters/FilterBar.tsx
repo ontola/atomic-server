@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import { useState, type ComponentType } from 'react';
 import { styled } from 'styled-components';
 import { filterKey, type TableFilter } from '../views/configuration.js';
 import { TableFilterChip, type TableFilterChipProps } from './FilterChip.js';
@@ -22,9 +22,12 @@ export interface TableFilterTarget {
 export interface TableFilterAddMenuProps {
   items: readonly { key: string; label: string; onSelect: () => void }[];
   label: string;
+  searchLabel: string;
+  noMatch: string;
 }
 export interface TableFilterBarProps {
   filters: readonly TableFilter[];
+  disabled?: boolean;
   targets: readonly TableFilterTarget[];
   onAdd: (key: string) => void;
   onValueChange: (key: string, value: string) => void;
@@ -33,35 +36,38 @@ export interface TableFilterBarProps {
   /** Label for operators on targets that no longer exist. */
   operatorLabel?: (operator: TableFilter['operator']) => string;
   /** Menu primitive adapter; the bar owns candidate exclusion and dispatch. */
-  AddMenu: ComponentType<TableFilterAddMenuProps>;
+  AddMenu?: ComponentType<TableFilterAddMenuProps>;
   messages?: Partial<{
     toolbar: string;
     add: string;
+    search: string;
+    noMatch: string;
     unavailable: string;
     unavailableHint: string;
     remove: string;
   }>;
 }
 
-const defaultOperatorLabel = (operator: TableFilter['operator']) => operator;
-
-/** Existing active-filter layout and dispatch. Host menu and metadata leaves
- * keep their existing behavior; hidden fields retain their active chips. */
+/** The actual active-filter row. Backend descriptors supply labels/types and
+ * reference leaves; chip editing, missing targets and Add candidates stay here. */
 export function TableFilterBar({
   filters,
+  disabled,
   targets,
   onAdd,
   onValueChange,
   onOperatorChange,
   onRemove,
-  operatorLabel = defaultOperatorLabel,
-  AddMenu,
+  operatorLabel = operator => operator,
+  AddMenu = DefaultAddMenu,
   messages,
 }: TableFilterBarProps) {
   if (!filters.length) return null;
   const text = {
     toolbar: 'Table filters',
     add: 'Add filter',
+    search: 'Find a column to filter by',
+    noMatch: 'No column matches',
     unavailable: 'Unavailable column',
     unavailableHint: 'This column is unavailable.',
     remove: 'Remove filter',
@@ -69,7 +75,7 @@ export function TableFilterBar({
   };
   const byKey = new Map(targets.map(target => [target.key, target]));
   const taken = new Set(filters.map(filterKey));
-  const items = targets
+  const items = [...byKey.values()]
     .filter(target => target.addable !== false && !taken.has(target.key))
     .map(target => ({
       key: target.key,
@@ -94,6 +100,7 @@ export function TableFilterBar({
             {...chip}
             key={key}
             filter={filter}
+            disabled={disabled || chip.disabled}
             operatorLabel={chip.operatorLabel(filter.operator)}
             onValueChange={value => onValueChange(key, value)}
             onOperatorChange={operator => onOperatorChange(key, operator)}
@@ -101,8 +108,58 @@ export function TableFilterBar({
           />
         );
       })}
-      {!!items.length && <AddMenu items={items} label={text.add} />}
+      {!disabled && !!items.length && (
+        <AddMenu
+          items={items}
+          label={text.add}
+          searchLabel={text.search}
+          noMatch={text.noMatch}
+        />
+      )}
     </Bar>
+  );
+}
+
+function DefaultAddMenu({
+  items,
+  label,
+  searchLabel,
+  noMatch,
+}: TableFilterAddMenuProps) {
+  const [search, setSearch] = useState('');
+  const matches = items.filter(item =>
+    item.label.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+  );
+
+  return (
+    <details
+      onToggle={event => {
+        if (!event.currentTarget.open) setSearch('');
+      }}
+    >
+      <summary>{label}</summary>
+      <input
+        type='search'
+        aria-label={searchLabel}
+        value={search}
+        onChange={event => setSearch(event.target.value)}
+      />
+      {!matches.length && <p role='status'>{noMatch}</p>}
+      {matches.map(item => (
+        <button
+          key={item.key}
+          type='button'
+          onClick={event => {
+            item.onSelect();
+            const menu = event.currentTarget.closest('details');
+            if (menu) menu.open = false;
+            setSearch('');
+          }}
+        >
+          {item.label}
+        </button>
+      ))}
+    </details>
   );
 }
 

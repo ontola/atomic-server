@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, afterAll, it, expect, vi } from 'vitest';
 import { cleanup, render, fireEvent, screen } from '@testing-library/react';
-import {
-  TableFilterBar,
-  type TableFilterTarget,
-  type TableFilterAddMenuProps,
-} from './FilterBar.js';
-
+import { TableFilterBar, type TableFilterTarget } from './FilterBar.js';
 beforeAll(() =>
   vi.stubGlobal(
     'ResizeObserver',
@@ -33,88 +28,78 @@ const target = (
     valueInputProps: { kind: 'text' },
   },
 });
-
-function Menu({ items }: TableFilterAddMenuProps) {
-  return (
-    <div data-testid='candidate-list'>
-      {items.map(item => (
-        <button
-          key={`${item.key}/${item.label}`}
-          type='button'
-          onClick={item.onSelect}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-const callbacks = {
+const base = {
   onAdd: vi.fn(),
   onValueChange: vi.fn(),
   onOperatorChange: vi.fn(),
   onRemove: vi.fn(),
-  AddMenu: Menu,
 };
-
-it('hides an empty active bar', () => {
+it('hides the active row when empty', () => {
   render(
     <TableFilterBar
-      {...callbacks}
+      {...base}
       filters={[]}
-      targets={[target('name', 'Name')]}
+      targets={[target('title', 'Title')]}
     />,
   );
   expect(screen.queryByRole('toolbar')).toBeNull();
 });
-it('retains hidden chips and original untaken candidate order without new deduplication', () => {
+it('retains hidden-column chips and offers only untaken visible and computed targets', () => {
   const add = vi.fn();
   render(
     <TableFilterBar
-      {...callbacks}
+      {...base}
       onAdd={add}
-      filters={[{ property: 'hidden', operator: 'eq', value: 'x' }]}
+      filters={[
+        { property: 'hidden', operator: 'eq', value: 'x' },
+        { property: 'title', operator: 'eq', value: 'a' },
+      ]}
       targets={[
         target('hidden', 'Hidden', false),
-        target('omitted', 'Other hidden', false),
-        target('name', 'Name'),
-        target('name', 'Second name'),
+        target('title', 'Title'),
+        target('other-hidden', 'Other hidden', false),
         target('derived:hours', 'Hours'),
       ]}
     />,
   );
-  expect(screen.getAllByTestId('filter-chip')).toHaveLength(1);
-  expect(screen.getByTestId('candidate-list').textContent).toBe(
-    'NameSecond nameHours',
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Hours', exact: true }));
+  expect(screen.getAllByTestId('filter-chip')).toHaveLength(2);
+  fireEvent.click(screen.getByText('Add filter'));
+  expect(screen.queryByRole('button', { name: 'Other hidden' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Title' })).toBeNull();
+  fireEvent.change(screen.getByRole('searchbox'), {
+    target: { value: 'absent' },
+  });
+  expect(screen.getByRole('status').textContent).toBe('No column matches');
+  fireEvent.change(screen.getByRole('searchbox'), {
+    target: { value: 'hours' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Hours' }));
   expect(add).toHaveBeenCalledExactlyOnceWith('derived:hours');
 });
-it('preserves stable edit/removal dispatch and inherited missing-target recovery', async () => {
+it('dispatches edits and removal by stable identity and keeps missing targets recoverable', async () => {
   const change = vi.fn(),
     remove = vi.fn();
   render(
     <TableFilterBar
-      {...callbacks}
+      {...base}
       onValueChange={change}
       onRemove={remove}
       filters={[
-        { property: 'name', operator: 'eq', value: '' },
-        { derived: 'gone', operator: 'eq', value: '2' },
+        { property: 'title', operator: 'eq', value: '' },
+        { derived: 'removed', operator: 'eq', value: '2' },
       ]}
-      targets={[target('name', 'Name')]}
+      targets={[target('title', 'Title')]}
     />,
   );
   fireEvent.change(
     await screen.findByRole('textbox', { name: 'Filter value' }),
     { target: { value: 'edited' } },
   );
-  expect(change).toHaveBeenCalledExactlyOnceWith('name', 'edited');
+  expect(change).toHaveBeenCalledExactlyOnceWith('title', 'edited');
   fireEvent.click(screen.getByRole('button', { name: 'Remove filter' }));
-  expect(remove).toHaveBeenCalledWith('name');
+  expect(remove).toHaveBeenCalledWith('title');
   fireEvent.click(screen.getAllByTestId('filter-chip')[1]);
   await screen.findByText('This column is unavailable.');
   fireEvent.click(screen.getByRole('button', { name: 'Remove filter' }));
-  expect(remove).toHaveBeenLastCalledWith('derived:gone');
+  expect(remove).toHaveBeenLastCalledWith('derived:removed');
 });

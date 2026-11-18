@@ -4,7 +4,6 @@ import { FaPlus } from 'react-icons/fa6';
 import {
   TableFilterBar as SharedFilterBar,
   derivedFilterKey,
-  filterKey,
   type TableFilterAddMenuProps,
 } from '@tomic/table';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
@@ -21,8 +20,7 @@ interface TableFilterBarProps {
   allColumns?: Property[];
   derivedColumns: DerivedColumnSpec[];
 }
-const addFilterLabel = 'Add filter';
-const AddFilterTrigger = buildDefaultTrigger(<FaPlus />, addFilterLabel);
+const AddFilterTrigger = buildDefaultTrigger(<FaPlus />, 'Add filter');
 
 function AtomicAddMenu({ items }: TableFilterAddMenuProps) {
   return (
@@ -74,21 +72,6 @@ export function TableFilterBar({
     ),
   ];
 
-  // Existing missing chips keep Atomic's popover, labels and value adapters.
-  const available = new Set(targets.map(target => target.key));
-
-  for (const filter of filters) {
-    const key = filterKey(filter);
-
-    if (!available.has(key)) {
-      targets.push({
-        ...atomicFilterTarget(key, 'Unavailable column', viewKind),
-        addable: false,
-      });
-      available.add(key);
-    }
-  }
-
   return (
     <SharedFilterBar
       filters={filters}
@@ -101,7 +84,9 @@ export function TableFilterBar({
       AddMenu={AtomicAddMenu}
       messages={{
         toolbar: 'Table filters',
-        add: addFilterLabel,
+        add: 'Add filter',
+        search: 'Find a column to filter by',
+        noMatch: 'No column matches',
         unavailable: 'Unavailable column',
         unavailableHint: 'This column is unavailable.',
         remove: 'Remove filter',

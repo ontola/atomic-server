@@ -40,7 +40,6 @@ export function atomicFilterTarget(
     key,
     chip: {
       label,
-      unavailable: !column && !derived,
       operatorLabel: labelOperator,
       operators: choices.map(value => ({ value, label: labelOperator(value) })),
       derivedUnit: unit,
