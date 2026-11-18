@@ -7,7 +7,6 @@ import {
   FaChartPie,
   FaRegCircleDot,
   FaPlug,
-  FaGithub,
 } from 'react-icons/fa6';
 
 /**
@@ -30,8 +29,7 @@ export const VIEW_KINDS = [
   'dashboard',
   'issues',
   'syncables',
-  'github-organizations',
-  'github-repositories',
+  'syncable-collection',
 ] as const;
 
 export type ViewKind = (typeof VIEW_KINDS)[number];
@@ -40,6 +38,9 @@ export const DEFAULT_VIEW_KIND: ViewKind = 'table';
 
 /** Narrows an arbitrary stored string to a known ViewKind, falling back to table. */
 export function normalizeViewKind(kind: string | undefined): ViewKind {
+  if (kind === 'github-organizations' || kind === 'github-repositories')
+    return 'syncable-collection';
+
   return (VIEW_KINDS as readonly string[]).includes(kind ?? '')
     ? (kind as ViewKind)
     : DEFAULT_VIEW_KIND;
@@ -71,8 +72,7 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   dashboard: 'Dashboard',
   issues: 'Issues',
   syncables: 'Sync',
-  'github-organizations': 'GitHub Organizations',
-  'github-repositories': 'GitHub Repositories',
+  'syncable-collection': 'Syncable Collection',
 };
 
 export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
@@ -83,6 +83,5 @@ export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
   dashboard: FaChartPie,
   issues: FaRegCircleDot,
   syncables: FaPlug,
-  'github-organizations': FaGithub,
-  'github-repositories': FaGithub,
+  'syncable-collection': FaTable,
 };

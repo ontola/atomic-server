@@ -24,6 +24,19 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
       description: name,
     })),
     {
+      shortname: 'syncable-collection-view',
+      name: 'Syncable collection view',
+      description:
+        'Declarative columns and navigation for saved collection rows.',
+      datatype: Datatype.JSON,
+    },
+    {
+      shortname: 'syncable-open-target',
+      name: 'Syncable open target',
+      description: 'A saved child table to open from a collection row.',
+      datatype: Datatype.ATOMIC_URL,
+    },
+    {
       shortname: 'syncable-mirror-status',
       name: 'Mirror status',
       description: 'Last acknowledged synchronization and pause state.',

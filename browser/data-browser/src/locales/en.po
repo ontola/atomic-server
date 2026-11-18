@@ -1866,6 +1866,7 @@ msgstr "Toggle whether this resource appears in your Favorites."
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/IntegrationStore.tsx
@@ -5206,6 +5207,7 @@ msgstr "Button says"
 #: src/actions/runAction.ts
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/IntegrationActions.tsx
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Action"
 msgstr "Action"
@@ -13544,9 +13546,6 @@ msgstr "Pressing Send report shares the reviewed chat text, error messages, and 
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
@@ -13826,6 +13825,7 @@ msgid "This view cannot connect an account"
 msgstr "This view cannot connect an account"
 
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
 msgid "Loading stored rows…"
 msgstr "Loading stored rows…"
 
@@ -13882,3 +13882,43 @@ msgstr "Sync issues"
 #: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
 msgid "Opening Sync…"
 msgstr "Opening Sync…"
+
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
+msgid "No stored rows yet."
+msgstr "No stored rows yet."
+
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
+msgid "Syncable Collection"
+msgstr "Syncable Collection"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Built-in app"
+msgstr "Built-in app"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A registered app delivered by this Atomic Server release."
+msgstr "A registered app delivered by this Atomic Server release."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API description"
+msgstr "Integration API description"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public composed OpenAPI metadata saved from the configured integration catalog."
+msgstr "Public composed OpenAPI metadata saved from the configured integration catalog."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API selection"
+msgstr "Integration API selection"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public catalog consumer selections for the saved API description."
+msgstr "Public catalog consumer selections for the saved API description."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Accounts"
+msgstr "Accounts"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "The app is ready, but its icon could not be loaded."
+msgstr "The app is ready, but its icon could not be loaded."

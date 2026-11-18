@@ -194,7 +194,9 @@ describe('built-in source and proxy capabilities', () => {
       { method: 'POST' },
       { body: '{}' },
       { query: { page: 21 } },
-      { query: { state: 'closed' } },
+      { query: { per_page: 100, state: 'closed' } },
+      { query: { per_page: 100 } },
+      { query: { state: 'all' } },
       { query: { redirect: 'elsewhere' } },
     ])
       await expect(
@@ -202,6 +204,7 @@ describe('built-in source and proxy capabilities', () => {
           platform: 'github-issues',
           connectionId: 'slot',
           path: 'repositories/456/issues',
+          query: { per_page: 100, state: 'all' },
           ...patch,
         }),
       ).rejects.toThrow();
@@ -235,6 +238,7 @@ describe('built-in source and proxy capabilities', () => {
         platform: 'github-issues',
         connectionId: 'slot',
         path: 'repositories/456/issues',
+        query: { per_page: 100, state: 'all' },
       }),
     ).rejects.toThrow('Source changed');
   });
@@ -252,6 +256,7 @@ describe('built-in source and proxy capabilities', () => {
       transport.request!({
         platform: 'github-issues',
         path: 'repositories/999/issues',
+        query: { per_page: 100, state: 'all' },
       }),
     ).rejects.toThrow('endpoint');
     await expect(
@@ -259,6 +264,7 @@ describe('built-in source and proxy capabilities', () => {
         platform: 'github-issues',
         connectionId: 'slot',
         path: 'repositories/456/issues',
+        query: { per_page: 100, state: 'all' },
       }),
     ).rejects.toThrow('endpoint');
     await transport.request!({

@@ -1288,14 +1288,33 @@ This does not yet prove restoration of the user's private staging workspace.
   GitHub account without replacing its mirror. It runs against a real
   Atomic Server with a protocol-checking proxy fixture. The live GitHub OAuth
   and proxy deployment are separate from this browser test.
-- The same flow adds GitHub Organizations and GitHub Repositories using **+**,
-  checks their kinds, counts and actions, keeps the raw Table schema unchanged,
-  and navigates away during a deliberately delayed issue import. Runtime unit
-  tests cover deduplication, pause, stale completion and source/session changes.
-  Directory tests cover compatible local row browsing and scoped Open actions.
-  Native custom views contain no iframe and make no provider reads, including
-  opening, switching back, reloading and offline browsing during a sync. Saved
-  kinds and counts appear without changing the raw Table schema.
+- The updated flow adds the generic **Syncable Collection** view using **+**,
+  checks saved kinds, counts and Open targets, and keeps the raw Table schema
+  unchanged. It checks that GitHub is an App rather than a Table, has one
+  Accounts child and a locally stored icon, and retains its subject on reopen.
+  Public icon/metadata fixtures reject credentials and signatures. Native
+  browsing checks no iframe or refresh controls, no provider/catalog reads on
+  return or reload, and navigation during a deliberately delayed issue import.
+  Creating the first Issues table remains an explicit action in the Sync tab;
+  subsequent native Open uses the saved target. Desktop and mobile screenshots
+  are captured by the spec. A fresh real-server Chromium run of these generic
+  view and App/icon changes is still pending; earlier browser evidence predates
+  this slice.
+- `syncableCollection.test.ts` and `SyncableCollectionView.test.tsx` cover a
+  second provider using unrelated class/property subjects, saved schema labels,
+  numeric and enum values, missing/invalid values, order/filter cache isolation,
+  immediate reentry and installed native-view navigation without provider fetches.
+  Open revalidates the table, row, direct child and drive after cached authority
+  changes; absent, moved, foreign or non-table targets fall back to the row.
+  Menu tests cover one applicable generic choice and legacy view-kind aliases.
+  This proves provider-independent stored rendering, not a live second-provider
+  sync adapter or end-to-end second-provider import.
+- `syncablePlatform.test.ts` adds App/Accounts idempotence, explicit legacy-table
+  migration, preserved remote identities and moved rows, and interrupted
+  migration recovery. `installIntegrationIcon.test.ts` covers unsigned public
+  image fetches, size/type/origin checks, cancellation, File upload and preserving
+  an existing icon. Image resizing is mocked in that unit suite; decoding and
+  real File persistence pass in the current Chromium browser spec.
 - `syncablePlatform.test.ts`, `syncableHierarchy.test.ts`,
   `builtinSyncablesProfile.test.ts`, `builtinSyncApp.test.ts` and
   `proxyConnections.test.ts` cover stable source bindings after moves, source
@@ -1309,6 +1328,31 @@ This does not yet prove restoration of the user's private staging workspace.
   deduplication and stale completion after replacement. Drive guards reject moved
   roots or ancestors outside the selected drive, including stale descendant
   drive stamps, while preserving same-drive identities.
+
+- Shared Syncables reader integration:
+  `builtinSyncApp.test.ts` exercises the actual `syncables/browser` dependency
+  against a fixture composed from the IAP catalog and its standard overlays.
+  Its cases cover named collection selection without unrelated reads,
+  catalog query defaults, canonical repository-ID Issues, authenticated and
+  Public request budgets, exact cursor forwarding, typed idempotent upserts,
+  stable moved identities and stored-only opening. Descriptor tests check schema
+  titles/enum labels and saved navigation links created only by explicit
+  discovery or mirror creation, without eager issue reads. Failed continuations,
+  repeated identities, foreign origins and lossy query parameters retain
+  accepted rows and do not advance the last complete read.
+- `syncableDocument.test.ts` covers fixed public metadata endpoints, unsigned
+  credential-free reads, optional selections, invalid or oversized YAML,
+  unsafe API origins, cancellation, cached ancestor metadata and drive-index
+  fallback after a collection moves. Document and source/proxy profile
+  tests cover metadata transport and the existing
+  connection, route and selected-table boundaries separately from the reader.
+- `scripts/builtin-syncables-bundle.test.mjs` builds the actual iframe module
+  and checks that the library's collection, page and model implementations
+  contribute code to the output. It verifies no external runtime imports or
+  separately bundled provider read overlay, then loads the generated module.
+  This is an artifact check, not a replacement for the real-server browser
+  walkthrough. Final library-release, production-build and Chromium validation
+  are tracked in `planning/builtin-syncables-apps.md`.
 
 - `browser/e2e/tests/plugin.spec.ts`: private plugin assets load through signed parent requests; custom rendering and RPC still work.
 - The bootstrap test opens the shell directly and verifies its server-enforced opaque origin, independently of iframe attributes.

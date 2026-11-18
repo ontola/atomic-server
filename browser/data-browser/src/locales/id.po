@@ -1866,6 +1866,7 @@ msgstr "Atur apakah sumber daya ini muncul di Favorit Anda."
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/IntegrationStore.tsx
@@ -5204,6 +5205,7 @@ msgstr "Teks tombol"
 #: src/actions/runAction.ts
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/IntegrationActions.tsx
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Action"
 msgstr "Tindakan"
@@ -13536,9 +13538,6 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
 
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
@@ -13818,6 +13817,7 @@ msgid "This view cannot connect an account"
 msgstr "Tampilan ini tidak dapat menghubungkan akun"
 
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
 msgid "Loading stored rows…"
 msgstr "Memuat baris tersimpan…"
 
@@ -13874,3 +13874,43 @@ msgstr "Sinkronkan issue"
 #: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
 msgid "Opening Sync…"
 msgstr "Membuka Sinkronisasi…"
+
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
+msgid "No stored rows yet."
+msgstr "Belum ada baris yang tersimpan."
+
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
+msgid "Syncable Collection"
+msgstr "Koleksi yang dapat disinkronkan"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Built-in app"
+msgstr "Aplikasi bawaan"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A registered app delivered by this Atomic Server release."
+msgstr "Aplikasi terdaftar yang disertakan dalam rilis Atomic Server ini."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API description"
+msgstr "Deskripsi API integrasi"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public composed OpenAPI metadata saved from the configured integration catalog."
+msgstr "Metadata OpenAPI publik gabungan yang disimpan dari katalog integrasi yang dikonfigurasi."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API selection"
+msgstr "Pilihan API integrasi"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public catalog consumer selections for the saved API description."
+msgstr "Pilihan publik klien katalog untuk deskripsi API yang tersimpan."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Accounts"
+msgstr "Akun"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "The app is ready, but its icon could not be loaded."
+msgstr "Aplikasi siap, tetapi ikonnya tidak dapat dimuat."

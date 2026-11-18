@@ -49,6 +49,7 @@ These components help with rendering resources in different contexts.
 - `src/views/ResourcePage.tsx` - Full-page resource view dispatcher that picks the best page component for a resource class and falls back to `ResourcePageDefault`.
 - `src/components/EditableTitle.tsx` - Displays the title of a resource as h1 heading with support for editing. Useful on resource pages.
 - `src/views/ResourcePageDefault.tsx` exports `EditResourceButton`, the "Edit" button that opens a resource's edit form (renders nothing without write rights).
+- `src/chunks/PluginRuns/SyncableCollectionView.tsx` - Native collection browser driven by a stored `SyncableCollectionDescriptor`: row class, Atomic property columns, labels, count/enum formatting and optional saved child-table links. Reuse it for provider collections with stored descriptors. It preserves collection filtering/order and cached reentry, performs scoped Open navigation, and has no iframe, provider transport or refresh controls. `syncableCollection.ts` validates descriptors and navigation targets; the Sync app owns discovery and writes.
 
 ## Dialogs, Popovers, And Menus
 

@@ -37,6 +37,11 @@ fn precompressed_index() -> &'static HashMap<&'static str, (&'static [u8], &'sta
     })
 }
 
+/// Read an already embedded bundle without constructing another resource map.
+pub(crate) fn embedded_asset(path: &str) -> Option<&'static [u8]> {
+    precompressed_index().get(path).map(|(data, _)| *data)
+}
+
 /// Serve a pre-compressed `.br` asset when the request supports brotli
 /// AND a precompressed sibling exists in the embedded resource map.
 /// The build script (`build.rs`) writes these at brotli q11, which is

@@ -18,7 +18,11 @@ more.
 - **PR branches get no CI by themselves.** `.github/workflows/main.yml` runs
   on pushes to `develop`, `v*` tags and `workflow_dispatch` only. To test a PR
   branch, dispatch it: `gh workflow run main.yml --ref <branch>` (or the
-  equivalent GitHub API call). A docs-only change needs no dispatch.
+  equivalent GitHub API call). Add `-f runner=github-hosted` to run the full
+  server suite on GitHub-hosted runners for that dispatch only. The default
+  still follows repository runner configuration, normally Mancave. Hosted
+  runs skip the private atomic-saas downstream check; they do not verify it.
+  A docs-only change needs no dispatch.
 - **Paired atomic-saas branch.** The `Downstream` job in `main.yml` builds
   ontola/atomic-saas against your commit. It uses an atomic-saas branch with
   the *same name* as yours only if that branch has an open PR; otherwise it

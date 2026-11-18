@@ -345,10 +345,14 @@ pub async fn handle_builtin_syncables_ui(
             .content_type("application/javascript")
             .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"))
             .body(include_str!("../../assets_tmp/view-client.js"))),
-        "js" => Ok(HttpResponse::Ok()
-            .content_type("application/javascript")
-            .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"))
-            .body(include_str!("builtin_syncables.js"))),
+        "js" => {
+            let script = crate::routes::embedded_asset("builtin-syncables.js")
+                .ok_or("The built-in Sync app bundle is missing. Build the Data Browser first.")?;
+            Ok(HttpResponse::Ok()
+                .content_type("application/javascript")
+                .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"))
+                .body(script))
+        }
         _ => Err(AtomicServerError::bad_request(
             "Unknown built-in Syncables iframe asset",
         )),

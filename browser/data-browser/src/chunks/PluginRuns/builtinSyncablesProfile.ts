@@ -303,6 +303,10 @@ export function syncProxyTransport(
         !Number.isInteger(page) ||
         page < 1 ||
         page > limit ||
+        (['user/repos', 'user/orgs'].includes(path) &&
+          String(query.per_page) !== '100') ||
+        (path.endsWith('/issues') &&
+          (String(query.per_page) !== '100' || query.state !== 'all')) ||
         (query.per_page !== undefined && String(query.per_page) !== '100') ||
         (query.state !== undefined && query.state !== 'all') ||
         (query.after !== undefined &&

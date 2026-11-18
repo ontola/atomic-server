@@ -17,7 +17,7 @@ import toast from 'react-hot-toast';
 import { styled } from 'styled-components';
 import { AppFrame } from '@chunks/AppPage/AppFrame';
 import { BuiltinSyncablesApp } from '@chunks/PluginRuns/BuiltinSyncablesApp';
-import { GitHubDirectoryView } from '@chunks/PluginRuns/GitHubDirectoryView';
+import { SyncableCollectionView } from '@chunks/PluginRuns/SyncableCollectionView';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
 import { useHandleClearCells } from '@chunks/TablePage/helpers/useHandleClearCells';
 import { useHandleColumnResize } from '@chunks/TablePage/helpers/useHandleColumnResize';
@@ -1524,6 +1524,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
         <TableCalendarRowContext value={calendarRow}>
           {!embedded && (
             <TableViewTabs
+              table={resource.subject}
               rowClass={tableClass.subject}
               drive={getTableDrive(store, resource) ?? store.getDrive()}
               views={views}
@@ -1601,12 +1602,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 drive={(getTableDrive(store, resource) ?? store.getDrive())!}
               />
             </AppViewWrapper>
-          ) : viewKind === 'github-organizations' ||
-            viewKind === 'github-repositories' ? (
-            <GitHubDirectoryView
+          ) : viewKind === 'syncable-collection' ? (
+            <SyncableCollectionView
               table={resource.subject}
               drive={(getTableDrive(store, resource) ?? store.getDrive())!}
-              kind={viewKind}
               collection={rowCollection}
               ready={ready}
             />

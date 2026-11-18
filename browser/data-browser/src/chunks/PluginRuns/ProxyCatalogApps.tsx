@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
-import {
-  FaGithub,
-  FaCalendarDays,
-  FaNoteSticky,
-  FaTableCells,
-} from 'react-icons/fa6';
-import { useStore } from '@tomic/react';
+import { FaPlug } from 'react-icons/fa6';
+import type { AtomicValue } from '@tomic/lib';
+import { findSchema, useResource, useStore } from '@tomic/react';
+import { ResourceGlyph } from '@components/ResourceGlyph';
 import { Button } from '@components/Button';
 import { Card } from '@components/Card';
 import { Column, Row } from '@components/Row';
@@ -16,12 +13,15 @@ import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
   findSyncablePlatform,
   ensureSyncablePlatform,
+  syncablePlatformSchema,
 } from './syncablePlatform';
+import { resolveBuiltinApp } from '@chunks/AppPage/builtinApp';
 import { useProxyCatalog } from './proxyCatalog';
+import { fetchSyncableDocument, syncableBranding } from './syncableDocument';
+import { installIntegrationIcon } from './installIntegrationIcon';
 
 /** Display names only. Source IDs are always the proxy's own canonical IDs. */
 export function platformDisplayName(id: string): string {
-  if (id === 'github-issues') return 'GitHub';
   if (id === 'gitlab') return 'GitLab';
   if (id === 'todoist') return 'Todoist';
   if (id === 'spotify') return 'Spotify';
@@ -130,16 +130,63 @@ export function ProxyCatalogApps({
 
   const install = (platform: string) => {
     setBusy(platform);
-    void ensureSyncablePlatform(store, {
-      drive,
-      proxyOrigin: catalog.origin,
-      platform,
-      name:
-        platform === 'github-issues'
-          ? 'GitHub'
-          : (catalog.entries.find(item => item.id === platform)?.name ??
-            platformDisplayName(platform)),
-    })
+    void (async () => {
+      const signal = new AbortController().signal;
+      const installed = existing[platform]
+        ? await store.getResource(existing[platform])
+        : undefined;
+      const oldTerms = await findSchema(store, drive, syncablePlatformSchema());
+      const oldDocument = oldTerms.properties?.['syncable-api-document'];
+      const oldSelection = oldTerms.properties?.['syncable-api-selection'];
+      const savedDocument = oldDocument && installed?.get(oldDocument);
+      const metadata = savedDocument
+        ? {
+            document: savedDocument,
+            querySelection: oldSelection
+              ? installed?.get(oldSelection)
+              : undefined,
+          }
+        : await fetchSyncableDocument(catalog.origin, signal, platform);
+      const branding = syncableBranding(metadata.document);
+      const subject = await ensureSyncablePlatform(store, {
+        drive,
+        proxyOrigin: catalog.origin,
+        platform,
+        name:
+          branding.name ??
+          catalog.entries.find(item => item.id === platform)?.name ??
+          platformDisplayName(platform),
+      });
+      const app = await resolveBuiltinApp(store, drive, subject);
+      if (!app) throw new Error('The integration app is unavailable');
+      const terms = await findSchema(store, drive, syncablePlatformSchema());
+
+      for (const target of [subject, app.table]) {
+        const resource = await store.getResource(target);
+        const documentProperty = terms.properties?.['syncable-api-document'];
+        const selectionProperty = terms.properties?.['syncable-api-selection'];
+
+        if (documentProperty && !resource.get(documentProperty)) {
+          await resource.set(
+            documentProperty,
+            metadata.document as AtomicValue,
+          );
+          if (selectionProperty && metadata.querySelection)
+            await resource.set(
+              selectionProperty,
+              metadata.querySelection as AtomicValue,
+            );
+          await resource.save();
+        }
+      }
+
+      await installIntegrationIcon(store, subject, branding.icon, signal).catch(
+        () =>
+          toast.error('The app is ready, but its icon could not be loaded.'),
+      );
+
+      return subject;
+    })()
       .then(subject => {
         setExisting(previous => ({ ...previous, [platform]: subject }));
         navigate(constructOpenURL(subject));
@@ -165,10 +212,7 @@ export function ProxyCatalogApps({
         <Grid>
           {visible.map(platform => {
             const entry = catalog.entries.find(item => item.id === platform);
-            const name =
-              platform === 'github-issues'
-                ? 'GitHub'
-                : (entry?.name ?? platformDisplayName(platform));
+            const name = entry?.name ?? platformDisplayName(platform);
             const subject = existing[platform];
             const canInstall = platform === 'github-issues';
 
@@ -177,15 +221,7 @@ export function ProxyCatalogApps({
                 <Column gap='1rem'>
                   <Row center justify='space-between'>
                     <Avatar aria-hidden>
-                      {platform === 'github-issues' ? (
-                        <FaGithub />
-                      ) : platform.includes('calendar') ? (
-                        <FaCalendarDays />
-                      ) : platform.includes('keep') ? (
-                        <FaNoteSticky />
-                      ) : (
-                        <FaTableCells />
-                      )}
+                      <InstalledIcon subject={subject} />
                     </Avatar>
                     <small>Integration proxy</small>
                   </Row>
@@ -221,6 +257,16 @@ export function ProxyCatalogApps({
         </Grid>
       </Column>
     </section>
+  );
+}
+
+function InstalledIcon({ subject }: { subject?: string }) {
+  const resource = useResource(subject);
+
+  return subject ? (
+    <ResourceGlyph resource={resource} fallbackIcon={FaPlug} />
+  ) : (
+    <FaPlug />
   );
 }
 

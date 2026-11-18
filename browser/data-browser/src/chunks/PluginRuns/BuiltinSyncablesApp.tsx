@@ -18,6 +18,10 @@ import {
 } from '@chunks/AppPage/AppExecutionRuntime';
 import { ShowRoute } from '../../routes/ShowRoute';
 import {
+  fetchSyncableDocument,
+  storedSyncableDocument,
+} from './syncableDocument';
+import {
   assertSyncAppDrive,
   syncAppContext,
   syncProxyTransport,
@@ -83,10 +87,14 @@ async function appProfile(
   const proxy = new ProxyConnections(localStorage, origin, () =>
     store.getAgent(),
   );
+  const metadata = worker
+    ? await fetchSyncableDocument(context.proxyOrigin, signal, context.platform)
+    : await storedSyncableDocument(store, drive, table, context);
+  assertCurrent();
   const key = executionKey(drive, table);
   const profile: AppFrameProfile = {
     source: server + '/builtin-syncables-ui?format=html',
-    context: { ...context, worker },
+    context: { ...context, ...metadata, worker },
     access: { root: table, signal, assertCurrent },
     proxy: syncProxyTransport(proxy, context, () => {
       assertCurrent();

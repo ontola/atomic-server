@@ -23,6 +23,17 @@ describe('what renders a view', () => {
     );
   });
 
+  it('normalizes legacy directory kinds to the same generic collection view', () => {
+    expect(normalizeViewKind('github-organizations')).toBe(
+      'syncable-collection',
+    );
+    expect(normalizeViewKind('github-repositories')).toBe(
+      'syncable-collection',
+    );
+    expect(VIEW_KINDS).not.toContain('github-organizations');
+    expect(VIEW_KINDS).not.toContain('github-repositories');
+  });
+
   it('falls back to the table for anything it does not know', () => {
     // Including an app: a node that has never heard of this one still shows
     // the rows rather than an empty tab.

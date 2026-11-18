@@ -26,40 +26,51 @@ It is then one more way to look at rows you already have.
 
 From My Drive, open the account menu and choose **Apps**. Turn on **Show
 experimental plugins** to see services from your configured integration proxy.
-Choose **Add to Drive** on GitHub to create or reopen its table.
+Choose **Add to Drive** on GitHub. This installs a GitHub App with an **Accounts**
+table beneath it. Its icon comes from the proxy's public API metadata and is
+saved as a File in your drive. Reopening the App preserves your chosen icon.
 
-Open the table’s **Sync** view and connect your GitHub account. Choose
-**Browse organizations**, then use **+** to add **GitHub Organizations**.
-Open an organization or your personal owner namespace, and add **GitHub
-Repositories** with **+** on its repositories table. These views show kinds,
-counts and actions from stored Atomic rows. Opening or switching back to these
-views makes no GitHub request. To discover changes, open **Sync** and choose
-**Refresh list**. Select a repository and choose
-**Sync issues**. In the resulting Issues table, choose **Sync now** to
+Connect your GitHub account from the App. Choose **Browse organizations**, then
+**Refresh list** in **Sync** to discover your organization and personal owner
+namespaces. Use **+** to add **Syncable Collection** to the table. This view
+shows the kinds, counts and **Open** actions saved in Atomic. Open an owner to
+reach its repositories table, where you can add the same **Syncable Collection**
+view. Opening or returning to these views makes no GitHub request.
+
+To import issues, open the repositories table's **Sync** tab, select a repository
+and choose **Sync issues**. In the resulting Issues table, choose **Sync now** to
 import issues. The **Table** view shows the imported rows. Run Sync again to
 update changed rows. **Pause** keeps the rows in your drive and prevents
-refreshes until you resume.
+refreshes until you resume. Once the Issues table exists, **Open** on its saved
+repository row takes you there. Discover later changes with **Refresh list**
+in **Sync**.
 
-To link a public repository, choose **Public repositories** in GitHub's
-**Sync** view. Enter its `owner/repo` name and choose **Link repository**.
-The Issues table appears under **GitHub → Public** in the sidebar. This
+To link a public repository, choose **Public repositories** in the GitHub App.
+Enter its `owner/repo` name and choose **Link repository**.
+The Issues table appears under the App's **Accounts → Public** branch in the sidebar. This
 branch reads from GitHub's public API and works without a GitHub account.
 
 Sync starts from **Sync now** and continues while you browse other views or
 resources in the app. Closing the app stops the run. The **Sync** view contains
-controls and status; the **Table** view follows the stored schema. GitHub custom
-views are ordinary views of saved data, available even while an import is
-running or GitHub is unavailable. They are optional and can be added wherever
-their row types are used.
-Changes you make in Atomic
-stay in your drive. An interrupted or incomplete import keeps cached issues.
+controls and status; the **Table** view follows the stored schema.
+**Syncable Collection** is an ordinary native view of saved data. It stays
+available while an import runs or the provider is unavailable. Its labels and
+fields come from stored collection metadata, so it can also display collections
+from other services that supply that metadata.
+Changes you make in Atomic stay in your drive. An interrupted or incomplete import keeps cached issues.
 Moving an Issues table within the same drive keeps its source binding.
+
+For an older installation, choose **Open GitHub** from **Apps** to upgrade its
+existing root table to an App. Its subject, saved accounts and source identities
+are retained. Existing GitHub-specific view tabs open the generic collection
+view; new tabs use **Syncable Collection**.
 
 Your integration proxy must support client-held connection keys and have
 GitHub OAuth configured. The
-[Syncables GitHub catalog](https://github.com/ontola/atomic-plugins/blob/main/overlays/catalog/2026-11-16-syncables-github.json)
-includes organization membership discovery. Older catalogs may only show
-owners of repositories visible to your account.
+[Syncables Apps catalog](https://github.com/ontola/atomic-plugins/blob/main/overlays/catalog/2026-11-18-syncables-apps.json)
+includes the collection descriptions and schema labels used by this flow.
+Older catalogs may lack these views or show only owners of repositories visible
+to your account.
 
 ## What is special about it
 

@@ -25,12 +25,14 @@ import { buildTheme } from '../../styling';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS, type ViewKind } from './tableViewKinds';
 
-const githubKinds = vi.hoisted(() => ({ values: [] as string[] }));
+const collectionView = vi.hoisted(() => ({ applicable: false }));
 
-vi.mock('@chunks/PluginRuns/githubViews', async importOriginal => ({
-  ...(await importOriginal<typeof import('@chunks/PluginRuns/githubViews')>()),
-  useGitHubViews: () => ({
-    kinds: githubKinds.values,
+vi.mock('@chunks/PluginRuns/syncableCollectionViews', async importOriginal => ({
+  ...(await importOriginal<
+    typeof import('@chunks/PluginRuns/syncableCollectionViews')
+  >()),
+  useSyncableCollectionView: () => ({
+    applicable: collectionView.applicable,
     refresh: () => undefined,
   }),
 }));
@@ -57,7 +59,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   cleanup();
-  githubKinds.values = [];
+  collectionView.applicable = false;
 });
 
 let n = 0;
@@ -104,6 +106,7 @@ function Harness({
       <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
         <DropdownPortalContext.Provider value={portal}>
           <TableViewTabs
+            table='https://example.com/tables/pieces'
             rowClass='https://example.com/classes/piece'
             views={views}
             activeView={active}
@@ -212,50 +215,47 @@ it('offers an in-place change while another table view remains', async () => {
   );
 });
 
-it('keeps GitHub views out of an unrelated table menu', async () => {
+it('keeps collection views out of a table without a valid descriptor', async () => {
   await setup([['All pieces', 'table']]);
   const menu = await openMenu('All pieces');
 
-  expect(within(menu).queryByText('GitHub Organizations')).toBeNull();
-  expect(within(menu).queryByText('GitHub Repositories')).toBeNull();
+  expect(within(menu).queryByText('Syncable Collection')).toBeNull();
   expect(within(menu).queryByText('Sync')).toBeNull();
 });
 
-it('manually adds an applicable GitHub view while keeping the Table tab', async () => {
-  githubKinds.values = ['github-organizations'];
+it('manually adds an applicable generic collection view while keeping the Table tab', async () => {
+  collectionView.applicable = true;
   await setup([['All pieces', 'table']]);
   fireEvent.click(screen.getByRole('button', { name: 'Add view' }));
   const menu = await screen.findByRole('menu');
-  expect(within(menu).queryByText('GitHub Repositories')).toBeNull();
   fireEvent.click(
-    within(menu).getByRole('menuitem', { name: 'GitHub Organizations' }),
+    within(menu).getByRole('menuitem', { name: 'Syncable Collection' }),
   );
 
   await waitFor(() =>
     expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual([
       'All pieces',
-      'GitHub Organizations',
+      'Syncable Collection',
     ]),
   );
 });
 
-it('offers only the applicable GitHub view in the add and change menus', async () => {
-  githubKinds.values = ['github-repositories'];
+it('offers the generic collection view in applicable add and change menus', async () => {
+  collectionView.applicable = true;
   const { setViewKind } = await setup([
     ['All repositories', 'table'],
     ['Another table', 'table'],
   ]);
   const menu = await openMenu('All repositories');
   const choices = within(menu).getAllByRole('menuitem', {
-    name: 'GitHub Repositories',
+    name: 'Syncable Collection',
   });
 
   expect(choices).toHaveLength(2);
-  expect(within(menu).queryByText('GitHub Organizations')).toBeNull();
   expect(within(menu).queryByText('Sync')).toBeNull();
   fireEvent.click(choices[1]);
   expect(setViewKind).toHaveBeenCalledWith(
     expect.stringMatching(/^_new:view-/),
-    'github-repositories',
+    'syncable-collection',
   );
 });

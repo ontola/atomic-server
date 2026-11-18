@@ -23,6 +23,52 @@ A native app that has its own repository and writes its own classes into a drive
 
 The web app lists the ExternalApps under 'Apps in this drive' in the drive settings, and adds 'Open in <app>' to the menu of a resource whose class is in `handlesClasses`. Nothing is activated or granted: it is a label, not an Installation. In Dart, `store.registerApp(...)` from `atomic_store` creates or updates it, and is safe to call on every start.
 
+## Built-in Sync apps
+
+Built-in service apps use the shared Data Browser iframe bridge. Their Sync
+code imports `syncables/browser` from the pinned `syncables` npm dependency.
+The browser build bundles that reader with the Atomic app into one
+`builtin-syncables.js` module, which Atomic Server embeds and serves inside
+an opaque iframe. No executable module is downloaded from the integration
+proxy at runtime.
+
+Installing a provider creates an ordinary App resource with an Accounts Table
+as its child. Its name and icon come from the proxy's public OpenAPI metadata;
+the `info.x-logo.url` image is resized and uploaded as an Atomic File beneath
+the App. An existing icon is preserved. Opening an older installation explicitly
+from Apps upgrades its root resource in place, retaining the App subject and
+stable source identities rather than creating another installation.
+
+When the user requests a refresh, the host loads the configured proxy's
+composed OpenAPI document and catalog query defaults. Standard OpenAPI
+Overlays, CRUD Causality and Pagination Schemes describe the available
+collections and their reads. The app uses `describePlatform` and named
+`readCollections` calls; the shared library handles collection selection,
+pagination links, read budgets and partial snapshots.
+
+Atomic-specific code maps those snapshots into stable drive resources and
+typed rows, provides the UI, and enforces permissions through the existing
+bridge. Writes stay within the selected table and its children, using the
+person's existing rights. Provider credentials remain at the proxy, and
+browser connection keys stay outside the iframe. Catalog metadata does not
+expand host permissions.
+
+**Syncable Collection** is a generic native table view, installed with **+**.
+During explicit discovery, the Sync app saves a versioned collection descriptor
+with its real row-class subject, column property bindings, labels, value formats
+and an optional property holding each row's saved child-table target. Titles
+and enum labels come from ordinary OpenAPI schema fields; the Atomic storage
+adapter supplies the bindings to stored Atomic properties. The descriptor is
+declarative data, not executable UI code or a separate provider view registry.
+
+The native view renders these saved values and offers **Open**. It never mounts
+an iframe, refreshes a provider or creates missing collections. Navigation
+rechecks the row, direct child target and selected drive. Missing or invalid
+values remain unknown. Legacy GitHub Organizations and Repositories view kinds
+resolve to this generic view. GitHub's provider-specific projection and sync
+controls remain in the sandboxed Sync app; this renderer does not replace that
+adapter. See [Apps](app/apps.md#import-github-issues) for the user flow.
+
 ## Installing a plugin
 
 You need write access to the drive the plugin will be installed on. Two ways in, one review:

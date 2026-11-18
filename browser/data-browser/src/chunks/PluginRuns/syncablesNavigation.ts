@@ -6,6 +6,7 @@ const NODE_PREFIX = 'syncables:node:';
 /** These tables hold resources that belong in the drive's navigation tree. */
 export function isSyncablesNavigationTable(localId: unknown): boolean {
   if (typeof localId !== 'string') return false;
+  if (localId === 'syncables:accounts') return true;
   if (PLATFORM_ID.test(localId)) return true;
   if (!localId.startsWith(NODE_PREFIX)) return false;
 

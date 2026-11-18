@@ -1,11 +1,12 @@
 /**
- * A provider installation is an ordinary Atomic table, not an executable App.
+ * A provider installation is an ordinary drive App with an Accounts table.
  *
  * This is the first provisioning slice of planning/builtin-syncables-apps.md.
  * Source connections and sandboxed view mounting are deliberately separate:
- * creating a table must never silently authorize an external service.
+ * installing an app must never silently authorize an external service.
  */
 import { ensureSyncablesTableViews } from './syncablesViews';
+import { syncableHierarchySchema } from './syncableHierarchy';
 import {
   AtomicError,
   core,
@@ -14,6 +15,7 @@ import {
   ensureSchema,
   ErrorType,
   findSchema,
+  pluginSchema,
   subjectsReferToSameResource,
   type PropertySpec,
   type SchemaSpec,
@@ -30,10 +32,30 @@ export const syncableNameProperty: PropertySpec = {
   datatype: Datatype.STRING,
 };
 
-/** Stored on the table, so its identity survives renaming and moving. */
+/** Stored on the installation, so its identity survives renaming and moving. */
 export const syncablePlatformSchema = (): SchemaSpec => ({
   properties: [
     syncableNameProperty,
+    {
+      shortname: 'builtin-app',
+      name: 'Built-in app',
+      description: 'A registered app delivered by this Atomic Server release.',
+      datatype: Datatype.STRING,
+    },
+    {
+      shortname: 'syncable-api-document',
+      name: 'Integration API description',
+      description:
+        'Public composed OpenAPI metadata saved from the configured integration catalog.',
+      datatype: Datatype.JSON,
+    },
+    {
+      shortname: 'syncable-api-selection',
+      name: 'Integration API selection',
+      description:
+        'Public catalog consumer selections for the saved API description.',
+      datatype: Datatype.JSON,
+    },
     {
       shortname: 'syncable-platform-index',
       name: 'Connected platform tables',
@@ -133,7 +155,7 @@ export async function loadSyncableResource(
   }
 }
 
-/** Cert-based resources have a stable drive; older resources may only have a parent. */
+/** Verify ancestry too: moving an ancestor may leave an old drive stamp. */
 export async function isSyncableResourceInDrive(
   store: SchemaStore,
   drive: string,
@@ -148,8 +170,12 @@ export async function isSyncableResourceInDrive(
     const resource = await loadSyncableResource(store, current);
     if (!resource) return false;
     const assignedDrive = resource.get(DRIVE_PROPERTY);
-    if (typeof assignedDrive === 'string')
-      return subjectsReferToSameResource(drive, assignedDrive);
+    if (
+      assignedDrive !== undefined &&
+      (typeof assignedDrive !== 'string' ||
+        !subjectsReferToSameResource(drive, assignedDrive))
+    )
+      return false;
     const parent = resource.get(core.properties.parent);
     if (typeof parent !== 'string' || !parent) return false;
     current = parent;
@@ -158,7 +184,7 @@ export async function isSyncableResourceInDrive(
   return false;
 }
 
-/** Read-only lookup, including a platform table moved elsewhere in the drive. */
+/** Read-only lookup, including an installed App moved elsewhere in the drive. */
 export async function findSyncablePlatform(
   store: PlatformProvisioner,
   input: { drive: string; proxyOrigin: string; platform: string },
@@ -171,12 +197,19 @@ export async function findSyncablePlatform(
   const proxyProperty = schema.properties?.['syncable-proxy-origin'];
   if (!platformProperty || !proxyProperty) return undefined;
 
-  const isMatchingTable = (target: SchemaResource) => {
+  const app = await findSchema(store, drive, pluginSchema());
+  const builtinProperty = schema.properties?.['builtin-app'];
+
+  const isMatchingInstallation = (target: SchemaResource) => {
     const classes = target.get(core.properties.isA);
 
     return (
       Array.isArray(classes) &&
-      classes.includes(dataBrowser.classes.table) &&
+      (classes.includes(dataBrowser.classes.table) ||
+        (app.classes?.app &&
+          classes.includes(app.classes.app) &&
+          builtinProperty &&
+          target.get(builtinProperty) === 'syncables')) &&
       target.get(platformProperty) === platform &&
       target.get(proxyProperty) === proxyOrigin
     );
@@ -194,7 +227,7 @@ export async function findSyncablePlatform(
 
         if (
           target &&
-          isMatchingTable(target) &&
+          isMatchingInstallation(target) &&
           (await isSyncableResourceInDrive(store, drive, target.subject))
         ) {
           return target.subject;
@@ -208,7 +241,7 @@ export async function findSyncablePlatform(
 
   if (
     original &&
-    isMatchingTable(original) &&
+    isMatchingInstallation(original) &&
     (await isSyncableResourceInDrive(store, drive, original.subject))
   ) {
     return original.subject;
@@ -237,12 +270,7 @@ async function indexSyncablePlatform(
   await root.save();
 }
 
-/**
- * Return an existing platform table or create it at the current drive root.
- * Reopening an installed provider must not create a second table.
- *
- * The table starts with the built-in Syncables view and a standard table view.
- */
+/** Return the same installed App after reinstalling, renaming or moving it. */
 export function ensureSyncablePlatform(
   store: PlatformProvisioner,
   input: PlatformInstall,
@@ -259,71 +287,182 @@ interface PlatformInstall {
   name: string;
 }
 
+const ACCOUNTS_LOCAL_ID = 'syncables:accounts';
+
+type ParentResource = SchemaResource & {
+  getChildrenCollection?: () => Promise<{ getAllMembers(): Promise<string[]> }>;
+  remove?: (property: string) => void;
+};
+
+function classesOf(resource: SchemaResource): string[] {
+  const value = resource.get(core.properties.isA);
+
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+}
+
+/** Migrate only installation-owned direct rows; every source identity stays put. */
+async function migratePlatformRows(
+  store: PlatformProvisioner,
+  drive: string,
+  root: ParentResource,
+  accounts: SchemaResource,
+  accountClass: string,
+) {
+  if (!root.getChildrenCollection)
+    throw new Error('Cannot enumerate this installation for migration');
+  const hierarchy = await findSchema(store, drive, syncableHierarchySchema());
+  const kindProperty = hierarchy.properties?.['syncable-node-kind'];
+  const collection = await root.getChildrenCollection();
+  const children = await collection.getAllMembers();
+  const rawViews = root.get(dataBrowser.properties.tableViews);
+  const views = Array.isArray(rawViews)
+    ? rawViews.filter((value): value is string => typeof value === 'string')
+    : [];
+  const adoptedViews: string[] = [];
+
+  for (const subject of new Set([...children, ...views])) {
+    if (subject === accounts.subject) continue;
+    const child = await store.getResource(subject);
+    const parent = child.get(core.properties.parent);
+    const atRoot =
+      typeof parent === 'string' &&
+      subjectsReferToSameResource(parent, root.subject);
+    const alreadyMoved =
+      typeof parent === 'string' &&
+      subjectsReferToSameResource(parent, accounts.subject);
+    if (!atRoot && !alreadyMoved) continue;
+    if (!(await isSyncableResourceInDrive(store, drive, subject))) continue;
+    const classes = classesOf(child);
+    const view =
+      views.includes(subject) && classes.includes(dataBrowser.classes.view);
+    const row =
+      classes.includes(accountClass) ||
+      (kindProperty &&
+        child.get(kindProperty) === 'public' &&
+        classes.includes(dataBrowser.classes.table));
+    if (!view && !row) continue;
+
+    if (atRoot) {
+      await child.set(core.properties.parent, accounts.subject);
+      await child.save();
+    }
+
+    if (view) adoptedViews.push(subject);
+  }
+
+  if (adoptedViews.length) {
+    const existing = accounts.get(dataBrowser.properties.tableViews);
+    const combined = new Set([
+      ...(Array.isArray(existing)
+        ? existing.filter((value): value is string => typeof value === 'string')
+        : []),
+      ...adoptedViews,
+    ]);
+    await accounts.set(dataBrowser.properties.tableViews, [...combined]);
+    const priorDefault = root.get(dataBrowser.properties.tableDefaultView);
+    if (typeof priorDefault === 'string' && adoptedViews.includes(priorDefault))
+      await accounts.set(dataBrowser.properties.tableDefaultView, priorDefault);
+    await accounts.save();
+  }
+}
+
 async function provisionPlatform(
   store: PlatformProvisioner,
   input: PlatformInstall,
 ): Promise<string> {
   const { drive, proxyOrigin, platform, name } = input;
   const localId = platformLocalId(proxyOrigin, platform);
-
   const existing = await findSyncablePlatform(store, input);
   const schema = await ensureSchema(store, drive, syncablePlatformSchema());
+  const app = await ensureSchema(store, drive, pluginSchema());
+  let subject = existing;
 
-  if (existing) {
-    await ensureSyncablesTableViews(store, existing);
-    await indexSyncablePlatform(
+  if (!subject) {
+    const root = await store.newResource({
+      parent: drive,
+      isA: [app.classes.app],
+      propVals: {
+        [core.properties.name]: name,
+        [core.properties.localId]: localId,
+        [schema.properties['builtin-app']]: 'syncables',
+        [schema.properties['syncable-platform-id']]: platform,
+        [schema.properties['syncable-proxy-origin']]: proxyOrigin,
+      },
+    });
+
+    try {
+      await root.save();
+      subject = root.subject;
+    } catch (error) {
+      subject = await findSyncablePlatform(store, input);
+      if (!subject) throw error;
+    }
+  }
+
+  const root = (await store.getResource(subject)) as ParentResource;
+  const data = root.get(app.properties['app-data']);
+  let accounts =
+    typeof data === 'string'
+      ? await loadSyncableResource(store, data)
+      : await store.findByLocalId(drive, subject, ACCOUNTS_LOCAL_ID);
+  if (typeof data === 'string' && !accounts)
+    throw new Error('The installed app accounts table is unavailable');
+  const accountsParent = accounts?.get(core.properties.parent);
+  if (
+    accounts &&
+    (typeof accountsParent !== 'string' ||
+      !subjectsReferToSameResource(accountsParent, subject) ||
+      !classesOf(accounts).includes(dataBrowser.classes.table) ||
+      accounts.get(schema.properties['syncable-platform-id']) !== platform ||
+      accounts.get(schema.properties['syncable-proxy-origin']) !==
+        proxyOrigin ||
+      !(await isSyncableResourceInDrive(store, drive, accounts.subject)))
+  )
+    throw new Error('The installed app accounts table has a different source');
+
+  if (!accounts) {
+    accounts = await store.newResource({
+      parent: subject,
+      isA: [dataBrowser.classes.table],
+      propVals: {
+        [core.properties.name]: 'Accounts',
+        [core.properties.localId]: ACCOUNTS_LOCAL_ID,
+        [core.properties.classtype]: schema.classes['syncable-account'],
+        [schema.properties['syncable-platform-id']]: platform,
+        [schema.properties['syncable-proxy-origin']]: proxyOrigin,
+      },
+    });
+    await accounts.save();
+  }
+
+  if (classesOf(root).includes(dataBrowser.classes.table))
+    await migratePlatformRows(
       store,
       drive,
-      schema.properties['syncable-platform-index'],
-      localId,
-      existing,
+      root,
+      accounts,
+      schema.classes['syncable-account'],
     );
-
-    return existing;
-  }
-
-  const table = await store.newResource({
-    parent: drive,
-    isA: [dataBrowser.classes.table],
-    propVals: {
-      [core.properties.name]: name,
-      [core.properties.localId]: localId,
-      [core.properties.classtype]: schema.classes['syncable-account'],
-      [schema.properties['syncable-platform-id']]: platform,
-      [schema.properties['syncable-proxy-origin']]: proxyOrigin,
-    },
-  });
-
-  try {
-    await table.save();
-  } catch (error) {
-    // If a concurrent install won the same localId, reuse the winner.
-    const winner = await findSyncablePlatform(store, input);
-
-    if (winner) {
-      await ensureSyncablesTableViews(store, winner);
-      await indexSyncablePlatform(
-        store,
-        drive,
-        schema.properties['syncable-platform-index'],
-        localId,
-        winner,
-      );
-
-      return winner;
-    }
-
-    throw error;
-  }
-
-  await ensureSyncablesTableViews(store, table.subject);
+  await ensureSyncablesTableViews(store, accounts.subject);
+  await root.set(app.properties['app-data'], accounts.subject);
+  await root.set(schema.properties['builtin-app'], 'syncables');
+  await root.set(core.properties.isA, [
+    ...classesOf(root).filter(kind => kind !== dataBrowser.classes.table),
+    ...(!classesOf(root).includes(app.classes.app) ? [app.classes.app] : []),
+  ]);
+  root.remove?.(core.properties.classtype);
+  root.remove?.(dataBrowser.properties.tableViews);
+  root.remove?.(dataBrowser.properties.tableDefaultView);
+  await root.save();
   await indexSyncablePlatform(
     store,
     drive,
     schema.properties['syncable-platform-index'],
     localId,
-    table.subject,
+    subject,
   );
 
-  return table.subject;
+  return subject;
 }

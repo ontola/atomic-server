@@ -9,7 +9,7 @@ import {
 import { useCallback, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../../helpers/navigation';
-import { getIconForClass } from '../../../helpers/iconMap';
+import { ResourceGlyph } from '../../../components/ResourceGlyph';
 import { BookmarkGridItem } from './BookmarkGridItem';
 import { BasicGridItem } from './BasicGridItem';
 import { GridCard, GridItemTitle, GridItemWrapper } from './components';
@@ -58,8 +58,6 @@ export function ResourceGridItem({
   const classType = useResource(classTypeSubject);
   const [classTypeName] = useTitle(classType);
 
-  const Icon = getIconForClass(classTypeSubject ?? '');
-
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -90,7 +88,7 @@ export function ResourceGridItem({
       ) : (
         <GridCard subject={transitionSubject}>
           <ClassBanner>
-            <Icon />
+            <ResourceGlyph resource={resource} />
             <span>{classTypeName}</span>
           </ClassBanner>
           <ErrorBoundary FallBackComponent={GridItemError}>

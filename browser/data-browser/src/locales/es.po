@@ -1866,6 +1866,7 @@ msgstr "Elige si este recurso aparece en tus favoritos."
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/IntegrationStore.tsx
@@ -5200,6 +5201,7 @@ msgstr "Texto del botón"
 #: src/actions/runAction.ts
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/IntegrationActions.tsx
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Action"
 msgstr "Acción"
@@ -13538,9 +13540,6 @@ msgstr "Al pulsar Enviar informe compartes con el equipo de Atomic, mediante Sen
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Informa de un error o sugiere una mejora. Tu mensaje y tu correo opcional se envían al equipo de Atomic mediante Sentry, junto con detalles técnicos de tu configuración (versión de la app, dirección y estado del servidor). No incluyas contenido privado del espacio de trabajo."
 
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
@@ -13820,6 +13819,7 @@ msgid "This view cannot connect an account"
 msgstr "Esta vista no puede conectar una cuenta"
 
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
 msgid "Loading stored rows…"
 msgstr "Cargando filas guardadas…"
 
@@ -13876,3 +13876,43 @@ msgstr "Sincronizar incidencias"
 #: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
 msgid "Opening Sync…"
 msgstr "Abriendo Sincronizar…"
+
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
+msgid "No stored rows yet."
+msgstr "Todavía no hay filas guardadas."
+
+#: src/chunks/PluginRuns/SyncableCollectionView.tsx
+msgid "Syncable Collection"
+msgstr "Colección sincronizable"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Built-in app"
+msgstr "Aplicación integrada"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A registered app delivered by this Atomic Server release."
+msgstr "Una aplicación registrada incluida en esta versión de Atomic Server."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API description"
+msgstr "Descripción de la API de integración"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public composed OpenAPI metadata saved from the configured integration catalog."
+msgstr "Metadatos públicos de OpenAPI combinados y guardados desde el catálogo de integraciones configurado."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API selection"
+msgstr "Selección de la API de integración"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public catalog consumer selections for the saved API description."
+msgstr "Opciones públicas del cliente del catálogo para la descripción de API guardada."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Accounts"
+msgstr "Cuentas"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "The app is ready, but its icon could not be loaded."
+msgstr "La aplicación está lista, pero no se pudo cargar su icono."

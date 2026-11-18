@@ -83,23 +83,29 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     // that as hidden too: otherwise `useChildren` fetches every table row
     // into the tree, then hides them when the class arrives — the sidebar
     // flash on open.
-    const { classes, isTable, isDirectory, tableViews } = useMemo(() => {
-      const current = snapshot.resource;
-      const currentClasses = current.getClasses();
-      const table = currentClasses.includes(dataBrowser.classes.table);
-      const directory =
-        table &&
-        isSyncablesNavigationTable(current.get(core.properties.localId));
+    const { classes, isTable, isDirectory, navigationDecorations } =
+      useMemo(() => {
+        const current = snapshot.resource;
+        const currentClasses = current.getClasses();
+        const table = currentClasses.includes(dataBrowser.classes.table);
+        const directory =
+          table &&
+          isSyncablesNavigationTable(current.get(core.properties.localId));
+        const icon = current.get(dataBrowser.properties.icon);
 
-      return {
-        classes: currentClasses,
-        isTable: table,
-        isDirectory: directory,
-        tableViews: directory
-          ? current.getSubjects(dataBrowser.properties.tableViews)
-          : [],
-      };
-    }, [snapshot]);
+        return {
+          classes: currentClasses,
+          isTable: table,
+          isDirectory: directory,
+          // An app's icon is stored alongside its data, but is not a folder to browse.
+          navigationDecorations: [
+            ...(directory
+              ? current.getSubjects(dataBrowser.properties.tableViews)
+              : []),
+            ...(typeof icon === 'string' ? [icon] : []),
+          ],
+        };
+      }, [snapshot]);
     const websiteClass = useWebsiteClass(classes.join('|'));
     const hideChildren =
       !!websiteClass ||
@@ -114,9 +120,9 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
 
     const { subjects: children, total } = useChildren(
       hideChildren ? undefined : subject,
-      { limit: SIDEBAR_CHILD_LIMIT + tableViews.length },
+      { limit: SIDEBAR_CHILD_LIMIT + navigationDecorations.length },
     );
-    const visibleChildren = withoutTableViews(children, tableViews);
+    const visibleChildren = withoutTableViews(children, navigationDecorations);
     const totalChildren = total - (children.length - visibleChildren.length);
     const subResources =
       visibleChildren.length > SIDEBAR_CHILD_LIMIT

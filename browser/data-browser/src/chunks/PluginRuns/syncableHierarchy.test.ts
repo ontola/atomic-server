@@ -14,6 +14,8 @@ describe('stored GitHub discovery vocabulary', () => {
       ['syncable-repository-private', Datatype.BOOLEAN],
       ['syncable-repository-has-issues', Datatype.BOOLEAN],
       ['syncable-repository-open-issues', Datatype.INTEGER],
+      ['syncable-collection-view', Datatype.JSON],
+      ['syncable-open-target', Datatype.ATOMIC_URL],
     ])
       expect(
         schema.properties.find(row => row.shortname === name)?.datatype,

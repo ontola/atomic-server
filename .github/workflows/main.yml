@@ -3,6 +3,12 @@ on:
     branches: [develop]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Heavy CI runner (default follows repository configuration)
+        type: choice
+        default: default
+        options: [default, github-hosted]
 
 # Feature-branch pushes do not trigger CI. Dispatch full validation explicitly
 # on a temporary branch containing the exact PR heads to test together.
@@ -24,7 +30,8 @@ concurrency:
 # Trusted heavy CI defaults to Mancave so its Dagger cache stays warm. The
 # selector and result jobs use hosted runners to avoid queueing a few seconds
 # of control work behind long Mancave builds. If Mancave is offline, heavy CI
-# queues; set CI_RUNNER_OVERRIDE = ["ubuntu-latest"] to explicitly use hosted runners.
+# queues; dispatch with runner=github-hosted to select hosted for one run.
+# CI_RUNNER_OVERRIDE = ["ubuntu-latest"] remains a repository-wide escape hatch.
 # Deployments retain their existing runners.
 #
 # The old variable name, CI_RUNNER, is set to ["ubuntu-latest"] on purpose.
@@ -48,6 +55,7 @@ jobs:
       - id: pick
         env:
           FORCE_RUNNER: ${{ vars.CI_RUNNER_OVERRIDE }}
+          DISPATCH_RUNNER: ${{ inputs.runner }}
           EVENT_NAME: ${{ github.event_name }}
           REPO: ${{ github.repository }}
         run: |
@@ -55,6 +63,12 @@ jobs:
 
           if [ "$EVENT_NAME" = "pull_request" ] || [ "$EVENT_NAME" = "pull_request_target" ]; then
             echo "PR event — forcing GitHub-hosted (never run untrusted code on Mancave)"
+            echo "host=hosted" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DISPATCH_RUNNER" = "github-hosted" ]; then
+            echo "Explicit dispatch runner — forcing GitHub-hosted for this run"
             echo "host=hosted" >> "$GITHUB_OUTPUT"
             exit 0
           fi

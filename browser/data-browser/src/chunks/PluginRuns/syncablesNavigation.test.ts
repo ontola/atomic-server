@@ -11,6 +11,11 @@ const nodeId = (kind: string, connection?: string) => {
   return 'syncables:node:' + encodeURIComponent(JSON.stringify(key));
 };
 
+it('exposes the built-in App Accounts table children without exposing ordinary table rows', () => {
+  expect(isSyncablesNavigationTable('syncables:accounts')).toBe(true);
+  expect(isSyncablesNavigationTable('syncables:accounts-extra')).toBe(false);
+});
+
 describe('Syncables navigation tables', () => {
   it.each([
     'syncables:platform:https%3A%2F%2Fproxy.example:github-issues',

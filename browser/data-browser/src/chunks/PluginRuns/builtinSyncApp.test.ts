@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
+import { mergeQuerySelections } from 'syncables/browser';
+import catalogFixture from './fixtures/github-syncables-catalog.json';
+import catalogSelection from './fixtures/github-syncables-selection.json';
 import {
   createSyncApp,
-  publicContinuation,
   sourceKeys,
   view,
   // @ts-expect-error The server-delivered plain JavaScript module has no declarations.
-} from '../../../../../server/src/handlers/builtin_syncables.js';
+} from './builtinSyncApp.js';
 
 const P = 'https://atomicdata.dev/properties/';
 const names = [
@@ -24,6 +26,8 @@ const names = [
   'repository-private',
   'repository-has-issues',
   'repository-open-issues',
+  'collection-view',
+  'open-target',
 ];
 const properties = Object.fromEntries(
   names.map(name => ['syncable-' + name, 'atomic:' + name]),
@@ -56,7 +60,37 @@ const repo = {
   open_issues_count: 7,
 };
 
-function setup(kind = 'organizations', extra = {}) {
+/** The composed published IAP catalog, with one unrelated test-only collection. */
+function apiDocument() {
+  return {
+    ...structuredClone(catalogFixture),
+    paths: {
+      ...structuredClone(catalogFixture.paths),
+      '/unrelated': {
+        get: {
+          parameters: [
+            { name: 'filter', in: 'query', schema: { type: 'string' } },
+          ],
+          responses: {},
+        },
+      },
+    },
+    components: {
+      ...structuredClone(catalogFixture.components),
+      crudResources: {
+        ...structuredClone(catalogFixture.components.crudResources),
+        unrelated: {
+          collections: { unrelated: { urlTemplate: '/unrelated' } },
+        },
+      },
+    },
+  };
+}
+
+function setup(
+  kind = 'organizations',
+  extra: { querySelection?: unknown; [name: string]: unknown } = {},
+) {
   const data = new Map<string, Record<string, unknown>>([[root, {}]]);
   let sequence = 0;
   const resource = (subject: string) => ({
@@ -84,22 +118,35 @@ function setup(kind = 'organizations', extra = {}) {
     ownerLogin: 'org',
     repoId: '200',
     repoName: 'project',
+    document: apiDocument(),
     schema: { properties, classes },
     ...extra,
+    querySelection: mergeQuerySelections(
+      catalogSelection,
+      extra.querySelection,
+    ),
   };
-  const request = vi.fn(async ({ path }: { path: string }) => ({
-    status: 200,
-    headers: {} as Record<string, string>,
-    body: (path === 'user/repos'
-      ? [repo]
-      : path === 'user/orgs'
-        ? [{ id: 100, login: 'org' }]
-        : path === 'user'
-          ? { id: 300, login: 'person' }
-          : path === 'repos/org/project'
-            ? repo
-            : [issue()]) as unknown,
-  }));
+  const request = vi.fn(
+    async ({
+      path,
+    }: {
+      path: string;
+      connectionId?: string;
+      query?: Record<string, string>;
+    }) => ({
+      status: 200,
+      headers: {} as Record<string, string>,
+      body: (path === 'user/repos'
+        ? [repo]
+        : path === 'user/orgs'
+          ? [{ id: 100, login: 'org' }]
+          : path === 'user'
+            ? { id: 300, login: 'person' }
+            : path === 'repos/org/project'
+              ? repo
+              : [issue()]) as unknown,
+    }),
+  );
   const store = {
     getContext: vi.fn(async () => context),
     getResource: vi.fn(async (subject: string) => resource(subject)),
@@ -192,6 +239,83 @@ describe('GitHub sync app using the shared bridge', () => {
     await app.refresh();
     expect(data.size).toBe(before);
     expect(nodes(data, 'repositories')).toHaveLength(2);
+  });
+
+  it('derives saved collection labels and enum labels from the composed API schema', async () => {
+    const { app, data, context } = setup();
+    const schema = context.document.components.schemas.builtinGithubRepository;
+    schema.title = 'API supplied repository heading';
+    schema.properties.name.title = 'API supplied name label';
+    schema.properties.private.oneOf = [
+      { enum: [true], title: 'API hidden' },
+      { enum: [false], title: 'API visible' },
+    ];
+    await app.refresh();
+    const listing = nodes(data, 'repositories')[0][1];
+    expect(listing[prop('collection-view')]).toMatchObject({
+      version: 1,
+      rowClass: classes['syncable-repository'],
+      title: 'API supplied repository heading',
+      openTargetProperty: prop('open-target'),
+      columns: expect.arrayContaining([
+        { property: P + 'name', label: 'API supplied name label' },
+        {
+          property: prop('repository-private'),
+          label: 'Kind',
+          format: 'enum',
+          labels: { true: 'API hidden', false: 'API visible' },
+        },
+      ]),
+    });
+    expect(data.get(root)![prop('collection-view')]).toMatchObject({
+      rowClass: classes['syncable-owner'],
+      columns: expect.arrayContaining([
+        {
+          property: prop('repository-count'),
+          label: 'API supplied repository heading',
+          format: 'count',
+        },
+        {
+          property: prop('owner-kind'),
+          label: 'Kind',
+          format: 'enum',
+          labels: { organization: 'Organization', personal: 'Personal owner' },
+        },
+      ]),
+    });
+  });
+
+  it('materializes navigation links during explicit discovery and mirror creation without eager issue reads', async () => {
+    const { app, data, store, context, request } = setup();
+    await app.refresh();
+    const [ownerSubject, owner] = nodes(data, 'owner').find(
+      ([, props]) => props[P + 'name'] === 'org',
+    )!;
+    const [listingSubject] = nodes(data, 'repositories').find(
+      ([, props]) => props[P + 'parent'] === ownerSubject,
+    )!;
+    expect(owner[prop('open-target')]).toBe(listingSubject);
+    expect(nodes(data, 'mirror')).toHaveLength(0);
+    expect(request.mock.calls.map(([call]) => call.path)).not.toContain(
+      'repositories/200/issues',
+    );
+    const [repoSubject, savedRepo] = nodes(data, 'repository')[0];
+    expect(savedRepo[prop('open-target')]).toBeUndefined();
+    const repositories = createSyncApp(store, {
+      ...context,
+      subject: listingSubject,
+      kind: 'repositories',
+    });
+    const before = request.mock.calls.length;
+    const mirror = await repositories.ensureMirror(
+      await store.getResource(repoSubject),
+    );
+    expect(savedRepo[prop('open-target')]).toBe(mirror.subject);
+    expect(request.mock.calls.length).toBe(before);
+    const identity = savedRepo[P + 'localId'];
+    await repositories.ensureMirror(await store.getResource(repoSubject));
+    expect(savedRepo[P + 'localId']).toBe(identity);
+    expect(nodes(data, 'mirror')).toHaveLength(1);
   });
 
   it('retains counts and rows after an incomplete discovery', async () => {
@@ -417,7 +541,7 @@ describe('GitHub sync app using the shared bridge', () => {
       request.mockResolvedValueOnce({
         status: 200,
         headers: {
-          link: '</repositories/200/issues?page=2&after=Y3Vyc29yOjY%3D>; rel="next"',
+          link: '</repositories/200/issues?per_page=100&page=2&state=all&after=Y3Vyc29yOjY%3D>; rel="next"',
         },
         body: [issue()],
       });
@@ -437,6 +561,179 @@ describe('GitHub sync app using the shared bridge', () => {
       );
     },
   );
+
+  it('selects only the mirror collection while retaining unrelated catalog defaults', async () => {
+    const { app, request } = setup('mirror', {
+      querySelection: {
+        query_overrides: [
+          { path: '/unrelated', values: { filter: 'stored-default' } },
+        ],
+      },
+    });
+    expect(await app.refresh()).toMatchObject({ rows: 1, incomplete: false });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: 'repositories/200/issues',
+        query: { per_page: '100', state: 'all' },
+      }),
+    );
+  });
+
+  it('opens saved Sync controls without needing provider metadata', async () => {
+    const { store, app, request } = setup('mirror', { document: undefined });
+    const element = document.createElement('div');
+    await view({ root: element, store });
+    expect(element.textContent).toContain('Sync now');
+    expect(request).not.toHaveBeenCalled();
+    await expect(app.refresh()).rejects.toThrow(
+      'API description is unavailable',
+    );
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('retains accepted rows and the last success when a later page fails', async () => {
+    const { app, data, request } = setup('mirror');
+    data.get(root)![prop('mirror-status')] = {
+      lastSuccess: 'earlier complete read',
+    };
+    request.mockResolvedValueOnce({
+      status: 200,
+      headers: {
+        link: '</repositories/200/issues?per_page=100&page=2&state=all>; rel="next"',
+      },
+      body: [issue()],
+    });
+    request.mockResolvedValueOnce({ status: 503, headers: {}, body: [] });
+    expect(await app.refresh()).toMatchObject({
+      rows: 1,
+      added: 1,
+      incomplete: true,
+    });
+    expect(await app.status()).toMatchObject({
+      lastSuccess: 'earlier complete read',
+      error: expect.stringContaining('HTTP 503'),
+    });
+    expect(
+      [...data.values()].some(row => row[P + 'name'] === 'First issue'),
+    ).toBe(true);
+  });
+
+  it.each([undefined, 'public'])(
+    'keeps accepted records when the library reaches the %s request budget',
+    async mode => {
+      const { app, request, data } = setup('mirror', {
+        mode,
+        ...(mode ? { connectionId: undefined } : {}),
+      });
+      data.get(root)![prop('mirror-status')] = {
+        lastSuccess: 'earlier complete read',
+      };
+      let page = 0;
+      request.mockImplementation(async () => {
+        page++;
+
+        return {
+          status: 200,
+          headers: {
+            link:
+              '</repositories/200/issues?per_page=100&page=' +
+              (page + 1) +
+              '&state=all>; rel="next"',
+          },
+          body: [{ ...issue(), id: 1000 + page, number: page }],
+        };
+      });
+      const limit = mode === 'public' ? 40 : 20;
+      expect(await app.refresh()).toMatchObject({
+        added: limit,
+        rows: limit,
+        incomplete: true,
+      });
+      expect(request).toHaveBeenCalledTimes(limit);
+      expect(await app.status()).toMatchObject({
+        lastSuccess: 'earlier complete read',
+      });
+      expect(
+        request.mock.calls.every(
+          ([sent]) => sent.connectionId === (mode ? undefined : 'slot'),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('retains an incomplete prefix if continuation repeats a provider identity', async () => {
+    const { app, request } = setup('mirror');
+    request.mockResolvedValueOnce({
+      status: 200,
+      headers: {
+        link: '</repositories/200/issues?per_page=100&page=2&state=all>; rel="next"',
+      },
+      body: [issue()],
+    });
+    request.mockResolvedValueOnce({
+      status: 200,
+      headers: {},
+      body: [issue()],
+    });
+    expect(await app.refresh()).toMatchObject({
+      added: 1,
+      rows: 1,
+      incomplete: true,
+    });
+    expect((await app.status()).error).toContain('repeated record identity');
+  });
+
+  it('uses library link validation and retains rows without contacting a foreign origin', async () => {
+    const { app, request } = setup('mirror');
+    request.mockResolvedValue({
+      status: 200,
+      headers: {
+        link: '<https://evil.example/repositories/200/issues?per_page=100&page=2&state=all>; rel="next"',
+      },
+      body: [issue()],
+    });
+    expect(await app.refresh()).toMatchObject({ added: 1, incomplete: true });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect((await app.status()).error).toContain('origin');
+  });
+
+  it('refuses a lossy query conversion before sending a continuation', async () => {
+    const { app, request } = setup('mirror');
+    request.mockResolvedValue({
+      status: 200,
+      headers: {
+        link: '</repositories/200/issues?per_page=100&page=2&state=open&state=all>; rel="next"',
+      },
+      body: [issue()],
+    });
+    expect(await app.refresh()).toMatchObject({ added: 1, incomplete: true });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect((await app.status()).error).toContain('Repeated GitHub query');
+  });
+
+  it('forwards the exact next URL to host permission checks without rewriting its scope', async () => {
+    const { app, request } = setup('mirror');
+    request.mockResolvedValueOnce({
+      status: 200,
+      headers: {
+        link: '</repositories/999/issues?per_page=100&page=2&state=open>; rel="next"',
+      },
+      body: [issue()],
+    });
+    request.mockImplementationOnce(async () => {
+      throw new Error('Host refused a different source');
+    });
+    expect(await app.refresh()).toMatchObject({ added: 1, incomplete: true });
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        path: 'repositories/999/issues',
+        query: { per_page: '100', page: '2', state: 'open' },
+      }),
+    );
+    expect((await app.status()).error).toBe('Host refused a different source');
+  });
 
   it('links anonymous repositories separately and reuses their identities', async () => {
     const { app, data, store } = setup('public', {
@@ -464,24 +761,6 @@ describe('GitHub sync app using the shared bridge', () => {
 });
 
 describe('public pagination and stable source binding', () => {
-  it('accepts only the next page of the pinned public repository', () => {
-    expect(
-      publicContinuation(
-        '</repositories/200/issues?page=2&after=Y3Vyc29yOjY%3D>; rel="next"',
-        '200',
-        2,
-      ),
-    ).toBe('Y3Vyc29yOjY=');
-    for (const link of [
-      '<https://evil.example/repositories/200/issues?page=2>; rel="next"',
-      '</repositories/999/issues?page=2>; rel="next"',
-      '</repositories/200/issues?page=3>; rel="next"',
-      '</repositories/200/issues?page=2&state=open>; rel="next"',
-      '</repositories/200/issues?page=2&unexpected=x>; rel="next"',
-    ])
-      expect(() => publicContinuation(link, '200', 2)).toThrow();
-    expect(publicContinuation(undefined, '200', 2)).toBeUndefined();
-  });
   it('retains account-qualified mirror keys and the old lookup identity', () => {
     const [current, legacy] = sourceKeys(
       origin,

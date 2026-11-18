@@ -72,13 +72,14 @@ import type { QuickAddSpec } from './quickAdd';
 import { QuickFilterField } from './QuickFilterField';
 import {
   selectableViewKinds,
-  useGitHubViews,
-} from '@chunks/PluginRuns/githubViews';
+  useSyncableCollectionView,
+} from '@chunks/PluginRuns/syncableCollectionViews';
 
 /** Tabs sit in a row: a dragged one must not wander off it. */
 const keepHorizontal: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
 interface TableViewTabsProps {
+  table: string;
   /** Owning drive, for a table opened independently of the active drive. */
   drive?: string;
   /** The class of this table's rows, which decides what apps can show it. */
@@ -130,6 +131,7 @@ interface TableViewTabsProps {
  * tab is renamed inline by double-clicking it.
  */
 export function TableViewTabs({
+  table,
   drive: tableDrive,
   rowClass,
   views,
@@ -159,12 +161,12 @@ export function TableViewTabs({
   const store = useStore();
   const drive = tableDrive ?? store.getDrive();
   const driveApps = useDriveApps(drive);
-  const githubViews = useGitHubViews(drive, rowClass);
-  const builtinKinds = selectableViewKinds(githubViews.kinds);
+  const collectionView = useSyncableCollectionView(drive, table, rowClass);
+  const builtinKinds = selectableViewKinds(collectionView.applicable);
 
   const refreshApps = () => {
     driveApps.refresh();
-    githubViews.refresh();
+    collectionView.refresh();
   };
 
   const apps = appsForClass(driveApps.apps, rowClass);
