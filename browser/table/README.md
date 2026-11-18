@@ -164,3 +164,10 @@ bounds. It retains raw invalid input, publishes only valid finite values, suppor
 integer/nonnegative rules and equal inclusive limits, and reports validity to the
 host form. `parsePropertyRange` returns stable error codes; hosts can localize the
 control's messages. Remount the field when changing draft/schema revision.
+
+
+The range-policy proposal is independent of the baseline range-input move.
+Its original whole-number requirement on integer-column boundaries overlaps
+#2540 and must be reconciled before merge; this review does not establish a new
+Resource/Store persistence contract. The unused former host MinMaxInput is
+removed rather than kept as a second implementation.

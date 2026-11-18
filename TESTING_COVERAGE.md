@@ -2814,3 +2814,11 @@ localId durability contract still uses one flush.
 Manual acceptance measurements and their limits are recorded in PR #2361.
 The private-dataset harness is kept outside the repository; it is not a CI
 speed assertion. Crash durability is covered by the abort test above.
+
+
+Range-policy proposal: `browser/table/src/schema/PropertyRangeField.test.tsx`
+and the four actual Atomic `TableRangeInput.test.tsx` cases cover retained raw
+input, finite/fractional parsing, equal/max-only bounds and guarded submission.
+The original integer-bound restriction overlaps #2540 and is not a settled
+schema policy. The unused old MinMaxInput implementation has no callers and is
+removed, avoiding a second range-input implementation.
