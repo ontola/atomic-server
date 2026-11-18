@@ -167,8 +167,124 @@ observations of completed operations, not independently verifiable certificates.
 These receipts do not prove that a server flushed its disk or that an independent
 second replica has the change. Tabs sharing one client database are one stored
 copy, browser storage can be cleared or evicted, and a resource receipt does not
-cover attachment bytes or all its linked resources. Independent replica evidence
-remains follow-up work in [issue #2538](https://github.com/ontola/atomic-server/issues/2538).
+cover attachment bytes or all its linked resources. The SDK can assess explicit replica evidence as described below; built-in
+transports do not yet produce it.
+
+## Assess independent-replica evidence
+
+`evaluateReplicaEvidence` answers a narrower question: does the supplied evidence
+establish at least one persistent copy of this exact resource version independent
+of the local storage under the selected policy? It is a pure, synchronous SDK
+function; it does not send a request, subscribe to peers, or wait for replication.
+
+```ts
+import { evaluateReplicaEvidence } from '@tomic/lib';
+
+const receipt = await book.saveWithReceipt();
+const signal = evaluateReplicaEvidence({
+  subject: receipt.subject,
+  version: receipt.local?.version ?? null,
+  scope: 'device',
+});
+console.info(signal.status); // 'unsupported': no replica evidence provider
+```
+
+Choose `receipt.local.version` to ask about the locally persisted snapshot, or
+`receipt.server.version` to ask about the version accepted by that server. Do not
+silently substitute one for the other: concurrent edits can make them different.
+A missing or `null` version cannot satisfy this version-specific requirement.
+
+| Signal | Meaning |
+| --- | --- |
+| `unsupported` | No observation provider supports this evidence contract. This is the default with the built-in transports. |
+| `unknown` | A provider might support it, but required identity, provenance, generation or independence information is missing or cannot be trusted. |
+| `pending` | A supported provider has not supplied a qualifying completed barrier for this target. This does not mean the SDK scheduled a transfer or that replication will eventually succeed. |
+| `satisfied` | At least one supplied observation meets the selected policy for this exact target. |
+
+The result includes its target, qualifying observations and excluded observations
+with reasons. It is a detached immutable snapshot. Re-evaluate when your adapter
+provides new evidence or your trusted policy changes; the function maintains no
+cache or subscriptions and does not change `getSaveState()`.
+
+### Integrate a trusted storage adapter
+
+An adapter can pass `ReplicaObservation` records and a `ReplicaEvidencePolicy`.
+These are integration interfaces, not a built-in remote receipt producer:
+
+```ts
+import {
+  evaluateReplicaEvidence,
+  type ReplicaEvidencePolicy,
+  type ReplicaIdentity,
+  type ReplicaObservation,
+} from '@tomic/lib';
+
+// Supplied by your adapter using authenticated evidence and operator knowledge.
+// Neither SaveReceipt nor an Atomic peer ID supplies these facts today.
+declare const localReplica: ReplicaIdentity;
+declare const observations: readonly ReplicaObservation[];
+declare const trustPolicy: ReplicaEvidencePolicy;
+
+const signal = evaluateReplicaEvidence(
+  {
+    subject: receipt.subject,
+    version: receipt.local?.version ?? null,
+    source: localReplica,
+    scope: 'device',
+  },
+  observations,
+  trustPolicy,
+);
+```
+
+A supported observation identifies its provider, the reporting storage replica
+and generation, and a named persistence barrier bound to the subject and version.
+Only explicitly persistent storage with a completed barrier can qualify. Memory
+storage, an unknown capability, a pending or failed flush, or an ordinary commit
+acknowledgement cannot qualify.
+
+The policy's `assess(target, observation)` must independently establish trusted,
+authorized provenance for the exact observation, current generations for both
+source and destination, and independence under `target.scope`. Its assessment
+returns `trust`, `generation` and `independence`. Trust includes validating what
+the named barrier and backend actually promise, not just recognizing the sender.
+An optional `evidenceId` can correlate the observation with an externally verified
+record; the identifier itself proves nothing. The SDK does not authenticate a
+peer or validate a signature for you. Do not implement the policy as an
+unconditional trusted/independent response, or trust those claims merely because
+a peer supplied them. Provider names, different storage IDs and device labels are
+lookup keys, not proof. Missing policy information and policy exceptions fail
+closed.
+
+Use `scope: 'storage'` for separately backed storage, or `scope: 'device'` to
+require independence from loss of the local device. Two tabs sharing the same
+store never qualify as independent, including across a generation change. Two
+separately backed browser stores on one laptop can meet a trusted storage policy
+but cannot meet a device-loss policy. Scoped storage identities must be comparable
+within the adapter's trust relationship; do not invent IDs from URLs, presence
+sessions, Loro author IDs or browser fingerprinting.
+
+This first contract requires exact equality of the captured version strings.
+It does not infer coverage from a later or concurrent Loro frontier, timestamps,
+commit counts or displayed values. A provider must supply evidence for the exact
+target; a later frontier may contain it but will conservatively remain unproven
+here. Repeated observations of the same store do not create additional copies;
+the API assesses at least one qualifying replica, not a quorum or replica count.
+In particular, do not use `qualifying.length` as a count of independent copies.
+
+`satisfied` describes a historical completed persistence barrier under the supplied
+policy. It does not promise current retention, recoverable backups, attachment
+bytes, dependency closure, encryption-key availability, power-loss survival, or
+acceptance by an authority. Disconnecting does not undo a historical write.
+Resetting storage, deleting data or changing trust requires fresh adapter evidence
+and policy assessment before presenting a current-copy claim.
+
+Persistent storage identities and authenticated wire receipt producers remain
+follow-up work in [#2538](https://github.com/ontola/atomic-server/issues/2538),
+following the [#2537 design](https://github.com/ontola/atomic-server/pull/2537) and
+[#2244 contract discussion](https://github.com/ontola/atomic-server/pull/2244).
+Existing commit acknowledgements, peer counts and full-sync timestamps must not
+be converted into this evidence without the missing storage and trust facts.
 
 ## What you have
 
