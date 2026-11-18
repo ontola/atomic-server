@@ -2,6 +2,8 @@
 
 For the packaged macOS account and Cloud Vault acceptance setup, see
 [ACCOUNT_ACCEPTANCE.md](./ACCOUNT_ACCEPTANCE.md).
+For a real native preview recovering a file delivered late by an Iroh peer,
+see [NATIVE_FILE_RECOVERY_ACCEPTANCE.md](./NATIVE_FILE_RECOVERY_ACCEPTANCE.md).
 
 The packaged WebView uses styled-components at runtime. Tauri's asset CSP
 rewriting adds a `style-src` nonce that blocks those new style tags in WebKit,
