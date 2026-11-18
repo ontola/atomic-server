@@ -64,3 +64,5 @@ export type {
 export type { JSONValue } from './value.js';
 
 export { TableHeadingWrapper } from './chunks/TableEditor/TableHeading.js';
+
+export { TableQuickAddBar, type TableQuickAddBarProps } from './QuickAddBar.js';
