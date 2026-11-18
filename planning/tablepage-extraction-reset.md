@@ -97,6 +97,11 @@ Baseline React Compiler diagnostics were reproduced before retaining them.
 Full integration CI and the outstanding clean-base restacks remain merge
 prerequisites. Nothing is merged by this worker; trekmeester owns merge review.
 
+The independently restacked test-worker policy #2497 (`faa6ba0`) is not part
+of the eight-move validation batch. Its 14 package tests and commit hook passed;
+its original base remains preserved for #2498. Keep that review separate unless
+its configuration change is explicitly included in a later batch.
+
 The move parents preserve existing draft ownership, conversion, lifecycle and
 query readiness. Strict validation, scope services, queue isolation, failure
 recovery and accessibility additions remain with the improvement children.

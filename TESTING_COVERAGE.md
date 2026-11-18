@@ -13,6 +13,9 @@ dropdown positioning/trigger, resize, Back-to-close, expanded-row and column-fil
 tests exercise the same implementation through host entry points.
 `browser/ui/scripts/check-package.mjs` mounts compiled controls in a clean packed
 consumer and verifies NodeNext declarations without application source aliases.
+`browser/data-browser/src/oxc-styled-components.test.ts` runs the canonical shared
+Button source through the React Compiler and styled-components transforms,
+retaining display-name coverage after the host file becomes a compatibility export.
 
 Resource.set(undefined) (#2315): `browser/lib/src/resource.set-undefined.test.ts` covers removing optional string/date values with default and known-datatype validation, avoiding unnecessary Property reads, exactly one LocalChange event, removal in an exported/reopened Loro snapshot, and rejection of invalid non-undefined values. These are library unit checks; no server is required.
 
