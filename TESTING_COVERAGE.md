@@ -638,6 +638,8 @@ manufacturing proof on no-op passes or failed uploads.
 
 `browser/e2e/tests/resource-vault-sync.spec.ts` exercises the production browser,
 real WASM encryption and local receipt storage against a test-owned HTTP service.
+The manual-enable journeys begin with the drive opted out so boot enrollment
+cannot race the enable button; the real UI clears that preference.
 It covers a saved resource, same-account reload without a new upload, another
 account, edits during a held upload, failed upload and attachment wording. This
 is not validation of real S3 or the production control plane; the separate

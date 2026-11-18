@@ -145,8 +145,9 @@ Acceptance and design:
   and identical-version recreation, including changes through shared-store facades.
 - [x] Validate native bulk/live/reopen and departure across real processes,
   plus renderer identity changes, malformed evidence and old-host fallback.
-- [ ] Update public protocol/product docs and coverage; run required checks.
-- [ ] Publish this phase in PR #2576 and follow exact-head CI.
+- [x] Update public protocol/product docs and coverage; run required checks.
+- [x] Prepare this phase for the existing PR #2576.
+- [ ] Follow exact-head CI; runner availability can block the main pipeline.
 
 Evidence is session-local and metadata-only. Distinct storage identities do not
 establish independent physical devices, retention, attachment coverage or a

@@ -24,10 +24,15 @@ async function installVaultPortal(
   page: Page,
   onUploadFailure?: (url: string) => void,
 ) {
-  const identity = await page.evaluate(() => ({
-    drive: window.store.getDrive()!,
-    agent: window.store.getAgent()!.subject,
-  }));
+  const identity = await page.evaluate(() => {
+    const drive = window.store.getDrive()!;
+    // These journeys start with backup explicitly off, then enable it through
+    // the UI. Otherwise the boot watcher can enroll the personal drive before
+    // the manual-enable button is reached. Enabling clears this user preference.
+    localStorage.setItem('atomic.vault.optOut', JSON.stringify([drive]));
+
+    return { drive, agent: window.store.getAgent()!.subject };
+  });
   const enrollment = {
     id: 'resource-vault-enrollment',
     drive_subject: identity.drive,
@@ -250,6 +255,9 @@ test('real encrypted backup restores scoped resource proof on reload and keeps f
   await waitForClientDbFlush(page, { required: true });
   const listUrl = page.url();
   await page.goto(`${FRONTEND_URL}/app/sync`);
+  await expect(page.getByTestId('vault-enable')).toBeEnabled();
+  expect(portal.enrolled).toBe(false);
+  expect(portal.confirmed.size).toBe(0);
   await page.getByTestId('vault-enable').click();
   await expect(page.getByTestId('vault-backup-now')).toBeEnabled();
   await expect.poll(() => portal.checkpoints.length).toBe(1);
@@ -372,6 +380,9 @@ test('an edit after encrypted export stays pending and failed upload cannot conf
   const listUrl = page.url();
   portal.mode = 'hold';
   await page.goto(`${FRONTEND_URL}/app/sync`);
+  await expect(page.getByTestId('vault-enable')).toBeEnabled();
+  expect(portal.enrolled).toBe(false);
+  expect(portal.confirmed.size).toBe(0);
   await page.getByTestId('vault-enable').click();
   await expect.poll(() => portal.held.length).toBe(1);
   expect(portal.confirmed.size).toBe(0);
