@@ -413,6 +413,50 @@ pub fn live_peer_name(peer_id: &str) -> Option<String> {
         .and_then(|guard| guard.get(&normalize_node_id(peer_id)).cloned())
 }
 
+pub(crate) fn current_receipt_peer(peer: &str, generation: u64, agent: &ForAgent) -> bool {
+    live_peers()
+        .get(peer)
+        .is_some_and(|p| p.generation == generation && &p.agent == agent)
+}
+
+#[cfg(test)]
+pub(crate) fn receipt_peer_for_test(peer: &str, generation: u64, agent: ForAgent) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(64);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    live_peers().insert(
+        peer.into(),
+        LivePeer {
+            generation,
+            tx,
+            canonical_scheme: true,
+            agent,
+            _connection: None,
+        },
+    );
+}
+
+pub(crate) fn emit_receipt_if_current(
+    store: &Db,
+    agent: &ForAgent,
+    receipt: super::iroh_receipts::IrohReplicaReceipt,
+) {
+    let peers = live_peers();
+    if peers
+        .get(&receipt.remote_node_id)
+        .is_some_and(|p| p.generation == receipt.connection_generation && &p.agent == agent)
+    {
+        store.emit_replica_receipt(receipt);
+    }
+}
+
+fn receipt_capabilities(store: &Db, drive: &str) -> Vec<&'static str> {
+    let mut caps = super::protocol::CAPABILITIES.to_vec();
+    if store.kv.replica_identity(drive).ok().flatten().is_some() {
+        caps.push(super::protocol::CAP_IROH_STORAGE_RECEIPTS_V1);
+    }
+    caps
+}
+
 /// Returns the number of currently connected live peers.
 pub fn live_peer_count() -> usize {
     live_peers().len()
@@ -1120,6 +1164,8 @@ fn register_live_peer(
     // What the peer listed in its `AUTH_OK` (dial side) or `HELLO` (accept
     // side). Decides the identifier scheme on every frame this link carries.
     peer_caps: Vec<String>,
+    receipt_drive: Option<String>,
+    local_agent_generation: u64,
 ) {
     let key = normalize_node_id(&peer_id);
     let wire = super::engine::WireScheme::from_caps(&peer_caps);
@@ -1164,6 +1210,21 @@ fn register_live_peer(
         );
         !replacing
     };
+
+    let receipt_session = receipt_drive.as_ref().and_then(|drive| {
+        super::iroh_receipts::ReceiptSession::new(
+            &store,
+            key.clone(),
+            agent.clone(),
+            drive,
+            generation,
+            local_agent_generation,
+            &peer_caps,
+        )
+    });
+    if let Some(session) = &receipt_session {
+        session.start(store.clone(), tx_for_read.clone());
+    }
 
     let peer_short = key[..key.len().min(12)].to_string();
     tracing::info!("[live] registered peer {peer_short} (new={is_new_peer})");
@@ -1382,6 +1443,47 @@ fn register_live_peer(
                     .send(frame_with_len(&auth_required_error(buf[0])))
                     .await;
                 break;
+            }
+
+            // Receipt identity is fixed by the original node-bound handshake.
+            // Generic late AUTH may change ordinary sync permissions, but may
+            // never revive proof requests issued under an earlier identity.
+            if buf[0] == super::protocol::tag::AUTH {
+                if let Some(session) = &receipt_session {
+                    session.invalidate();
+                }
+            }
+            if buf[0] == super::protocol::tag::STORAGE_RECEIPT {
+                if let Some(session) = &receipt_session {
+                    session.receive(&store, &buf[1..]).await;
+                }
+                continue;
+            }
+            if buf[0] == super::protocol::tag::STORAGE_RECEIPT_REQUEST {
+                if let (Some(session), Some(drive)) = (&receipt_session, &receipt_drive) {
+                    if session.current(&store) {
+                        if let Some(request) =
+                            super::protocol::StorageReceiptRequest::decode(&buf[1..])
+                        {
+                            match super::storage_receipts::produce_receipt(
+                                &store, &agent, drive, &request,
+                            )
+                            .await
+                            {
+                                Ok(Some(receipt)) if session.current(&store) => {
+                                    if let Some(frame) = receipt.encode_frame() {
+                                        let _ = tx_for_read.try_send(frame_with_len(&frame));
+                                    }
+                                }
+                                Ok(_) => {}
+                                Err(error) => {
+                                    tracing::debug!("[live] storage receipt refused: {error}")
+                                }
+                            }
+                        }
+                    }
+                }
+                continue;
             }
 
             // The peer answered something we sent (a SYNC_PUSH it refused, a
@@ -1846,6 +1948,7 @@ pub async fn sync_drive_with_peer_using_outcome(
     store: &Db,
     force: bool,
 ) -> crate::errors::AtomicResult<PeerSyncOutcome> {
+    let local_agent_generation = store.agent_generation();
     let remote_key = normalize_node_id(remote_node_id);
     let node_id: NodeId = remote_key
         .parse()
@@ -1995,7 +2098,10 @@ pub async fn sync_drive_with_peer_using_outcome(
     // side does the same in `handle_stream`. Either side's HELLO can arrive
     // at any time (TCP is ordered but we don't block on it here) — the
     // read loop below captures it whenever it lands.
-    let hello_frame = super::protocol::encode_hello(&effective_device_name(store));
+    let hello_frame = super::protocol::encode_hello_with_caps(
+        &effective_device_name(store),
+        &receipt_capabilities(store, drive),
+    );
     send.write_u32(hello_frame.len() as u32)
         .await
         .map_err(io_err)?;
@@ -2457,6 +2563,8 @@ pub async fn sync_drive_with_peer_using_outcome(
         true,
         Some(conn),
         peer_caps.clone(),
+        Some(crate::identifiers::canonicalize_scheme(drive)),
+        local_agent_generation,
     );
 
     // Remember which drive this node syncs, so it can rebuild this link on its
@@ -2828,6 +2936,8 @@ async fn handle_stream(
     remote_id: String,
     my_node_id: String,
 ) -> anyhow::Result<usize> {
+    let local_agent_generation = store.agent_generation();
+    let mut receipt_auth_bound = false;
     let remote_key = normalize_node_id(&remote_id);
     let my_node_key = normalize_node_id(&my_node_id);
     let mut agent = ForAgent::Public;
@@ -2840,6 +2950,7 @@ async fn handle_stream(
     let mut sent_sync_ok = false;
     let mut hello_sent = false;
     let mut auth_sent = false;
+    let mut receipt_auth_sent = false;
     let mut peer_display_name: Option<String> = None;
     // What the dialer listed in its HELLO, which precedes its SYNC. A dialer
     // that sends none predates the rename and is answered in `did:ad:`.
@@ -3020,6 +3131,9 @@ async fn handle_stream(
 
         if tag == super::protocol::tag::AUTH {
             if just_authed {
+                receipt_auth_bound = !auth_sent
+                    && auth_requested_subject(&buf[1..])
+                        .is_some_and(|s| super::protocol::split_challenge_fragment(&s).1.is_some());
                 if bound_drive.is_none() {
                     bound_drive = auth_requested_subject(&buf[1..]).map(|s| {
                         // `drive#nodeId`: the drive is the part before the
@@ -3081,7 +3195,15 @@ async fn handle_stream(
                     .is_some_and(|diff| diff.pull.is_empty())
         });
 
-        for response in responses {
+        for mut response in responses {
+            if response.first() == Some(&super::protocol::tag::AUTH_OK) && receipt_auth_bound {
+                if let Some(drive) = &bound_drive {
+                    response = super::protocol::encode_auth_ok_with_caps(&receipt_capabilities(
+                        &store,
+                        &drive.pure_id(),
+                    ));
+                }
+            }
             if let Err(e) = send.write_u32(response.len() as u32).await {
                 tracing::warn!(
                     "[accept] failed to write response header to {}: {e}",
@@ -3100,7 +3222,13 @@ async fn handle_stream(
 
         if just_authed && !hello_sent {
             hello_sent = true;
-            let hello = super::protocol::encode_hello(&effective_device_name(&store));
+            let caps = bound_drive
+                .as_ref()
+                .filter(|_| receipt_auth_bound)
+                .map(|d| receipt_capabilities(&store, &d.pure_id()))
+                .unwrap_or_else(|| super::protocol::CAPABILITIES.to_vec());
+            let hello =
+                super::protocol::encode_hello_with_caps(&effective_device_name(&store), &caps);
             // Two-step write so the ? in either step doesn't have to convert
             // between io::Error (write_u32) and WriteError (write_all).
             let header_ok = send.write_u32(hello.len() as u32).await;
@@ -3137,6 +3265,8 @@ async fn handle_stream(
                             "[accept] failed to write auth-back body to {}: {e}",
                             &remote_key[..remote_key.len().min(12)]
                         );
+                    } else {
+                        receipt_auth_sent = true;
                     }
                 }
             }
@@ -3174,6 +3304,11 @@ async fn handle_stream(
                 false,
                 None,
                 peer_caps.clone(),
+                bound_drive
+                    .as_ref()
+                    .filter(|_| receipt_auth_bound && receipt_auth_sent)
+                    .map(|d| d.pure_id()),
+                local_agent_generation,
             );
             return Ok(total_imported);
         }
@@ -3194,6 +3329,11 @@ async fn handle_stream(
             false,
             None,
             peer_caps.clone(),
+            bound_drive
+                .as_ref()
+                .filter(|_| receipt_auth_bound && receipt_auth_sent)
+                .map(|d| d.pure_id()),
+            local_agent_generation,
         );
     }
 
@@ -4121,6 +4261,59 @@ mod accept_gate_tests {
         }
         // Give the accept side a moment to register the live loop.
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    #[tokio::test]
+    async fn iroh_receipts_require_successful_auth_back_even_for_capable_peer() {
+        let db = Db::init_temp("iroh_receipt_no_signing_key").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Receipt owner")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (drive, _) = private_drive_with_child(&db, &alice).await;
+        let mut unsigned = alice.clone();
+        unsigned.private_key = None;
+        db.set_default_agent(unsigned);
+        let (node, router) = start(db.clone()).await.unwrap();
+        let (_ep, mut send, mut recv) = raw_stream(&router, &node).await;
+        write_frame(
+            &mut send,
+            &protocol::encode_auth(&alice, &auth_subject_for(&drive, &node.to_string())).unwrap(),
+        )
+        .await;
+        assert_eq!(read_frame(&mut recv).await.unwrap()[0], tag::AUTH_OK);
+        write_frame(
+            &mut send,
+            &protocol::encode_hello_with_caps(
+                "Capable requester",
+                &[protocol::CAP_IROH_STORAGE_RECEIPTS_V1],
+            ),
+        )
+        .await;
+        write_frame(
+            &mut send,
+            &protocol::encode_sync(&drive, "", &[], &HashMap::new()),
+        )
+        .await;
+        loop {
+            let frame = read_frame(&mut recv).await.unwrap();
+            match frame[0] {
+                tag::SYNC_OK => break,
+                tag::SYNC_PUSH if protocol::decode_sync_push(&frame[1..]).unwrap().last => break,
+                tag::SYNC_PUSH | tag::SYNC_DIFF => {}
+                tag => panic!("ordinary sync failed with tag {tag:02x}"),
+            }
+        }
+        let snapshot = db.get_loro_snapshot_bytes(&drive).unwrap();
+        let doc = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+        let request = protocol::StorageReceiptRequest {
+            nonce: "c".repeat(64),
+            drive: drive.clone(),
+            subject: drive,
+            version: crate::agents::encode_base64(&doc.doc().state_vv().encode()),
+        };
+        write_frame(&mut send, &request.encode_frame().unwrap()).await;
+        let result =
+            tokio::time::timeout(std::time::Duration::from_secs(1), read_frame(&mut recv)).await;
+        assert!(result.is_err(), "no automatic probe or positive receipt without successful mutual authentication: {result:?}");
     }
 
     /// A naked `DESTROY` frame carries no signature, so it authorises

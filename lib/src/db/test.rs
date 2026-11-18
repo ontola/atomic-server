@@ -6569,3 +6569,29 @@ async fn opened_drive_stays_listed_after_another_becomes_active() {
     assert!(subjects.contains(&welcome.to_string()), "{subjects:?}");
     assert!(subjects.contains(&other), "{subjects:?}");
 }
+
+#[cfg(feature = "iroh")]
+#[tokio::test]
+async fn replica_receipt_agent_epoch_fences_away_and_back() {
+    let db = Db::init_redb(None).await.unwrap();
+    let a = crate::agents::Agent::new(None).unwrap();
+    let b = crate::agents::Agent::new(None).unwrap();
+    db.set_default_agent(a.clone());
+    let original = db.agent_generation();
+    let clone = db.clone();
+    clone.set_default_agent(a.clone());
+    assert_eq!(db.agent_generation(), original);
+    clone.set_default_agent(b);
+    clone.set_default_agent(a.clone());
+    assert_eq!(db.agent_generation(), original + 2);
+    db.clear_default_agent();
+    clone.set_default_agent(a.clone());
+    assert_eq!(db.agent_generation(), original + 4);
+
+    let independent = db.with_own_agent(Some(a));
+    let independent_epoch = independent.agent_generation();
+    independent.clear_default_agent();
+    assert_eq!(independent.agent_generation(), independent_epoch + 1);
+    assert_eq!(db.agent_generation(), original + 4);
+    assert!(db.get_default_agent().is_ok());
+}

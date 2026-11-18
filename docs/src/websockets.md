@@ -138,8 +138,8 @@ logged and dropped, not answered.
 | `0x51` | `CALL_RESULT` | Iroh responder | the dialer of the `CALL`. |
 | `0x52` | `INVITE` | Iroh dialer, after `AUTH` | `atomic_lib::sync::invite`. Iroh only; the WS server answers it with an `ERROR`. |
 | `0x53` | `INVITE_OK` | Iroh responder | the dialer of the `INVITE`. A refusal is an `ERROR` with code 13 (`INVITE_REFUSED`). |
-| `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated browser peer | Browser peer session advertising `browser-storage-receipts-v1`. |
-| `0x57` | `STORAGE_RECEIPT` | authenticated browser peer | Correlated live request on that same WebRTC connection. |
+| `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated browser or native Iroh peer | Session advertising the transport-specific storage-receipt capability. |
+| `0x57` | `STORAGE_RECEIPT` | authenticated browser or native Iroh peer | Correlated live request on that same connection. |
 
 ## Frame layouts
 
@@ -361,13 +361,14 @@ read. `max_usages` of the token is not counted: that needs state shared by all
 the inviter's devices. In the link form of the Flutter package this is
 `atomic:invite?token=<token>`; the web app does not parse that form yet.
 
-### Browser storage receipts (0x56 / 0x57)
+### Peer storage receipts (0x56 / 0x57)
 
-This optional browser-peer extension is advertised as
-`browser-storage-receipts-v1` in `AUTH_OK` only when the actual backing store can
-supply a durable replica identity. It is not advertised globally by HTTP/WS or
-Iroh responders. Both directions must authenticate before the browser initiates
-requests. Old peers continue to sync normally without these frames; ordinary
+Browser sessions advertise `browser-storage-receipts-v1` in `AUTH_OK`. Native
+Iroh sessions advertise `iroh-storage-receipts-v1` in their `AUTH_OK` / `HELLO`
+exchange. These optional capabilities require actual persistent storage; neither
+is part of the global HTTP/WS capability list. Both directions must authenticate
+before automatic requests begin. Native requests start after the stream enters
+live mode, including when bulk reconciliation found the peers already equal. Old peers continue to sync normally without these frames; ordinary
 `COMMIT_OK` and `SYNC_OK` retain their existing meanings.
 
 ```
@@ -381,7 +382,9 @@ session's drive, current read permission, and a non-tombstoned stored resource w
 **state** version vector covers the requested frontier. Announced or buffered operations with unresolved dependencies do not qualify. After coverage
 is established, the persistent flush must succeed and coverage/identity must still
 hold before any positive frame is constructed. Pending transaction overlays cannot
-serve as durable evidence. Missing or non-covering state returns no positive frame;
+serve as durable evidence. Target reads are local-only: a missing HTTP subject
+does not trigger a fetch. Unsolicited native replies are rejected before resource
+resolution. Missing or non-covering state returns no positive frame;
 normal synchronization can supply it and the requester can retry. Authorization,
 malformed-frame and flush errors follow the session's existing error handling.
 
@@ -396,8 +399,13 @@ retain copied identity rather than claiming an independent copy.
 `version` in the positive response is the requested frontier the receiver proved
 it holds, even when the stored snapshot has advanced. The requester's live nonce,
 drive, subject and exact version must all match; a response never acknowledges a
-later local edit. Request correlation is scoped to the mutually authenticated,
-channel-bound session and invalidated on account/database replacement or disconnect.
+later local edit. Request correlation is scoped to the authenticated transport session and
+invalidated on account/database replacement or disconnect. Native evidence carries
+the authenticated QUIC node, verified agent and connection/account generations;
+it is emitted through `Db::subscribe_replica_receipts()`. Browser AUTH is bound to
+the WebRTC channel. The native dialer AUTH names the drive and receiving QUIC
+node; the verified auth-back names the dialer's QUIC node. A later AUTH disables
+receipts on that stream; reconnect to establish a fresh receipt session.
 The SDK delivers immutable observations automatically; callers still choose and
 validate their independence policy. Different IDs or authenticated agents alone
 are not evidence of separate devices. This receipt covers resource metadata only,

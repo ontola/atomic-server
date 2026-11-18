@@ -646,6 +646,29 @@ Two things worth knowing about the runners:
 | `DbEvent::Destroyed` for a removed resource and its cascade-deleted children arrives only after the removal is applied (the store no longer holds them when a listener hears), each subject announced exactly once | `lib/src/db/test.rs` (`destroyed_events_follow_the_applied_removal`) |
 | Pairing envelope encode/decode | `browser/lib/src/pairing.test.ts` |
 
+### Automatic native resource receipts (#2538/#2589)
+
+`lib/tests/iroh_receipts.rs` runs production Iroh sync between separate processes
+with persistent Redb stores. It subscribes before bulk sync, observes an exact
+bulk target and consecutive live targets without application-issued probes, then
+kills the receiving process and reopens its database to verify the same scoped
+identity and coverage of the receipted versions. Only discovery is replaced by
+exchanging the direct QUIC address through a temporary file.
+
+`sync::iroh_receipts` tests cover exact target/nonce correlation, delayed older
+versions, retry expiry and bounded queues. Protocol and shared browser-producer
+tests cover malformed identities/frontiers, authentication, read authorization,
+missing dependencies, pending batches, failed flushes, memory exclusion and
+persisted identity. Loopback HTTP regressions verify absent receipt targets never
+trigger fetches; unsolicited native receipts are rejected before resource reads.
+The Db account-epoch regression checks account replacement,
+logout and away-and-back changes, including independent agent handles.
+
+These receipts are historical resource-state observations. Tests do not establish
+physical device independence, storage retention, blob/key completeness or full
+backup recovery. Native change notifications may coalesce before target capture;
+there is no every-intermediate-save receipt guarantee.
+
 ### Cross-process — covered since 2026-07
 
 Both matter because `iroh_transport` holds the router and node identity in
