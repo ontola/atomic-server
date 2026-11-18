@@ -3227,12 +3227,11 @@ msgstr "Buscar"
 msgid "Disabled"
 msgstr ""
 
-#: src/components/forms/MinMaxInput.tsx
-#: src/components/forms/MinMaxInput.tsx
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Value should be a round number."
 msgstr "El valor debe ser un número entero."
 
-#: src/components/forms/MinMaxInput.tsx
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Min must be a less than max"
 msgstr "El mínimo debe ser menor que el máximo"
 

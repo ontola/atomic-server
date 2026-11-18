@@ -134,3 +134,9 @@ export {
   nameTableProperty,
   type PropertyNameFieldProps,
 } from './schema/PropertyNameField.js';
+
+export {
+  PropertyRangeField,
+  validatePropertyRange,
+  type PropertyRangeFieldProps,
+} from './schema/PropertyRangeField.js';

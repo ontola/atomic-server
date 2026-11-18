@@ -1,13 +1,39 @@
 import { Resource, useNumber } from '@tomic/react';
-import { useCallback, type JSX } from 'react';
+import {
+  useCallback,
+  type InputHTMLAttributes,
+  type PropsWithChildren,
+  type JSX,
+} from 'react';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import { useValidation } from '@components/forms/formValidation/useValidation';
-import { MinMaxInput, validateRange } from '@components/forms/MinMaxInput';
+import { PropertyRangeField, validatePropertyRange } from '@tomic/table';
+import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
+import { Row } from '@components/Row';
 
 interface TableRangeInputProps {
   resource: Resource;
   minProp: string;
   maxProp: string;
+}
+
+function RangeFieldInput({
+  $invalid,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { $invalid?: boolean }) {
+  return (
+    <InputWrapper $invalid={$invalid}>
+      <InputStyled {...props} />
+    </InputWrapper>
+  );
+}
+
+function RangeFieldContainer({ children }: PropsWithChildren) {
+  return (
+    <Row center gap='0.5rem'>
+      {children}
+    </Row>
+  );
 }
 
 export function TableRangeInput({
@@ -27,14 +53,21 @@ export function TableRangeInput({
 
       // Form state only: the range is written to the table class's
       // constraints when the dialog is confirmed.
-      setError(validateRange(min, max, true));
+      setError(
+        validatePropertyRange(min, max, true, {
+          rounded: 'Value should be a round number.',
+          order: 'Min must be a less than max',
+        }),
+      );
     },
     [setMinLength, setMaxLength, setError],
   );
 
   return (
     <div>
-      <MinMaxInput
+      <PropertyRangeField
+        Input={RangeFieldInput}
+        Container={RangeFieldContainer}
         round
         maxValue={maxLength}
         minValue={minLength}
