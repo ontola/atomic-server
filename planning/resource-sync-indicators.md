@@ -1,95 +1,113 @@
 # Resource sync: remaining destinations
 
-The resource-row indicator, “Copies & sync” panel and browser confirmation
-recovery are implemented in draft PR #2576. This plan remains open for the
-unfinished Vault, peer and multiple-server dependencies below; completed
-implementation checklists have been removed. Exact-commit CI is tracked on the PR.
+Resource-row indicators, the “Copies & sync” panel, browser server-confirmation
+recovery and per-resource Cloud Vault confirmations are implemented in draft
+PR #2576. This plan remains open for browser peers, attachment confirmation and
+multiple-server configuration. Exact-commit CI is tracked on the PR.
 
 ## Ownership and dependency
 
 - Worktree: `/Users/michieldejong/.codex/worktrees/atomic-resource-sync/atomic-server`
 - Branch: `codex/atomic-resource-sync`
 - Original base: `origin/develop`, `f445d2909c50506c74c798cd8d891e99e8962780`
-- Reload recovery builds on unmerged first-phase commit
-  `34ef7e44b5e278f9140797e868436dc9777e5a76` in the same PR.
-- Design follows the resource-list concept reviewed with Michiel in chat
+- Vault work builds on unmerged reload-recovery commit
+  `41dbfdb41feb608c6745eb952df7886810d11822` in the same PR.
+- Design follows the concept reviewed with Michiel in chat
   `01a1e484-5764-75e0-8345-7269b13e7717`.
-- Coordinator owns integration/docs/catalogs/PR/CI; `sync_architecture` owns
-  Store/tracker evidence; `sync_ui` owns database/WASM/worker persistence;
-  `sync_ui_tests` owns browser regressions and independent review.
+- Coordinator owns UI/integration/docs/catalogs/PR/CI; `sync_architecture` owns
+  app-level proof and backup orchestration; `sync_ui` owns Rust/WASM/library
+  storage and independent review; `sync_ui_tests` owns UI/backup/browser tests.
 - The original checkout's pre-existing untracked files remain outside this task.
 
-## Existing contract to preserve
+## Existing contracts to preserve
 
-`Store.getResourceSyncStatus(resource)` returns a stable immutable snapshot;
-`subscribeResourceSyncStatus(resource, callback)` updates consumers. Local
-states are confirmed, pending, unknown, unavailable and error. Server states
-are confirmed, pending, unknown and not-configured, with the destination URL.
-`useSaveState` independently supplies queued/error/dirty save status.
+Local/server evidence comes from actual durable snapshot bytes, acknowledged
+commits and exact updates from the current authenticated primary server. It is
+version scoped and survives browser reloads. Idle queues, connection status,
+`ResourceSaved` and generic peer traffic cannot establish a server receipt.
+Newer edits remain pending. Own-echo server metadata must also be persisted
+without re-notifying active editors. Old/native adapters without the evidence
+capability cannot invent recovered proof.
 
-Confirmation covers only observed Loro versions: durable local writes or stored
-snapshot bytes, acknowledged server commits and exact updates from the current
-authenticated primary server. Idle queues, `ResourceSaved`, drive backup times
-and peer presence are insufficient. Server metadata imported through an own-echo
-must also be saved locally, without re-notifying active editors. Attachment bytes
-are excluded from resource-metadata receipts.
+Vault export supplies a **local-only** resource-version manifest derived from
+actual update entries in the sealed object. Unchanged lane cursors, no-op passes,
+workspace backup times, occupied-object collisions and another account's backup
+cannot mint new proof. PUT and confirm-upload must succeed; checkpoints must
+also publish successfully. The manifest never enters plaintext cloud requests.
 
-Browser adapters expose optional `getResourceSyncEvidence(subjects, scope?)`
-and `putResourceSyncReceipts(scope, receipts)`. The private `sync_receipts_v1`
-database tree scopes server proof by canonical account, destination origin and
-resource. Reads return actual stored snapshot bytes after a durability barrier.
-Restored local proof does not invent the original save time. Recovered server
-proof preserves the acknowledged vector and confirmation time; newer offline
-edits stay pending. Older/native adapters without this capability retain live
-session evidence only.
+Private Vault receipts are scoped to managedAccount (the internal account key),
+agent, portalUrl (including its meaningful API path), drive, drivePseudonym and
+keyEpoch. The ledger lives in the app layer, keeping managed-account semantics
+out of Store. Rows batch local reads and do not request account/enrollment data.
+Automatic/manual backup establishes scope only after verifying the current
+account and enrollment; a no-op pass can then recover existing durable proof.
+A fresh fully offline reload cannot establish that account and stays unknown.
+An already verified session retains proof while offline; explicit account,
+provider, database and lifecycle changes invalidate its context.
 
-Receipt merges and deletion cleanup are atomic across database clones and tabs.
-Receipts never enter resource queries, replication, outbox rows or Vault exports.
-Scope/generation fences reject delayed recovery after account, database,
-destination or transport changes. Cache eviction retains disk proof. Normal
-pending-sync accounting includes receipt persistence; a diagnostic write failure
-never fails an otherwise accepted resource save.
+`getResourceVaultGeneration`, `getResourceVaultEvidence`,
+`putResourceVaultReceipts` and `clearResourceVaultReceipts` use the existing
+private encrypted receipt tree. Resource removal clears its receipts. Explicit
+Vault disable rotates a durable scope generation; every export captures it
+before encryption and every write must match it. This rejects delayed writes
+from other tabs and worker-handoff retries after disable. A replayed clear may
+conservatively invalidate a newer capture, but can never accept an older one.
+Corrupt generations fail closed rather than resetting the fence.
 
-Buttons remain accessible and do not navigate their resource row. Existing
-popover primitives handle dismissal and focus return; shapes/text accompany
-colour. Vault and peer details currently provide workspace context only.
+Async setup, receipt reads and callbacks are fenced by scope/resource tokens.
+Restored proof requires a valid durable snapshot. Receipt persistence joins
+normal reload readiness; diagnostic storage failures withhold proof without
+failing an otherwise successful backup. Clearing proof before a UI context was
+mounted uses the explicitly verified scope. Existing latest-checkpoint and
+coverage protections make normal Vault compaction safe without blanket erasure.
+
+The panel presents independent local/server/Vault states. A confirmed server
+retains the primary icon; Vault can be primary when the server copy is unknown
+or unconfigured. Unsaved edits and server failures/pending work remain visible.
+Shapes and labels accompany colour. File contents and browser-peer copies are
+not confirmed by resource metadata receipts.
 
 ## Remaining work
 
-- [ ] Add resource/version coverage to confirmed Cloud Vault exports; distinguish
-  resource data from attachment bytes and backups by another account.
+- [ ] Confirm attachment bytes separately from resource data, for each supported
+  destination, before claiming a complete file copy.
 - [ ] Add typed per-peer receipts after applied/persisted reconciliation and live
   updates. Expose confirmed peer counts independently of connection counts,
   including peer departure, browser-tab lifetimes and identity changes.
-- [ ] Extend configuration when the runtime supports multiple active servers,
-  then derive the primary indicator from the user's intended destinations.
-- [ ] Validate real Vault and peer-only journeys before enabling success icons.
-  Browser-peer copies must not be described as durable remote backups.
+- [ ] Extend configuration when multiple active servers are supported, then
+  derive the primary indicator from the user's intended destinations.
+- [ ] Validate real peer-only journeys before enabling success icons. Browser
+  tabs must not be presented as durable remote backups.
+- [ ] Run the Vault acceptance journey against an explicitly provisioned real
+  control plane and S3; the local HTTP boundary fixture is not that validation.
 - [ ] Update public docs, coverage and browser acceptance alongside each new
   evidence source; follow exact-head CI before removing this remaining plan.
 
 See `unified-sync.md`, `atomic-lib-runtime.md` and `sync-onboarding-ux.md` for
-transport/runtime boundaries. Multiple authoritative destinations in the mockup
-remain a target; they are not supported merely by rendering several rows.
+transport/runtime boundaries. The mockup's multiple authoritative destinations
+remain a target rather than a capability inferred from several rendered rows.
 
 ## Validation baseline, 2026-11-18
 
-- Store/tracker/transport/save: 134 tests passing, including reentrant
-  subscriptions during account/server switches and stale asynchronous reads.
-- Storage/worker/Node/handoff: 40 tests passing across five suites. Rust receipt
-  storage: seven passing; `db-sled` check passes.
-- Focused ResourceSync/ResourceRow/catalog UI: 29 passing. Library and frontend
-  typechecks, component compiler check, and matching lib/WASM/UI/native builds pass.
-- Seven distinct native Chromium tests pass across the integrated run and
-  targeted rerun, one worker and zero retries. The reload test disables all
-  browser networking, restores both confirmations, preserves the server timestamp,
-  then reloads a newer offline edit and proves it remains pending. Its initial
-  failure was only on expected disconnected-network diagnostics; bounded,
-  test-specific expectations keep unrelated diagnostics strict.
-- Desktop/mobile and both offline-reload screenshots were reviewed and shared in
-  chat. The previous CI own-echo persistence failure and ambiguous profile Save
-  locator are corrected and covered by this browser set.
-- First-phase full frontend baseline: 2,614 Vitest and two MCP integration tests
-  passed under TZ=UTC. An unchanged date-formula test depends on the current DST
-  offset; no unrelated formula code was changed. The shared Popover has a
-  pre-existing compiler warning. Exact-head CI results belong on PR #2576.
+- Targeted Rust storage/export, library adapter/handoff/parser tests pass,
+  including generation rotation/replay, durable reopen, scope isolation and the
+  exact exported version versus unchanged/later edits.
+- Vault ledger/automatic/manual/native regressions: 66 passing; backup
+  orchestration: 73 passing; ResourceSync UI: 20 passing.
+- Full frontend typecheck, matching lib/WASM/UI/native builds and all six
+  translation catalogs pass. Five new messages are translated. Component compiler
+  checks pass; the manual Vault hook's existing suppression diagnostic was
+  independently reproduced against HEAD before these changes.
+- Four distinct native Chromium tests pass across the integrated run and
+  targeted rerun, one worker and zero retries. The new two-test Vault spec uses
+  real WASM encryption and durable storage with a test-owned HTTP service: it
+  checks successful backup, same-account reload without a new upload, account
+  isolation, edits during upload and failed upload. It does not claim live S3 or
+  control-plane validation. Desktop/mobile/footer/pending screenshots were
+  reviewed and shared in chat. Test diagnostics remain strict; no ResizeObserver
+  errors are suppressed.
+- Previous server phase: 134 library regressions, 40 adapter/storage regressions,
+  seven Rust receipt tests and seven distinct native browser checks passed. The
+  first-phase full frontend baseline was 2,614 Vitest and two MCP integration
+  tests under TZ=UTC. The unchanged date-formula test depends on DST; no unrelated
+  formula code was changed. Exact-head CI results belong on PR #2576.

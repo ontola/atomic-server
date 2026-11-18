@@ -25,6 +25,8 @@ import {
   localCopyLabel,
   resourceSyncPresentation,
   serverCopyLabel,
+  vaultCopyLabel,
+  type ResourceVaultPresentationStatus,
 } from './resourceSyncPresentation';
 import {
   useResourceCopyContext,
@@ -34,19 +36,25 @@ import {
 export function ResourceSyncPanel({
   resource,
   status,
+  vault,
   save,
   headingId,
   onClose,
 }: {
   resource: Resource;
   status: ResourceSyncStatus;
+  vault: ResourceVaultPresentationStatus;
   save: ResourceSaveState;
   headingId: string;
   onClose: () => void;
 }): JSX.Element {
   const [title] = useTitle(resource);
   const context = useResourceCopyContext(resource);
-  const presentation = resourceSyncPresentation(status, save);
+  const presentation = resourceSyncPresentation(status, save, vault);
+  const confirmedTime =
+    vault.confirmedAt === undefined
+      ? null
+      : new Date(vault.confirmedAt).toLocaleString();
   const destination = destinationLabel(status.server.url);
   const localConfirmed = status.local.state === 'confirmed';
   const serverConfirmed =
@@ -99,24 +107,26 @@ export function ResourceSyncPanel({
           )}
           {save.error && <Note>{save.error}</Note>}
         </CopyRow>
-      </CopyList>
-
-      <Section aria-label='Workspace destinations'>
-        <SectionHeading>Workspace destinations</SectionHeading>
         <CopyRow
           icon={<FaVault aria-hidden />}
           name='Cloud Vault'
-          description={vaultContextLabel(context.vault)}
+          confirmed={vault.state === 'confirmed'}
+          description={vaultCopyLabel(vault)}
         >
+          {confirmedTime !== null && (
+            <Note>Last confirmed backup: {confirmedTime}</Note>
+          )}
+          <Note>{vaultContextLabel(context.vault)}</Note>
           {context.lastBackupAt !== null && (
             <Note>
               Last workspace backup: {formatTime(context.lastBackupAt)}
             </Note>
           )}
-          {context.vault !== 'off' && (
-            <Note>This resource’s latest backup is not confirmed here.</Note>
-          )}
         </CopyRow>
+      </CopyList>
+
+      <Section aria-label='Workspace destinations'>
+        <SectionHeading>Workspace destinations</SectionHeading>
         <CopyRow
           icon={
             <PeerIcon>

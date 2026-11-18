@@ -95,6 +95,7 @@ export * from './chat-log.js';
 export * from './forks.js';
 export * from './copy.js';
 export * from './store.js';
+export * from './resource-vault-evidence.js';
 export type { ResourceSyncStatus } from './resource-sync-status.js';
 export type {
   ResourceSyncScope,

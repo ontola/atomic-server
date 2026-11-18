@@ -97,3 +97,84 @@ describe('resource sync presentation', () => {
     );
   });
 });
+
+describe('resource vault sync presentation', () => {
+  it('shows proven vault backup when no current server copy is confirmed', () => {
+    for (const state of ['unknown', 'not-configured'] as const) {
+      expect(
+        resourceSyncPresentation({ ...confirmed, server: { state } }, idle, {
+          state: 'confirmed',
+        }),
+      ).toEqual({
+        label: 'Latest changes backed up to Cloud Vault',
+        tone: 'confirmed',
+        symbol: 'vault',
+      });
+    }
+  });
+
+  it('retains the server indicator when both destinations have the current version', () => {
+    expect(
+      resourceSyncPresentation(confirmed, idle, { state: 'confirmed' }),
+    ).toMatchObject({
+      label: 'Latest changes saved to server',
+      symbol: 'server',
+      tone: 'confirmed',
+    });
+  });
+
+  it('does not let backup proof hide pending server changes or unsaved edits', () => {
+    expect(
+      resourceSyncPresentation(
+        { ...confirmed, server: { state: 'pending' } },
+        idle,
+        { state: 'confirmed' },
+      ),
+    ).toMatchObject({ label: 'Changes waiting to sync', tone: 'pending' });
+
+    for (const kind of [
+      'dirty',
+      'scheduled',
+      'saving',
+      'queued',
+      'error',
+    ] as const) {
+      expect(
+        resourceSyncPresentation(
+          confirmed,
+          { ...idle, kind },
+          { state: 'confirmed' },
+        ),
+      ).toEqual(resourceSyncPresentation(confirmed, { ...idle, kind }));
+    }
+  });
+
+  it('keeps a local write failure visible even when the vault has the resource', () => {
+    expect(
+      resourceSyncPresentation(
+        { ...confirmed, local: { state: 'error', error: 'Disk full' } },
+        idle,
+        { state: 'confirmed' },
+      ),
+    ).toMatchObject({
+      label: 'Could not save on this device',
+      tone: 'attention',
+    });
+  });
+
+  it('uses pending vault proof as a fallback without hiding a confirmed server', () => {
+    expect(
+      resourceSyncPresentation(
+        { ...confirmed, server: { state: 'unknown' } },
+        idle,
+        { state: 'pending' },
+      ),
+    ).toMatchObject({ label: 'Changes waiting for backup', tone: 'pending' });
+    expect(
+      resourceSyncPresentation(confirmed, idle, { state: 'pending' }),
+    ).toMatchObject({
+      label: 'Latest changes saved to server',
+      symbol: 'server',
+    });
+  });
+});

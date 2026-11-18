@@ -319,6 +319,73 @@ impl ClientDb {
         Ok(())
     }
 
+    /// Durable resource bytes and scoped acknowledgement metadata. No network IO.
+    #[wasm_bindgen(js_name = "getResourceVaultEvidence")]
+    pub fn get_resource_vault_evidence(
+        &self,
+        subjects: &str,
+        scope: &str,
+    ) -> Result<JsValue, JsError> {
+        let subjects: Vec<String> = serde_json::from_str(subjects)?;
+        let scope: atomic_lib::db::sync_receipts::VaultSyncScope = serde_json::from_str(scope)?;
+        let rows = self.db().get_resource_vault_evidence(&subjects, &scope)?;
+        let array = js_sys::Array::new();
+        for evidence in rows {
+            let row = js_sys::Object::new();
+            js_sys::Reflect::set(&row, &"subject".into(), &evidence.subject.into())
+                .map_err(|_| JsError::new("could not build evidence"))?;
+            let snapshot = evidence
+                .snapshot
+                .map(|bytes| js_sys::Uint8Array::from(bytes.as_slice()).into())
+                .unwrap_or(JsValue::NULL);
+            js_sys::Reflect::set(&row, &"snapshot".into(), &snapshot)
+                .map_err(|_| JsError::new("could not build evidence"))?;
+            if let Some(receipt) = evidence.vault_receipt {
+                let receipt = js_sys::JSON::parse(&serde_json::to_string(&receipt)?)
+                    .map_err(|_| JsError::new("could not encode receipt"))?;
+                js_sys::Reflect::set(&row, &"vaultReceipt".into(), &receipt)
+                    .map_err(|_| JsError::new("could not build evidence"))?;
+            }
+            array.push(&row);
+        }
+        Ok(array.into())
+    }
+
+    #[wasm_bindgen(js_name = "getResourceVaultGeneration")]
+    pub fn get_resource_vault_generation(&self, scope: &str) -> Result<f64, JsError> {
+        let scope = serde_json::from_str(scope)?;
+        Ok(self.db().get_resource_vault_generation(&scope)? as f64)
+    }
+
+    #[wasm_bindgen(js_name = "clearResourceVaultReceipts")]
+    pub fn clear_resource_vault_receipts(&self, scope: &str) -> Result<(), JsError> {
+        let scope = serde_json::from_str(scope)?;
+        self.db().clear_resource_vault_receipts(&scope)?;
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = "putResourceVaultReceipts")]
+    pub fn put_resource_vault_receipts(
+        &self,
+        scope: &str,
+        receipts: &str,
+        generation: f64,
+    ) -> Result<bool, JsError> {
+        if !generation.is_finite()
+            || generation < 0.0
+            || generation.fract() != 0.0
+            || generation > 9_007_199_254_740_991.0
+        {
+            return Err(JsError::new("Invalid vault receipt generation"));
+        }
+        let scope = serde_json::from_str(scope)?;
+        let receipts: Vec<atomic_lib::db::sync_receipts::SerializedVaultReceipt> =
+            serde_json::from_str(receipts)?;
+        Ok(self
+            .db()
+            .put_resource_vault_receipts(&scope, &receipts, generation as u64)?)
+    }
+
     /// A resource's stored row as JSON-AD plus its Loro snapshot, as
     /// `{ jsonAd, snapshot }` (either may be null), for hydrating a tab.
     ///
@@ -1352,6 +1419,9 @@ struct VaultExportResult {
     /// Checkpoints only: lanes this object provably subsumes. JS publishes this
     /// verbatim; the control plane prunes against it.
     coverage: std::collections::BTreeMap<String, u32>,
+    /// Local-only exact versions; never send this map to the control plane.
+    resource_versions:
+        std::collections::BTreeMap<String, atomic_lib::vault::sync::VersionVectorMap>,
 }
 
 /// Add `sealed` to a serialised {@link VaultExportResult} as a `Uint8Array`.
@@ -1675,7 +1745,7 @@ impl ClientDb {
         };
 
         let sealed = staging.get(&summary.object_key).map_err(to_js_err)?;
-        let result = serde_wasm_bindgen::to_value(&VaultExportResult {
+        let result = VaultExportResult {
             object_key: summary.object_key,
             kind: match summary.kind {
                 SegmentKind::Pack => "pack",
@@ -1685,7 +1755,18 @@ impl ClientDb {
             unchanged: summary.unchanged,
             tombstones: summary.tombstones,
             coverage: summary.coverage,
-        })
+            resource_versions: summary
+                .resource_versions
+                .into_iter()
+                .map(|(subject, version)| {
+                    (
+                        Subject::from(subject.as_str()).resolve(&self.origin()),
+                        version,
+                    )
+                })
+                .collect(),
+        }
+        .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(to_js_err)?;
 
         attach_sealed(result, &sealed)

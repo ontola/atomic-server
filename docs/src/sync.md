@@ -39,7 +39,7 @@ Not everything a device holds travels, and not everything that travels is kept.
 ## Checking an individual resource
 
 In resource lists, select a resource's sync icon to open **Copies & sync**.
-The panel separates this device's local copy from the configured server. It
+The panel separates this device's local copy, the configured server and Cloud Vault. It
 shows pending saves and failures for that resource, rather than treating a
 connected server as proof that every resource is saved.
 
@@ -55,12 +55,23 @@ actually stored on this device. Newer offline edits remain waiting to sync.
 Existing resources without a saved server confirmation remain unconfirmed until
 the server supplies one. Clearing local storage also clears these confirmations.
 
-Cloud Vault backups and browser-peer connections are separate from these
-resource-level confirmations. A workspace backup timestamp or a connected peer
-does not prove that it holds this resource's latest edits. Browser peers may
-also become unavailable when their tabs close. File resource confirmations
-describe the resource data, not whether every destination has its attachment
-bytes.
+Cloud Vault confirms the resource versions included in a successfully uploaded
+backup. Checkpoints also require successful publication. Edits made during or
+after the upload remain waiting for backup. A workspace backup timestamp, an
+unchanged backup pass, or another account's backup does not establish this proof.
+
+Vault confirmations are stored privately on this device for the managed account,
+agent, provider, workspace and Vault key epoch. Reloading recovers them once the
+current account and Vault are established. A fully offline fresh reload may show
+the backup as unconfirmed because it cannot verify which account's Vault is
+selected. Going offline in an already verified session preserves its confirmation.
+Older backups without resource evidence stay unconfirmed until a subsequent
+backup includes that resource's version.
+
+Browser-peer connections remain workspace context; a connected peer does not
+prove it holds this resource's latest edits and may become unavailable when its
+tab closes. File resource confirmations describe the resource data, not whether
+every destination has its attachment bytes.
 
 ## Connecting a cloud account
 

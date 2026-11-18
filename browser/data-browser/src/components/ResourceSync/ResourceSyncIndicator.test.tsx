@@ -21,6 +21,11 @@ import { ResourceSyncIndicator } from './ResourceSyncIndicator';
 
 let status: ResourceSyncStatus;
 let save: ResourceSaveState;
+let vaultStatus: {
+  state: 'unknown' | 'pending' | 'confirmed';
+  confirmedAt?: number;
+};
+let isFile = false;
 let propagationBoundary: HTMLDivElement | undefined;
 const context = {
   drive: 'atomic:workspace',
@@ -31,7 +36,7 @@ const context = {
 };
 const resource = {
   subject: 'atomic:notes',
-  hasClasses: () => false,
+  hasClasses: () => isFile,
 } as unknown as Resource;
 
 vi.mock('@tomic/react', async importOriginal => ({
@@ -41,6 +46,9 @@ vi.mock('@tomic/react', async importOriginal => ({
 }));
 vi.mock('./useResourceSyncStatus', () => ({
   useResourceSyncStatus: () => status,
+}));
+vi.mock('./useResourceVaultSyncStatus', () => ({
+  useResourceVaultSyncStatus: () => vaultStatus,
 }));
 vi.mock('./useResourceCopyContext', () => ({
   useResourceCopyContext: () => context,
@@ -62,6 +70,8 @@ vi.mock('../AtomicLink', () => ({
 }));
 
 beforeEach(() => {
+  vaultStatus = { state: 'unknown' };
+  isFile = false;
   status = {
     local: { state: 'confirmed', confirmedAt: 100 },
     server: {
@@ -157,9 +167,7 @@ it('does not treat a connected server, workspace backup, or peers as resource re
       `Last workspace backup: ${new Date('2023-11-14T22:13:20Z').toLocaleString()}`,
     ),
   ).toBeTruthy();
-  expect(
-    copy.getByText('This resource’s latest backup is not confirmed here.'),
-  ).toBeTruthy();
+  expect(copy.getByText('Resource backup not confirmed')).toBeTruthy();
   expect(
     copy.getByText(
       'Workspace connection only. Resource copies are not confirmed.',
@@ -167,6 +175,47 @@ it('does not treat a connected server, workspace backup, or peers as resource re
   ).toBeTruthy();
   expect(copy.queryByText('Latest changes saved', { exact: true })).toBeNull();
   expect(copy.queryByText('Saved on this device')).toBeNull();
+});
+
+it('updates exact vault proof in the open panel without changing the server receipt', async () => {
+  const rendered = render(view());
+  fireEvent.click(screen.getByTestId('resource-sync-indicator'));
+  const panel = await screen.findByTestId('resource-sync-panel');
+  expect(within(panel).getByText('Resource backup not confirmed')).toBeTruthy();
+
+  vaultStatus = { state: 'confirmed', confirmedAt: 1_700_000_000_000 };
+  rendered.rerender(view());
+  expect(within(panel).getByText('Latest changes backed up')).toBeTruthy();
+  expect(
+    within(panel).getByText('Latest changes saved', { exact: true }),
+  ).toBeTruthy();
+  expect(
+    within(panel).getByText(
+      `Last confirmed backup: ${new Date('2023-11-14T22:13:20Z').toLocaleString()}`,
+    ),
+  ).toBeTruthy();
+
+  vaultStatus = { ...vaultStatus, state: 'pending' };
+  rendered.rerender(view());
+  expect(within(panel).getByText('Changes waiting for backup')).toBeTruthy();
+  expect(within(panel).queryByText('Latest changes backed up')).toBeNull();
+  expect(
+    within(panel).getByText('Latest changes saved', { exact: true }),
+  ).toBeTruthy();
+});
+
+it('keeps the file-content limitation visible when its resource metadata is backed up', async () => {
+  isFile = true;
+  vaultStatus = { state: 'confirmed' };
+  render(view());
+  fireEvent.click(screen.getByTestId('resource-sync-indicator'));
+  const panel = await screen.findByTestId('resource-sync-panel');
+  expect(within(panel).getByText('Latest changes backed up')).toBeTruthy();
+  expect(
+    within(panel).getByText(
+      'These confirmations cover file details. The file’s contents are not verified here.',
+    ),
+  ).toBeTruthy();
 });
 
 it('updates an open panel when a newer edit is queued while keeping its local confirmation', async () => {

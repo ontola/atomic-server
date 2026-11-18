@@ -8,6 +8,11 @@
  */
 
 import type {
+  ResourceVaultEvidence,
+  VaultSyncScope,
+  SerializedVaultReceipt,
+} from './resource-vault-evidence.js';
+import type {
   ResourceSyncEvidence,
   ResourceSyncScope,
   SerializedServerReceipt,
@@ -251,6 +256,59 @@ export class NodeClientDb {
     if (typeof db.putResourceSyncReceipts !== 'function') return;
     db.putResourceSyncReceipts(JSON.stringify(scope), JSON.stringify(receipts));
     db.flush();
+  }
+
+  async getResourceVaultEvidence(
+    subjects: string[],
+    scope: VaultSyncScope,
+  ): Promise<ResourceVaultEvidence[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceVaultEvidence !== 'function') return undefined;
+    const evidence = db.getResourceVaultEvidence(
+      JSON.stringify(subjects),
+      JSON.stringify(scope),
+    ) as ResourceVaultEvidence[];
+    db.flush();
+
+    return evidence;
+  }
+
+  async getResourceVaultGeneration(
+    scope: VaultSyncScope,
+  ): Promise<number | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceVaultGeneration !== 'function') return undefined;
+    const generation = db.getResourceVaultGeneration(
+      JSON.stringify(scope),
+    ) as number;
+    db.flush();
+
+    return generation;
+  }
+
+  async clearResourceVaultReceipts(scope: VaultSyncScope): Promise<void> {
+    const db = this.requireDb();
+    if (typeof db.clearResourceVaultReceipts !== 'function') return;
+    db.clearResourceVaultReceipts(JSON.stringify(scope));
+    db.flush();
+  }
+
+  async putResourceVaultReceipts(
+    scope: VaultSyncScope,
+    receipts: SerializedVaultReceipt[],
+    generation: number,
+  ): Promise<boolean> {
+    const db = this.requireDb();
+    if (typeof db.putResourceVaultReceipts !== 'function') return false;
+    const accepted =
+      db.putResourceVaultReceipts(
+        JSON.stringify(scope),
+        JSON.stringify(receipts),
+        generation,
+      ) === true;
+    db.flush();
+
+    return accepted;
   }
 
   async removeResource(subject: string): Promise<void> {

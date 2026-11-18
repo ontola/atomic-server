@@ -410,6 +410,7 @@ async function ensureVaultBackupOnce(
     const held = known;
     const agentSubject = agent.subject;
     const outcome = await deps.runVaultBackup({
+      store,
       signal,
       db,
       driveSubject,

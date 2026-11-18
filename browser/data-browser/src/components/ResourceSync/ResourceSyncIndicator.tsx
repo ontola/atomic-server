@@ -7,12 +7,14 @@ import {
   FaClock,
   FaDesktop,
   FaServer,
+  FaVault,
   FaArrowUp,
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { IconButton } from '../IconButton/IconButton';
 import { Popover } from '../Popover';
 import { useResourceSyncStatus } from './useResourceSyncStatus';
+import { useResourceVaultSyncStatus } from './useResourceVaultSyncStatus';
 import {
   resourceSyncPresentation,
   type SyncSymbol,
@@ -29,8 +31,9 @@ export function ResourceSyncIndicator({
   const [open, setOpen] = useState(false);
   const [title] = useTitle(resource);
   const status = useResourceSyncStatus(resource);
+  const vault = useResourceVaultSyncStatus(resource);
   const save = useSaveState(resource);
-  const presentation = resourceSyncPresentation(status, save);
+  const presentation = resourceSyncPresentation(status, save, vault);
   const headingId = useId();
 
   return (
@@ -48,6 +51,7 @@ export function ResourceSyncIndicator({
               aria-label={`Copies and sync for ${title}: ${presentation.label}`}
               data-testid='resource-sync-indicator'
               data-sync-state={status.server.state}
+              data-vault-sync-state={vault.state}
               $tone={presentation.tone}
             >
               <StatusSymbol symbol={presentation.symbol} />
@@ -64,6 +68,7 @@ export function ResourceSyncIndicator({
           <ResourceSyncPanel
             resource={resource}
             status={status}
+            vault={vault}
             save={save}
             headingId={headingId}
             onClose={() => setOpen(false)}
@@ -78,6 +83,8 @@ function StatusSymbol({ symbol }: { symbol: SyncSymbol }) {
   switch (symbol) {
     case 'server':
       return <FaServer aria-hidden />;
+    case 'vault':
+      return <FaVault aria-hidden />;
     case 'waiting':
       return <FaClock aria-hidden />;
     case 'saving':

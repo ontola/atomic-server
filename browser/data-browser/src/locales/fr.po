@@ -13625,9 +13625,8 @@ msgstr "Copies de la ressource"
 msgid "Last workspace backup: {0}"
 msgstr "Dernière sauvegarde de l’espace de travail : {0}"
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "This resource’s latest backup is not confirmed here."
-msgstr "La dernière sauvegarde de cette ressource n’est pas confirmée ici."
+#~ msgid "This resource’s latest backup is not confirmed here."
+#~ msgstr "La dernière sauvegarde de cette ressource n’est pas confirmée ici."
 
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace connection only. Resource copies are not confirmed."
@@ -13680,3 +13679,25 @@ msgstr "Vérification de la sauvegarde de l’espace de travail…"
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup status unavailable"
 msgstr "État de la sauvegarde de l’espace de travail indisponible"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes backed up to Cloud Vault"
+msgstr "Dernières modifications sauvegardées dans Cloud Vault"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting for backup"
+msgstr "Modifications en attente de sauvegarde"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes backed up"
+msgstr "Dernières modifications sauvegardées"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource backup not confirmed"
+msgstr "Sauvegarde de la ressource non confirmée"
+
+#. 0: confirmedTime
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last confirmed backup: {0}"
+msgstr "Dernière sauvegarde confirmée : {0}"

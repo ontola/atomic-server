@@ -6,6 +6,11 @@
  */
 
 import type {
+  ResourceVaultEvidence,
+  VaultSyncScope,
+  SerializedVaultReceipt,
+} from './resource-vault-evidence.js';
+import type {
   ResourceSyncEvidence,
   ResourceSyncScope,
   SerializedServerReceipt,
@@ -34,6 +39,8 @@ export interface VaultExportResult {
   unchanged: number;
   tombstones: number;
   coverage: Record<string, number>;
+  /** Exact versions sealed in this object. Local-only; absent on older WASM. */
+  resourceVersions?: Record<string, Record<string, number>>;
 }
 
 export interface VaultImportSummary {
@@ -83,6 +90,20 @@ export interface ClientDbRpc {
   putResourceSyncReceipts: [
     { scope: ResourceSyncScope; receipts: SerializedServerReceipt[] },
     void,
+  ];
+  getResourceVaultEvidence: [
+    { subjects: string[]; scope: VaultSyncScope },
+    ResourceVaultEvidence[] | undefined,
+  ];
+  getResourceVaultGeneration: [{ scope: VaultSyncScope }, number | undefined];
+  clearResourceVaultReceipts: [{ scope: VaultSyncScope }, void];
+  putResourceVaultReceipts: [
+    {
+      scope: VaultSyncScope;
+      receipts: SerializedVaultReceipt[];
+      generation: number;
+    },
+    boolean,
   ];
   getResourceWithSnapshot: [{ subject: string }, Rows[number] | null];
   getResourcesWithSnapshots: [{ subjects: string[] }, Rows | null];
@@ -261,6 +282,47 @@ const handlers: Handlers = {
       JSON.stringify(m.receipts),
     );
     flushNow();
+  },
+  getResourceVaultEvidence: m => {
+    if (typeof db!.getResourceVaultEvidence !== 'function') return undefined;
+    dirty = true;
+    const evidence = db!.getResourceVaultEvidence(
+      JSON.stringify(m.subjects),
+      JSON.stringify(m.scope),
+    ) as ResourceVaultEvidence[];
+    // The Rust method also flushes; keep the RPC durability boundary explicit.
+    flushNow();
+
+    return evidence;
+  },
+  getResourceVaultGeneration: m => {
+    if (typeof db!.getResourceVaultGeneration !== 'function') return undefined;
+    dirty = true;
+    const generation = db!.getResourceVaultGeneration(
+      JSON.stringify(m.scope),
+    ) as number;
+    flushNow();
+
+    return generation;
+  },
+  clearResourceVaultReceipts: m => {
+    if (typeof db!.clearResourceVaultReceipts !== 'function') return;
+    dirty = true;
+    db!.clearResourceVaultReceipts(JSON.stringify(m.scope));
+    flushNow();
+  },
+  putResourceVaultReceipts: m => {
+    if (typeof db!.putResourceVaultReceipts !== 'function') return false;
+    dirty = true;
+    const accepted =
+      db!.putResourceVaultReceipts(
+        JSON.stringify(m.scope),
+        JSON.stringify(m.receipts),
+        m.generation,
+      ) === true;
+    flushNow();
+
+    return accepted;
   },
   // One round trip for a whole list: opening a chat asks for every message and
   // part at once, and a postMessage per subject queued behind boot-time sync

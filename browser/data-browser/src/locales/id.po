@@ -13623,9 +13623,8 @@ msgstr "Salinan sumber daya"
 msgid "Last workspace backup: {0}"
 msgstr "Pencadangan ruang kerja terakhir: {0}"
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "This resource’s latest backup is not confirmed here."
-msgstr "Cadangan terbaru sumber daya ini belum dikonfirmasi di sini."
+#~ msgid "This resource’s latest backup is not confirmed here."
+#~ msgstr "Cadangan terbaru sumber daya ini belum dikonfirmasi di sini."
 
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace connection only. Resource copies are not confirmed."
@@ -13678,3 +13677,25 @@ msgstr "Memeriksa pencadangan ruang kerja…"
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup status unavailable"
 msgstr "Status pencadangan ruang kerja tidak tersedia"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes backed up to Cloud Vault"
+msgstr "Perubahan terbaru dicadangkan ke Cloud Vault"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting for backup"
+msgstr "Perubahan menunggu pencadangan"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes backed up"
+msgstr "Perubahan terbaru dicadangkan"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource backup not confirmed"
+msgstr "Cadangan sumber daya belum dikonfirmasi"
+
+#. 0: confirmedTime
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last confirmed backup: {0}"
+msgstr "Cadangan terakhir yang dikonfirmasi: {0}"

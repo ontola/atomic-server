@@ -1,19 +1,32 @@
-import { AGENT_VAULT_PROOF_MESSAGE, decodeB64 } from '@tomic/lib';
-import { managedFetch } from './api';
+import {
+  AGENT_VAULT_PROOF_MESSAGE,
+  decodeB64,
+  canonicalizeScheme,
+  type Store,
+} from '@tomic/lib';
+import { managedFetch, getManagedApiBase } from './api';
+import { getManagedAccount } from './session';
+import {
+  captureResourceVaultBackup,
+  captureResourceVaultOperation,
+  clearResourceVaultScopes,
+  type ConfirmedVaultExport,
+  type VaultReceiptDb,
+} from './vaultResourceSync';
 
 /**
  * Cloud Vault client: encrypted, blind backup of a drive.
  *
  * The division of labour is deliberate. **WASM does crypto and format, this
  * file does the network.** `vaultExport` hands back bytes that are already
- * sealed; everything here only ever moves ciphertext around. The control plane
- * brokers presigned URLs and never sees a payload, and object bytes go straight
- * to storage rather than through the API — which is why a backup of a large
- * drive does not cost us bandwidth.
+ * sealed. Network uploads contain ciphertext; the control plane brokers
+ * presigned URLs and object bytes go straight to storage rather than through
+ * the API — which is why a backup of a large drive does not cost us bandwidth.
  *
- * What that means for reading this file: nothing here can leak drive contents,
- * because nothing here can read them. The security-critical code is in
- * `atomic_lib::vault`; this is plumbing.
+ * The exporter also returns a private manifest of resource identifiers and
+ * exact versions for local confirmation. That manifest stays on this device;
+ * it is never included in upload reservations, confirmations or checkpoints.
+ * Encryption and the stored format remain in `atomic_lib::vault`.
  */
 
 /** Signs the fixed derivation message. Satisfied by `@tomic/lib`'s `Agent`. */
@@ -230,7 +243,7 @@ export type VaultCheckpoint = {
  * which wasm binding module the host wires up — the worker and the tests pass
  * different ones.
  */
-export type VaultCapableDb = {
+export type VaultCapableDb = VaultReceiptDb & {
   vaultExport(
     driveSubject: string,
     key: Uint8Array,
@@ -256,6 +269,8 @@ export type VaultCapableDb = {
     tombstones: number;
     /** Checkpoints only; published verbatim to the control plane. */
     coverage: Record<string, number>;
+    /** Exact resource versions sealed in this object; absent in older adapters. */
+    resourceVersions?: Record<string, Record<string, number>>;
   } | null>;
   vaultImport(
     key: Uint8Array,
@@ -752,9 +767,11 @@ export async function backupDrive({
   observedLanes,
   collisionRetries = 0,
   beforeNetworkWrite,
+  onResourceVersionsConfirmed,
 }: {
   db: VaultCapableDb;
   collisionRetries?: number;
+  onResourceVersionsConfirmed?: (proof: ConfirmedVaultExport) => Promise<void>;
   beforeNetworkWrite?: () => Promise<void>;
   signal?: AbortSignal;
   driveSubject: string;
@@ -871,6 +888,7 @@ export async function backupDrive({
       segment: isCheckpoint ? segment : segment + 1,
       collisionRetries: collisionRetries + 1,
       beforeNetworkWrite,
+      onResourceVersionsConfirmed,
     });
   }
 
@@ -922,6 +940,8 @@ export async function backupDrive({
   // A rejection here means another device published this number first. Its
   // anchor is just as good as ours, so the pass still counts as backed up and
   // the next one picks the next number.
+  let published = !isCheckpoint;
+
   if (isCheckpoint) {
     try {
       await beforeNetworkWrite?.();
@@ -935,6 +955,7 @@ export async function backupDrive({
           checkpoint_object_id: upload.object_id,
         }),
       });
+      published = true;
     } catch (error) {
       if (error instanceof VaultSessionEndedError) throw error;
       signal?.throwIfAborted();
@@ -952,6 +973,24 @@ export async function backupDrive({
   // landed leaves ops no later delta would ever ship again.
   signal?.throwIfAborted();
   await db.vaultCommitSegment(drivePseudonym, devicePubkey, segment);
+
+  // A generic "backed-up" result can also mean an unpublished checkpoint.
+  // Per-resource proof requires the actual object to have completed every
+  // publication step, and rechecks account scope after asynchronous storage.
+  if (published && sealedPack.resourceVersions && onResourceVersionsConfirmed) {
+    try {
+      await beforeNetworkWrite?.();
+      signal?.throwIfAborted();
+      await onResourceVersionsConfirmed({
+        objectKey: sealedPack.objectKey,
+        resourceVersions: sealedPack.resourceVersions,
+        confirmedAt: Date.now(),
+      });
+    } catch {
+      // Publication already succeeded. An unavailable identity check or local
+      // diagnostic write may withhold proof but cannot undo the remote backup.
+    }
+  }
 
   return {
     status: 'backed-up',
@@ -1372,6 +1411,8 @@ export async function recoverDriveKey({
 const inFlight = new Map<string, Promise<BackupOutcome>>();
 
 export function runVaultBackup(args: {
+  /** Optional app context for account-scoped per-resource confirmations. */
+  store?: Store;
   /** Revalidate the account after encryption or storage I/O. */
   beforeNetworkWrite?: () => Promise<void>;
   signal?: AbortSignal;
@@ -1413,6 +1454,29 @@ export function runVaultBackup(args: {
   }
 
   const pass = (async () => {
+    const operationCurrent = args.store
+      ? captureResourceVaultOperation(args.store)
+      : undefined;
+    const proofAgent = args.store?.getAgent();
+    const proofDb = args.store?.getClientDb();
+    const proofPortal = getManagedApiBase();
+    const account = args.store
+      ? await getManagedAccount({ fresh: true })
+      : undefined;
+
+    if (
+      args.store &&
+      (!account ||
+        !proofAgent ||
+        args.store.getAgent() !== proofAgent ||
+        args.store.getClientDb() !== proofDb ||
+        (!!proofDb && args.db !== proofDb) ||
+        getManagedApiBase() !== proofPortal)
+    ) {
+      clearResourceVaultScopes(args.store);
+      throw new VaultSessionEndedError();
+    }
+
     args.signal?.throwIfAborted();
     await args.beforeNetworkWrite?.();
     const state = await getVaultState(args.drivePseudonym, args.signal);
@@ -1421,6 +1485,8 @@ export function runVaultBackup(args: {
     // A suspended vault refuses uploads; asking anyway would just produce an
     // error per tick and bury anything else in the log.
     if (state.enrollment.status !== 'active') {
+      if (args.store) clearResourceVaultScopes(args.store);
+
       return { status: 'nothing-to-do' } as BackupOutcome;
     }
 
@@ -1448,8 +1514,58 @@ export function runVaultBackup(args: {
       }
     }
 
+    const currentAccount = args.store
+      ? await getManagedAccount({ fresh: true })
+      : undefined;
+
+    if (
+      operationCurrent &&
+      (!operationCurrent() ||
+        currentAccount?.email !== account?.email ||
+        args.store!.getAgent() !== proofAgent ||
+        args.store!.getClientDb() !== proofDb ||
+        getManagedApiBase() !== proofPortal)
+    ) {
+      clearResourceVaultScopes(args.store!);
+      throw new VaultSessionEndedError();
+    }
+
+    if (
+      args.store &&
+      (canonicalizeScheme(state.enrollment.drive_subject) !==
+        canonicalizeScheme(args.driveSubject) ||
+        (state.enrollment.agent_subject &&
+          canonicalizeScheme(state.enrollment.agent_subject) !==
+            canonicalizeScheme(proofAgent?.subject ?? '')))
+    ) {
+      clearResourceVaultScopes(args.store);
+      throw new VaultSessionEndedError();
+    }
+
+    const proof =
+      args.store && account && proofAgent?.subject
+        ? captureResourceVaultBackup(args.store, args.db, {
+            managedAccount: account.email,
+            agent: proofAgent.subject,
+            portalUrl: proofPortal,
+            drive: args.driveSubject,
+            drivePseudonym: args.drivePseudonym,
+            keyEpoch: currentEpoch,
+          })
+        : undefined;
+
+    const guard = async () => {
+      await args.beforeNetworkWrite?.();
+      if (proof && !(await proof.isCurrent()))
+        throw new VaultSessionEndedError();
+    };
+
+    await guard();
+
     return backupDrive({
       ...args,
+      beforeNetworkWrite: guard,
+      onResourceVersionsConfirmed: proof?.confirm,
       driveKey,
       keyEpoch: currentEpoch,
       segment: nextSegmentFor(state, args.devicePubkey),

@@ -628,8 +628,22 @@ The worker and Node adapter tests cover capability fallback and propagation of
 durability failures. Store/tracker recovery tests cover delayed reads and scope
 changes, older adapters, missing/corrupt evidence and persistence failures. The
 own-echo regression verifies that server-added metadata is also persisted locally.
-These indicators cover resource metadata; attachment bytes and per-resource
-Vault/peer receipts are not implemented or claimed by this coverage.
+Cloud Vault export tests bind the local-only resource-version manifest to actual
+sealed update entries, excluding unchanged cursors and later edits. Scoped Vault
+receipt tests cover durable recovery, monotonic merging, malformed evidence,
+account/provider/drive/key-epoch isolation, deletion and explicit disable cleanup.
+The app-level Vault ledger and backup tests require upload confirmation and
+checkpoint publication, fence stale account/resource operations and avoid
+manufacturing proof on no-op passes or failed uploads.
+
+`browser/e2e/tests/resource-vault-sync.spec.ts` exercises the production browser,
+real WASM encryption and local receipt storage against a test-owned HTTP service.
+It covers a saved resource, same-account reload without a new upload, another
+account, edits during a held upload, failed upload and attachment wording. This
+is not validation of real S3 or the production control plane; the separate
+Vault backup/restore suite still requires an explicitly supplied portal.
+These indicators cover resource metadata. Attachment-byte confirmation and
+per-resource peer receipts remain outside this coverage.
 
 ### Protocol — well covered
 

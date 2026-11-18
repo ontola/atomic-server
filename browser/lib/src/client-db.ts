@@ -26,6 +26,11 @@
  */
 
 import type {
+  ResourceVaultEvidence,
+  VaultSyncScope,
+  SerializedVaultReceipt,
+} from './resource-vault-evidence.js';
+import type {
   ResourceSyncEvidence,
   ResourceSyncScope,
   SerializedServerReceipt,
@@ -253,6 +258,10 @@ const REPEATABLE_RPC_TYPES = new Set([
   // Stored proof reads and monotonic receipt merges are safe after handoff.
   'getResourceSyncEvidence',
   'putResourceSyncReceipts',
+  'getResourceVaultEvidence',
+  'getResourceVaultGeneration',
+  'putResourceVaultReceipts',
+  'clearResourceVaultReceipts',
   'flush',
   'exportAllResources',
   'getLoroSnapshot',
@@ -1078,6 +1087,35 @@ export class ClientDbWorker {
     return this.call('putResourceSyncReceipts', { scope, receipts });
   }
 
+  async getResourceVaultEvidence(
+    subjects: string[],
+    scope: VaultSyncScope,
+  ): Promise<ResourceVaultEvidence[] | undefined> {
+    return this.call('getResourceVaultEvidence', { subjects, scope });
+  }
+
+  async getResourceVaultGeneration(
+    scope: VaultSyncScope,
+  ): Promise<number | undefined> {
+    return this.call('getResourceVaultGeneration', { scope });
+  }
+
+  async clearResourceVaultReceipts(scope: VaultSyncScope): Promise<void> {
+    return this.call('clearResourceVaultReceipts', { scope });
+  }
+
+  async putResourceVaultReceipts(
+    scope: VaultSyncScope,
+    receipts: SerializedVaultReceipt[],
+    generation: number,
+  ): Promise<boolean> {
+    return this.call('putResourceVaultReceipts', {
+      scope,
+      receipts,
+      generation,
+    });
+  }
+
   removeResource(subject: string): Promise<void> {
     return this.call('removeResource', { subject });
   }
@@ -1234,9 +1272,9 @@ export class ClientDbWorker {
    * host agrees, but the caller must read it: a checkpoint uploads under a
    * different object kind and has to be published afterwards.
    *
-   * The bytes come back already encrypted — the caller uploads ciphertext and
-   * never sees drive contents. See `helpers/managed/vault.ts` for the
-   * control-plane half.
+   * The bytes come back already encrypted. The caller uploads ciphertext;
+   * the accompanying resource-version manifest stays local for confirmation
+   * tracking. See `helpers/managed/vault.ts` for the control-plane half.
    */
   async vaultExport(
     driveSubject: string,

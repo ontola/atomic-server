@@ -1,3 +1,5 @@
+import { getManagedApiBase } from './api';
+import { invalidateResourceVaultProof } from './vaultResourceSync';
 import type { Store } from '@tomic/react';
 import { getManagedAccount } from './session';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -334,6 +336,7 @@ export function useVaultBackup({
       // First backup immediately, so enabling produces something restorable
       // rather than an empty vault waiting on a tick the user cannot see.
       await runVaultBackup({
+        store,
         db: db!,
         driveSubject: driveSubject!,
         drivePseudonym: enrollment.drive_pseudonym,
@@ -356,20 +359,46 @@ export function useVaultBackup({
     db,
     devicePubkey,
     refresh,
+    store,
   ]);
 
   const disable = useCallback(async () => {
     if (status.state !== 'on') return;
 
     await run(async () => {
+      const account = store
+        ? await getManagedAccount({ fresh: true })
+        : undefined;
+      const scope =
+        store && account && agentSubject && driveSubject && db
+          ? {
+              managedAccount: account.email,
+              agent: agentSubject,
+              portalUrl: getManagedApiBase(),
+              drive: driveSubject,
+              drivePseudonym: status.enrollment.drive_pseudonym,
+              keyEpoch: status.enrollment.key_epoch ?? 1,
+            }
+          : undefined;
       await disableVault(status.enrollment.drive_pseudonym);
       driveKey.current = null;
       // Backup is on for everyone by default; switching it off here must not
       // be undone by the next sign-in (see vaultAutoBackup.ts).
       setVaultOptOut(driveSubject!, true);
-      await refresh();
+      if (store)
+        try {
+          await invalidateResourceVaultProof(
+            store,
+            status.enrollment.drive_pseudonym,
+            scope && db ? { scope, db } : undefined,
+          );
+        } finally {
+          // The remote switch already succeeded even if diagnostic cleanup fails.
+          await refresh();
+        }
+      else await refresh();
     });
-  }, [run, status, driveSubject, refresh]);
+  }, [run, status, driveSubject, refresh, store, agentSubject, db]);
 
   const backupNow = useCallback(async () => {
     if (status.state !== 'on') return;
@@ -377,6 +406,7 @@ export function useVaultBackup({
     await run(async () => {
       const key = await ensureKey(status.enrollment.drive_pseudonym);
       await runVaultBackup({
+        store,
         db: db!,
         driveSubject: driveSubject!,
         drivePseudonym: status.enrollment.drive_pseudonym,
@@ -396,6 +426,7 @@ export function useVaultBackup({
     driveSubject,
     devicePubkey,
     refresh,
+    store,
   ]);
 
   const compact = useCallback(
@@ -410,6 +441,7 @@ export function useVaultBackup({
           includeUndoWindow,
           runBackup: ({ currentStateOnly }) =>
             runVaultBackup({
+              store,
               db: db!,
               driveSubject: driveSubject!,
               drivePseudonym,
@@ -435,6 +467,7 @@ export function useVaultBackup({
       driveSubject,
       devicePubkey,
       refresh,
+      store,
     ],
   );
 

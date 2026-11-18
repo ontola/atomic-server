@@ -365,6 +365,9 @@ pub struct BackupSummary {
     /// Checkpoints only — the lanes this object provably subsumes, which is
     /// what the control plane prunes against. Empty for a delta pack.
     pub coverage: BTreeMap<String, u32>,
+    /// Local-only versions of exactly the resource updates sealed by this pass.
+    /// Never uploaded as plaintext and never inferred from unchanged cursors.
+    pub resource_versions: BTreeMap<String, VersionVectorMap>,
 }
 
 /// Outcome of one restore pass.
@@ -532,6 +535,7 @@ pub async fn export_vault_segment(
     let mut cursors: BTreeMap<String, VersionVectorMap> = BTreeMap::new();
     let mut envelope_cursors: BTreeMap<String, i64> = BTreeMap::new();
     let mut unchanged = 0usize;
+    let mut resource_versions = BTreeMap::new();
 
     for subject_str in &subjects {
         match contribution(
@@ -583,6 +587,7 @@ pub async fn export_vault_segment(
                 if let Some(newest) = newest.or(floor) {
                     envelope_cursors.insert(subject_str.clone(), newest);
                 }
+                resource_versions.insert(subject_str.clone(), reached.clone());
                 cursors.insert(subject_str.clone(), reached);
             }
             Contribution::Unchanged => {
@@ -730,6 +735,7 @@ pub async fn export_vault_segment(
         tombstones: tombstone_count,
         sealed_bytes: sealed.len(),
         coverage,
+        resource_versions,
     }))
 }
 
@@ -1896,6 +1902,59 @@ mod tests {
             anchor.resources,
             anchor.sealed_bytes
         );
+    }
+
+    /// A later edit or overlapping export must not enlarge the earlier object's proof.
+    #[tokio::test]
+    async fn vault_manifest_tracks_sealed_updates_not_later_or_unchanged_resources() {
+        let source = Db::init_temp("vault_exact_manifest").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let changed = source
+            .create_resource(FOLDER, &drive, "changed", None)
+            .await
+            .unwrap();
+        let unchanged = source
+            .create_resource(FOLDER, &drive, "unchanged", None)
+            .await
+            .unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        let anchor = backup(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        assert_eq!(anchor.resource_versions.len(), anchor.resources);
+        rename(&source, &changed, "first edit").await;
+        let delta = backup_delta(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        let changed_key =
+            Subject::from_raw(&changed, source.get_base_domain().as_deref()).pure_id();
+        let unchanged_key =
+            Subject::from_raw(&unchanged, source.get_base_domain().as_deref()).pure_id();
+        assert_eq!(delta.resource_versions.len(), 1);
+        assert!(!delta.resource_versions.contains_key(&unchanged_key));
+        let first_version = delta.resource_versions[&changed_key].clone();
+        assert_eq!(
+            first_version,
+            cheap_version_vector(&source, &changed_key).unwrap()
+        );
+        let (_, plaintext) = envelope::open(&key, &vault.get(&delta.object_key).unwrap()).unwrap();
+        let packed = Pack::decode(&plaintext).unwrap();
+        assert_eq!(
+            packed
+                .entries
+                .iter()
+                .map(|entry| &entry.subject)
+                .collect::<Vec<_>>(),
+            delta.resource_versions.keys().collect::<Vec<_>>()
+        );
+        rename(&source, &changed, "newer edit while upload is in flight").await;
+        let later = backup_delta(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        assert_ne!(later.resource_versions[&changed_key], first_version);
+        assert_eq!(delta.resource_versions[&changed_key], first_version);
     }
 
     /// A delta is not self-sufficient, and a chain of them still restores.
