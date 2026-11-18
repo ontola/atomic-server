@@ -105,3 +105,16 @@ Coordinate with view registry #1899 and existing app-view/lens protocols.
       activation. Discovery does not retype rows or write source records.
 - [ ] Start with direct declared mappings, without implicit multi-hop chaining
       or an assumption that transforms are invertible.
+
+## Embed size budget
+
+The original extraction's final commit coalesces only Rolldown's statically
+reachable `$initial` modules. Lazy feature modules remain lazy. The unchanged
+budgets are 1,000,000 bytes of first-use gzip and 16,777,216 shipped bytes.
+
+The unmodified `flutter/scripts/build_embed.sh` rebuilds the renderer and copies
+`embed.html` plus `assets/**` into `flutter/assets/embed`. The default size gate
+on that actual payload passes: two initial chunks, 962.6 KB gzip and 14.5472 MB
+total. Raw `dist-embed` also contains web-only public assets; its 23.7935 MB is a
+different measurement, not the Flutter shipping payload. No budget, copy rule,
+valid web asset or optimization requirement was removed to make the gate pass.
