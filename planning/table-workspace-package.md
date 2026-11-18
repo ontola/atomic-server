@@ -1,9 +1,8 @@
 # Table workspace package
 
-Status: full TablePage extraction is the decided target (11 November 2026).
-The clean extraction branch shares the grid/editors plus reusable UI and pure
-helpers. Full page adoption and catalog evolution remain open. State-management
-improvements are deferred; see [the scope reset](tablepage-extraction-reset.md).
+Status: complete TablePage/shared-UI source extraction is implemented and
+validated in Atomic (18 November 2026). ELFA full-page adoption and catalog
+evolution remain open. State-management improvements are deferred; see [the scope reset](tablepage-extraction-reset.md).
 Execution tracker: [#2484](https://github.com/ontola/atomic-server/issues/2484).
 
 ## Sequence
@@ -28,7 +27,7 @@ not completion of the full-page target.
 - [x] Validate packed table/UI consumers and the unchanged SDK package API.
 - [ ] Move the external host pin to the clean extraction once the full page is ready.
 - [x] Add an independent package CI lane with a clean packed-consumer check.
-- [ ] Move the complete saved-view tabs with TablePage; avoid an intermediate
+- [x] Move the complete saved-view tabs with TablePage; avoid an intermediate
       presentation-only extraction.
 
 The original #2434 stack is preserved as reference. The replacement extraction
@@ -37,15 +36,15 @@ grid boundary does not make the complete TablePage storage-independent.
 
 ## Full TablePage gate
 
-- [ ] Extract TablePage/TableResource orchestration and explicit scoped query,
-      schema/property, mutation/draft, saved-view, permission and reactive
-      navigation services from actual call sites.
-- [ ] Share schema/property and row dialogs, typed cells, saved-view lifecycle,
-      menus/defaults, filters/order/paging, totals, clipboard/undo,
+- [x] Move complete TablePage/TableResource orchestration with the existing SDK
+      query, schema/property, mutation/draft, saved-view and permission APIs;
+      navigation crosses the small host boundary.
+- [x] Share schema/property and row dialogs, typed cells, saved-view lifecycle,
+      page-owned menus/defaults, filters/order/paging, totals, clipboard/undo,
       derived columns/actions and built-in renderers.
-- [ ] Inventory title/cover/export, files/relations, comments/presence, forms,
-      connections and automation controls; implement real host capabilities or
-      track explicit backend/integration limitations.
+- [x] Inventory and retain title/cover/export, files/relations, comments/presence,
+      forms, connections and automation controls; track explicit external
+      backend/integration requirements.
 - [ ] Both hosts use the same full page; migrate existing saved configurations
       without losing property identities, drafts or collection isolation.
 - [ ] Characterize and preserve baseline persistence/restart, drafts and partial
@@ -87,13 +86,14 @@ of creating competing registry identities or a third iframe protocol.
 Keep `.github/workflows/table-package.yml` as the fast independent lane and
 expand it as shared TablePage moves. Existing checks cover package lint,
 typecheck, interaction tests, packing, a clean consumer DOM mount and NodeNext
-declarations. These are not full TablePage/backend acceptance today.
+declarations, full moved-page behavior and preserved locales. ELFA complete-page
+backend acceptance remains a separate gate.
 
-- [ ] Include Atomic adapter and affected shared-library/host paths in triggers.
-- [ ] Test shared page behavior and the Atomic wrapper.
-- [ ] Test a clean external adapter consumer with pinned inputs; separate native
+- [x] Include Atomic adapter and affected shared-library/host paths in triggers.
+- [x] Test shared page behavior and the Atomic wrapper.
+- [x] Test a clean external adapter consumer with pinned inputs; separate native
       backend/browser jobs when broker/WASM infrastructure is required.
-- [ ] Add browser keyboard/navigation and actual desktop/mobile screen evidence.
+- [x] Add browser keyboard/navigation and actual desktop/mobile screen evidence.
 - [ ] Add catalog/lens compatibility, unavailable/offline/version persistence and
       scoped-frame lifecycle tests when their milestones begin.
 
@@ -139,7 +139,7 @@ Validation gates are import-boundary/cycle checks, focused existing behavior
 tests, canonical context identity, package declarations/packing, Atomic full-page
 consumption and actual desktop/mobile browser evidence. Heavy SDK/WASM/server
 or whole-app checks use `/tmp/atomic-candidate-heavy-check.lock` and are scheduled
-behind the candidate validation. This unfinished branch is not candidate26.
+behind the candidate validation. This future branch is excluded from candidate26.
 
 Current future-branch validation:
 
@@ -158,7 +158,10 @@ Current future-branch validation:
   source frontend (real create/edit/computed/configuration persistence).
 - [x] Existing native browser regressions pass (9): forms, comments, templates,
   filters, saved-view persistence, editing, bulk deletion and resource menus.
-- [ ] Complete normal commit hooks and publish a separate extraction PR.
+- [x] Normal commit hooks pass: full-workspace browser lint/format and Rust
+  Clippy on the staged snapshot, without bypasses.
+- [ ] Integrate the full page into ELFA through a future candidate and complete
+  the external backend acceptance gate.
 
 The generic app-wide resource menu and right comments panel remain shell
 services using the canonical shared trigger/state contexts. An external host
