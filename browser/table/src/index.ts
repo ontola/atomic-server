@@ -64,3 +64,9 @@ export type {
 export type { JSONValue } from './value.js';
 
 export { TableHeadingWrapper } from './chunks/TableEditor/TableHeading.js';
+export {
+  TableRowSelectCheckbox,
+  TableRowSelectionActions,
+  type TableRowSelectCheckboxProps,
+  type TableRowSelectionActionsProps,
+} from './RowSelection.js';
