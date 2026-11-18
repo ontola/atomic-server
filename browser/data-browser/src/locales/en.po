@@ -8974,10 +8974,12 @@ msgid "Find a column…"
 msgstr "Find a column…"
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
 msgid "Find a column to filter by"
 msgstr "Find a column to filter by"
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
 msgid "No column matches"
 msgstr "No column matches"
 
@@ -13446,7 +13448,6 @@ msgid "Value…"
 msgstr "Value…"
 
 #: src/chunks/TablePage/TableFilterBar.tsx
-#: src/chunks/TablePage/TableFilterBar.tsx
 msgid "Unavailable column"
 msgstr "Unavailable column"
 
@@ -13454,3 +13455,7 @@ msgstr "Unavailable column"
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "This column is unavailable."
 msgstr "This column is unavailable."
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+msgid "Add filter"
+msgstr "Add filter"

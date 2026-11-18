@@ -409,8 +409,15 @@ actual Atomic page-context removal path in the dedicated CI lane. This recovery
 is for unresolved targets; malformed stored configuration and the remaining
 full-page/schema/renderer services still need extraction.
 
-## Active-filter bar extraction split
+## Shared active-filter bar
 
-- [x] Move existing dispatch and preserve inherited recovery/Atomic leaves.
-- [ ] Review busy guards, operator repair, candidate deduplication and new
-  fallback menu/styling separately.
+The actual Atomic active-filter row now uses `TableFilterBar` from the package.
+It owns stable-key chip dispatch, hidden-target retention, unavailable-target
+removal, and exclusion of already active/hidden targets from Add. Targets are
+backend metadata descriptors; value/reference leaves retain backend identity.
+A default searchable Add control works without an Atomic dropdown; Atomic keeps
+its existing menu primitive and drive-search affordance. Equality-only backends
+can also repair a previously stored unsupported operator without removing the
+filter. Package tests exercise these state transitions; the actual Atomic page
+checks unavailable-target removal and persisted recovery. ELFA's full stored
+configuration and remaining page orchestration still need adoption.
