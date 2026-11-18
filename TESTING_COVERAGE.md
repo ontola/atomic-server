@@ -1096,6 +1096,17 @@ native clients.
 
 ### Save durability and identity lifecycle regressions
 
+- `save-receipt.test.ts` checks the additive `saveWithReceipt` contract through
+  real Resource/outbox code with controlled write/transport completion. It covers
+  captured local and accepted server versions, later edits, absent evidence,
+  optional mirror failures/deadlines, identity/database replacement, custom host
+  transports, no-op/concurrent calls and accepted-commit bookkeeping failures.
+  The actual WASM memory-backend cases in
+  `tests/outbox-client-db.integration.test.ts` verify offline/local-only writes
+  produce readable stored JSON/snapshots but no local durability receipt. Existing
+  `client-db-durable-put.test.ts` checks worker acknowledgement follows flush.
+  These establish attribution and completion boundaries, not new browser crash
+  durability, server fsync or independent replica guarantees (#2538).
 - `local-save-persistence.test.ts` checks required offline/local-only save
   persistence through the real Resource/signing/outbox path with a stubbed worker
   boundary: missing, unsupported and failing storage reject; edits and signed

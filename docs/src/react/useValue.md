@@ -21,6 +21,13 @@ It looks and functions a lot like React's useState hook.
 The `useValue` hook does not save the resource by default when the value is changed.
 This can be configured by passing an options object as the third argument with `commit` set to true.
 
+Awaiting the setter waits for local processing, not for its debounced save.
+For version-specific completion evidence, await `resource.saveWithReceipt()`
+and inspect its optional `local` and `server` fields. See the
+[persistence guide](../local-first-guide/4-persist.md#read-version-specific-receipts)
+for examples and limits. The `useSaveState(resource)` hook reports progress and
+errors; it is not a receipt for a particular version.
+
 In practice, you will use typed versions of `useValue` more often.
 These offer better typescript typing and validation on writes.
 

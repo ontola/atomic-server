@@ -360,6 +360,8 @@ type BroadcastMessage =
     };
 
 export class ClientDbWorker {
+  /** Whether completed writes include a reload-durable storage flush. */
+  readonly supportsDurablePersistence: boolean = true;
   private worker: Worker | null = null;
   private bc: BroadcastChannel | null = null;
   private role: Role = 'initializing';
