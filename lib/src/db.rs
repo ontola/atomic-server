@@ -440,7 +440,7 @@ pub struct Db {
     /// Optional remote file storage. Configure before sharing this Db.
     pub blob_backend: Option<Arc<dyn blob_backend::BlobBackend>>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
-    #[cfg(feature = "iroh")]
+    #[cfg(any(feature = "iroh", feature = "ws"))]
     agent_generation: Arc<std::sync::atomic::AtomicU64>,
     /// The key this node wraps stored secrets with, set once at startup.
     ///
@@ -457,6 +457,9 @@ pub struct Db {
     on_commit: Option<Arc<HandleCommit>>,
     /// Broadcast channel for all resource mutations.
     db_events: tokio::sync::broadcast::Sender<DbEvent>,
+    #[cfg(feature = "ws")]
+    server_replica_receipts:
+        tokio::sync::broadcast::Sender<crate::client::ws_receipts::ServerReplicaReceipt>,
     /// Best-effort, per-store observations from authenticated native peers.
     #[cfg(feature = "iroh")]
     replica_receipts:
@@ -613,13 +616,15 @@ impl Db {
             write_log,
             probe_cache: Default::default(),
             default_agent: Arc::new(Mutex::new(None)),
-            #[cfg(feature = "iroh")]
+            #[cfg(any(feature = "iroh", feature = "ws"))]
             agent_generation: Default::default(),
             node_key: Arc::new(std::sync::OnceLock::new()),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            #[cfg(feature = "ws")]
+            server_replica_receipts: tokio::sync::broadcast::channel(128).0,
             #[cfg(feature = "iroh")]
             replica_receipts: tokio::sync::broadcast::channel(128).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
@@ -1660,7 +1665,11 @@ impl Db {
     pub fn with_own_agent(&self, agent: Option<crate::agents::Agent>) -> Db {
         let mut db = self.clone();
         db.default_agent = Arc::new(Mutex::new(agent));
-        #[cfg(feature = "iroh")]
+        #[cfg(feature = "ws")]
+        {
+            db.server_replica_receipts = tokio::sync::broadcast::channel(128).0;
+        }
+        #[cfg(any(feature = "iroh", feature = "ws"))]
         {
             db.agent_generation = Default::default();
         }
@@ -1671,15 +1680,15 @@ impl Db {
     pub fn clear_default_agent(&self) {
         let mut agent = self.default_agent.lock().unwrap();
         if agent.take().is_some() {
-            #[cfg(feature = "iroh")]
+            #[cfg(any(feature = "iroh", feature = "ws"))]
             self.agent_generation
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
     /// Changes even when an agent is replaced and subsequently restored.
-    #[cfg(feature = "iroh")]
-    pub(crate) fn agent_generation(&self) -> u64 {
+    #[cfg(any(feature = "iroh", feature = "ws"))]
+    pub fn agent_generation(&self) -> u64 {
         self.agent_generation
             .load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -3092,6 +3101,45 @@ impl Db {
             return;
         }
         let _ = self.replica_receipts.send(receipt);
+    }
+
+    #[cfg(feature = "ws")]
+    pub(crate) fn with_server_receipt_agent<T>(
+        &self,
+        generation: u64,
+        subject: &str,
+        action: impl FnOnce() -> T,
+    ) -> Option<T> {
+        let agent = self.default_agent.lock().unwrap();
+        if self.agent_generation() != generation
+            || agent.as_ref().map(|a| a.subject.as_str()) != Some(subject)
+        {
+            return None;
+        }
+        Some(action())
+    }
+
+    /// Future native WebSocket storage observations. Subscribe before connecting.
+    /// Bounded and without replay; handle lag as unknown, not as a negative proof.
+    #[cfg(feature = "ws")]
+    pub fn subscribe_server_replica_receipts(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<crate::client::ws_receipts::ServerReplicaReceipt> {
+        self.server_replica_receipts.subscribe()
+    }
+
+    #[cfg(feature = "ws")]
+    pub(crate) fn emit_server_replica_receipt(
+        &self,
+        receipt: crate::client::ws_receipts::ServerReplicaReceipt,
+    ) {
+        let agent = self.default_agent.lock().unwrap();
+        if self.agent_generation() != receipt.agent_generation
+            || agent.as_ref().map(|a| a.subject.as_str()) != Some(receipt.local_agent.as_str())
+        {
+            return;
+        }
+        let _ = self.server_replica_receipts.send(receipt);
     }
 
     /// Presence arriving from peers. See [`EphemeralEvent`].
@@ -6018,7 +6066,7 @@ impl Storelike for Db {
 
     fn set_default_agent(&self, agent: crate::agents::Agent) {
         let mut current = self.default_agent.lock().unwrap();
-        #[cfg(feature = "iroh")]
+        #[cfg(any(feature = "iroh", feature = "ws"))]
         if current.as_ref().map(|previous| &previous.subject) != Some(&agent.subject) {
             self.agent_generation
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);

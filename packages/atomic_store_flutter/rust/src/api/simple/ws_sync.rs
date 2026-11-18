@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use atomic_lib::{
     client::ws::{WsClient, WsMessage},
+    client::ws_receipts::{ServerReplicaReceipt, WsReceiptSession},
     sync::{
         outbox::{CommitRefused, CommitTransport, Outbox},
         protocol, ws_apply,
@@ -55,6 +56,8 @@ impl CommitTransport for SinkTransport {
 #[derive(Default)]
 #[flutter_rust_bridge::frb(ignore)]
 pub(crate) struct SyncSession {
+    generation: Mutex<u64>,
+    receipts: Mutex<Option<Arc<WsReceiptSession>>>,
     client: Mutex<Option<Arc<WsClient>>>,
     sink: Mutex<Option<Arc<dyn CommitSink>>>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -111,6 +114,15 @@ impl SyncSession {
     }
 
     pub(crate) async fn close(&self) {
+        self.replace_session();
+    }
+
+    fn replace_session(&self) -> u64 {
+        let mut generation = self.generation.lock().unwrap();
+        *generation = generation.wrapping_add(1);
+        if let Some(receipts) = self.receipts.lock().unwrap().take() {
+            receipts.close();
+        }
         if let Ok(mut guard) = self.task.lock() {
             if let Some(handle) = guard.take() {
                 handle.abort();
@@ -126,6 +138,25 @@ impl SyncSession {
         }
         if let Ok(mut guard) = self.sink.lock() {
             *guard = None;
+        }
+        *generation
+    }
+
+    pub(crate) fn accepts_receipt(&self, receipt: &ServerReplicaReceipt) -> bool {
+        self.receipts
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|session| session.accepts(receipt))
+    }
+
+    fn open_is_current(&self, store: &atomic_lib::Db, generation: u64, account: u64) -> bool {
+        *self.generation.lock().unwrap() == generation && store.agent_generation() == account
+    }
+
+    fn follow_receipts(&self, drive: &str) {
+        if let Some(receipts) = self.receipts.lock().unwrap().as_ref() {
+            receipts.follow_drive(drive);
         }
     }
 
@@ -147,7 +178,9 @@ impl SyncSession {
         drive: Option<String>,
         server_origin: &str,
     ) -> Result<bool, String> {
-        self.close().await;
+        let generation = self.replace_session();
+        let account = store.agent_generation();
+        let agent = store.get_default_agent().map_err(err)?;
 
         let ws_url = server_origin_to_ws_url(server_origin)?;
         tracing::info!("[ws_sync] connecting to {ws_url}");
@@ -156,8 +189,16 @@ impl SyncSession {
         self.set_origin(server_origin);
 
         let client = Arc::new(WsClient::connect(&ws_url).await.map_err(err)?);
-        let agent = store.get_default_agent().map_err(err)?;
+        if !self.open_is_current(store, generation, account) {
+            return Err("WebSocket session was replaced while connecting".into());
+        }
         client.authenticate(&agent).await.map_err(err)?;
+        if !self.open_is_current(store, generation, account) {
+            return Err("WebSocket session was replaced while authenticating".into());
+        }
+        // Subscribe before SUB so its immediate initial state cannot race the
+        // spawned apply loop. The receiver buffers while setup completes.
+        let mut messages = client.subscribe();
 
         if let Some(drive) = &drive {
             // Drive-wide SUB now covers everything that used to require a
@@ -172,43 +213,59 @@ impl SyncSession {
             subscribe_presence(&client, drive).await;
         }
 
-        // Local presence updates go out; the server's come in via the loop
-        // below. The forwarder listens before the heartbeat, so that it sends
-        // our entry to the server's fresh per-connection cache.
-        let presence_handle = spawn_presence_forwarder(client.clone(), store);
-        atomic_lib::host::presence::heartbeat(store);
+        {
+            let current = self.generation.lock().unwrap();
+            if *current != generation || store.agent_generation() != account {
+                return Err("WebSocket session was replaced while subscribing".into());
+            }
+            let receipts = WsReceiptSession::start(client.clone(), store.clone());
+            // The constructor captures the DB epoch itself. It must still be
+            // the one that began this connection, even after A→B→A.
+            if store.agent_generation() != account {
+                receipts.close();
+                return Err("WebSocket account was replaced while attaching receipts".into());
+            }
+            *self.receipts.lock().unwrap() = Some(receipts.clone());
+            if let Some(drive) = &drive {
+                receipts.follow_drive(drive);
+            }
 
-        let client_loop = client.clone();
-        let store_loop = store.clone();
-        let handle = tokio::spawn(async move {
-            let mut rx = client_loop.subscribe();
-            loop {
-                match rx.recv().await {
-                    Ok(msg) => {
-                        if let Err(e) = handle_ws_message(store_loop.as_ref(), msg).await {
-                            tracing::warn!("[ws_sync] message error: {e}");
+            // Local presence updates go out; the server's come in via the loop
+            // below. The forwarder listens before the heartbeat, so that it sends
+            // our entry to the server's fresh per-connection cache.
+            let presence_handle = spawn_presence_forwarder(client.clone(), store);
+            atomic_lib::host::presence::heartbeat(store);
+
+            let store_loop = store.clone();
+            let handle = tokio::spawn(async move {
+                loop {
+                    match messages.recv().await {
+                        Ok(msg) => {
+                            if let Err(e) = handle_ws_message(store_loop.as_ref(), msg).await {
+                                tracing::warn!("[ws_sync] message error: {e}");
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(_) => {
+                            tracing::info!("[ws_sync] broadcast closed, exiting loop");
+                            break;
                         }
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(_) => {
-                        tracing::info!("[ws_sync] broadcast closed, exiting loop");
-                        break;
-                    }
                 }
-            }
-        });
+            });
 
-        if let Ok(mut guard) = self.client.lock() {
-            *guard = Some(client.clone());
-        }
-        if let Ok(mut guard) = self.sink.lock() {
-            *guard = Some(Arc::new(client));
-        }
-        if let Ok(mut guard) = self.task.lock() {
-            *guard = Some(handle);
-        }
-        if let Ok(mut guard) = self.presence_task.lock() {
-            *guard = Some(presence_handle);
+            if let Ok(mut guard) = self.client.lock() {
+                *guard = Some(client.clone());
+            }
+            if let Ok(mut guard) = self.sink.lock() {
+                *guard = Some(Arc::new(client));
+            }
+            if let Ok(mut guard) = self.task.lock() {
+                *guard = Some(handle);
+            }
+            if let Ok(mut guard) = self.presence_task.lock() {
+                *guard = Some(presence_handle);
+            }
         }
 
         let mut have_drive = false;
@@ -217,6 +274,10 @@ impl SyncSession {
                 Ok(()) => have_drive = true,
                 Err(e) => tracing::warn!("[ws_sync] drive fetch skipped: {e}"),
             }
+        }
+
+        if !self.open_is_current(store, generation, account) {
+            return Err("WebSocket session was replaced while fetching its drive".into());
         }
 
         // Whatever was written while there was no session goes out now, in
@@ -241,7 +302,10 @@ impl SyncSession {
             return Ok(());
         }
         let (agent, origin) = self.access_key(store);
-        if let Some(why) = self.denied_lock().check(&agent, drive, &origin, Instant::now()) {
+        if let Some(why) = self
+            .denied_lock()
+            .check(&agent, drive, &origin, Instant::now())
+        {
             return Err(why);
         }
         tracing::info!(
@@ -252,7 +316,8 @@ impl SyncSession {
             Ok(b) => b,
             Err(e) => {
                 if is_access_denied(&e) {
-                    self.denied_lock().deny(&agent, drive, &origin, Instant::now());
+                    self.denied_lock()
+                        .deny(&agent, drive, &origin, Instant::now());
                 }
                 return Err(e);
             }
@@ -285,7 +350,8 @@ impl SyncSession {
     /// Whether any server refused this agent the drive: for the drive list.
     pub(crate) fn is_drive_denied(&self, store: &atomic_lib::Db, drive: &str) -> bool {
         let (agent, _) = self.access_key(store);
-        self.denied_lock().is_denied_anywhere(&agent, drive, Instant::now())
+        self.denied_lock()
+            .is_denied_anywhere(&agent, drive, Instant::now())
     }
 
     async fn fetch_resource_state(&self, subject: &str) -> Result<Vec<u8>, String> {
@@ -362,6 +428,8 @@ impl SyncSession {
         drive: &str,
     ) -> Result<(), String> {
         let client = self.client()?;
+        let generation = *self.generation.lock().unwrap();
+        let account = store.agent_generation();
         // A drive lives on the host in its URL; this session is one server.
         if let Some(origin) = self.origin() {
             if !drive_belongs_to_origin(drive, &origin) {
@@ -373,6 +441,10 @@ impl SyncSession {
         self.ensure_drive_materialized(store, drive).await?;
         client.subscribe_drive(drive).await.map_err(err)?;
         subscribe_presence(&client, drive).await;
+        if !self.open_is_current(store, generation, account) {
+            return Err("WebSocket session was replaced while following its drive".into());
+        }
+        self.follow_receipts(drive);
         atomic_lib::host::presence::heartbeat(store);
         Ok(())
     }
@@ -390,6 +462,8 @@ impl SyncSession {
     ) -> Result<(), String> {
         use std::collections::HashMap;
         let client = self.client()?;
+        let generation = *self.generation.lock().unwrap();
+        let account = store.agent_generation();
         let subject = atomic_lib::Subject::from(drive);
         let subjects = atomic_lib::sync::engine::collect_drive_subjects(store, &subject).await;
         let vvs = atomic_lib::sync::engine::build_drive_vvs(store, &subjects);
@@ -411,6 +485,10 @@ impl SyncSession {
                 (subject.clone(), counters)
             })
             .collect();
+        if !self.open_is_current(store, generation, account) {
+            return Err("WebSocket session was replaced while reconciling its drive".into());
+        }
+        self.follow_receipts(drive);
         // An empty hash never matches the server's, so it always compares.
         client
             .send_binary(protocol::encode_sync(
@@ -501,7 +579,10 @@ fn spawn_presence_forwarder(
             match events.recv().await {
                 Ok(event) => {
                     if event.kind == protocol::ephemeral_kind::PRESENCE && event.from_peer != "ws" {
-                        if let Err(e) = client.send_presence_update(&event.drive, &event.payload).await {
+                        if let Err(e) = client
+                            .send_presence_update(&event.drive, &event.payload)
+                            .await
+                        {
                             tracing::debug!("[ws_sync] presence send failed: {e}");
                         }
                     }
@@ -568,8 +649,11 @@ const DENIED_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 /// or a dropped connection).
 pub(crate) fn is_access_denied(message: &str) -> bool {
     let m = message.to_lowercase();
-    m.contains("401") || m.contains("403") || m.contains("unauthorized")
-        || m.contains("forbidden") || m.contains("not publicly readable")
+    m.contains("401")
+        || m.contains("403")
+        || m.contains("unauthorized")
+        || m.contains("forbidden")
+        || m.contains("not publicly readable")
 }
 
 fn host_of(subject: &str) -> Option<String> {
@@ -599,7 +683,11 @@ struct DeniedDrives {
 
 impl DeniedDrives {
     fn key(agent: &str, drive: &str, origin: &str) -> (String, String, String) {
-        (agent.to_string(), drive.to_string(), origin.trim_end_matches('/').to_string())
+        (
+            agent.to_string(),
+            drive.to_string(),
+            origin.trim_end_matches('/').to_string(),
+        )
     }
 
     fn deny(&mut self, agent: &str, drive: &str, origin: &str, now: Instant) {
@@ -612,7 +700,9 @@ impl DeniedDrives {
         match self.seen.get(&key) {
             Some(at) if now.saturating_duration_since(*at) < DENIED_TTL => {
                 tracing::debug!("[ws_sync] {drive} on {origin}: refused before, not asked again");
-                Some(format!("{drive} is not readable on {origin} (401/403, remembered)"))
+                Some(format!(
+                    "{drive} is not readable on {origin} (401/403, remembered)"
+                ))
             }
             Some(_) => {
                 self.seen.remove(&key);
@@ -638,8 +728,32 @@ mod denied_tests {
     use super::*;
 
     #[test]
+    fn concurrent_session_replacements_reserve_distinct_tokens() {
+        let session = Arc::new(SyncSession::default());
+        let barrier = Arc::new(std::sync::Barrier::new(8));
+        let threads: Vec<_> = (0..8)
+            .map(|_| {
+                let (session, barrier) = (session.clone(), barrier.clone());
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    session.replace_session()
+                })
+            })
+            .collect();
+        let mut tokens: Vec<_> = threads
+            .into_iter()
+            .map(|thread| thread.join().unwrap())
+            .collect();
+        tokens.sort();
+        assert_eq!(tokens, (1..=8).collect::<Vec<_>>());
+        assert_eq!(*session.generation.lock().unwrap(), 8);
+    }
+
+    #[test]
     fn detects_refusals() {
-        assert!(is_access_denied("Status: 401 Unauthorized, not publicly readable"));
+        assert!(is_access_denied(
+            "Status: 401 Unauthorized, not publicly readable"
+        ));
         assert!(!is_access_denied("GET timed out"));
     }
 
@@ -647,8 +761,14 @@ mod denied_tests {
     fn drive_is_tried_on_its_own_host_only() {
         let d = "https://atomicdata.dev/drive/0PXBdxdX";
         assert!(drive_belongs_to_origin(d, "https://atomicdata.dev"));
-        assert!(!drive_belongs_to_origin(d, "https://staging.atomicdata.dev/"));
-        assert!(drive_belongs_to_origin("did:ad:abc", "https://staging.atomicdata.dev"));
+        assert!(!drive_belongs_to_origin(
+            d,
+            "https://staging.atomicdata.dev/"
+        ));
+        assert!(drive_belongs_to_origin(
+            "did:ad:abc",
+            "https://staging.atomicdata.dev"
+        ));
     }
 
     #[test]
@@ -659,10 +779,15 @@ mod denied_tests {
         assert!(m.check("me", d, o, t0).is_none());
         m.deny("me", d, o, t0);
         assert!(m.check("me", d, o, t0 + Duration::from_secs(60)).is_some());
-        assert!(m.check("other", d, o, t0).is_none(), "another agent asks again");
+        assert!(
+            m.check("other", d, o, t0).is_none(),
+            "another agent asks again"
+        );
         assert!(m.check("me", d, "https://elsewhere", t0).is_none());
         assert!(m.is_denied_anywhere("me", d, t0));
-        assert!(m.check("me", d, o, t0 + DENIED_TTL + Duration::from_secs(1)).is_none());
+        assert!(m
+            .check("me", d, o, t0 + DENIED_TTL + Duration::from_secs(1))
+            .is_none());
         m.deny("me", d, o, t0);
         m.clear();
         assert!(m.check("me", d, o, t0).is_none());
@@ -677,9 +802,12 @@ mod presence_tests {
     /// "ws" so the forwarder does not send it back and the hub applies it.
     #[tokio::test]
     async fn server_presence_is_published_as_ws_ephemeral() {
-        let dir = std::env::temp_dir().join(format!("atomic-bridge-presence-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("atomic-bridge-presence-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let store = atomic_lib::Db::init_redb_file(&dir, None, &dir.join("uploads")).await.unwrap();
+        let store = atomic_lib::Db::init_redb_file(&dir, None, &dir.join("uploads"))
+            .await
+            .unwrap();
         let mut events = store.subscribe_ephemeral();
         handle_ws_message(
             &store,

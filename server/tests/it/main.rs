@@ -17,6 +17,7 @@ mod history_attribution;
 mod iroh_pairing;
 mod loro_ephemeral_sync;
 mod multi_client_sync;
+mod native_ws_receipts;
 mod put_blob;
 mod rate_limit;
 mod replicate;

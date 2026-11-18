@@ -8,6 +8,7 @@ import 'assistant.dart';
 import 'error.dart';
 import 'node.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'server_receipts.dart';
 
 // These functions are ignored because they are not marked as `pub`: `atomic_to_sub_resource`, `atomic_to_value`, `build`, `global`, `list_to_propvals`, `new_default`, `node`, `parse`, `pin_drive`, `propvals_to_list`, `push`, `pusher`, `scalar`, `sub_resource_to_value`, `value_to_atomic`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
@@ -157,6 +158,10 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// chat's subject.
   Future<String> importAiChat(
       {required String name, required String entriesJson});
+
+  /// Recheck after crossing the asynchronous native-to-Dart boundary.
+  bool isServerReplicaReceiptCurrent(
+      {required ServerReplicaReceiptData receipt});
 
   /// Whether the session is open now.
   bool isSyncing();
@@ -417,6 +422,9 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// one; later handles on other stores get an `Other` error. Search for the
   /// account's other devices starts with it.
   Future<String> startPeer();
+
+  /// Register before connecting. One continuous subscription survives reconnects.
+  ServerReceiptSubscription subscribeServerReplicaReceipts();
 
   /// Work in `drive` from now on, and remember it: the next
   /// [`AtomicStore::open`] of this file starts there.

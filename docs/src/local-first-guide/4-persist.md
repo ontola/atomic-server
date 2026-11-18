@@ -352,6 +352,73 @@ does not prove replication failed. Observations are historical, with no replay o
 retention ledger. They cover resource state, not attachment bytes, keys, physical
 device independence, future retention or complete backup recovery.
 
+### Native WebSocket and Flutter clients
+
+Native clients collect the same server evidence automatically for followed drives.
+Enable `atomic_lib`'s `ws` feature and subscribe before starting sync:
+
+```rust,ignore
+let mut receipts = db.subscribe_server_replica_receipts();
+// Native replicate_drive_to_remote and Flutter's server sync start collection.
+while let Ok(evidence) = receipts.recv().await {
+    println!("{} stored {} at {}", evidence.server_origin,
+        evidence.receipt.subject, evidence.receipt.version);
+}
+```
+
+Applications managing a long-lived `WsClient` directly attach
+`client::ws_receipts::WsReceiptSession::start(client, db)`, call `follow_drive`
+for the drives they synchronize, and retain the session until `close`. This
+collects evidence; it does not itself synchronize the drive. Native
+`replicate_drive_to_remote` attaches collection for its bounded replication
+attempt, including when the remote already has the same state.
+Code that exhaustively matches `WsMessage` must handle its new `StorageReceipt`
+variant. A raw frame is not correlated evidence; use the Db subscription above.
+
+Flutter applications use the typed stream on their node:
+
+```dart
+final subscription = node.sync.watchReplicaReceipts().listen((evidence) {
+  print('${evidence.serverOrigin}: ${evidence.receipt.subject} '
+      'at ${evidence.receipt.version}');
+});
+await node.sync.connect(origin);
+// Later, when the observer is no longer needed:
+await subscription.cancel();
+```
+
+The native envelope includes the wire `receipt`, optional `source` storage
+identity, `server_origin`, `connection_id`, `authentication_generation`,
+`authenticated_agent`, `local_agent`, `agent_generation` and `observed_at`.
+Flutter exposes the equivalent immutable fields in camel case. The authenticated
+agent is the **client** identity accepted by the server; it is not a verified
+identity for the server. Native replication can authenticate with a delegated
+proof, so the authenticated client and local database agent may differ.
+`observed_at` is the local observation time in Unix milliseconds; Flutter exposes
+it as a UTC `DateTime`, not as a promise about the server's clock.
+
+Targets are captured from stored applied state during initial inventories and
+live changes, with periodic inventories recovering missed notifications. Edits
+can coalesce before capture, so this is not a receipt for every intermediate
+save. Each response echoes its exact requested version. When matching a separately
+captured Loro frontier, compare decoded counters: equivalent vectors can have
+different byte encodings. A collector follows at most 32 drives, queues at most
+256 targets and keeps four requests pending, with five-second deadlines and three attempts. Native
+one-shot replication gives collection a bounded response window, so it need not
+produce evidence for every resource before returning. Pending work is discarded
+when its account, authentication or connection changes. The stream has no replay; subscribe early and treat missing
+observations as unknown. Flutter keeps a continuous subscription across reconnects
+and filters evidence against its current sync session.
+
+An untracked raw AUTH or canceled authentication attempt disables receipt
+provenance on that WebSocket until reconnecting: AUTH acknowledgements have no
+request identifier, so a delayed acknowledgement cannot safely certify a later
+attempt. Ordinary synchronization remains separate from receipt eligibility.
+
+These events do not change native save results, outbox delivery acknowledgements
+or replication's `in_sync` result. The same endpoint trust, historical evidence,
+optional source identity and metadata-only limitations described above apply.
+
 ## Assess independent-replica evidence
 
 `evaluateReplicaEvidence` answers a narrower question: does the supplied evidence

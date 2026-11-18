@@ -437,6 +437,17 @@ depends on origin/transport trust, unlike an Iroh peer's verified QUIC identity.
 Receipt requests never change commit acknowledgement semantics, and old clients
 and servers continue ordinary saves and synchronization.
 
+Native `WsClient` sessions also opt into this server capability. The automatic
+`client::ws_receipts::WsReceiptSession` observes stored applied frontiers on
+followed drives, correlates exact pending tuples, and publishes
+`Db::subscribe_server_replica_receipts()` events. Native replication attaches this
+collector automatically; Flutter's server session binds it to
+`node.sync.watchReplicaReceipts()`. Their evidence records the server origin,
+authenticated client, local agent and connection/account generations. It does
+not manufacture a verified server agent. Reauthentication, account replacement
+and session closure invalidate pending evidence. Memory clients can receive
+remote evidence without claiming a persistent source identity.
+
 ### EPHEMERAL (0x40)
 
 ```
