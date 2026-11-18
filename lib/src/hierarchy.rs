@@ -1174,4 +1174,120 @@ mod test {
             "unpublishing by re-parenting out of the public folder must revoke public read"
         );
     }
+
+    /// Creation needs `append` on the parent. Moving an existing resource must
+    /// need it on the new parent too, otherwise "create in your own drive,
+    /// then move" lands content in a drive the signer has no rights on.
+    #[tokio::test]
+    async fn moving_a_resource_needs_append_on_the_new_parent() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        let a = store.create_agent(Some("agent-a")).await.unwrap();
+        let b = store.create_agent(Some("agent-b")).await.unwrap();
+
+        let opts_for = |agent: &crate::agents::Agent| crate::commit::CommitOpts {
+            validate_schema: false,
+            validate_constraints: false,
+            validate_signature: false,
+            validate_timestamp: true,
+            validate_rights: true,
+            validate_loro_causality: false,
+            update_index: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            source_id: None,
+        };
+
+        // A drive owned by the default agent, writable by `extra_writers` too.
+        let make_drive = |owner: crate::agents::Agent, extra_writers: Vec<crate::Subject>| {
+            let store = &store;
+            async move {
+                store.set_default_agent(owner.clone());
+                let mut drive = crate::Resource::new("did:ad:placeholder".into());
+                drive
+                    .set(
+                        crate::urls::IS_A.into(),
+                        Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
+                        store,
+                    )
+                    .await
+                    .unwrap();
+                let mut writers: Vec<crate::Subject> = vec![owner.subject.clone()];
+                writers.extend(extra_writers);
+                drive
+                    .set(
+                        crate::urls::WRITE.into(),
+                        Value::ResourceArray(writers.into_iter().map(Into::into).collect()),
+                        store,
+                    )
+                    .await
+                    .unwrap();
+                drive
+                    .save_as_genesis(store)
+                    .await
+                    .unwrap()
+                    .resource_new
+                    .unwrap()
+                    .get_subject()
+                    .clone()
+            }
+        };
+        let make_child = |owner: crate::agents::Agent, parent: crate::Subject| {
+            let store = &store;
+            async move {
+                store.set_default_agent(owner);
+                let mut res = crate::Resource::new("did:ad:placeholder".into());
+                res.set(crate::urls::PARENT.into(), Value::AtomicUrl(parent), store)
+                    .await
+                    .unwrap();
+                res.save_as_genesis(store)
+                    .await
+                    .unwrap()
+                    .resource_new
+                    .unwrap()
+                    .get_subject()
+                    .clone()
+            }
+        };
+
+        let drive_a = make_drive(a.clone(), vec![]).await;
+        let drive_b = make_drive(b.clone(), vec![]).await;
+        let drive_shared = make_drive(b.clone(), vec![a.subject.clone()]).await;
+        let x = make_child(a.clone(), drive_a.clone()).await;
+        let folder_a2 = make_child(a.clone(), drive_a.clone()).await;
+        let folder_b = make_child(b.clone(), drive_b.clone()).await;
+        let folder_shared = make_child(b.clone(), drive_shared.clone()).await;
+
+        let move_to = |parent: crate::Subject| {
+            let store = &store;
+            let a = &a;
+            let x = &x;
+            let opts = opts_for(a);
+            async move {
+                let current = store.get_resource(x).await.unwrap();
+                let mut mv = crate::commit::CommitBuilder::new(x.clone());
+                mv.set(crate::urls::PARENT.into(), Value::AtomicUrl(parent));
+                let commit = mv.sign(a, store, &current).await.unwrap();
+                store.apply_commit(commit, &opts).await
+            }
+        };
+
+        let refused = move_to(folder_b.clone()).await;
+        assert!(
+            refused.is_err(),
+            "agent A has no append on B's folder; moving a resource there must be refused"
+        );
+        let still = store.get_resource(&x).await.unwrap();
+        assert_eq!(
+            still.get(crate::urls::PARENT).unwrap().to_string(),
+            drive_a.to_string(),
+            "a refused move must leave the parent alone"
+        );
+
+        move_to(folder_a2.clone())
+            .await
+            .expect("moving inside a drive the signer owns is allowed");
+        move_to(folder_shared.clone())
+            .await
+            .expect("moving to a folder the signer may append to is allowed");
+    }
 }
