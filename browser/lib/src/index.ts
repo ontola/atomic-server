@@ -446,3 +446,12 @@ export {
   prepareAppPackageImport,
 } from './app-package.js';
 export type { AppPackage } from './app-package.js';
+
+export type {
+  ResourcePeerSyncStatus,
+  ResourcePeerCopy,
+} from './resource-peer-sync-status.js';
+export type {
+  BrowserReplicaReceipt,
+  ReplicaIdentity,
+} from './peer-receipts.js';

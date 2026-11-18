@@ -1,10 +1,20 @@
-import type { ResourceSaveState, ResourceSyncStatus } from '@tomic/react';
+import type {
+  ResourcePeerSyncStatus,
+  ResourceSaveState,
+  ResourceSyncStatus,
+} from '@tomic/react';
 
-export type SyncTone = 'neutral' | 'confirmed' | 'pending' | 'attention';
+export type SyncTone =
+  | 'neutral'
+  | 'confirmed'
+  | 'peer'
+  | 'pending'
+  | 'attention';
 export type SyncSymbol =
   | 'device'
   | 'server'
   | 'vault'
+  | 'peer'
   | 'waiting'
   | 'saving'
   | 'error';
@@ -19,6 +29,7 @@ export function resourceSyncPresentation(
   status: ResourceSyncStatus,
   save: ResourceSaveState,
   vault: ResourceVaultPresentationStatus = { state: 'unknown' },
+  peers?: ResourcePeerSyncStatus,
 ): { label: string; tone: SyncTone; symbol: SyncSymbol } {
   if (status.local.state === 'error') {
     return {
@@ -92,6 +103,22 @@ export function resourceSyncPresentation(
     };
   }
 
+  if (peers?.state === 'confirmed') {
+    return {
+      label: 'Latest changes received by peers',
+      tone: 'peer',
+      symbol: 'peer',
+    };
+  }
+
+  if (peers?.state === 'pending') {
+    return {
+      label: 'Changes waiting for peers',
+      tone: 'pending',
+      symbol: 'waiting',
+    };
+  }
+
   if (status.server.state === 'unknown') {
     return {
       label: 'Server copy not confirmed',
@@ -110,6 +137,19 @@ export function resourceSyncPresentation(
     tone: 'neutral',
     symbol: 'device',
   };
+}
+
+export function peerCopyLabel(
+  status: Pick<ResourcePeerSyncStatus, 'state'>,
+): string {
+  switch (status.state) {
+    case 'confirmed':
+      return 'Latest changes received';
+    case 'pending':
+      return 'Changes waiting for peers';
+    default:
+      return 'Resource copies not confirmed';
+  }
 }
 
 export function vaultCopyLabel(

@@ -39,7 +39,8 @@ Not everything a device holds travels, and not everything that travels is kept.
 ## Checking an individual resource
 
 In resource lists, select a resource's sync icon to open **Copies & sync**.
-The panel separates this device's local copy, the configured server and Cloud Vault. It
+The panel separates this device's local copy, the configured server, Cloud Vault
+and peers. It
 shows pending saves and failures for that resource, rather than treating a
 connected server as proof that every resource is saved.
 
@@ -68,10 +69,25 @@ selected. Going offline in an already verified session preserves its confirmatio
 Older backups without resource evidence stay unconfirmed until a subsequent
 backup includes that resource's version.
 
-Browser-peer connections remain workspace context; a connected peer does not
-prove it holds this resource's latest edits and may become unavailable when its
-tab closes. File resource confirmations describe the resource data, not whether
-every destination has its attachment bytes.
+Peers connected over WebRTC confirm a resource only after an authenticated peer
+checks the requested version against its stored data and completes its storage flush. A
+connection, cursor, or workspace sync message alone cannot confirm a copy.
+The panel shows the confirmed peer-copy count and each peer's confirmation
+time. A purple peer icon distinguishes these copies from server or Vault copies.
+Later edits remain waiting for peers until their version is confirmed.
+
+Peer confirmations describe currently connected WebRTC sessions. Closing a
+peer tab or app removes its available-copy confirmation; reloading requires a
+fresh connection and acknowledgement. Multiple tabs sharing one database count as
+one peer copy, and another tab using this device's database never adds a
+remote copy. Distinct storage identities do not establish a separate physical
+device or guarantee a recoverable backup. Older peers can still synchronize
+without providing these confirmations. Compatible native WebRTC peers use the
+same storage acknowledgement; the receipt does not identify device type. Native
+Iroh drive-level acknowledgements are not used as per-resource evidence here.
+
+File resource confirmations describe the resource data, not whether every
+destination has its attachment bytes.
 
 ## Connecting a cloud account
 

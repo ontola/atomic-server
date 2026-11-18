@@ -642,8 +642,25 @@ It covers a saved resource, same-account reload without a new upload, another
 account, edits during a held upload, failed upload and attachment wording. This
 is not validation of real S3 or the production control plane; the separate
 Vault backup/restore suite still requires an explicitly supplied portal.
-These indicators cover resource metadata. Attachment-byte confirmation and
-per-resource peer receipts remain outside this coverage.
+Browser peer receipt tests cover authenticated, nonce-correlated exact versions,
+actual persistent storage identity, failed flushes, unresolved dependencies,
+authorization, unsupported backends and legacy peers. The session-only peer
+ledger tests current versus older versions, shared-storage deduplication, local
+storage exclusion, disconnect, account/database replacement and late replies
+after resource removal. UI tests cover the purple peer indicator, copy counts,
+confirmation times, newer edits, departure and local/server/Vault precedence.
+
+`browser/e2e/tests/resource-peer-sync.spec.ts` uses isolated browser contexts
+with real WebRTC data channels, authenticated WASM peer sessions and local
+storage. Only the signaling rendezvous is test-owned. The resource is created
+after both drive copies are local-only; server inventory must not contain it.
+The journey pauses the receiver for a newer edit, resumes to obtain a fresh
+receipt, opens a shared-storage tab without inflating the copy count, and checks
+departure and reload. It does not validate physical-device independence,
+production signaling or TURN. These indicators cover resource metadata;
+attachment-byte and native Iroh per-resource confirmations remain outside this
+coverage. Native WebRTC uses the shared receipt responder, but mixed browser/native
+acceptance and native requester/UI evidence remain untested here.
 
 ### Protocol — well covered
 

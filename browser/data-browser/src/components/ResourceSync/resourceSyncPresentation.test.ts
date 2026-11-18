@@ -178,3 +178,98 @@ describe('resource vault sync presentation', () => {
     });
   });
 });
+
+describe('resource peer sync presentation', () => {
+  const localOnly: ResourceSyncStatus = {
+    local: { state: 'confirmed' },
+    server: { state: 'not-configured' },
+  };
+  const vault = { state: 'unknown' as const };
+  const peer = {
+    state: 'confirmed' as const,
+    connectedCount: 1,
+    confirmedCount: 1,
+    peers: [],
+  };
+
+  it('gives exact browser proof its own colour and icon for otherwise unconfirmed remote copies', () => {
+    for (const serverState of ['not-configured', 'unknown'] as const) {
+      expect(
+        resourceSyncPresentation(
+          { ...localOnly, server: { state: serverState } },
+          idle,
+          vault,
+          peer,
+        ),
+      ).toEqual({
+        label: 'Latest changes received by peers',
+        tone: 'peer',
+        symbol: 'peer',
+      });
+    }
+  });
+
+  it('does not equate connected browsers with confirmed resource copies', () => {
+    expect(
+      resourceSyncPresentation(localOnly, idle, vault, {
+        ...peer,
+        state: 'unknown',
+        connectedCount: 2,
+        confirmedCount: 0,
+      }),
+    ).toEqual(resourceSyncPresentation(localOnly, idle));
+    expect(
+      resourceSyncPresentation(localOnly, idle, vault, {
+        ...peer,
+        state: 'pending',
+        confirmedCount: 0,
+      }),
+    ).toMatchObject({ label: 'Changes waiting for peers', tone: 'pending' });
+  });
+
+  it('preserves server and vault confirmation ahead of temporary browser copies', () => {
+    expect(resourceSyncPresentation(confirmed, idle, vault, peer)).toEqual(
+      resourceSyncPresentation(confirmed, idle, vault),
+    );
+    expect(
+      resourceSyncPresentation(localOnly, idle, { state: 'confirmed' }, peer),
+    ).toEqual(
+      resourceSyncPresentation(localOnly, idle, { state: 'confirmed' }),
+    );
+  });
+
+  it('keeps outstanding local/server/backup work and failures ahead of browser confirmation', () => {
+    for (const kind of [
+      'dirty',
+      'scheduled',
+      'saving',
+      'queued',
+      'error',
+    ] as const) {
+      expect(
+        resourceSyncPresentation(localOnly, { ...idle, kind }, vault, peer),
+      ).toEqual(resourceSyncPresentation(localOnly, { ...idle, kind }, vault));
+    }
+
+    for (const local of [
+      { state: 'pending' as const },
+      { state: 'error' as const, error: 'Disk full' },
+    ]) {
+      expect(
+        resourceSyncPresentation({ ...localOnly, local }, idle, vault, peer),
+      ).toEqual(resourceSyncPresentation({ ...localOnly, local }, idle, vault));
+    }
+
+    expect(
+      resourceSyncPresentation(
+        { ...localOnly, server: { state: 'pending' } },
+        idle,
+        vault,
+        peer,
+      ),
+    ).toMatchObject({ label: 'Changes waiting to sync', tone: 'pending' });
+    expect(
+      resourceSyncPresentation(localOnly, idle, { state: 'pending' }, peer),
+    ).toMatchObject({ label: 'Changes waiting for backup', tone: 'pending' });
+  });
+});

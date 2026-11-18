@@ -1,3 +1,8 @@
+import {
+  ResourcePeerSyncStatusTracker,
+  type ResourcePeerSyncStatus,
+} from './resource-peer-sync-status.js';
+import type { BrowserReplicaReceipt } from './peer-receipts.js';
 import { randomUUID } from './uuid.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
@@ -408,6 +413,8 @@ export enum StoreEvents {
   ResourceSaved = 'resource-saved',
   /** User perform a Remove action */
   ResourceRemoved = 'resource-removed',
+  /** @internal Invalidates pending peer probes even for silent cache eviction. */
+  ResourcePeerEvidenceRemoved = 'resource-peer-evidence-removed',
   /**
    * User explicitly created a Resource through a conscious action, e.g. through
    * the SideBar.
@@ -511,6 +518,7 @@ export interface CreateDriveOpts {
 type StoreEventHandlers = {
   [StoreEvents.ResourceSaved]: ResourceCallback;
   [StoreEvents.ResourceRemoved]: SubjectCallback;
+  [StoreEvents.ResourcePeerEvidenceRemoved]: SubjectCallback;
   [StoreEvents.ResourceManuallyCreated]: ResourceCallback;
   [StoreEvents.AgentChanged]: AgentCallback;
   [StoreEvents.ServerURLChanged]: ServerURLCallback;
@@ -1188,8 +1196,10 @@ export class Store {
     const attached = !!clientDb && changed;
     this.clientDb = clientDb;
 
-    if (changed) this.resetResourceSyncEvidence();
-    else {
+    if (changed) {
+      this.resetPeerSyncEvidence();
+      this.resetResourceSyncEvidence();
+    } else {
       for (const resource of this.resourceSyncWatchers.keys()) {
         this.resourceSyncReads.delete(this.normalizeSubject(resource.subject));
         this.ensureResourceSyncEvidence(resource.subject);
@@ -6025,6 +6035,101 @@ export class Store {
     }
   }
 
+  private resourcePeerSyncStatus = new ResourcePeerSyncStatusTracker();
+  private peerSyncGeneration = 0;
+
+  /** @internal Invalidates browser sessions across identity/DB A→B→A changes. */
+  public getPeerSyncGeneration(): number {
+    return this.peerSyncGeneration;
+  }
+
+  private resetPeerSyncEvidence(): void {
+    this.peerSyncGeneration++;
+    this.resourcePeerSyncStatus.reset();
+  }
+
+  /** @internal Called only after both sides of a browser channel authenticate. */
+  public registerResourcePeerSession(
+    connectionId: string,
+    drive: string,
+    peerAgent: string,
+  ): () => void {
+    return this.resourcePeerSyncStatus.open(
+      connectionId,
+      this.normalizeSubject(drive),
+      peerAgent,
+    );
+  }
+
+  /** @internal The connection observed replacement of its backing storage. */
+  public invalidateResourcePeerSession(connectionId: string): void {
+    this.resourcePeerSyncStatus.invalidate(connectionId);
+  }
+
+  /** @internal Only the negotiated authenticated receipt consumer may call this. */
+  public acknowledgeResourcePeerReceipt(receipt: BrowserReplicaReceipt): void {
+    if (
+      this.isDestroyed(receipt.subject) ||
+      this.hasPendingDestroy(receipt.subject)
+    )
+      return;
+    this.resourcePeerSyncStatus.acknowledge({
+      ...receipt,
+      subject: this.normalizeSubject(receipt.subject),
+      drive: this.normalizeSubject(receipt.drive),
+    });
+  }
+
+  private resourcePeerDrive(resource: Resource): string | undefined {
+    let current: Resource | undefined = resource;
+    const seen = new Set<string>();
+
+    while (current && seen.size < 64) {
+      const subject = this.normalizeSubject(current.subject);
+      if (seen.has(subject)) return undefined;
+      seen.add(subject);
+      const drive = current.get('https://atomicdata.dev/properties/drive');
+      if (typeof drive === 'string') return this.normalizeSubject(drive);
+      const parent = current.get(core.properties.parent);
+      if (typeof parent !== 'string') return subject;
+      current = this.resources.get(this.normalizeSubject(parent));
+    }
+
+    return undefined;
+  }
+
+  public getResourcePeerSyncStatus(resource: Resource): ResourcePeerSyncStatus {
+    const target = resource.__internalObject;
+
+    return this.resourcePeerSyncStatus.get(
+      this.normalizeSubject(target.subject),
+      this.isDestroyed(target.subject) || this.hasPendingDestroy(target.subject)
+        ? undefined
+        : this.resourcePeerDrive(target),
+      target,
+    );
+  }
+
+  public subscribeResourcePeerSyncStatus(
+    resource: Resource,
+    callback: () => void,
+  ): () => void {
+    const target = resource.__internalObject;
+    const unsubscribers = [
+      this.resourcePeerSyncStatus.subscribe(
+        () => this.normalizeSubject(target.subject),
+        () => this.resourcePeerDrive(target),
+        callback,
+      ),
+      this.subscribeSaveState(target, callback),
+      this.subscribe(target.subject, callback),
+    ];
+
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe());
+    };
+  }
+
   private resourceSyncStatus = new ResourceSyncStatusTracker();
   private resourceSyncEpoch = 0;
   private resourceSyncWatchers = new Map<Resource, number>();
@@ -6760,6 +6865,11 @@ export class Store {
     // A subsequently loaded resource must not inherit the old cache stamp.
     this.lastPersisted.delete(resolved);
     this.resourceSyncStatus.remove(this.normalizeSubject(resolved));
+    this.resourcePeerSyncStatus.remove(this.normalizeSubject(resolved));
+    void this.eventManager.emit(
+      StoreEvents.ResourcePeerEvidenceRemoved,
+      this.normalizeSubject(resolved),
+    );
     this.resourceSyncReads.delete(this.normalizeSubject(resolved));
     this.resourceSyncReadBatch?.entries.delete(this.normalizeSubject(resolved));
     this.resourceSyncWriteBatch?.receipts.delete(
@@ -6812,7 +6922,9 @@ export class Store {
     // reconciles the previous identity's private workspace.
     if (this.agent && this.agent.subject !== agent?.subject) this.setDrive('');
     const changed = this.agent?.subject !== agent?.subject;
+    const peerChanged = this.agent !== agent;
     this.agent = agent;
+    if (peerChanged) this.resetPeerSyncEvidence();
     if (changed) this.resetResourceSyncEvidence();
 
     // The outbox is identity-scoped: rebind to this agent's own queue so a new

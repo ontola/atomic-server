@@ -11,6 +11,7 @@ import {
 import type {
   Resource,
   ResourceSaveState,
+  ResourcePeerSyncStatus,
   ResourceSyncStatus,
 } from '@tomic/react';
 import isPropValid from '@emotion/is-prop-valid';
@@ -25,6 +26,7 @@ let vaultStatus: {
   state: 'unknown' | 'pending' | 'confirmed';
   confirmedAt?: number;
 };
+let peerStatus: ResourcePeerSyncStatus;
 let isFile = false;
 let propagationBoundary: HTMLDivElement | undefined;
 const context = {
@@ -50,6 +52,9 @@ vi.mock('./useResourceSyncStatus', () => ({
 vi.mock('./useResourceVaultSyncStatus', () => ({
   useResourceVaultSyncStatus: () => vaultStatus,
 }));
+vi.mock('./useResourcePeerSyncStatus', () => ({
+  useResourcePeerSyncStatus: () => peerStatus,
+}));
 vi.mock('./useResourceCopyContext', () => ({
   useResourceCopyContext: () => context,
 }));
@@ -71,6 +76,12 @@ vi.mock('../AtomicLink', () => ({
 
 beforeEach(() => {
   vaultStatus = { state: 'unknown' };
+  peerStatus = {
+    state: 'unknown',
+    connectedCount: 2,
+    confirmedCount: 0,
+    peers: [],
+  };
   isFile = false;
   status = {
     local: { state: 'confirmed', confirmedAt: 100 },
@@ -168,11 +179,7 @@ it('does not treat a connected server, workspace backup, or peers as resource re
     ),
   ).toBeTruthy();
   expect(copy.getByText('Resource backup not confirmed')).toBeTruthy();
-  expect(
-    copy.getByText(
-      'Workspace connection only. Resource copies are not confirmed.',
-    ),
-  ).toBeTruthy();
+  expect(copy.getByText('Resource copies not confirmed')).toBeTruthy();
   expect(copy.queryByText('Latest changes saved', { exact: true })).toBeNull();
   expect(copy.queryByText('Saved on this device')).toBeNull();
 });
@@ -239,4 +246,74 @@ it('updates an open panel when a newer edit is queued while keeping its local co
   expect(
     within(panel).getAllByText('Changes waiting to sync').length,
   ).toBeGreaterThan(0);
+});
+
+it('shows exact distinct browser receipts and removes them when peers leave', async () => {
+  status = { ...status, server: { state: 'not-configured' } };
+  const rendered = render(view());
+  fireEvent.click(screen.getByTestId('resource-sync-indicator'));
+  const panel = await screen.findByTestId('resource-sync-panel');
+  expect(within(panel).getByText('Resource copies not confirmed')).toBeTruthy();
+  expect(within(panel).getByText('Confirmed peer copies: 0')).toBeTruthy();
+  peerStatus = {
+    state: 'confirmed',
+    connectedCount: 1,
+    confirmedCount: 1,
+    peers: [
+      {
+        connectionId: 'connection-a',
+        peerAgent: 'atomic:agent:peer',
+        state: 'confirmed',
+        confirmedAt: 1_700_000_000_000,
+        storageId: 'independent-db',
+        generation: '1',
+      },
+    ],
+  };
+  rendered.rerender(view());
+  expect(within(panel).getByRole('status').textContent).toBe(
+    'Latest changes received by peers',
+  );
+  expect(within(panel).getByText('Confirmed peer copies: 1')).toBeTruthy();
+  const copies = within(panel).getByRole('list', {
+    name: 'Peer resource copies',
+  });
+  expect(within(copies).getAllByRole('listitem')).toHaveLength(1);
+  expect(within(copies).getByText('Peer 1')).toBeTruthy();
+  expect(
+    within(copies).getByText(
+      `Last confirmed: ${new Date(1_700_000_000_000).toLocaleString()}`,
+    ),
+  ).toBeTruthy();
+  expect(
+    within(panel).getByText(
+      'Peers may become unavailable when browser tabs or apps close.',
+    ),
+  ).toBeTruthy();
+  peerStatus = {
+    ...peerStatus,
+    state: 'pending',
+    confirmedCount: 0,
+    peers: [{ ...peerStatus.peers[0], state: 'pending' }],
+  };
+  rendered.rerender(view());
+  expect(within(panel).getByRole('status').textContent).toBe(
+    'Changes waiting for peers',
+  );
+  expect(
+    within(panel).queryByText('Latest changes received', { exact: true }),
+  ).toBeNull();
+  expect(within(panel).getByText('Saved on this device')).toBeTruthy();
+  peerStatus = {
+    state: 'unknown',
+    connectedCount: 0,
+    confirmedCount: 0,
+    peers: [],
+  };
+  rendered.rerender(view());
+  expect(within(panel).getByText('Resource copies not confirmed')).toBeTruthy();
+  expect(
+    within(panel).queryByRole('list', { name: 'Peer resource copies' }),
+  ).toBeNull();
+  expect(within(panel).queryByText(/^Last confirmed:/)).toBeNull();
 });

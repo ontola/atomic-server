@@ -13634,26 +13634,20 @@ msgstr "Last workspace backup: {0}"
 #~ msgid "This resource’s latest backup is not confirmed here."
 #~ msgstr "This resource’s latest backup is not confirmed here."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Workspace connection only. Resource copies are not confirmed."
-msgstr "Workspace connection only. Resource copies are not confirmed."
+#~ msgid "Workspace connection only. Resource copies are not confirmed."
+#~ msgstr "Workspace connection only. Resource copies are not confirmed."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Browser peers may become unavailable when tabs close."
-msgstr "Browser peers may become unavailable when tabs close."
+#~ msgid "Browser peers may become unavailable when tabs close."
+#~ msgstr "Browser peers may become unavailable when tabs close."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Browser peers"
-msgstr "Browser peers"
+#~ msgid "Browser peers"
+#~ msgstr "Browser peers"
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Connection not confirmed"
-msgstr "Connection not confirmed"
+#~ msgid "Connection not confirmed"
+#~ msgstr "Connection not confirmed"
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Workspace destinations"
-msgstr "Workspace destinations"
+#~ msgid "Workspace destinations"
+#~ msgstr "Workspace destinations"
 
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "These confirmations cover file details. The file’s contents are not verified here."
@@ -13707,3 +13701,47 @@ msgstr "Resource backup not confirmed"
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Last confirmed backup: {0}"
 msgstr "Last confirmed backup: {0}"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting for peers"
+msgstr "Changes waiting for peers"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes received"
+msgstr "Latest changes received"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource copies not confirmed"
+msgstr "Resource copies not confirmed"
+
+#. 0: time
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last confirmed: {0}"
+msgstr "Last confirmed: {0}"
+
+#. 0: index + 1
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peer {0}"
+msgstr "Peer {0}"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peer resource copies"
+msgstr "Peer resource copies"
+
+#. 0: peers.confirmedCount
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Confirmed peer copies: {0}"
+msgstr "Confirmed peer copies: {0}"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peers may become unavailable when browser tabs or apps close."
+msgstr "Peers may become unavailable when browser tabs or apps close."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peers"
+msgstr "Peers"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes received by peers"
+msgstr "Latest changes received by peers"

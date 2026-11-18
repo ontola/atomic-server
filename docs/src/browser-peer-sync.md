@@ -14,6 +14,16 @@ remain in local storage and reconcile when the browsers meet again. Closing ever
 replica makes the data unavailable to other people until a replica returns. A
 Cloud Server can provide an always-online replica independently of peer pairing.
 
+The resource list's **Copies & sync** panel shows whether connected peers
+have confirmed that resource's latest saved version. The purple peer icon uses
+authenticated storage acknowledgements, not the number of open connections.
+Tabs sharing one local database count once. Closing a remote tab or app removes
+its available-copy confirmation, and a reload requires a new acknowledgement.
+Compatible native apps using this WebRTC protocol can return the same receipts;
+labels do not assert a device type. These confirmations cover resource data;
+attachment bytes and independent, recoverable backups are separate. See
+[resource confirmations](sync.md#checking-an-individual-resource).
+
 ## Discovery and transport
 
 A random 256-bit room secret in the invitation identifies a rendezvous room at

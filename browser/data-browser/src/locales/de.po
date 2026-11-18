@@ -13631,26 +13631,20 @@ msgstr "Letzte Sicherung des Arbeitsbereichs: {0}"
 #~ msgid "This resource’s latest backup is not confirmed here."
 #~ msgstr "Die neueste Sicherung dieser Ressource ist hier nicht bestätigt."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Workspace connection only. Resource copies are not confirmed."
-msgstr "Nur die Verbindung zum Arbeitsbereich wird angezeigt. Kopien der Ressource sind nicht bestätigt."
+#~ msgid "Workspace connection only. Resource copies are not confirmed."
+#~ msgstr "Nur die Verbindung zum Arbeitsbereich wird angezeigt. Kopien der Ressource sind nicht bestätigt."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Browser peers may become unavailable when tabs close."
-msgstr "Browser-Peers sind möglicherweise nicht mehr verfügbar, wenn ihre Tabs geschlossen werden."
+#~ msgid "Browser peers may become unavailable when tabs close."
+#~ msgstr "Browser-Peers sind möglicherweise nicht mehr verfügbar, wenn ihre Tabs geschlossen werden."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Browser peers"
-msgstr "Browser-Peers"
+#~ msgid "Browser peers"
+#~ msgstr "Browser-Peers"
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Connection not confirmed"
-msgstr "Verbindung nicht bestätigt"
+#~ msgid "Connection not confirmed"
+#~ msgstr "Verbindung nicht bestätigt"
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Workspace destinations"
-msgstr "Ziele des Arbeitsbereichs"
+#~ msgid "Workspace destinations"
+#~ msgstr "Ziele des Arbeitsbereichs"
 
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "These confirmations cover file details. The file’s contents are not verified here."
@@ -13704,3 +13698,47 @@ msgstr "Sicherung der Ressource nicht bestätigt"
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Last confirmed backup: {0}"
 msgstr "Letzte bestätigte Sicherung: {0}"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting for peers"
+msgstr "Änderungen warten auf Peers"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes received"
+msgstr "Neueste Änderungen empfangen"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource copies not confirmed"
+msgstr "Ressourcenkopien nicht bestätigt"
+
+#. 0: time
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last confirmed: {0}"
+msgstr "Zuletzt bestätigt: {0}"
+
+#. 0: index + 1
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peer {0}"
+msgstr "Peer {0}"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peer resource copies"
+msgstr "Ressourcenkopien bei Peers"
+
+#. 0: peers.confirmedCount
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Confirmed peer copies: {0}"
+msgstr "Bestätigte Peer-Kopien: {0}"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peers may become unavailable when browser tabs or apps close."
+msgstr "Peers können unerreichbar werden, wenn Browser-Tabs oder Apps geschlossen werden."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peers"
+msgstr "Peers"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes received by peers"
+msgstr "Neueste Änderungen von Peers empfangen"

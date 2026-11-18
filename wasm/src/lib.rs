@@ -186,6 +186,20 @@ impl ClientDb {
         })
     }
 
+    /// Drive-scoped persistent storage identity. Memory/custom backends return
+    /// no identity; the backing store makes metadata durable before exposing it.
+    #[wasm_bindgen(js_name = "getReplicaIdentity")]
+    pub fn get_replica_identity(&self, drive: &str) -> Result<JsValue, JsError> {
+        if !atomic_lib::identifiers::is_resource_id(drive) || drive.contains(['#', '?']) {
+            return Err(JsError::new(
+                "Replica identities require a canonical drive subject",
+            ));
+        }
+        let scope = atomic_lib::identifiers::canonicalize_scheme(drive);
+        let identity = self.db().kv.replica_identity(&scope).map_err(to_js_err)?;
+        serde_wasm_bindgen::to_value(&identity).map_err(to_js_err)
+    }
+
     /// Create a separately authenticated peer ingress, never a cache write.
     #[wasm_bindgen(js_name = "createPeerSession")]
     pub fn create_peer_session(

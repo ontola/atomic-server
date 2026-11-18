@@ -70,6 +70,8 @@ beforeEach(() => {
   const store = {
     getAgent: () => agent,
     getClientDb: () => db,
+    getPeerSyncGeneration: () => 0,
+    on: () => () => {},
   } as unknown as Store;
   link = new BrowserPeerSync(store, {
     drive: 'did:ad:drive',
@@ -246,6 +248,8 @@ function linkWithStatus(statuses: string[]) {
   const store = {
     getAgent: () => agent,
     getClientDb: () => db,
+    getPeerSyncGeneration: () => 0,
+    on: () => () => {},
   } as unknown as Store;
 
   return new BrowserPeerSync(store, {

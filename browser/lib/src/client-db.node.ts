@@ -30,6 +30,7 @@ import type {
   ClientDbQueryResult,
 } from './client-db.js';
 import { asError } from './error.js';
+import type { ReplicaIdentity } from './peer-receipts.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
@@ -167,6 +168,13 @@ export class NodeClientDb {
     subjects: string[],
   ): Promise<Array<{ jsonAd: string | null; snapshot: Uint8Array | null }>> {
     return Promise.all(subjects.map(s => this.getResourceWithSnapshot(s)));
+  }
+
+  /** The actual WASM memory backend supplies no persistent replica identity. */
+  async getReplicaIdentity(
+    drive: string,
+  ): Promise<ReplicaIdentity | undefined> {
+    return this.requireDb().getReplicaIdentity?.(drive) ?? undefined;
   }
 
   /** Match the worker persistence barrier for headless Store clients. */

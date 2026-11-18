@@ -9,12 +9,16 @@ import {
   FaServer,
   FaVault,
   FaArrowUp,
+  FaShareNodes,
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
+import { setLightness } from 'polished';
+import { presetColors } from '../../styling';
 import { IconButton } from '../IconButton/IconButton';
 import { Popover } from '../Popover';
 import { useResourceSyncStatus } from './useResourceSyncStatus';
 import { useResourceVaultSyncStatus } from './useResourceVaultSyncStatus';
+import { useResourcePeerSyncStatus } from './useResourcePeerSyncStatus';
 import {
   resourceSyncPresentation,
   type SyncSymbol,
@@ -32,8 +36,9 @@ export function ResourceSyncIndicator({
   const [title] = useTitle(resource);
   const status = useResourceSyncStatus(resource);
   const vault = useResourceVaultSyncStatus(resource);
+  const peers = useResourcePeerSyncStatus(resource);
   const save = useSaveState(resource);
-  const presentation = resourceSyncPresentation(status, save, vault);
+  const presentation = resourceSyncPresentation(status, save, vault, peers);
   const headingId = useId();
 
   return (
@@ -52,10 +57,12 @@ export function ResourceSyncIndicator({
               data-testid='resource-sync-indicator'
               data-sync-state={status.server.state}
               data-vault-sync-state={vault.state}
+              data-peer-sync-state={peers.state}
               $tone={presentation.tone}
             >
               <StatusSymbol symbol={presentation.symbol} />
-              {presentation.tone === 'confirmed' && (
+              {(presentation.tone === 'confirmed' ||
+                presentation.tone === 'peer') && (
                 <CheckMark aria-hidden>
                   <FaCheck />
                 </CheckMark>
@@ -69,6 +76,7 @@ export function ResourceSyncIndicator({
             resource={resource}
             status={status}
             vault={vault}
+            peers={peers}
             save={save}
             headingId={headingId}
             onClose={() => setOpen(false)}
@@ -85,6 +93,8 @@ function StatusSymbol({ symbol }: { symbol: SyncSymbol }) {
       return <FaServer aria-hidden />;
     case 'vault':
       return <FaVault aria-hidden />;
+    case 'peer':
+      return <FaShareNodes aria-hidden />;
     case 'waiting':
       return <FaClock aria-hidden />;
     case 'saving':
@@ -104,11 +114,13 @@ const Root = styled.span`
 const SyncButton = styled(IconButton)<{ $tone: SyncTone }>`
   position: relative;
   color: ${p =>
-    p.$tone === 'confirmed'
-      ? p.theme.colors.success
-      : p.$tone === 'pending' || p.$tone === 'attention'
-        ? p.theme.colors.warning
-        : p.theme.colors.textLight};
+    p.$tone === 'peer'
+      ? setLightness(p.theme.darkMode ? 0.75 : 0.44, presetColors[5])
+      : p.$tone === 'confirmed'
+        ? p.theme.colors.success
+        : p.$tone === 'pending' || p.$tone === 'attention'
+          ? p.theme.colors.warning
+          : p.theme.colors.textLight};
 
   @media (pointer: coarse) {
     min-width: 44px;

@@ -17,6 +17,7 @@ import type {
 } from './resource-sync-evidence.js';
 import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
 import { wasmBinaryUrl } from './wasm-url.js';
+import type { ReplicaIdentity } from './peer-receipts.js';
 import type {
   ClientDbOutboxWrite,
   ClientDbQueryOpts,
@@ -160,13 +161,19 @@ export interface ClientDbRpc {
   applyStateUpdates: [{ subjects: string[]; states: Uint8Array[] }, number];
   getVersionVectorsForSubjects: [{ subjects: string[] }, unknown];
   indexPendingSearch: [{ limit: number }, number];
+  getReplicaIdentity: [{ drive: string }, ReplicaIdentity | undefined];
   createPeerSession: [
     { drive: string; expectedPeer?: string; challenge: string },
     number,
   ];
   handlePeerFrame: [
     { session: number; frame: Uint8Array },
-    { frames: number[][]; changed: string[]; ephemeral?: number[] },
+    {
+      frames: number[][];
+      changed: string[];
+      ephemeral?: number[];
+      peerAgent?: string;
+    },
   ];
   canSendPeerFrame: [{ session: number; subject: string }, boolean];
   closePeerSession: [{ session: number }, void];
@@ -256,6 +263,7 @@ const handlers: Handlers = {
 
     return initPromise;
   },
+  getReplicaIdentity: m => db!.getReplicaIdentity?.(m.drive),
   canSendPeerFrame: m => db!.canSendPeerFrame(m.session, m.subject),
   createPeerSession: m =>
     db!.createPeerSession(m.drive, m.expectedPeer, m.challenge),

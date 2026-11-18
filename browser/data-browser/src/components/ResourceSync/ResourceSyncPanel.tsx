@@ -5,6 +5,7 @@ import {
   type Resource,
   type ResourceSaveState,
   type ResourceSyncStatus,
+  type ResourcePeerSyncStatus,
 } from '@tomic/react';
 import {
   FaCheck,
@@ -26,6 +27,7 @@ import {
   resourceSyncPresentation,
   serverCopyLabel,
   vaultCopyLabel,
+  peerCopyLabel,
   type ResourceVaultPresentationStatus,
 } from './resourceSyncPresentation';
 import {
@@ -37,6 +39,7 @@ export function ResourceSyncPanel({
   resource,
   status,
   vault,
+  peers,
   save,
   headingId,
   onClose,
@@ -44,13 +47,14 @@ export function ResourceSyncPanel({
   resource: Resource;
   status: ResourceSyncStatus;
   vault: ResourceVaultPresentationStatus;
+  peers: ResourcePeerSyncStatus;
   save: ResourceSaveState;
   headingId: string;
   onClose: () => void;
 }): JSX.Element {
   const [title] = useTitle(resource);
   const context = useResourceCopyContext(resource);
-  const presentation = resourceSyncPresentation(status, save, vault);
+  const presentation = resourceSyncPresentation(status, save, vault, peers);
   const confirmedTime =
     vault.confirmedAt === undefined
       ? null
@@ -123,25 +127,47 @@ export function ResourceSyncPanel({
             </Note>
           )}
         </CopyRow>
-      </CopyList>
-
-      <Section aria-label='Workspace destinations'>
-        <SectionHeading>Workspace destinations</SectionHeading>
         <CopyRow
           icon={
             <PeerIcon>
               <FaShareNodes aria-hidden />
             </PeerIcon>
           }
-          name='Browser peers'
-          description={context.peerStatus || 'Connection not confirmed'}
+          name='Peers'
+          description={peerCopyLabel(peers)}
+          confirmed={peers.state === 'confirmed'}
+          peer
         >
+          <div
+            data-testid='resource-peer-copies'
+            data-peer-sync-state={peers.state}
+            data-confirmed-count={peers.confirmedCount}
+          >
+            <Note>Confirmed peer copies: {peers.confirmedCount}</Note>
+            {peers.peers.length > 0 && (
+              <PeerList aria-label='Peer resource copies'>
+                {peers.peers.map((copy, index) => (
+                  <li key={copy.connectionId} data-peer-copy-state={copy.state}>
+                    <CopyName>Peer {index + 1}</CopyName>
+                    <CopyDescription
+                      $confirmed={copy.state === 'confirmed'}
+                      $peer
+                    >
+                      {peerCopyLabel(copy)}
+                    </CopyDescription>
+                    {copy.confirmedAt !== undefined && (
+                      <Note>{peerConfirmedLabel(copy.confirmedAt)}</Note>
+                    )}
+                  </li>
+                ))}
+              </PeerList>
+            )}
+          </div>
           <Note>
-            Workspace connection only. Resource copies are not confirmed.
+            Peers may become unavailable when browser tabs or apps close.
           </Note>
-          <Note>Browser peers may become unavailable when tabs close.</Note>
         </CopyRow>
-      </Section>
+      </CopyList>
 
       {resource.hasClasses(server.classes.file) && (
         <Note>
@@ -165,12 +191,14 @@ function CopyRow({
   name,
   description,
   confirmed = false,
+  peer = false,
   children,
 }: {
   icon: ReactNode;
   name: string;
   description: string;
   confirmed?: boolean;
+  peer?: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -180,12 +208,14 @@ function CopyRow({
         <Row center justify='space-between' gap='0.5rem'>
           <CopyName>{name}</CopyName>
           {confirmed && (
-            <ConfirmedCheck aria-hidden>
+            <ConfirmedCheck aria-hidden $peer={peer}>
               <FaCheck />
             </ConfirmedCheck>
           )}
         </Row>
-        <CopyDescription $confirmed={confirmed}>{description}</CopyDescription>
+        <CopyDescription $confirmed={confirmed} $peer={peer}>
+          {description}
+        </CopyDescription>
         {children}
       </CopyText>
     </CopyItem>
@@ -205,6 +235,12 @@ function destinationLabel(url?: string): string {
 function formatTime(timestamp: number): string {
   // Vault metadata uses Unix seconds, unlike browser receipt timestamps.
   return new Date(timestamp * 1000).toLocaleString();
+}
+
+function peerConfirmedLabel(timestamp: number): string {
+  const time = new Date(timestamp).toLocaleString();
+
+  return `Last confirmed: ${time}`;
 }
 
 function vaultContextLabel(state: ResourceCopyContext['vault']): string {
@@ -286,15 +322,23 @@ const CopyName = styled.span`
   font-weight: 600;
 `;
 
-const CopyDescription = styled.div<{ $confirmed: boolean }>`
+const CopyDescription = styled.div<{ $confirmed: boolean; $peer?: boolean }>`
   font-size: 0.8rem;
   margin-top: 0.2rem;
-  color: ${p => (p.$confirmed ? p.theme.colors.success : p.theme.colors.text)};
+  color: ${p =>
+    p.$confirmed
+      ? p.$peer
+        ? setLightness(p.theme.darkMode ? 0.75 : 0.44, presetColors[5])
+        : p.theme.colors.success
+      : p.theme.colors.text};
 `;
 
-const ConfirmedCheck = styled.span`
+const ConfirmedCheck = styled.span<{ $peer?: boolean }>`
   display: inline-flex;
-  color: ${p => p.theme.colors.success};
+  color: ${p =>
+    p.$peer
+      ? setLightness(p.theme.darkMode ? 0.75 : 0.44, presetColors[5])
+      : p.theme.colors.success};
 `;
 
 const PeerIcon = styled.span`
@@ -308,16 +352,13 @@ const Note = styled.div`
   margin-top: 0.3rem;
 `;
 
-const Section = styled.section`
-  border-top: 1px solid ${p => p.theme.colors.bg1};
-  padding-top: ${p => p.theme.size()};
-`;
-
-const SectionHeading = styled.h3`
-  font-size: 0.75rem;
-  color: ${p => p.theme.colors.textLight};
-  font-weight: 500;
-  margin: 0;
+const PeerList = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin: ${p => p.theme.size()} 0;
+  display: flex;
+  flex-direction: column;
+  gap: ${p => p.theme.size()};
 `;
 
 const Footer = styled(Column)`

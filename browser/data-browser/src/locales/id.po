@@ -13626,26 +13626,20 @@ msgstr "Pencadangan ruang kerja terakhir: {0}"
 #~ msgid "This resource’s latest backup is not confirmed here."
 #~ msgstr "Cadangan terbaru sumber daya ini belum dikonfirmasi di sini."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Workspace connection only. Resource copies are not confirmed."
-msgstr "Hanya koneksi ruang kerja. Salinan sumber daya belum dikonfirmasi."
+#~ msgid "Workspace connection only. Resource copies are not confirmed."
+#~ msgstr "Hanya koneksi ruang kerja. Salinan sumber daya belum dikonfirmasi."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Browser peers may become unavailable when tabs close."
-msgstr "Peer browser mungkin tidak lagi tersedia saat tab ditutup."
+#~ msgid "Browser peers may become unavailable when tabs close."
+#~ msgstr "Peer browser mungkin tidak lagi tersedia saat tab ditutup."
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Browser peers"
-msgstr "Peer browser"
+#~ msgid "Browser peers"
+#~ msgstr "Peer browser"
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Connection not confirmed"
-msgstr "Koneksi belum dikonfirmasi"
+#~ msgid "Connection not confirmed"
+#~ msgstr "Koneksi belum dikonfirmasi"
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "Workspace destinations"
-msgstr "Tujuan ruang kerja"
+#~ msgid "Workspace destinations"
+#~ msgstr "Tujuan ruang kerja"
 
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "These confirmations cover file details. The file’s contents are not verified here."
@@ -13699,3 +13693,47 @@ msgstr "Cadangan sumber daya belum dikonfirmasi"
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Last confirmed backup: {0}"
 msgstr "Cadangan terakhir yang dikonfirmasi: {0}"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting for peers"
+msgstr "Perubahan menunggu peer"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes received"
+msgstr "Perubahan terbaru diterima"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource copies not confirmed"
+msgstr "Salinan sumber daya belum dikonfirmasi"
+
+#. 0: time
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last confirmed: {0}"
+msgstr "Terakhir dikonfirmasi: {0}"
+
+#. 0: index + 1
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peer {0}"
+msgstr "Peer {0}"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peer resource copies"
+msgstr "Salinan sumber daya di peer"
+
+#. 0: peers.confirmedCount
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Confirmed peer copies: {0}"
+msgstr "Salinan peer terkonfirmasi: {0}"
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peers may become unavailable when browser tabs or apps close."
+msgstr "Peer mungkin tidak tersedia saat tab browser atau aplikasi ditutup."
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peers"
+msgstr "Peer"
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes received by peers"
+msgstr "Perubahan terbaru diterima oleh peer"
