@@ -307,8 +307,15 @@ class AtomicAccountClient {
     return AtomicLinkProgress.pending;
   }
 
-  Future<Map<String, dynamic>> account() async =>
-      _object(await _request('GET', 'me'));
+  Future<Map<String, dynamic>> account() async {
+    final response = await _request('GET', 'me');
+    // The portal answers a session it no longer knows with 204 (signed out),
+    // not 401: an empty body is an expired session, not a broken reply.
+    if (response.statusCode == 204) {
+      throw StateError('Sign in again to continue');
+    }
+    return _object(response);
+  }
 
   /// Recover the existing identity; never creates or replaces a user's backup.
   /// Passkey/code-only accounts must use their existing manual recovery path.

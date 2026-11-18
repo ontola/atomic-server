@@ -244,14 +244,25 @@ class AccountStore {
   /// The linked account's state for [drive]; null when no account is linked.
   /// Throws when it is linked but the portal cannot be read, so a failed read
   /// is not shown as "not linked".
-  static Future<AccountSummary?> summary(String? drive) async {
+  ///
+  /// An expired session is renewed with this device's agent once; when that
+  /// fails the session is gone and the account shows as not linked.
+  static Future<AccountSummary?> summary(String? drive,
+      {bool renewed = false}) async {
     final saved = await read();
     if (saved == null) return null;
     final origin = shared.AtomicAccountClient.sessionOrigin(saved);
     final client = shared.AtomicAccountClient(origin.toString())
       ..restoreSession(saved);
     try {
-      final me = await client.account();
+      final Map<String, dynamic> me;
+      try {
+        me = await client.account();
+      } on StateError catch (e) {
+        if (renewed || e.message != expiredMessage) rethrow;
+        await renewExpired();
+        return summary(drive, renewed: true);
+      }
       Future<Map<String, dynamic>?> forDrive(
           Future<List<Map<String, dynamic>>> list) async {
         try {
