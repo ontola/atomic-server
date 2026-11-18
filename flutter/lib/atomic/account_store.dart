@@ -142,7 +142,7 @@ class AccountStore {
 
   /// What the account client says for a 401.
   @visibleForTesting
-  static const expiredMessage = 'Sign in again to continue';
+  static const expiredMessage = shared.AtomicAccountClient.sessionExpired;
 
   /// The `session_token` cookie that signs a web view in to [portal] as the
   /// active agent, or null when it cannot (no agent, not an account identity,
