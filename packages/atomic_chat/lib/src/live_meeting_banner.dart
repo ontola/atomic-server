@@ -293,6 +293,12 @@ class InMeetingBar extends StatelessWidget {
                     onPressed: follow.stop,
                     child: const Text('Stop following'),
                   ),
+                if (leading && !following && !inCall)
+                  TextButton(
+                    key: const Key('in-meeting-stop-leading'),
+                    onPressed: lead.end,
+                    child: const Text('Stop leading'),
+                  ),
                 if (inCall)
                   IconButton(
                     key: const Key('in-meeting-leave'),
@@ -302,6 +308,7 @@ class InMeetingBar extends StatelessWidget {
                     onPressed: () {
                       call?.leave();
                       follow.stop();
+                      lead.end();
                     },
                   ),
               ]),
