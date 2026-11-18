@@ -1158,6 +1158,18 @@ function idCache(drivePseudonym: string) {
   };
 }
 
+type BlobBackupArgs = {
+  db: VaultCapableDb;
+  signal?: AbortSignal;
+  driveSubject: string;
+  drivePseudonym: string;
+  driveKey: Uint8Array;
+  keyEpoch: number;
+  beforeNetworkWrite?: () => Promise<void>;
+};
+
+const blobBackupTails = new WeakMap<VaultCapableDb, Promise<void>>();
+
 /**
  * Upload the sealed bytes of every file the drive references and the vault
  * does not hold.
@@ -1181,23 +1193,11 @@ function idCache(drivePseudonym: string) {
  * Returns `undefined` when the db cannot read files (an app without a local
  * store), which is a different answer from "nothing to do".
  */
-export async function backupBlobs({
-  db,
-  signal,
-  driveSubject,
-  drivePseudonym,
-  driveKey,
-  keyEpoch,
-  beforeNetworkWrite,
-}: {
-  db: VaultCapableDb;
-  signal?: AbortSignal;
-  driveSubject: string;
-  drivePseudonym: string;
-  driveKey: Uint8Array;
-  keyEpoch: number;
-  beforeNetworkWrite?: () => Promise<void>;
-}): Promise<BlobBackupOutcome | undefined> {
+export async function backupBlobs(
+  args: BlobBackupArgs,
+): Promise<BlobBackupOutcome | undefined> {
+  const { db, signal } = args;
+
   if (
     !db.vaultFileHashes ||
     !db.vaultBlobOpen ||
@@ -1207,7 +1207,38 @@ export async function backupBlobs({
     return undefined;
   }
 
-  const blobDb = db as VaultBlobDb;
+  // Both WASM and native databases have one open-file cache. A drive's pass
+  // owns it through its final close, including while uploads are in flight.
+  const previous = blobBackupTails.get(db) ?? Promise.resolve();
+  let release!: () => void;
+  const turn = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  const tail = previous.then(() => turn);
+  blobBackupTails.set(db, tail);
+  await previous;
+
+  try {
+    signal?.throwIfAborted();
+
+    return await backupBlobsOnce({ ...args, db: db as VaultBlobDb });
+  } finally {
+    release();
+    if (blobBackupTails.get(db) === tail) blobBackupTails.delete(db);
+  }
+}
+
+async function backupBlobsOnce({
+  db: blobDb,
+  signal,
+  driveSubject,
+  drivePseudonym,
+  driveKey,
+  keyEpoch,
+  beforeNetworkWrite,
+}: Omit<BlobBackupArgs, 'db'> & {
+  db: VaultBlobDb;
+}): Promise<BlobBackupOutcome> {
   const outcome: BlobBackupOutcome = {
     uploaded: 0,
     alreadyStored: 0,

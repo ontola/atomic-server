@@ -1,6 +1,7 @@
 mod blob_events;
 mod menu;
 mod system_tray;
+mod vault_blob_export;
 // The NFS virtual drive is unix-only: `nfsserve` does not build for windows
 // (see the dependency note in Cargo.toml).
 #[cfg(unix)]
@@ -52,6 +53,7 @@ const PAIR_LINK_RETRY_WINDOW: std::time::Duration = std::time::Duration::from_se
 #[derive(Default)]
 struct EmbeddedNode {
   store: std::sync::OnceLock<atomic_lib::Db>,
+  blob_export: std::sync::Arc<vault_blob_export::BlobExport>,
   config_file: std::sync::OnceLock<std::path::PathBuf>,
   /// Why the node never came up, if it didn't. The server runs on its own
   /// thread, so a boot failure there used to be an unwind into nothing: the
@@ -498,6 +500,44 @@ async fn vault_blob_present(
   store.has_blob(&hash).await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn vault_blob_open(
+  hash: String,
+  key: String,
+  key_epoch: u32,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<vault_blob_export::Plan, String> {
+  let store = vault_ipc::store_of(&node)?;
+  let key = vault_ipc::decode_key(&key, key_epoch)?;
+  let exporter = node.blob_export.clone();
+  vault_ipc::on_worker_thread(move || vault_ipc::block_on(exporter.open(&store, &hash, &key))?)
+    .await
+}
+
+#[tauri::command]
+async fn vault_blob_chunk(
+  hash: String,
+  key: String,
+  key_epoch: u32,
+  index: u32,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<String, String> {
+  let key = vault_ipc::decode_key(&key, key_epoch)?;
+  let exporter = node.blob_export.clone();
+  vault_ipc::on_worker_thread(move || {
+    use base64::Engine as _;
+    exporter
+      .chunk(&hash, &key, index)
+      .map(|bytes| vault_ipc::STANDARD.encode(bytes))
+  })
+  .await
+}
+
+#[tauri::command]
+fn vault_blob_close(node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>) -> Result<(), String> {
+  node.blob_export.close()
+}
+
 /// Restore only verified file bytes. Resource history and lane state stay local.
 #[tauri::command]
 async fn vault_blob_restore(
@@ -644,6 +684,9 @@ pub fn run() {
       vault_import,
       vault_file_hashes,
       vault_blob_present,
+      vault_blob_open,
+      vault_blob_chunk,
+      vault_blob_close,
       vault_blob_restore,
       vault_request_missing_files,
       virtual_drive_start,
@@ -661,6 +704,9 @@ pub fn run() {
     vault_import,
     vault_file_hashes,
     vault_blob_present,
+    vault_blob_open,
+    vault_blob_chunk,
+    vault_blob_close,
     vault_blob_restore,
     vault_request_missing_files
   ]);

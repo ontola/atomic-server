@@ -142,3 +142,7 @@ test that signs into arbitrary native profiles.
 Stop only the source, portal and app processes started for this run. Retain
 the evidence in the owned test directory. Screenshots, node keys, databases
 and runtime configuration do not belong in Git.
+
+For automatic fallback with no source peer, see
+[`NATIVE_VAULT_RECOVERY_ACCEPTANCE.md`](NATIVE_VAULT_RECOVERY_ACCEPTANCE.md),
+which records the actual native app against real Vault API and S3 storage.

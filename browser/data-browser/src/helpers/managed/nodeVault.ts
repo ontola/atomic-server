@@ -20,6 +20,7 @@ import type {
   RestoreOutcome,
   SegmentKind,
   VaultBlobRestoreResult,
+  VaultBlobPlan,
   VaultCapableDb,
 } from './vault';
 
@@ -90,6 +91,29 @@ export const nodeVault: VaultCapableDb = {
 
   vaultBlobPresent(hash) {
     return invoke<boolean>('vault_blob_present', { hash });
+  },
+
+  vaultBlobOpen(hash, key, keyEpoch) {
+    return invoke<VaultBlobPlan>('vault_blob_open', {
+      hash,
+      key: encodeB64(key),
+      keyEpoch,
+    });
+  },
+
+  async vaultBlobChunk(hash, key, keyEpoch, index) {
+    const sealed = await invoke<string>('vault_blob_chunk', {
+      hash,
+      key: encodeB64(key),
+      keyEpoch,
+      index,
+    });
+
+    return decodeB64(sealed);
+  },
+
+  async vaultBlobClose() {
+    await invoke('vault_blob_close');
   },
 
   vaultBlobRestore(key, keyEpoch, blobId, chunks, wanted, driveSubject) {

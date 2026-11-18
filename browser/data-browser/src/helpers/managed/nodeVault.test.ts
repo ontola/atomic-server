@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { backupBlobs } from './vault';
 
 const invoke = vi.fn();
 const listen = vi.fn();
@@ -86,6 +87,72 @@ describe('native stored-file notifications', () => {
  */
 describe('nodeVault', () => {
   const key = new Uint8Array(32).fill(7);
+
+  it('provides native file export so a file backup runs even when history is unchanged', async () => {
+    vi.stubEnv('VITE_MANAGED_PORTAL_URL', 'http://localhost:3031');
+    invoke.mockResolvedValue([]);
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: async () => [],
+    } as Response);
+
+    try {
+      const outcome = await backupBlobs({
+        db: nodeVault,
+        driveSubject: 'atomic:native-drive',
+        drivePseudonym: 'native-file-backup',
+        driveKey: key,
+        keyEpoch: 1,
+      });
+      expect(outcome).toEqual({
+        uploaded: 0,
+        alreadyStored: 0,
+        missing: 0,
+        tooLarge: 0,
+        bytesUploaded: 0,
+      });
+      expect(invoke).toHaveBeenCalledWith('vault_file_hashes', {
+        driveSubject: 'atomic:native-drive',
+      });
+      expect(invoke).toHaveBeenCalledWith('vault_blob_close');
+    } finally {
+      fetcher.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('passes a file plan and binary sealed chunks over the native export boundary', async () => {
+    const plan = {
+      status: 'ready',
+      size: 2,
+      blobId: 'per-vault-id',
+      chunks: [{ index: 0, offset: 0, length: 2, sealedLength: 48 }],
+    };
+    const sealed = new Uint8Array([0, 1, 127, 128, 254, 255]);
+    invoke.mockImplementation(async command => {
+      if (command === 'vault_blob_open') return plan;
+      if (command === 'vault_blob_chunk')
+        return btoa(String.fromCharCode(...sealed));
+    });
+    expect(await nodeVault.vaultBlobOpen!('plain-hash', key, 3)).toEqual(plan);
+    expect(invoke).toHaveBeenCalledWith('vault_blob_open', {
+      hash: 'plain-hash',
+      key: btoa(String.fromCharCode(...key)),
+      keyEpoch: 3,
+    });
+    const result = await nodeVault.vaultBlobChunk!('plain-hash', key, 3, 0);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect([...result]).toEqual([...sealed]);
+    expect(invoke).toHaveBeenCalledWith('vault_blob_chunk', {
+      hash: 'plain-hash',
+      key: btoa(String.fromCharCode(...key)),
+      keyEpoch: 3,
+      index: 0,
+    });
+    await nodeVault.vaultBlobClose!();
+    expect(invoke).toHaveBeenLastCalledWith('vault_blob_close');
+  });
 
   it('sends the key as base64 and brings sealed bytes back intact', async () => {
     const sealed = new Uint8Array([0, 1, 254, 255, 127, 128]);
