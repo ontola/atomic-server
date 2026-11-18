@@ -90,10 +90,9 @@ export interface SyncPushEnvelope {
 /**
  * Structured error codes on `ERROR` frames (mirrors `lib/src/sync/protocol.rs`
  * `error_code`; F5, planning/unified-sync.md). `UNKNOWN` means "no
- * structured classification" — callers fall back to message string
- * matching (`local-outbox.ts`'s `isTerminalCommitErrorMessage` /
- * `isUnrecoverableCommitErrorMessage`), which also covers older servers
- * that predate this field.
+ * structured classification" — callers fall back to `legacyRefusalCode`
+ * (`local-outbox.ts`), the one place that reads refusal text, for servers
+ * that predate the codes.
  */
 export const ErrorCode = {
   UNKNOWN: 0,
@@ -138,6 +137,8 @@ export const ErrorCode = {
    *  message carries `retry_after_ms=<n>` (see `retryAfterMsFromMessage`).
    *  Not a failure: keep the local state, wait, then send one merged delta. */
   BUSY: 12,
+  /** An INVITE was refused. The message is a sentence for the person. */
+  INVITE_REFUSED: 13,
   /** A notice, not a refusal, sent once per connection with request id 0 to
    *  a client that predates `canonical-scheme`: the connection keeps working
    *  but will stop being supported. Log it; never fail a request over it. */
@@ -145,6 +146,19 @@ export const ErrorCode = {
   /** A `GET_MANY` entry left unfetched because the batch's byte budget was
    *  spent. Nothing is wrong with the subject: fetch it again on its own. */
   RESULT_TOO_LARGE: 15,
+  /** A commit's delta starts past ops the server never received. Retry with
+   *  a self-contained snapshot (drop the save cursor), not the same delta. */
+  PENDING_DEPS: 16,
+  /** The server does not hold the resource's parent. Parked; a finished
+   *  resync of the drive re-arms it. */
+  MISSING_PARENT: 17,
+  /** The server does not host the drive. Parked like `SYNC_REJECTED`, kept
+   *  apart because the person can act on it. Servers before this code sent
+   *  `SYNC_REJECTED`. */
+  NOT_ENROLLED: 18,
+  /** A destroy with nothing left to do (already gone, or the subject was
+   *  re-created after it was signed): an acknowledgement. */
+  DESTROY_SETTLED: 19,
 } as const;
 
 /** The `retry_after_ms=<n>` hint of a BUSY error message (or an HTTP error

@@ -1,4 +1,4 @@
-import { isNotEnrolledMessage, type Store } from '@tomic/react';
+import { isNotEnrolledError, type Store } from '@tomic/react';
 import type { ManagedEnrollmentSummary } from './managed/enrollmentApi';
 
 type DriveStore = Pick<Store, 'isLocalOnlyDrive' | 'normalizeSubject'>;
@@ -64,10 +64,8 @@ export function grantFailureMessage(
   app: string,
   node: string,
 ): string {
-  const text = (error: unknown) =>
-    error instanceof Error ? error.message : String(error);
-  const notEnrolled = failed.filter(f => isNotEnrolledMessage(text(f.error)));
-  const other = failed.filter(f => !isNotEnrolledMessage(text(f.error)));
+  const notEnrolled = failed.filter(f => isNotEnrolledError(f.error));
+  const other = failed.filter(f => !isNotEnrolledError(f.error));
   const parts: string[] = [];
 
   if (notEnrolled.length > 0) {

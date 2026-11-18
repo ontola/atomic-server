@@ -7,6 +7,7 @@ import {
   encodeEphemeral as encodePeerEphemeral,
   decodeEphemeral as decodePeerEphemeral,
   EphemeralKind as PeerEphemeralKind,
+  ErrorCode,
 } from './ws-v2.js';
 import { serializeDeterministically as serializePeerCommit } from './commit.js';
 import { taskSchema } from './task-schema.js';
@@ -137,14 +138,15 @@ import {
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
-  isPendingDepsCommitErrorMessage,
+  isPendingDepsRefusal,
+  refusalCode,
   isOutboxDatabase,
-  isSettledDestroyErrorMessage,
+  isSettledDestroyRefusal,
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
-  isMissingParentMessage,
-  isNotEnrolledMessage,
+  isMissingParentRefusal,
+  isNotEnrolledRefusal,
   type OutboxEntry,
 } from './local-outbox.js';
 
@@ -334,12 +336,13 @@ export interface StoreSyncStatus {
     timestamp: number;
   };
   /** Set when the server refused the last SYNC_PUSH for a drive
-   *  (`SYNC_REJECTED`: no write right, quota, not enrolled). Local edits
+   *  (`SYNC_REJECTED` or `NOT_ENROLLED`: no write right, quota). Local edits
    *  are kept and offered again on the next handshake. Cleared by the
    *  next successful sync of that drive. */
   lastDriveSyncError?: {
     drive: string;
     message: string;
+    code?: number;
     timestamp: number;
   };
 }
@@ -914,6 +917,7 @@ export class Store {
   private _lastDriveSyncError?: {
     drive: string;
     message: string;
+    code?: number;
     timestamp: number;
   };
   private _lastDriveSync?: {
@@ -1255,7 +1259,10 @@ export class Store {
 
     if (
       this._lastDriveSyncError?.drive === drive &&
-      isNotEnrolledMessage(this._lastDriveSyncError.message)
+      isNotEnrolledRefusal(
+        this._lastDriveSyncError.message,
+        this._lastDriveSyncError.code,
+      )
     ) {
       return true;
     }
@@ -1266,7 +1273,7 @@ export class Store {
       .pending()
       .some(
         entry =>
-          isNotEnrolledMessage(entry.lastAttemptError) &&
+          isNotEnrolledRefusal(entry.lastAttemptError, entry.lastAttemptCode) &&
           this.driveOf(this.normalizeSubject(entry.subject)) === normalized,
       );
   }
@@ -1721,7 +1728,10 @@ export class Store {
               isGenesis: entry.signedGenesis !== undefined,
               rearmedAfterResync: entry.rearmedAfterResync === true,
             });
-          const refused = this.refusedDriveOf(error.message);
+          const refused = this.refusedDriveOf(
+            error.message,
+            e instanceof AtomicError ? e.code : undefined,
+          );
 
           // A refusal the app resolves (the drive moves to browser-only) is
           // not a failure worth reporting: nothing keeps failing afterwards.
@@ -1739,6 +1749,7 @@ export class Store {
           this.notifyBlockedSync(
             entry.subject,
             e instanceof Error ? e.message : String(e),
+            e instanceof AtomicError ? e.code : undefined,
           );
         },
       });
@@ -2188,7 +2199,13 @@ export class Store {
       // drain attempt (scheduled by the outbox backoff) exports a
       // self-contained snapshot, which the server can always merge; that
       // re-delivers the lost range too.
-      if (e instanceof Error && isPendingDepsCommitErrorMessage(e.message)) {
+      if (
+        e instanceof Error &&
+        isPendingDepsRefusal(
+          e.message,
+          e instanceof AtomicError ? e.code : undefined,
+        )
+      ) {
         resource.clearLoroSaveCursor();
       }
 
@@ -2257,7 +2274,7 @@ export class Store {
    * drop the entry, make sure the local copy is gone.
    *
    * A server answer that says the resource is already gone (see
-   * {@link isSettledDestroyErrorMessage}) counts as an ack: the goal of the
+   * {@link isSettledDestroyRefusal}) counts as an ack: the goal of the
    * delete is met. Every other failure is rethrown so the outbox applies
    * its usual backoff / terminal / blocking classification and
    * `Resource.destroy()` can surface it to the caller.
@@ -2282,7 +2299,14 @@ export class Store {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
 
-        if (!isSettledDestroyErrorMessage(msg)) throw e;
+        if (
+          !isSettledDestroyRefusal(
+            msg,
+            e instanceof AtomicError ? e.code : undefined,
+          )
+        ) {
+          throw e;
+        }
 
         console.debug(
           `[Outbox] destroy of ${subject} already settled on the server: ${msg}`,
@@ -5658,8 +5682,8 @@ export class Store {
   /** The drive a "not enrolled" refusal names, if `message` is one. The
    *  refusal names the drive it refuses; that is the same for every resource
    *  in it, where a resource's own drive may not be known yet. */
-  private refusedDriveOf(message: string): string | undefined {
-    if (!isNotEnrolledMessage(message)) return undefined;
+  private refusedDriveOf(message: string, code?: number): string | undefined {
+    if (!isNotEnrolledRefusal(message, code)) return undefined;
 
     return /Drive (\S+) is not enrolled/.exec(message)?.[1];
   }
@@ -5710,9 +5734,13 @@ export class Store {
    * resources they never see. Say it once per drive, in terms of the drive,
    * and say what happens to their edits.
    */
-  private notifyBlockedSync(subject: string, message: string): void {
-    if (isNotEnrolledMessage(message)) {
-      const named = this.refusedDriveOf(message);
+  private notifyBlockedSync(
+    subject: string,
+    message: string,
+    code?: number,
+  ): void {
+    if (isNotEnrolledRefusal(message, code)) {
+      const named = this.refusedDriveOf(message, code);
       const drive =
         named ?? this.driveOf(this.normalizeSubject(subject)) ?? subject;
 
@@ -5757,7 +5785,7 @@ export class Store {
       return;
     }
 
-    if (isMissingParentMessage(message)) {
+    if (isMissingParentRefusal(message, code)) {
       // Every write under a workspace the server does not hold is refused the
       // same way, and each one used to toast on every page load. Say it once
       // per workspace, in terms of the workspace, and say what to do.
@@ -5779,11 +5807,7 @@ export class Store {
       return;
     }
 
-    const missingRight = /\/properties\/(\w+) right has been found/.exec(
-      message,
-    )?.[1];
-
-    if (missingRight) {
+    if (refusalCode(message, code) === ErrorCode.UNAUTHORIZED_WRITE) {
       // Say what happened in the person's terms: which item, what they may
       // not do, that their work is safe, and what resolves it.
       if (this._notifiedNoRightSubjects.has(subject)) return;
@@ -5794,12 +5818,10 @@ export class Store {
       const title =
         local && local.title !== local.subject ? local.title : undefined;
       const what = title ? `"${title}"` : 'a change';
-      const action =
-        missingRight === 'append'
-          ? 'add this here'
-          : missingRight === 'read'
-            ? 'view this'
-            : 'edit this';
+      // Only the wording differs: a create (`append`) or an edit (`write`).
+      const action = message.includes('/properties/append right')
+        ? 'add this here'
+        : 'edit this';
 
       this.notifyError(
         new Error(
@@ -6106,10 +6128,10 @@ export class Store {
    * Distinct from `finishDriveSync` so a UI can show "your changes were
    * refused" instead of a green check.
    */
-  public failDriveSync(drive: string, message: string): void {
+  public failDriveSync(drive: string, message: string, code?: number): void {
     this._driveSyncInProgress = false;
     this._driveSyncPulling = false;
-    this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
+    this._lastDriveSyncError = { drive, message, code, timestamp: Date.now() };
 
     if (drive) {
       this._syncedDrives.delete(drive);
@@ -6121,9 +6143,9 @@ export class Store {
     // whether it is an unhosted drive it can keep browser-only, the same as
     // for a refused outbox write. Moving it local clears the error again
     // (`makeDriveLocal`), so the Sync page stops showing the refusal.
-    if (isNotEnrolledMessage(message) && this.refusedDriveHandler) {
+    if (isNotEnrolledRefusal(message, code) && this.refusedDriveHandler) {
       void this.healRefusedDrive(
-        this.refusedDriveOf(message) ?? drive,
+        this.refusedDriveOf(message, code) ?? drive,
         message,
       ).catch(e => console.warn('[Store] refused drive handler failed:', e));
     }

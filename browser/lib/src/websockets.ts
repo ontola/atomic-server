@@ -1320,7 +1320,10 @@ export class WSClient {
           // Nothing is pending on it, so neither `rejectAllPending` nor a
           // toast is right.
           console.warn(`[WS] ${msg.message}`);
-        } else if (msg.code === ErrorCode.SYNC_REJECTED) {
+        } else if (
+          msg.code === ErrorCode.SYNC_REJECTED ||
+          msg.code === ErrorCode.NOT_ENROLLED
+        ) {
           // Our SYNC_PUSH was refused as a whole (no write right on the
           // drive, quota, not enrolled). Nothing we sent landed and no
           // SYNC_OK will follow for it. `handleSyncDiff` may already have
@@ -1332,6 +1335,7 @@ export class WSClient {
           this.store.failDriveSync(
             this.driveFromRejection(msg.message),
             msg.message,
+            msg.code,
           );
         } else if (
           msg.code === ErrorCode.AUTH_REQUIRED ||

@@ -4,7 +4,7 @@ import { CommitBuilder } from './commit.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
-import { LocalOutbox, isSettledDestroyErrorMessage } from './local-outbox.js';
+import { LocalOutbox, isSettledDestroyRefusal } from './local-outbox.js';
 import { testStore } from './test-store.js';
 import type { ClientDbWorker } from './client-db.js';
 
@@ -332,25 +332,25 @@ describe('LocalOutbox destroy envelopes', () => {
 
   it('classifies only the "already gone" server answers as settled', () => {
     expect(
-      isSettledDestroyErrorMessage(
+      isSettledDestroyRefusal(
         'Destroy commit for did:ad:x was already applied here; refusing replay',
       ),
     ).toBe(true);
     expect(
-      isSettledDestroyErrorMessage(
+      isSettledDestroyRefusal(
         "Destroy commit for did:ad:x (created 1) predates the resource's genesis (2); refusing replay",
       ),
     ).toBe(true);
     expect(
-      isSettledDestroyErrorMessage(
+      isSettledDestroyRefusal(
         'Commit for did:ad:x has is_genesis: false, but the resource does not exist yet.',
       ),
     ).toBe(true);
     expect(
-      isSettledDestroyErrorMessage(
+      isSettledDestroyRefusal(
         'No https://atomicdata.dev/properties/write right has been found',
       ),
     ).toBe(false);
-    expect(isSettledDestroyErrorMessage('Failed to fetch')).toBe(false);
+    expect(isSettledDestroyRefusal('Failed to fetch')).toBe(false);
   });
 });

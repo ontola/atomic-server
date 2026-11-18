@@ -1,17 +1,10 @@
 // @wc-ignore-file
-import { isNotEnrolledMessage } from '@tomic/react';
+import { isNotEnrolledError } from '@tomic/react';
 import { reportStoreError } from '@helpers/loggingHandlers';
 import { asError } from '@tomic/react';
 
 /** Toast id shared by every "could not save this chat message" notification. */
 export const CHAT_SAVE_TOAST_ID = 'ai-chat-save';
-
-const errorMessage = (error: unknown): string | undefined => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-
-  return undefined;
-};
 
 /**
  * Handles a failed attempt to persist an AI chat message.
@@ -28,7 +21,7 @@ export function handleChatSaveError(
 ): void {
   console.error(error);
 
-  if (isNotEnrolledMessage(errorMessage(error))) return;
+  if (isNotEnrolledError(error)) return;
 
   reportStoreError(asError(error));
   notify({ id: CHAT_SAVE_TOAST_ID });
