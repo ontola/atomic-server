@@ -13,6 +13,7 @@ import {
   clickAccountMenuItem,
   currentDriveTitle,
   FRONTEND_URL,
+  getCurrentSubject,
 } from './test-utils';
 
 const PROXY = 'https://syncables-test.example';
@@ -48,6 +49,7 @@ interface MockState {
   redeemed: string[];
   issueConnections: string[];
   repositoryRequests: number;
+  providerRequests: string[];
   expiredConnection?: string;
   issueGate?: Promise<void>;
 }
@@ -128,6 +130,7 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
     redeemed: [],
     issueConnections: [],
     repositoryRequests: 0,
+    providerRequests: [],
   };
   const connections = new Map<string, MockConnection>();
   let consentAttempts = 0;
@@ -316,6 +319,7 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
     expect(requestSigner(request)).toBe(connection.owner);
     expect(request.headers()['x-connection-key']).toBe(connection.key);
     const providerPath = '/' + endpoint.join('/');
+    state.providerRequests.push(providerPath);
 
     if (providerPath === '/user') {
       await send({ id: 321, login: 'michiel', type: 'User' });
@@ -432,7 +436,7 @@ test.describe('built-in GitHub Syncables onboarding', () => {
     });
     await github.getByRole('button', { name: 'Add GitHub to drive' }).click();
 
-    const frame = page.getByTitle('Built-in Syncables collection view');
+    const frame = page.locator('iframe[title="App"]:visible');
     const iframe = frame.contentFrame();
     const emptyAccounts = iframe.getByRole('heading', {
       name: 'No accounts connected',
@@ -476,6 +480,15 @@ test.describe('built-in GitHub Syncables onboarding', () => {
       iframe.getByRole('button', { name: 'Refresh list', exact: true }),
     ).toBeVisible({ timeout: 45_000 });
     await expect(iframe.getByRole('table')).toHaveCount(0);
+    expect(requests.repositoryRequests).toBe(0);
+    await iframe
+      .getByRole('button', { name: 'Refresh list', exact: true })
+      .click();
+    await expect.poll(() => requests.repositoryRequests).toBe(1);
+    await expect(
+      iframe.getByRole('button', { name: 'Refresh list', exact: true }),
+    ).toBeEnabled({ timeout: 45_000 });
+    const discoveryReads = requests.providerRequests.length;
     await page.getByRole('tab', { name: 'Table', exact: true }).click();
     const rawOwners = page.getByRole('main').getByRole('grid');
     await expect(rawOwners.getByText('ontola', { exact: true })).toBeVisible();
@@ -483,12 +496,16 @@ test.describe('built-in GitHub Syncables onboarding', () => {
       rawOwners.getByRole('button', { name: 'Open', exact: true }),
     ).toHaveCount(0);
     await addGitHubView(page, 'GitHub Organizations');
-    await expect(iframe.getByText('ontola', { exact: true })).toBeVisible({
+    const directory = page.getByRole('main').getByRole('table');
+    await expect(frame).toHaveCount(0);
+    await expect(directory.getByText('ontola', { exact: true })).toBeVisible({
       timeout: 45_000,
     });
-    await expect(iframe.getByLabel('Public GitHub repository')).toHaveCount(0);
-    await expect(iframe.getByText('reporting', { exact: true })).toBeVisible();
-    const personalOwner = iframe.getByRole('row', {
+    await expect(page.getByLabel('Public GitHub repository')).toHaveCount(0);
+    await expect(
+      directory.getByText('reporting', { exact: true }),
+    ).toBeVisible();
+    const personalOwner = directory.getByRole('row', {
       name: /michiel.*Personal owner/,
     });
     await expect(personalOwner).toBeVisible();
@@ -497,6 +514,34 @@ test.describe('built-in GitHub Syncables onboarding', () => {
       contentType: 'image/png',
     });
     const ownersUrl = page.url();
+    await expect(personalOwner.getByText('1', { exact: true })).toBeVisible();
+    await expect(
+      directory
+        .getByRole('row', { name: /ontola.*Organization/ })
+        .getByText('2', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      directory
+        .getByRole('row', { name: /reporting.*Organization/ })
+        .getByText('0', { exact: true }),
+    ).toBeVisible();
+    let attemptedNativeProviderReads = 0;
+
+    const offlineProvider = async (route: Route) => {
+      attemptedNativeProviderReads++;
+      await route.abort('failed');
+    };
+
+    await page.route(PROXY + '/proxy/**', offlineProvider);
+    await page.getByRole('tab', { name: 'Table', exact: true }).click();
+    await page
+      .getByRole('tab', { name: 'GitHub Organizations', exact: true })
+      .click();
+    await expect(directory.getByText('ontola', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Loading stored rows…', { exact: true }),
+    ).toHaveCount(0);
+    expect(requests.providerRequests).toHaveLength(discoveryReads);
     await personalOwner.getByRole('button', { name: 'Open' }).click();
     await expect(
       page
@@ -504,19 +549,19 @@ test.describe('built-in GitHub Syncables onboarding', () => {
         .getByRole('heading', { name: 'Repositories', exact: true, level: 1 }),
     ).toBeVisible();
     await addGitHubView(page, 'GitHub Repositories');
-    await expect(iframe.getByText('notes', { exact: true })).toBeVisible({
+    await expect(directory.getByText('notes', { exact: true })).toBeVisible({
       timeout: 45_000,
     });
-    const personalRepo = iframe.getByRole('row', { name: /notes/ });
+    const personalRepo = directory.getByRole('row', { name: /notes/ });
     await expect(
       personalRepo.getByText('Private', { exact: true }),
     ).toBeVisible();
     await expect(personalRepo.getByText('3', { exact: true })).toBeVisible();
     await expect(
-      iframe.getByRole('row', { name: /ontola\/atomic-server/ }),
+      directory.getByRole('row', { name: /ontola\/atomic-server/ }),
     ).toHaveCount(0);
     await page.goto(ownersUrl);
-    await iframe
+    await directory
       .getByRole('row', { name: /ontola/ })
       .getByRole('button', { name: 'Open' })
       .click();
@@ -526,12 +571,14 @@ test.describe('built-in GitHub Syncables onboarding', () => {
         .getByRole('main')
         .getByRole('heading', { name: 'Repositories', exact: true, level: 1 }),
     ).toBeVisible();
-    await expect(iframe.getByRole('table')).toHaveCount(0);
+    await expect(frame).toHaveCount(0);
     await addGitHubView(page, 'GitHub Repositories');
     await expect(
-      iframe.getByText('atomic-server', { exact: true }),
+      directory.getByText('atomic-server', { exact: true }),
     ).toBeVisible({ timeout: 45_000 });
-    const organizationRepo = iframe.getByRole('row', { name: /atomic-server/ });
+    const organizationRepo = directory.getByRole('row', {
+      name: /atomic-server/,
+    });
     await expect(
       organizationRepo.getByText('Public', { exact: true }),
     ).toBeVisible();
@@ -539,26 +586,35 @@ test.describe('built-in GitHub Syncables onboarding', () => {
       organizationRepo.getByText('7', { exact: true }),
     ).toBeVisible();
     await expect(
-      iframe.getByRole('columnheader', {
+      directory.getByRole('columnheader', {
         name: 'Open issues + PRs',
         exact: true,
       }),
     ).toBeVisible();
-    const unavailableRepo = iframe.getByRole('row', { name: /archived/ });
+    const unavailableRepo = directory.getByRole('row', { name: /archived/ });
     await expect(
       unavailableRepo.getByText('Unknown', { exact: true }),
     ).toBeVisible();
     await expect(unavailableRepo.getByText('—', { exact: true })).toBeVisible();
-    await expect(unavailableRepo.getByRole('button')).toHaveCount(0);
     await expect(
-      iframe.getByRole('row', { name: /michiel\/notes/ }),
+      unavailableRepo.getByRole('button', { name: 'Open', exact: true }),
+    ).toBeVisible();
+    await expect(
+      unavailableRepo.getByRole('button', { name: 'Sync issues', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      directory.getByRole('row', { name: /michiel\/notes/ }),
     ).toHaveCount(0);
     expect(requests.issueConnections).toHaveLength(0);
+    expect(requests.providerRequests).toHaveLength(discoveryReads);
+    await expect(frame).toHaveCount(0);
     await testInfo.attach('github-repositories', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
-    await iframe
+    expect(attemptedNativeProviderReads).toBe(0);
+    await page.unroute(PROXY + '/proxy/**', offlineProvider);
+    await directory
       .getByRole('row', { name: /atomic-server/ })
       .getByRole('button', { name: 'Sync issues' })
       .click();
@@ -568,7 +624,9 @@ test.describe('built-in GitHub Syncables onboarding', () => {
     const syncTab = page.getByRole('tab', { name: 'Sync', exact: true });
     const rows = page.getByRole('main');
     await expect(syncNow).toBeVisible({ timeout: 45_000 });
-    const mirrorUrl = page.url();
+    expect(requests.issueConnections).toHaveLength(0);
+    expect(requests.providerRequests).toHaveLength(discoveryReads);
+    const mirrorSubject = await getCurrentSubject(page);
     let releaseIssueRead: (() => void) | undefined;
     requests.issueGate = new Promise(resolve => {
       releaseIssueRead = resolve;
@@ -587,16 +645,25 @@ test.describe('built-in GitHub Syncables onboarding', () => {
     await page
       .getByRole('tab', { name: 'GitHub Organizations', exact: true })
       .click();
-    await expect(iframe.getByText('ontola', { exact: true })).toBeVisible({
+    await expect(directory.getByText('ontola', { exact: true })).toBeVisible({
       timeout: 30_000,
     });
+    await expect(frame).toHaveCount(0);
+    await expect(page.locator('iframe[title="App"]')).toHaveCount(1);
+    expect(requests.repositoryRequests).toBe(1);
     expect(requests.issueConnections).toHaveLength(1);
     await testInfo.attach('github-browse-during-issues-sync', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
     await sidebar.getByText('Issues', { exact: true }).click();
-    await expect(page).toHaveURL(mirrorUrl);
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      mirrorSubject,
+    );
+    await expect(
+      page.getByRole('tab', { name: 'Sync', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
     await expect(
       iframe.getByRole('button', { name: 'Syncing', exact: true }),
     ).toBeDisabled();
@@ -784,9 +851,7 @@ test.describe('built-in GitHub Syncables onboarding', () => {
     await enableIntegrationDiscovery(page);
     await clickAccountMenuItem(page, 'Apps');
     await page.getByRole('button', { name: 'Add GitHub to drive' }).click();
-    const iframe = page
-      .getByTitle('Built-in Syncables collection view')
-      .contentFrame();
+    const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
     await expect(
       iframe.getByRole('heading', { name: 'No accounts connected' }),
     ).toBeVisible({ timeout: 30_000 });
@@ -797,7 +862,6 @@ test.describe('built-in GitHub Syncables onboarding', () => {
       page.getByRole('heading', { name: 'Public', level: 1, exact: true }),
     ).toBeVisible();
     await expect(iframe.getByRole('table')).toHaveCount(0);
-    await addGitHubView(page, 'GitHub Organizations');
 
     const repository = iframe.getByLabel('Public GitHub repository');
     const link = iframe.getByRole('button', { name: 'Link repository' });
@@ -816,7 +880,7 @@ test.describe('built-in GitHub Syncables onboarding', () => {
     await expect(iframe.getByText(/public repository\.$/)).toBeVisible();
     expect(metadataRequests).toEqual([PUBLIC_REPOSITORY]);
     expect(publicIssuePages).toHaveLength(0);
-    const mirrorUrl = page.url();
+    const mirrorSubject = await getCurrentSubject(page);
 
     await syncNow.click();
     await expect(
@@ -850,9 +914,26 @@ test.describe('built-in GitHub Syncables onboarding', () => {
     });
 
     await page.goto(publicUrl);
+    await addGitHubView(page, 'GitHub Organizations');
+    await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
+    await expect(
+      page
+        .getByRole('main')
+        .getByRole('table')
+        .getByText('ontola', { exact: true }),
+    ).toBeVisible();
+    expect(metadataRequests).toHaveLength(1);
+    expect(publicIssuePages).toHaveLength(PUBLIC_ISSUE_PAGE_COUNT);
+    await page.getByRole('tab', { name: 'Sync', exact: true }).click();
     await repository.fill(REPOSITORY, { timeout: 30_000 });
     await link.click();
-    await expect(page).toHaveURL(mirrorUrl);
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      mirrorSubject,
+    );
+    await expect(
+      page.getByRole('tab', { name: 'Sync', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
     await expect(syncNow).toBeVisible();
     expect(publicIssuePages).toHaveLength(PUBLIC_ISSUE_PAGE_COUNT);
     expect(requests.redeemed).toHaveLength(0);

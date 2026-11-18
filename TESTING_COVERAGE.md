@@ -1292,12 +1292,23 @@ This does not yet prove restoration of the user's private staging workspace.
   checks their kinds, counts and actions, keeps the raw Table schema unchanged,
   and navigates away during a deliberately delayed issue import. Runtime unit
   tests cover deduplication, pause, stale completion and source/session changes.
-  Directory tests cover compatible local row browsing and scoped Open actions;
-  these custom views do not require provider credentials to read stored rows.
+  Directory tests cover compatible local row browsing and scoped Open actions.
+  Native custom views contain no iframe and make no provider reads, including
+  opening, switching back, reloading and offline browsing during a sync. Saved
+  kinds and counts appear without changing the raw Table schema.
 - `syncablePlatform.test.ts`, `syncableHierarchy.test.ts`,
-  `syncablesHost.test.ts`, `syncablesProxyScope.test.ts` and
+  `builtinSyncablesProfile.test.ts`, `builtinSyncApp.test.ts` and
   `proxyConnections.test.ts` cover stable source bindings after moves, source
-  separation by account, narrow proxy URLs, keyed handoff and row upserts.
+  separation by account, narrow proxy URLs, keyed handoff, typed idempotent
+  upserts and incomplete-read count retention. `AppFrameProfile.test.tsx` and
+  `hostStoreProfile.test.ts` exercise the shared bridge profile, host-held
+  credentials, user signing and current-table write scope. The real-Store
+  `plugin-run.integration.test.ts` regression cancels a delayed property fetch
+  before its Loro mutation and verifies unchanged data and no pending commit.
+  `AppExecutionRuntime.test.ts` covers worker lifetime, startup failure,
+  deduplication and stale completion after replacement. Drive guards reject moved
+  roots or ancestors outside the selected drive, including stale descendant
+  drive stamps, while preserving same-drive identities.
 
 - `browser/e2e/tests/plugin.spec.ts`: private plugin assets load through signed parent requests; custom rendering and RPC still work.
 - The bootstrap test opens the shell directly and verifies its server-enforced opaque origin, independently of iframe attributes.

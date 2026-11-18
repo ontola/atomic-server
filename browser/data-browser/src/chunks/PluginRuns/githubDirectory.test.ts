@@ -11,7 +11,7 @@ import {
 import { fakeSchemaStore } from '../../../../lib/src/test-schema-store.js';
 import { syncableHierarchySchema } from './syncableHierarchy';
 import {
-  githubDirectoryRows,
+  githubDirectoryValues,
   githubDirectoryType,
   openGithubDirectoryRow,
 } from './githubDirectory';
@@ -109,58 +109,8 @@ describe('GitHub stored directory views', () => {
     ).rejects.toThrow('This row type has no GitHub directory view');
   });
 
-  it('lists stored direct rows and counts typed repositories while excluding view subjects', async () => {
-    const { store, resources, terms, table, queries, extraMembers, addOwner } =
-      await setup();
-    addOwner('owner', 'ontola');
-    resources.get('owner')![dataBrowser.properties.tableViews] = ['owner-view'];
-    resources.set('owner-table-view', {
-      [core.properties.parent]: table,
-      [core.properties.isA]: [dataBrowser.classes.view],
-    });
-    resources.set('owner-view', {
-      [core.properties.parent]: 'owner',
-      [core.properties.isA]: [dataBrowser.classes.view],
-    });
-    resources.set('repository', {
-      [core.properties.parent]: 'owner',
-      [core.properties.isA]: [terms.classes['syncable-repository']],
-    });
-    // Names do not decide whether a resource is an internal view.
-    resources.set('named-like-a-view', {
-      [core.properties.parent]: 'owner',
-      [core.properties.name]: 'Table',
-    });
-    resources.set('foreign-child', {
-      [core.properties.parent]: 'owner',
-      [DRIVE_PROPERTY]: 'another-drive',
-    });
-    resources.set('unrelated-row', {
-      [core.properties.parent]: table,
-      [core.properties.isA]: [terms.classes['syncable-repository']],
-    });
-    resources.set('moved-owner', {
-      [core.properties.parent]: 'somewhere-else',
-      [core.properties.isA]: [terms.classes['syncable-owner']],
-    });
-    extraMembers.set(table, ['moved-owner']);
-
-    await expect(githubDirectoryRows(store, 'drive', table)).resolves.toEqual({
-      rows: [
-        {
-          subject: 'owner',
-          name: 'ontola',
-          kind: 'organization',
-          count: 1,
-        },
-      ],
-      complete: true,
-    });
-    expect(queries.every(query => query.drive === 'drive')).toBe(true);
-  });
-
-  it('counts nested repository rows and opens the single repository table', async () => {
-    const { store, resources, terms, table, extraMembers, addOwner } =
+  it('opens only the single local repository table in the explicit drive', async () => {
+    const { store, resources, terms, table, extraMembers, queries, addOwner } =
       await setup();
     addOwner('owner', 'ontola');
     resources.set('repositories', {
@@ -193,12 +143,10 @@ describe('GitHub stored directory views', () => {
     });
     extraMembers.set('repositories', ['moved', 'foreign']);
 
-    expect(
-      (await githubDirectoryRows(store, 'drive', table)).rows,
-    ).toMatchObject([{ subject: 'owner', count: 2 }]);
     await expect(
       openGithubDirectoryRow(store, 'drive', table, 'owner'),
     ).resolves.toEqual({ subject: 'repositories' });
+    expect(queries.every(query => query.drive === 'drive')).toBe(true);
 
     resources.set('second-repositories', {
       ...resources.get('repositories'),
@@ -247,15 +195,54 @@ describe('GitHub stored directory views', () => {
     ).rejects.toThrow('Choose a GitHub row');
   });
 
-  it('refuses an out-of-drive table and stops a cancelled directory read', async () => {
-    const { store, resources, table, addOwner } = await setup();
-    addOwner('owner', 'ontola');
-    const controller = new AbortController();
-    controller.abort(new Error('Directory closed'));
-    await expect(
-      githubDirectoryRows(store, 'drive', table, controller.signal),
-    ).rejects.toThrow('Directory closed');
+  it('reads persisted repository metadata and leaves absent or invalid values unknown', () => {
+    const values = new Map<string, unknown>([
+      [
+        'config',
+        { ownerId: '123', ownerLogin: 'ontola', repoName: 'atomic-server' },
+      ],
+      ['count', 42],
+      ['private', false],
+      ['issues', true],
+      ['open', 0],
+    ]);
+    const properties = {
+      'syncable-source-config': 'config',
+      'syncable-repository-count': 'count',
+      'syncable-repository-private': 'private',
+      'syncable-repository-has-issues': 'issues',
+      'syncable-repository-open-issues': 'open',
+    };
+    const resource = {
+      get: (property: string) => values.get(property),
+    } as Parameters<typeof githubDirectoryValues>[0];
+    expect(githubDirectoryValues(resource, properties)).toMatchObject({
+      ownerId: '123',
+      ownerLogin: 'ontola',
+      repoName: 'atomic-server',
+      repositories: 42,
+      private: false,
+      hasIssues: true,
+      openIssues: 0,
+    });
+    values.set('open', -1);
+    values.set('count', Number.NaN);
+    values.set('private', 'false');
+    expect(githubDirectoryValues(resource, properties)).toMatchObject({
+      repositories: undefined,
+      private: undefined,
+      openIssues: undefined,
+    });
+    expect(githubDirectoryValues(resource, undefined)).toMatchObject({
+      repositories: undefined,
+      private: undefined,
+      hasIssues: undefined,
+      openIssues: undefined,
+    });
+  });
 
+  it('refuses an out-of-drive table', async () => {
+    const { store, resources, table } = await setup();
     resources.get(table)![DRIVE_PROPERTY] = 'another-drive';
     await expect(githubDirectoryType(store, 'drive', table)).rejects.toThrow(
       'This GitHub table is outside the current drive',

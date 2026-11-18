@@ -6,8 +6,17 @@ on:
       - 'browser/data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx'
       - 'browser/data-browser/src/chunks/PluginRuns/proxyCatalog*'
       - 'browser/data-browser/src/chunks/PluginRuns/syncable*'
-      - 'browser/data-browser/src/chunks/PluginRuns/SyncablesFrame.tsx'
-      - 'browser/data-browser/src/chunks/PluginRuns/SyncablesRuntime*'
+      - 'browser/data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx'
+      - 'browser/data-browser/src/chunks/PluginRuns/builtin*'
+      - 'browser/data-browser/src/chunks/PluginRuns/GitHubDirectoryView*'
+      - 'browser/data-browser/src/chunks/AppPage/AppFrame*'
+      - 'browser/data-browser/src/chunks/AppPage/AppExecution*'
+      - 'browser/data-browser/src/chunks/AppPage/hostStore*'
+      - 'browser/data-browser/src/chunks/AppPage/viewClient.js'
+      - 'browser/plugin/src/*'
+      - 'browser/lib/src/plugin-apply*'
+      - 'browser/lib/src/plugin-run.integration.test.ts'
+      - 'browser/lib/src/resource.ts'
       - 'browser/data-browser/src/chunks/PluginRuns/github*'
       - 'browser/data-browser/src/chunks/TablePage/**'
       - 'browser/data-browser/src/helpers/proxyConnections*'
@@ -52,7 +61,13 @@ jobs:
         run: pnpm --filter @tomic/e2e typecheck
       - name: Test built-in Syncables unit specs
         working-directory: browser
-        run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncableHierarchy.test.ts src/chunks/PluginRuns/syncablesHost.test.ts src/chunks/PluginRuns/syncablesNavigation.test.ts src/chunks/PluginRuns/SyncablesFrame.test.ts src/chunks/PluginRuns/SyncablesRuntime.test.ts src/chunks/PluginRuns/githubViews.test.ts src/chunks/PluginRuns/githubDirectory.test.ts src/chunks/TablePage/TableViewTabs.test.tsx src/chunks/PluginRuns/syncablesProxyScope.test.ts src/chunks/PluginRuns/proxyCatalog.test.ts src/helpers/proxyConnections.test.ts src/chunks/AppPage/ProxyConnectReturn.test.tsx
+        run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncableHierarchy.test.ts src/chunks/PluginRuns/syncablesNavigation.test.ts src/chunks/PluginRuns/githubViews.test.ts src/chunks/PluginRuns/githubDirectory.test.ts src/chunks/TablePage/TableViewTabs.test.tsx src/chunks/PluginRuns/proxyCatalog.test.ts src/chunks/PluginRuns/builtinSyncablesProfile.test.ts src/chunks/PluginRuns/builtinSyncApp.test.ts src/chunks/PluginRuns/GitHubDirectoryView.test.tsx src/chunks/AppPage/AppExecutionRuntime.test.ts src/chunks/AppPage/AppFrameProfile.test.tsx src/chunks/AppPage/hostStoreProfile.test.ts src/chunks/AppPage/hostStore.test.ts src/chunks/AppPage/viewClient.test.ts src/helpers/proxyConnections.test.ts src/chunks/AppPage/ProxyConnectReturn.test.tsx
+      - name: Test shared bridge client protocol
+        working-directory: browser
+        run: pnpm --filter @tomic/plugin exec vitest run src/store.test.ts src/viewProtocol.test.ts
+      - name: Test shared Store write authority
+        working-directory: browser
+        run: pnpm --filter @tomic/lib exec vitest run src/plugin-run.integration.test.ts src/plugin-apply.test.ts src/resource.test.ts
       - name: Validate sandbox module JavaScript syntax
         run: node --check server/src/handlers/builtin_syncables.js
 

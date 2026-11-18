@@ -16,6 +16,7 @@ let nextId = 0;
 /** The host refuses larger `getMany` batches; say so before asking. */
 const MAX_GET_MANY = 100;
 const pending = new Map();
+let proxyTransport;
 
 window.addEventListener('message', event => {
   if (event.source !== window.parent) return;
@@ -272,7 +273,18 @@ export const store = {
 
   /** `{ subject, agent }`: what this view shows, and who is looking. */
   async getContext() {
-    return send('context', {});
+    const context = await send('context', {});
+    proxyTransport = context?.proxyTransport;
+
+    return context;
+  },
+
+  /** Manage the foreground execution selected by this host and resource. */
+  async execution(action) {
+    if (!['start', 'state', 'cancel'].includes(action))
+      throw new Error('Unknown view execution action');
+
+    return send('execution', { action });
   },
 
   /**
@@ -520,8 +532,11 @@ export const store = {
      * one, the page goes to the proxy and back, reloading this view, so the
      * promise does not settle; if they cancel, `{ status: 'cancelled' }`.
      */
-    async connect({ platform }) {
-      return send('proxyConnect', { platform });
+    async connect({ platform, connectionId }) {
+      return send('proxyConnect', {
+        platform,
+        ...(connectionId ? { connectionId } : {}),
+      });
     },
   },
 };
@@ -705,6 +720,24 @@ async function proxyRequest({
     throw new Error('A GET proxy request has no body');
   if (ifMatch !== undefined && typeof ifMatch !== 'string')
     throw new Error('Invalid If-Match');
+
+  if (proxyTransport === 'host') {
+    const response = await send('proxyFetch', {
+      platform,
+      connectionId,
+      path,
+      method: verb,
+      query,
+      body,
+      ifMatch,
+    });
+
+    return {
+      status: response.status,
+      headers: response.headers ?? {},
+      body: parseBody(response.text),
+    };
+  }
 
   const attempt = async fresh => {
     const cap = await capabilityFor(platform, connectionId, fresh);

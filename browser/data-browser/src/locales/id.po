@@ -1864,6 +1864,7 @@ msgstr "Atur apakah sumber daya ini muncul di Favorit Anda."
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
@@ -5201,6 +5202,7 @@ msgid "Button says"
 msgstr "Teks tombol"
 
 #: src/actions/runAction.ts
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/IntegrationActions.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Action"
@@ -5986,6 +5988,7 @@ msgstr "Masukan <0/>"
 msgid "Email for a reply (optional) <0/>"
 msgstr "Email untuk balasan (opsional) <0/>"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/components/Drives/PrivateDriveBadge.tsx
 msgid "Private"
 msgstr "Pribadi"
@@ -8622,6 +8625,7 @@ msgstr "Peran untuk orang yang bergabung melalui tautan"
 msgid "Copy invite link"
 msgstr "Salin tautan undangan"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Owner"
 msgstr "Pemilik"
@@ -8667,6 +8671,7 @@ msgstr "Dapat menulis"
 msgid "Can read"
 msgstr "Dapat membaca"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/components/Share/PublicAccess.tsx
 msgid "Public"
 msgstr "Publik"
@@ -8883,7 +8888,6 @@ msgstr "{0} Terbuka"
 msgid "{0} Closed"
 msgstr "{0} Ditutup"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Issue state"
 msgstr "Status masalah"
@@ -13536,6 +13540,7 @@ msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda diki
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
+#: src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
 msgstr "GitHub"
 
@@ -13634,7 +13639,6 @@ msgstr "Asal proksi integrasi"
 msgid "The HTTPS origin of the proxy describing this platform."
 msgstr "Asal HTTPS proksi yang mendeskripsikan platform ini."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Syncable account"
 msgstr "Akun yang dapat disinkronkan"
@@ -13643,6 +13647,8 @@ msgstr "Akun yang dapat disinkronkan"
 msgid "A connected account through which remote collection instances can be discovered."
 msgstr "Akun terhubung yang dapat digunakan untuk menemukan instans koleksi jarak jauh."
 
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
@@ -13691,7 +13697,6 @@ msgstr "Judul masalah"
 msgid "Issue updatedAt"
 msgstr "Waktu pembaruan masalah"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issue URL"
 msgstr "URL masalah"
@@ -13700,10 +13705,12 @@ msgstr "URL masalah"
 msgid "Organizations"
 msgstr "Organisasi"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Repositories"
 msgstr "Repositori"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issues"
 msgstr "Masalah"
@@ -13716,118 +13723,154 @@ msgstr "Batas pembacaan tercapai. Baris lokal tetap disimpan."
 msgid "Sync error"
 msgstr "Kesalahan sinkronisasi"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Mirror status"
-msgstr "Status pencerminan"
+#~ msgid "Mirror status"
+#~ msgstr "Status pencerminan"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Last acknowledged synchronization and pause state."
-msgstr "Status sinkronisasi dan jeda terakhir yang telah dikonfirmasi."
+#~ msgid "Last acknowledged synchronization and pause state."
+#~ msgstr "Status sinkronisasi dan jeda terakhir yang telah dikonfirmasi."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "GitHub issue number"
-msgstr "Nomor masalah GitHub"
+#~ msgid "GitHub issue number"
+#~ msgstr "Nomor masalah GitHub"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Stable issue number within its repository."
-msgstr "Nomor masalah yang tetap dalam repositorinya."
+#~ msgid "Stable issue number within its repository."
+#~ msgstr "Nomor masalah yang tetap dalam repositorinya."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Open or closed at last successful read."
-msgstr "Terbuka atau ditutup pada pembacaan terakhir yang berhasil."
+#~ msgid "Open or closed at last successful read."
+#~ msgstr "Terbuka atau ditutup pada pembacaan terakhir yang berhasil."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Updated at"
-msgstr "Diperbarui pada"
+#~ msgid "Updated at"
+#~ msgstr "Diperbarui pada"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Last GitHub update timestamp."
-msgstr "Stempel waktu pembaruan GitHub terakhir."
+#~ msgid "Last GitHub update timestamp."
+#~ msgstr "Stempel waktu pembaruan GitHub terakhir."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Canonical GitHub issue link."
-msgstr "Tautan kanonis masalah GitHub."
+#~ msgid "Canonical GitHub issue link."
+#~ msgstr "Tautan kanonis masalah GitHub."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Issue body"
-msgstr "Isi masalah"
+#~ msgid "Issue body"
+#~ msgstr "Isi masalah"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "GitHub issue description in Markdown."
-msgstr "Deskripsi masalah GitHub dalam Markdown."
+#~ msgid "GitHub issue description in Markdown."
+#~ msgstr "Deskripsi masalah GitHub dalam Markdown."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable source configuration"
-msgstr "Konfigurasi sumber yang dapat disinkronkan"
+#~ msgid "Syncable source configuration"
+#~ msgstr "Konfigurasi sumber yang dapat disinkronkan"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Non-secret source bindings and selected collection parameters."
-msgstr "Ikatan sumber yang tidak rahasia dan parameter koleksi yang dipilih."
+#~ msgid "Non-secret source bindings and selected collection parameters."
+#~ msgstr "Ikatan sumber yang tidak rahasia dan parameter koleksi yang dipilih."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable resource index"
-msgstr "Indeks sumber daya yang dapat disinkronkan"
+#~ msgid "Syncable resource index"
+#~ msgstr "Indeks sumber daya yang dapat disinkronkan"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Drive-level lookup of synced resources by canonical source key."
-msgstr "Pencarian sumber daya tersinkron pada tingkat drive berdasarkan kunci sumber kanonis."
+#~ msgid "Drive-level lookup of synced resources by canonical source key."
+#~ msgstr "Pencarian sumber daya tersinkron pada tingkat drive berdasarkan kunci sumber kanonis."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable source identity"
-msgstr "Identitas sumber yang dapat disinkronkan"
+#~ msgid "Syncable source identity"
+#~ msgstr "Identitas sumber yang dapat disinkronkan"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
-msgstr "Ikatan kanonis proksi, platform, jenis, dan sumber jarak jauh, terlepas dari induk Atomic."
+#~ msgid "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
+#~ msgstr "Ikatan kanonis proksi, platform, jenis, dan sumber jarak jauh, terlepas dari induk Atomic."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable node kind"
-msgstr "Jenis node yang dapat disinkronkan"
+#~ msgid "Syncable node kind"
+#~ msgstr "Jenis node yang dapat disinkronkan"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Role of this resource in the discovery hierarchy."
-msgstr "Peran sumber daya ini dalam hierarki penemuan."
+#~ msgid "Role of this resource in the discovery hierarchy."
+#~ msgstr "Peran sumber daya ini dalam hierarki penemuan."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Remote owner kind"
-msgstr "Jenis pemilik jarak jauh"
+#~ msgid "Remote owner kind"
+#~ msgstr "Jenis pemilik jarak jauh"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Whether this owner namespace is an organization or personal account."
-msgstr "Menunjukkan apakah ruang nama pemilik ini merupakan organisasi atau akun pribadi."
+#~ msgid "Whether this owner namespace is an organization or personal account."
+#~ msgstr "Menunjukkan apakah ruang nama pemilik ini merupakan organisasi atau akun pribadi."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "An authorized remote account."
-msgstr "Akun jarak jauh yang telah diotorisasi."
+#~ msgid "An authorized remote account."
+#~ msgstr "Akun jarak jauh yang telah diotorisasi."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable owner namespace"
-msgstr "Ruang nama pemilik yang dapat disinkronkan"
+#~ msgid "Syncable owner namespace"
+#~ msgstr "Ruang nama pemilik yang dapat disinkronkan"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "A remote organization or personal repository owner."
-msgstr "Organisasi jarak jauh atau pemilik repositori pribadi."
+#~ msgid "A remote organization or personal repository owner."
+#~ msgstr "Organisasi jarak jauh atau pemilik repositori pribadi."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable repository"
-msgstr "Repositori yang dapat disinkronkan"
+#~ msgid "Syncable repository"
+#~ msgstr "Repositori yang dapat disinkronkan"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "A repository within its canonical remote owner namespace."
-msgstr "Repositori dalam ruang nama kanonis pemilik jarak jauhnya."
+#~ msgid "A repository within its canonical remote owner namespace."
+#~ msgstr "Repositori dalam ruang nama kanonis pemilik jarak jauhnya."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable record"
-msgstr "Rekaman yang dapat disinkronkan"
+#~ msgid "Syncable record"
+#~ msgstr "Rekaman yang dapat disinkronkan"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "A record mirrored from a selected remote collection."
-msgstr "Rekaman yang dicerminkan dari koleksi jarak jauh yang dipilih."
+#~ msgid "A record mirrored from a selected remote collection."
+#~ msgstr "Rekaman yang dicerminkan dari koleksi jarak jauh yang dipilih."
 
 #: src/chunks/AppPage/ProxyConnectReturn.tsx
 msgid "Return to the app"
 msgstr "Kembali ke aplikasi"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Organization"
 msgstr "Organisasi"
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This view cannot connect an account"
+msgstr "Tampilan ini tidak dapat menghubungkan akun"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Loading stored rows…"
+msgstr "Memuat baris tersimpan…"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Owner namespace"
+msgstr "Ruang nama pemilik"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Repository"
+msgstr "Repositori"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Open issues + PRs"
+msgstr "Issue terbuka + pull request"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Kind"
+msgstr "Jenis"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "No stored rows yet. Use Sync to refresh GitHub."
+msgstr "Belum ada baris tersimpan. Gunakan Sinkronisasi untuk memperbarui GitHub."
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "GitHub Organizations"
+msgstr "Organisasi GitHub"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "GitHub Repositories"
+msgstr "Repositori GitHub"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Personal owner"
+msgstr "Pemilik pribadi"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Unknown"
+msgstr "Tidak diketahui"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Available"
+msgstr "Tersedia"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Disabled in GitHub"
+msgstr "Dinonaktifkan di GitHub"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Sync issues"
+msgstr "Sinkronkan issue"
+
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "Opening Sync…"
+msgstr "Membuka Sinkronisasi…"

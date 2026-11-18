@@ -16,7 +16,8 @@ import type { CellIndex } from '@chunks/TableEditor';
 import toast from 'react-hot-toast';
 import { styled } from 'styled-components';
 import { AppFrame } from '@chunks/AppPage/AppFrame';
-import { SyncablesFrame } from '@chunks/PluginRuns/SyncablesFrame';
+import { BuiltinSyncablesApp } from '@chunks/PluginRuns/BuiltinSyncablesApp';
+import { GitHubDirectoryView } from '@chunks/PluginRuns/GitHubDirectoryView';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
 import { useHandleClearCells } from '@chunks/TablePage/helpers/useHandleClearCells';
 import { useHandleColumnResize } from '@chunks/TablePage/helpers/useHandleColumnResize';
@@ -221,9 +222,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   const showsRows =
     appView === undefined &&
     viewKind !== 'dashboard' &&
-    viewKind !== 'syncables' &&
-    viewKind !== 'github-organizations' &&
-    viewKind !== 'github-repositories';
+    viewKind !== 'syncables';
 
   // The visible stored columns, each language of a split column on its own:
   // what the quick filter reads a row's text from.
@@ -1595,16 +1594,22 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 table={resource.subject}
               />
             </AppViewWrapper>
-          ) : viewKind === 'syncables' ||
-            viewKind === 'github-organizations' ||
-            viewKind === 'github-repositories' ? (
+          ) : viewKind === 'syncables' ? (
             <AppViewWrapper>
-              <SyncablesFrame
+              <BuiltinSyncablesApp
                 table={resource.subject}
                 drive={(getTableDrive(store, resource) ?? store.getDrive())!}
-                presentation={viewKind === 'syncables' ? 'sync' : 'directory'}
               />
             </AppViewWrapper>
+          ) : viewKind === 'github-organizations' ||
+            viewKind === 'github-repositories' ? (
+            <GitHubDirectoryView
+              table={resource.subject}
+              drive={(getTableDrive(store, resource) ?? store.getDrive())!}
+              kind={viewKind}
+              collection={rowCollection}
+              ready={ready}
+            />
           ) : viewKind === 'dashboard' && embedded ? (
             // A dashboard inside a dashboard block would render itself again,
             // forever. Say so instead of hanging the page.

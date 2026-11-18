@@ -31,6 +31,8 @@ export type ShowRouteSearch = {
    */
   view?: string;
   editColumn?: string;
+  /** Explicit row selected by a stored-data view for the Sync app. */
+  syncRow?: string;
 };
 
 export const ShowRoute = createRoute({
@@ -45,6 +47,11 @@ export const ShowRoute = createRoute({
         : undefined,
     view: (search.view as string) || undefined,
     editColumn: (search.editColumn as string) || undefined,
+    syncRow:
+      typeof search.syncRow === 'string' &&
+      Client.isValidSubject(search.syncRow)
+        ? search.syncRow
+        : undefined,
   }),
 });
 

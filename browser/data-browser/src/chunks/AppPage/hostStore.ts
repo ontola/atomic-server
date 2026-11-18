@@ -12,7 +12,50 @@ import {
   errorMessageFromResponse,
   signRequest,
 } from '@tomic/react';
-import { readSchema, schemaValue } from '@tomic/lib';
+import { applyHostFromStore, readSchema, schemaValue } from '@tomic/lib';
+import type { ApplyHost, JSONValue } from '@tomic/lib';
+
+/** Authority selected by the mounting host, never supplied by frame messages. */
+export interface HostStoreProfile {
+  context?: Record<string, unknown>;
+  access: {
+    root: string;
+    signal?: AbortSignal;
+    assertCurrent: () => void;
+  };
+  execution?: (action: 'start' | 'state' | 'cancel') => Promise<unknown>;
+}
+
+export function assertHostProfile(profile?: HostStoreProfile): void {
+  profile?.access.signal?.throwIfAborted();
+  profile?.access.assertCurrent();
+}
+
+/** Pin the actor and server in addition to the host's source validation. */
+export function bindHostProfile(
+  store: Store,
+  profile: HostStoreProfile,
+  signal?: AbortSignal,
+): HostStoreProfile {
+  const actor = store.getAgent();
+  const server = store.getServerUrl();
+
+  return {
+    ...profile,
+    access: {
+      ...profile.access,
+      signal:
+        signal && profile.access.signal
+          ? AbortSignal.any([signal, profile.access.signal])
+          : (signal ?? profile.access.signal),
+      assertCurrent: () => {
+        profile.access.assertCurrent();
+        if (store.getAgent() !== actor || store.getServerUrl() !== server)
+          throw new Error('This view session is no longer current');
+      },
+    },
+  };
+}
 
 /**
  * Answers the data requests an app's view makes.
@@ -55,6 +98,10 @@ export interface HostRequest {
   args?: unknown;
   /** `getMany`: the subjects to read, in order. Checked, since the frame sends it. */
   subjects?: unknown;
+  path?: string;
+  query?: unknown;
+  ifMatch?: string;
+  action?: unknown;
 }
 
 /**
@@ -110,8 +157,42 @@ export async function handleRequest(
   proxy?: ProxyHost,
   /** This frame's `apply` and `undo` history. */
   changes?: ViewChanges,
+  profile?: HostStoreProfile,
 ): Promise<unknown> {
+  assertHostProfile(profile);
+  const result = await handleOperation(
+    store,
+    app,
+    drive,
+    request,
+    table,
+    proxy,
+    changes,
+    profile,
+  );
+  assertHostProfile(profile);
+
+  return result;
+}
+
+async function handleOperation(
+  ...args: Parameters<typeof handleRequest>
+): Promise<unknown> {
+  const [store, app, drive, request, table, proxy, changes, profile] = args;
+
   switch (request.op) {
+    case 'execution': {
+      if (!profile?.execution)
+        throw new Error('This host cannot manage view execution');
+      const { action } = request;
+      if (action !== 'start' && action !== 'state' && action !== 'cancel')
+        throw new Error('Unknown view execution action');
+      const result = await profile.execution(action);
+      assertHostProfile(profile);
+
+      return result;
+    }
+
     case 'apply':
       if (!changes) throw new Error('This host cannot apply changes.');
 
@@ -131,9 +212,12 @@ export async function handleRequest(
       // The table it was pointed at, if any, and its own otherwise. So one
       // app can be its own thing on its own page and a view of someone
       // else's rows on a table tab, without knowing which it is.
-      const resource = await store.getResource(app);
-      const schema = await readSchema(store, drive);
-      const value = await schemaValue(store, schema, resource, 'app-data');
+      const resource = profile ? undefined : await store.getResource(app);
+      const schema = profile ? undefined : await readSchema(store, drive);
+      const value =
+        resource && schema
+          ? await schemaValue(store, schema, resource, 'app-data')
+          : undefined;
       const own = typeof value === 'string' && value ? value : undefined;
       const subject = table ?? own;
 
@@ -146,7 +230,9 @@ export async function handleRequest(
       // A table an importer's Set up created together with others (a
       // manifest `destination.tables`): its siblings, by the keys the
       // manifest declared, so a view of transactions can find statements.
-      const tables = await destinationTablesFor(store, drive, subject);
+      const tables = profile
+        ? undefined
+        : await destinationTablesFor(store, drive, subject);
 
       return {
         table: subject,
@@ -199,6 +285,7 @@ export async function handleRequest(
       return await runViewQuery(
         store,
         parseViewQuery(request as unknown as Record<string, unknown>),
+        profile ? drive : undefined,
       );
 
     case 'search':
@@ -209,6 +296,7 @@ export async function handleRequest(
 
     case 'context':
       return {
+        ...profile?.context,
         subject: table ?? app,
         agent: store.getAgent()?.subject,
       };
@@ -216,16 +304,22 @@ export async function handleRequest(
     case 'create': {
       // Defaulting the parent to the app is not a convenience: it is the one
       // place a view may always write, so it is the only sensible default.
-      const parent = request.parent ?? app;
+      const parent = request.parent ?? profile?.access.root ?? app;
 
-      await refuseOutsideApp(store, parent, app);
+      await authorizeViewWrite(store, parent, app, profile);
 
-      const { subject } = await writeAsApp(store, drive, app, {
-        op: 'create',
-        parent,
-        isA: request.isA ?? [],
-        propVals: request.propVals ?? {},
-      });
+      const { subject } = await writeAsApp(
+        store,
+        drive,
+        app,
+        {
+          op: 'create',
+          parent,
+          isA: request.isA ?? [],
+          propVals: request.propVals ?? {},
+        },
+        profile,
+      );
 
       const created = await store.getResource(subject);
 
@@ -235,7 +329,7 @@ export async function handleRequest(
     case 'save': {
       const subject = required(request.subject, 'subject');
 
-      await refuseOutsideApp(store, subject, app);
+      await authorizeViewWrite(store, subject, app, profile);
 
       // `save` on the server only sets, so a property the view removed goes
       // as its own write. Without this, `resource.remove(p).save()` left `p`
@@ -247,19 +341,31 @@ export async function handleRequest(
       );
 
       if (removed.length) {
-        await writeAsApp(store, drive, app, {
-          op: 'remove',
-          subject,
-          properties: removed,
-        });
+        await writeAsApp(
+          store,
+          drive,
+          app,
+          {
+            op: 'remove',
+            subject,
+            properties: removed,
+          },
+          profile,
+        );
       }
 
-      await writeAsApp(store, drive, app, {
-        op: 'save',
-        subject,
-        propVals: request.propVals ?? {},
-      });
-      await refresh(store, subject);
+      await writeAsApp(
+        store,
+        drive,
+        app,
+        {
+          op: 'save',
+          subject,
+          propVals: request.propVals ?? {},
+        },
+        profile,
+      );
+      if (!profile) await refresh(store, subject);
 
       return { subject };
     }
@@ -267,8 +373,8 @@ export async function handleRequest(
     case 'destroy': {
       const subject = required(request.subject, 'subject');
 
-      await refuseOutsideApp(store, subject, app);
-      await destroyAsApp(store, drive, app, subject);
+      await authorizeViewWrite(store, subject, app, profile);
+      await destroyAsApp(store, drive, app, subject, profile);
 
       return { subject };
     }
@@ -294,6 +400,13 @@ export async function handleRequest(
     case 'proxyFetch': {
       if (!proxy)
         throw new Error('This host cannot reach the integration proxy.');
+
+      if (proxy.request) {
+        const response = await proxy.request(request, profile?.access.signal);
+        assertHostProfile(profile);
+
+        return response;
+      }
 
       return await proxyFetch(proxy.origin, request);
     }
@@ -350,7 +463,14 @@ export function appChanges(
   store: Store,
   drive: string,
   app: string,
+  profile?: HostStoreProfile,
 ): ViewChanges {
+  if (profile)
+    return new ViewChanges(store, {
+      authorize: subject => authorizeViewWrite(store, subject, app, profile),
+      writes: userViewWrites(store, profile),
+    });
+
   return new ViewChanges(store, {
     authorize: subject => refuseOutsideApp(store, subject, app),
     writes: {
@@ -402,7 +522,39 @@ async function writeAsApp(
   drive: string,
   app: string,
   request: NativeAppWrite,
+  profile?: HostStoreProfile,
 ): Promise<{ subject: string }> {
+  if (profile) {
+    const writes = userViewWrites(store, profile);
+
+    switch (request.op) {
+      case 'create':
+        return {
+          subject: await writes.create({
+            parent: request.parent ?? profile.access.root,
+            isA: request.isA ?? [],
+            propVals: (request.propVals ?? {}) as Record<string, JSONValue>,
+          }),
+        };
+      case 'save':
+        await writes.set(
+          required(request.subject, 'subject'),
+          (request.propVals ?? {}) as Record<string, JSONValue>,
+        );
+        break;
+      case 'remove':
+        await writes.remove(
+          required(request.subject, 'subject'),
+          request.properties ?? [],
+        );
+        break;
+      case 'destroy':
+        await writes.destroy(required(request.subject, 'subject'));
+    }
+
+    return { subject: required(request.subject, 'subject') };
+  }
+
   // No server: the device's host holds the app's key and signs the write.
   if (store.noServer) {
     return await noServerHost(store).appWrite(drive, app, request);
@@ -448,9 +600,127 @@ async function destroyAsApp(
   drive: string,
   app: string,
   subject: string,
+  profile?: HostStoreProfile,
 ): Promise<void> {
-  await writeAsApp(store, drive, app, { op: 'destroy', subject });
+  await writeAsApp(store, drive, app, { op: 'destroy', subject }, profile);
   store.removeResource(subject);
+}
+
+export async function authorizeViewWrite(
+  store: Store,
+  subject: string,
+  app: string,
+  profile?: HostStoreProfile,
+): Promise<void> {
+  if (!profile) return refuseOutsideApp(store, subject, app);
+  assertHostProfile(profile);
+  if (!(await isWithinApp(store, subject, profile.access.root)))
+    throw new Error(
+      'This view may only write its selected resource and children',
+    );
+  const resource = await store.getResource(subject);
+  if (resource.error) throw resource.error;
+  const [canWrite] = await resource.canWrite(store.getAgent()?.subject);
+  assertHostProfile(profile);
+  if (!canWrite) throw new Error('Write access to this resource is required');
+}
+
+/** Scope policy for the shared user Store writer. No second CRUD adapter. */
+function userViewWrites(store: Store, profile: HostStoreProfile): ApplyHost {
+  const authorize = (subject: string) =>
+    authorizeViewWrite(store, subject, profile.access.root, profile);
+
+  const parentOf = async (values: Record<string, JSONValue>) => {
+    const parent = values[core.properties.parent];
+
+    if (parent !== undefined) {
+      if (typeof parent !== 'string')
+        throw new Error('A parent must be a resource');
+      await authorize(parent);
+    }
+  };
+
+  return applyHostFromStore(store, {
+    assertCurrent: write => {
+      assertHostProfile(profile);
+      if (!write) return;
+      assertCachedWriteScope(
+        store,
+        write.op === 'create' ? write.parent : write.subject,
+        profile.access.root,
+      );
+
+      if (write.op === 'set' || write.op === 'create') {
+        const parent = write.propVals[core.properties.parent];
+        if (typeof parent === 'string')
+          assertCachedWriteScope(
+            store,
+            parent,
+            profile.access.root,
+            write.op === 'set' ? write.subject : undefined,
+          );
+      }
+    },
+    authorize: async write => {
+      if (write.op === 'create') {
+        await authorize(write.parent);
+        await parentOf(write.propVals);
+        if (
+          write.propVals[core.properties.parent] !== undefined &&
+          write.propVals[core.properties.parent] !== write.parent
+        )
+          throw new Error(
+            'The resource parent must match its selected destination',
+          );
+
+        return;
+      }
+
+      await authorize(write.subject);
+
+      if (write.op === 'set') {
+        if (
+          write.subject === profile.access.root &&
+          write.propVals[core.properties.parent] !== undefined
+        )
+          throw new Error('This view cannot move its selected root');
+        await parentOf(write.propVals);
+      }
+
+      if (
+        write.op === 'remove' &&
+        write.properties.includes(core.properties.parent)
+      )
+        throw new Error('This view cannot remove the resource parent');
+    },
+  });
+}
+
+/** Authorization loaded these ancestors. Recheck synchronously after awaited
+ * metadata reads, so a moved row cannot receive a delayed write at its old root. */
+function assertCachedWriteScope(
+  store: Store,
+  subject: string,
+  root: string,
+  forbiddenAncestor?: string,
+) {
+  const seen = new Set<string>();
+  let current: string | undefined = subject;
+
+  for (let depth = 0; current && depth < 12; depth++) {
+    if (current === forbiddenAncestor) break;
+    if (current === root) return;
+    if (seen.has(current)) break;
+    seen.add(current);
+    const resource = store.resources.get(store.normalizeSubject(current));
+    if (!resource || resource.error) break;
+    const parent = resource.get(core.properties.parent);
+    current = typeof parent === 'string' ? parent : undefined;
+  }
+
+  throw new Error(
+    'This view may only write its selected resource and children',
+  );
 }
 
 /**

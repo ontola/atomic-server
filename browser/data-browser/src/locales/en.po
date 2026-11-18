@@ -1864,6 +1864,7 @@ msgstr "Toggle whether this resource appears in your Favorites."
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
@@ -5203,6 +5204,7 @@ msgid "Button says"
 msgstr "Button says"
 
 #: src/actions/runAction.ts
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/IntegrationActions.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Action"
@@ -5988,6 +5990,7 @@ msgstr "Feedback <0/>"
 msgid "Email for a reply (optional) <0/>"
 msgstr "Email for a reply (optional) <0/>"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/components/Drives/PrivateDriveBadge.tsx
 msgid "Private"
 msgstr "Private"
@@ -8624,6 +8627,7 @@ msgstr "Role for people who join with the link"
 msgid "Copy invite link"
 msgstr "Copy invite link"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Owner"
 msgstr "Owner"
@@ -8669,6 +8673,7 @@ msgstr "Can write"
 msgid "Can read"
 msgstr "Can read"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/components/Share/PublicAccess.tsx
 msgid "Public"
 msgstr "Public"
@@ -8886,7 +8891,6 @@ msgstr "{0} Open"
 msgid "{0} Closed"
 msgstr "{0} Closed"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Issue state"
 msgstr "Issue state"
@@ -13544,6 +13548,7 @@ msgstr "Report a bug or suggest an improvement. Your message and optional email 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
+#: src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
 msgstr "GitHub"
 
@@ -13642,7 +13647,6 @@ msgstr "Integration proxy origin"
 msgid "The HTTPS origin of the proxy describing this platform."
 msgstr "The HTTPS origin of the proxy describing this platform."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Syncable account"
 msgstr "Syncable account"
@@ -13651,6 +13655,8 @@ msgstr "Syncable account"
 msgid "A connected account through which remote collection instances can be discovered."
 msgstr "A connected account through which remote collection instances can be discovered."
 
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
@@ -13699,7 +13705,6 @@ msgstr "Issue title"
 msgid "Issue updatedAt"
 msgstr "Issue updatedAt"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issue URL"
 msgstr "Issue URL"
@@ -13708,10 +13713,12 @@ msgstr "Issue URL"
 msgid "Organizations"
 msgstr "Organizations"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Repositories"
 msgstr "Repositories"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Issues"
 msgstr "Issues"
@@ -13724,118 +13731,154 @@ msgstr "Read limit reached. Local rows were retained."
 msgid "Sync error"
 msgstr "Sync error"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Mirror status"
-msgstr "Mirror status"
+#~ msgid "Mirror status"
+#~ msgstr "Mirror status"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Last acknowledged synchronization and pause state."
-msgstr "Last acknowledged synchronization and pause state."
+#~ msgid "Last acknowledged synchronization and pause state."
+#~ msgstr "Last acknowledged synchronization and pause state."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "GitHub issue number"
-msgstr "GitHub issue number"
+#~ msgid "GitHub issue number"
+#~ msgstr "GitHub issue number"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Stable issue number within its repository."
-msgstr "Stable issue number within its repository."
+#~ msgid "Stable issue number within its repository."
+#~ msgstr "Stable issue number within its repository."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Open or closed at last successful read."
-msgstr "Open or closed at last successful read."
+#~ msgid "Open or closed at last successful read."
+#~ msgstr "Open or closed at last successful read."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Updated at"
-msgstr "Updated at"
+#~ msgid "Updated at"
+#~ msgstr "Updated at"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Last GitHub update timestamp."
-msgstr "Last GitHub update timestamp."
+#~ msgid "Last GitHub update timestamp."
+#~ msgstr "Last GitHub update timestamp."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Canonical GitHub issue link."
-msgstr "Canonical GitHub issue link."
+#~ msgid "Canonical GitHub issue link."
+#~ msgstr "Canonical GitHub issue link."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Issue body"
-msgstr "Issue body"
+#~ msgid "Issue body"
+#~ msgstr "Issue body"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "GitHub issue description in Markdown."
-msgstr "GitHub issue description in Markdown."
+#~ msgid "GitHub issue description in Markdown."
+#~ msgstr "GitHub issue description in Markdown."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable source configuration"
-msgstr "Syncable source configuration"
+#~ msgid "Syncable source configuration"
+#~ msgstr "Syncable source configuration"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Non-secret source bindings and selected collection parameters."
-msgstr "Non-secret source bindings and selected collection parameters."
+#~ msgid "Non-secret source bindings and selected collection parameters."
+#~ msgstr "Non-secret source bindings and selected collection parameters."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable resource index"
-msgstr "Syncable resource index"
+#~ msgid "Syncable resource index"
+#~ msgstr "Syncable resource index"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Drive-level lookup of synced resources by canonical source key."
-msgstr "Drive-level lookup of synced resources by canonical source key."
+#~ msgid "Drive-level lookup of synced resources by canonical source key."
+#~ msgstr "Drive-level lookup of synced resources by canonical source key."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable source identity"
-msgstr "Syncable source identity"
+#~ msgid "Syncable source identity"
+#~ msgstr "Syncable source identity"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
-msgstr "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
+#~ msgid "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
+#~ msgstr "Canonical proxy/platform/kind/remote binding, independent of Atomic parent."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable node kind"
-msgstr "Syncable node kind"
+#~ msgid "Syncable node kind"
+#~ msgstr "Syncable node kind"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Role of this resource in the discovery hierarchy."
-msgstr "Role of this resource in the discovery hierarchy."
+#~ msgid "Role of this resource in the discovery hierarchy."
+#~ msgstr "Role of this resource in the discovery hierarchy."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Remote owner kind"
-msgstr "Remote owner kind"
+#~ msgid "Remote owner kind"
+#~ msgstr "Remote owner kind"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Whether this owner namespace is an organization or personal account."
-msgstr "Whether this owner namespace is an organization or personal account."
+#~ msgid "Whether this owner namespace is an organization or personal account."
+#~ msgstr "Whether this owner namespace is an organization or personal account."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "An authorized remote account."
-msgstr "An authorized remote account."
+#~ msgid "An authorized remote account."
+#~ msgstr "An authorized remote account."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable owner namespace"
-msgstr "Syncable owner namespace"
+#~ msgid "Syncable owner namespace"
+#~ msgstr "Syncable owner namespace"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "A remote organization or personal repository owner."
-msgstr "A remote organization or personal repository owner."
+#~ msgid "A remote organization or personal repository owner."
+#~ msgstr "A remote organization or personal repository owner."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable repository"
-msgstr "Syncable repository"
+#~ msgid "Syncable repository"
+#~ msgstr "Syncable repository"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "A repository within its canonical remote owner namespace."
-msgstr "A repository within its canonical remote owner namespace."
+#~ msgid "A repository within its canonical remote owner namespace."
+#~ msgstr "A repository within its canonical remote owner namespace."
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "Syncable record"
-msgstr "Syncable record"
+#~ msgid "Syncable record"
+#~ msgstr "Syncable record"
 
-#: src/chunks/PluginRuns/syncableHierarchy.ts
-msgid "A record mirrored from a selected remote collection."
-msgstr "A record mirrored from a selected remote collection."
+#~ msgid "A record mirrored from a selected remote collection."
+#~ msgstr "A record mirrored from a selected remote collection."
 
 #: src/chunks/AppPage/ProxyConnectReturn.tsx
 msgid "Return to the app"
 msgstr "Return to the app"
 
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/syncablesHost.ts
 msgid "Organization"
 msgstr "Organization"
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This view cannot connect an account"
+msgstr "This view cannot connect an account"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Loading stored rows…"
+msgstr "Loading stored rows…"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Owner namespace"
+msgstr "Owner namespace"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Repository"
+msgstr "Repository"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Open issues + PRs"
+msgstr "Open issues + PRs"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Kind"
+msgstr "Kind"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "No stored rows yet. Use Sync to refresh GitHub."
+msgstr "No stored rows yet. Use Sync to refresh GitHub."
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "GitHub Organizations"
+msgstr "GitHub Organizations"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "GitHub Repositories"
+msgstr "GitHub Repositories"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Personal owner"
+msgstr "Personal owner"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Unknown"
+msgstr "Unknown"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Available"
+msgstr "Available"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Disabled in GitHub"
+msgstr "Disabled in GitHub"
+
+#: src/chunks/PluginRuns/GitHubDirectoryView.tsx
+msgid "Sync issues"
+msgstr "Sync issues"
+
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "Opening Sync…"
+msgstr "Opening Sync…"

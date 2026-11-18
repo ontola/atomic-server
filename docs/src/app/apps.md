@@ -32,7 +32,9 @@ Open the table’s **Sync** view and connect your GitHub account. Choose
 **Browse organizations**, then use **+** to add **GitHub Organizations**.
 Open an organization or your personal owner namespace, and add **GitHub
 Repositories** with **+** on its repositories table. These views show kinds,
-counts and actions for their row types. Select a repository and choose
+counts and actions from stored Atomic rows. Opening or switching back to these
+views makes no GitHub request. To discover changes, open **Sync** and choose
+**Refresh list**. Select a repository and choose
 **Sync issues**. In the resulting Issues table, choose **Sync now** to
 import issues. The **Table** view shows the imported rows. Run Sync again to
 update changed rows. **Pause** keeps the rows in your drive and prevents
@@ -46,7 +48,9 @@ branch reads from GitHub's public API and works without a GitHub account.
 Sync starts from **Sync now** and continues while you browse other views or
 resources in the app. Closing the app stops the run. The **Sync** view contains
 controls and status; the **Table** view follows the stored schema. GitHub custom
-views are optional and can be added wherever their row types are used.
+views are ordinary views of saved data, available even while an import is
+running or GitHub is unavailable. They are optional and can be added wherever
+their row types are used.
 Changes you make in Atomic
 stay in your drive. An interrupted or incomplete import keeps cached issues.
 Moving an Issues table within the same drive keeps its source binding.

@@ -130,6 +130,24 @@ A plugin whose view edits schema (a form builder, a table editor) can declare th
 
 Drive apps follow a stricter rule: they read what the signed-in person can read, and write only under their own app resource, signed by the app's own agent.
 
+### Built-in service apps
+
+Server-bundled Sync apps use the same frame, request protocol and Store APIs.
+Their native host selects a fixed server source and a single collection root.
+Writes use the signed-in person's existing rights, limited to that root and its
+children. The frame cannot choose a wider destination or receive connection keys.
+The host limits proxy reads to the selected service, account and collection.
+
+For hosts that provide execution control, `store.execution('start' | 'state' |
+'cancel')` manages the current collection's run. A run continues across navigation
+inside the app and stops on pause, source or identity changes, or closing the app.
+Hosts without this capability reject execution requests. Account connection still
+requires the native confirmation dialog.
+
+The built-in GitHub Organizations and Repositories views are native views of
+stored Atomic data. They use no frame or provider connection. Refreshing GitHub
+belongs to the separate Sync app.
+
 ### Host UI
 
 Some things a frame cannot do well on its own: a menu is cut off at the frame's edge, and a share dialog or a confirmation should look like the rest of Atomic. `store.ui` asks the Data Browser to draw them with its own components. Each one names your plugin to the person, so a prompt can never pass as the Data Browser's own. One question is open at a time: asking a new one answers the open one as cancelled.
