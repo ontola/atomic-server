@@ -39,7 +39,10 @@ Future<void> _done(WidgetTester tester) async {
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    // Notifications is off by default; these tests turn it on.
+    SharedPreferences.setMockInitialValues({
+      homeHiddenKey: ['drives']
+    });
     ResourceView.serverFactory = () async => throw 'no server in a test';
   });
 
@@ -71,12 +74,12 @@ void main() {
     expect(find.text('99+'), findsOneWidget);
   });
 
-  testWidgets('no notifications: no section and no badge on the tablet',
+  testWidgets('no notifications: an empty section and no badge on the tablet',
       (tester) async {
     _tablet(tester);
     await tester.pumpWidget(_shell(FakeApi()));
     await tester.pumpAndSettle();
-    expect(find.text('Notifications'), findsNothing);
+    expect(find.text('No notifications'), findsOneWidget);
     expect(find.byKey(const Key('notifications-badge')), findsNothing);
     await _done(tester);
   });

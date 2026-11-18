@@ -21,8 +21,9 @@ enum HomeSection {
 }
 
 /// The sections that are panels at the bottom of the home, in the web
-/// sidebar's order (the drives are not one: the current drive's tree is).
+/// sidebar's order.
 const homePanelSections = [
+  HomeSection.drives,
   HomeSection.notifications,
   HomeSection.activity,
   HomeSection.messages,
@@ -36,7 +37,11 @@ typedef HomeSectionEntry = ({HomeSection section, bool hidden, int? count});
 
 /// SharedPreferences keys of the Home layout (per device).
 const homeOrderKey = 'home_sections_order';
-const homeHiddenKey = 'home_sections_hidden';
+const homeHiddenKey = 'home_sections_hidden_v3';
+
+/// Where the hidden sections were kept before Drives and Activity started
+/// out hidden: read once, with those two added.
+const homeLegacyHiddenKey = 'home_sections_hidden';
 const homeCollapsedKey = 'home_sections_collapsed';
 
 /// Which Home sections show, in which order, and which are folded to their
@@ -101,8 +106,12 @@ class HomeLayout {
         collapsed: collapsed ?? this.collapsed,
       );
 
-  /// The layout of a fresh install: every panel closed.
-  static const closed = HomeLayout(collapsed: {
+  /// Off until the person turns them on: the header already switches
+  /// drives, and the activity is busy.
+  static const offByDefault = {HomeSection.drives, HomeSection.activity};
+
+  /// The layout of a fresh install: every panel closed, [offByDefault] off.
+  static const closed = HomeLayout(hidden: offByDefault, collapsed: {
     HomeSection.drives,
     HomeSection.notifications,
     HomeSection.activity,
@@ -142,8 +151,9 @@ class HomeLayout {
     return _with(order: list);
   }
 
-  /// Default order, every section on; folds are kept.
-  HomeLayout reset() => HomeLayout(collapsed: collapsed);
+  /// Default order, the default sections on; folds are kept.
+  HomeLayout reset() =>
+      HomeLayout(hidden: offByDefault, collapsed: collapsed);
 
   bool canMove(HomeSection s, int delta) => _neighbour(s, delta) != null;
 
@@ -173,7 +183,11 @@ class HomeLayout {
       final p = await SharedPreferences.getInstance();
       return HomeLayout.fromNames(
         order: p.getStringList(homeOrderKey),
-        hidden: p.getStringList(homeHiddenKey),
+        hidden: p.getStringList(homeHiddenKey) ??
+            [
+              ...?p.getStringList(homeLegacyHiddenKey),
+              for (final s in fresh.hidden) s.name,
+            ],
         collapsed: p.getStringList(homeCollapsedKey) ??
             [for (final s in fresh.collapsed) s.name],
       );
