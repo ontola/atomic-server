@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer, type ServerHandle } from './server-fixture.js';
 import { Agent } from '../src/agent.js';
-import { Store, StoreEvents, type DriveSyncState } from '../src/store.js';
+import { Store, StoreEvents } from '../src/store.js';
 import { core } from '../src/ontologies/core.js';
 import type { ServerReplicaReceipt } from '../src/server-receipts.js';
 import { NodeClientDb } from '../src/client-db.node.js';
@@ -12,8 +12,8 @@ import type { ClientDbWorker } from '../src/client-db.js';
 import { decodeB64 } from '../src/base64.js';
 import { LoroLoader } from '../src/loro-loader.js';
 
-async function until(check: () => boolean): Promise<void> {
-  const deadline = Date.now() + 25_000;
+async function until(check: () => boolean, timeout = 25_000): Promise<void> {
+  const deadline = Date.now() + timeout;
   while (!check() && Date.now() < deadline) await delay(25);
   expect(check()).toBe(true);
 }
@@ -52,9 +52,11 @@ describe('automatic storage receipts against a real server', () => {
       let httpProbes = 0;
       store.injectFetch(async (input, init) => {
         const response = await fetch(input, init);
+
         if (String(input).endsWith('/storage-receipt')) {
           httpProbes++;
           const request = JSON.parse(String(init?.body));
+
           if (request.subject === heldSubject && !held) {
             held = true;
             // The server has already flushed C1; delay only its response so
@@ -62,6 +64,7 @@ describe('automatic storage receipts against a real server', () => {
             await responseGate;
           }
         }
+
         return response;
       });
 
@@ -125,6 +128,197 @@ describe('automatic storage receipts against a real server', () => {
     60_000,
   );
 
+  it.each(['genesis', 'update'] as const)(
+    'observes a cold %s outbox acceptance without an active save call',
+    async kind => {
+      localStorage.setItem('ws-disconnected', '1');
+      const wasmPath = path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        '../../../wasm/pkg/atomic_wasm_bg.wasm',
+      );
+      const db = new NodeClientDb({ wasmPath, baseUrl: server.serverUrl });
+      await db.init();
+      const agent = await Agent.fromSecret(server.agentSecret);
+      const first = new Store({ serverUrl: server.serverUrl, agent });
+      first.setClientDb(db as unknown as ClientDbWorker);
+      first.setServerConnected(true);
+      let second: Store | undefined;
+
+      try {
+        const drive = await first.ensurePrivateDrive();
+        if (kind === 'genesis') first.setServerConnected(false);
+        const resource = await first.newResource({
+          parent: drive.subject,
+          propVals: { [core.properties.name]: `Cold ${kind}` },
+        });
+        if (kind === 'update') await resource.save();
+        first.setServerConnected(false);
+        if (kind === 'update')
+          await resource.set(core.properties.name, `Queued ${kind}`);
+        expect(await resource.save()).toBe('offline');
+        await first.outbox.flush();
+        await db.flush();
+        const queuedSnapshot = await db.getResourceWithSnapshot(
+          resource.subject,
+        );
+        const queuedDoc = new LoroLoader.Loro.LoroDoc();
+        queuedDoc.import(queuedSnapshot.snapshot!);
+        const queuedVersion = queuedDoc.version().toJSON();
+        queuedDoc.free();
+        first.disconnect();
+
+        second = new Store({ serverUrl: server.serverUrl, agent });
+        second.setClientDb(db as unknown as ClientDbWorker);
+        await second.outbox.whenHydrated();
+        expect(second.resources.has(resource.subject)).toBe(false);
+        const observed: ServerReplicaReceipt[] = [];
+        const saves: unknown[] = [];
+        const sentVersions: Map<string, number>[] = [];
+        const postCommit = second.postCommit.bind(second);
+        vi.spyOn(second, 'postCommit').mockImplementation(
+          (commit, endpoint) => {
+            if (commit.subject === resource.subject && commit.loroUpdate) {
+              sentVersions.push(
+                new Map(
+                  commit.isGenesis
+                    ? LoroLoader.Loro.decodeImportBlobMeta(
+                        commit.loroUpdate,
+                        false,
+                      ).partialEndVersionVector.toJSON()
+                    : second!.resources
+                        .get(resource.subject)!
+                        .getLoroDoc()!
+                        .oplogVersion()
+                        .toJSON(),
+                ),
+              );
+            }
+
+            return postCommit(commit, endpoint);
+          },
+        );
+        second.on(StoreEvents.ServerReplicaReceipt, receipt =>
+          observed.push(receipt),
+        );
+        second.on(StoreEvents.SaveReceipt, receipt => saves.push(receipt));
+        second.setServerConnected(true);
+        // Ordinary reconnect drain, with no Resource.save/saveWithReceipt
+        // invocation in this new Store and no receipt probe from the test.
+        await second.syncDirtyResources();
+        expect(second.outbox.hasPending(resource.subject)).toBe(false);
+
+        const matchesQueued = (receipt: ServerReplicaReceipt) => {
+          if (receipt.observation.barrier?.subject !== resource.subject)
+            return false;
+          const actual = LoroLoader.Loro.VersionVector.decode(
+            decodeB64(receipt.observation.barrier.version!),
+          ).toJSON();
+
+          return [...queuedVersion].every(
+            ([peer, counter]) => (actual.get(peer) ?? 0) >= counter,
+          );
+        };
+
+        await until(() => observed.some(matchesQueued));
+        const receipt = observed.find(matchesQueued)!;
+        expect(sentVersions).toContainEqual(
+          LoroLoader.Loro.VersionVector.decode(
+            decodeB64(receipt.observation.barrier!.version!),
+          ).toJSON(),
+        );
+        expect(receipt.transport).toBe('http');
+        expect(receipt.source).toBeUndefined();
+        expect(receipt.clientAgent).toBe(agent.subject);
+        expect(saves).toEqual([]);
+      } finally {
+        first.disconnect();
+        first.setServerConnected(false);
+        second?.disconnect();
+        second?.setServerConnected(false);
+        localStorage.removeItem('ws-disconnected');
+      }
+    },
+    60_000,
+  );
+
+  it('observes newly imported stored state without another save or reconnect', async () => {
+    localStorage.removeItem('ws-disconnected');
+    const wasmPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../wasm/pkg/atomic_wasm_bg.wasm',
+    );
+    const db = new NodeClientDb({ wasmPath, baseUrl: server.serverUrl });
+    await db.init();
+    const agent = await Agent.fromSecret(server.agentSecret);
+    const observer = new Store({ serverUrl: server.serverUrl, agent });
+    observer.setClientDb(db as unknown as ClientDbWorker);
+    const writer = new Store({ serverUrl: server.serverUrl, agent });
+    const observed: ServerReplicaReceipt[] = [];
+    observer.on(StoreEvents.ServerReplicaReceipt, receipt =>
+      observed.push(receipt),
+    );
+
+    try {
+      await until(() => observer.serverConnected && writer.serverConnected);
+      const drive = await observer.ensurePrivateDrive();
+      observer.setDrive(drive.subject);
+      await until(() =>
+        observed.some(
+          receipt =>
+            receipt.observation.barrier?.subject === drive.subject &&
+            receipt.transport === 'websocket',
+        ),
+      );
+      const connection = observed.find(
+        receipt => receipt.transport === 'websocket',
+      )!.connectionId;
+      const save = vi.spyOn(observer, 'notifySaveReceipt');
+      const resource = await writer.newResource({
+        parent: drive.subject,
+        propVals: {
+          [core.properties.name]: 'Imported after initial inventory',
+        },
+      });
+      const accepted = await resource.saveWithReceipt();
+      await observer.fetchResourceFromServer(resource.subject);
+      await db.flush();
+      const stored = await db.getResourceWithSnapshot(resource.subject);
+      expect(stored.snapshot?.length).toBeGreaterThan(0);
+      await until(
+        () =>
+          observed.some(
+            receipt =>
+              receipt.observation.barrier?.subject === resource.subject &&
+              receipt.connectionId === connection,
+          ),
+        45_000,
+      );
+      const receipt = observed.find(
+        item =>
+          item.observation.barrier?.subject === resource.subject &&
+          item.connectionId === connection,
+      )!;
+      const target = LoroLoader.Loro.VersionVector.decode(
+        decodeB64(receipt.observation.barrier!.version!),
+      ).toJSON();
+      const acceptedVersion = LoroLoader.Loro.VersionVector.decode(
+        decodeB64(accepted.server!.version!),
+      ).toJSON();
+
+      for (const [peer, counter] of acceptedVersion) {
+        expect(target.get(peer) ?? 0).toBeGreaterThanOrEqual(counter);
+      }
+
+      expect(receipt.source).toBeUndefined();
+      expect(save).not.toHaveBeenCalled();
+    } finally {
+      observer.disconnect();
+      observer.setServerConnected(false);
+      writer.disconnect();
+      writer.setServerConnected(false);
+    }
+  }, 60_000);
+
   it('produces fresh evidence after reconnect without another save', async () => {
     localStorage.removeItem('ws-disconnected');
     const wasmPath = path.resolve(
@@ -136,19 +330,41 @@ describe('automatic storage receipts against a real server', () => {
     const agent = await Agent.fromSecret(server.agentSecret);
     const store = new Store({ serverUrl: server.serverUrl, agent });
     store.setClientDb(db as unknown as ClientDbWorker);
-    const inventories: DriveSyncState[] = [];
-    const compute = store.computeDriveSyncState.bind(store);
-    vi.spyOn(store, 'computeDriveSyncState').mockImplementation(
-      async (...args) => {
-        const state = await compute(...args);
-        inventories.push(state);
-        return state;
+    const inventories: Array<{
+      subject: string;
+      version: Map<string, number>;
+    }> = [];
+    const readSnapshot = db.getResourceWithSnapshot.bind(db);
+    vi.spyOn(db, 'getResourceWithSnapshot').mockImplementation(
+      async subject => {
+        const stored = await readSnapshot(subject);
+
+        if (stored.snapshot) {
+          const doc = new LoroLoader.Loro.LoroDoc();
+
+          try {
+            doc.import(stored.snapshot);
+            inventories.push({
+              subject,
+              version: new Map(
+                [...doc.version().toJSON()].filter(
+                  ([, counter]) => counter > 0,
+                ),
+              ),
+            });
+          } finally {
+            doc.free();
+          }
+        }
+
+        return stored;
       },
     );
     const observed: ServerReplicaReceipt[] = [];
     const off = store.on(StoreEvents.ServerReplicaReceipt, receipt => {
       observed.push(receipt);
     });
+
     try {
       await until(() => store.serverConnected);
       const drive = await store.ensurePrivateDrive();
@@ -182,23 +398,14 @@ describe('automatic storage receipts against a real server', () => {
       // an actual captured inventory, and coverage of the saved operations.
       const target = counters(receipt.observation.barrier!.version!);
       const captured = inventories
-        .filter(state => state.drive === drive.subject)
-        .map(state => {
-          const entries = state.vvs
-            ? Object.entries(state.vvs[resource.subject] ?? {})
-            : state.peers.map(
-                (peer, index) =>
-                  [peer, state.resources[resource.subject]?.[index]] as [
-                    string,
-                    number,
-                  ],
-              );
-          return new Map(entries.filter(([, counter]) => counter > 0));
-        });
+        .filter(state => state.subject === resource.subject)
+        .map(state => state.version);
       expect(captured).toContainEqual(target);
+
       for (const [peer, counter] of counters(saved.server!.version!)) {
         expect(target.get(peer) ?? 0).toBeGreaterThanOrEqual(counter);
       }
+
       expect(receipt.source).toBeUndefined();
     } finally {
       off();

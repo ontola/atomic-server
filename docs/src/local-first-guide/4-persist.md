@@ -298,8 +298,9 @@ before their callers can consume it.
 ## Observe HTTP/WebSocket server receipts
 
 `Store` automatically requests storage evidence from compatible servers after
-finalized saves and for drives being reconciled over WebSocket. Subscribe before
-saving:
+saves and background outbox delivery. While a drive is followed over WebSocket,
+it also checks newly stored versions, including changes received from another
+client and existing state after reconnect. Subscribe before connecting or saving:
 
 ```ts
 import { StoreEvents, evaluateReplicaEvidence } from '@tomic/lib';
@@ -326,6 +327,13 @@ const saved = await book.saveWithReceipt();
 // Call unsubscribe() when this observer is no longer needed.
 ```
 
+No `saveWithReceipt()` call is required to start collection: ordinary `save()`
+and delivery of previously queued edits use the same producer. A queued save's
+original return value remains unchanged; later server evidence arrives through
+the event. Stored-state collection reads the client database rather than unsaved
+editor state. Several edits may coalesce before collection, so the event stream
+does not promise a receipt for every intermediate version.
+
 The exported `ServerReplicaReceipt` includes the immutable `observation`, optional
 local `source` identity, `endpoint`, `serverOrigin`, actual `transport` (`http` or
 `websocket`), `clientAgent`, `identityGeneration`, `databaseGeneration`, and
@@ -344,13 +352,21 @@ acceptance; `SaveReceipt.server` does not become a disk-flush guarantee.
 
 Receipt work is bounded and best effort (128 queued targets, four concurrent
 requests, six-second deadlines and three attempts per target). Reconciliation
-inventories are visited in rotating slices. It runs separately from save completion;
+inventories are refreshed and visited in rotating slices: at most 16 followed
+drives, eight stored snapshots per slice and one in-flight scan per database.
+A stalled database read cannot accumulate more scans. It runs separately from save completion;
 unsupported servers, authorization refusals, missing state or failed barriers
 produce no positive evidence. Account/database replacement and connection changes
 discard stale requests. Applications do not issue probes, and absence of an event
 does not prove replication failed. Observations are historical, with no replay or
 retention ledger. They cover resource state, not attachment bytes, keys, physical
 device independence, future retention or complete backup recovery.
+
+Browser WebSocket authentication is serialized. Raw, failed or unmatched
+authentication exchanges can leave an acknowledgement ambiguous because
+`AUTH_OK` has no request identifier. Such a connection stops producing receipt
+evidence until reconnect; ordinary commit acknowledgements remain a separate
+contract.
 
 ### Native WebSocket and Flutter clients
 

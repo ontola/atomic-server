@@ -278,6 +278,22 @@ function shortPropName(url: string): string {
 export class WSClient {
   private readonly receiptInstance = randomUUID();
   private receiptEpoch = 0;
+  private receiptAuthGeneration: number | undefined;
+  private receiptAuthPoisoned = false;
+  private receiptAuthAttempt:
+    | {
+        generation: number;
+        signal: AbortSignal;
+        sent: boolean;
+        acknowledged: boolean;
+      }
+    | undefined;
+
+  private poisonReceiptAuthentication(): void {
+    this.receiptAuthPoisoned = true;
+    this.receiptAuthGeneration = undefined;
+    this.rejectStorageReceipts();
+  }
   private pendingReceipts = new Map<
     string,
     {
@@ -302,6 +318,8 @@ export class WSClient {
   public getStorageReceiptSession(): string | undefined {
     if (
       this._closed ||
+      this.receiptAuthPoisoned ||
+      this.receiptAuthGeneration !== this.store.getIdentityGeneration() ||
       this.isAuthenticating ||
       this.readyState !== WebSocket.OPEN ||
       !this.isAuthenticatedAsCurrentAgent() ||
@@ -360,6 +378,7 @@ export class WSClient {
   private openPromise: Promise<void>;
 
   private authenticatedWith: string | undefined;
+  private authenticatedGeneration: number | undefined;
   /** Drives whose `PRESENCE_SUBSCRIBE` is deferred behind `authenticate()` and
    *  not on the wire yet, with the presence updates produced meanwhile. The
    *  server only relays updates from current subscribers, so an update sent
@@ -570,6 +589,9 @@ export class WSClient {
       this.connection.abort(new RequestCancelledError('WebSocket replaced'));
       this.rejectAllPending('WebSocket replaced', true);
       this.connection = new AbortController();
+      this.receiptAuthPoisoned = false;
+      this.receiptAuthGeneration = undefined;
+      this.receiptAuthAttempt = undefined;
       const { signal } = this.connection;
       const ws = new WebSocket(wsURL.toString(), [WS_PROTOCOL]);
       ws.binaryType = 'arraybuffer';
@@ -786,9 +808,25 @@ export class WSClient {
     if (this._closed)
       throw new RequestCancelledError('WebSocket closed by client');
     const agent = this.store.getAgent();
+    const generation = this.store.getIdentityGeneration();
+
+    const checkIdentity = () => {
+      if (
+        this.store.getIdentityGeneration() !== generation ||
+        this.store.getAgent() !== agent
+      )
+        throw new RequestCancelledError(
+          'Account identity changed during authentication',
+        );
+    };
 
     if (!agent?.subject) return;
-    if (this.authenticatedWith === agent.subject && !fetchAll) return;
+    const alreadyAuthenticated = () =>
+      !this.isAuthenticating &&
+      this.authenticatedWith === agent.subject &&
+      this.authenticatedGeneration === generation &&
+      !fetchAll;
+    if (alreadyAuthenticated()) return;
 
     // An in-flight auth might be for a DIFFERENT (e.g. now-stale) agent. Wait
     // for it to settle, then check whether we still need to authenticate as
@@ -797,23 +835,30 @@ export class WSClient {
     // created one) silently keeps the WS bound to the old agent, and the next
     // `ws.fetch(newAgent.subject)` returns 401 because the old agent has no
     // read rights on the new agent's resource.
-    if (this.isAuthenticating) {
+    while (this.isAuthenticating) {
       try {
         await this.authPromise;
       } catch {}
 
-      if (this.authenticatedWith === agent.subject && !fetchAll) return;
+      checkIdentity();
+      if (alreadyAuthenticated()) return;
     }
 
     const { signal } = this.connection;
     signal.throwIfAborted();
     this.isAuthenticating = true;
+    this.authenticatedWith = undefined;
+    this.authenticatedGeneration = undefined;
     this.rejectStorageReceipts();
+    this.receiptAuthGeneration = undefined;
+    const attempt = { generation, signal, sent: false, acknowledged: false };
+    this.receiptAuthAttempt = attempt;
 
     this.authPromise = (async () => {
       try {
         await waitForConnection(this.openPromise, signal);
         signal.throwIfAborted();
+        checkIdentity();
         // The server's CHALLENGE is its first frame; on a current server it
         // has arrived by the time anyone calls `authenticate`. The short wait
         // covers the race, and costs its full length only against a server
@@ -821,6 +866,7 @@ export class WSClient {
         // it expects.
         const nonce = await waitForConnection(this.awaitChallenge(), signal);
         signal.throwIfAborted();
+        checkIdentity();
         const subject = nonce
           ? `${this.serverOrigin}#${nonce}`
           : this.serverOrigin;
@@ -829,6 +875,7 @@ export class WSClient {
           signal,
         );
         signal.throwIfAborted();
+        checkIdentity();
         // Challenge waiting/signing can finish after disconnect(). Never send
         // on that socket or install a new AUTH_OK waiter after close drained it.
         if (this._closed || this.readyState !== WebSocket.OPEN)
@@ -837,41 +884,56 @@ export class WSClient {
           );
 
         const authenticated = this.waitForTag(Tag.AUTH_OK);
-        this.sendBinary(encodeAuth(JSON.stringify(json)));
+        attempt.sent = true;
+        this.sendBinary(encodeAuth(JSON.stringify(json)), true);
 
         // Wait for AUTH_OK — rejected by the close handler if the socket
         // dies mid-handshake, otherwise waits as long as needed.
         await waitForConnection(authenticated, signal);
         signal.throwIfAborted();
+        checkIdentity();
 
         this.authenticatedWith = agent.subject;
+        this.authenticatedGeneration = generation;
+        if (attempt.acknowledged && !this.receiptAuthPoisoned)
+          this.receiptAuthGeneration = generation;
         recordServerVersionFromWsProtocol(
           this.ws.protocol || WS_PROTOCOL,
           this.serverOrigin,
         );
+      } catch (error) {
+        // AUTH_OK has no request id. Once an attempt was sent but failed,
+        // a later ACK cannot safely certify another identity on this socket.
+        if (attempt.sent && !signal.aborted) this.poisonReceiptAuthentication();
+        throw error;
+      } finally {
+        if (this.receiptAuthAttempt === attempt)
+          this.receiptAuthAttempt = undefined;
+        this.isAuthenticating = false;
+      }
 
-        // Re-subscribe to the drive + active Loro sync and ephemeral channels.
-        // `reSubscribeAll` now owns the drive SUB (for both authenticated and
-        // anonymous sessions), so there's no separate `encodeSub` here.
-        this.reSubscribeAll();
+      // Authentication has completed before subscription callbacks re-enter it.
+      // No pending contender can start another exchange until this synchronous
+      // continuation returns, and a callback cannot clear a later attempt's lock.
+      // Re-subscribe to the drive + active Loro sync and ephemeral channels.
+      // `reSubscribeAll` now owns the drive SUB (for both authenticated and
+      // anonymous sessions), so there's no separate `encodeSub` here.
+      this.reSubscribeAll();
 
-        // Refetch resources that had 401 errors
-        if (fetchAll) {
-          // Not awaited: computing the drive's sync state takes seconds on a
-          // large drive, and `authenticate` resolving is what tells the store
-          // the server is connected, so every read waited for it.
-          void this.reconcileSubscribedDrive().catch(() => undefined);
-          // Anything a previous session left without search entries.
-          this.scheduleBackgroundImport();
+      // Refetch resources that had 401 errors
+      if (fetchAll) {
+        // Not awaited: computing the drive's sync state takes seconds on a
+        // large drive, and `authenticate` resolving is what tells the store
+        // the server is connected, so every read waited for it.
+        void this.reconcileSubscribedDrive().catch(() => undefined);
+        // Anything a previous session left without search entries.
+        this.scheduleBackgroundImport();
 
-          for (const resource of this.store.resources.values()) {
-            if (resource.isUnauthorized()) {
-              this.fetch(resource.subject).catch(() => {});
-            }
+        for (const resource of this.store.resources.values()) {
+          if (resource.isUnauthorized()) {
+            this.fetch(resource.subject).catch(() => {});
           }
         }
-      } finally {
-        this.isAuthenticating = false;
       }
     })();
 
@@ -1275,7 +1337,10 @@ export class WSClient {
   }
 
   /** Send a binary frame, logging it in debug mode. */
-  private sendBinary(frame: Uint8Array) {
+  private sendBinary(frame: Uint8Array, managedAuthentication = false) {
+    if (frame[0] === Tag.AUTH && !managedAuthentication)
+      this.poisonReceiptAuthentication();
+
     if (this.debug) {
       logFrame(frame, '→', '#9bf');
     }
@@ -1374,6 +1439,15 @@ export class WSClient {
         // Resolved by waitForTag. The payload is the server's capability
         // list; remember it so features negotiate instead of guessing.
         this._serverCaps = decodeAuthOk(payload);
+        if (
+          this.receiptAuthAttempt?.sent &&
+          !this.receiptAuthAttempt.acknowledged &&
+          !this.receiptAuthAttempt.signal.aborted &&
+          this.receiptAuthAttempt.generation ===
+            this.store.getIdentityGeneration()
+        )
+          this.receiptAuthAttempt.acknowledged = true;
+        else this.poisonReceiptAuthentication();
 
         break;
 
@@ -1717,6 +1791,7 @@ export class WSClient {
                   direct.map(e => e.subject),
                   direct.map(e => e.loroBytes),
                 )
+                .then(() => this.store.refreshServerReceiptTargets())
                 .catch(e =>
                   console.warn('[WS] applying pulled states failed:', e),
                 );
@@ -1893,6 +1968,29 @@ export class WSClient {
     if (drive && this.store.isLiveSyncedDrive(drive)) {
       this.sendBinary(encodeSub(this.wireSubject(drive)));
       this._subscribedDrive = drive;
+      this.followSubscribedDriveReceipts();
+    }
+  }
+
+  private followSubscribedDriveReceipts(): void {
+    const drive = this._subscribedDrive;
+    const session = this.getStorageReceiptSession();
+    if (!drive || !session) return;
+    const current = () =>
+      this.getStorageReceiptSession() === session &&
+      this._subscribedDrive === drive &&
+      this.store.getDrive() === drive &&
+      this.canAutomaticallySyncDrive(drive);
+
+    try {
+      if (current())
+        this.store.followServerReceiptDrive(
+          `${this.serverOrigin}/commit`,
+          drive,
+          current,
+        );
+    } catch {
+      // Optional collection must not change authentication or subscription success.
     }
   }
 
@@ -2294,9 +2392,6 @@ export class WSClient {
   }
 
   private async runVVSync(drive: string, explicit: boolean): Promise<void> {
-    const receiptIdentityGeneration = this.store.getIdentityGeneration();
-    const receiptDatabaseGeneration = this.store.getClientDbGeneration();
-    const receiptSession = this.getStorageReceiptSession();
     if (!explicit && !this.canAutomaticallySyncDrive(drive)) return;
     if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
@@ -2366,17 +2461,7 @@ export class WSClient {
       if (!current() || (!explicit && !this.canAutomaticallySyncDrive(drive)))
         return;
 
-      if (
-        receiptSession &&
-        this.getStorageReceiptSession() === receiptSession &&
-        this.store.getIdentityGeneration() === receiptIdentityGeneration &&
-        this.store.getClientDbGeneration() === receiptDatabaseGeneration
-      ) {
-        this.store.seedServerReceiptTargets(
-          `${this.serverOrigin}/commit`,
-          localState,
-        );
-      }
+      this.followSubscribedDriveReceipts();
 
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });

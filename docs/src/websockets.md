@@ -434,6 +434,13 @@ publishes `StoreEvents.ServerReplicaReceipt`. Its envelope identifies the actual
 server origin, endpoint, HTTP/WS transport and client/session generations. An
 optional source identity is omitted for memory-only clients. HTTP/WS provenance
 depends on origin/transport trust, unlike an Iroh peer's verified QUIC identity.
+Browser collection includes background outbox acceptance and periodically
+refreshed stored state for followed drives, so an application does not need to
+save again or issue a probe after reconnect or a remote edit. Captured targets
+are immutable even when a newer version arrives. Browser AUTH exchanges are
+serialized; ambiguous acknowledgements disable receipt eligibility until a
+fresh socket establishes authentication. Account and database changes invalidate
+pending collection work.
 Receipt requests never change commit acknowledgement semantics, and old clients
 and servers continue ordinary saves and synchronization.
 

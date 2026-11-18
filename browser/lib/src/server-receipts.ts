@@ -196,6 +196,7 @@ interface Target {
   attempts: number;
   next: number;
   active: boolean;
+  followed?: () => boolean;
 }
 
 /** @internal Optional bounded evidence collection; never on the save critical path. */
@@ -210,23 +211,35 @@ export class ServerReceiptRequests {
     string,
     {
       endpoint: string;
-      state: DriveSyncState;
+      drive: string;
       subjects: string[];
       cursor: number;
       next: number;
+      refresh: number;
       current: () => boolean;
     }
   >();
+  private readonly reading = new WeakSet<object>();
   constructor(private readonly store: Store) {}
 
-  reset(): void {
+  reset(preserveFollows = false): void {
     this.epoch++;
     this.targets.clear();
     this.settled.clear();
-    this.seeds.clear();
+
+    if (!preserveFollows) this.seeds.clear();
+    else
+      for (const seed of this.seeds.values()) {
+        seed.subjects = [];
+        seed.cursor = 0;
+        seed.next = 0;
+        seed.refresh = 0;
+      }
+
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
     for (const c of this.controllers) c.abort();
+    this.schedule(0);
   }
 
   observe(receipt: SaveReceipt): void {
@@ -254,68 +267,151 @@ export class ServerReceiptRequests {
     );
   }
 
-  seed(endpoint: string, state: DriveSyncState): void {
-    const transport = this.store.getServerReceiptTransport(endpoint);
-    if (transport?.transport !== 'websocket') return;
+  /** Capture before delivery; invoking after acceptance cannot rebind an old write. */
+  captureAccepted(
+    endpoint: string,
+    drive: string,
+    resource: string,
+    vv: string,
+  ): () => void {
     const epoch = this.epoch;
     const identityGeneration = this.store.getIdentityGeneration();
     const databaseGeneration = this.store.getClientDbGeneration();
-    const key = JSON.stringify([endpoint, state.drive]);
-    this.seeds.set(key, {
-      endpoint,
-      state,
-      subjects: Object.keys(state.vvs ?? state.resources).sort(),
-      cursor: this.seeds.get(key)?.cursor ?? 0,
-      next: 0,
-      current: () =>
-        epoch === this.epoch &&
-        this.store.getIdentityGeneration() === identityGeneration &&
-        this.store.getClientDbGeneration() === databaseGeneration &&
-        transport.current(),
-    });
+    const transport = this.store.getServerReceiptTransport(endpoint);
+
+    return () => {
+      if (
+        epoch !== this.epoch ||
+        identityGeneration !== this.store.getIdentityGeneration() ||
+        databaseGeneration !== this.store.getClientDbGeneration() ||
+        (transport && !transport.current())
+      )
+        return;
+      this.enqueue(endpoint, drive, resource, vv);
+    };
+  }
+
+  follow(endpoint: string, drive: string, current: () => boolean): void {
+    if (!subject(drive) || !current()) return;
+    const key = JSON.stringify([endpoint, drive]);
+    const previous = this.seeds.get(key);
+    this.seeds.set(
+      key,
+      previous
+        ? { ...previous, current }
+        : {
+            endpoint,
+            drive,
+            subjects: [],
+            cursor: 0,
+            next: 0,
+            refresh: 0,
+            current,
+          },
+    );
     while (this.seeds.size > 16)
       this.seeds.delete(this.seeds.keys().next().value!);
     this.schedule(0);
   }
 
+  /** Compatibility hook: reconciliation vectors can include unsaved oplog state.
+   * They identify a drive only; receipt targets are always reread from storage. */
+  seed(endpoint: string, state: DriveSyncState): void {
+    const transport = this.store.getServerReceiptTransport(endpoint);
+    if (transport?.transport !== 'websocket') return;
+    this.follow(endpoint, state.drive, () => transport.current());
+  }
+
+  refresh(): void {
+    for (const seed of this.seeds.values()) {
+      seed.refresh = 0;
+      seed.next = Math.min(seed.next, Date.now() + 1000);
+    }
+
+    this.schedule(0);
+  }
+
   private feedSeeds(): void {
-    for (const [key, seed] of [...this.seeds]) {
+    for (const [key, seed] of this.seeds)
+      if (!seed.current()) this.seeds.delete(key);
+    const db = this.store.getClientDb();
+    if (
+      !db?.getDriveSubjects ||
+      !db.getResourceWithSnapshot ||
+      this.reading.has(db)
+    )
+      return;
+
+    for (const [key, seed] of this.seeds) {
       if (!seed.current()) {
         this.seeds.delete(key);
         continue;
       }
 
-      if (seed.next > Date.now()) continue;
-      if (this.targets.size >= LIMIT) break;
+      if (seed.next > Date.now() || this.targets.size >= LIMIT) continue;
+      const epoch = this.epoch;
+      const identityGeneration = this.store.getIdentityGeneration();
+      const databaseGeneration = this.store.getClientDbGeneration();
+      const expires = Date.now() + TIMEOUT;
+      const current = () =>
+        epoch === this.epoch &&
+        this.store.getClientDb() === db &&
+        this.store.getIdentityGeneration() === identityGeneration &&
+        this.store.getClientDbGeneration() === databaseGeneration &&
+        seed.current() &&
+        this.seeds.get(key) === seed &&
+        Date.now() < expires;
       seed.next = Date.now() + 1000;
-      const { endpoint, state, subjects } = seed;
-      // Rotate both inventories and subjects without advancing past a full queue.
       this.seeds.delete(key);
       this.seeds.set(key, seed);
-
-      for (let i = 0; i < Math.min(32, subjects.length); i++) {
-        if (this.targets.size >= LIMIT) break;
-        const resource = subjects[seed.cursor++ % subjects.length];
-
-        try {
-          const entries = state.vvs
-            ? Object.entries(state.vvs[resource])
-            : state.peers.map(
-                (p, index) =>
-                  [p, state.resources[resource][index]] as [string, number],
-              );
-          if (entries.some(([, c]) => !Number.isSafeInteger(c) || c < 0))
-            continue;
-          const vv = new LoroLoader.Loro.VersionVector(
-            new Map(
-              entries.filter(([, c]) => c > 0) as [`${number}`, number][],
-            ),
-          );
-          this.enqueue(endpoint, state.drive, resource, encodeB64(vv.encode()));
-        } catch {
-          /* Invalid inventory cannot produce evidence. */
+      // Keep the actual worker slot occupied until it settles, even after a
+      // deadline/reset. Repeated timeouts must not flood a stuck worker queue.
+      this.reading.add(db);
+      void (async () => {
+        if (seed.refresh <= Date.now()) {
+          const subjects = await db.getDriveSubjects(seed.drive);
+          if (!current()) return;
+          seed.subjects = [...subjects].sort();
+          seed.cursor %= Math.max(seed.subjects.length, 1);
+          seed.refresh = Date.now() + 30_000;
         }
-      }
+
+        for (let i = 0; i < Math.min(8, seed.subjects.length); i++) {
+          if (!current() || this.targets.size >= LIMIT) return;
+          const resource = seed.subjects[seed.cursor % seed.subjects.length];
+          const { snapshot } = await db.getResourceWithSnapshot(resource);
+          if (!current() || this.targets.size >= LIMIT) return;
+          seed.cursor = (seed.cursor + 1) % seed.subjects.length;
+          if (!snapshot?.length) continue;
+          const doc = new LoroLoader.Loro.LoroDoc();
+
+          try {
+            doc.import(snapshot);
+            // version() is applied state; oplogVersion() can count unresolved dependencies.
+            const entries = [...doc.version().toJSON()]
+              .filter(([, count]) => count > 0)
+              .sort(([a], [b]) => a.localeCompare(b));
+            const vv = new LoroLoader.Loro.VersionVector(new Map(entries));
+            this.enqueue(
+              seed.endpoint,
+              seed.drive,
+              resource,
+              encodeB64(vv.encode()),
+              seed.current,
+            );
+          } catch {
+            /* Missing/incomplete stored state supplies no target. */
+          } finally {
+            doc.free();
+          }
+        }
+      })()
+        .catch(() => undefined)
+        .finally(() => {
+          this.reading.delete(db);
+          this.schedule();
+        });
+      break;
     }
   }
 
@@ -324,6 +420,7 @@ export class ServerReceiptRequests {
     drive: string,
     resource: string,
     vv?: string | null,
+    followed?: () => boolean,
   ): void {
     if (!subject(drive) || !subject(resource) || !version(vv)) return;
     const agent = this.store.getAgent();
@@ -355,11 +452,13 @@ export class ServerReceiptRequests {
       attempts: 0,
       next: 0,
       active: false,
+      followed,
     });
     this.schedule(0);
   }
   private current(target: Target): boolean {
     return (
+      (!target.followed || target.followed()) &&
       target.epoch === this.epoch &&
       this.store.getIdentityGeneration() === target.identityGeneration &&
       this.store.getClientDbGeneration() === target.databaseGeneration &&
