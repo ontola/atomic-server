@@ -852,7 +852,9 @@ void main() {
             for (final row in rows.evaluate()) {
               final f = find.byElementPredicate((e) => e == row);
               final rect = tester.getRect(f);
-              expect(rect.height, greaterThanOrEqualTo(48));
+              // A card at a fractional scroll offset measures 48 dp as
+              // 47.99999999999994 in global coordinates.
+              expect(rect.height, greaterThanOrEqualTo(48 - 1e-6));
               final label = find.descendant(
                   of: f, matching: find.byKey(const Key('kv-label')));
               final value = find.descendant(
