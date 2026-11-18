@@ -1,18 +1,5 @@
-import {
-  Datatype,
-  dataBrowser,
-  server,
-  useArray,
-  useCanWrite,
-  useProperty,
-  useResource,
-  useStore,
-  type Resource,
-  type Server,
-} from '@tomic/react';
-import { lazy, Suspense, useId, useState, type JSX } from 'react';
-import { FaXmark } from 'react-icons/fa6';
-import { styled } from 'styled-components';
+import { server, useStore } from '@tomic/react';
+import { useId, useState, type JSX } from 'react';
 import { Button } from '@components/Button';
 import { ErrorLook } from '@components/ErrorLook';
 import { Column, Row } from '@components/Row';
@@ -23,42 +10,27 @@ import {
   InputWrapper,
   LabelStyled,
 } from '@components/forms/InputStyles';
-import { onboardingKeys } from '@hooks/useOnboardingProgress';
-import { useLocalStorage } from '@hooks/useLocalStorage';
 import { useAccountDriveCatalog } from '@hooks/useAccountDriveCatalog';
 import { useDriveHistory } from '@hooks/useDriveHistory';
 import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import { useSavedDrives } from '@hooks/useSavedDrives';
-import InputSwitcher from '@components/forms/InputSwitcher';
-import { Tag } from '@components/Tag/Tag';
-import { CreateTagRow } from '@components/Tag/CreateTagRow';
-import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { constructOpenURL } from '@helpers/navigation';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { useGettingStartedAgent } from '../../views/Drive/GettingStartedCard';
-import { PluginList } from '../../views/Drive/PluginList';
-import { ExternalAppList } from '../../views/Drive/ExternalAppList';
-import { SettingCheckbox } from './SettingCheckbox';
 import { SettingsSection } from './SettingsSection';
+import { settingsKeywords } from './settingsKeywords';
 
-const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
-
-/** The drives you have, and the configuration of the current one. */
+/** The drives you have. A drive's own configuration is not yours, so it
+ *  lives with the drive (the gear on its page), not here. */
 export function DriveSettings(): JSX.Element {
-  const { drive } = useSettings();
-
   return (
     <SettingsSection
-      label='Drive'
+      label='Drives'
       id='drive'
-      childSearchKeywords='drive drives switch current tags llm instructions ontology browser sync server apps plugins getting started my drives recently visited open url did new'
+      childSearchKeywords={settingsKeywords.drive}
     >
-      {/* No drive switcher: the radio buttons in My drives pick the current
-          drive, and the settings below follow it. */}
       <Column gap='0.75rem'>
         <DriveLists />
-        {drive && <CurrentDriveSettings subject={drive} />}
       </Column>
     </SettingsSection>
   );
@@ -193,188 +165,3 @@ function DriveLists(): JSX.Element {
     </>
   );
 }
-
-/** The drive's configuration. */
-function CurrentDriveSettings({ subject }: { subject: string }): JSX.Element {
-  const drive = useResource<Server.Drive>(subject);
-  const defaultOntologyProp = useProperty(server.properties.defaultOntology);
-  const signalingUrlProp = useProperty(server.properties.signalingUrl);
-  const canEdit = useCanWrite(drive);
-
-  return (
-    <>
-      <GettingStartedSetting drive={drive} canEdit={canEdit} />
-      <SettingsSection label='Tags' initialState>
-        <DriveTagList resource={drive} />
-      </SettingsSection>
-      <SettingsSection label='LLM Instructions' initialState>
-        <p>
-          A short description given to the AI Agent, use this to tell it what
-          this drive is about, link important resources etc.
-        </p>
-        <ValueFormAddButton
-          resource={drive}
-          propertyURL={server.properties.llmTxt}
-          datatype={Datatype.MARKDOWN}
-          buttonLabel='Add LLM instructions'
-        />
-      </SettingsSection>
-      <SettingsSection label='Default Ontology' initialState>
-        <InputSwitcher
-          commit
-          resource={drive}
-          property={defaultOntologyProp}
-          disabled={!canEdit}
-        />
-      </SettingsSection>
-      <SettingsSection label='Browser sync server' initialState>
-        <Column gap='0.75rem'>
-          <p>Server members meet through for free browser sync.</p>
-          <InputSwitcher
-            commit
-            resource={drive}
-            property={signalingUrlProp}
-            disabled={!canEdit}
-          />
-        </Column>
-      </SettingsSection>
-      <ExternalAppList drive={drive.subject} />
-      <SettingsSection label='Plugins' initialState>
-        <Column gap='1rem'>
-          <PluginList drive={drive} />
-          {canEdit && (
-            <Suspense fallback={null}>
-              <NewPluginButton drive={drive} />
-            </Suspense>
-          )}
-        </Column>
-      </SettingsSection>
-    </>
-  );
-}
-
-/** Brings the Getting started card back after Hide; same flag, so they stay in sync. */
-function GettingStartedSetting({
-  drive,
-  canEdit,
-}: {
-  drive: Resource;
-  canEdit: boolean;
-}): JSX.Element | null {
-  const agent = useGettingStartedAgent(drive, canEdit);
-
-  // Keyed by agent: the flag is read once, and the agent may load after mount.
-  return agent ? <ShowGettingStarted key={agent} agent={agent} /> : null;
-}
-
-function ShowGettingStarted({ agent }: { agent: string }): JSX.Element {
-  const [hidden, setHidden] = useLocalStorage(
-    onboardingKeys.hidden(agent),
-    false,
-  );
-
-  return (
-    <SettingsSection label='Getting started' initialState>
-      <SettingCheckbox
-        checked={!hidden}
-        onChange={checked => setHidden(!checked)}
-      >
-        Show Getting started on my drives
-      </SettingCheckbox>
-    </SettingsSection>
-  );
-}
-
-function DriveTagList({ resource }: { resource: Resource }) {
-  const canEdit = useCanWrite(resource);
-  const navigate = useNavigateWithTransition();
-  const [tags, setTags, pushTags] = useArray(
-    resource,
-    dataBrowser.properties.tagList,
-    {
-      commit: true,
-    },
-  );
-
-  const handleDelete = (subject: string) => {
-    setTags(tags.filter(t => t !== subject));
-  };
-
-  const handleNewTag = async (tag: Resource) => {
-    await tag.save();
-    pushTags([tag.subject]);
-  };
-
-  const handleTagClick =
-    (subject: string): React.MouseEventHandler<HTMLAnchorElement> =>
-    e => {
-      e.preventDefault();
-      navigate(constructOpenURL(subject));
-    };
-
-  if (tags.length === 0 && !canEdit) {
-    return null;
-  }
-
-  return (
-    <Column gap='0.75rem'>
-      <Row gap='0.5rem' wrapItems>
-        {tags.map(tag => (
-          <TagItem key={tag}>
-            <TagLink href={constructOpenURL(tag)} onClick={handleTagClick(tag)}>
-              <Tag subject={tag} />
-            </TagLink>
-            {canEdit && (
-              <DeleteTagButton
-                type='button'
-                title='Remove tag'
-                onClick={() => handleDelete(tag)}
-              >
-                <FaXmark />
-              </DeleteTagButton>
-            )}
-          </TagItem>
-        ))}
-      </Row>
-      {canEdit && (
-        <CreateTagRow parent={resource.subject} onNewTag={handleNewTag} />
-      )}
-    </Column>
-  );
-}
-
-const TagItem = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25ch;
-`;
-
-const TagLink = styled.a`
-  text-decoration: none;
-  display: contents;
-`;
-
-const DeleteTagButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2em;
-  border: none;
-  background: transparent;
-  color: ${p => p.theme.colors.textLight};
-  cursor: pointer;
-  border-radius: ${p => p.theme.radius};
-  opacity: 0;
-  font-size: 0.75em;
-
-  ${TagItem}:hover & {
-    opacity: 1;
-  }
-
-  &:hover {
-    color: ${p => p.theme.colors.alert};
-  }
-
-  @media (hover: none) {
-    opacity: 1;
-  }
-`;

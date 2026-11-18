@@ -141,14 +141,15 @@ export const timestamp = () => new Date().toLocaleTimeString();
 // chevron next to the title.
 export const sideBarDriveSwitcher = (page: Page) =>
   page.getByTestId('sidebar').getByTitle('Switch Drive');
-/** Opens the settings page at the current drive's section, from the drive page header. */
+/** Opens the "Drive settings" dialog from the drive page header. */
 export async function openDriveSettings(page: Page) {
   await page.getByTestId('drive-settings-button').click();
-  await expect(page).toHaveURL(/\/app\/settings\?section=drive/);
-  const section = page.locator('#drive');
-  await expect(section.getByText('Plugins', { exact: true })).toBeVisible();
+  const dialog = currentDialog(page);
+  await expect(
+    dialog.getByRole('heading', { name: 'Drive settings' }),
+  ).toBeVisible();
 
-  return section;
+  return dialog;
 }
 
 export const sideBarNewResourceTestId = 'sidebar-new-resource';

@@ -16,6 +16,7 @@ import { LocalNetworkNotice } from './LocalNetworkNotice';
 import { SettingCheckbox, SettingsSection } from '@components/Settings';
 import { WarningBlock } from '@components/WarningBlock';
 import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
+import { settingsKeywords } from '@components/Settings/settingsKeywords';
 
 const ProviderModelSettings = React.lazy(
   () => import('@chunks/AI/ProviderModelSettings'),
@@ -45,9 +46,6 @@ interface CreditUsage {
 const CREDITS_ENDPOINT = 'https://openrouter.ai/api/v1/credits';
 
 // Text that lives in child components, so the section shows for it
-const AI_KEYWORDS =
-  'ai enable features token usage panel sidebar openrouter ollama mcp server generative model chat provider api key local agents skills default voice microphone speech stt transcription privacy retention zdr generate titles follow up prompts temperature context tools system prompt content references transport headers';
-
 const AISettings: React.FC = () => {
   const theme = useTheme();
   const { enabledPanels, enablePanel, disablePanel } = usePanelList();
@@ -103,7 +101,11 @@ const AISettings: React.FC = () => {
   }, [openRouterApiKey]);
 
   return (
-    <SettingsSection label='AI' id='ai' childSearchKeywords={AI_KEYWORDS}>
+    <SettingsSection
+      label='AI'
+      id='ai'
+      childSearchKeywords={settingsKeywords.ai}
+    >
       <Column gap='0.75rem'>
         <SettingCheckbox checked={enableAI} onChange={setEnableAI}>
           Enable AI Features

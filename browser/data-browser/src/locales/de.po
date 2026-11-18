@@ -985,27 +985,27 @@ msgstr "Ressourcen"
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Tags"
 msgstr "Tags"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Add LLM instructions"
 msgstr "LLM-Anweisungen hinzufügen"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "LLM Instructions"
 msgstr "LLM-Anweisungen"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Default Ontology"
 msgstr "Standardontologie"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Plugins"
 msgstr "Plugins"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Remove tag"
 msgstr "Tag entfernen"
 
@@ -3785,7 +3785,7 @@ msgstr "Tippe auf <0>Rückgängig</0> / <1>Wiederholen</1>, um durch Änderungen
 msgid "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
 msgstr "Halte die Rückgängig-Taste gedrückt, um Versionen zu sehen, die du durch Zeichnen nach dem Rückgängigmachen verworfen hast; ziehe über eine Version und lasse los, um sie wiederherzustellen"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "A short description given to the AI Agent, use this to tell it what this drive is about, link important resources etc."
 msgstr "Eine kurze Beschreibung für den KI-Agenten. Erkläre darin den Zweck dieses Laufwerks, verlinke wichtige Ressourcen usw."
 
@@ -5644,7 +5644,9 @@ msgstr "Dein privates Laufwerk wird erstellt …"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Deine Liste konnte nicht aktualisiert werden: Für dieses Konto ist noch kein privates Laufwerk eingerichtet."
 
+#: src/actions/appActions.ts
 #: src/components/Drives/DrivesCard.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Drives"
 msgstr "Laufwerke"
 
@@ -8091,6 +8093,7 @@ msgstr "Enthaltenes Modell verwenden"
 msgid "Agent"
 msgstr "Agent"
 
+#: src/actions/appActions.ts
 #: src/chunks/AI/RealAIChat.tsx
 msgid "AI settings"
 msgstr "KI-Einstellungen"
@@ -10912,7 +10915,6 @@ msgstr "Speicherbelegung"
 msgid "This workspace"
 msgstr "Dieser Arbeitsbereich"
 
-#: src/components/Settings/DriveSettings.tsx
 #: src/helpers/storageMap.ts
 msgid "Drive"
 msgstr "Laufwerk"
@@ -12458,11 +12460,11 @@ msgstr "<0/> Drive-Einstellungen"
 msgid "Nothing here yet."
 msgstr "Noch nichts hier."
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Server, über den Mitglieder für die kostenlose Browser-Synchronisierung zusammenfinden."
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Browser sync server"
 msgstr "Browser-Synchronisierungsserver"
 
@@ -12991,7 +12993,7 @@ msgstr "Deine Arbeit sichern"
 msgid "Sign up with your email, save your secret or connect a device"
 msgstr "Mit deiner E-Mail registrieren, dein Geheimnis aufbewahren oder ein Gerät verbinden"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Getting started"
@@ -13271,7 +13273,7 @@ msgstr "Zu diesem Laufwerk hinzufügen"
 msgid "Or describe what you need"
 msgstr "Oder beschreibe, was du brauchst"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Show Getting started on my drives"
 msgstr "„Erste Schritte“ auf meinen Laufwerken anzeigen"
 
@@ -13509,6 +13511,7 @@ msgstr "Dateien sind enthalten. Sie werden auf diesem Gerät verschlüsselt wie 
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} alte Verlaufsdaten können entfernt werden. Sichtbare Inhalte bleiben erhalten."
 
+#: src/actions/appActions.ts
 #: src/routes/AppSettings.tsx
 msgid "Sync & devices"
 msgstr "Synchronisierung und Geräte"
@@ -13526,7 +13529,68 @@ msgstr "Symbole und Bilder neben Elementen in der Seitenleiste anzeigen"
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Verbrauchte Credits: {0} /{1} {2}"
 
+#: src/actions/appActions.ts
 #: src/components/Settings/AccountSettings.tsx
 #: src/components/Settings/AccountSettings.tsx
 msgid "Account & security"
 msgstr "Konto und Sicherheit"
+
+#: src/actions/appActions.ts
+msgid "Profile settings"
+msgstr "Profileinstellungen"
+
+#: src/actions/appActions.ts
+msgid "Your name, avatar and signing out."
+msgstr "Dein Name, Avatar und Abmelden."
+
+#: src/actions/appActions.ts
+msgid "Sign in, recovery, your plan and this device."
+msgstr "Anmelden, Wiederherstellung, dein Tarif und dieses Gerät."
+
+#: src/actions/appActions.ts
+msgid "Your drives and recently visited ones."
+msgstr "Deine Drives und kürzlich besuchte."
+
+#: src/actions/appActions.ts
+msgid "Where this drive syncs, and connecting a device."
+msgstr "Wo dieser Drive synchronisiert, und ein Gerät verbinden."
+
+#: src/actions/appActions.ts
+msgid "Appearance settings"
+msgstr "Darstellungseinstellungen"
+
+#: src/actions/appActions.ts
+msgid "Theme, colors, language and sidebar."
+msgstr "Design, Farben, Sprache und Seitenleiste."
+
+#: src/actions/appActions.ts
+msgid "Accessibility settings"
+msgstr "Barrierefreiheit"
+
+#: src/actions/appActions.ts
+msgid "Animations and motion."
+msgstr "Animationen und Bewegung."
+
+#: src/actions/appActions.ts
+msgid "Notification settings"
+msgstr "Benachrichtigungseinstellungen"
+
+#: src/actions/appActions.ts
+msgid "What you get notified about."
+msgstr "Worüber du benachrichtigt wirst."
+
+#: src/actions/appActions.ts
+msgid "Models, providers and voice."
+msgstr "Modelle, Anbieter und Sprache."
+
+#: src/actions/appActions.ts
+msgid "Integration settings"
+msgstr "Integrationseinstellungen"
+
+#: src/actions/appActions.ts
+msgid "Proxy, catalog and experimental plugins."
+msgstr "Proxy, Katalog und experimentelle Plugins."
+
+#: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Drive settings"
+msgstr "Drive-Einstellungen"

@@ -24,6 +24,7 @@ import {
   useExtraMarketplaces,
   usePluginCatalogUrl,
 } from '@helpers/pluginCatalogUrl';
+import { settingsKeywords } from './settingsKeywords';
 
 export function IntegrationSettings() {
   const proxy = useIntegrationProxy();
@@ -41,7 +42,7 @@ export function IntegrationSettings() {
     <SettingsSection
       label='Integration'
       id='integration'
-      childSearchKeywords='proxy catalog marketplace server url experimental plugins'
+      childSearchKeywords={settingsKeywords.integration}
     >
       <Column
         gap='1rem'

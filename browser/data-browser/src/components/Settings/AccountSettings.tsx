@@ -21,6 +21,7 @@ import { saveAgentToIDB } from '@helpers/agentStorage';
 import { SettingsSection } from './SettingsSection';
 import { useSettingsSearch } from './SettingsSearch';
 import { SyncSettings } from './SyncSettings';
+import { settingsKeywords } from './settingsKeywords';
 
 /** Two top-level sections: Profile (name, avatar, sign out) and Account &
  *  security (recovery, connected apps, this device). One component because
@@ -121,7 +122,7 @@ export function AccountSettings() {
       <SettingsSection
         label='Account & security'
         id='account'
-        childSearchKeywords='sign in account login log in inloggen aanmelden atomic.place cloud vault cloud server plan subscription abonnement email recovery herstel e-mail credits'
+        childSearchKeywords={settingsKeywords.account}
       >
         <SignInButton />
         <SyncSettings part='account' />
@@ -134,7 +135,7 @@ export function AccountSettings() {
       <SettingsSection
         label='Profile'
         id='profile'
-        childSearchKeywords='profile name avatar picture user agent sign out log out login log in logout log out sign out uitloggen afmelden'
+        childSearchKeywords={settingsKeywords.profile}
       >
         <Column>
           {effectiveAgent.subject?.startsWith('http://localhost') && (
@@ -167,7 +168,7 @@ export function AccountSettings() {
       <SettingsSection
         label='Account & security'
         id='account'
-        childSearchKeywords='account recovery passkey backup agent secret connected apps mcp device lock idle forget login log in sign in inloggen aanmelden atomic.place cloud vault cloud server plan subscription abonnement email recovery herstel e-mail credits'
+        childSearchKeywords={settingsKeywords.account}
       >
         <Column>
           <SyncSettings part='account' />

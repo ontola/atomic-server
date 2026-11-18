@@ -2,6 +2,7 @@ import test, { expect } from './fixtures';
 import {
   before,
   SERVER_URL,
+  currentDialog,
   fillSearchBox,
   inDialog,
   newResource,
@@ -38,7 +39,7 @@ test.describe('Plugins', () => {
     // browser never sees extender-modified propvals.
     await openCurrentDrive(page);
 
-    // Plugins live in the Drive section of the settings page (its sections start open).
+    // Plugins live in the Drive settings dialog (its sections start open).
     const settings = await openDriveSettings(page);
 
     // Upload a plugin
@@ -323,7 +324,8 @@ test.describe('Plugins', () => {
     // The Plugins setting no longer lists the plugin.
     const settingsAfter = await openDriveSettings(page);
     await expect(settingsAfter.getByText('No plugins installed')).toBeVisible();
-    await page.goBack();
+    await page.keyboard.press('Escape');
+    await expect(currentDialog(page)).toBeHidden();
 
     // Check if the custom view is gone.
     await page

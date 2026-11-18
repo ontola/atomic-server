@@ -77,11 +77,14 @@ vi.mock('@components/Row', () => ({
 vi.mock('react-icons/fa6', () => ({
   FaGear: () => <svg />,
 }));
-vi.mock('@hooks/useNavigateWithTransition', () => ({
-  useNavigateWithTransition: () => vi.fn(),
+vi.mock('@components/Dialog/useDialog', () => ({
+  useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
 vi.mock('./GettingStartedCard', () => ({ GettingStartedCard: () => null }));
 vi.mock('./EmptyDriveStart', () => ({ EmptyDriveStart: () => <div /> }));
+vi.mock('./DriveSettingsDialog', () => ({
+  DriveSettingsDialog: () => <div />,
+}));
 vi.mock('./DriveHome', () => ({
   ActivityFeed: () => <div />,
   DrivePeople: () => <div />,

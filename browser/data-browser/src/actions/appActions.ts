@@ -5,6 +5,28 @@ import {
 } from '../components/overlayState';
 import { shortcuts } from './shortcuts';
 import type { ActionDefinition } from './types';
+import {
+  settingsKeywords,
+  type SettingsSectionKey,
+} from '../components/Settings/settingsKeywords';
+
+/** Opens one section of the settings page from ⌘K, found by the same words
+ *  as the settings page's own search. */
+function settingsAction(
+  section: SettingsSectionKey,
+  label: () => string,
+  helper: () => string,
+): ActionDefinition {
+  return {
+    id: `settings-${section}`,
+    scope: 'app',
+    section: 'action',
+    label,
+    helper,
+    keywords: ['settings', ...settingsKeywords[section].split(' ')],
+    run: ctx => ctx.navigate(`${paths.appSettings}?section=${section}`),
+  };
+}
 
 /**
  * App-level actions (no target resource). Their shortcuts used to live only
@@ -80,7 +102,7 @@ export const appActions: ActionDefinition[] = [
     helper: () => 'Open appearance and theme settings.',
     keywords: ['appearance', 'dark', 'light'],
     shortcut: shortcuts.themeSettings,
-    run: ctx => ctx.navigate(paths.appSettings),
+    run: ctx => ctx.navigate(`${paths.appSettings}?section=appearance`),
   },
   {
     id: 'sidebarToggle',
@@ -93,4 +115,49 @@ export const appActions: ActionDefinition[] = [
     available: ctx => !!ctx.toggleSidebar,
     run: ctx => ctx.toggleSidebar?.(),
   },
+  settingsAction(
+    'profile',
+    () => 'Profile settings',
+    () => 'Your name, avatar and signing out.',
+  ),
+  settingsAction(
+    'account',
+    () => 'Account & security',
+    () => 'Sign in, recovery, your plan and this device.',
+  ),
+  settingsAction(
+    'drive',
+    () => 'Drives',
+    () => 'Your drives and recently visited ones.',
+  ),
+  settingsAction(
+    'sync',
+    () => 'Sync & devices',
+    () => 'Where this drive syncs, and connecting a device.',
+  ),
+  settingsAction(
+    'appearance',
+    () => 'Appearance settings',
+    () => 'Theme, colors, language and sidebar.',
+  ),
+  settingsAction(
+    'accessibility',
+    () => 'Accessibility settings',
+    () => 'Animations and motion.',
+  ),
+  settingsAction(
+    'notifications',
+    () => 'Notification settings',
+    () => 'What you get notified about.',
+  ),
+  settingsAction(
+    'ai',
+    () => 'AI settings',
+    () => 'Models, providers and voice.',
+  ),
+  settingsAction(
+    'integration',
+    () => 'Integration settings',
+    () => 'Proxy, catalog and experimental plugins.',
+  ),
 ];

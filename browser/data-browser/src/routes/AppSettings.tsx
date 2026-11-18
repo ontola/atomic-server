@@ -52,6 +52,7 @@ import {
   showSettingsHeader,
   showSettingsSection,
 } from '../embed/settings';
+import { settingsKeywords } from '@components/Settings/settingsKeywords';
 
 /** Touch screens: focusing a field there raises the keyboard. */
 const isTouchDevice = () =>
@@ -174,7 +175,7 @@ const AppSettings: React.FunctionComponent = () => {
               <SettingsSection
                 label='Sync & devices'
                 id='sync'
-                childSearchKeywords='sync devices device backup paired pairing connect another device local database restore offline'
+                childSearchKeywords={settingsKeywords.sync}
               >
                 <Suspense>
                   <SyncSettings requestedDrive={drive} />
@@ -187,7 +188,7 @@ const AppSettings: React.FunctionComponent = () => {
                 id='appearance'
                 // The only section in the embed: open from the start.
                 {...(header ? {} : { open: true, initialState: true })}
-                childSearchKeywords='sidebar icons pictures avatars language locale panels messages favorites shared with me templates ontology aichats hide templates'
+                childSearchKeywords={settingsKeywords.appearance}
               >
                 <Column gap='1rem'>
                   {show('theme') && (
@@ -325,7 +326,7 @@ const AppSettings: React.FunctionComponent = () => {
               <SettingsSection
                 label='Accessibility'
                 id='accessibility'
-                childSearchKeywords='enable disable page transition animations view transitions motion'
+                childSearchKeywords={settingsKeywords.accessibility}
               >
                 <Column gap='0.5rem'>
                   <SettingCheckbox
@@ -348,7 +349,7 @@ const AppSettings: React.FunctionComponent = () => {
               <SettingsSection
                 label='Notifications'
                 id='notifications'
-                childSearchKeywords='notify notifications alerts messages comments replies push'
+                childSearchKeywords={settingsKeywords.notifications}
               >
                 <NotificationSettings />
               </SettingsSection>

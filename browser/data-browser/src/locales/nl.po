@@ -985,27 +985,27 @@ msgstr "Resources"
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Tags"
 msgstr "Tags"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Add LLM instructions"
 msgstr "LLM-instructies toevoegen"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "LLM Instructions"
 msgstr "LLM-instructies"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Default Ontology"
 msgstr "Standaardontologie"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Plugins"
 msgstr "Plugins"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Remove tag"
 msgstr "Tag verwijderen"
 
@@ -3788,7 +3788,7 @@ msgstr "Tik op <0>Ongedaan maken</0> / <1>Opnieuw uitvoeren</1> om door bewerkin
 msgid "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
 msgstr "Houd de knop voor ongedaan maken ingedrukt om versies te zien die je hebt verlaten door na het ongedaan maken te tekenen; sleep naar een versie en laat los om die te herstellen"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "A short description given to the AI Agent, use this to tell it what this drive is about, link important resources etc."
 msgstr "Een korte beschrijving voor de AI-agent. Vertel hiermee waar deze schijf over gaat, link belangrijke resources enzovoort."
 
@@ -5647,7 +5647,9 @@ msgstr "Je privéschijf maken…"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Kan je lijst niet bijwerken: er is nog geen privéschijf ingesteld voor dit account."
 
+#: src/actions/appActions.ts
 #: src/components/Drives/DrivesCard.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Drives"
 msgstr "Schijven"
 
@@ -8094,6 +8096,7 @@ msgstr "Inbegrepen model gebruiken"
 msgid "Agent"
 msgstr "Agent"
 
+#: src/actions/appActions.ts
 #: src/chunks/AI/RealAIChat.tsx
 msgid "AI settings"
 msgstr "AI-instellingen"
@@ -10915,7 +10918,6 @@ msgstr "Waar ruimte naartoe gaat"
 msgid "This workspace"
 msgstr "Deze werkruimte"
 
-#: src/components/Settings/DriveSettings.tsx
 #: src/helpers/storageMap.ts
 msgid "Drive"
 msgstr "Schijf"
@@ -12461,11 +12463,11 @@ msgstr "<0/> Schijfinstellingen"
 msgid "Nothing here yet."
 msgstr "Hier is nog niets."
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Server via welke leden elkaar vinden voor gratis browsersynchronisatie."
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Browser sync server"
 msgstr "Browsersynchronisatieserver"
 
@@ -12994,7 +12996,7 @@ msgstr "Sla je werk op"
 msgid "Sign up with your email, save your secret or connect a device"
 msgstr "Meld je aan met je e-mail, bewaar je geheime sleutel of verbind een apparaat"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "Getting started"
@@ -13274,7 +13276,7 @@ msgstr "Aan deze schijf toevoegen"
 msgid "Or describe what you need"
 msgstr "Of beschrijf wat je nodig hebt"
 
-#: src/components/Settings/DriveSettings.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Show Getting started on my drives"
 msgstr "Aan de slag tonen op mijn schijven"
 
@@ -13512,6 +13514,7 @@ msgstr "Bestanden zijn inbegrepen. Ze worden op dit apparaat versleuteld, net al
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien gaat verloren."
 
+#: src/actions/appActions.ts
 #: src/routes/AppSettings.tsx
 msgid "Sync & devices"
 msgstr "Synchronisatie en apparaten"
@@ -13529,7 +13532,68 @@ msgstr "Toon pictogrammen en afbeeldingen naast items in de zijbalk"
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Gebruikte credits: {0} /{1} {2}"
 
+#: src/actions/appActions.ts
 #: src/components/Settings/AccountSettings.tsx
 #: src/components/Settings/AccountSettings.tsx
 msgid "Account & security"
 msgstr "Account en beveiliging"
+
+#: src/actions/appActions.ts
+msgid "Profile settings"
+msgstr "Profielinstellingen"
+
+#: src/actions/appActions.ts
+msgid "Your name, avatar and signing out."
+msgstr "Je naam, avatar en uitloggen."
+
+#: src/actions/appActions.ts
+msgid "Sign in, recovery, your plan and this device."
+msgstr "Inloggen, herstel, je abonnement en dit apparaat."
+
+#: src/actions/appActions.ts
+msgid "Your drives and recently visited ones."
+msgstr "Je schijven en recent bezochte schijven."
+
+#: src/actions/appActions.ts
+msgid "Where this drive syncs, and connecting a device."
+msgstr "Waar deze schijf mee synchroniseert, en een apparaat verbinden."
+
+#: src/actions/appActions.ts
+msgid "Appearance settings"
+msgstr "Weergave-instellingen"
+
+#: src/actions/appActions.ts
+msgid "Theme, colors, language and sidebar."
+msgstr "Thema, kleuren, taal en zijbalk."
+
+#: src/actions/appActions.ts
+msgid "Accessibility settings"
+msgstr "Toegankelijkheidsinstellingen"
+
+#: src/actions/appActions.ts
+msgid "Animations and motion."
+msgstr "Animaties en beweging."
+
+#: src/actions/appActions.ts
+msgid "Notification settings"
+msgstr "Meldingsinstellingen"
+
+#: src/actions/appActions.ts
+msgid "What you get notified about."
+msgstr "Waarover je een melding krijgt."
+
+#: src/actions/appActions.ts
+msgid "Models, providers and voice."
+msgstr "Modellen, aanbieders en spraak."
+
+#: src/actions/appActions.ts
+msgid "Integration settings"
+msgstr "Integratie-instellingen"
+
+#: src/actions/appActions.ts
+msgid "Proxy, catalog and experimental plugins."
+msgstr "Proxy, catalogus en experimentele plugins."
+
+#: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Drive settings"
+msgstr "Schijfinstellingen"
