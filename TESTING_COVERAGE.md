@@ -236,6 +236,10 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
+Quick-add presentation: `browser/table/src/QuickAddBar.test.tsx` checks the
+existing local serial queue, preservation of newly typed text, and reporting a
+failed request while continuing already accepted submissions.
+
 Plugin discovery: `PluginRuns/pluginCatalog.test.tsx` covers parsing the remote
 plugin catalog, which entries unlock "Show experimental plugins" (entries
 that need API plugins don't), and a remounted hook rendering the cached catalog
