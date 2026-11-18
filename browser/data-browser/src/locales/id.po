@@ -3222,6 +3222,7 @@ msgstr "Cari"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/connectableDrives.ts
+#: src/helpers/driveData.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
@@ -11065,10 +11066,6 @@ msgstr "Dicadangkan {0}"
 msgid "Backed up to {0}"
 msgstr "Dicadangkan ke {0}"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Cadangan terenkripsi data Anda. Hanya Anda yang dapat membacanya."
-
 #: src/components/Settings/SyncSettings.tsx
 msgid "Manage plan"
 msgstr "Kelola paket"
@@ -11561,11 +11558,6 @@ msgstr "Kolom tabel wajib tidak ada dalam formulir ini:{0} {1} . Respons tidak d
 #: src/components/Vault/VaultStorage.tsx
 msgid "Reading what is stored…"
 msgstr "Membaca data yang tersimpan…"
-
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} riwayat lama dan file yang tidak digunakan dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."
 
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
@@ -13477,6 +13469,43 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
 
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# objek cadangan tidak dapat dibaca"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# berkas tidak ada di cadangan"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# berkas tidak dapat dibaca"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Dipulihkan, tetapi tidak semuanya: {0}. Muat ulang halaman untuk melihat apa yang dipulihkan."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Cadangan terenkripsi untuk data dan berkas Anda. Hanya Anda yang dapat membacanya."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Berkas disertakan. Berkas dienkripsi di perangkat ini seperti yang lainnya dan dihitung ke dalam penyimpanan Cloud Vault cadangan ini."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."
+
+#: src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Sinkronisasi dan perangkat"
+
 #: src/routes/AppSettings.tsx
 msgid "Show icons in the sidebar"
 msgstr "Tampilkan ikon di bilah samping"
@@ -13494,7 +13523,3 @@ msgstr "Kredit terpakai: {0} /{1} {2}"
 #: src/components/Settings/AccountSettings.tsx
 msgid "Account & security"
 msgstr "Akun dan keamanan"
-
-#: src/routes/AppSettings.tsx
-msgid "Sync & devices"
-msgstr "Sinkronisasi dan perangkat"

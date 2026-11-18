@@ -7,7 +7,11 @@ import {
   restoreDriveToSnapshot,
   revertDocToSnapshot,
 } from './vaultRestore';
-import { readVaultSnapshot, type VaultCapableDb } from './vault';
+import {
+  readVaultSnapshot,
+  type VaultBlobDb,
+  type VaultCapableDb,
+} from './vault';
 
 vi.mock('loro-crdt', () => import('loro-crdt/nodejs'));
 vi.mock('@tomic/react', async importOriginal => ({
@@ -418,5 +422,167 @@ describe('restoreDriveToSnapshot', () => {
     );
     // The rest still went through.
     expect(s.resources.folder.get(PARENT)).toBe('drive');
+  });
+
+  /**
+   * The snapshot picker ends here (`useVaultBackup.restore(snapshotId)`). The
+   * resources come back from the snapshot's checkpoint, and the file bytes
+   * those resources name come back from the vault's sealed file objects, even
+   * though the plain restore path is not the one running.
+   */
+  it('also brings back the file bytes the snapshot references', async () => {
+    const HASH = 'ab'.repeat(32);
+    const OTHER = 'cd'.repeat(32);
+    const BLOB_ID = 'ee'.repeat(32);
+    const blobKey = `vault/${PSEUDONYM}/blobs/${BLOB_ID}/000000`;
+    const BLOB = 'https://atomicdata.dev/properties/blob';
+    const INTERNAL_ID = 'https://atomicdata.dev/properties/internalId';
+    const snapDocs = {
+      drive: docWith({ [NAME]: 'Drive' }, '1'),
+      file: docWith(
+        {
+          [NAME]: 'photo.png',
+          [PARENT]: 'drive',
+          [BLOB]: `https://example/blob/${HASH}`,
+          [INTERNAL_ID]: HASH,
+        },
+        '2',
+      ),
+    };
+    const state = new Map(
+      Object.entries(snapDocs).map(([k, d]) => [
+        k,
+        d.export({ mode: 'snapshot' }),
+      ]),
+    );
+    const scratch = {
+      vaultImport: vi.fn(async () => ({
+        packsRead: 1,
+        resourcesRestored: 2,
+        tombstonesApplied: 0,
+        objectsSkipped: 0,
+        objectsUnreadable: 0,
+      })),
+      allSubjects: vi
+        .fn()
+        .mockReturnValueOnce(['builtin'])
+        .mockReturnValue(['builtin', 'drive', 'file']),
+      getLoroSnapshot: (s: string) =>
+        state.get(s) ?? (s === 'builtin' ? new Uint8Array([1]) : null),
+      free: vi.fn(),
+    };
+    // The device's drive still has the live resources, but not the file's bytes.
+    const resources = {
+      drive: liveResource('drive', snapDocs.drive),
+      file: liveResource('file', snapDocs.file),
+    };
+    const store = {
+      getResource: async (s: string) => resources[s as never],
+      trash: vi.fn(),
+    };
+    const local = new Map<string, Uint8Array>();
+    const db: VaultCapableDb & VaultBlobDb = {
+      vaultExport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+      vaultImport: vi.fn(),
+      vaultFileHashes: vi.fn(async () => {
+        throw new Error('a snapshot restore wants the snapshot files');
+      }),
+      vaultBlobPresent: vi.fn(async (h: string) => local.has(h)),
+      vaultBlobOpen: vi.fn(),
+      vaultBlobChunk: vi.fn(),
+      vaultBlobClose: vi.fn(),
+      vaultBlobRestore: vi.fn(
+        async (_k, _e, id: string, chunks: Uint8Array[], wanted: string[]) => {
+          // Stands for the Rust open + plain-BLAKE3 match.
+          if (id !== BLOB_ID || !wanted.includes(HASH)) {
+            return { status: 'unreferenced' as const };
+          }
+
+          local.set(HASH, chunks[0]);
+
+          return { status: 'restored' as const, hash: HASH };
+        },
+      ),
+    };
+
+    const keyOf: Record<string, string> = {
+      o2: CKPT_KEY,
+      b0: `vault/${PSEUDONYM}/blobs/${OTHER}/000000`,
+      b1: blobKey,
+    };
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+
+      if (url.endsWith('/state'))
+        return new Response(
+          JSON.stringify({
+            checkpoints: [
+              { id: 'snap-2', checkpoint_n: 2, checkpoint_object_id: 'o2' },
+            ],
+          }),
+        );
+      if (url.endsWith('/objects'))
+        return new Response(
+          JSON.stringify([
+            { object_id: 'o2', object_key: CKPT_KEY, kind: 'checkpoint' },
+            // A file the snapshot never referenced is opened and dropped.
+            {
+              object_id: 'b0',
+              object_key: `vault/${PSEUDONYM}/blobs/${OTHER}/000000`,
+              kind: 'blob',
+            },
+            { object_id: 'b1', object_key: blobKey, kind: 'blob' },
+          ]),
+        );
+
+      if (url.endsWith('/download-urls')) {
+        const ids = JSON.parse(String(init?.body)).object_ids as string[];
+
+        return new Response(
+          JSON.stringify({
+            downloads: ids.map(id => ({
+              object_id: id,
+              object_key: keyOf[id],
+              url: `https://s3.test/${id}`,
+            })),
+          }),
+        );
+      }
+
+      return new Response(
+        new Uint8Array(url.endsWith('/b1') ? [7, 7, 7] : [9, 9]),
+      );
+    });
+
+    const outcome = await restoreDriveToSnapshot({
+      store: store as never,
+      db,
+      drive: 'drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+      keyEpoch: 1,
+      snapshotId: 'snap-2',
+      openScratchDb: async () => scratch,
+      listDriveSubjects: async () => ['drive', 'file'],
+    });
+
+    expect(outcome.blobs).toEqual({
+      restored: 1,
+      present: 0,
+      missing: 0,
+      unreadable: 0,
+    });
+    // Ends with the file's bytes on this device.
+    expect(local.get(HASH)).toBeTruthy();
+    expect(db.vaultBlobRestore).toHaveBeenCalledWith(
+      KEY,
+      1,
+      BLOB_ID,
+      [expect.any(Uint8Array)],
+      [HASH],
+    );
   });
 });

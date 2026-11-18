@@ -31,6 +31,28 @@ export interface VaultExportResult {
   coverage: Record<string, number>;
 }
 
+/** How a local file would be uploaded; see `vaultBlobOpen` in `wasm/`. */
+export interface VaultBlobPlan {
+  /** `missing` also covers bytes that do not match their hash. */
+  status: 'ready' | 'missing' | 'tooLarge';
+  size: number;
+  /** The file's id in this vault (keyed BLAKE3 hex); empty unless `ready`. */
+  blobId: string;
+  /** `length` is plaintext, `sealedLength` what is uploaded and charged. */
+  chunks: {
+    index: number;
+    offset: number;
+    length: number;
+    sealedLength: number;
+  }[];
+}
+
+export interface VaultBlobRestoreResult {
+  status: 'restored' | 'unreferenced' | 'unreadable';
+  /** Plain BLAKE3 hex of the stored file, when `restored`. */
+  hash?: string | null;
+}
+
 export interface VaultImportSummary {
   packsRead: number;
   resourcesRestored: number;
@@ -167,6 +189,29 @@ export interface ClientDbRpc {
   vaultCommitSegment: [
     { drivePseudonym: string; devicePubkey: string; segment: number },
     void,
+  ];
+  // File bytes (`planning/vault-file-blobs.md`): hashing, chunking, sealing
+  // and opening are Rust; the main thread only moves sealed chunks.
+  vaultFileHashes: [{ driveSubject: string }, string[]];
+  vaultBlobPresent: [{ hash: string }, boolean];
+  vaultBlobOpen: [
+    { hash: string; key: Uint8Array; keyEpoch: number },
+    VaultBlobPlan,
+  ];
+  vaultBlobChunk: [
+    { hash: string; key: Uint8Array; keyEpoch: number; index: number },
+    Uint8Array,
+  ];
+  vaultBlobClose: [object, void];
+  vaultBlobRestore: [
+    {
+      key: Uint8Array;
+      keyEpoch: number;
+      blobId: string;
+      chunks: Uint8Array[];
+      wanted: string[];
+    },
+    VaultBlobRestoreResult,
   ];
 }
 
@@ -425,6 +470,32 @@ const handlers: Handlers = {
   vaultCommitSegment: m => {
     db!.vaultCommitSegment(m.drivePseudonym, m.devicePubkey, m.segment);
     flushNow();
+  },
+  vaultFileHashes: m => db!.vaultFileHashes(m.driveSubject),
+  vaultBlobPresent: m => db!.vaultBlobPresent(m.hash),
+  vaultBlobOpen: m => db!.vaultBlobOpen(m.hash, m.key, m.keyEpoch),
+  vaultBlobChunk: m => db!.vaultBlobChunk(m.hash, m.key, m.keyEpoch, m.index),
+  vaultBlobClose: () => db!.vaultBlobClose(),
+  vaultBlobRestore: async m => {
+    const result: VaultBlobRestoreResult = await db!.vaultBlobRestore(
+      m.key,
+      m.keyEpoch,
+      m.blobId,
+      m.chunks,
+      m.wanted,
+    );
+
+    // Same reasoning as `vaultImport`: a restore may be followed by a reload.
+    if (result.status === 'restored') {
+      try {
+        db!.flush();
+      } catch (e) {
+        dirty = true;
+        console.error('[ClientDb] flush after vault blob restore failed:', e);
+      }
+    }
+
+    return result;
   },
   getVersionVectorsForDrive: m => db!.getVersionVectorsForDrive(m.drive),
   // Search entries are about three quarters of a pulled resource's index

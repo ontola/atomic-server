@@ -3223,6 +3223,7 @@ msgstr "Search"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/connectableDrives.ts
+#: src/helpers/driveData.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
@@ -11068,10 +11069,6 @@ msgstr "Backed up {0}"
 msgid "Backed up to {0}"
 msgstr "Backed up to {0}"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Encrypted backup of your data. Only you can read it."
-
 #: src/components/Settings/SyncSettings.tsx
 msgid "Manage plan"
 msgstr "Manage plan"
@@ -11564,11 +11561,6 @@ msgstr "Required table columns are missing from this form:{0} {1} . Responses ca
 #: src/components/Vault/VaultStorage.tsx
 msgid "Reading what is stored…"
 msgstr "Reading what is stored…"
-
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} of old history and unused files can be removed. Nothing you can see is lost."
 
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
@@ -13485,6 +13477,46 @@ msgstr "Pressing Send report shares the reviewed chat text, error messages, and 
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# backup object could not be read"
+msgstr[1] "# backup objects could not be read"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# file is not in the backup"
+msgstr[1] "# files are not in the backup"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# file could not be read"
+msgstr[1] "# files could not be read"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Restored, but not everything: {0}. Reload the page to see what was restored."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Encrypted backup of your data and files. Only you can read it."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} of old history can be removed. Nothing you can see is lost."
+
+#: src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Sync & devices"
+
 #: src/routes/AppSettings.tsx
 msgid "Show icons in the sidebar"
 msgstr "Show icons in the sidebar"
@@ -13502,7 +13534,3 @@ msgstr "Credits used: {0} /{1} {2}"
 #: src/components/Settings/AccountSettings.tsx
 msgid "Account & security"
 msgstr "Account & security"
-
-#: src/routes/AppSettings.tsx
-msgid "Sync & devices"
-msgstr "Sync & devices"
