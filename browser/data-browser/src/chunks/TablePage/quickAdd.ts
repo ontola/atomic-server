@@ -6,7 +6,7 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
-import { ROW_ACTION_GENERATORS, type RowActionKind } from './rowActions';
+import { ROW_ACTION_GENERATORS } from './rowActions';
 import { withTableRowDefaults } from './rowDefaults';
 
 /**
@@ -18,31 +18,8 @@ import { withTableRowDefaults } from './rowDefaults';
  * the step. Reusing the verbs keeps the closed set closed — there is no second
  * vocabulary to learn, to document, or to write a second dialog for.
  */
-export interface QuickAddPreset {
-  kind: RowActionKind;
-  property: string;
-  value?: string | number;
-}
-
-/**
- * A button above the grid that creates a row: "Log a feed", "Add item", "Log
- * set". The timer's "what are you working on?" bar, generalised — for a personal
- * app this is usually the widget the whole thing exists for.
- */
-export interface QuickAddSpec {
-  /** What the button says. */
-  label: string;
-  /**
-   * A property to type into before creating, almost always the row's name.
-   * Absent means the button creates immediately, with no field at all — which is
-   * what "Log a feed" wants.
-   */
-  field?: string;
-  /** Placeholder for that field. */
-  placeholder?: string;
-  /** Values every new row starts with. */
-  presets?: QuickAddPreset[];
-}
+export type { QuickAddPreset, QuickAddSpec } from '@tomic/table';
+import type { QuickAddPreset, QuickAddSpec } from '@tomic/table';
 
 function isPreset(value: unknown): value is QuickAddPreset {
   if (typeof value !== 'object' || value === null) {

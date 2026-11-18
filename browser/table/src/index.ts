@@ -64,3 +64,18 @@ export type {
 export type { JSONValue } from './value.js';
 
 export { TableHeadingWrapper } from './chunks/TableEditor/TableHeading.js';
+
+export {
+  TableQuickAddFields,
+  quickAddDraftFromSpec,
+  quickAddSpecFromDraft,
+  isQuickAddDraftComplete,
+  type QuickAddDraft,
+  type TableQuickAddFieldsProps,
+} from './QuickAddFields.js';
+export type { QuickAddSpec, QuickAddPreset } from './quickAddTypes.js';
+export type {
+  RowActionKind,
+  TableRowActionKind,
+  TableRowActionTarget,
+} from './rowActionTypes.js';
