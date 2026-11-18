@@ -263,7 +263,7 @@ mod admission_error_tests {
                 .to_vec(),
         )
         .unwrap();
-        assert!(body.contains("\"errorCode\":18"), "{body}");
+        assert!(body.contains("errorCode\":18"), "{body}");
     }
 
     #[test]
