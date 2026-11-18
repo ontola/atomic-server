@@ -509,6 +509,9 @@ class BrowserPeerConnection {
 
           const output = await this.db!.handlePeerFrame(session, frame);
 
+          if (frame[0] === Tag.BLOB_RESPONSE && current())
+            this.store.retryFileContentRecovery();
+
           if (frame[0] === Tag.AUTH) {
             authenticated = true;
 

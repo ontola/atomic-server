@@ -769,6 +769,7 @@ export function useVaultBackup({
       assertCurrent();
       setFileRecoveryResult(result);
       setFileRecoveryError(result.error ?? null);
+      if (result.repaired > 0) store?.retryFileContentRecovery();
 
       return result;
     } catch (cause) {

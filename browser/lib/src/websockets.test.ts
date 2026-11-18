@@ -133,23 +133,53 @@ describe('WSClient handshake', () => {
 
   it('verifies file contents before storing a response from the server', async () => {
     const { client, socket, store } = await connectedClient();
+    const retry = vi.spyOn(store, 'retryFileContentRecovery');
     const hash = new Uint8Array(32).fill(7);
     const bytes = new Uint8Array([1, 2, 3]);
+    const stored = Promise.withResolvers<void>();
     const db = {
       blake3Hash: vi.fn().mockResolvedValue(new Uint8Array(32).fill(8)),
-      putBlob: vi.fn(),
+      putBlob: vi.fn().mockReturnValue(stored.promise),
     };
     vi.spyOn(store, 'getClientDb').mockReturnValue(db as never);
     socket.receive(encodeBlobResponse(hash, bytes));
     await vi.waitFor(() => assert(db.blake3Hash).toHaveBeenCalled());
     assert(db.putBlob).not.toHaveBeenCalled();
+    assert(retry).not.toHaveBeenCalled();
     db.blake3Hash.mockResolvedValue(hash);
     socket.receive(encodeBlobResponse(hash, bytes));
     await vi.waitFor(() =>
       assert(db.putBlob).toHaveBeenCalledWith(hash, bytes),
     );
+    assert(retry).not.toHaveBeenCalled();
+    stored.resolve();
+    await vi.waitFor(() => assert(retry).toHaveBeenCalledOnce());
     client.close();
   });
+
+  it.each(['closed connection', 'replaced database'])(
+    'does not refresh file readers after storage completes for a %s',
+    async stale => {
+      const { client, socket, store } = await connectedClient();
+      const retry = vi.spyOn(store, 'retryFileContentRecovery');
+      const hash = new Uint8Array(32).fill(7);
+      const stored = Promise.withResolvers<void>();
+      const db = {
+        blake3Hash: vi.fn().mockResolvedValue(hash),
+        putBlob: vi.fn().mockReturnValue(stored.promise),
+      };
+      const getDb = vi.spyOn(store, 'getClientDb').mockReturnValue(db as never);
+      socket.receive(encodeBlobResponse(hash, new Uint8Array([1, 2, 3])));
+      await vi.waitFor(() => assert(db.putBlob).toHaveBeenCalledOnce());
+      if (stale === 'closed connection') client.close();
+      else getDb.mockReturnValue({} as never);
+      stored.resolve();
+      await stored.promise;
+      await Promise.resolve();
+      assert(retry).not.toHaveBeenCalled();
+      client.close();
+    },
+  );
 
   it('lets file recovery fall back when this server lacks the contents', async () => {
     const { client, socket, store } = await connectedClient();

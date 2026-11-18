@@ -39,6 +39,10 @@ type FileRepairArgs = {
   drivePseudonym: string;
   driveKey: Uint8Array;
   keyEpoch?: number;
+  /** Limit this operation to the requested hashes that are still referenced. */
+  hashes?: string[];
+  /** Automatic recovery has already given connected peers an opportunity. */
+  peerWaitMs?: number;
   signal?: AbortSignal;
   throwIfStale?: () => void | Promise<void>;
   /** Issue requests on available connections. The core bounds the waiting time. */
@@ -75,6 +79,8 @@ async function repairDriveFilesOnce({
   drivePseudonym,
   driveKey,
   keyEpoch = 1,
+  hashes: requestedHashes,
+  peerWaitMs = 5_000,
   signal,
   throwIfStale,
   tryPeers,
@@ -114,7 +120,14 @@ async function repairDriveFilesOnce({
   };
 
   onProgress?.({ stage: 'scanning', done: 0, total: 0 });
-  const original = new Set(await missing(await referenced()));
+  const requested = requestedHashes
+    ? new Set(requestedHashes.map(hash => hash.toLowerCase()))
+    : undefined;
+  const original = new Set(
+    await missing(
+      (await referenced()).filter(hash => !requested || requested.has(hash)),
+    ),
+  );
   let wanted = [...original];
 
   const currentWanted = async (candidates: string[]) => {
@@ -123,7 +136,7 @@ async function repairDriveFilesOnce({
     return missing(candidates.filter(hash => current.has(hash)));
   };
 
-  if (wanted.length > 0) {
+  if (wanted.length > 0 && peerWaitMs > 0) {
     onProgress?.({ stage: 'peers', done: 0, total: wanted.length });
     const peerController = new AbortController();
     const stopPeers = () => peerController.abort();
@@ -133,7 +146,7 @@ async function repairDriveFilesOnce({
       tryPeers(wanted, peerController.signal),
     );
     void attempt.catch(() => {});
-    const deadline = Date.now() + 5_000;
+    const deadline = Date.now() + peerWaitMs;
 
     try {
       while (wanted.length > 0 && Date.now() < deadline) {

@@ -52,11 +52,13 @@ function setup() {
     vaultBlobRestore: vi.fn(),
   } as unknown as VaultCapableDb;
   const state = { drive: FIRST, agent: AGENT, db };
+  const retry = vi.fn();
   const store = {
     getAgent: () => ({ subject: state.agent }),
     getDrive: () => state.drive,
     getClientDb: () => state.db,
     on: vi.fn(() => () => {}),
+    retryFileContentRecovery: retry,
   } as unknown as Store;
   const keys = {} as VaultKeyOps;
   const signer = { signBytes: vi.fn() };
@@ -74,7 +76,7 @@ function setup() {
     tryPeers,
   });
 
-  return { state, options, tryPeers };
+  return { state, options, tryPeers, retry };
 }
 
 beforeEach(() => {
@@ -130,6 +132,23 @@ it('returns file recovery counts without restoring any resource snapshot', async
     }),
   );
   expect(restoreDrive).not.toHaveBeenCalled();
+  expect(fixture.retry).toHaveBeenCalledOnce();
+});
+
+it('does not refresh file readers when the scan recovered no bytes', async () => {
+  const fixture = setup();
+  vi.mocked(repairDriveFiles).mockResolvedValueOnce({
+    total: 1,
+    repaired: 0,
+    missing: ['missing'],
+    unreadable: 0,
+  });
+  const hook = renderHook(() => useVaultBackup(fixture.options()));
+  await waitFor(() => expect(hook.result.current.canRecoverFiles).toBe(true));
+  await act(async () => {
+    await hook.result.current.recoverMissingFiles();
+  });
+  expect(fixture.retry).not.toHaveBeenCalled();
 });
 
 it('cancels an active repair and ignores its eventual result', async () => {
@@ -154,6 +173,7 @@ it('cancels an active repair and ignores its eventual result', async () => {
   });
 
   expect(hook.result.current.fileRecoveryResult).toBeNull();
+  expect(fixture.retry).not.toHaveBeenCalled();
   expect(hook.result.current.fileRecoveryError).toBe(
     'File recovery cancelled.',
   );
@@ -185,6 +205,7 @@ it('aborts when the drive changes and fetches the next drive’s own key', async
     await running;
   });
   expect(hook.result.current.fileRecoveryResult).toBeNull();
+  expect(fixture.retry).not.toHaveBeenCalled();
 
   await act(async () => {
     await hook.result.current.recoverMissingFiles();
@@ -215,6 +236,7 @@ it('invalidates a running repair on logout without applying late results', async
     await running;
   });
   expect(hook.result.current.fileRecoveryResult).toBeNull();
+  expect(fixture.retry).not.toHaveBeenCalled();
 });
 
 it('aborts an unfinished repair when its panel unmounts', async () => {

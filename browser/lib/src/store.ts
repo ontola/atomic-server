@@ -7623,6 +7623,51 @@ export class Store {
     }
   }
 
+  private fileContentRecovery?: (
+    hash: string,
+    drive?: string,
+  ) => Promise<boolean>;
+  private fileContentRecoveryListeners = new Set<() => void>();
+
+  /** Install the app's recovery path for a file whose bytes are absent locally. */
+  public setFileContentRecovery(
+    recover: (hash: string, drive?: string) => Promise<boolean>,
+  ): () => void {
+    this.fileContentRecovery = recover;
+    this.retryFileContentRecovery();
+
+    return () => {
+      if (this.fileContentRecovery === recover) {
+        this.fileContentRecovery = undefined;
+        this.retryFileContentRecovery();
+      }
+    };
+  }
+
+  /** Retry mounted file readers after connectivity or recovery availability changes. */
+  public retryFileContentRecovery(): void {
+    for (const listener of this.fileContentRecoveryListeners) listener();
+  }
+
+  public onFileContentRecoveryChanged(listener: () => void): () => void {
+    this.fileContentRecoveryListeners.add(listener);
+
+    return () => {
+      this.fileContentRecoveryListeners.delete(listener);
+    };
+  }
+
+  public hasFileContentRecovery(): boolean {
+    return this.fileContentRecovery !== undefined;
+  }
+
+  public recoverMissingFileContents(
+    hash: string,
+    drive?: string,
+  ): Promise<boolean> {
+    return this.fileContentRecovery?.(hash, drive) ?? Promise.resolve(false);
+  }
+
   public async destroyLocalResource(commit: Commit): Promise<void> {
     if (!this.clientDb)
       throw new Error('Local storage is required to delete this resource');

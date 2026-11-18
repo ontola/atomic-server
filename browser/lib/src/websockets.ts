@@ -1711,13 +1711,16 @@ export class WSClient {
           if (db) {
             void db
               .blake3Hash(resp.bytes)
-              .then(hash => {
+              .then(async hash => {
                 if (
                   current() &&
                   this.store.getClientDb() === db &&
+                  hash.length === resp.hash.length &&
                   hash.every((byte, index) => byte === resp.hash[index])
                 ) {
-                  return db.putBlob(resp.hash, resp.bytes);
+                  await db.putBlob(resp.hash, resp.bytes);
+                  if (current() && this.store.getClientDb() === db)
+                    this.store.retryFileContentRecovery();
                 }
               })
               .catch(error =>

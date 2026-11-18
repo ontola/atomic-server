@@ -33,10 +33,12 @@ If a file is not on the device that runs the backup, it cannot be backed up from
 A restore, including a restore to an earlier snapshot, says how many files it could not bring back.
 A backup file downloaded from Cloud Vault contains the encrypted history only, not the files.
 
-If a file is listed in a drive but its contents are missing on this device, open *Storage and hosting* and choose *Recover missing files* under Cloud Vault.
-Atomic asks connected devices for the missing contents first, then searches the encrypted files already stored in the drive's Vault.
+If a file is listed in a drive but its contents are missing on this device, Atomic automatically tries to recover them when you open or display the file.
+It asks connected devices first, then searches the encrypted files already stored in the drive's Vault if you are signed into its account and can unlock it.
+Several previews requesting the same file share the recovery attempt.
 Recovered bytes are verified against each file's hash. The drive keeps its current edits and history.
-The action reports any files it could not recover and lets you retry or cancel.
+Recovery can only succeed if another device or the Vault has the contents. Missing previews retry when connectivity or the account changes; repeated failures have a short cooldown.
+To check the whole drive or retry a failed recovery yourself, open *Storage and hosting* and choose *Recover missing files* under Cloud Vault. The action reports any files it could not recover and lets you retry or cancel.
 Searching Vault can require downloading several encrypted files because their stored identifiers are private to that vault.
 
 ## What is special about it

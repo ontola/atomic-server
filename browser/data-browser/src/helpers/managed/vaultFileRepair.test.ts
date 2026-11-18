@@ -114,6 +114,25 @@ afterEach(() => {
 });
 
 describe('recovering missing drive files', () => {
+  it('selectively repairs requested hashes after an earlier peer opportunity', async () => {
+    const f = fixture([A, B]);
+    f.state.stored = [A, B];
+    const result = await repairDriveFiles({
+      ...f.args,
+      hashes: [A, A],
+      peerWaitMs: 0,
+    });
+    expect(result).toEqual({
+      total: 1,
+      repaired: 1,
+      missing: [],
+      unreadable: 0,
+    });
+    expect(f.state.local.has(B)).toBe(false);
+    expect(f.tryPeers).not.toHaveBeenCalled();
+    expect(f.db.vaultBlobRestore).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects another recovery for the same db and drive and releases it after cancellation', async () => {
     const f = fixture();
     const controller = new AbortController();
