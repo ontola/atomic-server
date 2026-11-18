@@ -1,4 +1,4 @@
-import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText;
+import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText, AtomicSpinner;
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -357,7 +357,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
       );
     }
     if (!_window.loaded) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: AtomicSpinner());
     }
     final shown = [..._window.items, ..._pending];
     if (shown.isEmpty) {
@@ -405,7 +405,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         child: SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))),
+                            child: AtomicSpinner())),
                   );
                 }
                 _keeper.built(i);

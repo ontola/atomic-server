@@ -15,8 +15,9 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 STRIP=(-strip -define png:exclude-chunk=date,time)
 
-# Mark without its tile, shrunk to sit inside the adaptive safe zone (66/108 dp).
-grep -v '<rect ' "$SRC" | sed 's/scale(1.05)/scale(0.92)/' > "$TMP/fg.svg"
+# Mark without its tile, shrunk well inside the adaptive safe zone (66/108 dp):
+# at 0.92 it filled the launcher's mask nearly edge to edge.
+grep -v '<rect ' "$SRC" | sed 's/scale(1.05)/scale(0.72)/' > "$TMP/fg.svg"
 # Themed icons (Android 13) use only the alpha channel: orb becomes solid white.
 sed 's|fill="url(#placeInsideOrb)"|fill="#fff"|' "$TMP/fg.svg" > "$TMP/mono.svg"
 

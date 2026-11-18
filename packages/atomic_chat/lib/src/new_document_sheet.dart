@@ -1,4 +1,4 @@
-import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText;
+import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText, AtomicSpinner;
 import 'dart:convert';
 
 import 'package:atomic_flutter/atomic_flutter.dart' show AppColorsExt;
@@ -270,7 +270,7 @@ class _NewDocumentSheetState extends State<NewDocumentSheet> {
                       child: SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))),
+                          child: AtomicSpinner())),
                 )
               else if (drives.isEmpty)
                 Text('No drive to create it in.',
@@ -312,7 +312,7 @@ class _NewDocumentSheetState extends State<NewDocumentSheet> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2))
+                          child: AtomicSpinner())
                       : const Text('Create'),
                 ),
               ),
