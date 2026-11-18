@@ -74,6 +74,18 @@ abstract class AtomicSettingsBackend {
   /// line to show. Throws for a text that is no secret. Null: no such row.
   Future<String> Function(String secret)? get signInWithSecret => null;
 
+  /// The hosted account provider this host can sign in with, as people know
+  /// it (its host, or the app's label). Null: none, and no such row.
+  String? get accountProviderName => null;
+
+  /// Signs in with the provider's account in the system browser and says what
+  /// happened, in a line to show. Null: no such row. Throws a sentence.
+  Future<String?> Function(BuildContext context)? get signInWithAccount => null;
+
+  /// Who is linked at the provider (an address, or its host when it cannot be
+  /// read); null when nobody is. Only asked when [accountProviderName] is set.
+  Future<String?> linkedAccount() async => null;
+
   /// Opens a pasted invite (a link or its token), makes the invited workspace
   /// the active one and says what happened, in a line to show. Throws a
   /// sentence for a link that does not work. Null: no "Open an invite" row.

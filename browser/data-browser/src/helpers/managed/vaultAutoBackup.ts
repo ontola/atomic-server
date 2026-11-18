@@ -33,7 +33,7 @@ import {
 import { evaluateIdentityReconciliation } from './reconcile';
 import { nodeVault } from './nodeVault';
 import { isRunningInTauri } from '../tauri';
-import { reopenRestoredDrive } from '../driveData';
+import { keepUnhostedRestoreLocal, reopenRestoredDrive } from '../driveData';
 import { asError } from '@tomic/react';
 
 /**
@@ -67,6 +67,11 @@ import { asError } from '@tomic/react';
 export type VaultAutoBackupDeps = {
   /** Whether a control-plane session exists. Nothing here works without one. */
   hasAccount: () => Promise<boolean>;
+  /**
+   * Which account the session belongs to, so a pass can tell that another tab
+   * signed in as someone else. `fresh` skips the session cache.
+   */
+  accountEmail?: (fresh?: boolean) => Promise<string | null>;
   canEnroll?: typeof canEnrollVault;
   /** Enrollment must wait until the local identity matches the portal account. */
   identityMatches?: (agentSubject: string) => Promise<boolean>;
@@ -141,6 +146,8 @@ const defaultDeps: VaultAutoBackupDeps = {
   // "no account", not a failure worth logging.
   hasAccount: async () =>
     (await getManagedAccount().catch(() => null)) !== null,
+  accountEmail: async fresh =>
+    (await getManagedAccount({ fresh }).catch(() => null))?.email ?? null,
   loadKeys: loadVaultKeyOps,
   laneId: async () => {
     const deviceId = getOrCreateDeviceId();
@@ -272,11 +279,22 @@ async function accountChangedSince(
   store: Store,
   agentSubject: string,
   deps: VaultAutoBackupDeps,
+  accountEmail: string | null,
 ): Promise<boolean> {
   if (store.getAgent()?.subject !== agentSubject) return true;
 
   try {
     if (!(await deps.hasAccount())) return true;
+
+    // The identity check alone cannot see this: an account that is still
+    // onboarding has no recovery secret or enrollment to disagree with.
+    if (
+      accountEmail &&
+      deps.accountEmail &&
+      (await deps.accountEmail(true)) !== accountEmail
+    ) {
+      return true;
+    }
 
     return (
       !!deps.identityMatches && !(await deps.identityMatches(agentSubject))
@@ -299,6 +317,7 @@ async function ensureVaultBackupOnce(
     return { status: 'skipped', reason: 'backup switched off for this drive' };
   }
 
+  let accountEmail: string | null = null;
   const controller = new AbortController();
   const { signal } = controller;
   const stop = () => controller.abort();
@@ -314,6 +333,7 @@ async function ensureVaultBackupOnce(
       return { status: 'skipped', reason: 'no account session' };
     }
 
+    if (deps.accountEmail) accountEmail = await deps.accountEmail();
     signal.throwIfAborted();
     const db = await deps.db(store);
     signal.throwIfAborted();
@@ -402,6 +422,9 @@ async function ensureVaultBackupOnce(
 
         if (
           !(await deps.hasAccount()) ||
+          (accountEmail &&
+            deps.accountEmail &&
+            (await deps.accountEmail()) !== accountEmail) ||
           (deps.identityMatches && !(await deps.identityMatches(agentSubject)))
         ) {
           controller.abort();
@@ -428,7 +451,7 @@ async function ensureVaultBackupOnce(
     });
     signal.throwIfAborted();
     notifyVaultChanged(driveSubject);
-    store.clearNotifiedError(`vault-quota:${driveSubject}`);
+    clearVaultFull(store, driveSubject);
 
     return outcome;
   } catch (error) {
@@ -439,7 +462,7 @@ async function ensureVaultBackupOnce(
     if (
       signal.aborted ||
       error instanceof VaultSessionEndedError ||
-      (await accountChangedSince(store, agent.subject, deps))
+      (await accountChangedSince(store, agent.subject, deps, accountEmail))
     ) {
       return {
         status: 'skipped',
@@ -452,10 +475,7 @@ async function ensureVaultBackupOnce(
     // A full vault is not something a retry fixes; say so once per drive
     // until a backup succeeds again, instead of failing quietly every minute.
     if (/quota exceeded/i.test(String((error as Error)?.message))) {
-      store.notifyErrorOnce(
-        `vault-quota:${driveSubject}`,
-        'Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan.',
-      );
+      announceVaultFull(store, driveSubject);
     }
 
     return {
@@ -468,6 +488,47 @@ async function ensureVaultBackupOnce(
     if (typeof window !== 'undefined')
       window.removeEventListener('pagehide', stop);
   }
+}
+
+type VaultFullListener = (driveSubject: string) => void;
+
+const vaultFullListeners = new Set<VaultFullListener>();
+const vaultFullAnnounced = new WeakMap<Store, Set<string>>();
+
+/**
+ * Hear about drives whose Cloud Vault is full. A full vault is not a bug, so it
+ * does not go through the error handler; the listener (CloudVaultWatcher) shows
+ * an upgrade notice instead. Returns the unsubscribe function.
+ */
+export function onVaultFull(listener: VaultFullListener): () => void {
+  vaultFullListeners.add(listener);
+
+  return () => {
+    vaultFullListeners.delete(listener);
+  };
+}
+
+/** Says so once per drive until a backup succeeds again. */
+export function announceVaultFull(store: Store, driveSubject: string): void {
+  // Nobody is listening yet (app still booting): stay unannounced so the next
+  // retry can still deliver it.
+  if (vaultFullListeners.size === 0) return;
+
+  let drives = vaultFullAnnounced.get(store);
+
+  if (!drives) {
+    drives = new Set();
+    vaultFullAnnounced.set(store, drives);
+  }
+
+  if (drives.has(driveSubject)) return;
+
+  drives.add(driveSubject);
+  for (const listener of [...vaultFullListeners]) listener(driveSubject);
+}
+
+function clearVaultFull(store: Store, driveSubject: string): void {
+  vaultFullAnnounced.get(store)?.delete(driveSubject);
 }
 
 /** Incremental packs make short idle backups cheap; unchanged drives upload nothing. */
@@ -553,16 +614,17 @@ export async function restoreFromVault(
     });
     const outcome = await deps.restoreDrive({
       db,
+      driveSubject,
       drivePseudonym: enrollment.drive_pseudonym,
       devicePubkey: lane,
       driveKey,
     });
 
-    // Restoring a vault copy does not upload it to the node. Preserve a
-    // confirmed node absence so saves and subscriptions stay on this device.
+    // Restoring a vault copy does not upload it to the node. Keep a drive no
+    // Cloud Server hosts on this device, so saves and subscriptions stay here.
     // A transport failure alone says nothing about where the drive is hosted.
-    if (absentFromNode && outcome.resourcesRestored > 0) {
-      store.registerLocalOnlyDrive(driveSubject);
+    if (outcome.resourcesRestored > 0) {
+      await keepUnhostedRestoreLocal(store, driveSubject, absentFromNode);
     }
 
     // The import wrote the drive into the local database only. The store

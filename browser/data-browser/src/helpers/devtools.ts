@@ -8,6 +8,7 @@
  * All methods log a structured object and also return it, so you can assign
  * the result to a variable for further inspection.
  */
+import { announceVaultFull } from './managed/vaultAutoBackup';
 import type { Store, CommitLogEntry, Resource } from '@tomic/react';
 import {
   ATOMIC_PREFIX,
@@ -294,6 +295,9 @@ export function attachDevtools(store: Store): void {
     wsLog: (n?: number) => wsLog(store, n),
     problems: () => problems(store),
     forcePut: (s: string) => forcePut(store, s),
+    /** Dev only: show the "Cloud Vault is full" notice for a drive. */
+    vaultFull: (drive?: string) =>
+      announceVaultFull(store, drive ?? `did:ad:devtools-${Date.now()}`),
     help: () => {
       console.log(
         [
@@ -302,6 +306,7 @@ export function attachDevtools(store: Store): void {
           'devtools.wsLog(n?)           — last N commit log entries as a table',
           'devtools.problems()          — resources that are loading, errored, or new',
           'devtools.forcePut(subject)   — re-put a JS-store resource to OPFS and verify',
+          'devtools.vaultFull(drive?)   — show the Cloud Vault is full notice',
         ].join('\n'),
       );
     },

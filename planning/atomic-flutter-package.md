@@ -7,7 +7,7 @@
 - [x] Keep optional server/account capabilities explicit.
 - [x] Include drives recorded on the private home in the native drive list; preserve legacy entries.
 - [ ] Extract the pairing screen and parser, with injectable QR scanner support.
-- [ ] Extract secure account session storage and sign-in flow after agreeing the native/web API.
+- [x] Extract secure account session storage and sign-in flow. Optional and off by default: `accountProvider` on `AtomicNodeSettings` / `AtomicAccountButton`; UI and client in `atomic_flutter`, keychain session and node wiring in `atomic_store_flutter`. Cloud Vault / Cloud Server status stays in the `flutter/` app.
 - [ ] Add a standalone example host and package publishing metadata.
 - [ ] Verify Canvas and Audio pairing/account flows on physical devices.
 

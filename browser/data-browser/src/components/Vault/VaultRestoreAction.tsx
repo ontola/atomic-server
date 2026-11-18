@@ -82,7 +82,7 @@ export function VaultRestoreAction({
       {(failed || !busy) && (
         <Button
           data-testid='vault-restore-now'
-          onClick={restore}
+          onClick={() => void restore()}
           disabled={busy}
         >
           <FaRotateLeft /> {failed ? 'Try again' : 'Restore from Cloud Vault'}

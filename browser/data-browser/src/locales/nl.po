@@ -3223,6 +3223,7 @@ msgstr "Zoeken"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/connectableDrives.ts
+#: src/helpers/driveData.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
@@ -5433,6 +5434,7 @@ msgstr "Account beheren →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Cloud Vault"
 
@@ -5974,10 +5976,6 @@ msgid "Thank you. Your feedback has been received."
 msgstr "Bedankt. Je feedback is ontvangen."
 
 #: src/components/SideBar/FeedbackButton.tsx
-msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
-msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team. Vermeld geen privé-inhoud uit je werkruimte."
-
-#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback <0/>"
 msgstr "Feedback <0/>"
 
@@ -6047,6 +6045,7 @@ msgstr "Kan bestand niet voorbereiden. Selecteer het opnieuw om het nogmaals te 
 
 #: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore"
 msgstr "Herstellen"
 
@@ -8356,6 +8355,7 @@ msgstr "Lokale kopie niet beschikbaar"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Deze fout melden"
 
@@ -8403,10 +8403,6 @@ msgstr "Kan niet kopiëren. Selecteer de tekst hierboven om deze handmatig te ko
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "The report could not be sent. Your text is still here; try again."
 msgstr "De melding kon niet worden verzonden. Je tekst staat er nog; probeer het opnieuw."
-
-#: src/chunks/AI/ReportAIChatDialog.tsx
-msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Remove private information before sending."
-msgstr "Met Melding verzenden deel je de gecontroleerde chattekst, foutmeldingen en je optionele beschrijving en e-mailadres via Sentry met het Atomic-team. Bijlagen, toolgegevens en redeneringen worden niet meegestuurd. Verwijder privégegevens voordat je verzendt."
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "What went wrong? <0/>"
@@ -8594,11 +8590,11 @@ msgstr "Voeg een bericht toe voor de mensen die je uitnodigt"
 msgid "Sending…"
 msgstr "Verzenden…"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Invite link copied"
 msgstr "Uitnodigingslink gekopieerd"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Could not copy the link. Select it and copy it by hand."
 msgstr "Kan de link niet kopiëren. Selecteer deze en kopieer handmatig."
 
@@ -10195,6 +10191,7 @@ msgstr "Je hebt een bericht gemist terwijl je weg was"
 msgid "You missed {0} messages while you were away"
 msgstr "Je hebt {0} berichten gemist terwijl je weg was"
 
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
@@ -11097,10 +11094,6 @@ msgstr "Back-up gemaakt {0}"
 msgid "Backed up to {0}"
 msgstr "Back-up gemaakt naar {0}"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Versleutelde back-up van je gegevens. Alleen jij kunt deze lezen."
-
 #: src/routes/SyncRoute.tsx
 msgid "Manage plan"
 msgstr "Abonnement beheren"
@@ -11598,11 +11591,6 @@ msgstr "Verplichte tabelkolommen ontbreken in dit formulier:{0} {1} . Zonder dez
 #: src/components/Vault/VaultStorage.tsx
 msgid "Reading what is stored…"
 msgstr "Lezen wat is opgeslagen…"
-
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} aan oude geschiedenis en ongebruikte bestanden kan worden verwijderd. Niets wat je kunt zien gaat verloren."
 
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
@@ -12414,7 +12402,7 @@ msgstr "De lijst met objecten en hun inhoud komen niet overeen."
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr "Oudere back-upkopieën worden verwijderd, evenals de bewerkingsgeschiedenis van de back-up: alleen de huidige staat van elk item blijft behouden. Herstellen hieruit brengt je werkruimte terug zoals deze nu is, zonder versiegeschiedenis. Onlangs verwijderde items kunnen niet meer uit de back-up worden hersteld. Je apparaten behouden hun eigen bewerkingsgeschiedenis en je werkruimte wordt niet gewijzigd."
 
-#: src/components/ConnectDevice.tsx
+#: src/helpers/connectInput.ts
 msgid "Could not reach that address."
 msgstr "Kan dat adres niet bereiken."
 
@@ -12767,6 +12755,11 @@ msgstr "Deze schijf staat niet op een server. Mensen die je uitnodigt kunnen dez
 #: src/components/Share/ShareDialog.tsx
 msgid "A Cloud Server keeps this drive online for everyone, so nobody has to keep a browser open."
 msgstr "Een Cloud Server houdt deze schijf voor iedereen online, zodat niemand een browser open hoeft te houden."
+
+#. 0: CLOUD_SERVER_PRICE
+#: src/components/CloudVaultWatcher.tsx
+msgid "Upgrade to Cloud Server from {0}"
+msgstr "Upgraden naar Cloud Server vanaf {0}"
 
 #: src/components/SideBar/MessagesPanel.tsx
 #: src/components/SideBar/MessagesPanel.tsx
@@ -13134,10 +13127,6 @@ msgstr "Marktplaats-URL toevoegen"
 msgid "Discover apps and integrations"
 msgstr "Apps en integraties ontdekken"
 
-#: src/helpers/managed/vaultAutoBackup.ts
-msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
-msgstr "Cloud Vault is vol, dus er wordt geen back-up van deze schijf gemaakt. Maak ruimte vrij of upgrade je abonnement."
-
 #: src/embed/MeetingChatOverlay.tsx
 #: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
@@ -13489,7 +13478,7 @@ msgstr "Alleen op dit apparaat opgeslagen"
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
-msgstr ""
+msgstr "Je bent ingelogd, maar het opslaan van je werk in je account is niet gelukt. Controleer je verbinding en probeer het opnieuw."
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
@@ -13517,3 +13506,115 @@ msgstr "Gekopieerd"
 #: src/components/Share/PeopleWithAccess.tsx
 msgid "Remove invite link"
 msgstr "Uitnodigingslink verwijderen"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault is full, so this drive is not being backed up."
+msgstr "Cloud Vault is vol, dus er wordt geen back-up van deze schijf gemaakt."
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Van deze schijf maakt {0} een back-up. Alleen dat account kan dit wijzigen."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Van deze schijf maakt een ander account een back-up. Alleen dat account kan dit wijzigen."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "Openen in {0}"
+
+#. 0: app.name
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Open de homepage van {0}"
+
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Apps in this drive"
+msgstr "Apps in deze schijf"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Snapshot"
+msgstr "Snapshot"
+
+#. 0: when
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
+msgstr "Je drive gaat terug naar hoe hij was op {0}. Wijzigingen van na dat moment gaan verloren voor iedereen die deze drive gebruikt."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
+msgstr "Items die sindsdien zijn toegevoegd gaan naar de Prullenbak, en het herstel wordt opgeslagen als nieuwe wijziging, dus de Geschiedenis van elk item bewaart wat het vervangt."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore a snapshot"
+msgstr "Een snapshot herstellen"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore this backup?"
+msgstr "Deze back-up herstellen?"
+
+#. 0: url; 1: url.replace('https://', 'http://')
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+msgstr "Kon {0} niet bereiken. Een server op je eigen computer spreekt meestal gewoon http, probeer dus {1}."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+msgstr "Kon {0} niet bereiken. Controleer of de server draait en of deze site andere apps en diensten op dit apparaat mag benaderen (het slotje in de adresbalk, dan site-instellingen). De server moet ook de origin van deze site toestaan."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running on that port."
+msgstr "Kon {0} niet bereiken. Controleer of de server op die poort draait."
+
+#. 0: response.status; 1: apiHost()
+#: src/helpers/managed/recovery.ts
+msgid "HTTP {0} from {1}"
+msgstr "HTTP {0} van {1}"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Technical details about your setup (app version, server address and status) are attached. Remove private information before sending."
+msgstr "Met Melding verzenden deel je de gecontroleerde chattekst, foutmeldingen en je optionele beschrijving en e-mailadres via Sentry met het Atomic-team. Bijlagen, toolgegevens en redeneringen worden niet meegestuurd. Technische gegevens over je opstelling (app-versie, serveradres en status) worden meegestuurd. Verwijder privégegevens voordat je verzendt."
+
+#: src/components/SideBar/FeedbackButton.tsx
+msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
+msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team, samen met technische gegevens over je opstelling (app-versie, serveradres en status). Vermeld geen privé-inhoud uit je werkruimte."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# back-upobject kon niet worden gelezen"
+msgstr[1] "# back-upobjecten konden niet worden gelezen"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# bestand staat niet in de back-up"
+msgstr[1] "# bestanden staan niet in de back-up"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# bestand kon niet worden gelezen"
+msgstr[1] "# bestanden konden niet worden gelezen"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Hersteld, maar niet alles: {0}. Laad de pagina opnieuw om te zien wat is hersteld."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Versleutelde back-up van je gegevens en bestanden. Alleen jij kunt deze lezen."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Bestanden zijn inbegrepen. Ze worden op dit apparaat versleuteld, net als al het andere, en tellen mee voor de Cloud Vault-opslag van deze back-up."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien gaat verloren."

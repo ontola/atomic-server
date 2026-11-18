@@ -12,12 +12,15 @@ import {
 import {
   isEmbeddedVaultDrive,
   ensureVaultBackup,
+  onVaultFull,
   forgetEnrolledVaults,
   onVaultChanged,
   restoreFromVault,
   watchForVaultBackups,
   type VaultAutoBackupDeps,
 } from './vaultAutoBackup';
+import { getManagedEnrollments } from './enrollmentApi';
+import { EMPTY_NODE_INFO, fetchManagedInfo } from '../managedServer';
 import {
   VaultSessionEndedError,
   type VaultEnrollment,
@@ -30,6 +33,12 @@ import {
  * drive its owner switched off, and it restores only when there is actually
  * something to restore.
  */
+
+vi.mock('./enrollmentApi', () => ({ getManagedEnrollments: vi.fn() }));
+vi.mock('../managedServer', async importOriginal => ({
+  ...(await importOriginal<typeof import('../managedServer')>()),
+  fetchManagedInfo: vi.fn(),
+}));
 
 const DRIVE = 'did:ad:drive:test';
 const PSEUDONYM = 'pseudonym-1';
@@ -221,6 +230,32 @@ describe('ensureVaultBackup', () => {
     warn.mockRestore();
   });
 
+  /**
+   * The other tab's account is still onboarding: no recovery secret and no
+   * enrollment yet, so the identity check finds nothing to disagree with.
+   * The session's account is what changed.
+   */
+  it('stays quiet when the other account is too new for the identity check', async () => {
+    const store = await signedInStore();
+    const accountEmail = vi.fn(async () => 'first@example.com');
+    const deps = fakeDeps({
+      identityMatches: vi.fn(async () => true),
+      accountEmail,
+      runVaultBackup: vi.fn(async () => {
+        accountEmail.mockResolvedValue('second@example.com');
+        throw new Error('Cloud Vault enrollment not found');
+      }),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(await ensureVaultBackup(store, DRIVE, deps)).toEqual({
+      status: 'skipped',
+      reason: 'backup cancelled by account change',
+    });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('still reports a failure while the account is unchanged', async () => {
     const store = await signedInStore();
     const deps = fakeDeps({
@@ -242,6 +277,8 @@ describe('ensureVaultBackup', () => {
   it('shows a quota-exceeded failure once, not on every retry', async () => {
     const store = await signedInStore();
     const notify = vi.spyOn(store, 'notifyError').mockImplementation(() => {});
+    const full = vi.fn();
+    const off = onVaultFull(full);
     const deps = fakeDeps({
       identityMatches: vi.fn(async () => true),
       runVaultBackup: vi.fn(async () => {
@@ -252,7 +289,35 @@ describe('ensureVaultBackup', () => {
 
     await ensureVaultBackup(store, DRIVE, deps);
     await ensureVaultBackup(store, DRIVE, deps);
-    expect(notify).toHaveBeenCalledTimes(1);
+    expect(full).toHaveBeenCalledTimes(1);
+    expect(full).toHaveBeenCalledWith(DRIVE);
+    // A full vault is not an error report.
+    expect(notify).not.toHaveBeenCalled();
+    off();
+    warn.mockRestore();
+  });
+
+  it('announces a full vault again after a backup succeeds', async () => {
+    const store = await signedInStore();
+    const full = vi.fn();
+    const off = onVaultFull(full);
+    const runVaultBackup = vi.fn(async () => {
+      throw new Error('Cloud Vault quota exceeded');
+    });
+    const deps = fakeDeps({
+      identityMatches: vi.fn(async () => true),
+      runVaultBackup,
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await ensureVaultBackup(store, DRIVE, deps);
+    runVaultBackup.mockResolvedValueOnce(
+      (await fakeDeps().runVaultBackup({} as never)) as never,
+    );
+    await ensureVaultBackup(store, DRIVE, deps);
+    await ensureVaultBackup(store, DRIVE, deps);
+    expect(full).toHaveBeenCalledTimes(2);
+    off();
     warn.mockRestore();
   });
 
@@ -484,6 +549,39 @@ describe('restoreFromVault', () => {
       );
     },
   );
+
+  describe('a drive nobody confirmed missing', () => {
+    const run = async (managed: boolean, hosted: boolean) => {
+      vi.mocked(fetchManagedInfo).mockResolvedValue({
+        ...EMPTY_NODE_INFO,
+        managed,
+      });
+      vi.mocked(getManagedEnrollments).mockResolvedValue(
+        hosted
+          ? [{ drive_subject: DRIVE, agent_subject: null, status: 'Active' }]
+          : [],
+      );
+      const store = await signedInStore();
+
+      await restoreFromVault(store, DRIVE, fakeDeps());
+
+      return store.isLocalOnlyDrive(DRIVE);
+    };
+
+    // Enrollments list Cloud Server hosting only, so a self-hosted server
+    // with a Vault backup has none and must keep saving to its server.
+    it('stays on a self-hosted server', async () => {
+      expect(await run(false, false)).toBe(false);
+    });
+
+    it('becomes local on a managed node that does not host it', async () => {
+      expect(await run(true, false)).toBe(true);
+    });
+
+    it('stays on the managed node that hosts it', async () => {
+      expect(await run(true, true)).toBe(false);
+    });
+  });
 
   it('reloads the restored drive, so a lookup from before the restore stops answering', async () => {
     const store = await signedInStore();

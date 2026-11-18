@@ -10,8 +10,21 @@ import {
   catalogCacheKey,
   readCatalogCache,
   catalogSubjects,
+  shareCatalogReports,
   type CatalogSnapshot,
 } from '../helpers/managed/driveCatalog';
+
+/** One report per moment, however many drive lists are mounted. */
+const catalogReports = shareCatalogReports(async body => {
+  const response = await managedFetch('/drives/catalog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+  if (!response.ok) throw new Error('Could not refresh account drives');
+
+  return response.json();
+});
 
 /** Reconcile account membership separately from the user's favorite pointers. */
 export function useAccountDriveCatalog(local: string[]) {
@@ -34,15 +47,10 @@ export function useAccountDriveCatalog(local: string[]) {
           ? { agent, email: result.managedAccount.email }
           : null;
       },
-      send: async entries => {
-        const response = await managedFetch('/drives/catalog', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(entries),
-        });
-        if (!response.ok) throw new Error('Could not refresh account drives');
+      send: entries => {
+        const body = JSON.stringify(entries);
 
-        return response.json();
+        return catalogReports.send(JSON.stringify([agent, body]), body);
       },
       changed: next => {
         if (!stopped) {
@@ -110,9 +118,18 @@ export function useAccountDriveCatalog(local: string[]) {
 
     void refresh();
     const interval = window.setInterval(refresh, 30000);
-    window.addEventListener('focus', refresh);
-    window.addEventListener('online', refresh);
+
+    // Focus and reconnect must ask the server again, not reuse the last answer.
+    const refreshNow = () => {
+      catalogReports.expire();
+      void refresh();
+    };
+
+    window.addEventListener('focus', refreshNow);
+    window.addEventListener('online', refreshNow);
     const logout = onManagedLogout(() => {
+      catalogReports.reset();
+
       if (sync.snapshot) {
         try {
           localStorage.removeItem(catalogCacheKey(sync.snapshot));
@@ -129,8 +146,8 @@ export function useAccountDriveCatalog(local: string[]) {
       sync.reset();
       logout();
       window.clearInterval(interval);
-      window.removeEventListener('focus', refresh);
-      window.removeEventListener('online', refresh);
+      window.removeEventListener('focus', refreshNow);
+      window.removeEventListener('online', refreshNow);
     };
   }, [store, agent, key]);
   const current = snapshot?.agent === agent ? snapshot : null;

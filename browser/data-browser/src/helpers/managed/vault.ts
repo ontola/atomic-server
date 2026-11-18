@@ -136,6 +136,8 @@ export type VaultObject = {
   key_epoch: number;
   lane_device_pubkey: string | null;
   segment: number | null;
+  /** Keyed BLAKE3 hex id of the whole file, for `kind: 'blob'` (a file chunk). */
+  content_hash?: string | null;
 };
 
 type UploadUrl = {
@@ -177,10 +179,32 @@ export type VaultEnrollment = {
   key_epoch?: number;
 };
 
+/**
+ * What a backup pass did about file bytes. Files are sealed on this device
+ * like everything else and stored once per vault, by a keyed hash of their
+ * contents.
+ */
+export type BlobBackupOutcome = {
+  /** Files whose sealed bytes this pass uploaded. */
+  uploaded: number;
+  /** Files this vault already holds. */
+  alreadyStored: number;
+  /**
+   * Files a File resource points at but this device does not have (or whose
+   * bytes do not match). They cannot be backed up from here.
+   */
+  missing: number;
+  /** Files larger than a vault can store. */
+  tooLarge: number;
+  /** Sealed bytes uploaded. */
+  bytesUploaded: number;
+};
+
 export type BackupOutcome =
-  | { status: 'nothing-to-do' }
+  | { status: 'nothing-to-do'; blobs?: BlobBackupOutcome }
   | {
       status: 'backed-up';
+      blobs?: BlobBackupOutcome;
       /** `'pack'` for an incremental delta, `'checkpoint'` for a fresh anchor. */
       kind: SegmentKind;
       resources: number;
@@ -207,10 +231,31 @@ export type RestoreOutcome = {
    * without mentioning this would be a lie.
    */
   objectsUnreadable: number;
+  /** File bytes. Absent when files were not restored (backup file, no drive). */
+  blobs?: BlobRestoreOutcome;
+};
+
+/** What restoring file bytes did. Every referenced file lands in one bucket. */
+export type BlobRestoreOutcome = {
+  restored: number;
+  /** Already on this device. */
+  present: number;
+  /** A File resource names it, but the vault has no copy. */
+  missing: number;
+  /**
+   * Found, but a chunk was missing or the bytes did not match the file's hash.
+   * Reported rather than stored: nothing unverified reaches the file store.
+   */
+  unreadable: number;
 };
 
 /** What a `VaultCheckpointRecord` looks like on the wire. */
 export type VaultCheckpoint = {
+  /**
+   * The id a snapshot is listed under in `usage.snapshots`. Optional only
+   * because older control planes may not send it.
+   */
+  id?: string;
   checkpoint_n: number;
   /** Device pubkey → last inclusive segment this checkpoint provably holds. */
   coverage: Record<string, number>;
@@ -225,7 +270,60 @@ export type VaultCheckpoint = {
  * which wasm binding module the host wires up — the worker and the tests pass
  * different ones.
  */
-export type VaultCapableDb = {
+export type VaultBlobDb = {
+  vaultFileHashes(driveSubject: string): Promise<string[]> | string[];
+  vaultBlobPresent(hash: string): Promise<boolean> | boolean;
+  /**
+   * Load a local file (verified against its hash), derive its id in this vault
+   * and say how it is chunked. The db holds that one file until the next open
+   * or `vaultBlobClose`.
+   */
+  vaultBlobOpen(
+    hash: string,
+    key: Uint8Array,
+    keyEpoch: number,
+  ): Promise<VaultBlobPlan> | VaultBlobPlan;
+  /** One chunk of the opened file, sealed under the drive key. */
+  vaultBlobChunk(
+    hash: string,
+    key: Uint8Array,
+    keyEpoch: number,
+    index: number,
+  ): Promise<Uint8Array> | Uint8Array;
+  vaultBlobClose(): Promise<void> | void;
+  /**
+   * Open one stored file from its sealed chunks and store it when one of the
+   * `wanted` plain hashes names it. Nothing is written otherwise.
+   */
+  vaultBlobRestore(
+    key: Uint8Array,
+    keyEpoch: number,
+    blobId: string,
+    chunks: Uint8Array[],
+    wanted: string[],
+  ): Promise<VaultBlobRestoreResult> | VaultBlobRestoreResult;
+};
+
+export type VaultBlobRestoreResult = {
+  status: 'restored' | 'unreferenced' | 'unreadable';
+  hash?: string | null;
+};
+
+export type VaultBlobPlan = {
+  status: 'ready' | 'missing' | 'tooLarge';
+  size: number;
+  /** The file's id in this vault (keyed BLAKE3 hex). */
+  blobId: string;
+  /** `length` is plaintext; `sealedLength` is what is uploaded and charged. */
+  chunks: {
+    index: number;
+    offset: number;
+    length: number;
+    sealedLength: number;
+  }[];
+};
+
+export type VaultCapableDb = Partial<VaultBlobDb> & {
   vaultExport(
     driveSubject: string,
     key: Uint8Array,
@@ -375,6 +473,30 @@ export async function listVaultDrives(): Promise<VaultEnrollment[]> {
   return api<VaultEnrollment[]>('/cloud-vault/drives');
 }
 
+/**
+ * What any signed-in account may learn about a drive's backup, including one
+ * that another account pays for. The members' view of a vault they do not own:
+ * that it exists and who made it, never how to manage it.
+ */
+export type VaultDriveSummary =
+  | { enabled: false }
+  | {
+      enabled: true;
+      is_yours: boolean;
+      suspended: boolean;
+      last_backup_at: number | null;
+      /** The payer's chosen display name; null when they set none. */
+      backed_up_by: string | null;
+    };
+
+export async function getVaultDriveSummary(
+  driveSubject: string,
+): Promise<VaultDriveSummary> {
+  return api<VaultDriveSummary>(
+    `/cloud-vault/drive-status?${new URLSearchParams({ drive: driveSubject })}`,
+  );
+}
+
 export async function disableVault(drivePseudonym: string): Promise<void> {
   await api(`/cloud-vault/${drivePseudonym}/disable`, {
     method: 'POST',
@@ -429,6 +551,10 @@ export async function getVaultKeyEnvelopeRecord(
   });
 
   if (response.status === 204) return null;
+
+  // Same as `api`: a session that ended mid-pass (sign-out in another tab) is
+  // not a failed backup, and callers skip quietly on this error.
+  if (response.status === 401) throw new VaultSessionEndedError();
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
@@ -526,7 +652,7 @@ export type VaultUsage = {
   used_bytes: number;
   quota_bytes: number;
   by_kind: VaultUsageCategory[];
-  /** Superseded history and unused files; freeing these loses nothing. */
+  /** Superseded history; freeing it loses nothing. */
   reclaimable_bytes: number;
   reclaimable_objects: number;
   /** Extra bytes kept only so a recently deleted item can come back. */
@@ -688,8 +814,8 @@ export async function listVaultObjects(
 }
 
 /**
- * Back a drive up: seal locally, upload straight to storage, then tell the
- * control plane what landed.
+ * One sealed pass of {@link backupDrive}: seal locally, upload straight to
+ * storage, then tell the control plane what landed.
  *
  * The order matters. The object is confirmed only *after* storage accepted it,
  * so a failed upload leaves a reservation that expires rather than usage the
@@ -703,7 +829,7 @@ export async function listVaultObjects(
  * the anchor now subsumes. Uploading one without publishing it stores bytes
  * that free nothing.
  */
-export async function backupDrive({
+async function backupSegment({
   db,
   signal,
   driveSubject,
@@ -822,7 +948,7 @@ export async function backupDrive({
       );
     }
 
-    return backupDrive({
+    return backupSegment({
       db,
       signal,
       driveSubject,
@@ -930,6 +1056,368 @@ export async function backupDrive({
   };
 }
 
+type BackupDriveArgs = Parameters<typeof backupSegment>[0];
+
+/**
+ * Back a drive up: its sealed history, then the sealed bytes of its files.
+ *
+ * The history pass is {@link backupSegment}. The file pass runs after it, and
+ * also when the history had nothing new: a file whose upload failed last time
+ * has no commit left to ride on, so only this pass can retry it. A failure in
+ * the file pass throws after the history is already committed, so the next
+ * pass finds nothing to seal and goes straight back to the files.
+ */
+export async function backupDrive(
+  args: BackupDriveArgs,
+): Promise<BackupOutcome> {
+  const outcome = await backupSegment(args);
+  const blobs = await backupBlobs({
+    db: args.db,
+    signal: args.signal,
+    driveSubject: args.driveSubject,
+    drivePseudonym: args.drivePseudonym,
+    driveKey: args.driveKey,
+    keyEpoch: args.keyEpoch ?? 1,
+    beforeNetworkWrite: args.beforeNetworkWrite,
+  });
+
+  return blobs ? { ...outcome, blobs } : outcome;
+}
+
+/** Objects per `upload-urls` call. A file's chunks always go in one call. */
+const BLOB_URL_BATCH_OBJECTS = 16;
+
+type ReadyFile = { hash: string; plan: VaultBlobPlan };
+
+type StoredBlobs = Map<string, Set<number>>;
+
+const BLOB_KEY = /\/blobs\/([0-9a-f]{64})\/(\d+)$/;
+
+/** The keyed id and chunk number a blob object belongs to. */
+function blobKeyOf(object: VaultObject): { id: string; chunk: number } | null {
+  if (object.kind !== 'blob') return null;
+
+  const match = BLOB_KEY.exec(object.object_key);
+
+  return match ? { id: match[1], chunk: Number(match[2]) } : null;
+}
+
+function storedBlobs(objects: VaultObject[]): StoredBlobs {
+  const stored: StoredBlobs = new Map();
+
+  for (const object of objects) {
+    const key = blobKeyOf(object);
+
+    if (key)
+      stored.set(key.id, (stored.get(key.id) ?? new Set()).add(key.chunk));
+  }
+
+  return stored;
+}
+
+/** Chunks 0..n-1 all there, n >= 1. */
+function isContiguous(chunks: Set<number> | undefined): boolean {
+  if (!chunks || chunks.size === 0) return false;
+
+  for (let i = 0; i < chunks.size; i++) if (!chunks.has(i)) return false;
+
+  return true;
+}
+
+/**
+ * Remembers which vault id a file hashed to on this device, so a pass need not
+ * read every file again just to learn an id it already knows. Pure speed: a
+ * wrong or missing entry only means the file is read.
+ */
+function idCache(drivePseudonym: string) {
+  const storageKey = `atomic-vault-blob-ids:${drivePseudonym}`;
+  let map: Record<string, string> = {};
+
+  try {
+    map = JSON.parse(localStorage.getItem(storageKey) ?? '{}');
+  } catch {
+    map = {};
+  }
+
+  return {
+    get: (hash: string): string | undefined => map[hash],
+    set: (hash: string, id: string) => {
+      map[hash] = id;
+    },
+    save: () => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(map));
+      } catch {
+        // Storage unavailable: the next pass reads the files again.
+      }
+    },
+  };
+}
+
+/**
+ * Upload the sealed bytes of every file the drive references and the vault
+ * does not hold.
+ *
+ * Every chunk is encrypted on this device under the drive key before it
+ * leaves (`planning/vault-file-blobs.md`), and a file is addressed by a keyed
+ * hash of its contents, so identical files in one vault are stored once and
+ * identical files in two vaults share nothing. The control plane charges the
+ * sealed size of each stored chunk to this vault.
+ *
+ * Chunking, hashing and sealing are `atomic_lib::vault::sync`, reached through
+ * the db. Memory: the store returns a file as one value, so the db holds one
+ * whole file at a time; JS only ever holds one sealed chunk (8 MiB, at most
+ * 64 MiB) of it.
+ *
+ * This never asks the control plane to drop a file. A local inventory can
+ * omit a blob that a retained checkpoint or another device's pack still needs,
+ * so deleted files stay in the vault (and keep counting) until a design that
+ * accounts for both exists.
+ *
+ * Returns `undefined` when the db cannot read files (an app without a local
+ * store), which is a different answer from "nothing to do".
+ */
+export async function backupBlobs({
+  db,
+  signal,
+  driveSubject,
+  drivePseudonym,
+  driveKey,
+  keyEpoch,
+  beforeNetworkWrite,
+}: {
+  db: VaultCapableDb;
+  signal?: AbortSignal;
+  driveSubject: string;
+  drivePseudonym: string;
+  driveKey: Uint8Array;
+  keyEpoch: number;
+  beforeNetworkWrite?: () => Promise<void>;
+}): Promise<BlobBackupOutcome | undefined> {
+  if (
+    !db.vaultFileHashes ||
+    !db.vaultBlobOpen ||
+    !db.vaultBlobChunk ||
+    !db.vaultBlobClose
+  ) {
+    return undefined;
+  }
+
+  const blobDb = db as VaultBlobDb;
+  const outcome: BlobBackupOutcome = {
+    uploaded: 0,
+    alreadyStored: 0,
+    missing: 0,
+    tooLarge: 0,
+    bytesUploaded: 0,
+  };
+  const cache = idCache(drivePseudonym);
+
+  signal?.throwIfAborted();
+  const hashes = (await blobDb.vaultFileHashes(driveSubject)).map(h =>
+    h.toLowerCase(),
+  );
+  const stored = storedBlobs(await listVaultObjects(drivePseudonym));
+  const batch: ReadyFile[] = [];
+  let batchObjects = 0;
+
+  const flush = async () => {
+    if (batch.length === 0) return;
+
+    const files = batch.splice(0);
+
+    batchObjects = 0;
+    await uploadBlobBatch({
+      db: blobDb,
+      signal,
+      drivePseudonym,
+      driveKey,
+      keyEpoch,
+      files,
+      outcome,
+      cache,
+      beforeNetworkWrite,
+    });
+  };
+
+  try {
+    for (const hash of hashes) {
+      signal?.throwIfAborted();
+
+      // This device already knows the id and the vault holds all of it:
+      // nothing to read, seal or send. Also covers a device that has no copy
+      // of the bytes but did upload them before.
+      const known = cache.get(hash);
+
+      if (known && isContiguous(stored.get(known))) {
+        outcome.alreadyStored++;
+        continue;
+      }
+
+      const plan = await blobDb.vaultBlobOpen(hash, driveKey, keyEpoch);
+
+      if (plan.status === 'missing') {
+        outcome.missing++;
+        continue;
+      }
+
+      if (plan.status === 'tooLarge') {
+        outcome.tooLarge++;
+        continue;
+      }
+
+      cache.set(hash, plan.blobId);
+      const have = stored.get(plan.blobId);
+
+      if (plan.chunks.every(c => have?.has(c.index))) {
+        outcome.alreadyStored++;
+        continue;
+      }
+
+      if (batchObjects + plan.chunks.length > BLOB_URL_BATCH_OBJECTS) {
+        await flush();
+      }
+
+      batch.push({ hash, plan });
+      batchObjects += plan.chunks.length;
+    }
+
+    await flush();
+  } finally {
+    await blobDb.vaultBlobClose();
+    cache.save();
+  }
+
+  return outcome;
+}
+
+async function uploadBlobBatch({
+  db,
+  signal,
+  drivePseudonym,
+  driveKey,
+  keyEpoch,
+  files,
+  outcome,
+  cache,
+  beforeNetworkWrite,
+}: {
+  db: VaultBlobDb;
+  signal?: AbortSignal;
+  drivePseudonym: string;
+  driveKey: Uint8Array;
+  keyEpoch: number;
+  files: ReadyFile[];
+  outcome: BlobBackupOutcome;
+  cache: ReturnType<typeof idCache>;
+  beforeNetworkWrite?: () => Promise<void>;
+}): Promise<void> {
+  await beforeNetworkWrite?.();
+  signal?.throwIfAborted();
+  const issued = await api<{ uploads: UploadUrl[] }>(
+    `/cloud-vault/${drivePseudonym}/upload-urls`,
+    {
+      method: 'POST',
+      signal,
+      body: JSON.stringify({
+        objects: files.flatMap(({ plan }) =>
+          plan.chunks.map(chunk => ({
+            kind: 'blob',
+            size_bytes: chunk.sealedLength,
+            key_epoch: keyEpoch,
+            content_hash: plan.blobId,
+            chunk_index: chunk.index,
+          })),
+        ),
+      }),
+    },
+  );
+
+  for (const { hash, plan } of files) {
+    signal?.throwIfAborted();
+    // The db holds one file at a time; this batch planned several.
+    await db.vaultBlobOpen(hash, driveKey, keyEpoch);
+
+    const confirmations: {
+      object_id: string;
+      size_bytes: number;
+      content_hash: string;
+    }[] = [];
+
+    for (const chunk of plan.chunks) {
+      const objectKey = `/blobs/${plan.blobId}/${String(chunk.index).padStart(6, '0')}`;
+      const upload = issued.uploads.find(u => u.object_key.endsWith(objectKey));
+
+      if (!upload) {
+        throw new Error(
+          `The control plane issued no upload URL for chunk ${chunk.index} of a file.`,
+        );
+      }
+
+      // This vault already holds this chunk: nothing to send.
+      if (upload.already_stored) continue;
+
+      const sealed = await db.vaultBlobChunk(
+        hash,
+        driveKey,
+        keyEpoch,
+        chunk.index,
+      );
+
+      if (!(sealed instanceof Uint8Array)) {
+        throw new Error(
+          'Vault returned non-binary file data; refusing to upload a corrupt object.',
+        );
+      }
+
+      await putBlobChunk(upload, sealed, signal);
+      confirmations.push({
+        object_id: upload.object_id,
+        size_bytes: sealed.length,
+        content_hash: plan.blobId,
+      });
+      outcome.bytesUploaded += sealed.length;
+    }
+
+    if (confirmations.length > 0) {
+      await beforeNetworkWrite?.();
+      signal?.throwIfAborted();
+      await api(`/cloud-vault/${drivePseudonym}/confirm-upload`, {
+        method: 'POST',
+        signal,
+        body: JSON.stringify({ confirmations }),
+      });
+      outcome.uploaded++;
+    } else {
+      outcome.alreadyStored++;
+    }
+
+    cache.set(hash, plan.blobId);
+  }
+}
+
+async function putBlobChunk(
+  upload: UploadUrl,
+  bytes: Uint8Array,
+  signal?: AbortSignal,
+): Promise<void> {
+  const put = await fetch(upload.url, {
+    method: upload.method || 'PUT',
+    signal,
+    body: bytes as BodyInit,
+    headers: Object.fromEntries(
+      // Content-Length is set by the browser and cannot be assigned.
+      upload.headers.filter(
+        ([name]) => name.toLowerCase() !== 'content-length',
+      ),
+    ),
+  });
+
+  if (!put.ok) {
+    throw new Error(`Vault file upload failed (${put.status})`);
+  }
+}
+
 /** Matches `MAX_URL_BATCH` in the control plane's vault API. */
 const DOWNLOAD_URL_BATCH = 64;
 
@@ -1019,7 +1507,11 @@ export async function downloadVaultObjects<T>(
 /** The cloud vault as a {@link RestoreSource}. */
 export function cloudRestoreSource(drivePseudonym: string): RestoreSource {
   return async onProgress => {
-    const objects = await listVaultObjects(drivePseudonym);
+    // File chunks are not sealed history: they are restored separately, one
+    // file at a time (`restoreDriveBlobs`), and must not be fed to the importer.
+    const objects = (await listVaultObjects(drivePseudonym)).filter(
+      o => o.kind !== 'blob',
+    );
 
     const bodies = await downloadVaultObjects(
       drivePseudonym,
@@ -1051,14 +1543,20 @@ export function cloudRestoreSource(drivePseudonym: string): RestoreSource {
  */
 export async function restoreDrive({
   db,
+  driveSubject,
   drivePseudonym,
   devicePubkey,
   driveKey,
   keyEpoch = 1,
   onProgress,
-  source = cloudRestoreSource(drivePseudonym),
+  source,
 }: {
   db: VaultCapableDb;
+  /**
+   * The drive being restored. With it (and the cloud vault as the source) the
+   * files its File resources reference are restored after the history.
+   */
+  driveSubject?: string;
   drivePseudonym: string;
   devicePubkey: string;
   driveKey: Uint8Array;
@@ -1066,7 +1564,9 @@ export async function restoreDrive({
   onProgress?: (downloaded: number, total: number) => void;
   source?: RestoreSource;
 }): Promise<RestoreOutcome> {
-  const fetched = await source(onProgress);
+  const fetched = await (source ?? cloudRestoreSource(drivePseudonym))(
+    onProgress,
+  );
 
   if (fetched.length === 0) {
     return {
@@ -1086,13 +1586,247 @@ export async function restoreDrive({
   // observed maps to decide what to replay and when — see `plan_restore` in
   // `lib/src/vault/sync.rs`. Passing everything and letting it choose is what
   // keeps that decision in one place rather than duplicated here in JS.
-  return db.vaultImport(
+  const outcome = await db.vaultImport(
     driveKey,
     keyEpoch,
     drivePseudonym,
     devicePubkey,
     fetched,
   );
+
+  // Files come after the resources that name them, and only from the cloud
+  // vault: a backup file or a snapshot carries sealed history only.
+  if (source || !driveSubject) return outcome;
+
+  const blobs = await restoreDriveBlobs({
+    db,
+    driveSubject,
+    drivePseudonym,
+    driveKey,
+    keyEpoch,
+  });
+
+  return blobs ? { ...outcome, blobs } : outcome;
+}
+
+/**
+ * Fetch the bytes of every file the restored drive references and this device
+ * lacks. Run after the resources are restored, since they name the hashes.
+ *
+ * The vault holds files by keyed id, which says nothing about which File
+ * resource a stored file belongs to. So each stored file is downloaded and
+ * handed to the db, which opens it with the drive key, hashes the result with
+ * plain BLAKE3 and stores it only if that hash is the `File.internalId` of a
+ * wanted file. Nothing unverified reaches the file store. A file in the vault
+ * that no wanted File names (deleted since) is opened and dropped. Memory: one
+ * file's chunks in JS, then one copy in the db, because the file store takes
+ * whole values.
+ *
+ * `hashes` overrides which files are wanted (a snapshot restore wants the
+ * snapshot's files, not the drive's current ones).
+ *
+ * Counting: `unreadable` is stored files that did not open or did not add up;
+ * `missing` is wanted files not accounted for after that. A broken stored file
+ * cannot be tied to a hash, so it is counted once, as unreadable.
+ *
+ * Returns `undefined` when the db cannot store files.
+ */
+export async function restoreDriveBlobs({
+  db,
+  driveSubject,
+  drivePseudonym,
+  driveKey,
+  keyEpoch = 1,
+  hashes: explicitHashes,
+  onProgress,
+}: {
+  db: VaultCapableDb;
+  driveSubject: string;
+  drivePseudonym: string;
+  driveKey: Uint8Array;
+  keyEpoch?: number;
+  hashes?: string[];
+  onProgress?: (done: number, total: number) => void;
+}): Promise<BlobRestoreOutcome | undefined> {
+  if (!db.vaultFileHashes || !db.vaultBlobPresent || !db.vaultBlobRestore) {
+    return undefined;
+  }
+
+  const hashes = [
+    ...new Set(
+      (explicitHashes ?? (await db.vaultFileHashes(driveSubject))).map(h =>
+        h.toLowerCase(),
+      ),
+    ),
+  ];
+  const outcome: BlobRestoreOutcome = {
+    restored: 0,
+    present: 0,
+    missing: 0,
+    unreadable: 0,
+  };
+  const wanted = new Set<string>();
+
+  for (const hash of hashes) {
+    if (await db.vaultBlobPresent(hash)) outcome.present++;
+    else wanted.add(hash);
+  }
+
+  const groups = new Map<string, { chunk: number; object: VaultObject }[]>();
+
+  for (const object of await listVaultObjects(drivePseudonym)) {
+    const key = blobKeyOf(object);
+
+    if (key) {
+      groups.set(key.id, [
+        ...(groups.get(key.id) ?? []),
+        { chunk: key.chunk, object },
+      ]);
+    }
+  }
+
+  let done = 0;
+
+  for (const [id, parts] of groups) {
+    if (wanted.size === 0) break;
+
+    onProgress?.(done++, groups.size);
+    parts.sort((a, b) => a.chunk - b.chunk);
+
+    // Chunks run 0.. without a gap, or the file is short.
+    if (!parts.every((part, n) => part.chunk === n)) {
+      outcome.unreadable++;
+      continue;
+    }
+
+    try {
+      const bodies = await downloadVaultObjects(
+        drivePseudonym,
+        parts.map(part => part.object),
+        async response => new Uint8Array(await response.arrayBuffer()),
+      );
+      const result = await db.vaultBlobRestore(driveKey, keyEpoch, id, bodies, [
+        ...wanted,
+      ]);
+
+      if (result.status === 'restored') {
+        outcome.restored++;
+
+        if (result.hash) wanted.delete(result.hash.toLowerCase());
+      } else if (result.status === 'unreadable') {
+        outcome.unreadable++;
+      }
+    } catch (error) {
+      // Losing the session or the network says nothing about this file.
+      if (
+        error instanceof VaultSessionEndedError ||
+        error instanceof TypeError
+      ) {
+        throw error;
+      }
+
+      outcome.unreadable++;
+    }
+  }
+
+  onProgress?.(groups.size, groups.size);
+  outcome.missing = Math.max(0, wanted.size - outcome.unreadable);
+
+  return outcome;
+}
+
+/** The part of a wasm `ClientDb` needed to read one snapshot. */
+export type ScratchVaultDb = {
+  vaultImport: VaultCapableDb['vaultImport'];
+  allSubjects(): string[] | Promise<string[]>;
+  getLoroSnapshot(
+    subject: string,
+  ): Uint8Array | null | Promise<Uint8Array | null>;
+  free?(): void;
+};
+
+/**
+ * Every resource of one snapshot as it was then: subject → Loro snapshot bytes.
+ *
+ * A snapshot id is the id of a checkpoint record, listed by the usage route and
+ * also carried by `state.checkpoints[].id`. That record names the checkpoint
+ * object (`checkpoint_object_id`, key `.../checkpoints/ckpt-N.loro`). A
+ * checkpoint holds every resource's whole oplog at that moment, so the object
+ * alone is the exact state; the change packs around it are newer or older
+ * history and are deliberately not read. It is opened in a scratch store, never
+ * in the live one, because importing only merges and the newer edits would stay.
+ */
+export async function readVaultSnapshot({
+  drivePseudonym,
+  snapshotId,
+  driveKey,
+  keyEpoch,
+  devicePubkey,
+  openScratchDb,
+  onProgress,
+}: {
+  drivePseudonym: string;
+  snapshotId: string;
+  driveKey: Uint8Array;
+  keyEpoch: number;
+  devicePubkey: string;
+  openScratchDb: () => Promise<ScratchVaultDb>;
+  onProgress?: (done: number, total: number) => void;
+}): Promise<{ state: Map<string, Uint8Array>; sealed: SealedObject }> {
+  const vaultState = await getVaultState(drivePseudonym);
+  const checkpoint = vaultState.checkpoints.find(c => c.id === snapshotId);
+
+  if (!checkpoint) {
+    throw new Error('This snapshot is no longer stored. Choose another one.');
+  }
+
+  const object = (await listVaultObjects(drivePseudonym)).find(
+    o => o.object_id === checkpoint.checkpoint_object_id,
+  );
+
+  if (!object) {
+    throw new Error('This snapshot is no longer stored. Choose another one.');
+  }
+
+  const [body] = await downloadVaultObjects(
+    drivePseudonym,
+    [object],
+    async response => new Uint8Array(await response.arrayBuffer()),
+    onProgress,
+  );
+  const sealed = { objectKey: object.object_key, sealed: body };
+  const scratch = await openScratchDb();
+
+  try {
+    // A fresh store already holds the built-in vocabulary; only what the
+    // checkpoint adds is the drive.
+    const builtIn = new Set(await scratch.allSubjects());
+    const summary = await scratch.vaultImport(
+      driveKey,
+      keyEpoch,
+      drivePseudonym,
+      devicePubkey,
+      [sealed],
+    );
+
+    if (summary.packsRead !== 1 || summary.objectsUnreadable > 0) {
+      throw new Error('This snapshot could not be opened.');
+    }
+
+    const state = new Map<string, Uint8Array>();
+
+    for (const subject of await scratch.allSubjects()) {
+      if (builtIn.has(subject)) continue;
+
+      const bytes = await scratch.getLoroSnapshot(subject);
+
+      if (bytes) state.set(subject, bytes);
+    }
+
+    return { state, sealed };
+  } finally {
+    scratch.free?.();
+  }
 }
 
 /**
@@ -1104,6 +1838,11 @@ export async function restoreDrive({
  * then on any device that can sign in as this account can get it back.
  */
 export type VaultKeyOps = {
+  /**
+   * A throw-away in-memory store, to read a snapshot without touching the
+   * drive on this device. Absent where the wasm bundle is not loaded.
+   */
+  openScratchDb?: () => Promise<ScratchVaultDb>;
   vaultGenerateKey(): Uint8Array;
   vaultWrapKey(driveKey: Uint8Array, agentSecret: Uint8Array): string;
   vaultUnwrapKey(envelope: string, agentSecret: Uint8Array): Uint8Array;

@@ -1,11 +1,19 @@
 import { useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { styled } from 'styled-components';
 import { useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { deviceHasDriveData } from '../helpers/driveData';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
+import { CLOUD_SERVER_PRICE } from '../helpers/cloudServerPrice';
+import { paths } from '../routes/paths';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { Button } from './Button';
+import { ToastBody } from './Notifications/toastStyles';
 import {
   AUTO_BACKUP_RETRY_MS,
   ensureVaultBackup,
+  onVaultFull,
   watchForVaultBackups,
 } from '../helpers/managed/vaultAutoBackup';
 
@@ -24,8 +32,43 @@ export function CloudVaultWatcher() {
   const store = useStore();
   const { agent } = useSettings();
   const subject = agent?.subject;
+  const navigate = useNavigateWithTransition();
 
   useEffect(() => watchForVaultBackups(store), [store]);
+
+  // A full vault is an upsell moment, not an error: no Bugsnag, and a button
+  // that goes to the plans for that drive.
+  useEffect(
+    () =>
+      onVaultFull(drive => {
+        toast.custom(
+          t => (
+            <VaultFullToast role='alert'>
+              <ToastBody>
+                <VaultFullText>
+                  Cloud Vault is full, so this drive is not being backed up.
+                </VaultFullText>
+              </ToastBody>
+              <UpgradeButton
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  void navigate(
+                    `${paths.sync}?${new URLSearchParams({ drive })}`,
+                  );
+                }}
+              >
+                Upgrade to Cloud Server from {CLOUD_SERVER_PRICE}
+              </UpgradeButton>
+              <Button subtle onClick={() => toast.dismiss(t.id)}>
+                Not now
+              </Button>
+            </VaultFullToast>
+          ),
+          { id: `vault-full:${drive}`, duration: Infinity },
+        );
+      }),
+    [navigate],
+  );
 
   useEffect(() => {
     if (!subject || !agent) return;
@@ -73,3 +116,29 @@ export function CloudVaultWatcher() {
 
   return null;
 }
+
+const VaultFullToast = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  max-width: 22rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid ${p => p.theme.colors.alert};
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
+  box-shadow: ${p => p.theme.boxShadowSoft};
+  color: ${p => p.theme.colors.text};
+`;
+
+const UpgradeButton = styled(Button)`
+  max-width: 100%;
+  white-space: normal;
+  text-align: start;
+`;
+
+/** Unlike a chat toast title, this sentence must wrap, not be cut off. */
+const VaultFullText = styled.span`
+  font-weight: 600;
+  font-size: 0.85rem;
+`;

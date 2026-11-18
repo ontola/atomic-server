@@ -8,24 +8,13 @@ import {
   FaVideo,
   FaVideoSlash,
 } from 'react-icons/fa6';
-import { joinRoom, type Room } from 'trystero/nostr';
-import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { Column, Row } from '../../components/Row';
 import {
   IconButton,
   IconButtonVariant,
 } from '../../components/IconButton/IconButton';
 import { AgentAvatar } from '../../components/Presence/AgentAvatar';
-
-/** Namespaces our rooms on the public signaling relays. */
-const APP_ID = 'dev.atomicdata.conference';
-
-interface PeerState {
-  /** The peer's atomic agent subject, once they've introduced themselves. */
-  agent?: string;
-  stream?: MediaStream;
-}
+import { joinCall, type PeerState } from './callTransport';
 
 type MediaError = 'denied' | 'unavailable';
 
@@ -40,11 +29,9 @@ export interface ConferenceRoomProps {
 }
 
 /**
- * In-meeting audio/video call. Fully peer-to-peer via WebRTC (Trystero):
- * peers find each other over public Nostr relays — the meeting subject is
- * hashed into the room id and doubles as the signaling password, so only
- * people who know the meeting can join or read the handshake. Media never
- * touches a server.
+ * In-meeting audio/video call. Transport (LiveKit SFU or peer-to-peer mesh)
+ * is chosen in `callTransport.ts`; this component only renders tiles and
+ * controls.
  */
 export default function ConferenceRoom({
   subject,
@@ -64,7 +51,7 @@ export default function ConferenceRoom({
   useEffect(() => {
     let cancelled = false;
     let stream: MediaStream | undefined;
-    let room: Room | undefined;
+    let leaveCall: (() => void) | undefined;
 
     async function join() {
       try {
@@ -98,50 +85,26 @@ export default function ConferenceRoom({
       setLocalStream(stream);
       setHasCamera(stream.getVideoTracks().length > 0);
 
-      room = joinRoom(
-        { appId: APP_ID, password: subject },
-        bytesToHex(sha256(utf8ToBytes(subject))),
-      );
+      const leave = await joinCall({
+        subject,
+        agentSubject,
+        stream,
+        setPeer: (id, patch) =>
+          setPeers(prev => ({ ...prev, [id]: { ...prev[id], ...patch } })),
+        removePeer: id =>
+          setPeers(prev => {
+            const next = { ...prev };
+            delete next[id];
 
-      const identity = room.makeAction<string>('identity');
+            return next;
+          }),
+      });
 
-      identity.onMessage = (peerAgent, { peerId }) => {
-        setPeers(prev => ({
-          ...prev,
-          [peerId]: { ...prev[peerId], agent: peerAgent },
-        }));
-      };
-
-      // Handlers are assigned before any peer can finish signaling, so
-      // every participant — present or future — comes through onPeerJoin
-      // exactly once; that's where we share our stream and identity.
-      room.onPeerJoin = peerId => {
-        setPeers(prev => ({ ...prev, [peerId]: prev[peerId] ?? {} }));
-
-        if (stream) {
-          room?.addStream(stream, { target: peerId });
-        }
-
-        if (agentSubject) {
-          identity.send(agentSubject, { target: peerId });
-        }
-      };
-
-      room.onPeerLeave = peerId => {
-        setPeers(prev => {
-          const next = { ...prev };
-          delete next[peerId];
-
-          return next;
-        });
-      };
-
-      room.onPeerStream = (peerStream, peerId) => {
-        setPeers(prev => ({
-          ...prev,
-          [peerId]: { ...prev[peerId], stream: peerStream },
-        }));
-      };
+      if (cancelled) {
+        leave();
+      } else {
+        leaveCall = leave;
+      }
     }
 
     join();
@@ -149,7 +112,7 @@ export default function ConferenceRoom({
     return () => {
       cancelled = true;
       stream?.getTracks().forEach(track => track.stop());
-      room?.leave();
+      leaveCall?.();
       setLocalStream(undefined);
       setPeers({});
       setError(undefined);

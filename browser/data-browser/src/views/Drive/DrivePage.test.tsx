@@ -83,6 +83,14 @@ vi.mock('@components/Dialog/useDialog', () => ({
   useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
 vi.mock('./EmptyDriveStart', () => ({ EmptyDriveStart: () => <div /> }));
+vi.mock('@components/IconButton/IconButton', () => ({
+  IconButton: ({ children }: { children?: React.ReactNode }) => (
+    <button>{children}</button>
+  ),
+}));
+vi.mock('@components/SideBar/GettingStartedPanel', () => ({
+  GettingStartedPanel: () => <div />,
+}));
 vi.mock('./DriveSettingsDialog', () => ({
   DriveSettingsDialog: () => <div />,
 }));

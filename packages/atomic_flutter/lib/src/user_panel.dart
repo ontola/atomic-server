@@ -115,6 +115,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
 
   String? _revealed;
   bool _signInOpen = false;
+  String? _linked;
   String? _signInNote;
   bool _signInFailed = false;
 
@@ -150,6 +151,11 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
         _loads++;
       });
       _follow();
+      if (_backend.accountProviderName != null) {
+        _backend.linkedAccount().then((a) {
+          if (mounted) setState(() => _linked = a);
+        }, onError: (Object _) {});
+      }
       // Listing the drives reads each one, which is slow with many: after the
       // panel is up.
       drives = await _backend.listDrives();
@@ -313,6 +319,24 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
     if (!failed) await _load();
   }
 
+  Future<void> _signInWithAccount() async {
+    String? note;
+    var failed = false;
+    try {
+      note = await _backend.signInWithAccount!(context);
+    } catch (e) {
+      note = '$e'.replaceFirst('Bad state: ', '');
+      failed = true;
+    }
+    if (!mounted || note == null) return;
+    setState(() {
+      _signInNote = note;
+      _signInFailed = failed;
+      _revealed = null;
+    });
+    if (!failed) await _load();
+  }
+
   Future<void> _signInAsOther() async {
     if (await widget.signInAsOther!(context) && mounted) await _load();
   }
@@ -456,7 +480,9 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                 tone: SyncTone.error, icon: Icons.error_outline),
           ),
         _identity(c),
-        if (_backend.signInWithSecret != null) _secrets(c),
+        if (_backend.signInWithSecret != null ||
+            _backend.signInWithAccount != null)
+          _secrets(c),
         _workspaceSwitcher(c),
         if (widget.accountBuilder != null)
           widget.accountBuilder!(context, info),
@@ -595,16 +621,27 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                 padding: const EdgeInsets.all(SyncGap.l),
                 child: SelectableText(_revealed!, style: SyncText.mono(c)),
               ),
-            SyncRow(
-              icon: Icons.login,
-              title: 'Sign in with a secret key',
-              trailing: Icon(
-                  _signInOpen ? Icons.expand_less : Icons.expand_more,
-                  size: 24,
-                  color: c.textSecondary),
-              onTap: () => setState(() => _signInOpen = !_signInOpen),
-            ),
-            if (_signInOpen)
+            if (_backend.signInWithAccount != null)
+              SyncRow(
+                key: const ValueKey('user-signin-account'),
+                icon: Icons.cloud_outlined,
+                title: _linked == null
+                    ? 'Sign in with ${_backend.accountProviderName}'
+                    : 'Linked to ${_backend.accountProviderName}',
+                subtitle: _linked,
+                onTap: _signInWithAccount,
+              ),
+            if (_backend.signInWithSecret != null)
+              SyncRow(
+                icon: Icons.login,
+                title: 'Sign in with a secret key',
+                trailing: Icon(
+                    _signInOpen ? Icons.expand_less : Icons.expand_more,
+                    size: 24,
+                    color: c.textSecondary),
+                onTap: () => setState(() => _signInOpen = !_signInOpen),
+              ),
+            if (_signInOpen && _backend.signInWithSecret != null)
               Padding(
                 padding: const EdgeInsets.all(SyncGap.l),
                 child: Column(children: [

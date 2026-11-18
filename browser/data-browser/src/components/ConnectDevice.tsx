@@ -3,7 +3,10 @@ import { styled } from 'styled-components';
 import { Button } from './Button';
 import { PairingCode } from './PairingCode';
 import { cardSurface } from './cardSurface';
-import { classifyConnectInput } from '../helpers/connectInput';
+import {
+  classifyConnectInput,
+  describeUnreachable,
+} from '../helpers/connectInput';
 import { deliverDeepLink } from '../helpers/deepLinkQueue';
 import { probeServer } from '../helpers/probeServer';
 
@@ -87,7 +90,7 @@ export function ConnectDevice({
       if (probe !== 'node') {
         setMessage(
           probe === 'unreachable'
-            ? 'Could not reach that address.'
+            ? describeUnreachable(parsed.url)
             : 'That address answers, but it is not an AtomicServer.',
         );
 

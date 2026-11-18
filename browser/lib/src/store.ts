@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
@@ -30,6 +31,7 @@ import {
   signRequest,
 } from './authentication.js';
 import { Client, isOwnServerUrl, type FileOrFileLike } from './client.js';
+import { isOriginBackoffError, noteOriginReachable } from './origin-backoff.js';
 import {
   CommitBuilder,
   commitIdOf,
@@ -76,6 +78,7 @@ import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { LoroLoader } from './loro-loader.js';
+import { loroCall } from './loro-context.js';
 import { withDeadline } from './withDeadline.js';
 
 /** How long a connected store waits on its local database before asking the server. */
@@ -597,6 +600,10 @@ const embeddedVocabulary = new Set<string>([
   server.classes.release,
   server.classes.installation,
   server.classes.listing,
+  server.classes.externalApp,
+  server.properties.homepage,
+  server.properties.openUrlTemplate,
+  server.properties.handlesClasses,
   core.properties.importBaseline,
   core.properties.importResolution,
   core.properties.importReferenceReview,
@@ -712,7 +719,7 @@ export class Store {
   private presenceManagers: Map<string, DrivePresenceManager> = new Map();
   private localPresenceListeners = new Set<LocalPresenceListener>();
   /** This tab's presence session, shared by every channel it announces in. */
-  public readonly presenceSessionId: string = crypto.randomUUID();
+  public readonly presenceSessionId: string = randomUUID();
   private injectedFetch: Fetch;
   /** The base URL of an Atomic Server. Where commits, search, and
    *  new-instance requests are sent. */
@@ -3254,7 +3261,9 @@ export class Store {
       // A snapshot export commits pending ops, untagged; keep a mid-edit
       // persist from stripping the edit's history token.
       resource.sealPendingEdits();
-      const snapshot = doc?.export({ mode: 'snapshot' });
+      const snapshot = doc
+        ? loroCall('export', doc, () => doc.export({ mode: 'snapshot' }))
+        : undefined;
 
       // Skipped when this exact state is already written there: a table
       // built from a template used to do 64 writes for 15 resources.
@@ -4984,7 +4993,10 @@ export class Store {
       if (
         foreignOrigin !== undefined &&
         !result.cancelled &&
-        isProxyWorthyError(result.resource.error)
+        isProxyWorthyError(result.resource.error) &&
+        // The origin failed moments ago, and so did the proxy then: had it
+        // answered, the origin would be in `_proxiedOrigins` (`proxyFirst`).
+        (proxyFirst || !isOriginBackoffError(result.resource.error))
       ) {
         const retried = await fetchVia(!proxyFirst);
 
@@ -5961,6 +5973,9 @@ export class Store {
    * Called from `WSClient.handleOpen` AFTER the outbox drain completes.
    */
   public refetchOfflineErroredResources(): void {
+    // The server is back, so its HTTP fetches may go out again.
+    if (this.serverUrl) noteOriginReachable(this.serverUrl);
+
     for (const [subject, resource] of this.resources.entries()) {
       if (resource.hasPendingCommits) continue;
       const erroredOffline = isTransportError(resource.error);
@@ -6109,6 +6124,17 @@ export class Store {
     }
 
     this.emitSyncStatus();
+
+    // A node that does not host this drive refuses all of it. Ask the app
+    // whether it is an unhosted drive it can keep browser-only, the same as
+    // for a refused outbox write. Moving it local clears the error again
+    // (`makeDriveLocal`), so the Sync page stops showing the refusal.
+    if (isNotEnrolledMessage(message) && this.refusedDriveHandler) {
+      void this.healRefusedDrive(
+        this.refusedDriveOf(message) ?? drive,
+        message,
+      ).catch(e => console.warn('[Store] refused drive handler failed:', e));
+    }
   }
 
   /** How long a read waits for the local database before asking the

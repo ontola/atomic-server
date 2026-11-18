@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Store } from './store.js';
 import { webcrypto } from 'node:crypto';
-import { BrowserPeerSync, browserPeerId } from './browser-peer-sync.js';
+import {
+  BrowserPeerSync,
+  browserPeerId,
+  describePeerFailure,
+} from './browser-peer-sync.js';
 
 const peers = vi.hoisted(
   () =>
@@ -280,4 +284,13 @@ it('keeps the last failure in the waiting status', async () => {
   markReady(failing, ids[0]);
   expect(statuses.at(-1)).toBe('Connected to 1 browser');
   failing.close();
+});
+
+it('turns transport framing errors into a readable status, and passes others through', () => {
+  const readable = describePeerFailure('Invalid Atomic frame size');
+  expect(readable).not.toMatch(/frame/i);
+  expect(readable).toMatch(/Reload or update/);
+  expect(describePeerFailure('Peer access removed')).toBe(
+    'Peer access removed',
+  );
 });

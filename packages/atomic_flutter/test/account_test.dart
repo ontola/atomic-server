@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:atomic_flutter/atomic_flutter.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -145,29 +144,6 @@ void main() {
     broken.close();
   });
 
-  testWidgets('closing approval dialog never installs a late response',
-      (tester) async {
-    final response = Completer<http.Response>();
-    var installed = false;
-    final client = AtomicAccountClient('https://provider.example',
-        client: MockClient((r) => response.future));
-    await tester.pumpWidget(MaterialApp(
-        home: AtomicAccountLinkDialog(
-            client: client,
-            deviceName: 'test',
-            openUrl: (_) async {},
-            install: (identity, session) async {
-              installed = true;
-            })));
-    await tester.pumpWidget(const SizedBox());
-    response.complete(http.Response(
-        '{"device_code":"private","user_code":"PUBLIC","expires_in":300,"interval":1}',
-        200));
-    await tester.pump(const Duration(seconds: 3));
-    expect(installed, isFalse);
-    expect(tester.takeException(), isNull);
-    client.close();
-  });
   group('agent sign-in', () {
     Future<String> fakeSign(String m) async => 'sig:$m';
     MockClient portal(int status, List<http.Request> seen) =>

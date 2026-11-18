@@ -32,6 +32,9 @@ export type SecretCreateCopy = {
   copy: string;
   copied: string;
   saved: string;
+  /** A valid secret that has no account yet: only the email is missing. */
+  existingTitle: string;
+  existingText: string;
   emailText: string;
   submit: string;
   back: string;
@@ -66,6 +69,9 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
       copy: 'Copy',
       copied: 'Copied',
       saved: 'I have saved my secret',
+      existingTitle: 'Create your account',
+      existingText:
+        'This secret is valid, but no account uses it yet. Add your email to create one.',
       emailText:
         'Add your email to finish. Your account always has one, for invoices and for signing in when your secret is not at hand.',
       submit: 'Create account',
@@ -127,6 +133,9 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
       copy: 'Kopiëren',
       copied: 'Gekopieerd',
       saved: 'Ik heb mijn secret bewaard',
+      existingTitle: 'Maak je account aan',
+      existingText:
+        'Dit secret is geldig, maar er hoort nog geen account bij. Vul je e-mailadres in om er een te maken.',
       emailText:
         'Vul je e-mailadres in om af te ronden. Je account heeft er altijd een, voor facturen en om in te loggen als je je secret niet bij de hand hebt.',
       submit: 'Account aanmaken',
@@ -221,6 +230,11 @@ export function AccountSignIn({
   secretSignUp?: {
     create: () => Promise<string>;
     submit: (secret: string) => void;
+    /** A secret the person pasted that is valid but has no account: the card
+     * skips showing it and goes straight to the email. */
+    unlinked?: string | null;
+    /** Back out of that step. */
+    dismiss?: () => void;
   };
   onPasskey: () => void;
   passkeySupported?: boolean;
@@ -247,18 +261,21 @@ export function AccountSignIn({
   const [secret, setSecret] = useState('');
   const [created, setCreated] = useState<string | null>(null);
 
-  if (created !== null && secretSignUp) {
+  const unlinked = secretSignUp?.unlinked ?? null;
+  const pending = created ?? unlinked;
+  if (pending !== null && secretSignUp) {
     return (
       <div className='atomic-signin' data-signin-theme={theme}>
         <SecretCreated
-          secret={created}
+          secret={pending}
+          existing={created === null}
           copy={copy}
           email={email}
           onEmailChange={onEmailChange}
           emailInputId={emailInputId}
           busy={busy || sending}
-          onSubmit={() => secretSignUp.submit(created)}
-          onBack={() => setCreated(null)}
+          onSubmit={() => secretSignUp.submit(pending)}
+          onBack={() => (created !== null ? setCreated(null) : secretSignUp.dismiss?.())}
         />
         {notice}
       </div>
@@ -430,6 +447,7 @@ export function AccountSignIn({
  * the account. */
 function SecretCreated({
   secret,
+  existing,
   copy,
   email,
   onEmailChange,
@@ -439,6 +457,8 @@ function SecretCreated({
   onBack,
 }: {
   secret: string;
+  /** The person already holds this secret: no copy button or checkbox. */
+  existing: boolean;
   copy: AccountSignInCopy;
   email: string;
   onEmailChange: (email: string) => void;
@@ -460,33 +480,43 @@ function SecretCreated({
       }}
       data-test='secret-created'
     >
-      <h3 className='atomic-signin-title'>{text.title}</h3>
-      <p className='atomic-signin-hint'>{text.text}</p>
-      <div className='atomic-signin-secret'>
-        <code data-test='secret-created-value'>{secret}</code>
-        <button
-          type='button'
-          className='atomic-signin-option'
-          onClick={() =>
-            void navigator.clipboard?.writeText(secret).then(
-              () => setCopied(true),
-              () => undefined,
-            )
-          }
-        >
-          {copied ? text.copied : text.copy}
-        </button>
-      </div>
-      <label className='atomic-signin-check'>
-        <input
-          type='checkbox'
-          checked={saved}
-          onChange={e => setSaved(e.target.checked)}
-          data-test='secret-saved'
-        />
-        <span>{text.saved}</span>
-      </label>
-      <p className='atomic-signin-hint'>{text.emailText}</p>
+      <h3 className='atomic-signin-title'>
+        {existing ? text.existingTitle : text.title}
+      </h3>
+      {existing ? (
+        <p className='atomic-signin-hint'>{text.existingText}</p>
+      ) : (
+        <>
+          <p className='atomic-signin-hint'>{text.text}</p>
+          <div className='atomic-signin-secret'>
+            <code data-test='secret-created-value'>{secret}</code>
+            <button
+              type='button'
+              className='atomic-signin-option'
+              onClick={() =>
+                void navigator.clipboard?.writeText(secret).then(
+                  () => setCopied(true),
+                  () => undefined,
+                )
+              }
+            >
+              {copied ? text.copied : text.copy}
+            </button>
+          </div>
+          <label className='atomic-signin-check'>
+            <input
+              type='checkbox'
+              checked={saved}
+              onChange={e => setSaved(e.target.checked)}
+              data-test='secret-saved'
+            />
+            <span>{text.saved}</span>
+          </label>
+        </>
+      )}
+      {existing ? null : (
+        <p className='atomic-signin-hint'>{text.emailText}</p>
+      )}
       <label htmlFor={`${emailInputId}-new`}>{copy.emailLabel}</label>
       <input
         id={`${emailInputId}-new`}
@@ -500,7 +530,7 @@ function SecretCreated({
       <button
         type='submit'
         className='atomic-signin-submit'
-        disabled={busy || !saved || !email.trim()}
+        disabled={busy || (!existing && !saved) || !email.trim()}
       >
         {text.submit}
       </button>

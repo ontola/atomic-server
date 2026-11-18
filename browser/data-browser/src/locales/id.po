@@ -3222,6 +3222,7 @@ msgstr "Cari"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/connectableDrives.ts
+#: src/helpers/driveData.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
@@ -5431,6 +5432,7 @@ msgstr "Kelola akun →"
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Cloud Vault"
 msgstr "Cloud Vault"
 
@@ -5972,10 +5974,6 @@ msgid "Thank you. Your feedback has been received."
 msgstr "Terima kasih. Masukan Anda telah diterima."
 
 #: src/components/SideBar/FeedbackButton.tsx
-msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
-msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry. Jangan sertakan konten ruang kerja pribadi."
-
-#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback <0/>"
 msgstr "Masukan <0/>"
 
@@ -6045,6 +6043,7 @@ msgstr "Tidak dapat menyiapkan file. Pilih lagi untuk mencoba kembali."
 
 #: src/actions/resourceActions.tsx
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreDialog.tsx
 msgid "Restore"
 msgstr "Pulihkan"
 
@@ -8354,6 +8353,7 @@ msgstr "Salinan lokal tidak tersedia"
 
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/Toaster.tsx
 msgid "Report this error"
 msgstr "Laporkan kesalahan ini"
 
@@ -8401,10 +8401,6 @@ msgstr "Tidak dapat menyalin. Pilih teks di atas untuk menyalinnya secara manual
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "The report could not be sent. Your text is still here; try again."
 msgstr "Laporan tidak dapat dikirim. Teks Anda masih di sini; coba lagi."
-
-#: src/chunks/AI/ReportAIChatDialog.tsx
-msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Remove private information before sending."
-msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan kesalahan, serta deskripsi dan email opsional Anda kepada tim Atomic melalui Sentry. Lampiran, payload alat, dan penalaran tidak disertakan. Hapus informasi pribadi sebelum mengirim."
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "What went wrong? <0/>"
@@ -8592,11 +8588,11 @@ msgstr "Tambahkan catatan untuk orang yang Anda undang"
 msgid "Sending…"
 msgstr "Mengirim…"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Invite link copied"
 msgstr "Tautan undangan disalin"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Could not copy the link. Select it and copy it by hand."
 msgstr "Tidak dapat menyalin tautan. Pilih dan salin secara manual."
 
@@ -10192,6 +10188,7 @@ msgstr "Anda melewatkan pesan saat tidak di sini"
 msgid "You missed {0} messages while you were away"
 msgstr "Anda melewatkan {0} pesan saat tidak di sini"
 
+#: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
@@ -11094,10 +11091,6 @@ msgstr "Dicadangkan {0}"
 msgid "Backed up to {0}"
 msgstr "Dicadangkan ke {0}"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Cadangan terenkripsi data Anda. Hanya Anda yang dapat membacanya."
-
 #: src/routes/SyncRoute.tsx
 msgid "Manage plan"
 msgstr "Kelola paket"
@@ -11595,11 +11588,6 @@ msgstr "Kolom tabel wajib tidak ada dalam formulir ini:{0} {1} . Respons tidak d
 #: src/components/Vault/VaultStorage.tsx
 msgid "Reading what is stored…"
 msgstr "Membaca data yang tersimpan…"
-
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} riwayat lama dan file yang tidak digunakan dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."
 
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
@@ -12411,7 +12399,7 @@ msgstr "Daftar objek dan isinya tidak cocok."
 msgid "Older backup copies are removed, and so is the edit history of the backup: it keeps only the current state of every item. Restoring from it brings back your workspace as it is now, without its version history. Items you deleted recently can no longer be recovered from the backup. Your devices keep their own edit history and your workspace is not changed."
 msgstr "Salinan cadangan lama dihapus, begitu pula riwayat suntingan cadangan: hanya keadaan terkini setiap item yang disimpan. Memulihkan darinya mengembalikan ruang kerja seperti sekarang, tanpa riwayat versinya. Item yang baru dihapus tidak lagi dapat dipulihkan dari cadangan. Perangkat Anda tetap menyimpan riwayat suntingannya sendiri dan ruang kerja Anda tidak berubah."
 
-#: src/components/ConnectDevice.tsx
+#: src/helpers/connectInput.ts
 msgid "Could not reach that address."
 msgstr "Tidak dapat menghubungi alamat itu."
 
@@ -12764,6 +12752,11 @@ msgstr "Drive ini tidak berada di server. Orang yang Anda undang hanya dapat mem
 #: src/components/Share/ShareDialog.tsx
 msgid "A Cloud Server keeps this drive online for everyone, so nobody has to keep a browser open."
 msgstr "Cloud Server menjaga drive ini tetap online untuk semua orang, sehingga tidak ada yang harus membiarkan browser tetap terbuka."
+
+#. 0: CLOUD_SERVER_PRICE
+#: src/components/CloudVaultWatcher.tsx
+msgid "Upgrade to Cloud Server from {0}"
+msgstr "Tingkatkan ke Cloud Server mulai dari {0}"
 
 #: src/components/SideBar/MessagesPanel.tsx
 #: src/components/SideBar/MessagesPanel.tsx
@@ -13131,10 +13124,6 @@ msgstr "Tambahkan URL marketplace"
 msgid "Discover apps and integrations"
 msgstr "Temukan aplikasi dan integrasi"
 
-#: src/helpers/managed/vaultAutoBackup.ts
-msgid "Cloud Vault is full, so this drive is not being backed up. Free up space or upgrade your plan."
-msgstr "Cloud Vault penuh, sehingga drive ini tidak dicadangkan. Kosongkan ruang atau tingkatkan paket Anda."
-
 #: src/embed/MeetingChatOverlay.tsx
 #: src/embed/MeetingChatOverlay.tsx
 msgid "Close chat"
@@ -13481,7 +13470,7 @@ msgstr "Hanya tersimpan di perangkat ini"
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
-msgstr ""
+msgstr "Anda sudah masuk, tetapi penyimpanan pekerjaan Anda ke akun belum selesai. Periksa koneksi Anda lalu coba lagi."
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
@@ -13509,3 +13498,112 @@ msgstr "Disalin"
 #: src/components/Share/PeopleWithAccess.tsx
 msgid "Remove invite link"
 msgstr "Hapus tautan undangan"
+
+#: src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault is full, so this drive is not being backed up."
+msgstr "Cloud Vault penuh, sehingga drive ini tidak dicadangkan."
+
+#. 0: status.backedUpBy
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by {0}. Only that account can change it."
+msgstr "Drive ini dicadangkan oleh {0}. Hanya akun tersebut yang dapat mengubahnya."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This drive is backed up by another account. Only that account can change it."
+msgstr "Drive ini dicadangkan oleh akun lain. Hanya akun tersebut yang dapat mengubahnya."
+
+#. 0: app.name
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Open in {0}"
+msgstr "Buka di {0}"
+
+#. 0: app.name
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Open the {0} homepage"
+msgstr "Buka beranda {0}"
+
+#: src/views/Drive/ExternalAppList.tsx
+msgid "Apps in this drive"
+msgstr "Aplikasi di drive ini"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Snapshot"
+msgstr "Snapshot"
+
+#. 0: when
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Your drive will go back to how it was on {0}. Changes made after that moment will be lost for everyone who uses this drive."
+msgstr "Drive kamu akan kembali seperti pada {0}. Perubahan setelah saat itu akan hilang bagi semua orang yang menggunakan drive ini."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Items added since are moved to the Trash, and the restore is saved as a new change, so each item’s History still has what it replaced."
+msgstr "Item yang ditambahkan sejak itu dipindahkan ke Sampah, dan pemulihan disimpan sebagai perubahan baru, sehingga Riwayat setiap item tetap menyimpan apa yang digantikan."
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore a snapshot"
+msgstr "Pulihkan snapshot"
+
+#: src/components/Vault/VaultRestoreDialog.tsx
+msgid "Restore this backup?"
+msgstr "Pulihkan cadangan ini?"
+
+#. 0: url; 1: url.replace('https://', 'http://')
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. A server on your own machine usually speaks plain http, so try {1}."
+msgstr "Tidak dapat menjangkau {0}. Server di mesinmu sendiri biasanya memakai http biasa, jadi coba {1}."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running, and that this site is allowed to access other apps and services on this device (the lock icon in the address bar, then site settings). The server must also allow this site's origin."
+msgstr "Tidak dapat menjangkau {0}. Pastikan server berjalan, dan situs ini diizinkan mengakses aplikasi dan layanan lain di perangkat ini (ikon gembok di bilah alamat, lalu setelan situs). Server juga harus mengizinkan origin situs ini."
+
+#. 0: url
+#: src/helpers/connectInput.ts
+msgid "Could not reach {0}. Check that the server is running on that port."
+msgstr "Tidak dapat menjangkau {0}. Pastikan server berjalan di port tersebut."
+
+#. 0: response.status; 1: apiHost()
+#: src/helpers/managed/recovery.ts
+msgid "HTTP {0} from {1}"
+msgstr "HTTP {0} dari {1}"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Technical details about your setup (app version, server address and status) are attached. Remove private information before sending."
+msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan kesalahan, serta deskripsi dan email opsional Anda kepada tim Atomic melalui Sentry. Lampiran, payload alat, dan penalaran tidak disertakan. Detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server) disertakan. Hapus informasi pribadi sebelum mengirim."
+
+#: src/components/SideBar/FeedbackButton.tsx
+msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
+msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# objek cadangan tidak dapat dibaca"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# berkas tidak ada di cadangan"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# berkas tidak dapat dibaca"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Dipulihkan, tetapi tidak semuanya: {0}. Muat ulang halaman untuk melihat apa yang dipulihkan."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Cadangan terenkripsi untuk data dan berkas Anda. Hanya Anda yang dapat membacanya."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Berkas disertakan. Berkas dienkripsi di perangkat ini seperti yang lainnya dan dihitung ke dalam penyimpanan Cloud Vault cadangan ini."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."

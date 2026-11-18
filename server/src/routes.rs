@@ -335,6 +335,11 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::upload::upload_handler),
     )
     .service(
+        web::resource(handlers::client_reports::TUNNEL_PATH)
+            .guard(guard::Method(Method::POST))
+            .to(handlers::client_reports::relay),
+    )
+    .service(
         web::resource("/commit")
             .guard(guard::Method(Method::POST))
             .to(handlers::commit::post_commit),

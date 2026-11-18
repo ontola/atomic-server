@@ -18,6 +18,7 @@ import {
   type NewChatLogEntry,
 } from './chat-log.js';
 import { enableLoro, LoroLoader } from './loro-loader.js';
+import { loroCall } from './loro-context.js';
 import { decodeB64, encodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
 import { decodeGenesisCert, genesisSignerDid } from './genesis.js';
@@ -569,7 +570,9 @@ export class Resource<C extends OptionalClass = any> {
       const initializedFromSnapshot = !!stored;
 
       if (stored) {
-        this._loroDoc.import(stored);
+        const doc = this._loroDoc;
+
+        loroCall('import', doc, () => doc.import(stored), stored.length);
       } else {
         for (const [key, value] of Object.entries(this.#cache)) {
           if (!isDerivedByServer(key)) {
@@ -1626,7 +1629,10 @@ export class Resource<C extends OptionalClass = any> {
 
     // If it's the first commit, we must export a full snapshot.
     if (isFirstCommit || !this._loroVersionAtLastSave) {
-      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
+      const doc = this._loroDoc;
+      const snapshot = loroCall('export', doc, () =>
+        doc.export({ mode: 'snapshot' }),
+      );
 
       // A header-only snapshot (no ops) means "no changes worth sending".
       if (snapshot.length <= 4) {
@@ -1637,10 +1643,11 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Otherwise, export the incremental updates since the last save (the delta).
-    const delta = this._loroDoc.export({
-      mode: 'update',
-      from: this._loroVersionAtLastSave,
-    });
+    const from = this._loroVersionAtLastSave;
+    const doc = this._loroDoc;
+    const delta = loroCall('export', doc, () =>
+      doc.export({ mode: 'update', from }),
+    );
 
     if (delta.length <= 4) {
       return undefined;
@@ -1703,8 +1710,9 @@ export class Resource<C extends OptionalClass = any> {
     if (!snapshot || snapshot.length === 0) return;
 
     const { LoroDoc: LoroDocClass } = LoroLoader.Loro;
-    this._loroDoc = new LoroDocClass();
-    this._loroDoc.import(snapshot);
+    const doc = (this._loroDoc = new LoroDocClass());
+
+    loroCall('import', doc, () => doc.import(snapshot), snapshot.length);
     this._loroMap = this._loroDoc.getMap('properties');
 
     // Carry over the source's cursor VALUE, not the doc's current version.
@@ -4146,7 +4154,10 @@ export class Resource<C extends OptionalClass = any> {
 
     // The export seals pending ops; keep them under their history token.
     this.sealPendingEdits();
-    const snapshot = this._loroDoc?.export({ mode: 'snapshot' });
+    const doc = this._loroDoc;
+    const snapshot = doc
+      ? loroCall('export', doc, () => doc.export({ mode: 'snapshot' }))
+      : undefined;
 
     // Await the OPFS write — when `save()` resolves the edit MUST survive a
     // reload. A non-awaited write left a reload reading OPFS before the
@@ -4382,7 +4393,12 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       this.sealPendingEdits();
-      const status = doc.import(loroUpdate);
+      const status = loroCall(
+        'import',
+        doc,
+        () => doc.import(loroUpdate),
+        loroUpdate.length,
+      );
       this.absorbImportedOpsIntoSaveCursor(status.success);
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;

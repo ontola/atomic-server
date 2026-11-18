@@ -55,7 +55,7 @@ describe('managed metadata reads', () => {
     expect(fetch).toHaveBeenCalledTimes(7);
   });
 
-  it('shares explicit refreshes asked for at the same moment, and nothing else', async () => {
+  it('shares explicit refreshes asked for at the same moment', async () => {
     const fetch = vi.fn(async () => Response.json([]));
     vi.stubGlobal('fetch', fetch);
     const cache = new ManagedReadCache();
@@ -71,10 +71,30 @@ describe('managed metadata reads', () => {
     // Once settled, the next refresh asks again.
     await cache.fetch(url2, refresh);
     expect(fetch).toHaveBeenCalledTimes(2);
-    // A refresh is not served from, and does not feed, the shared 5 s read.
+    // A refresh's answer is the freshest there is: plain reads reuse it.
     await cache.fetch(url2, init);
-    await cache.fetch(url2, init);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    // A refresh never reuses a settled answer, though.
+    await cache.fetch(url2, refresh);
     expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('shares one request between a refresh and a plain read asked for together', async () => {
+    // The drive menu refreshes hosting states while the identity check reads
+    // the same enrollments: one page load sent /sync-enrollments twice.
+    const fetch = vi.fn(async () => Response.json([{ drive_subject: 'd' }]));
+    vi.stubGlobal('fetch', fetch);
+    const cache = new ManagedReadCache();
+    const url2 = 'https://account.example/api/sync-enrollments';
+    const responses = await Promise.all([
+      cache.fetch(url2, { ...init, cache: 'no-store' }),
+      cache.fetch(url2, init),
+      cache.fetch(url2, { ...init, cache: 'no-store' }),
+    ]);
+
+    for (const response of responses)
+      expect(await response.json()).toEqual([{ drive_subject: 'd' }]);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('does not reuse pending reads across logout or a completed mutation', async () => {
