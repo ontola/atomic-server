@@ -56,6 +56,8 @@ export function TableFilterValueInput({
       value={value}
       onChange={onChange}
       autoFocus={autoFocus}
+      label='Filter value'
+      normalizeNumbers
       messages={messages}
       choices={property.allowsOnly}
       Option={FilterTagOption}
@@ -74,6 +76,7 @@ export function TableFilterValueInput({
                 }
                 hideCreateOption
                 autoFocus={state.autoFocus}
+                disabled={state.disabled}
                 setSubject={subject => state.onChange(subject ?? '')}
               />
             )

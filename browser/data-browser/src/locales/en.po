@@ -13432,6 +13432,10 @@ msgid "The configured measurement is unavailable."
 msgstr "The configured measurement is unavailable."
 
 #: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Filter value"
+msgstr "Filter value"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Any"
 msgstr "Any"
 
