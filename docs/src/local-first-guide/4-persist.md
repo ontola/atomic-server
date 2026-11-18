@@ -219,8 +219,8 @@ ordinary sync; they never publish unsigned edits or bypass normal authorization.
 Probing is best effort and connection-scoped: old targets can be dropped on queue
 overflow or retry exhaustion, so a callback is not guaranteed for every save.
 
-This optional capability is currently implemented for browser WebRTC peers using
-the Rust-backed persistent client database. Legacy peers continue normal syncing
+Browser WebRTC peers use the Rust-backed persistent client database. Native Iroh
+peers expose the equivalent receipt stream described below. Legacy peers continue normal syncing
 without these receipt frames. Native Iroh full-sync confirmation and HTTP/WS server
 acceptance remain separate contracts. No callback alone is not a replication failure
 or evidence that a peer has retained nothing.
@@ -239,6 +239,61 @@ agent, database or connection invalidates outstanding requests, including switch
 away and back. Callback evidence is not persisted as a retention ledger. Reconnection
 can produce new evidence, and current retention or backup recovery still needs its
 own policy and verification.
+
+## Observe native Iroh receipts
+
+With the Rust `iroh` feature enabled, subscribe on the database before opening a
+peer connection or making changes:
+
+```rust,no_run
+# async fn example(db: atomic_lib::Db) -> Result<(), Box<dyn std::error::Error>> {
+let mut receipts = db.subscribe_replica_receipts();
+// Start/connect the native peer through the normal Iroh sync API.
+loop {
+    match receipts.recv().await {
+        Ok(evidence) => {
+            let receipt = &evidence.receipt;
+            println!("{} covers {} at {}", evidence.remote_node_id,
+                receipt.subject, receipt.version);
+            // Compare evidence.source with receipt.replica under your own
+            // trusted storage/device independence policy.
+        }
+        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+    }
+}
+# Ok(())
+# }
+```
+
+Native peers negotiate `iroh-storage-receipts-v1`, then automatically probe stored
+resource versions after bulk reconciliation and during live sync, within the
+drive bound by that connection's handshake. Other drives need their own
+drive-bound sync session. Each queued
+target keeps its captured version; a delayed response cannot become evidence for
+a newer edit. Compare independently captured versions by decoding their Loro
+version vectors: equivalent vectors can have different byte encodings. Wire
+responses must still echo the exact version string from their pending request. Native change notifications can coalesce before a snapshot is
+captured, so this API does not promise a receipt for every intermediate save.
+
+`IrohReplicaReceipt` contains the wire `receipt`, local `source` storage identity,
+verified `remote_agent`, authenticated QUIC `remote_node_id`, `local_agent`,
+`connection_generation`, `agent_generation` and `observed_at`. Keep this context
+when evaluating trust and independence. Node IDs, distinct storage IDs and an
+ordinary sync acknowledgement do not establish separate devices. The same
+resource-state coverage and persistent Redb flush checks serve browser and native
+receipts; blobs, keys, retention and complete recovery remain separate.
+
+The subscription is scoped to the backing database and shared by its clones,
+including `with_own_agent` views, with bounded buffering and no replay. Hosts with
+multiple agent views must filter `local_agent` and connection context; account
+generations belong to the originating agent view, not a global account counter.
+Subscribe first, handle lag, and treat observations as historical evidence. Account changes, connection replacement and disconnect fence
+outstanding requests; reconnecting can produce new observations. Missing evidence
+is not proof of replication failure. No application-issued probes are required,
+and receiving a receipt does not change the return contract of native saves or
+full-drive sync. Flutter/HTTP adapters must explicitly expose this Rust stream
+before their callers can consume it.
 
 ## Assess independent-replica evidence
 

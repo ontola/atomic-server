@@ -83,7 +83,7 @@ pub mod tag {
     /// Responder → invitee: `[0x53] [json {"drive": "...", "write": bool}]`,
     /// after the rights were granted to the `AUTH`-ed agent.
     pub const INVITE_OK: u8 = 0x53;
-    /// Browser peer only: request a flush receipt for a resource frontier.
+    /// Capability-gated peer request for a resource frontier flush receipt.
     /// 0x54/0x55 belong to the separate Iroh full-drive confirmation proposal.
     pub const STORAGE_RECEIPT_REQUEST: u8 = 0x56;
     pub const STORAGE_RECEIPT: u8 = 0x57;
@@ -91,6 +91,8 @@ pub mod tag {
 
 /// Advertised only by authenticated browser sessions with persistent storage.
 pub const CAP_BROWSER_STORAGE_RECEIPTS_V1: &str = "browser-storage-receipts-v1";
+/// Native Iroh peers only; never part of the general WebSocket capabilities.
+pub const CAP_IROH_STORAGE_RECEIPTS_V1: &str = "iroh-storage-receipts-v1";
 pub const STORAGE_RECEIPT_BARRIER: &str = "atomic-redb-flush-v1";
 pub const STORAGE_RECEIPT_MAX_FRAME: usize = 64 * 1024;
 
@@ -104,22 +106,117 @@ pub struct StorageReceiptRequest {
     pub version: String,
 }
 
+fn receipt_hex(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+fn receipt_subject(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 4096
+        && !value.contains(['#', '?'])
+        && crate::Subject::from(value).pure_id() == crate::identifiers::canonicalize_scheme(value)
+}
+
+/// Accept the canonical browser (standard padded) and native (URL-safe unpadded)
+/// spellings. Preserve the requested spelling for exact response correlation.
+fn receipt_frontier(value: &str) -> Option<loro::VersionVector> {
+    use base64::{engine::general_purpose, Engine as _};
+    if value.is_empty() || value.len() > 16 * 1024 {
+        return None;
+    }
+    let bytes = crate::agents::decode_base64(value).ok()?;
+    if general_purpose::STANDARD.encode(&bytes) != value
+        && general_purpose::URL_SAFE_NO_PAD.encode(&bytes) != value
+    {
+        return None;
+    }
+    let vv = loro::VersionVector::decode(&bytes).ok()?;
+    (!vv.is_empty() && vv.iter().all(|(_, counter)| *counter > 0)).then_some(vv)
+}
+
+fn receipt_frame<T: serde::Serialize>(tag: u8, value: &T) -> Option<Vec<u8>> {
+    let payload = serde_json::to_vec(value).ok()?;
+    if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+        return None;
+    }
+    let mut frame = vec![tag];
+    frame.extend(payload);
+    Some(frame)
+}
+
 impl StorageReceiptRequest {
+    pub fn validate(&self) -> bool {
+        receipt_hex(&self.nonce)
+            && receipt_subject(&self.drive)
+            && receipt_subject(&self.subject)
+            && self.frontier().is_some()
+    }
+
+    pub fn frontier(&self) -> Option<loro::VersionVector> {
+        receipt_frontier(&self.version)
+    }
+
     pub fn decode(payload: &[u8]) -> Option<Self> {
         if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
             return None;
         }
         let request: Self = serde_json::from_slice(payload).ok()?;
-        (request.nonce.len() == 64
-            && request
-                .nonce
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            && !request.version.is_empty()
-            && request.version.len() <= 16 * 1024
-            && request.drive.len() <= 4096
-            && request.subject.len() <= 4096)
-            .then_some(request)
+        request.validate().then_some(request)
+    }
+
+    pub fn encode_frame(&self) -> Option<Vec<u8>> {
+        self.validate()
+            .then(|| receipt_frame(tag::STORAGE_RECEIPT_REQUEST, self))
+            .flatten()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StorageReceiptReplica {
+    pub storage_id: String,
+    pub generation: String,
+}
+
+/// One completed historical storage barrier. It does not assert independence,
+/// current retention, reachability, or backup closure.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StorageReceipt {
+    pub nonce: String,
+    pub drive: String,
+    pub subject: String,
+    pub version: String,
+    pub replica: StorageReceiptReplica,
+    pub barrier: String,
+}
+
+impl StorageReceipt {
+    pub fn validate(&self) -> bool {
+        receipt_hex(&self.nonce)
+            && receipt_subject(&self.drive)
+            && receipt_subject(&self.subject)
+            && receipt_frontier(&self.version).is_some()
+            && receipt_hex(&self.replica.storage_id)
+            && receipt_hex(&self.replica.generation)
+            && self.barrier == STORAGE_RECEIPT_BARRIER
+    }
+
+    pub fn decode(payload: &[u8]) -> Option<Self> {
+        if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+            return None;
+        }
+        let receipt: Self = serde_json::from_slice(payload).ok()?;
+        receipt.validate().then_some(receipt)
+    }
+
+    pub fn encode_frame(&self) -> Option<Vec<u8>> {
+        self.validate()
+            .then(|| receipt_frame(tag::STORAGE_RECEIPT, self))
+            .flatten()
     }
 }
 
@@ -1865,6 +1962,100 @@ pub fn decode_sync_push(data: &[u8]) -> Option<DecodedSyncPush> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn receipt_request_fixture() -> StorageReceiptRequest {
+        let vv: loro::VersionVector = [(1, 2), (2, 1)].into_iter().collect();
+        StorageReceiptRequest {
+            nonce: "a".repeat(64),
+            drive: "atomic:drive".into(),
+            subject: "https://example.com/resource".into(),
+            version: crate::agents::encode_base64(&vv.encode()),
+        }
+    }
+
+    #[test]
+    fn storage_receipt_request_and_response_round_trip() {
+        use base64::{engine::general_purpose, Engine as _};
+        let mut request = receipt_request_fixture();
+        let bytes = crate::agents::decode_base64(&request.version).unwrap();
+        for version in [
+            request.version.clone(),
+            general_purpose::STANDARD.encode(bytes),
+        ] {
+            request.version = version;
+            let frame = request.encode_frame().unwrap();
+            let decoded = StorageReceiptRequest::decode(&frame[1..]).unwrap();
+            assert_eq!(decoded.version, request.version);
+            let receipt = StorageReceipt {
+                nonce: request.nonce.clone(),
+                drive: request.drive.clone(),
+                subject: request.subject.clone(),
+                version: request.version.clone(),
+                replica: StorageReceiptReplica {
+                    storage_id: "b".repeat(64),
+                    generation: "c".repeat(64),
+                },
+                barrier: STORAGE_RECEIPT_BARRIER.into(),
+            };
+            let frame = receipt.encode_frame().unwrap();
+            assert_eq!(frame[0], tag::STORAGE_RECEIPT);
+            assert_eq!(StorageReceipt::decode(&frame[1..]), Some(receipt.clone()));
+            for (field, value) in [
+                ("nonce", "bad"),
+                ("barrier", "ordinary-ack"),
+                ("version", "AQEC==="),
+            ] {
+                let mut invalid = serde_json::to_value(&receipt).unwrap();
+                invalid[field] = value.into();
+                assert!(StorageReceipt::decode(&serde_json::to_vec(&invalid).unwrap()).is_none());
+            }
+            let mut invalid = serde_json::to_value(&receipt).unwrap();
+            invalid["replica"]["storageId"] = serde_json::json!(["b".repeat(64)]);
+            assert!(StorageReceipt::decode(&serde_json::to_vec(&invalid).unwrap()).is_none());
+        }
+        assert!(!CAPABILITIES.contains(&CAP_IROH_STORAGE_RECEIPTS_V1));
+    }
+
+    #[test]
+    fn storage_receipt_rejects_invalid_subjects_sizes_and_frontiers() {
+        let original = receipt_request_fixture();
+        for field in ["drive", "subject"] {
+            for value in [
+                "".to_owned(),
+                "x".repeat(4097),
+                "é".repeat(2049),
+                "atomic:drive?query".into(),
+                "atomic:drive#fragment".into(),
+            ] {
+                let mut invalid = serde_json::to_value(&original).unwrap();
+                invalid[field] = value.into();
+                assert!(
+                    StorageReceiptRequest::decode(&serde_json::to_vec(&invalid).unwrap()).is_none()
+                );
+            }
+        }
+        for vv in [
+            loro::VersionVector::default(),
+            [(1, 0)].into_iter().collect(),
+            [(1, -1)].into_iter().collect(),
+            [(1, 1), (2, 0)].into_iter().collect(),
+        ] {
+            let request = StorageReceiptRequest {
+                version: crate::agents::encode_base64(&vv.encode()),
+                ..original.clone()
+            };
+            assert!(request.encode_frame().is_none());
+        }
+        for version in ["AQEC===".to_owned(), "a".repeat(16 * 1024 + 1)] {
+            let request = StorageReceiptRequest {
+                version,
+                ..original.clone()
+            };
+            assert!(request.encode_frame().is_none());
+        }
+        assert!(StorageReceiptRequest::decode(&vec![b' '; STORAGE_RECEIPT_MAX_FRAME]).is_none());
+        assert!(StorageReceipt::decode(&vec![b' '; STORAGE_RECEIPT_MAX_FRAME]).is_none());
+    }
 
     #[test]
     fn sync_push_envelopes_round_trip_and_stay_invisible_without_the_flag() {
