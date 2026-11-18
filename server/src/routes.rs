@@ -344,6 +344,11 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .guard(guard::Method(Method::POST))
             .to(handlers::commit::post_commit),
     )
+    .service(
+        web::resource("/storage-receipt")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::storage_receipt::post_storage_receipt),
+    )
     .service(web::resource("/download/{path:[^{}]+}").to(handlers::download::handle_download))
     .service(
         web::resource("/blob/{hash}")

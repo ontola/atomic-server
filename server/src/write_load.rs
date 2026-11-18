@@ -9,10 +9,13 @@
 //! ephemeral channel), so when the node is busy they can send fewer, fatter
 //! commits at no visible cost. This module is how the node says so.
 //!
-//! One [`WriteLoad`] is shared by `POST /commit` and the WebSocket `COMMIT`
-//! frame. A commit takes a [`WriteGuard`] before any work (signature check,
+//! One [`WriteLoad`] is shared by `POST /commit`, the WebSocket `COMMIT`
+//! frame, and explicit HTTP/WebSocket storage-receipt flushes. Receipt jobs
+//! keep their guard inside the blocking operation so disconnecting cannot
+//! release capacity while the disk barrier still runs.
+//! A commit takes a [`WriteGuard`] before any work (signature check,
 //! Loro merge, redb write) and holds it until it is answered, so
-//! `in_flight` is the number of commits the node is working on or queued
+//! `in_flight` counts commits and receipt barriers being worked on or queued
 //! behind the writer. By Little's law that equals commit rate times latency,
 //! which makes it a direct measure of how far behind the node is.
 //!

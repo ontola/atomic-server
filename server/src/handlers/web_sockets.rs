@@ -86,6 +86,10 @@ pub async fn web_socket_handler(
             request_origin,
             auth_nonce: atomic_lib::sync::protocol::new_challenge_nonce(),
             client_capabilities: Vec::new(),
+            auth_epoch: 0,
+            auth_pending: false,
+            receipt_auth_ready: false,
+            receipt_jobs: 0,
             fragments: None,
             commit_monitor_addr: appstate.commit_monitor.clone(),
             agent: for_agent,
@@ -139,6 +143,11 @@ pub struct WebSocketConnection {
     /// Capability names the client listed in a `HELLO` (0x37), if it sent
     /// one. Consulted before answering `COMMIT` with a slim `COMMIT_OK`.
     client_capabilities: Vec<String>,
+    /// Every AUTH arrival invalidates pending receipt work, even A→B→A.
+    auth_epoch: u64,
+    auth_pending: bool,
+    receipt_auth_ready: bool,
+    receipt_jobs: usize,
     /// A message arriving in continuation frames, until its last frame:
     /// whether it is text, and the bytes so far. See `handle_fragment`.
     fragments: Option<(bool, Vec<u8>)>,
@@ -424,6 +433,10 @@ impl WebSocketConnection {
             // a cloned agent handed to `handle_frame` would otherwise drop the
             // identity the AUTH just proved.
             ws_v2::tag::AUTH => {
+                self.auth_epoch = self.auth_epoch.wrapping_add(1);
+                let epoch = self.auth_epoch;
+                self.auth_pending = true;
+                self.receipt_auth_ready = false;
                 let store = self.store.clone();
                 let mut agent = self.agent.clone();
                 let bin_vec = bin.to_vec();
@@ -460,7 +473,15 @@ impl WebSocketConnection {
                         (responses, agent)
                     }
                     .into_actor(self)
-                    .map(|(responses, agent), actor, ctx| {
+                    .map(move |(responses, agent), actor, ctx| {
+                        if actor.auth_epoch != epoch {
+                            return;
+                        }
+                        actor.auth_pending = false;
+                        actor.receipt_auth_ready = !matches!(agent, ForAgent::Public)
+                            && responses
+                                .iter()
+                                .any(|frame| frame.first() == Some(&ws_v2::tag::AUTH_OK));
                         // Subscriptions were admitted under the previous
                         // identity; have the monitor re-check them against
                         // this one (see `Handler<RebindAgent>`).
@@ -473,8 +494,69 @@ impl WebSocketConnection {
                                 });
                         }
                         actor.agent = agent;
-                        for response in responses {
+                        for mut response in responses {
+                            if response.first() == Some(&ws_v2::tag::AUTH_OK) {
+                                let mut caps = ws_v2::CAPABILITIES.to_vec();
+                                caps.push(ws_v2::CAP_SERVER_STORAGE_RECEIPTS_V1);
+                                response = ws_v2::encode_auth_ok_with_caps(&caps);
+                            }
                             ctx.binary(response);
+                        }
+                    }),
+                );
+            }
+
+            ws_v2::tag::STORAGE_RECEIPT_REQUEST => {
+                // Optional evidence must never fan out unbounded flush tasks or
+                // inherit an identity whose reauthentication is still pending.
+                if self.auth_pending
+                    || !self.receipt_auth_ready
+                    || self.receipt_jobs >= 4
+                    || !self
+                        .client_capabilities
+                        .iter()
+                        .any(|cap| cap == ws_v2::CAP_SERVER_STORAGE_RECEIPTS_V1)
+                {
+                    return;
+                }
+                let Some(request) = ws_v2::StorageReceiptRequest::decode(&bin[1..]) else {
+                    return;
+                };
+                let allowed = match &self.agent {
+                    ForAgent::Sudo => true,
+                    ForAgent::AgentSubject(subject) => self
+                        .write_rate_limiter
+                        .check(&subject.to_string(), false)
+                        .is_ok(),
+                    ForAgent::Public => false,
+                };
+                if !allowed {
+                    return;
+                }
+                let Ok(load) = self.write_load.try_begin() else {
+                    return;
+                };
+                let store = self.store.clone();
+                let agent = self.agent.clone();
+                let epoch = self.auth_epoch;
+                self.receipt_jobs += 1;
+                ctx.spawn(
+                    async move {
+                        let result =
+                            super::storage_receipt::produce(store, agent.clone(), request, load)
+                                .await;
+                        (result, agent)
+                    }
+                    .into_actor(self)
+                    .map(move |(result, agent), actor, ctx| {
+                        actor.receipt_jobs -= 1;
+                        if actor.auth_epoch != epoch || actor.auth_pending || actor.agent != agent {
+                            return;
+                        }
+                        if let Ok(Some(receipt)) = result {
+                            if let Some(frame) = receipt.encode_frame() {
+                                ctx.binary(frame);
+                            }
                         }
                     }),
                 );

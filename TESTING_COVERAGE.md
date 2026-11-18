@@ -669,6 +669,38 @@ physical device independence, storage retention, blob/key completeness or full
 backup recovery. Native change notifications may coalesce before target capture;
 there is no every-intermediate-save receipt guarantee.
 
+### Automatic HTTP/WebSocket server receipts (#2538/#2592)
+
+`browser/lib/tests/server-receipts.integration.test.ts` runs the SDK against a
+real server with persistent Redb storage. HTTP and WebSocket saves automatically
+produce evidence for consecutive exact captured versions, including clients with
+no local database. The HTTP test holds an already-produced response while the
+next save completes, then verifies the older evidence retains its original
+target. A real WASM memory client reconnects and obtains fresh WS evidence for
+existing state without another save. The tests check actual transport provenance,
+stable scoped receiving identity, absent fabricated source identity and immutable
+event payloads.
+
+`server/tests/it/storage_receipts.rs` exercises signed HTTP and negotiated WS
+adapters, CORS capability discovery, authentication, URL/body tampering, wrong
+drives, denied reads, missing/uncovered state and bounded wire input. The
+`handlers::storage_receipt` cancellation regression first reproduced premature
+load-slot release, then verified the slot remains occupied until a held flush
+actually completes after its caller is canceled. A deterministic held-proof WS
+reauthentication test remains a coverage gap; the actor's epoch guard has been
+reviewed. Shared producer tests remain the
+coverage for persistent flush failures, memory exclusion, pending dependencies,
+open batches and local-only target reads. These adapter tests do not establish
+power-loss survival, endpoint trust, physical independence, future retention,
+blob/key completeness or recoverable backup guarantees.
+
+`browser/lib/src/server-receipts.test.ts` covers exact correlation, older targets,
+optional source identity, account/database/connection replacement, observer
+reentrancy, stalled worker cancellation, bounded retries and rotating inventories
+larger than the queue. HTTP adapter tests cover capability discovery, redirect
+refusal, signed-body requests and size limits. Existing WebSocket, save-receipt
+and commit-fallback regressions preserve normal save semantics.
+
 ### Cross-process — covered since 2026-07
 
 Both matter because `iroh_transport` holds the router and node identity in

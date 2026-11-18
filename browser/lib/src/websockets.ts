@@ -17,6 +17,15 @@ import {
   emitSubjectForCaps,
 } from './subject.js';
 import { Resource } from './resource.js';
+import { randomUUID } from './uuid.js';
+import {
+  decodeServerReceipt,
+  matchesServerReceipt,
+  SERVER_RECEIPT_CAPABILITY,
+  SERVER_RECEIPT_MAX_FRAME,
+  type ServerReceiptRequest,
+  type ServerReceiptWire,
+} from './server-receipts.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import { StoreEvents, type Store } from './store.js';
 import type { DriveItem } from './local-drive-copy.js';
@@ -267,6 +276,81 @@ function shortPropName(url: string): string {
  * All messages are binary frames — no JSON-AD parsing on the hot path.
  */
 export class WSClient {
+  private readonly receiptInstance = randomUUID();
+  private receiptEpoch = 0;
+  private pendingReceipts = new Map<
+    string,
+    {
+      request: ServerReceiptRequest;
+      resolve: (receipt?: ServerReceiptWire) => void;
+      cleanup: () => void;
+    }
+  >();
+
+  private rejectStorageReceipts(): void {
+    this.receiptEpoch++;
+
+    for (const pending of this.pendingReceipts.values()) {
+      pending.cleanup();
+      pending.resolve();
+    }
+
+    this.pendingReceipts.clear();
+  }
+
+  /** @internal Capability and authentication belong to this socket incarnation. */
+  public getStorageReceiptSession(): string | undefined {
+    if (
+      this._closed ||
+      this.isAuthenticating ||
+      this.readyState !== WebSocket.OPEN ||
+      !this.isAuthenticatedAsCurrentAgent() ||
+      !this._serverCaps.includes(SERVER_RECEIPT_CAPABILITY)
+    )
+      return;
+
+    return `${this.serverOrigin}:${this.receiptInstance}:${this.receiptEpoch}`;
+  }
+
+  /** @internal The owning bounded scheduler supplies the abort deadline. */
+  public requestStorageReceipt(
+    request: ServerReceiptRequest,
+    signal: AbortSignal,
+  ): Promise<ServerReceiptWire | undefined> {
+    if (
+      !this.getStorageReceiptSession() ||
+      signal.aborted ||
+      this.pendingReceipts.size >= 4
+    )
+      return Promise.resolve(undefined);
+    const payload = new TextEncoder().encode(JSON.stringify(request));
+    if (payload.length + 1 > SERVER_RECEIPT_MAX_FRAME)
+      return Promise.resolve(undefined);
+
+    return new Promise(resolve => {
+      const abort = () => {
+        this.pendingReceipts.delete(request.nonce);
+        resolve(undefined);
+      };
+
+      signal.addEventListener('abort', abort, { once: true });
+      this.pendingReceipts.set(request.nonce, {
+        request,
+        resolve,
+        cleanup: () => signal.removeEventListener('abort', abort),
+      });
+      const frame = new Uint8Array(payload.length + 1);
+      frame[0] = Tag.STORAGE_RECEIPT_REQUEST;
+      frame.set(payload, 1);
+
+      try {
+        this.sendBinary(frame);
+      } catch {
+        signal.removeEventListener('abort', abort);
+        abort();
+      }
+    });
+  }
   /** Tests set this to 0. */
   public static syncProbeDelayMs = SYNC_PROBE_DELAY_MS;
 
@@ -395,6 +479,7 @@ export class WSClient {
    *  hang for REQUEST_TIMEOUT (10 s) when the socket dies mid-flight
    *  — the next reconnect will fetch fresh state anyway. */
   private rejectAllPending(reason: string, cancellation = false): void {
+    this.rejectStorageReceipts();
     const err = cancellation
       ? new RequestCancelledError(reason)
       : new AtomicError(reason, ErrorType.Server);
@@ -723,6 +808,7 @@ export class WSClient {
     const { signal } = this.connection;
     signal.throwIfAborted();
     this.isAuthenticating = true;
+    this.rejectStorageReceipts();
 
     this.authPromise = (async () => {
       try {
@@ -1263,6 +1349,27 @@ export class WSClient {
     profilerTick(`ws.in.${tagName(tag)}`, data.length);
 
     switch (tag) {
+      case Tag.STORAGE_RECEIPT_RESPONSE: {
+        if (data.length > SERVER_RECEIPT_MAX_FRAME) break;
+        let receipt: ServerReceiptWire | undefined;
+
+        try {
+          receipt = decodeServerReceipt(
+            new TextDecoder('utf-8', { fatal: true }).decode(payload),
+          );
+        } catch {
+          break;
+        }
+
+        if (!receipt) break;
+        const pending = this.pendingReceipts.get(receipt.nonce);
+        if (!pending || !matchesServerReceipt(pending.request, receipt)) break;
+        this.pendingReceipts.delete(receipt.nonce);
+        pending.cleanup();
+        pending.resolve(receipt);
+        break;
+      }
+
       case Tag.AUTH_OK:
         // Resolved by waitForTag. The payload is the server's capability
         // list; remember it so features negotiate instead of guessing.
@@ -2187,6 +2294,9 @@ export class WSClient {
   }
 
   private async runVVSync(drive: string, explicit: boolean): Promise<void> {
+    const receiptIdentityGeneration = this.store.getIdentityGeneration();
+    const receiptDatabaseGeneration = this.store.getClientDbGeneration();
+    const receiptSession = this.getStorageReceiptSession();
     if (!explicit && !this.canAutomaticallySyncDrive(drive)) return;
     if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
@@ -2255,6 +2365,19 @@ export class WSClient {
       });
       if (!current() || (!explicit && !this.canAutomaticallySyncDrive(drive)))
         return;
+
+      if (
+        receiptSession &&
+        this.getStorageReceiptSession() === receiptSession &&
+        this.store.getIdentityGeneration() === receiptIdentityGeneration &&
+        this.store.getClientDbGeneration() === receiptDatabaseGeneration
+      ) {
+        this.store.seedServerReceiptTargets(
+          `${this.serverOrigin}/commit`,
+          localState,
+        );
+      }
+
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
