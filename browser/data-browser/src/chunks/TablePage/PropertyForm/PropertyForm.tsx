@@ -1,6 +1,7 @@
 import { core, Resource, unknownSubject, useString } from '@tomic/react';
-import { useCallback, useEffect, useMemo, useRef, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
+import { PropertyNameField, nameTableProperty } from '@tomic/table';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import { useValidation } from '@components/forms/formValidation/useValidation';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
@@ -22,7 +23,6 @@ export function PropertyForm({
   category,
   autoFocusName,
 }: PropertyFormProps): JSX.Element {
-  const nameInputRef = useRef<HTMLInputElement>(null);
   const {
     error: nameError,
     setError: setNameError,
@@ -54,19 +54,20 @@ export function PropertyForm({
   );
 
   const handleNameChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-
-      setName(value);
-
-      // The shortname is part of the property's identity, so it only follows
-      // the name while the property is being created. Renaming an existing
-      // property changes the label only.
-      if (!existingProperty) {
-        setShortName(stringToSlug((value ?? '').trim()));
-      }
+    (value: string) => {
+      const next = nameTableProperty(
+        {
+          name: name ?? '',
+          shortname: shortname ?? '',
+          existing: !!existingProperty,
+        },
+        value,
+        stringToSlug,
+      );
+      setName(next.name);
+      if (!existingProperty) setShortName(next.shortname);
     },
-    [setName, setShortName, existingProperty],
+    [name, shortname, setName, setShortName, existingProperty],
   );
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = useCallback(
@@ -94,37 +95,19 @@ export function PropertyForm({
     }
   }, []);
 
-  useEffect(() => {
-    if (!autoFocusName) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      nameInputRef.current?.focus();
-      nameInputRef.current?.select();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [autoFocusName, resource.subject]);
-
   const CategoryForm = categoryFormFactory(category);
 
   return (
     <Form onSubmit={handleSubmit}>
       <div>
         <InputWrapper $invalid={!!nameError}>
-          <InputStyled
-            ref={nameInputRef}
-            id='name-form'
-            type='text'
+          <PropertyNameField
+            Input={InputStyled}
+            focusKey={resource.subject}
             autoFocus={autoFocusName}
-            data-dialog-autofocus={autoFocusName ? true : undefined}
             value={name ?? ''}
             onChange={handleNameChange}
             placeholder='New Column'
-            onFocus={autoFocusName ? e => e.currentTarget.select() : undefined}
             onBlur={setNameTouched}
           />
         </InputWrapper>
