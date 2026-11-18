@@ -64,3 +64,9 @@ export type {
 export type { JSONValue } from './value.js';
 
 export { TableHeadingWrapper } from './chunks/TableEditor/TableHeading.js';
+
+export {
+  PropertyDateFormatField,
+  type PropertyDateFormatOption,
+} from './schema/PropertyDateFormatField.js';
+export { PropertyPrecisionField } from './schema/PropertyPrecisionField.js';
