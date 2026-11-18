@@ -3204,10 +3204,6 @@ msgstr "Vista predeterminada"
 msgid "Row is incomplete or has invalid data"
 msgstr "La fila está incompleta o tiene datos no válidos"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Open resource"
-msgstr "Abrir recurso"
-
 #: src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
 msgstr "Derechos insuficientes para ver el recurso"
@@ -3790,11 +3786,6 @@ msgstr "Intenta recargar la página. Si el problema persiste, es posible que otr
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0}/M input tokens"
 msgstr "{0}/M tokens de entrada"
-
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
 
 #. 0: subject
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
@@ -6515,10 +6506,6 @@ msgstr "No hay coincidencias. Prueba otra búsqueda o pídele a la IA que lo cre
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "Preguntar a la IA"
-
-#: src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Cargando"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -12840,10 +12827,6 @@ msgstr "Añadir un comentario"
 msgid "Open the comments for this resource"
 msgstr "Abrir los comentarios de este recurso"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Row menu"
-msgstr "Menú de fila"
-
 #: src/views/Drive/DriveHome.tsx
 msgid "Commented"
 msgstr "Comentado"
@@ -13420,10 +13403,6 @@ msgstr "Añadir filtro"
 msgid "Edit column"
 msgstr "Editar columna"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Añadir vista"
-
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
 msgstr "Invitado"
@@ -13511,3 +13490,15 @@ msgstr "Al pulsar Enviar informe compartes con el equipo de Atomic, mediante Sen
 #: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Informa de un error o sugiere una mejora. Tu mensaje y tu correo opcional se envían al equipo de Atomic mediante Sentry, junto con detalles técnicos de tu configuración (versión de la app, dirección y estado del servidor). No incluyas contenido privado del espacio de trabajo."
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Menú de fila"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Abrir recurso"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Añadir vista"

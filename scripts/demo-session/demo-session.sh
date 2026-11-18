@@ -147,10 +147,10 @@ build() {
   fi
 
   # The workspace packages the data-browser imports from their built dist/.
-  local pkgs=(lib react edit-mode plugin service-ui) dirs=() filters=()
+  local pkgs=(utils ui table lib react edit-mode plugin service-ui form-renderer) dirs=() filters=()
   for pkg in "${pkgs[@]}"; do
     dirs+=("$BROWSER/$pkg/src")
-    filters+=(--filter "@tomic/$pkg")
+    filters+=(--filter "@tomic/$pkg...")
   done
   if newer_than "$stamps/js-libs" "${dirs[@]}"; then
     log "Building ${pkgs[*]}"

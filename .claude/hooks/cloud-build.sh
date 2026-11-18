@@ -23,9 +23,8 @@ mark() { echo "$2" >"$STATE/$1.done"; }
 echo "==> Build @tomic workspace packages ($(date -u +%T))"
 cd "$REPO/browser" || exit 1
 # data-browser (which also compiles the WASM) is built by the server build.
-if pnpm --filter @tomic/lib --filter @tomic/react --filter @tomic/plugin \
-  --filter @tomic/service-ui --filter @tomic/edit-mode \
-  --filter @tomic/cli --filter @tomic/svelte -r build; then
+if pnpm --filter '@tomic/data-browser^...' \
+  --filter @tomic/cli... --filter @tomic/svelte... -r build; then
   mark packages ok
 else
   mark packages failed
