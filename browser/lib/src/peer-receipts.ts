@@ -1,3 +1,8 @@
+import {
+  attachmentManifestKey,
+  parseAttachmentManifest,
+  type AttachmentManifest,
+} from './resource-attachment-evidence.js';
 import { commits } from './ontologies/commits.js';
 import { canonicalizeScheme } from './subject.js';
 import { decodeB64, encodeB64 } from './base64.js';
@@ -16,6 +21,7 @@ export interface ReplicaIdentity {
  */
 export interface BrowserReplicaReceipt {
   readonly subject: string;
+  readonly manifest?: AttachmentManifest;
   readonly version: string;
   readonly source: ReplicaIdentity;
   readonly replica: ReplicaIdentity;
@@ -46,6 +52,7 @@ function validSubject(subject: unknown): subject is string {
 }
 
 interface Target {
+  manifest?: AttachmentManifest;
   subject: string;
   version: string;
   attempts: number;
@@ -57,6 +64,7 @@ interface Pending {
   expires: number;
 }
 interface ReceiptDependencies {
+  attachmentManifest?: (subject: string) => AttachmentManifest | undefined;
   drive: string;
   connectionId: string;
   current: () => boolean;
@@ -124,8 +132,12 @@ function validVersion(version: unknown): version is string {
   }
 }
 
-const keyOf = (target: Pick<Target, 'subject' | 'version'>) =>
-  JSON.stringify([target.subject, target.version]);
+const keyOf = (target: Pick<Target, 'subject' | 'version' | 'manifest'>) =>
+  JSON.stringify(
+    target.manifest
+      ? [target.subject, target.version, target.manifest]
+      : [target.subject, target.version],
+  );
 
 /** Connection-scoped bounded best-effort probing. Exact requested versions remain separate while newer reconciliation targets arrive.
  * No receipts or historical targets are promised across close/reload/overflow. */
@@ -164,7 +176,12 @@ export class PeerReceiptRequests {
     );
 
     for (const [key, target] of this.targets) {
-      if (canonicalizeScheme(target.subject) !== canonicalizeScheme(subject))
+      if (
+        canonicalizeScheme(target.subject) !== normalized &&
+        !target.manifest?.files.some(
+          file => canonicalizeScheme(file.subject) === normalized,
+        )
+      )
         continue;
       if (target.nonce) this.pending.delete(target.nonce);
       this.targets.delete(key);
@@ -172,7 +189,10 @@ export class PeerReceiptRequests {
 
     for (const key of this.settled.keys()) {
       if (
-        canonicalizeScheme(JSON.parse(key)[0]) === canonicalizeScheme(subject)
+        canonicalizeScheme(JSON.parse(key)[0]) === normalized ||
+        (JSON.parse(key)[2] as AttachmentManifest | undefined)?.files.some(
+          file => canonicalizeScheme(file.subject) === normalized,
+        )
       )
         this.settled.delete(key);
     }
@@ -231,7 +251,10 @@ export class PeerReceiptRequests {
       !validVersion(version)
     )
       return;
-    const key = keyOf({ subject, version });
+    const manifest = this.deps.attachmentManifest?.(subject);
+    if (this.deps.attachmentManifest && (!manifest || !manifest.files.length))
+      return;
+    const key = keyOf({ subject, version, manifest });
     if (
       (this.settled.get(key) ?? 0) > Date.now() ||
       this.targets.has(key) ||
@@ -239,7 +262,7 @@ export class PeerReceiptRequests {
     )
       return;
     this.settled.delete(key);
-    this.targets.set(key, { subject, version, attempts: 0 });
+    this.targets.set(key, { subject, version, manifest, attempts: 0 });
   }
 
   /** Dense VVs already exclude outbox-owned subjects. Rotate through the whole
@@ -343,11 +366,15 @@ export class PeerReceiptRequests {
             drive: this.deps.drive,
             subject: target.subject,
             version: target.version,
+            ...(target.manifest ? { manifest: target.manifest } : {}),
           }),
         );
 
         if (bytes.length + 1 > MAX_FRAME) {
-          this.settle(key, Infinity);
+          this.settle(
+            key,
+            this.deps.attachmentManifest ? Date.now() + 10_000 : Infinity,
+          );
           continue;
         }
 
@@ -359,7 +386,10 @@ export class PeerReceiptRequests {
           expires: Date.now() + PEER_RECEIPT_TIMEOUT_MS,
         });
         await this.deps.send(
-          new Uint8Array([Tag.STORAGE_RECEIPT_REQUEST, ...bytes]),
+          new Uint8Array([
+            this.deps.attachmentManifest ? 0x58 : Tag.STORAGE_RECEIPT_REQUEST,
+            ...bytes,
+          ]),
         );
         if (this.closed || !this.deps.current()) return;
       }
@@ -375,7 +405,8 @@ export class PeerReceiptRequests {
       this.closed ||
       !this.peerAgent ||
       !this.deps.current() ||
-      frame[0] !== Tag.STORAGE_RECEIPT_RESPONSE ||
+      frame[0] !==
+        (this.deps.attachmentManifest ? 0x59 : Tag.STORAGE_RECEIPT_RESPONSE) ||
       frame.length > MAX_FRAME
     )
       return;
@@ -392,9 +423,23 @@ export class PeerReceiptRequests {
         response.drive !== this.deps.drive ||
         response.subject !== pending.target.subject ||
         response.version !== pending.target.version ||
-        response.barrier !== PEER_STORAGE_BARRIER
+        response.barrier !==
+          (this.deps.attachmentManifest
+            ? 'atomic-attachment-flush-v1'
+            : PEER_STORAGE_BARRIER)
       )
         return;
+
+      if (pending.target.manifest) {
+        const manifest = parseAttachmentManifest(response.manifest);
+        if (
+          !manifest ||
+          attachmentManifestKey(manifest) !==
+            attachmentManifestKey(pending.target.manifest)
+        )
+          return;
+      }
+
       const replica = identity(response.replica);
       if (!replica) return;
       // Consume before awaiting the identity query: replayed frames cannot race.
@@ -413,12 +458,18 @@ export class PeerReceiptRequests {
         this.targets.get(key) !== pending.target
       )
         return;
-      this.settle(key, Infinity);
+      this.settle(
+        key,
+        this.deps.attachmentManifest ? Date.now() + 10_000 : Infinity,
+      );
       // Fill the freed bounded slot without waiting for the next inventory poll.
       void this.tick();
       const callback = this.deps.onReceipt?.(
         Object.freeze({
           subject: pending.target.subject,
+          ...(pending.target.manifest
+            ? { manifest: pending.target.manifest }
+            : {}),
           version: pending.target.version,
           replica,
           source,

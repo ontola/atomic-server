@@ -28,6 +28,8 @@ struct LogState {
 #[derive(Default)]
 pub struct WriteLog {
     state: Mutex<LogState>,
+    blob_generation: AtomicU64,
+    blob_writers: AtomicU64,
 }
 
 /// The subject a `Tree::Resources` / `Tree::LoroSnapshots` key names, if a
@@ -45,7 +47,28 @@ pub(super) fn logged_subject(tree: Tree, key: &[u8]) -> Option<String> {
     Some(key.to_string())
 }
 
+/// Marks an in-progress byte mutation, including failed writes and open commits.
+pub struct BlobWrite<'a>(&'a WriteLog);
+impl Drop for BlobWrite<'_> {
+    fn drop(&mut self) {
+        self.0.blob_generation.fetch_add(1, Ordering::SeqCst);
+        self.0.blob_writers.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 impl WriteLog {
+    pub fn blob_generation(&self) -> Option<u64> {
+        let generation = self.blob_generation.load(Ordering::SeqCst);
+        (self.blob_writers.load(Ordering::SeqCst) == 0).then_some(generation)
+    }
+    pub fn blob_write(&self, writing: bool) -> Option<BlobWrite<'_>> {
+        if !writing {
+            return None;
+        }
+        self.blob_writers.fetch_add(1, Ordering::SeqCst);
+        self.blob_generation.fetch_add(1, Ordering::SeqCst);
+        Some(BlobWrite(self))
+    }
+
     pub fn generation(&self) -> u64 {
         self.state.lock().map(|s| s.generation).unwrap_or(0)
     }

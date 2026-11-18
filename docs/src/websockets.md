@@ -140,6 +140,8 @@ logged and dropped, not answered.
 | `0x53` | `INVITE_OK` | Iroh responder | the dialer of the `INVITE`. A refusal is an `ERROR` with code 13 (`INVITE_REFUSED`). |
 | `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated peer | WebRTC `browser-storage-receipts-v1` or native `iroh-storage-receipts-v1`. |
 | `0x57` | `STORAGE_RECEIPT` | authenticated peer | Correlated live request on that same WebRTC or Iroh connection. |
+| `0x58` | `ATTACHMENT_RECEIPT_REQUEST` | authenticated peer | Negotiated `attachment-storage-receipts-v1` on WebRTC or native Iroh. |
+| `0x59` | `ATTACHMENT_RECEIPT` | authenticated peer | Exact live nonce, manifest and metadata target on the same connection. |
 
 ## Frame layouts
 
@@ -427,6 +429,57 @@ Reloading the embedded view can recover still-live host evidence; restarting the
 native process cannot recover it from disk. This bridge serves the native
 embedded renderer; the legacy Tauri renderer using a local HTTP server does not
 consume this native-host API.
+
+### Attachment storage receipts (0x58 / 0x59)
+
+The separate optional `attachment-storage-receipts-v1` capability adds
+`ATTACHMENT_RECEIPT_REQUEST` (`0x58`) and `ATTACHMENT_RECEIPT` (`0x59`). Resource
+receipts (`0x56` / `0x57`) retain their metadata-only meaning. Older peers ignore
+this unnegotiated capability and never acquire implicit attachment proof.
+
+An attachment request binds the authenticated drive, resource subject, requested
+metadata frontier, nonce and an exact canonical content manifest:
+
+```json
+{"files":[{"subject":"atomic:example-file","hash":"<lowercase BLAKE3 hex>","chunks":[]}]}
+```
+
+Files are sorted by canonical subject. `chunks` is empty for one stored blob;
+otherwise it contains ordered BLAKE3 chunk hashes and `hash` is the complete
+assembled-file hash. The manifest includes the resource's own File contents and
+its explicit direct attachment references. External or unreadable references,
+missing hashes and unsupported representations cannot be confirmed. Neither a
+resource version nor a file size substitutes for this content identity.
+
+The responder verifies read permission for every included resource, derives the
+manifest from local stored state, checks actual bytes and the storage barrier,
+and rechecks resource, blob, account and backend generations across asynchronous
+work. The reply echoes the exact request, supplies a scoped replica identity,
+and uses `atomic-attachment-flush-v1`. Requesters reject stale nonces, changed
+manifests and replaced sessions. Attachment probes refresh after 10 seconds;
+positive byte proof expires after 30 seconds without a fresh acknowledgement,
+even when the peer remains connected and its metadata receipt is still valid.
+Both metadata and contents must match the same
+current destination before a complete resource copy is displayed.
+
+Verification is bounded and cached under blob mutation and backend-version
+fences. Native verification runs outside the transport read loop. Missing or
+corrupt chunks, failed barriers and oversized requests produce no positive
+receipt. External object backends cannot use the local metadata database's
+identity to claim another peer file copy.
+
+`getResourceAttachmentEvidence(subjects)` supplies local byte evidence to WASM
+and embedded views. `POST /attachment-evidence` supplies the server equivalent:
+a version-2 signed JSON body `{"subjects":[...]}`, at most 128 subjects and 64 KiB,
+with a `no-store` JSON response. Root and referenced File snapshots and bytes
+are read from local storage; a missing root or File is not fetched to create
+evidence. Local WASM cache reads use the same trusted boundary as existing local
+resource/blob reads; a browser cache has no Rust default signing agent. Remote
+HTTP and peer requests retain inherited permission checks, which may resolve an
+uncached ancestor. Configured S3 storage
+uses its explicit complete-object/version contract plus verified reads; a local
+KV flush alone never confirms S3 bytes. Native peer evidence remains session
+scoped and expires when the host detects disconnection.
 
 ### EPHEMERAL (0x40)
 

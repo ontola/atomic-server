@@ -1,3 +1,4 @@
+import { resourceAttachmentDescriptor } from './resource-attachment-evidence.js';
 import { authorizeBrowserInvite } from './browser-peer-invite.js';
 import type { Agent } from './agent.js';
 import type { ClientDbWorker } from './client-db.js';
@@ -413,6 +414,7 @@ class BrowserPeerConnection {
   private unsubscribeReceipts?: () => void;
   private unregisterReceiptSession?: () => void;
   private receipts?: PeerReceiptRequests;
+  private attachmentReceipts?: PeerReceiptRequests;
   private readonly peerGeneration: number;
   private readonly connectionId = randomPeerToken();
   private stopped = false;
@@ -452,11 +454,49 @@ class BrowserPeerConnection {
         return this.options.onReplicaReceipt?.(receipt);
       },
     });
+    const attachmentReceipts = new PeerReceiptRequests({
+      attachmentManifest: subject => {
+        const resource = this.store.resources.get(
+          this.store.normalizeSubject(subject),
+        );
+
+        return resource
+          ? resourceAttachmentDescriptor(this.store, resource).manifest
+          : undefined;
+      },
+      drive: this.options.drive,
+      connectionId: this.connectionId,
+      current: () => this.current(),
+      getSource: () =>
+        typeof this.db.getReplicaIdentity === 'function'
+          ? this.db.getReplicaIdentity(this.options.drive)
+          : Promise.resolve(undefined),
+      canSend: subject =>
+        this.session === undefined
+          ? Promise.resolve(false)
+          : this.db.canSendPeerFrame(this.session, subject),
+      send: async bytes => {
+        const pipe = await this.peer.transport;
+        if (this.current()) await pipe.send(bytes);
+      },
+      onSourceChanged: () =>
+        this.store.invalidateResourcePeerSession(this.connectionId),
+      onReceipt: receipt => {
+        if (!this.current()) return;
+        if (receipt.manifest)
+          this.store.acknowledgeResourceAttachmentReceipt({
+            ...receipt,
+            manifest: receipt.manifest,
+          });
+      },
+    });
+    this.attachmentReceipts = attachmentReceipts;
     this.receipts = receipts;
     this.unsubscribeReceipts = this.store.on(
       StoreEvents.ResourcePeerEvidenceRemoved,
       subject => {
         receipts.remove(subject);
+        attachmentReceipts.remove(subject);
       },
     );
     void this.peer.transport
@@ -487,6 +527,7 @@ class BrowserPeerConnection {
     this.unsubscribeReceipts?.();
     this.unregisterReceiptSession?.();
     this.receipts?.close();
+    this.attachmentReceipts?.close();
     this.peer.close();
     if (this.session !== undefined)
       void this.db.closePeerSession(this.session).catch(() => {});
@@ -522,6 +563,7 @@ class BrowserPeerConnection {
     let accepted = false;
     let peerAgent: string | undefined;
     let receiptCapability = false;
+    let attachmentCapability = false;
     let started = false;
     let pendingAuth: Record<string, unknown> | undefined;
     const timeout = setTimeout(() => {
@@ -560,9 +602,15 @@ class BrowserPeerConnection {
           if (!challenged || accepted)
             throw new Error('Unexpected authentication acknowledgement');
           accepted = true;
+          attachmentCapability = decodeAuthOk(frame.subarray(1)).includes(
+            'attachment-storage-receipts-v1',
+          );
           receiptCapability = decodeAuthOk(frame.subarray(1)).includes(
             CAP_BROWSER_STORAGE_RECEIPTS,
           );
+        } else if (frame[0] === 0x59) {
+          if (authenticated && accepted && attachmentCapability)
+            await this.attachmentReceipts?.receive(frame);
         } else if (frame[0] === Tag.STORAGE_RECEIPT_RESPONSE) {
           if (authenticated && accepted && receiptCapability)
             await receipts.receive(frame);
@@ -644,6 +692,8 @@ class BrowserPeerConnection {
                 peerAgent,
               );
             if (receiptCapability) receipts.enable(peerAgent);
+            if (attachmentCapability)
+              this.attachmentReceipts?.enable(peerAgent);
           }
 
           clearTimeout(timeout);
@@ -674,6 +724,7 @@ class BrowserPeerConnection {
 
               if (current()) {
                 receipts.seed(state);
+                this.attachmentReceipts?.seed(state);
                 await pipe.send(
                   encodeSync(
                     this.options.drive,
@@ -685,6 +736,7 @@ class BrowserPeerConnection {
                   ),
                 );
                 await receipts.tick();
+                await this.attachmentReceipts?.tick();
               }
             } finally {
               syncing = false;
@@ -695,6 +747,10 @@ class BrowserPeerConnection {
             (subject, bytes) => {
               if (!current()) return;
               const observe = receipts.captureFrame(subject, bytes);
+              const observeAttachment = this.attachmentReceipts?.captureFrame(
+                subject,
+                bytes,
+              );
               const resource = this.store.resources.get(subject);
               const drive = resource?.get(
                 'https://atomicdata.dev/properties/drive',
@@ -735,6 +791,8 @@ class BrowserPeerConnection {
                         if (!current()) return;
                         observe();
                         void receipts.tick();
+                        observeAttachment?.();
+                        void this.attachmentReceipts?.tick();
                       });
                   })
                   .catch(error => this.fail(error));

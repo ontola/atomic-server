@@ -10,6 +10,7 @@ import {
   type VaultSyncScope,
   type ResourceVaultEvidence,
   type SerializedVaultReceipt,
+  type SerializedVaultAttachmentReceipt,
 } from '@tomic/lib';
 import {
   bindResourceVaultScope,
@@ -17,6 +18,8 @@ import {
   captureResourceVaultOperation,
   clearResourceVaultScopes,
   getResourceVaultSyncStatus,
+  getResourceVaultAttachmentSyncStatus,
+  subscribeResourceVaultAttachmentSyncStatus,
   invalidateResourceVaultProof,
   subscribeResourceVaultSyncStatus,
   type VaultReceiptDb,
@@ -359,5 +362,126 @@ describe('resource Vault proof', () => {
     bindResourceVaultScope(store, db, scope);
     await old.confirm(proof(resource));
     expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+  });
+});
+
+describe('Vault file content confirmations', () => {
+  const hash = 'a'.repeat(64);
+
+  async function attachmentFixture() {
+    const f = await fixture();
+    await f.resource.set(
+      'https://atomicdata.dev/properties/isA',
+      ['https://atomicdata.dev/classes/File'],
+      false,
+    );
+    await f.resource.set(
+      'https://atomicdata.dev/properties/blob',
+      `atomic:blob:${hash}`,
+      false,
+    );
+    await f.resource.set(
+      'https://atomicdata.dev/properties/internalId',
+      hash,
+      false,
+    );
+    const manifest = {
+      files: [{ subject: f.resource.subject, hash, chunks: [] }],
+    };
+    const db = Object.assign(f.db, {
+      getResourceVaultAttachmentReceipts: vi.fn(async () => []),
+      putResourceVaultAttachmentReceipts: vi.fn(
+        async (
+          _scope: VaultSyncScope,
+          _receipts: SerializedVaultAttachmentReceipt[],
+          _generation: number,
+        ) => true,
+      ),
+    });
+
+    return { ...f, db, manifest };
+  }
+
+  it('binds hash proof before upload, permits rename, and withholds coverage after replacement', async () => {
+    const f = await attachmentFixture();
+    const capture = captureResourceVaultBackup(f.store, f.db, f.scope);
+    expect(await capture.isCurrent()).toBe(true);
+    await capture.confirmAttachments([hash]);
+    expect(
+      getResourceVaultAttachmentSyncStatus(f.store, f.resource).state,
+    ).toBe('confirmed');
+    await f.resource.set(core.properties.name, 'Renamed', false);
+    expect(
+      getResourceVaultAttachmentSyncStatus(f.store, f.resource).state,
+    ).toBe('confirmed');
+    await f.resource.set(
+      'https://atomicdata.dev/properties/blob',
+      `atomic:blob:${'b'.repeat(64)}`,
+      false,
+    );
+    await f.resource.set(
+      'https://atomicdata.dev/properties/internalId',
+      'b'.repeat(64),
+      false,
+    );
+    expect(
+      getResourceVaultAttachmentSyncStatus(f.store, f.resource).state,
+    ).toBe('pending');
+    expect(
+      f.db.putResourceVaultAttachmentReceipts.mock.calls[0]![1][0].manifest,
+    ).toEqual(f.manifest);
+  });
+  it('does not mint live proof after rejected durable generation or account change', async () => {
+    const f = await attachmentFixture();
+    const capture = captureResourceVaultBackup(f.store, f.db, f.scope);
+    f.db.putResourceVaultAttachmentReceipts.mockResolvedValue(false);
+    await capture.confirmAttachments([hash]);
+    expect(
+      getResourceVaultAttachmentSyncStatus(f.store, f.resource).state,
+    ).toBe('unknown');
+    const next = captureResourceVaultBackup(f.store, f.db, f.scope);
+    noteManagedSessionChanged();
+    f.db.putResourceVaultAttachmentReceipts.mockClear();
+    await next.confirmAttachments([hash]);
+    expect(f.db.putResourceVaultAttachmentReceipts).not.toHaveBeenCalled();
+  });
+  it('hydrates accepted manifests under the established account scope with original time', async () => {
+    const f = await attachmentFixture();
+    f.db.getResourceVaultAttachmentReceipts.mockResolvedValue([
+      { subject: f.resource.subject, manifest: f.manifest, confirmedAt: 123 },
+    ] as never);
+    bindResourceVaultScope(f.store, f.db, f.scope);
+    const stop = subscribeResourceVaultAttachmentSyncStatus(
+      f.store,
+      f.resource,
+      () => {},
+    );
+    await vi.waitFor(() =>
+      expect(
+        getResourceVaultAttachmentSyncStatus(f.store, f.resource),
+      ).toMatchObject({ state: 'confirmed', confirmedAt: 123 }),
+    );
+    stop();
+  });
+  it('captures unloaded persisted attachment manifests before export', async () => {
+    const f = await attachmentFixture();
+    const db = Object.assign(f.db, {
+      vaultAttachmentManifests: vi.fn(async () => [
+        {
+          subject: 'atomic:unloaded',
+          manifest: {
+            files: [{ subject: 'atomic:unloaded', hash, chunks: [] }],
+          },
+        },
+      ]),
+    });
+    const capture = captureResourceVaultBackup(f.store, db, f.scope);
+    expect(await capture.isCurrent()).toBe(true);
+    await capture.confirmAttachments([hash]);
+    expect(db.putResourceVaultAttachmentReceipts).toHaveBeenCalledWith(
+      f.scope,
+      [expect.objectContaining({ subject: 'atomic:unloaded' })],
+      0,
+    );
   });
 });

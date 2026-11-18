@@ -87,6 +87,8 @@ pub mod tag {
     /// 0x54/0x55 belong to the separate Iroh full-drive confirmation proposal.
     pub const STORAGE_RECEIPT_REQUEST: u8 = 0x56;
     pub const STORAGE_RECEIPT: u8 = 0x57;
+    pub const ATTACHMENT_RECEIPT_REQUEST: u8 = 0x58;
+    pub const ATTACHMENT_RECEIPT: u8 = 0x59;
 }
 
 /// Advertised only by authenticated browser sessions with persistent storage.
@@ -216,6 +218,83 @@ impl StorageReceipt {
     pub fn encode_frame(&self) -> Option<Vec<u8>> {
         self.validate()
             .then(|| receipt_frame(tag::STORAGE_RECEIPT, self))
+            .flatten()
+    }
+}
+
+pub const CAP_ATTACHMENT_STORAGE_RECEIPTS_V1: &str = "attachment-storage-receipts-v1";
+pub const ATTACHMENT_RECEIPT_BARRIER: &str = "atomic-attachment-flush-v1";
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AttachmentReceiptRequest {
+    pub nonce: String,
+    pub drive: String,
+    pub subject: String,
+    pub version: String,
+    pub manifest: super::attachment_manifest::AttachmentManifest,
+}
+impl AttachmentReceiptRequest {
+    pub fn metadata(&self) -> StorageReceiptRequest {
+        StorageReceiptRequest {
+            nonce: self.nonce.clone(),
+            drive: self.drive.clone(),
+            subject: self.subject.clone(),
+            version: self.version.clone(),
+        }
+    }
+    pub fn validate(&self) -> bool {
+        self.metadata().validate() && self.manifest.validate()
+    }
+    pub fn decode(payload: &[u8]) -> Option<Self> {
+        if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+            return None;
+        }
+        let request: Self = serde_json::from_slice(payload).ok()?;
+        request.validate().then_some(request)
+    }
+    pub fn encode_frame(&self) -> Option<Vec<u8>> {
+        self.validate()
+            .then(|| receipt_frame(tag::ATTACHMENT_RECEIPT_REQUEST, self))
+            .flatten()
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AttachmentReceipt {
+    pub nonce: String,
+    pub drive: String,
+    pub subject: String,
+    pub version: String,
+    pub manifest: super::attachment_manifest::AttachmentManifest,
+    pub replica: StorageReceiptReplica,
+    pub barrier: String,
+}
+impl AttachmentReceipt {
+    pub fn request(&self) -> AttachmentReceiptRequest {
+        AttachmentReceiptRequest {
+            nonce: self.nonce.clone(),
+            drive: self.drive.clone(),
+            subject: self.subject.clone(),
+            version: self.version.clone(),
+            manifest: self.manifest.clone(),
+        }
+    }
+    pub fn validate(&self) -> bool {
+        self.request().validate()
+            && receipt_hex(&self.replica.storage_id)
+            && receipt_hex(&self.replica.generation)
+            && self.barrier == ATTACHMENT_RECEIPT_BARRIER
+    }
+    pub fn decode(payload: &[u8]) -> Option<Self> {
+        if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+            return None;
+        }
+        let receipt: Self = serde_json::from_slice(payload).ok()?;
+        receipt.validate().then_some(receipt)
+    }
+    pub fn encode_frame(&self) -> Option<Vec<u8>> {
+        self.validate()
+            .then(|| receipt_frame(tag::ATTACHMENT_RECEIPT, self))
             .flatten()
     }
 }

@@ -470,6 +470,21 @@ impl EmbedHost {
                         .await
                 )
             }
+            "getResourceAttachmentEvidence" => {
+                let agent = store
+                    .get_default_agent()
+                    .map(|agent| crate::agents::ForAgent::from(&agent))
+                    .unwrap_or(crate::agents::ForAgent::Public);
+                json!(
+                    crate::sync::attachment_receipts::resource_attachment_evidence(
+                        store,
+                        &agent,
+                        &strings(&args, 0)
+                    )
+                    .await
+                    .map_err(|error| error.to_string())?
+                )
+            }
             "getResource" => {
                 let raw = vec![str_arg(&args, 0)?.to_string()];
                 read_many(store, &self.profiles, &raw).await[0]["jsonAd"].clone()

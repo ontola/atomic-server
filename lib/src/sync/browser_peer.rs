@@ -156,7 +156,10 @@ impl BrowserPeerSession {
             }
             let mut capabilities = Vec::new();
             match db.kv.replica_identity(&self.drive) {
-                Ok(Some(_)) => capabilities.push(protocol::CAP_BROWSER_STORAGE_RECEIPTS_V1),
+                Ok(Some(_)) => {
+                    capabilities.push(protocol::CAP_BROWSER_STORAGE_RECEIPTS_V1);
+                    capabilities.push(protocol::CAP_ATTACHMENT_STORAGE_RECEIPTS_V1);
+                }
                 Ok(None) => {}
                 Err(error) => tracing::warn!(%error, "Peer storage receipts unavailable"),
             }
@@ -169,6 +172,24 @@ impl BrowserPeerSession {
             return Err("Peer AUTH required".into());
         }
         match tag {
+            protocol::tag::ATTACHMENT_RECEIPT_REQUEST => {
+                let request = protocol::AttachmentReceiptRequest::decode(payload)
+                    .ok_or("Invalid attachment receipt request")?;
+                if let Some(receipt) = super::attachment_receipts::produce_receipt(
+                    db,
+                    &self.agent,
+                    &self.drive,
+                    &request,
+                )
+                .await?
+                {
+                    out.frames.push(
+                        receipt
+                            .encode_frame()
+                            .ok_or("Invalid attachment receipt response")?,
+                    );
+                }
+            }
             protocol::tag::STORAGE_RECEIPT_REQUEST => {
                 let request = protocol::StorageReceiptRequest::decode(payload)
                     .ok_or("Invalid storage receipt request")?;

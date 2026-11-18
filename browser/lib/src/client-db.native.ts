@@ -1,4 +1,8 @@
 import {
+  parseResourceAttachmentEvidence,
+  type ResourceAttachmentEvidence,
+} from './resource-attachment-evidence.js';
+import {
   parseResourcePeerEvidence,
   type ResourcePeerEvidence,
 } from './resource-peer-evidence.js';
@@ -119,6 +123,42 @@ export class NativeClientDb {
   /** Live Iroh proof owned by the native process, batched by the Store's UI
    * subscriptions. Older hosts remain usable and simply offer no proof.
    */
+  private attachmentEvidenceInFlight?: Promise<unknown>;
+  async getResourceAttachmentEvidence(
+    subjects: string[],
+  ): Promise<ResourceAttachmentEvidence[] | undefined> {
+    if (this.destroyed) return undefined;
+    if (this.attachmentEvidenceInFlight)
+      throw new Error('Native attachment evidence query is still running');
+    const epoch = this.peerEvidenceEpoch;
+    const pending = this.channel.call('getResourceAttachmentEvidence', [
+      subjects,
+    ]);
+    this.attachmentEvidenceInFlight = pending;
+
+    try {
+      const reply = await pending;
+      if (this.destroyed || epoch !== this.peerEvidenceEpoch)
+        throw new Error('Native attachment query cancelled');
+      if (reply === null || reply === undefined) return undefined;
+      const evidence = parseResourceAttachmentEvidence(reply);
+      if (!evidence) throw new Error('Invalid native attachment evidence');
+
+      return evidence;
+    } catch (error) {
+      if (
+        /getResourceAttachmentEvidence.*(not available|unknown|unsupported|not implemented)|no getResourceAttachmentEvidence/i.test(
+          String(error),
+        )
+      )
+        return undefined;
+      throw error;
+    } finally {
+      if (this.attachmentEvidenceInFlight === pending)
+        this.attachmentEvidenceInFlight = undefined;
+    }
+  }
+
   async getResourcePeerEvidence(
     subjects: string[],
   ): Promise<ResourcePeerEvidence | undefined> {

@@ -55,6 +55,8 @@ export const Tag = {
   /** Negotiated browser peer resource storage barriers. */
   STORAGE_RECEIPT_REQUEST: 0x56,
   STORAGE_RECEIPT_RESPONSE: 0x57,
+  ATTACHMENT_RECEIPT_REQUEST: 0x58,
+  ATTACHMENT_RECEIPT_RESPONSE: 0x59,
   /** Server → client, the negative answer to a `SYNC` probe: `[0x38]
    *  [drive_utf8]`. The drive hashes differ; send the full version-vector
    *  `SYNC`. The positive answer is `SYNC_OK`. */
@@ -1203,3 +1205,6 @@ export function debugFrameInfo(
       };
   }
 }
+
+export const CAP_ATTACHMENT_STORAGE_RECEIPTS = 'attachment-storage-receipts-v1';
+export const ATTACHMENT_STORAGE_BARRIER = 'atomic-attachment-flush-v1';

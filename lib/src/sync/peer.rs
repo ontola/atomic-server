@@ -463,6 +463,7 @@ fn receipt_capabilities(store: &Db, drive: &str) -> Vec<&'static str> {
     let mut caps = super::protocol::CAPABILITIES.to_vec();
     if store.kv.replica_identity(drive).ok().flatten().is_some() {
         caps.push(super::protocol::CAP_IROH_STORAGE_RECEIPTS_V1);
+        caps.push(super::protocol::CAP_ATTACHMENT_STORAGE_RECEIPTS_V1);
     }
     caps
 }
@@ -1471,6 +1472,46 @@ fn register_live_peer(
                 if let Some(session) = &receipt_session {
                     session.invalidate();
                 }
+            }
+            if buf[0] == super::protocol::tag::ATTACHMENT_RECEIPT {
+                if let Some(session) = &receipt_session {
+                    session.receive_attachment(&store, &buf[1..]).await;
+                }
+                continue;
+            }
+            if buf[0] == super::protocol::tag::ATTACHMENT_RECEIPT_REQUEST {
+                if let (Some(session), Some(drive)) = (&receipt_session, &receipt_drive) {
+                    if session.attachments_enabled && session.current(&store) {
+                        if let (Some(request), Ok(permit)) = (
+                            super::protocol::AttachmentReceiptRequest::decode(&buf[1..]),
+                            session.attachment_responders.clone().try_acquire_owned(),
+                        ) {
+                            // Large complete-object reads/hashes never stall the
+                            // read loop or its keepalive and commit processing.
+                            let db = store.clone();
+                            let agent = agent.clone();
+                            let drive = drive.clone();
+                            let session = session.clone();
+                            let tx = tx_for_read.clone();
+                            tokio::spawn(async move {
+                                let _permit = permit;
+                                if let Ok(Some(receipt)) =
+                                    super::attachment_receipts::produce_receipt(
+                                        &db, &agent, &drive, &request,
+                                    )
+                                    .await
+                                {
+                                    if session.current(&db) {
+                                        if let Some(frame) = receipt.encode_frame() {
+                                            let _ = tx.try_send(frame_with_len(&frame));
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+                continue;
             }
             if buf[0] == super::protocol::tag::STORAGE_RECEIPT {
                 if let Some(session) = &receipt_session {

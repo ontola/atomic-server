@@ -1,3 +1,7 @@
+import {
+  parseAttachmentManifest,
+  type AttachmentManifest,
+} from './resource-attachment-evidence.js';
 import { decodeB64 } from './base64.js';
 import { LoroLoader } from './loro-loader.js';
 import type { ReplicaIdentity } from './peer-receipts.js';
@@ -14,6 +18,9 @@ export interface ResourcePeerEvidenceConnection {
   readonly drive: string;
   readonly peerAgent: string;
   readonly receipts: readonly ResourcePeerEvidenceReceipt[];
+  readonly attachmentReceipts?: readonly (ResourcePeerEvidenceReceipt & {
+    readonly manifest: AttachmentManifest;
+  })[];
 }
 
 export interface ResourcePeerEvidenceReceipt {
@@ -134,12 +141,54 @@ export function parseResourcePeerEvidence(
       );
     }
 
+    const attachmentReceipts: (ResourcePeerEvidenceReceipt & {
+      manifest: AttachmentManifest;
+    })[] = [];
+
+    if (connection.attachmentReceipts !== undefined) {
+      if (
+        !Array.isArray(connection.attachmentReceipts) ||
+        connection.attachmentReceipts.length > 128
+      )
+        return undefined;
+      const seen = new Set<string>();
+
+      for (const receipt of connection.attachmentReceipts) {
+        const manifest = parseAttachmentManifest(receipt?.manifest);
+        if (
+          !record(receipt) ||
+          !text(receipt.subject) ||
+          seen.has(receipt.subject) ||
+          !version(receipt.version) ||
+          !manifest ||
+          typeof receipt.confirmedAt !== 'number' ||
+          !Number.isSafeInteger(receipt.confirmedAt) ||
+          receipt.confirmedAt < 0 ||
+          !identity(receipt.source) ||
+          !identity(receipt.replica)
+        )
+          return undefined;
+        seen.add(receipt.subject);
+        attachmentReceipts.push(
+          Object.freeze({
+            subject: receipt.subject,
+            version: receipt.version,
+            manifest,
+            confirmedAt: receipt.confirmedAt,
+            source: receipt.source,
+            replica: receipt.replica,
+          }),
+        );
+      }
+    }
+
     connections.push(
       Object.freeze({
         connectionId: connection.connectionId,
         drive: connection.drive,
         peerAgent: connection.peerAgent,
         receipts: Object.freeze(receipts),
+        attachmentReceipts: Object.freeze(attachmentReceipts),
       }),
     );
   }

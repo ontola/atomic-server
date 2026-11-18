@@ -31,8 +31,9 @@ Playwright owns worker counts, filters, repetitions, sharding and reports. The
 launcher defaults to Chromium, zero retries, failure traces and line/HTML/JSON
 reporters; normal Playwright arguments can override these. `run.json` retains
 build/startup/test phase durations, and `report.json` contains test outcomes,
-skips and step timings. Cloud Vault tests need an explicit
-`ATOMIC_VAULT_PORTAL_URL`; unrelated local portals are never discovered.
+skips and step timings. Full Cloud Vault backup/restore tests need an explicit
+`ATOMIC_VAULT_PORTAL_URL`; unrelated local portals are never discovered. The
+resource confirmation specs below instead own their HTTP control-plane fixture.
 
 ### Comparing concurrency
 
@@ -222,6 +223,32 @@ behavior. The typing unit regressions are `loro-typing-history.test.ts` and
 checks real keystrokes against the built app so minification cannot silently
 disable the optimization.
 
+### Resource metadata and attachment confirmations
+
+The scoped web acceptance set has seven journeys across four specs. From
+`browser/`, after building matching app/WASM/server artifacts:
+
+```sh
+pnpm test-e2e:local --skip-build tests/resource-sync.spec.ts tests/resource-peer-sync.spec.ts \
+  tests/resource-attachment-sync.spec.ts tests/resource-vault-sync.spec.ts \
+  --workers=1 --retries=0
+```
+
+`resource-attachment-sync.spec.ts` distinguishes metadata from actual local,
+HTTP-server and WebRTC-peer file bytes. It checks missing bytes, real transfers,
+rename versus content replacement, direct attachment references, reload and
+peer departure. No receipt is injected. `resource-vault-sync.spec.ts` holds one
+chunk of a real encrypted 8 MiB-plus file, then checks complete confirmation,
+account-scoped recovery and failed/newer exports. That spec owns the control
+plane and object-store HTTP boundary; it does not certify production SaaS or S3.
+The other two specs retain metadata/offline-recovery and peer-dedup regressions.
+
+These attachment journeys passed locally against the matching production build
+with zero retries (five in the full run, two corrected fixtures in a focused
+rerun). Preserve strict diagnostics, report the actual test count and inspect
+desktop/mobile screenshots.
+The native journey below is separate from these seven web tests.
+
 ### Native Iroh resource confirmations
 
 `native-resource-peer-sync.spec.ts` uses the actual native host and two Iroh
@@ -239,7 +266,9 @@ ATOMIC_NATIVE_EMBED_TEST_BINARY=/absolute/path/to/iroh_receipts-HASH \
 ```
 
 The fixture serves `dist-embed`, forwards the renderer's existing host calls to
-Rust, and checks real resource evidence through view reload and peer departure.
+Rust, and checks both metadata and file contents for an actual File/direct
+attachment through view reload and peer departure. Both the two-process Rust
+integration and matching renderer acceptance passed locally with zero retries.
 The native process owns the databases and networking; only address exchange and
 process control are test fixtures. Without the explicit executable this test is
 skipped, so an ordinary web E2E pass does not claim native renderer coverage.

@@ -462,3 +462,5 @@ export type {
   ResourcePeerEvidenceReceipt,
   ResourcePeerEvidenceProvider,
 } from './resource-peer-evidence.js';
+
+export * from './resource-attachment-evidence.js';

@@ -87,7 +87,8 @@ async function nativeHost() {
   });
   const readyTimer = setTimeout(
     () => readyReject(new Error('Native Iroh fixture did not become ready')),
-    45_000,
+    // Database bootstrap plus the initial 30s byte-receipt retry precede readiness.
+    75_000,
   );
   const call = (method: string, args: unknown[] = []) =>
     new Promise<unknown>((resolve, reject) => {
@@ -194,7 +195,7 @@ test('native Iroh receipts reach the embedded resource panel and disappear on de
     !nativeBinary,
     'Requires the real Iroh integration-test binary and matching dist-embed build',
   );
-  test.setTimeout(120_000);
+  test.setTimeout(150_000);
   const host = await nativeHost();
   let assets: Awaited<ReturnType<typeof serveEmbed>> | undefined;
 
@@ -233,8 +234,24 @@ test('native Iroh receipts reach the embedded resource panel and disappear on de
     const peers = dialog.getByTestId('resource-peer-copies');
     await expect(dialog).toHaveCSS('opacity', '1');
     await expect(peers).toHaveAttribute('data-confirmed-count', '1');
+    await expect(dialog.getByTestId('resource-content-local')).toHaveAttribute(
+      'data-content-state',
+      'confirmed',
+    );
+    await expect(peers.getByTestId('resource-content-peer')).toHaveAttribute(
+      'data-content-state',
+      'confirmed',
+    );
+    await expect(dialog.getByTestId('resource-content-local')).toHaveText(
+      'File contents confirmed',
+    );
+    await expect(peers.getByTestId('resource-content-peer')).toHaveText(
+      'File contents confirmed',
+    );
     await expect(
-      dialog.getByText('No server configured', { exact: true }),
+      dialog.getByText('Resource details: No server configured', {
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(
       peers.getByText('Latest changes received', { exact: true }),
@@ -249,6 +266,14 @@ test('native Iroh receipts reach the embedded resource panel and disappear on de
     await expect(dialog).toHaveCSS('opacity', '1');
     await peers.scrollIntoViewIfNeeded();
     await expect(peers).toHaveAttribute('data-confirmed-count', '1');
+    await expect(dialog.getByTestId('resource-content-local')).toHaveAttribute(
+      'data-content-state',
+      'confirmed',
+    );
+    await expect(peers.getByTestId('resource-content-peer')).toHaveAttribute(
+      'data-content-state',
+      'confirmed',
+    );
     const bounds = await dialog.boundingBox();
     expect(bounds).not.toBeNull();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
@@ -267,16 +292,26 @@ test('native Iroh receipts reach the embedded resource panel and disappear on de
     );
     await resourceIndicator.click();
     await expect(peers).toHaveAttribute('data-confirmed-count', '1');
+    await expect(dialog.getByTestId('resource-content-local')).toHaveAttribute(
+      'data-content-state',
+      'confirmed',
+    );
+    await expect(peers.getByTestId('resource-content-peer')).toHaveAttribute(
+      'data-content-state',
+      'confirmed',
+    );
     await host.call('__test_close_peer');
     await expect(peers).toHaveAttribute('data-confirmed-count', '0', {
       timeout: 45_000,
     });
     await expect(peers).toHaveAttribute('data-peer-sync-state', 'unknown');
+    await expect(peers.getByTestId('resource-content-peer')).toHaveCount(0);
     await page.reload();
     await expect(resourceIndicator).toBeVisible();
     await resourceIndicator.click();
     await expect(peers).toHaveAttribute('data-confirmed-count', '0');
     await expect(peers).toHaveAttribute('data-peer-sync-state', 'unknown');
+    await expect(peers.getByTestId('resource-content-peer')).toHaveCount(0);
     expect(assets.requests).not.toContain('/server');
   } finally {
     await page.close();

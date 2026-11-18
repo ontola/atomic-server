@@ -32,6 +32,14 @@ pub trait BlobBackend: Send + Sync {
     /// Metadata only: usage accounting must not download every file.
     async fn size(&self, key: &[u8]) -> AtomicResult<Option<u64>>;
 
+    /// Optional proof contract: every named object is durably stored and the
+    /// returned token changes whenever its bytes/existence change. Call before
+    /// and after verified complete-object reads. None means unsupported/missing.
+    /// A KV flush is deliberately not a barrier for external object storage.
+    async fn durable_token(&self, _keys: &[Vec<u8>]) -> AtomicResult<Option<String>> {
+        Ok(None)
+    }
+
     // Garbage collection (planning/s3-blob-storage.md, "GC / refcounting").
     // The defaults refuse, so a backend written before GC existed keeps
     // compiling and is never swept by accident.

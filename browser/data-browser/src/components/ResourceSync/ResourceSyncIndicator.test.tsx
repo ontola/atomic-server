@@ -19,6 +19,7 @@ import { StyleSheetManager, ThemeProvider } from 'styled-components';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { buildTheme } from '../../styling';
 import { ResourceSyncIndicator } from './ResourceSyncIndicator';
+import type { ResourceAttachmentPresentationStatus } from './resourceSyncPresentation';
 
 let status: ResourceSyncStatus;
 let save: ResourceSaveState;
@@ -27,6 +28,7 @@ let vaultStatus: {
   confirmedAt?: number;
 };
 let peerStatus: ResourcePeerSyncStatus;
+let contents: ResourceAttachmentPresentationStatus;
 let isFile = false;
 let propagationBoundary: HTMLDivElement | undefined;
 const context = {
@@ -55,6 +57,9 @@ vi.mock('./useResourceVaultSyncStatus', () => ({
 vi.mock('./useResourcePeerSyncStatus', () => ({
   useResourcePeerSyncStatus: () => peerStatus,
 }));
+vi.mock('./useResourceAttachmentSyncStatus', () => ({
+  useResourceAttachmentSyncStatus: () => contents,
+}));
 vi.mock('./useResourceCopyContext', () => ({
   useResourceCopyContext: () => context,
 }));
@@ -75,6 +80,13 @@ vi.mock('../AtomicLink', () => ({
 }));
 
 beforeEach(() => {
+  contents = {
+    required: false,
+    local: { state: 'unknown' },
+    server: { state: 'unknown' },
+    vault: { state: 'unknown' },
+    peers: [],
+  };
   vaultStatus = { state: 'unknown' };
   peerStatus = {
     state: 'unknown',
@@ -211,18 +223,45 @@ it('updates exact vault proof in the open panel without changing the server rece
   ).toBeTruthy();
 });
 
-it('keeps the file-content limitation visible when its resource metadata is backed up', async () => {
+it('shows metadata and file contents separately until both are confirmed', async () => {
   isFile = true;
+  contents.required = true;
   vaultStatus = { state: 'confirmed' };
-  render(view());
+  const rendered = render(view());
   fireEvent.click(screen.getByTestId('resource-sync-indicator'));
   const panel = await screen.findByTestId('resource-sync-panel');
-  expect(within(panel).getByText('Latest changes backed up')).toBeTruthy();
+  expect(
+    within(panel).getByText('Resource details: Latest changes backed up'),
+  ).toBeTruthy();
+  expect(within(panel).getByTestId('resource-content-vault').textContent).toBe(
+    'File contents not confirmed',
+  );
+  expect(screen.getByTestId('resource-sync-indicator').title).toBe(
+    'Server file contents not confirmed',
+  );
   expect(
     within(panel).getByText(
-      'These confirmations cover file details. The file’s contents are not verified here.',
+      'A complete copy needs both resource details and file contents at the same destination.',
     ),
   ).toBeTruthy();
+
+  contents = { ...contents, vault: { state: 'confirmed' } };
+  rendered.rerender(view());
+  expect(within(panel).getByTestId('resource-content-vault').textContent).toBe(
+    'File contents confirmed',
+  );
+  expect(screen.getByTestId('resource-sync-indicator').title).toBe(
+    'Resource and file contents backed up to Cloud Vault',
+  );
+
+  contents = { ...contents, vault: { state: 'pending' } };
+  rendered.rerender(view());
+  expect(within(panel).getByTestId('resource-content-vault').textContent).toBe(
+    'Checking file contents…',
+  );
+  expect(screen.getByTestId('resource-sync-indicator').title).toBe(
+    'Server file contents not confirmed',
+  );
 });
 
 it('updates an open panel when a newer edit is queued while keeping its local confirmation', async () => {

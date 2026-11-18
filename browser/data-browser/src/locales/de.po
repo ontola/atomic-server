@@ -11100,10 +11100,6 @@ msgstr "Gesichert {0}"
 msgid "Backed up to {0}"
 msgstr "Bei {0} gesichert"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Verschlüsselte Sicherung deiner Daten. Nur du kannst sie lesen."
-
 #: src/routes/SyncRoute.tsx
 msgid "Manage plan"
 msgstr "Tarif verwalten"
@@ -11601,11 +11597,6 @@ msgstr "Erforderliche Tabellenspalten fehlen in diesem Formular:{0} {1}. Ohne si
 #: src/components/Vault/VaultStorage.tsx
 msgid "Reading what is stored…"
 msgstr "Gespeicherte Inhalte werden gelesen …"
-
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} alte Verlaufsdaten und ungenutzte Dateien können entfernt werden. Sichtbare Inhalte bleiben erhalten."
 
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
@@ -13646,9 +13637,8 @@ msgstr "Letzte Sicherung des Arbeitsbereichs: {0}"
 #~ msgid "Workspace destinations"
 #~ msgstr "Ziele des Arbeitsbereichs"
 
-#: src/components/ResourceSync/ResourceSyncPanel.tsx
-msgid "These confirmations cover file details. The file’s contents are not verified here."
-msgstr "Diese Bestätigungen betreffen die Dateiinformationen. Der Dateiinhalt wird hier nicht überprüft."
+#~ msgid "These confirmations cover file details. The file’s contents are not verified here."
+#~ msgstr "Diese Bestätigungen betreffen die Dateiinformationen. Der Dateiinhalt wird hier nicht überprüft."
 
 #~ msgid "Confirmations shown here are from this session."
 #~ msgstr "Die hier angezeigten Bestätigungen stammen aus dieser Sitzung."
@@ -13726,7 +13716,7 @@ msgstr "Peer {0}"
 msgid "Peer resource copies"
 msgstr "Ressourcenkopien bei Peers"
 
-#. 0: peers.confirmedCount
+#. 0: completePeers
 #: src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Confirmed peer copies: {0}"
 msgstr "Bestätigte Peer-Kopien: {0}"
@@ -13742,3 +13732,105 @@ msgstr "Peers"
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Latest changes received by peers"
 msgstr "Neueste Änderungen von Peers empfangen"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# Backup-Objekt konnte nicht gelesen werden"
+msgstr[1] "# Backup-Objekte konnten nicht gelesen werden"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# Datei ist nicht im Backup"
+msgstr[1] "# Dateien sind nicht im Backup"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# Datei konnte nicht gelesen werden"
+msgstr[1] "# Dateien konnten nicht gelesen werden"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Wiederhergestellt, aber nicht alles: {0}. Lade die Seite neu, um das Wiederhergestellte zu sehen."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Verschlüsselte Sicherung deiner Daten und Dateien. Nur du kannst sie lesen."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Dateien sind enthalten. Sie werden auf diesem Gerät verschlüsselt wie alles andere und zählen zum Cloud-Vault-Speicher dieser Sicherung."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} alte Verlaufsdaten können entfernt werden. Sichtbare Inhalte bleiben erhalten."
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "File contents confirmed"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Checking file contents…"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Could not confirm file contents"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "File storage unavailable"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "File contents not confirmed"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Could not confirm file contents on this device"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource and file contents saved to server"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource and file contents backed up to Cloud Vault"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource and file contents received by peers"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Server file contents not confirmed"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Cloud Vault file contents not confirmed"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Peer file copies not confirmed"
+msgstr ""
+
+#: src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource and file contents saved on this device"
+msgstr ""
+
+#. 0: peers.confirmedCount
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Resource-details copies: {0}"
+msgstr ""
+
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "A complete copy needs both resource details and file contents at the same destination."
+msgstr ""
+
+#. 0: description
+#: src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Resource details: {0}"
+msgstr ""

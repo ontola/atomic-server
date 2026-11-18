@@ -50,3 +50,7 @@ pub mod ws_apply;
 pub mod browser_peer;
 #[cfg(feature = "db")]
 pub mod webrtc_link;
+
+pub mod attachment_manifest;
+#[cfg(feature = "db")]
+pub mod attachment_receipts;

@@ -19,6 +19,7 @@ import { Popover } from '../Popover';
 import { useResourceSyncStatus } from './useResourceSyncStatus';
 import { useResourceVaultSyncStatus } from './useResourceVaultSyncStatus';
 import { useResourcePeerSyncStatus } from './useResourcePeerSyncStatus';
+import { useResourceAttachmentSyncStatus } from './useResourceAttachmentSyncStatus';
 import {
   resourceSyncPresentation,
   type SyncSymbol,
@@ -37,8 +38,15 @@ export function ResourceSyncIndicator({
   const status = useResourceSyncStatus(resource);
   const vault = useResourceVaultSyncStatus(resource);
   const peers = useResourcePeerSyncStatus(resource);
+  const contents = useResourceAttachmentSyncStatus(resource);
   const save = useSaveState(resource);
-  const presentation = resourceSyncPresentation(status, save, vault, peers);
+  const presentation = resourceSyncPresentation(
+    status,
+    save,
+    vault,
+    peers,
+    contents,
+  );
   const headingId = useId();
 
   return (
@@ -58,6 +66,10 @@ export function ResourceSyncIndicator({
               data-sync-state={status.server.state}
               data-vault-sync-state={vault.state}
               data-peer-sync-state={peers.state}
+              data-content-required={contents.required}
+              data-content-local-state={contents.local.state}
+              data-content-server-state={contents.server.state}
+              data-content-vault-state={contents.vault.state}
               $tone={presentation.tone}
             >
               <StatusSymbol symbol={presentation.symbol} />
@@ -77,6 +89,7 @@ export function ResourceSyncIndicator({
             status={status}
             vault={vault}
             peers={peers}
+            contents={contents}
             save={save}
             headingId={headingId}
             onClose={() => setOpen(false)}

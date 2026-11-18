@@ -1,6 +1,11 @@
 // @wc-ignore-file
 import {
   StoreEvents,
+  attachmentManifestKey,
+  parseAttachmentManifest,
+  resourceAttachmentDescriptor,
+  type SerializedVaultAttachmentReceipt,
+  type AttachmentManifest,
   LoroLoader,
   canonicalizeScheme,
   core,
@@ -33,6 +38,18 @@ export type ConfirmedVaultExport = {
 };
 
 export type VaultReceiptDb = {
+  vaultAttachmentManifests?: (
+    drive: string,
+  ) => Promise<{ subject: string; manifest: AttachmentManifest }[] | undefined>;
+  getResourceVaultAttachmentReceipts?: (
+    subjects: string[],
+    scope: VaultSyncScope,
+  ) => Promise<SerializedVaultAttachmentReceipt[] | undefined>;
+  putResourceVaultAttachmentReceipts?: (
+    scope: VaultSyncScope,
+    receipts: SerializedVaultAttachmentReceipt[],
+    generation: number,
+  ) => Promise<boolean>;
   getResourceVaultGeneration?: (
     scope: VaultSyncScope,
   ) => Promise<number | undefined>;
@@ -52,6 +69,9 @@ type Context = {
   db: VaultReceiptDb;
   storeDb: ReturnType<Store['getClientDb']>;
   receipts: Map<string, SerializedVaultReceipt>;
+  attachmentReceipts: Map<string, SerializedVaultAttachmentReceipt>;
+  attachmentReads: Map<string, object>;
+  attachmentQueued: Map<string, object>;
   reads: Map<string, object>;
   queued: Map<string, object>;
   ready: Promise<number | undefined>;
@@ -60,7 +80,9 @@ type Ledger = {
   contexts: Map<string, Context>;
   listeners: Set<{ resource: Resource; callback: () => void }>;
   snapshots: WeakMap<Resource, ResourceVaultSyncStatus>;
+  attachmentSnapshots: WeakMap<Resource, ResourceVaultSyncStatus>;
   epoch: number;
+  attachmentEpoch: number;
 };
 const ledgers = new WeakMap<Store, Ledger>();
 const UNKNOWN: ResourceVaultSyncStatus = Object.freeze({ state: 'unknown' });
@@ -123,7 +145,9 @@ function ledgerFor(store: Store): Ledger {
     contexts: new Map(),
     listeners: new Set(),
     snapshots: new WeakMap(),
+    attachmentSnapshots: new WeakMap(),
     epoch: 0,
+    attachmentEpoch: 0,
   };
   ledgers.set(store, ledger);
   const clear = () => clearResourceVaultScopes(store);
@@ -163,11 +187,26 @@ function ledgerFor(store: Store): Ledger {
     )
       clear();
   });
-  store.on(StoreEvents.ResourceRemoved, subject => {
+  store.on(StoreEvents.ResourcePeerEvidenceRemoved, subject => {
+    current.attachmentEpoch++;
     const normalized = store.normalizeSubject(subject);
 
     for (const ctx of current.contexts.values()) {
       ctx.receipts.delete(normalized);
+
+      for (const [root, receipt] of ctx.attachmentReceipts)
+        if (
+          root === normalized ||
+          receipt.manifest.files.some(file => file.subject === normalized)
+        ) {
+          ctx.attachmentReceipts.delete(root);
+          ctx.attachmentReads.delete(root);
+          ctx.attachmentQueued.delete(root);
+        }
+
+      ctx.attachmentReceipts.delete(normalized);
+      ctx.attachmentReads.delete(normalized);
+      ctx.attachmentQueued.delete(normalized);
       ctx.reads.delete(normalized);
       ctx.queued.delete(normalized);
     }
@@ -274,6 +313,7 @@ function ensureEvidence(
   ledger: Ledger,
   resource: Resource,
 ): void {
+  ensureAttachmentEvidence(store, ledger, resource);
   const context = contextFor(store, ledger, resource);
   const subject = store.normalizeSubject(resource.subject);
   if (
@@ -400,6 +440,148 @@ export function subscribeResourceVaultSyncStatus(
   };
 }
 
+function ensureAttachmentEvidence(
+  store: Store,
+  ledger: Ledger,
+  resource: Resource,
+): void {
+  const context = contextFor(store, ledger, resource);
+  const requestedSubject = store.normalizeSubject(resource.subject);
+  if (
+    !context?.db.getResourceVaultAttachmentReceipts ||
+    context.attachmentReads.has(requestedSubject) ||
+    store.isDestroyed(requestedSubject) ||
+    store.hasPendingDestroy(requestedSubject)
+  )
+    return;
+  const readToken = {};
+  context.attachmentReads.set(requestedSubject, readToken);
+  context.attachmentQueued.set(requestedSubject, readToken);
+  if (context.attachmentQueued.size > 1) return;
+  const epoch = ledger.epoch;
+  queueMicrotask(() => {
+    const queued = new Map(context.attachmentQueued);
+    context.attachmentQueued.clear();
+    if (!contextCurrent(store, ledger, context, epoch)) return;
+    const subjects = [...queued.keys()];
+
+    const read = async () => {
+      const receipts: SerializedVaultAttachmentReceipt[] = [];
+
+      for (let offset = 0; offset < subjects.length; offset += 128) {
+        if (!contextCurrent(store, ledger, context, epoch)) return [];
+        receipts.push(
+          ...((await context.db.getResourceVaultAttachmentReceipts!(
+            subjects.slice(offset, offset + 128),
+            context.scope,
+          )) ?? []),
+        );
+      }
+
+      return receipts;
+    };
+
+    void read()
+      .then(async receipts => {
+        const generation = await context.ready;
+        const now = await context.db.getResourceVaultGeneration?.(
+          context.scope,
+        );
+        if (
+          generation === undefined ||
+          generation !== now ||
+          !contextCurrent(store, ledger, context, epoch)
+        )
+          return;
+
+        for (const receipt of receipts ?? []) {
+          const subject = store.normalizeSubject(receipt.subject);
+          const manifest = parseAttachmentManifest(receipt.manifest);
+          if (
+            !manifest ||
+            !Number.isSafeInteger(receipt.confirmedAt) ||
+            receipt.confirmedAt < 0 ||
+            !queued.has(subject) ||
+            context.attachmentReads.get(subject) !== queued.get(subject) ||
+            store.isDestroyed(subject) ||
+            store.hasPendingDestroy(subject)
+          )
+            continue;
+          const old = context.attachmentReceipts.get(subject);
+          if (!old || old.confirmedAt < receipt.confirmedAt)
+            context.attachmentReceipts.set(subject, {
+              ...receipt,
+              subject,
+              manifest,
+            });
+        }
+
+        notify(ledger);
+      })
+      .catch(() => {
+        for (const [subject, token] of queued)
+          if (context.attachmentReads.get(subject) === token)
+            context.attachmentReads.delete(subject);
+      });
+  });
+}
+
+export function getResourceVaultAttachmentSyncStatus(
+  store: Store,
+  resource: Resource,
+): ResourceVaultSyncStatus {
+  const ledger = ledgerFor(store);
+  const context = contextFor(store, ledger, resource);
+  if (
+    !context ||
+    !contextCurrent(store, ledger, context, ledger.epoch) ||
+    store.isDestroyed(resource.subject) ||
+    store.hasPendingDestroy(resource.subject)
+  )
+    return UNKNOWN;
+  const receipt = context.attachmentReceipts.get(
+    store.normalizeSubject(resource.subject),
+  );
+  const manifest = resourceAttachmentDescriptor(store, resource).manifest;
+  const next: ResourceVaultSyncStatus = {
+    state: receipt
+      ? manifest &&
+        attachmentManifestKey(manifest) ===
+          attachmentManifestKey(receipt.manifest)
+        ? 'confirmed'
+        : 'pending'
+      : 'unknown',
+    confirmedAt: receipt?.confirmedAt,
+    scope: context.scope,
+  };
+  const previous = ledger.attachmentSnapshots.get(resource);
+  if (previous && JSON.stringify(previous) === JSON.stringify(next))
+    return previous;
+  ledger.attachmentSnapshots.set(resource, Object.freeze(next));
+
+  return next;
+}
+
+export function subscribeResourceVaultAttachmentSyncStatus(
+  store: Store,
+  resource: Resource,
+  callback: () => void,
+): () => void {
+  const ledger = ledgerFor(store);
+  const listener = { resource, callback };
+  ledger.listeners.add(listener);
+  ensureAttachmentEvidence(store, ledger, resource);
+  const stop = store.subscribeResourceAttachmentSyncStatus(resource, () => {
+    ensureAttachmentEvidence(store, ledger, resource);
+    callback();
+  });
+
+  return () => {
+    stop();
+    ledger.listeners.delete(listener);
+  };
+}
+
 /** Called only after checking the current account and active enrollment. */
 export function bindResourceVaultScope(
   store: Store,
@@ -434,6 +616,9 @@ export function bindResourceVaultScope(
     db,
     storeDb: store.getClientDb(),
     receipts: new Map(),
+    attachmentReceipts: new Map(),
+    attachmentReads: new Map(),
+    attachmentQueued: new Map(),
     reads: new Map(),
     queued: new Map(),
     ready: Promise.resolve(undefined),
@@ -487,10 +672,38 @@ export function captureResourceVaultBackup(
   const current = () =>
     accepted && !!context && contextCurrent(store, ledger, context, epoch);
 
+  // Capture identities before upload; never infer an exported file from a later edit.
+  const attachmentEpoch = ledger.attachmentEpoch;
+  let attachmentCandidates = [...store.resources.values()].flatMap(resource => {
+    if (!context || contextFor(store, ledger, resource) !== context) return [];
+    const manifest = resourceAttachmentDescriptor(store, resource).manifest;
+
+    return manifest?.files.length
+      ? [{ subject: store.normalizeSubject(resource.subject), manifest }]
+      : [];
+  });
+  const attachmentReady =
+    db
+      .vaultAttachmentManifests?.(scope.drive)
+      .then(rows => {
+        if (!current() || ledger.attachmentEpoch !== attachmentEpoch || !rows)
+          return;
+        attachmentCandidates = rows.flatMap(row => {
+          const manifest = parseAttachmentManifest(row.manifest);
+
+          return manifest?.files.length
+            ? [{ subject: store.normalizeSubject(row.subject), manifest }]
+            : [];
+        });
+      })
+      .catch(() => {
+        attachmentCandidates = [];
+      }) ?? Promise.resolve();
   let proofAvailable = true;
 
   return {
     async isCurrent(): Promise<boolean> {
+      await attachmentReady;
       if (!current()) return false;
       const account = await getManagedAccount({ fresh: true });
       if (!current()) return false;
@@ -532,6 +745,71 @@ export function captureResourceVaultBackup(
       }
 
       return true;
+    },
+    async confirmAttachments(hashes: readonly string[]): Promise<void> {
+      await attachmentReady;
+      if (
+        !proofAvailable ||
+        !current() ||
+        ledger.attachmentEpoch !== attachmentEpoch ||
+        !context?.db.putResourceVaultAttachmentReceipts
+      )
+        return;
+      const generation = await context.ready;
+      if (
+        generation === undefined ||
+        !current() ||
+        ledger.attachmentEpoch !== attachmentEpoch
+      )
+        return;
+      const verified = new Set(hashes);
+      const receipts: SerializedVaultAttachmentReceipt[] = attachmentCandidates
+        .filter(
+          row =>
+            row.manifest.files.every(
+              file =>
+                verified.has(file.hash) &&
+                file.chunks.every(hash => verified.has(hash)),
+            ) &&
+            !store.isDestroyed(row.subject) &&
+            !store.hasPendingDestroy(row.subject),
+        )
+        .map(row => ({ ...row, confirmedAt: Date.now() }));
+      if (!receipts.length) return;
+      store.startScheduledSave();
+
+      try {
+        for (let offset = 0; offset < receipts.length; offset += 128) {
+          if (!current() || ledger.attachmentEpoch !== attachmentEpoch) return;
+          const attachmentAccepted =
+            await context.db.putResourceVaultAttachmentReceipts(
+              context.scope,
+              receipts.slice(offset, offset + 128),
+              generation,
+            );
+
+          if (!current() || ledger.attachmentEpoch !== attachmentEpoch) return;
+
+          if (!attachmentAccepted) {
+            ledger.contexts.delete(context.scope.drive);
+            notify(ledger);
+
+            return;
+          }
+        }
+
+        for (const receipt of receipts)
+          if (
+            !store.isDestroyed(receipt.subject) &&
+            !store.hasPendingDestroy(receipt.subject)
+          )
+            context.attachmentReceipts.set(receipt.subject, receipt);
+        notify(ledger);
+      } catch {
+        /* Diagnostic failure cannot fail successful encrypted storage. */
+      } finally {
+        store.finishScheduledSave();
+      }
     },
     async confirm(proof: ConfirmedVaultExport): Promise<void> {
       if (

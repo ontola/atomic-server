@@ -158,6 +158,46 @@ async fn await_host_receipt(host: &EmbedHost, subject: &str, version: &str) -> s
     .expect("EmbedHost should expose the actual automatic Iroh receipt")
 }
 
+async fn await_host_attachment(host: &EmbedHost, subject: &str, file: &str, hash: &str) {
+    let expected = serde_json::json!({"files": [{"subject": file, "hash": hash, "chunks": []}]});
+    tokio::time::timeout(WAIT + Duration::from_secs(15), async {
+        loop {
+            let snapshot = host_evidence(host, subject).await;
+            if snapshot["connections"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|connection| {
+                    connection["attachmentReceipts"]
+                        .as_array()
+                        .is_some_and(|receipts| {
+                            receipts.iter().any(|receipt| {
+                                receipt["subject"] == subject && receipt["manifest"] == expected
+                            })
+                        })
+                })
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("actual Iroh peer must confirm the complete attachment manifest");
+    let local: serde_json::Value = serde_json::from_str(
+        &host
+            .call(
+                "getResourceAttachmentEvidence",
+                &serde_json::json!([[subject]]).to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(local[0]["state"], "confirmed");
+    assert_eq!(local[0]["manifest"], expected);
+}
+
 fn spawn_receiver(root: &Path, receiver_dir: &Path) -> ChildGuard {
     let _ = std::fs::remove_file(receiver_dir.join("address.json"));
     let log = std::fs::OpenOptions::new()
@@ -334,6 +374,61 @@ async fn automatic_bulk_and_live_receipts_survive_receiver_reopen() {
         )
         .await
         .unwrap();
+    // A real File and direct attachment travel through the normal Iroh blob
+    // transfer. Resource metadata alone must not satisfy the renderer's count.
+    let attachment_bytes = b"Native attachment bytes independently verified after peer storage";
+    let attachment_hash = blake3::hash(attachment_bytes);
+    store
+        .put_blob(attachment_hash.as_bytes(), attachment_bytes)
+        .await
+        .unwrap();
+    let attachment = store
+        .create_resource(
+            atomic_lib::urls::FILE,
+            &drive,
+            "Native evidence.txt",
+            Some(vec![
+                (
+                    atomic_lib::urls::FILENAME,
+                    atomic_lib::Value::String("Native evidence.txt".into()),
+                ),
+                (
+                    atomic_lib::urls::FILESIZE,
+                    atomic_lib::Value::Integer(attachment_bytes.len() as i64),
+                ),
+                (
+                    atomic_lib::urls::DOWNLOAD_URL,
+                    atomic_lib::Value::AtomicUrl(
+                        format!("https://embed.invalid/download/files/{attachment_hash}")
+                            .as_str()
+                            .into(),
+                    ),
+                ),
+                (
+                    atomic_lib::urls::INTERNAL_ID,
+                    atomic_lib::Value::String(attachment_hash.to_hex().to_string()),
+                ),
+                (
+                    atomic_lib::urls::BLOB,
+                    atomic_lib::Value::AtomicUrl(
+                        atomic_lib::identifiers::blob_subject(attachment_hash.to_hex().as_ref())
+                            .as_str()
+                            .into(),
+                    ),
+                ),
+            ]),
+        )
+        .await
+        .unwrap();
+    let mut parent = store.get_resource(&subject.as_str().into()).await.unwrap();
+    parent
+        .set_unsafe(
+            atomic_lib::urls::ATTACHMENTS.into(),
+            atomic_lib::Value::ResourceArray(vec![attachment.clone().into()]),
+        )
+        .unwrap();
+    parent.save_locally(&store).await.unwrap();
+    drop(parent);
     let c1 = stored_frontier(&store, &subject);
     eprintln!("Bulk target C1: {c1}");
     let source_identity = store.kv.replica_identity(&drive).unwrap().unwrap();
@@ -355,6 +450,20 @@ async fn automatic_bulk_and_live_receipts_survive_receiver_reopen() {
         first_host["connections"][0]["receipts"][0]["replica"]["storageId"],
         first.receipt.replica.storage_id
     );
+    await_host_attachment(
+        &host,
+        &subject,
+        &attachment,
+        attachment_hash.to_hex().as_ref(),
+    )
+    .await;
+    await_host_attachment(
+        &host,
+        &attachment,
+        &attachment,
+        attachment_hash.to_hex().as_ref(),
+    )
+    .await;
     if std::env::var_os("ATOMIC_NATIVE_RENDERER_HOST").is_some() {
         tokio::time::timeout(
             Duration::from_secs(180),
@@ -377,6 +486,13 @@ async fn automatic_bulk_and_live_receipts_survive_receiver_reopen() {
     assert_ne!(decoded_frontier(&c2), decoded_frontier(&c3));
     let third = await_receipt(&mut events, &subject, &c3).await;
     await_host_receipt(&host, &subject, &c3).await;
+    await_host_attachment(
+        &host,
+        &subject,
+        &attachment,
+        attachment_hash.to_hex().as_ref(),
+    )
+    .await;
 
     for event in [&first, &second, &third] {
         assert_eq!(event.receipt.drive, drive);
@@ -417,6 +533,14 @@ async fn automatic_bulk_and_live_receipts_survive_receiver_reopen() {
     .await
     .expect("a killed native peer must disappear from the renderer evidence");
     let reopened = open_store(&receiver_dir).await;
+    assert_eq!(
+        reopened
+            .get_blob(attachment_hash.as_bytes())
+            .await
+            .unwrap()
+            .as_deref(),
+        Some(attachment_bytes.as_slice())
+    );
     let identity = reopened.kv.replica_identity(&drive).unwrap().unwrap();
     assert_eq!(identity.storage_id, third.receipt.replica.storage_id);
     assert_eq!(identity.generation, third.receipt.replica.generation);
@@ -448,4 +572,11 @@ async fn automatic_bulk_and_live_receipts_survive_receiver_reopen() {
     assert_ne!(fresh.connection_generation, third.connection_generation);
     assert_eq!(fresh.receipt.replica, third.receipt.replica);
     await_host_receipt(&host, &subject, &c3).await;
+    await_host_attachment(
+        &host,
+        &subject,
+        &attachment,
+        attachment_hash.to_hex().as_ref(),
+    )
+    .await;
 }

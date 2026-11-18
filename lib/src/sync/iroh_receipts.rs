@@ -50,6 +50,7 @@ struct LedgerConnection {
     source: StorageReceiptReplica,
     replica: Option<StorageReceiptReplica>,
     receipts: VecDeque<IrohReplicaReceipt>,
+    attachment_receipts: VecDeque<(protocol::AttachmentReceipt, u64)>,
 }
 
 /// Ephemeral process-local state. Never exported as resource data or persisted.
@@ -65,6 +66,7 @@ impl NativeReceiptLedger {
             self.removal_generation = generation;
             for connection in &mut self.connections {
                 connection.receipts.clear();
+                connection.attachment_receipts.clear();
                 connection.replica = None;
             }
         }
@@ -85,6 +87,7 @@ impl NativeReceiptLedger {
             source: session.source.clone(),
             replica: None,
             receipts: VecDeque::new(),
+            attachment_receipts: VecDeque::new(),
         });
     }
 
@@ -111,6 +114,7 @@ impl NativeReceiptLedger {
         };
         if connection.replica.as_ref() != Some(&evidence.receipt.replica) {
             connection.receipts.clear();
+            connection.attachment_receipts.clear();
             connection.replica = Some(evidence.receipt.replica.clone());
         }
         let mut evidence = evidence.clone();
@@ -167,12 +171,24 @@ struct ResourcePeerConnection {
     drive: String,
     peer_agent: String,
     receipts: Vec<ResourcePeerReceipt>,
+    attachment_receipts: Vec<ResourcePeerAttachmentReceipt>,
 }
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ResourcePeerReceipt {
     subject: String,
     version: String,
+    confirmed_at: u64,
+    source: StorageReceiptReplica,
+    replica: StorageReceiptReplica,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ResourcePeerAttachmentReceipt {
+    subject: String,
+    version: String,
+    manifest: super::attachment_manifest::AttachmentManifest,
     confirmed_at: u64,
     source: StorageReceiptReplica,
     replica: StorageReceiptReplica,
@@ -235,6 +251,7 @@ pub async fn resource_peer_evidence(db: &Db, subjects: &[String]) -> ResourcePee
             continue;
         }
         let mut receipts = Vec::new();
+        let mut attachment_receipts = Vec::new();
         let mut relevant = false;
         for requested in subjects.iter().take(128) {
             let subject = db.normalize_subject(&requested.as_str().into());
@@ -256,6 +273,28 @@ pub async fn resource_peer_evidence(db: &Db, subjects: &[String]) -> ResourcePee
             }
             relevant = true;
             let public = wire_subject(db, &subject.pure_id());
+            if let Some((receipt, at)) = session.attachment_receipts.iter().find(|(receipt, at)| {
+                receipt.subject == public
+                    && crate::utils::now() >= *at as i64
+                    && crate::utils::now().saturating_sub(*at as i64) < 30_000
+            }) {
+                if let (Ok((_, local)), Ok((_, remote))) = (
+                    super::attachment_receipts::derive_manifest(db, &reader, requested).await,
+                    super::attachment_receipts::derive_manifest(db, &session.peer_agent, requested)
+                        .await,
+                ) {
+                    if local == receipt.manifest && remote == local {
+                        attachment_receipts.push(ResourcePeerAttachmentReceipt {
+                            subject: requested.clone(),
+                            version: receipt.version.clone(),
+                            manifest: local,
+                            confirmed_at: *at,
+                            source: session.source.clone(),
+                            replica: receipt.replica.clone(),
+                        });
+                    }
+                }
+            }
             if let Some(receipt) = session
                 .receipts
                 .iter()
@@ -276,6 +315,7 @@ pub async fn resource_peer_evidence(db: &Db, subjects: &[String]) -> ResourcePee
                 drive: session.drive.clone(),
                 peer_agent: session.peer_agent.to_string(),
                 receipts,
+                attachment_receipts,
             });
         }
     }
@@ -432,6 +472,83 @@ impl Requests {
     }
 }
 
+#[derive(Default)]
+struct AttachmentRequests {
+    removal_generation: u64,
+    pending: VecDeque<(protocol::AttachmentReceiptRequest, Instant)>,
+    completed: VecDeque<(
+        String,
+        super::attachment_manifest::AttachmentManifest,
+        Instant,
+    )>,
+    queued: VecDeque<protocol::AttachmentReceiptRequest>,
+}
+impl AttachmentRequests {
+    fn sync_removals(&mut self, generation: u64) {
+        if self.removal_generation < generation {
+            *self = Self {
+                removal_generation: generation,
+                ..Self::default()
+            };
+        }
+    }
+    fn enqueue(&mut self, request: protocol::AttachmentReceiptRequest) {
+        self.pending
+            .retain(|(_, time)| time.elapsed() < Duration::from_secs(30));
+        self.completed
+            .retain(|(_, _, time)| time.elapsed() < Duration::from_secs(10));
+        if self
+            .pending
+            .iter()
+            .any(|(r, _)| r.subject == request.subject && r.manifest == request.manifest)
+            || self
+                .queued
+                .iter()
+                .any(|r| r.subject == request.subject && r.manifest == request.manifest)
+            || self.completed.iter().any(|(subject, manifest, _)| {
+                subject == &request.subject && manifest == &request.manifest
+            })
+        {
+            return;
+        }
+        if self.queued.len() >= MAX_TARGETS {
+            self.queued.pop_front();
+        }
+        self.queued.push_back(request);
+    }
+    fn next(&mut self) -> Option<protocol::AttachmentReceiptRequest> {
+        self.pending
+            .retain(|(_, time)| time.elapsed() < Duration::from_secs(30));
+        if self.pending.len() >= MAX_PENDING {
+            return None;
+        }
+        let request = self.queued.pop_front()?;
+        self.pending.push_back((request.clone(), Instant::now()));
+        Some(request)
+    }
+    fn matching(&self, receipt: &protocol::AttachmentReceipt) -> bool {
+        self.pending.iter().any(|(request, time)| {
+            time.elapsed() < Duration::from_secs(30) && request == &receipt.request()
+        })
+    }
+    fn accept(&mut self, receipt: &protocol::AttachmentReceipt) -> bool {
+        if !self.matching(receipt) {
+            return false;
+        }
+        self.pending
+            .retain(|(request, _)| request.nonce != receipt.nonce);
+        if self.completed.len() >= MAX_TARGETS {
+            self.completed.pop_front();
+        }
+        self.completed.push_back((
+            receipt.subject.clone(),
+            receipt.manifest.clone(),
+            Instant::now(),
+        ));
+        true
+    }
+}
+
 pub(crate) struct ReceiptSession {
     remote: String,
     remote_agent: ForAgent,
@@ -441,6 +558,9 @@ pub(crate) struct ReceiptSession {
     local_generation: u64,
     source: StorageReceiptReplica,
     requests: Mutex<Requests>,
+    attachment_requests: Mutex<AttachmentRequests>,
+    pub(crate) attachments_enabled: bool,
+    pub(crate) attachment_responders: Arc<tokio::sync::Semaphore>,
     ledger: Arc<Mutex<NativeReceiptLedger>>,
 }
 
@@ -480,6 +600,11 @@ impl ReceiptSession {
                 generation: source.generation,
             },
             requests: Mutex::new(Requests::default()),
+            attachment_requests: Mutex::new(AttachmentRequests::default()),
+            attachments_enabled: caps
+                .iter()
+                .any(|cap| cap == protocol::CAP_ATTACHMENT_STORAGE_RECEIPTS_V1),
+            attachment_responders: Arc::new(tokio::sync::Semaphore::new(2)),
             ledger: db.native_receipt_ledger.clone(),
         });
         {
@@ -495,6 +620,7 @@ impl ReceiptSession {
         requests.closed = true;
         requests.queued.clear();
         requests.pending.clear();
+        *self.attachment_requests.lock().unwrap() = AttachmentRequests::default();
         self.ledger
             .lock()
             .unwrap()
@@ -509,6 +635,10 @@ impl ReceiptSession {
     }
 
     pub(crate) fn current(&self, db: &Db) -> bool {
+        self.attachment_requests
+            .lock()
+            .unwrap()
+            .sync_removals(db.native_removal_generation());
         self.requests
             .lock()
             .unwrap()
@@ -575,7 +705,32 @@ impl ReceiptSession {
             version: target.version.clone(),
         };
         if checked.validate() {
-            self.requests.lock().unwrap().enqueue(target);
+            self.requests.lock().unwrap().enqueue(target.clone());
+            if self.attachments_enabled {
+                let removal = db.native_removal_generation();
+                if let Ok((_, manifest)) = super::attachment_receipts::derive_manifest(
+                    db,
+                    &self.remote_agent,
+                    &target.subject,
+                )
+                .await
+                {
+                    if !manifest.files.is_empty()
+                        && self.current(db)
+                        && removal == db.native_removal_generation()
+                    {
+                        self.attachment_requests.lock().unwrap().enqueue(
+                            protocol::AttachmentReceiptRequest {
+                                nonce: protocol::new_challenge_nonce(),
+                                drive: self.drive.clone(),
+                                subject: target.subject,
+                                version: target.version,
+                                manifest,
+                            },
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -616,6 +771,64 @@ impl ReceiptSession {
                     observed_at: crate::utils::now() as u64,
                 },
             );
+        }
+    }
+
+    pub(crate) async fn receive_attachment(&self, db: &Db, payload: &[u8]) {
+        if !self.attachments_enabled {
+            return;
+        }
+        let Some(receipt) = protocol::AttachmentReceipt::decode(payload) else {
+            return;
+        };
+        if !self.attachment_requests.lock().unwrap().matching(&receipt) {
+            return;
+        }
+        let removal = db.native_removal_generation();
+        let write_generation = db.write_log().generation();
+        if !self.current(db) || !self.readable(db, &receipt.subject).await {
+            return;
+        }
+        let Ok((_, manifest)) =
+            super::attachment_receipts::derive_manifest(db, &self.remote_agent, &receipt.subject)
+                .await
+        else {
+            return;
+        };
+        if manifest != receipt.manifest
+            || !self.current(db)
+            || write_generation != db.write_log().generation()
+            || removal != db.native_removal_generation()
+        {
+            return;
+        }
+        if !self.attachment_requests.lock().unwrap().accept(&receipt) {
+            return;
+        }
+        let mut ledger = self.ledger.lock().unwrap();
+        ledger.sync_removals(db.native_removal_generation());
+        if ledger.removal_generation != removal {
+            return;
+        }
+        if let Some(connection) = ledger.connections.iter_mut().find(|c| {
+            c.remote == self.remote
+                && c.generation == self.generation
+                && c.agent_generation == self.local_generation
+        }) {
+            if connection.replica.as_ref() != Some(&receipt.replica) {
+                connection.receipts.clear();
+                connection.attachment_receipts.clear();
+                connection.replica = Some(receipt.replica.clone());
+            }
+            connection
+                .attachment_receipts
+                .retain(|(old, _)| old.subject != receipt.subject);
+            if connection.attachment_receipts.len() >= MAX_TARGETS {
+                connection.attachment_receipts.pop_front();
+            }
+            connection
+                .attachment_receipts
+                .push_back((receipt, crate::utils::now() as u64));
         }
     }
 
@@ -670,6 +883,23 @@ impl ReceiptSession {
                         (cursor + 32) % subjects.len()
                     };
                     last_scan = Instant::now();
+                }
+                for _ in 0..MAX_PENDING {
+                    let request = session.attachment_requests.lock().unwrap().next();
+                    let Some(request) = request else {
+                        break;
+                    };
+                    if !session.current(&db) {
+                        break;
+                    }
+                    if let Some(frame) = request.encode_frame() {
+                        let mut framed = Vec::with_capacity(frame.len() + 4);
+                        framed.extend_from_slice(&(frame.len() as u32).to_be_bytes());
+                        framed.extend(frame);
+                        if tx.try_send(framed).is_err() {
+                            break;
+                        }
+                    }
                 }
                 for _ in 0..MAX_PENDING {
                     let request = session
@@ -742,6 +972,89 @@ mod tests {
         )
         .unwrap();
         (db, drive, agent, session)
+    }
+
+    #[test]
+    fn attachment_requests_refresh_and_removal_fence() {
+        let mut requests = AttachmentRequests::default();
+        let request = protocol::AttachmentReceiptRequest {
+            nonce: "a".repeat(64),
+            drive: "atomic:drive".into(),
+            subject: "atomic:file".into(),
+            version: target(1).version,
+            manifest: Default::default(),
+        };
+        requests.enqueue(request.clone());
+        requests.next().unwrap();
+        let receipt = protocol::AttachmentReceipt {
+            nonce: request.nonce.clone(),
+            drive: request.drive.clone(),
+            subject: request.subject.clone(),
+            version: request.version.clone(),
+            manifest: request.manifest.clone(),
+            replica: StorageReceiptReplica {
+                storage_id: "b".repeat(64),
+                generation: "c".repeat(64),
+            },
+            barrier: protocol::ATTACHMENT_RECEIPT_BARRIER.into(),
+        };
+        assert!(requests.accept(&receipt));
+        requests.enqueue(request.clone());
+        assert!(requests.next().is_none());
+        requests.completed[0].2 = Instant::now() - Duration::from_secs(11);
+        let fresh = protocol::AttachmentReceiptRequest {
+            nonce: "d".repeat(64),
+            ..request
+        };
+        requests.enqueue(fresh);
+        assert!(requests.next().is_some());
+        assert!(
+            !requests.matching(&receipt),
+            "old nonce cannot refresh byte proof"
+        );
+        requests.sync_removals(1);
+        assert!(requests.pending.is_empty() && requests.completed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn attachment_ledger_expires_without_fresh_remote_verification() {
+        let (db, drive, _, session) = fixture("native_attachment_expiry").await;
+        confirm(&db, &session, &drive).await;
+        {
+            let mut ledger = db.native_receipt_ledger.lock().unwrap();
+            let connection = ledger.connections.front_mut().unwrap();
+            let meta = &connection.receipts[0].receipt;
+            connection.attachment_receipts.push_back((
+                protocol::AttachmentReceipt {
+                    nonce: meta.nonce.clone(),
+                    drive: meta.drive.clone(),
+                    subject: meta.subject.clone(),
+                    version: meta.version.clone(),
+                    manifest: Default::default(),
+                    replica: meta.replica.clone(),
+                    barrier: protocol::ATTACHMENT_RECEIPT_BARRIER.into(),
+                },
+                crate::utils::now() as u64,
+            ));
+        }
+        assert_eq!(
+            resource_peer_evidence(&db, std::slice::from_ref(&drive))
+                .await
+                .connections[0]
+                .attachment_receipts
+                .len(),
+            1
+        );
+        db.native_receipt_ledger.lock().unwrap().connections[0].attachment_receipts[0].1 =
+            (crate::utils::now() - 30_001) as u64;
+        let expired = resource_peer_evidence(&db, &[drive]).await;
+        assert!(expired.connections[0].attachment_receipts.is_empty());
+        assert_eq!(
+            expired.connections[0].receipts.len(),
+            1,
+            "metadata evidence remains separate"
+        );
+        super::super::peer::remove_live_peer(&session.remote, 1);
     }
 
     async fn confirm(db: &Db, session: &ReceiptSession, subject: &str) {

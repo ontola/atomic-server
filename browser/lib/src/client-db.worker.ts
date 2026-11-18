@@ -1,3 +1,8 @@
+import type {
+  AttachmentManifest,
+  ResourceAttachmentEvidence,
+  SerializedVaultAttachmentReceipt,
+} from './resource-attachment-evidence.js';
 /**
  * Web Worker that hosts the WASM ClientDb.
  * Communicates with the main thread via typed postMessage.
@@ -42,6 +47,28 @@ export interface VaultExportResult {
   coverage: Record<string, number>;
   /** Exact versions sealed in this object. Local-only; absent on older WASM. */
   resourceVersions?: Record<string, Record<string, number>>;
+}
+
+/** How a local file would be uploaded; see `vaultBlobOpen` in `wasm/`. */
+export interface VaultBlobPlan {
+  /** `missing` also covers bytes that do not match their hash. */
+  status: 'ready' | 'missing' | 'tooLarge';
+  size: number;
+  /** The file's id in this vault (keyed BLAKE3 hex); empty unless `ready`. */
+  blobId: string;
+  /** `length` is plaintext, `sealedLength` what is uploaded and charged. */
+  chunks: {
+    index: number;
+    offset: number;
+    length: number;
+    sealedLength: number;
+  }[];
+}
+
+export interface VaultBlobRestoreResult {
+  status: 'restored' | 'unreferenced' | 'unreadable';
+  /** Plain BLAKE3 hex of the stored file, when `restored`. */
+  hash?: string | null;
 }
 
 export interface VaultImportSummary {
@@ -91,6 +118,26 @@ export interface ClientDbRpc {
   putResourceSyncReceipts: [
     { scope: ResourceSyncScope; receipts: SerializedServerReceipt[] },
     void,
+  ];
+  vaultAttachmentManifests: [
+    { drive: string },
+    { subject: string; manifest: AttachmentManifest }[] | undefined,
+  ];
+  getResourceAttachmentEvidence: [
+    { subjects: string[] },
+    ResourceAttachmentEvidence[] | undefined,
+  ];
+  getResourceVaultAttachmentReceipts: [
+    { subjects: string[]; scope: VaultSyncScope },
+    SerializedVaultAttachmentReceipt[] | undefined,
+  ];
+  putResourceVaultAttachmentReceipts: [
+    {
+      scope: VaultSyncScope;
+      receipts: SerializedVaultAttachmentReceipt[];
+      generation: number;
+    },
+    boolean,
   ];
   getResourceVaultEvidence: [
     { subjects: string[]; scope: VaultSyncScope },
@@ -209,6 +256,29 @@ export interface ClientDbRpc {
     { drivePseudonym: string; devicePubkey: string; segment: number },
     void,
   ];
+  // File bytes (`planning/vault-file-blobs.md`): hashing, chunking, sealing
+  // and opening are Rust; the main thread only moves sealed chunks.
+  vaultFileHashes: [{ driveSubject: string }, string[]];
+  vaultBlobPresent: [{ hash: string }, boolean];
+  vaultBlobOpen: [
+    { hash: string; key: Uint8Array; keyEpoch: number },
+    VaultBlobPlan,
+  ];
+  vaultBlobChunk: [
+    { hash: string; key: Uint8Array; keyEpoch: number; index: number },
+    Uint8Array,
+  ];
+  vaultBlobClose: [object, void];
+  vaultBlobRestore: [
+    {
+      key: Uint8Array;
+      keyEpoch: number;
+      blobId: string;
+      chunks: Uint8Array[];
+      wanted: string[];
+    },
+    VaultBlobRestoreResult,
+  ];
 }
 
 export type RpcType = keyof ClientDbRpc;
@@ -290,6 +360,42 @@ const handlers: Handlers = {
       JSON.stringify(m.receipts),
     );
     flushNow();
+  },
+  vaultAttachmentManifests: async m => {
+    if (typeof db!.vaultAttachmentManifests !== 'function') return undefined;
+
+    return db!.vaultAttachmentManifests(m.drive);
+  },
+  getResourceAttachmentEvidence: async m => {
+    if (typeof db!.getResourceAttachmentEvidence !== 'function')
+      return undefined;
+
+    // Keep this worker self-contained; the main-thread RPC adapter validates
+    // the evidence before exposing it to callers.
+    return db!.getResourceAttachmentEvidence(JSON.stringify(m.subjects));
+  },
+  getResourceVaultAttachmentReceipts: m => {
+    if (typeof db!.getResourceVaultAttachmentReceipts !== 'function')
+      return undefined;
+
+    return db!.getResourceVaultAttachmentReceipts(
+      JSON.stringify(m.subjects),
+      JSON.stringify(m.scope),
+    );
+  },
+  putResourceVaultAttachmentReceipts: m => {
+    if (typeof db!.putResourceVaultAttachmentReceipts !== 'function')
+      return false;
+    dirty = true;
+    const accepted =
+      db!.putResourceVaultAttachmentReceipts(
+        JSON.stringify(m.scope),
+        JSON.stringify(m.receipts),
+        m.generation,
+      ) === true;
+    flushNow();
+
+    return accepted;
   },
   getResourceVaultEvidence: m => {
     if (typeof db!.getResourceVaultEvidence !== 'function') return undefined;
@@ -529,6 +635,32 @@ const handlers: Handlers = {
   vaultCommitSegment: m => {
     db!.vaultCommitSegment(m.drivePseudonym, m.devicePubkey, m.segment);
     flushNow();
+  },
+  vaultFileHashes: m => db!.vaultFileHashes(m.driveSubject),
+  vaultBlobPresent: m => db!.vaultBlobPresent(m.hash),
+  vaultBlobOpen: m => db!.vaultBlobOpen(m.hash, m.key, m.keyEpoch),
+  vaultBlobChunk: m => db!.vaultBlobChunk(m.hash, m.key, m.keyEpoch, m.index),
+  vaultBlobClose: () => db!.vaultBlobClose(),
+  vaultBlobRestore: async m => {
+    const result: VaultBlobRestoreResult = await db!.vaultBlobRestore(
+      m.key,
+      m.keyEpoch,
+      m.blobId,
+      m.chunks,
+      m.wanted,
+    );
+
+    // Same reasoning as `vaultImport`: a restore may be followed by a reload.
+    if (result.status === 'restored') {
+      try {
+        db!.flush();
+      } catch (e) {
+        dirty = true;
+        console.error('[ClientDb] flush after vault blob restore failed:', e);
+      }
+    }
+
+    return result;
   },
   getVersionVectorsForDrive: m => db!.getVersionVectorsForDrive(m.drive),
   // Search entries are about three quarters of a pulled resource's index

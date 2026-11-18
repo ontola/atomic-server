@@ -10,6 +10,7 @@ pub mod app_agent;
 mod app_endpoints_test;
 #[cfg(feature = "wasm-plugins")]
 pub mod app_write;
+pub mod attachment_evidence;
 pub mod blob;
 pub mod client_reports;
 pub mod commit;

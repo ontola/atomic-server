@@ -1,3 +1,9 @@
+import {
+  parseResourceAttachmentEvidence,
+  type AttachmentManifest,
+  type ResourceAttachmentEvidence,
+  type SerializedVaultAttachmentReceipt,
+} from './resource-attachment-evidence.js';
 /**
  * Node-side ClientDb: same public surface as `ClientDbWorker`, but runs the
  * WASM module on the main thread (no Worker, no BroadcastChannel, no OPFS).
@@ -264,6 +270,59 @@ export class NodeClientDb {
     if (typeof db.putResourceSyncReceipts !== 'function') return;
     db.putResourceSyncReceipts(JSON.stringify(scope), JSON.stringify(receipts));
     db.flush();
+  }
+
+  async vaultAttachmentManifests(
+    drive: string,
+  ): Promise<{ subject: string; manifest: AttachmentManifest }[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.vaultAttachmentManifests !== 'function') return undefined;
+
+    return db.vaultAttachmentManifests(drive);
+  }
+
+  async getResourceAttachmentEvidence(
+    subjects: string[],
+  ): Promise<ResourceAttachmentEvidence[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceAttachmentEvidence !== 'function')
+      return undefined;
+
+    return parseResourceAttachmentEvidence(
+      await db.getResourceAttachmentEvidence(JSON.stringify(subjects)),
+    );
+  }
+
+  async getResourceVaultAttachmentReceipts(
+    subjects: string[],
+    scope: VaultSyncScope,
+  ): Promise<SerializedVaultAttachmentReceipt[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceVaultAttachmentReceipts !== 'function')
+      return undefined;
+
+    return db.getResourceVaultAttachmentReceipts(
+      JSON.stringify(subjects),
+      JSON.stringify(scope),
+    );
+  }
+
+  async putResourceVaultAttachmentReceipts(
+    scope: VaultSyncScope,
+    receipts: SerializedVaultAttachmentReceipt[],
+    generation: number,
+  ): Promise<boolean> {
+    const db = this.requireDb();
+    if (typeof db.putResourceVaultAttachmentReceipts !== 'function')
+      return false;
+
+    return (
+      db.putResourceVaultAttachmentReceipts(
+        JSON.stringify(scope),
+        JSON.stringify(receipts),
+        generation,
+      ) === true
+    );
   }
 
   async getResourceVaultEvidence(

@@ -3,9 +3,10 @@
 Resource-row indicators, the “Copies & sync” panel, browser server-confirmation
 recovery and per-resource Cloud Vault confirmations are implemented in draft
 PR #2576. WebRTC and native Iroh peer confirmations are implemented and locally
-validated, including the embedded native renderer. This plan remains open for
-attachment confirmation, native WebRTC and legacy Tauri integration, and
-multiple-server configuration. Exact-commit CI is tracked on the PR.
+validated, including the embedded native renderer. Separate attachment-byte
+confirmation is implemented and locally validated in the real app. This plan remains
+open for native WebRTC and legacy Tauri integration, production infrastructure
+validation and multiple-server configuration. Exact-commit CI is tracked on the PR.
 
 ## Ownership and dependency
 
@@ -72,7 +73,7 @@ based on authenticated stored-version acknowledgements, described below.
 
 ## Remaining work
 
-- [ ] Confirm attachment bytes separately from resource data, for each supported
+- [x] Confirm attachment bytes separately from resource data, for each supported
   destination, before claiming a complete file copy.
 - [x] Add typed WebRTC per-peer receipts after verified persistent storage.
   Expose resource copy counts independently of connection counts, including
@@ -153,3 +154,55 @@ Evidence is session-local and metadata-only. Distinct storage identities do not
 establish independent physical devices, retention, attachment coverage or a
 recoverable backup. Native WebRTC requester integration is separate from this
 Iroh phase; its shared responder remains supported.
+
+
+## Attachment confirmations (active phase)
+
+Builds on native Iroh head `7968972a6b1e6762feedcb698dd47c414603978f` in the
+same owned worktree/branch. The original checkout remains at its recorded dirty
+baseline. Reuse the committed encrypted Vault file pipeline from
+`bf2c4125161d0144b1b31bd5b2d58444a5a89dfc` (#2495), preserving this branch's
+resource receipts; do not merge unrelated develop changes. File/chunk validation
+may adapt `1021eba25` without importing drive-level confirmation semantics.
+
+- [x] Audit byte identity, durability, transfers and existing dependencies.
+- [x] Integrate encrypted Vault file backup dependency and settle conflicts.
+- [x] Define bounded exact attachment descriptors and shared byte verification.
+- [x] Add local/server/peer byte evidence with authorization and lifecycle fences.
+- [x] Record scoped Vault proof only after all required encrypted chunks confirm.
+- [x] Present resource details and contents separately; complete destination
+  confirmations require both. Unsupported or missing contents remain unknown.
+- [x] Validate corruption, partial/missing bytes, hash replacement, reload,
+  deletion/GC, late replies and scope changes at unit/integration/UI layers.
+- [x] Update protocol/product docs, coverage and actual desktop/mobile screenshots.
+- [x] Run required lint/format, type, compiler and Rust checks.
+- [ ] Publish to PR #2576 and follow exact-head CI.
+
+Content identity is independent of the metadata version: renames must not erase
+valid byte proof, while changed blob/chunk references immediately lose coverage.
+Use explicit supported File representations (BLAKE3 blob, ordered chunks and
+legacy hash-backed files); do not imply coverage of arbitrary external document
+URLs. File existence, lengths, drive sync timestamps and metadata receipts alone
+are insufficient. Large-file verification must be bounded and avoid blocking
+transport keepalives. Shared storage identities must not inflate copy counts.
+
+Coordinator owns dependency integration, UI, catalogs, docs and publishing.
+`sync_ui` owns Rust storage/protocol/host/WASM implementation;
+`sync_architecture` owns library/Store/Vault orchestration and independent review;
+`sync_ui_tests` owns independent regression and end-to-end acceptance.
+
+Attachment proof limits and lifecycle decisions: local byte verification admits
+64 MiB per stored blob/chunk, 512 MiB per batch, two active batches and a bounded
+cache under blob/backend generations. Current metadata and ACL are checked for
+every request. Peer byte receipts refresh every 10 seconds and expire after 30
+seconds without new proof; remote byte loss cannot retain a permanent checkmark.
+S3 can provide HTTP evidence using complete-object/version checks plus verified
+reads, but external blob backends do not emit peer byte receipts under their
+metadata KV identity. Vault captures persisted drive manifests rather than only
+loaded UI resources, assembles supported split files and verifies reused sealed
+chunks before writing private scoped proof.
+
+The browser cache has no Rust default signing agent. Its local byte checks and
+Vault inventory use the existing trusted local resource/blob access boundary;
+remote HTTP and peer checks still require their authenticated agent. Regression
+coverage verifies both private-cache confirmation and anonymous remote denial.

@@ -1,4 +1,9 @@
 import {
+  ResourceAttachmentSync,
+  type AttachmentPeerReceipt,
+} from './resource-attachment-sync.js';
+import type { ResourceAttachmentSyncStatus } from './resource-attachment-evidence.js';
+import {
   parseResourcePeerEvidence,
   type ResourcePeerEvidenceProvider,
 } from './resource-peer-evidence.js';
@@ -6039,6 +6044,52 @@ export class Store {
     }
   }
 
+  private resourceAttachmentSync = new ResourceAttachmentSync(
+    this,
+    async (subjects, signal) => {
+      const agent = this.getAgent();
+      if (!agent || this.noServer || this.commitTransport || !this.serverUrl)
+        return undefined;
+      const url = new URL('/attachment-evidence', this.serverUrl).toString();
+      const body = JSON.stringify({ subjects });
+      const headers = await signRequest(
+        url,
+        agent,
+        { 'Content-Type': 'application/json', Accept: 'application/json' },
+        { method: 'POST', body },
+      );
+      const response = await (this.injectedFetch ?? fetch)(url, {
+        method: 'POST',
+        headers,
+        body,
+        signal,
+      });
+      if (!response.ok) return undefined;
+
+      return response.json();
+    },
+  );
+
+  public getResourceAttachmentSyncStatus(
+    resource: Resource,
+  ): ResourceAttachmentSyncStatus {
+    return this.resourceAttachmentSync.get(resource);
+  }
+
+  public subscribeResourceAttachmentSyncStatus(
+    resource: Resource,
+    callback: () => void,
+  ): () => void {
+    return this.resourceAttachmentSync.subscribe(resource, callback);
+  }
+
+  /** @internal Exact authenticated content receipt, independent of metadata coverage. */
+  public acknowledgeResourceAttachmentReceipt(
+    receipt: AttachmentPeerReceipt,
+  ): void {
+    this.resourceAttachmentSync.acknowledge(receipt);
+  }
+
   private resourcePeerSyncStatus = new ResourcePeerSyncStatusTracker();
   private peerSyncGeneration = 0;
   private resourcePeerWatchers = new Map<Resource, number>();
@@ -6188,6 +6239,25 @@ export class Store {
           !this.hasPendingDestroy(subject);
         const accepted = requested.filter(valid);
         const acceptedSet = new Set(accepted);
+
+        for (const subject of accepted) {
+          if (!valid(subject)) continue;
+          this.resourceAttachmentSync.replaceNative(
+            subject,
+            evidence.connections.flatMap(connection =>
+              (connection.attachmentReceipts ?? [])
+                .filter(
+                  receipt => this.normalizeSubject(receipt.subject) === subject,
+                )
+                .map(receipt => ({
+                  ...receipt,
+                  subject,
+                  connectionId: connection.connectionId,
+                })),
+            ),
+          );
+        }
+
         this.resourcePeerSyncStatus.replaceNative(
           accepted,
           {
@@ -6243,16 +6313,22 @@ export class Store {
     drive: string,
     peerAgent: string,
   ): () => void {
-    return this.resourcePeerSyncStatus.open(
+    const close = this.resourcePeerSyncStatus.open(
       connectionId,
       this.normalizeSubject(drive),
       peerAgent,
     );
+
+    return () => {
+      close();
+      this.resourceAttachmentSync.closePeer(connectionId);
+    };
   }
 
   /** @internal The connection observed replacement of its backing storage. */
   public invalidateResourcePeerSession(connectionId: string): void {
     this.resourcePeerSyncStatus.invalidate(connectionId);
+    this.resourceAttachmentSync.closePeer(connectionId);
   }
 
   /** @internal Only the negotiated authenticated receipt consumer may call this. */
@@ -7076,6 +7152,7 @@ export class Store {
     this.lastPersisted.delete(resolved);
     this.resourceSyncStatus.remove(this.normalizeSubject(resolved));
     this.resourcePeerSyncStatus.remove(this.normalizeSubject(resolved));
+    this.resourceAttachmentSync.remove(this.normalizeSubject(resolved));
     this.nativePeerReadTokens.delete(this.normalizeSubject(resolved));
     void this.eventManager.emit(
       StoreEvents.ResourcePeerEvidenceRemoved,

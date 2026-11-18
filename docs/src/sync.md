@@ -94,8 +94,28 @@ Iroh peers negotiate resource receipts separately from drive-level sync. The
 native host supplies its live evidence to embedded resource views; those views
 do not open another peer connection.
 
-File resource confirmations describe the resource data, not whether every
-destination has its attachment bytes.
+For files and directly attached files, the panel separates **resource details**
+from **file contents**. A destination gets a complete-copy check only when both
+are confirmed there. A metadata receipt from one peer cannot be combined with
+file bytes on another. Renaming a file can leave its contents confirmed while
+its new details are pending; replacing its contents immediately requires new
+byte proof.
+
+Contents confirmation checks actual stored bytes against their content hashes,
+including the order and complete hash of split files. Local contents are checked
+again after reload. Server checks are authorized for the signed-in agent. Peer
+checks require the attachment-confirmation capability and a live session.
+Cloud Vault records content proof only after the required encrypted file chunks
+have been uploaded and confirmed, or an existing encrypted copy has been opened
+and verified. Listing a file in a backup is insufficient.
+
+These checks cover supported File resources and explicit attachment references.
+They do not claim that arbitrary links or external images embedded in document
+text are copied. Missing, unreadable, unsupported or oversized content remains
+unconfirmed. The current verifier admits at most 64 MiB per stored blob/chunk
+and 512 MiB per batch. Older peers and unsupported storage backends can still
+sync without supplying contents proof. Peer confirmations do not count external
+shared object stores as separate file copies.
 
 ## Connecting a cloud account
 

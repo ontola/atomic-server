@@ -74,7 +74,7 @@ fork review diff) are recorded in their owning plans, not here.
    [`plugins.md`](./plugins.md).
 
 ## Active
-- [Resource copies and sync indicators](./resource-sync-indicators.md) — resource indicators and durable reload confirmations implemented in draft PR #2576; per-resource Cloud Vault confirmations implemented; WebRTC and native Iroh confirmations locally validated, including embedded renderer reload/departure; attachment, native WebRTC, legacy Tauri and multiple-server dependencies remain.
+- [Resource copies and sync indicators](./resource-sync-indicators.md) — resource indicators, durable reload confirmations, Cloud Vault and WebRTC/native Iroh confirmations implemented in draft PR #2576. Separate attachment-byte proof is locally validated across all destinations; native WebRTC requester, legacy Tauri, multiple-server, production infrastructure and exact-head CI validation remain.
 - [`atomic:` identifier scheme](atomic-scheme.md) — #1584: canonical `atomic:` scheme, dual-accept `did:ad:`, genesis v2.
 - [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
 - [Website publishing](./website-publishing.md) — FOSS publication on `develop` since #1500 (2026-09-17); managed SaaS adapter and the open follow-ups carried from that PR's handoff.

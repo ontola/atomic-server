@@ -5,6 +5,8 @@ import {
   localCopyLabel,
   resourceSyncPresentation,
   serverCopyLabel,
+  completePeerCopyCount,
+  type ResourceAttachmentPresentationStatus,
 } from './resourceSyncPresentation';
 
 const idle: ResourceSaveState = {
@@ -95,6 +97,134 @@ describe('resource sync presentation', () => {
     expect(localCopyLabel({ state: 'unknown' })).toBe(
       'Local copy not confirmed',
     );
+  });
+});
+
+describe('attachment confirmation presentation', () => {
+  const contents: ResourceAttachmentPresentationStatus = {
+    required: true,
+    local: { state: 'confirmed' },
+    server: { state: 'unknown' },
+    vault: { state: 'unknown' },
+    peers: [],
+  };
+  const peer = {
+    state: 'confirmed' as const,
+    confirmedCount: 1,
+    connectedCount: 1,
+    peers: [
+      {
+        connectionId: 'a',
+        peerAgent: 'agent',
+        storageId: 'store-a',
+        generation: '1',
+        state: 'confirmed' as const,
+      },
+    ],
+  };
+
+  it('does not turn metadata-only confirmation into a complete file copy', () => {
+    expect(
+      resourceSyncPresentation(confirmed, idle, undefined, undefined, contents),
+    ).toMatchObject({
+      label: 'Server file contents not confirmed',
+      tone: 'neutral',
+    });
+    expect(
+      resourceSyncPresentation(confirmed, idle, undefined, undefined, {
+        ...contents,
+        server: { state: 'confirmed' },
+      }),
+    ).toMatchObject({
+      label: 'Resource and file contents saved to server',
+      tone: 'confirmed',
+    });
+  });
+
+  it('selects a complete Vault copy when only metadata is confirmed on the server', () => {
+    expect(
+      resourceSyncPresentation(
+        confirmed,
+        idle,
+        { state: 'confirmed' },
+        undefined,
+        {
+          ...contents,
+          vault: { state: 'confirmed' },
+        },
+      ),
+    ).toMatchObject({ symbol: 'vault', tone: 'confirmed' });
+  });
+
+  it('cannot combine peer metadata with another connection, storage identity or generation', () => {
+    for (const other of [
+      { connectionId: 'b', storageId: 'store-a', generation: '1' },
+      { connectionId: 'a', storageId: 'store-b', generation: '1' },
+      { connectionId: 'a', storageId: 'store-a', generation: '2' },
+      { connectionId: 'a' },
+    ]) {
+      expect(
+        completePeerCopyCount(peer, {
+          ...contents,
+          peers: [{ ...other, state: 'confirmed' }],
+        }),
+      ).toBe(0);
+    }
+
+    expect(
+      completePeerCopyCount(peer, { ...contents, peers: peer.peers }),
+    ).toBe(1);
+  });
+
+  it('counts shared storage once and requires current metadata as well as bytes', () => {
+    const shared = {
+      ...peer,
+      confirmedCount: 1,
+      peers: [peer.peers[0], { ...peer.peers[0], connectionId: 'b' }],
+    };
+    expect(
+      completePeerCopyCount(shared, { ...contents, peers: shared.peers }),
+    ).toBe(1);
+    expect(
+      completePeerCopyCount(
+        {
+          ...shared,
+          peers: shared.peers.map(copy => ({ ...copy, state: 'pending' })),
+        },
+        {
+          ...contents,
+          peers: shared.peers,
+        },
+      ),
+    ).toBe(0);
+  });
+
+  it('keeps unsaved metadata visible even while contents are confirmed', () => {
+    expect(
+      resourceSyncPresentation(
+        confirmed,
+        { ...idle, kind: 'dirty' },
+        undefined,
+        undefined,
+        {
+          ...contents,
+          server: { state: 'confirmed' },
+        },
+      ),
+    ).toMatchObject({ label: 'Changes waiting to save', tone: 'pending' });
+  });
+
+  it('keeps a local contents failure visible even with a complete server copy', () => {
+    expect(
+      resourceSyncPresentation(confirmed, idle, undefined, undefined, {
+        ...contents,
+        local: { state: 'error' },
+        server: { state: 'confirmed' },
+      }),
+    ).toMatchObject({
+      label: 'Could not confirm file contents on this device',
+      tone: 'attention',
+    });
   });
 });
 

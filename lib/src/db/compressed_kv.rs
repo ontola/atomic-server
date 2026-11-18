@@ -349,6 +349,7 @@ impl KvStore for CompressedKv {
     }
 
     fn insert(&self, tree: Tree, key: &[u8], val: &[u8]) -> AtomicResult<()> {
+        let _blob_write = self.log.blob_write(tree == Tree::Blobs);
         if is_compressed_tree(tree) {
             self.inner
                 .insert(tree, key, &self.encoded(tree, key, val, &[]))?;
@@ -360,6 +361,7 @@ impl KvStore for CompressedKv {
     }
 
     fn remove(&self, tree: Tree, key: &[u8]) -> AtomicResult<()> {
+        let _blob_write = self.log.blob_write(tree == Tree::Blobs);
         self.inner.remove(tree, key)?;
         self.wrote(logged_subject(tree, key).into_iter().collect());
         Ok(())
@@ -430,6 +432,7 @@ impl KvStore for CompressedKv {
     }
 
     fn clear_tree(&self, tree: Tree) -> AtomicResult<()> {
+        let _blob_write = self.log.blob_write(tree == Tree::Blobs);
         self.inner.clear_tree(tree)?;
         if matches!(tree, Tree::Resources | Tree::LoroSnapshots) {
             self.log.invalidate_all();
@@ -438,6 +441,9 @@ impl KvStore for CompressedKv {
     }
 
     fn apply_batch(&self, operations: &[Operation]) -> AtomicResult<()> {
+        let _blob_write = self
+            .log
+            .blob_write(operations.iter().any(|op| op.tree == Tree::Blobs));
         if !operations
             .iter()
             .any(|op| is_compressed_tree(op.tree) && op.val.is_some())
@@ -478,6 +484,7 @@ impl KvStore for CompressedKv {
     }
 
     fn commit_batch(&self) -> AtomicResult<()> {
+        let _blob_write = self.log.blob_write(true);
         let committed = self.inner.commit_batch();
         let buffered = self.batched.lock().ok().and_then(|mut b| b.take());
         if let Err(e) = committed {

@@ -1,3 +1,9 @@
+import {
+  parseResourceAttachmentEvidence,
+  type AttachmentManifest,
+  type ResourceAttachmentEvidence,
+  type SerializedVaultAttachmentReceipt,
+} from './resource-attachment-evidence.js';
 /**
  * ClientDbWorker: typed async wrapper around the WASM ClientDb.
  *
@@ -57,6 +63,8 @@ import type {
   RpcReq,
   RpcRes,
   RpcType,
+  VaultBlobPlan,
+  VaultBlobRestoreResult,
   VaultExportResult,
   VaultImportSummary,
   WorkerRequest,
@@ -248,6 +256,10 @@ const POINT_READ_TYPES = new Set([
 /** Operations whose result remains valid when repeated by a new DB owner. */
 const REPEATABLE_RPC_TYPES = new Set([
   'blake3Hash',
+  'vaultAttachmentManifests',
+  'getResourceAttachmentEvidence',
+  'getResourceVaultAttachmentReceipts',
+  'putResourceVaultAttachmentReceipts',
   'getBlob',
   'putBlob', // Content-addressed write of the same bytes.
   'getResource',
@@ -1220,6 +1232,39 @@ export class ClientDbWorker {
     }
   }
 
+  vaultAttachmentManifests(
+    drive: string,
+  ): Promise<{ subject: string; manifest: AttachmentManifest }[] | undefined> {
+    return this.call('vaultAttachmentManifests', { drive });
+  }
+
+  async getResourceAttachmentEvidence(
+    subjects: string[],
+  ): Promise<ResourceAttachmentEvidence[] | undefined> {
+    return parseResourceAttachmentEvidence(
+      await this.call('getResourceAttachmentEvidence', { subjects }),
+    );
+  }
+
+  getResourceVaultAttachmentReceipts(
+    subjects: string[],
+    scope: VaultSyncScope,
+  ): Promise<SerializedVaultAttachmentReceipt[] | undefined> {
+    return this.call('getResourceVaultAttachmentReceipts', { subjects, scope });
+  }
+
+  putResourceVaultAttachmentReceipts(
+    scope: VaultSyncScope,
+    receipts: SerializedVaultAttachmentReceipt[],
+    generation: number,
+  ): Promise<boolean> {
+    return this.call('putResourceVaultAttachmentReceipts', {
+      scope,
+      receipts,
+      generation,
+    });
+  }
+
   putBlob(hash: Uint8Array, data: Uint8Array): Promise<void> {
     return this.call('putBlob', { hash, data });
   }
@@ -1358,6 +1403,63 @@ export class ClientDbWorker {
       drivePseudonym,
       devicePubkey,
       segment,
+    });
+  }
+
+  /** Hashes of the files this drive's File resources reference. */
+  vaultFileHashes(driveSubject: string): Promise<string[]> {
+    return this.call('vaultFileHashes', { driveSubject });
+  }
+
+  /** Whether this device holds the bytes for a file hash. */
+  vaultBlobPresent(hash: string): Promise<boolean> {
+    return this.call('vaultBlobPresent', { hash });
+  }
+
+  /**
+   * Load one local file, verified against its hash, derive its id in this
+   * vault and get its chunk layout. The worker keeps that one file until
+   * `vaultBlobClose` or the next open.
+   */
+  vaultBlobOpen(
+    hash: string,
+    key: Uint8Array,
+    keyEpoch: number,
+  ): Promise<VaultBlobPlan> {
+    return this.call('vaultBlobOpen', { hash, key, keyEpoch });
+  }
+
+  /** One chunk of the file opened with {@link vaultBlobOpen}, sealed. */
+  vaultBlobChunk(
+    hash: string,
+    key: Uint8Array,
+    keyEpoch: number,
+    index: number,
+  ): Promise<Uint8Array> {
+    return this.call('vaultBlobChunk', { hash, key, keyEpoch, index });
+  }
+
+  vaultBlobClose(): Promise<void> {
+    return this.call('vaultBlobClose');
+  }
+
+  /**
+   * Open one stored file from its sealed chunks and store it if one of the
+   * `wanted` hashes (plain BLAKE3) names it.
+   */
+  vaultBlobRestore(
+    key: Uint8Array,
+    keyEpoch: number,
+    blobId: string,
+    chunks: Uint8Array[],
+    wanted: string[],
+  ): Promise<VaultBlobRestoreResult> {
+    return this.call('vaultBlobRestore', {
+      key,
+      keyEpoch,
+      blobId,
+      chunks,
+      wanted,
     });
   }
 

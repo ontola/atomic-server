@@ -10,7 +10,9 @@ import {
 const ACCOUNT = 'resource-vault@example.com';
 const PSEUDONYM = 'resource-vault-test';
 type Reservation = {
-  kind: 'checkpoint' | 'pack';
+  kind: 'checkpoint' | 'pack' | 'blob';
+  content_hash?: string;
+  chunk_index?: number;
   size_bytes: number;
   key_epoch: number;
   checkpoint_n?: number;
@@ -50,6 +52,9 @@ async function installVaultPortal(
     keyEnvelope: '',
     mode: 'success' as 'success' | 'hold' | 'fail',
     held: [] as Array<() => void>,
+    holdBlobChunk: undefined as number | undefined,
+    heldBlobs: [] as Array<() => void>,
+    objectKeys: new Map<string, string>(),
     reservations: new Map<string, Reservation>(),
     uploaded: new Map<string, Buffer>(),
     confirmed: new Set<string>(),
@@ -123,29 +128,52 @@ async function installVaultPortal(
       } else {
         await route.fulfill({ status: 204 });
       }
-    } else if (path.endsWith('/upload-urls')) {
-      const [reservation] = route.request().postDataJSON()
-        .objects as Reservation[];
-      const id = `object-${state.reservations.size + 1}`;
-      state.reservations.set(id, reservation);
-      const suffix =
-        reservation.kind === 'checkpoint'
-          ? `checkpoints/ckpt-${String(reservation.checkpoint_n).padStart(6, '0')}.loro`
-          : `lanes/${reservation.lane_device_pubkey}/seg-${String(reservation.segment).padStart(6, '0')}.pack`;
+    } else if (path.endsWith('/objects')) {
+      await route.fulfill({
+        json: [...state.confirmed].map(id => ({
+          object_id: id,
+          object_key: state.objectKeys.get(id),
+          ...state.reservations.get(id),
+        })),
+      });
+    } else if (path.endsWith('/download-urls')) {
       await route.fulfill({
         json: {
-          uploads: [
-            {
+          downloads: route
+            .request()
+            .postDataJSON()
+            .object_ids.map((id: string) => ({
               object_id: id,
-              object_key: `vault/${PSEUDONYM}/${suffix}`,
+              object_key: state.objectKeys.get(id),
               url: `${new URL(FRONTEND_URL).origin}/test-vault-objects/${id}`,
-              method: 'PUT',
-              headers: [],
-              size_bytes: reservation.size_bytes,
-            },
-          ],
+            })),
         },
       });
+    } else if (path.endsWith('/upload-urls')) {
+      const reservations = route.request().postDataJSON()
+        .objects as Reservation[];
+      const uploads = reservations.map(reservation => {
+        const id = `object-${state.reservations.size + 1}`;
+        state.reservations.set(id, reservation);
+        const suffix =
+          reservation.kind === 'blob'
+            ? `blobs/${reservation.content_hash}/${String(reservation.chunk_index).padStart(6, '0')}`
+            : reservation.kind === 'checkpoint'
+              ? `checkpoints/ckpt-${String(reservation.checkpoint_n).padStart(6, '0')}.loro`
+              : `lanes/${reservation.lane_device_pubkey}/seg-${String(reservation.segment).padStart(6, '0')}.pack`;
+        const key = `vault/${PSEUDONYM}/${suffix}`;
+        state.objectKeys.set(id, key);
+
+        return {
+          object_id: id,
+          object_key: key,
+          url: `${new URL(FRONTEND_URL).origin}/test-vault-objects/${id}`,
+          method: 'PUT',
+          headers: [],
+          size_bytes: reservation.size_bytes,
+        };
+      });
+      await route.fulfill({ json: { uploads } });
     } else if (path.endsWith('/confirm-upload')) {
       for (const confirmation of route.request().postDataJSON().confirmations) {
         const bytes = state.uploaded.get(confirmation.object_id);
@@ -170,6 +198,25 @@ async function installVaultPortal(
   });
   await page.route('**/test-vault-objects/*', async route => {
     const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+
+    if (route.request().method() === 'GET') {
+      expect(state.confirmed.has(id)).toBe(true);
+      await route.fulfill({
+        body: state.uploaded.get(id)!,
+        contentType: 'application/octet-stream',
+      });
+
+      return;
+    }
+
+    const reservation = state.reservations.get(id)!;
+
+    if (
+      reservation.kind === 'blob' &&
+      reservation.chunk_index === state.holdBlobChunk
+    ) {
+      await new Promise<void>(resolve => state.heldBlobs.push(resolve));
+    }
 
     if (state.mode === 'hold') {
       await new Promise<void>(resolve => state.held.push(resolve));
@@ -235,108 +282,212 @@ async function saveName(page: Page, subject: string, name: string) {
   await waitForClientDbFlush(page, { required: true });
 }
 
-test('real encrypted backup restores scoped resource proof on reload and keeps file contents unverified', async ({
+test('encrypted file chunks must all land before scoped contents confirmation survives reload', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1300 });
   await waitForClientDbReady(page);
   const portal = await installVaultPortal(page);
-  await page.evaluate(async () => {
-    await window.store.uploadFiles(
-      [
-        new File(['Vault evidence canary'], 'Vault evidence canary.txt', {
-          type: 'text/plain',
-        }),
-      ],
-      window.store.getDrive()!,
+  portal.holdBlobChunk = 1;
+
+  try {
+    const [fileSubject] = await page.evaluate(async () => {
+      const content = new Uint8Array(8 * 1024 * 1024 + 17).fill(42);
+      content.set(new TextEncoder().encode('Vault evidence canary'));
+
+      return window.store.uploadFiles(
+        [
+          new File([content], 'Vault evidence canary.txt', {
+            type: 'text/plain',
+          }),
+        ],
+        window.store.getDrive()!,
+      );
+    });
+    await waitForSynced(page);
+    await waitForClientDbFlush(page, { required: true });
+    await page.goto(`${FRONTEND_URL}/app/sync`);
+    await expect(page.getByTestId('vault-enable')).toBeEnabled();
+    expect(portal.enrolled).toBe(false);
+    expect(portal.confirmed.size).toBe(0);
+    await page.getByTestId('vault-enable').click();
+    await expect.poll(() => portal.checkpoints.length).toBe(1);
+    await expect.poll(() => portal.heldBlobs.length).toBe(1);
+    // Stay in the same document so the real backup keeps running while the
+    // second encrypted chunk is held at the HTTP storage boundary.
+    await page.getByTestId('sidebar-drive-switcher').click();
+    await page.getByRole('menuitem', { name: /Private drive/ }).click();
+    const indicator = indicatorFor(page, 'Vault evidence canary.txt');
+    await expect(indicator).toHaveAttribute(
+      'data-vault-sync-state',
+      'confirmed',
     );
-  });
-  await waitForSynced(page);
-  await waitForClientDbFlush(page, { required: true });
-  const listUrl = page.url();
-  await page.goto(`${FRONTEND_URL}/app/sync`);
-  await expect(page.getByTestId('vault-enable')).toBeEnabled();
-  expect(portal.enrolled).toBe(false);
-  expect(portal.confirmed.size).toBe(0);
-  await page.getByTestId('vault-enable').click();
-  await expect(page.getByTestId('vault-backup-now')).toBeEnabled();
-  await expect.poll(() => portal.checkpoints.length).toBe(1);
-  expect(portal.uploaded.size).toBeGreaterThan(0);
-  await page.goto(listUrl);
-  const indicator = indicatorFor(page, 'Vault evidence canary.txt');
-  await expect(indicator).toHaveAttribute('data-vault-sync-state', 'confirmed');
-  await indicator.click();
-  const panel = page.getByTestId('resource-sync-panel');
-  await expect(
-    panel.getByText('Latest changes backed up', { exact: true }),
-  ).toBeVisible();
-  await expect(
-    panel.getByText(
-      'These confirmations cover file details. The file’s contents are not verified here.',
-    ),
-  ).toBeVisible();
-  const receiptTime = await panel
-    .getByText(/^Last confirmed backup:/)
-    .textContent();
-  await waitForPanel(page);
-  await page.screenshot({
-    path: test.info().outputPath('resource-vault-desktop.png'),
-    animations: 'disabled',
-    fullPage: true,
-  });
-  await waitForClientDbFlush(page, { required: true });
-  const uploadsBeforeReload = portal.uploaded.size;
-  await page.reload();
-  await expect(indicator).toHaveAttribute('data-vault-sync-state', 'confirmed');
-  await indicator.click();
-  await expect(panel.getByText(/^Last confirmed backup:/)).toHaveText(
-    receiptTime!,
-  );
-  expect(portal.uploaded.size).toBe(uploadsBeforeReload);
-  await page.keyboard.press('Escape');
-  await expect(panel).not.toBeVisible();
-  await page
-    .getByRole('button', { name: 'Show / hide sidebar', exact: false })
-    .click();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await indicator.click();
-  const dialog = await waitForPanel(page);
-  const bounds = await dialog.boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-  expect(bounds!.y).toBeGreaterThanOrEqual(0);
-  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
-  await page.screenshot({
-    path: test.info().outputPath('resource-vault-mobile.png'),
-    animations: 'disabled',
-    fullPage: true,
-  });
-  await panel
-    .getByRole('link', { name: 'Manage sync' })
-    .scrollIntoViewIfNeeded();
-  await expect(
-    panel.getByRole('link', { name: 'Manage sync' }),
-  ).toBeInViewport();
-  await expect(
-    panel.getByText(
-      'These confirmations cover file details. The file’s contents are not verified here.',
-    ),
-  ).toBeInViewport();
-  await waitForPanel(page);
-  await page.screenshot({
-    path: test.info().outputPath('resource-vault-mobile-footer.png'),
-    fullPage: true,
-    animations: 'disabled',
-  });
-  portal.account = 'another-vault-account@example.com';
-  await page.reload();
-  await expect(indicator).toHaveAttribute('data-vault-sync-state', 'unknown');
-  await indicator.click();
-  await expect(panel.getByText('Resource backup not confirmed')).toBeVisible();
-  await expect(
-    panel.getByText('Latest changes backed up', { exact: true }),
-  ).toHaveCount(0);
+    await expect(indicator).not.toHaveAttribute(
+      'data-content-vault-state',
+      'confirmed',
+    );
+    const blobReservations = [...portal.reservations.values()].filter(
+      item => item.kind === 'blob',
+    );
+    expect(blobReservations.map(item => item.chunk_index)).toEqual([0, 1]);
+    expect(
+      [...portal.confirmed].filter(
+        id => portal.reservations.get(id)?.kind === 'blob',
+      ),
+    ).toHaveLength(0);
+    portal.holdBlobChunk = undefined;
+    portal.heldBlobs.shift()!();
+    await expect(indicator).toHaveAttribute(
+      'data-content-vault-state',
+      'confirmed',
+    );
+    expect(
+      [...portal.confirmed].filter(
+        id => portal.reservations.get(id)?.kind === 'blob',
+      ),
+    ).toHaveLength(2);
+    await indicator.click();
+    const panel = page.getByTestId('resource-sync-panel');
+    await expect(
+      panel.getByText('Resource details: Latest changes backed up', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(panel.getByTestId('resource-content-vault')).toHaveAttribute(
+      'data-content-state',
+      'confirmed',
+    );
+    await expect(
+      panel.getByText(
+        'A complete copy needs both resource details and file contents at the same destination.',
+        { exact: true },
+      ),
+    ).toBeVisible();
+    const receiptTime = await panel
+      .getByText(/^Last confirmed backup:/)
+      .textContent();
+    await waitForPanel(page);
+    await page.screenshot({
+      path: test.info().outputPath('resource-vault-desktop.png'),
+      animations: 'disabled',
+      fullPage: true,
+    });
+    await waitForClientDbFlush(page, { required: true });
+    const uploadedBlobIds = () =>
+      [...portal.uploaded.keys()]
+        .filter(id => portal.reservations.get(id)?.kind === 'blob')
+        .sort();
+    const uploadsBeforeReload = uploadedBlobIds();
+    const versionBeforeReload = await page.evaluate(
+      subject =>
+        [
+          ...window.store
+            .getResourceLoading(subject)
+            .getLoroDoc()!
+            .oplogVersion()
+            .toJSON(),
+        ].sort(),
+      fileSubject,
+    );
+    await page.reload();
+    await expect(indicator).toHaveAttribute(
+      'data-vault-sync-state',
+      'confirmed',
+    );
+    await expect(indicator).toHaveAttribute(
+      'data-content-vault-state',
+      'confirmed',
+    );
+    await indicator.click();
+    await expect(panel.getByText(/^Last confirmed backup:/)).toHaveText(
+      receiptTime!,
+    );
+    // Other resources may produce a small metadata pack during boot. The
+    // current File must retain its exact version and durable byte proof without
+    // uploading either encrypted content chunk again.
+    expect(uploadedBlobIds()).toEqual(uploadsBeforeReload);
+    const versionAfterReload = await page.evaluate(
+      subject =>
+        [
+          ...window.store
+            .getResourceLoading(subject)
+            .getLoroDoc()!
+            .oplogVersion()
+            .toJSON(),
+        ].sort(),
+      fileSubject,
+    );
+    await test.info().attach('vault-reload-evidence.json', {
+      body: JSON.stringify(
+        {
+          versionBeforeReload,
+          versionAfterReload,
+          reservations: [...portal.reservations.values()],
+        },
+        null,
+        2,
+      ),
+      contentType: 'application/json',
+    });
+    expect(versionAfterReload).toEqual(versionBeforeReload);
+    await page.keyboard.press('Escape');
+    await expect(panel).not.toBeVisible();
+    await page
+      .getByRole('button', { name: 'Show / hide sidebar', exact: false })
+      .click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await indicator.click();
+    const dialog = await waitForPanel(page);
+    const bounds = await dialog.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+    await page.screenshot({
+      path: test.info().outputPath('resource-vault-mobile.png'),
+      animations: 'disabled',
+      fullPage: true,
+    });
+    await panel
+      .getByRole('link', { name: 'Manage sync' })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      panel.getByRole('link', { name: 'Manage sync' }),
+    ).toBeInViewport();
+    await expect(
+      panel.getByText(
+        'A complete copy needs both resource details and file contents at the same destination.',
+        { exact: true },
+      ),
+    ).toBeInViewport();
+
+    await waitForPanel(page);
+    await page.screenshot({
+      path: test.info().outputPath('resource-vault-mobile-footer.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+    portal.account = 'another-vault-account@example.com';
+    await page.reload();
+    await expect(indicator).toHaveAttribute('data-vault-sync-state', 'unknown');
+    await expect(indicator).not.toHaveAttribute(
+      'data-content-vault-state',
+      'confirmed',
+    );
+    await indicator.click();
+    await expect(
+      panel.getByText('Resource details: Resource backup not confirmed'),
+    ).toBeVisible();
+    await expect(
+      panel.getByText('Resource details: Latest changes backed up', {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  } finally {
+    portal.holdBlobChunk = undefined;
+    for (const release of portal.heldBlobs.splice(0)) release();
+  }
 });
 
 test('an edit after encrypted export stays pending and failed upload cannot confirm it', async ({

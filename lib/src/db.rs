@@ -438,6 +438,7 @@ pub struct Db {
     /// Which subjects `kv` wrote, in order; see [`write_log`].
     write_log: Arc<write_log::WriteLog>,
     probe_cache: Arc<write_log::ProbeCache>,
+    pub(crate) attachment_cache: Arc<Mutex<crate::sync::attachment_receipts::AttachmentCache>>,
     /// Optional remote file storage. Configure before sharing this Db.
     pub blob_backend: Option<Arc<dyn blob_backend::BlobBackend>>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
@@ -620,6 +621,7 @@ impl Db {
             kv: Arc::new(compressed_kv::CompressedKv::with_log(kv, write_log.clone())),
             write_log,
             probe_cache: Default::default(),
+            attachment_cache: Default::default(),
             default_agent: Arc::new(Mutex::new(None)),
             #[cfg(feature = "iroh")]
             native_receipt_ledger: Default::default(),

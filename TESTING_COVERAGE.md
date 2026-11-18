@@ -659,8 +659,8 @@ after both drive copies are local-only; server inventory must not contain it.
 The journey pauses the receiver for a newer edit, resumes to obtain a fresh
 receipt, opens a shared-storage tab without inflating the copy count, and checks
 departure and reload. It does not validate physical-device independence,
-production signaling or TURN. These indicators cover resource metadata;
-attachment-byte confirmations remain outside this coverage. Native WebRTC uses
+production signaling or TURN. This journey covers resource metadata; separate
+attachment-byte journeys are described below. Native WebRTC uses
 the shared receipt responder; mixed browser/native WebRTC acceptance and native
 WebRTC requester evidence remain separate from the Iroh coverage below.
 
@@ -698,6 +698,71 @@ checks mobile layout and removes the confirmation after peer departure. It uses
 no fabricated receipts or production hooks. This does not exercise packaged
 Flutter/Tauri builds, physical devices, native WebRTC requester integration or
 the legacy Tauri renderer's local HTTP path.
+
+### Attachment content confirmations
+
+The attachment phase's focused library and Vault unit suites passed locally.
+All seven matching web acceptance journeys passed locally with zero retries:
+five in the final full run and the two corrected fixtures in a focused rerun.
+The opt-in native renderer journey also passed with zero retries. These runs
+include actual byte assertions, not only the previous metadata checks.
+
+`lib/src/sync/attachment_receipts.rs` tests actual missing/corrupt bytes, cached
+verification invalidation, empty files, ordered chunk hashes and the whole-file
+hash, direct attachment references, child edits without parent edits, and exact
+wire manifest correlation. Protocol and native-ledger tests cover negotiated
+attachment receipts, deletion generations, fresh probes and expiry. Content
+proof is separate from metadata proof: peer byte confirmations refresh after
+ten seconds and expire after thirty seconds without a fresh acknowledgement.
+The verifier has bounded concurrency, per-blob and batch read limits, and a
+cooperative time budget. Missing or oversized data stays unconfirmed. Root and
+File state is read locally; inherited ACL checks may resolve uncached ancestors.
+The server endpoint additionally has a hard request timeout. A private browser
+cache without a Rust default agent confirms its local bytes and Vault inventory,
+including assembled chunks; the same resources remain unreadable to anonymous
+remote requests.
+
+`server/src/handlers/attachment_evidence.rs` tests required version-2 method/body
+signatures, tampered bodies, anonymous and private-resource denial, batch limits,
+missing contents and a verified `no-store` response. External object storage
+requires its explicit object/version contract and actual hash verification;
+local database flushes alone do not certify S3 contents. Real S3 acceptance is
+not implied by these tests.
+
+`browser/lib/src/resource-attachment-sync.test.ts` uses real Loro state with
+controlled storage/host responses to cover readonly getters, metadata-before-
+bytes, rename versus replacement, direct child edits, chunk ordering, account
+and database ABA changes, eviction, reload verification, signed HTTP requests,
+transient failures and peer expiry. `attachment-peer-receipts.test.ts` checks
+capability gating, exact captured manifests, fresh nonces, attached-child removal
+and periodic re-probing. UI tests require metadata and bytes at the same
+connection/storage identity, deduplicate copies and preserve pending/error
+precedence.
+
+Vault helper tests confirm only successfully uploaded and acknowledged hashes.
+Reused encrypted objects require a complete decrypt/hash check, not a listing or
+local hash cache. They cover partial/failed uploads, empty files, account/generation
+fences, persistence failures, old versus replaced content and unloaded persisted
+manifest capture. Rust Vault regressions cover authenticated empty-file restore
+and recovery of both aggregate bytes and original chunks for chunked Files.
+
+The validated acceptance set comprises:
+
+- `resource-sync.spec.ts` (two existing local/server and offline-reload journeys)
+  and `resource-peer-sync.spec.ts` (existing real WebRTC metadata/dedup/departure).
+- `resource-attachment-sync.spec.ts` (two new journeys): actual local and server
+  bytes after metadata-only confirmation, rename/reload/replacement, and a
+  local-only WebRTC File plus direct attachment whose bytes reach a second
+  browser before its complete-copy count increases.
+- `resource-vault-sync.spec.ts` (two journeys): a real 8 MiB-plus file with one
+  encrypted chunk held back, complete confirmation only after release,
+  same-account recovery and changed-account exclusion; and the existing held
+  metadata export/newer edit/failed upload regression. Its HTTP control-plane
+  boundary is test-owned; WASM hashing and encryption are real.
+- `native-resource-peer-sync.spec.ts` (one opt-in journey): actual File/direct-
+  attachment evidence from two Iroh processes through EmbedHost, desktop/mobile
+  rendering, view reload and peer departure. The Rust two-process integration
+  and matching renderer acceptance both passed locally with zero retries.
 
 ### Protocol — well covered
 
@@ -1960,8 +2025,43 @@ bucket; SaaS representative CI supplies MinIO. `server/src/tests.rs` checks
 remote multipart upload/download and image renditions, asserting Tree::Blobs
 stays empty. Standalone local storage still runs through the original tests.
 
-Not covered here: live Hetzner rollout, arbitrary large-file memory limits,
-or encrypted Vault attachment recovery.
+Not covered here: live Hetzner rollout and arbitrary large-file memory limits.
+
+### Cloud Vault file contents
+
+Files are sealed per vault (`planning/vault-file-blobs.md`).
+`lib/src/vault/sync.rs` tests: `vault_restores_uploaded_file_bytes` (multi-chunk
+file comes back, stored objects contain no plaintext, the importer skips file
+chunks), `the_same_file_twice_in_one_vault_uploads_one_blob` (and a second pass
+uploads nothing), `two_vaults_with_identical_bytes_are_unrelated` (different
+ids and ciphertext, one vault's key cannot open the other's, wiping one does not
+affect the other's restore), `missing_or_corrupt_blob_is_reported_on_restore`,
+`open_blob_rejects_swapped_reordered_or_short_chunks`,
+`a_device_missing_a_photo_cannot_make_the_vault_lose_it`,
+`the_seal_overhead_constant_matches_the_envelope`,
+`blob_keys_round_trip_and_stay_in_the_drive_prefix`,
+`blob_chunks_are_a_pure_function_of_length`.
+
+`helpers/managed/vaultBlobs.test.ts` runs `backupDrive` / `restoreDrive`
+against a mocked control plane: only sealed chunks are PUT, under the keyed id
+and with the sealed size (the plain hash never appears in a request); chunks are
+confirmed together; `retain-blobs` is never called (not after a backup, compress or discard, and not
+for a device that lacks a photo another device added); a file the vault already
+holds is not sent, only missing chunks are; the id cache avoids re-reading files;
+a rejected PUT confirms nothing; a file's chunks are never split across
+`upload-urls` calls; the
+importer is never handed file chunks; restore matches stored files to wanted
+hashes, stops downloading once everything wanted is back, and reports present /
+missing / unreadable (does not open, gap in chunks, chunk gone from storage);
+backup-file restores skip files. `helpers/managed/vaultRestore.test.ts`
+(`also brings back the file bytes the snapshot references`) and
+`components/Vault/VaultRestoreDialog.test.tsx` cover the snapshot picker path:
+picking a snapshot restores the file bytes its resources name and reports
+files left behind. The atomic-saas side (quota per enrollment, `already_stored`) is covered in that repo.
+
+Not covered: uploads to a provisioned real control plane and files larger than
+memory. The attachment acceptance above exercises the WASM and worker boundary
+against a test-owned HTTP control plane using the production app build.
 
 ### Blob garbage collection
 

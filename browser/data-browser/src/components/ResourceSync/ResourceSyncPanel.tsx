@@ -1,6 +1,5 @@
 import type { JSX, ReactNode } from 'react';
 import {
-  server,
   useTitle,
   type Resource,
   type ResourceSaveState,
@@ -28,6 +27,11 @@ import {
   serverCopyLabel,
   vaultCopyLabel,
   peerCopyLabel,
+  attachmentCopyLabel,
+  completePeerCopyCount,
+  peerHasConfirmedContents,
+  type AttachmentCopyPresentationStatus,
+  type ResourceAttachmentPresentationStatus,
   type ResourceVaultPresentationStatus,
 } from './resourceSyncPresentation';
 import {
@@ -40,6 +44,7 @@ export function ResourceSyncPanel({
   status,
   vault,
   peers,
+  contents,
   save,
   headingId,
   onClose,
@@ -48,21 +53,33 @@ export function ResourceSyncPanel({
   status: ResourceSyncStatus;
   vault: ResourceVaultPresentationStatus;
   peers: ResourcePeerSyncStatus;
+  contents: ResourceAttachmentPresentationStatus;
   save: ResourceSaveState;
   headingId: string;
   onClose: () => void;
 }): JSX.Element {
   const [title] = useTitle(resource);
   const context = useResourceCopyContext(resource);
-  const presentation = resourceSyncPresentation(status, save, vault, peers);
+  const presentation = resourceSyncPresentation(
+    status,
+    save,
+    vault,
+    peers,
+    contents,
+  );
   const confirmedTime =
     vault.confirmedAt === undefined
       ? null
       : new Date(vault.confirmedAt).toLocaleString();
   const destination = destinationLabel(status.server.url);
-  const localConfirmed = status.local.state === 'confirmed';
+  const localConfirmed =
+    status.local.state === 'confirmed' &&
+    (!contents.required || contents.local.state === 'confirmed');
   const serverConfirmed =
-    status.server.state === 'confirmed' && save.kind === 'idle';
+    status.server.state === 'confirmed' &&
+    save.kind === 'idle' &&
+    (!contents.required || contents.server.state === 'confirmed');
+  const completePeers = completePeerCopyCount(peers, contents);
 
   return (
     <Panel
@@ -93,7 +110,11 @@ export function ResourceSyncPanel({
           name='This device'
           confirmed={localConfirmed}
           description={localCopyLabel(status.local)}
+          hasContents={contents.required}
         >
+          {contents.required && (
+            <AttachmentStatus status={contents.local} destination='local' />
+          )}
           {status.local.error && <Note>{status.local.error}</Note>}
         </CopyRow>
         <CopyRow
@@ -101,7 +122,11 @@ export function ResourceSyncPanel({
           name={destination}
           confirmed={serverConfirmed}
           description={serverCopyLabel(status.server, save)}
+          hasContents={contents.required}
         >
+          {contents.required && (
+            <AttachmentStatus status={contents.server} destination='server' />
+          )}
           {status.server.state !== 'not-configured' && (
             <Note>
               {context.serverConnected
@@ -114,9 +139,16 @@ export function ResourceSyncPanel({
         <CopyRow
           icon={<FaVault aria-hidden />}
           name='Cloud Vault'
-          confirmed={vault.state === 'confirmed'}
+          confirmed={
+            vault.state === 'confirmed' &&
+            (!contents.required || contents.vault.state === 'confirmed')
+          }
           description={vaultCopyLabel(vault)}
+          hasContents={contents.required}
         >
+          {contents.required && (
+            <AttachmentStatus status={contents.vault} destination='vault' />
+          )}
           {confirmedTime !== null && (
             <Note>Last confirmed backup: {confirmedTime}</Note>
           )}
@@ -135,26 +167,47 @@ export function ResourceSyncPanel({
           }
           name='Peers'
           description={peerCopyLabel(peers)}
-          confirmed={peers.state === 'confirmed'}
+          confirmed={completePeers > 0}
+          hasContents={contents.required}
           peer
         >
           <div
             data-testid='resource-peer-copies'
             data-peer-sync-state={peers.state}
-            data-confirmed-count={peers.confirmedCount}
+            data-confirmed-count={completePeers}
           >
-            <Note>Confirmed peer copies: {peers.confirmedCount}</Note>
+            <Note>Confirmed peer copies: {completePeers}</Note>
+            {contents.required && (
+              <Note>Resource-details copies: {peers.confirmedCount}</Note>
+            )}
             {peers.peers.length > 0 && (
               <PeerList aria-label='Peer resource copies'>
                 {peers.peers.map((copy, index) => (
                   <li key={copy.connectionId} data-peer-copy-state={copy.state}>
                     <CopyName>Peer {index + 1}</CopyName>
                     <CopyDescription
-                      $confirmed={copy.state === 'confirmed'}
+                      $confirmed={
+                        copy.state === 'confirmed' &&
+                        peerHasConfirmedContents(copy, contents)
+                      }
                       $peer
                     >
                       {peerCopyLabel(copy)}
                     </CopyDescription>
+                    {contents.required && (
+                      <AttachmentStatus
+                        destination='peer'
+                        status={
+                          contents.peers.find(
+                            content =>
+                              content.connectionId === copy.connectionId &&
+                              content.storageId === copy.storageId &&
+                              content.generation === copy.generation,
+                          ) ?? { state: 'unknown' }
+                        }
+                        peer
+                      />
+                    )}
                     {copy.confirmedAt !== undefined && (
                       <Note>{peerConfirmedLabel(copy.confirmedAt)}</Note>
                     )}
@@ -169,10 +222,10 @@ export function ResourceSyncPanel({
         </CopyRow>
       </CopyList>
 
-      {resource.hasClasses(server.classes.file) && (
+      {contents.required && (
         <Note>
-          These confirmations cover file details. The file’s contents are not
-          verified here.
+          A complete copy needs both resource details and file contents at the
+          same destination.
         </Note>
       )}
       <Footer>
@@ -192,6 +245,7 @@ function CopyRow({
   description,
   confirmed = false,
   peer = false,
+  hasContents = false,
   children,
 }: {
   icon: ReactNode;
@@ -199,6 +253,7 @@ function CopyRow({
   description: string;
   confirmed?: boolean;
   peer?: boolean;
+  hasContents?: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -214,11 +269,32 @@ function CopyRow({
           )}
         </Row>
         <CopyDescription $confirmed={confirmed} $peer={peer}>
-          {description}
+          {hasContents ? <>Resource details: {description}</> : description}
         </CopyDescription>
         {children}
       </CopyText>
     </CopyItem>
+  );
+}
+
+function AttachmentStatus({
+  status,
+  destination,
+  peer = false,
+}: {
+  status: AttachmentCopyPresentationStatus;
+  destination: string;
+  peer?: boolean;
+}) {
+  return (
+    <CopyDescription
+      data-testid={`resource-content-${destination}`}
+      data-content-state={status.state}
+      $confirmed={status.state === 'confirmed'}
+      $peer={peer}
+    >
+      {attachmentCopyLabel(status)}
+    </CopyDescription>
   );
 }
 

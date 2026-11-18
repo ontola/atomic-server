@@ -615,6 +615,7 @@ export async function restoreFromVault(
     });
     const outcome = await deps.restoreDrive({
       db,
+      driveSubject,
       drivePseudonym: enrollment.drive_pseudonym,
       devicePubkey: lane,
       driveKey,
