@@ -21,6 +21,20 @@ import { buildTheme } from '../../styling';
 import { ResourceSyncIndicator } from './ResourceSyncIndicator';
 import type { ResourceAttachmentPresentationStatus } from './resourceSyncPresentation';
 
+const panelLoad = vi.hoisted(() => {
+  let resolve!: () => void;
+  const ready = new Promise<void>(done => {
+    resolve = done;
+  });
+
+  return { ready, resolve };
+});
+vi.mock('./ResourceSyncPanel', async importOriginal => {
+  await panelLoad.ready;
+
+  return importOriginal();
+});
+
 let status: ResourceSyncStatus;
 let save: ResourceSaveState;
 let vaultStatus: {
@@ -119,6 +133,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  panelLoad.resolve();
   cleanup();
   propagationBoundary?.remove();
   propagationBoundary = undefined;
@@ -153,7 +168,19 @@ it('opens copies without activating its enclosing row and returns focus on Escap
   trigger.focus();
   fireEvent.click(trigger);
 
+  // A deferred first open keeps the closed trigger; Radix never measures a
+  // short loading fallback before the full copies panel is ready.
+  await waitFor(() => expect(trigger.getAttribute('aria-busy')).toBe('true'));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  fireEvent.keyDown(trigger, { key: 'Escape' });
+  expect(trigger.getAttribute('aria-busy')).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  fireEvent.click(trigger);
+  expect(trigger.getAttribute('aria-busy')).toBe('true');
+  panelLoad.resolve();
   const panel = await screen.findByTestId('resource-sync-panel');
+  expect(trigger.getAttribute('aria-busy')).toBeNull();
   expect(
     within(panel).getByRole('heading', { name: 'Copies & sync' }),
   ).toBeTruthy();

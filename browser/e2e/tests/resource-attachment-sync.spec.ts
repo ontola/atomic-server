@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import {
@@ -13,8 +14,9 @@ import {
 } from './test-utils';
 import { SIGNALING, signalingRoom } from './resource-peer-test-utils';
 
-const CONTENT =
-  'Actual attachment bytes, independently verified from resource details.\n';
+// The server blob store is content-addressed across test drives. Each worker
+// needs fresh bytes so a repeated journey cannot reuse another run's upload.
+const CONTENT = `Actual attachment bytes, independently verified from resource details. ${randomUUID()}\n`;
 const TITLE = 'Attachment evidence';
 
 function indicatorFor(page: Page) {
@@ -295,6 +297,11 @@ test('resource details can sync before exact attachment bytes, and replacement i
   await page
     .getByRole('button', { name: 'Show / hide sidebar', exact: false })
     .click();
+  // Finish the docked sidebar's real width transition before changing layouts.
+  await expect(page.locator('[data-side-panel="left"]')).toHaveCSS(
+    'width',
+    '0px',
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await indicator.click();
   await expect(dialog).toHaveCSS('opacity', '1');

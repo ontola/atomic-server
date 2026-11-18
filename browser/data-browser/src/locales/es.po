@@ -1304,7 +1304,7 @@ msgstr "Sincronizar"
 msgid "Offline"
 msgstr "Sin conexión"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/SideBar/syncStatus.tsx
 msgid "Changes could not sync"
 msgstr "No se pudieron sincronizar los cambios"
@@ -11894,6 +11894,7 @@ msgstr "Código o dirección de servidor"
 msgid "Add a device"
 msgstr "Añadir un dispositivo"
 
+#: src/components/ResourceSync/ResourceSyncIndicator.tsx
 #: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
@@ -13526,7 +13527,7 @@ msgstr "Informa de un error o sugiere una mejora. Tu mensaje y tu correo opciona
 msgid "Copies and sync for {0}: {1}"
 msgstr "Copias y sincronización de {0}: {1}"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not save on this device"
 msgstr "No se pudo guardar en este dispositivo"
@@ -13535,18 +13536,18 @@ msgstr "No se pudo guardar en este dispositivo"
 msgid "Changes could not be saved"
 msgstr "No se pudieron guardar los cambios"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting to save"
 msgstr "Cambios pendientes de guardar"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting to sync"
 msgstr "Cambios pendientes de sincronizar"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Saving changes…"
 msgstr "Guardando cambios…"
@@ -13559,34 +13560,34 @@ msgstr "Últimos cambios guardados en el servidor"
 msgid "Server copy not confirmed"
 msgstr "Copia en el servidor sin confirmar"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Saved on this device"
 msgstr "Guardado en este dispositivo"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Local storage unavailable"
 msgstr "Almacenamiento local no disponible"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Local copy not confirmed"
 msgstr "Copia local sin confirmar"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Saving on this device…"
 msgstr "Guardando en este dispositivo…"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "No server configured"
 msgstr "No hay ningún servidor configurado"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes saved"
 msgstr "Últimos cambios guardados"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Copy not confirmed"
 msgstr "Copia sin confirmar"
 
@@ -13668,16 +13669,16 @@ msgstr "Estado de la copia de seguridad del espacio de trabajo no disponible"
 msgid "Latest changes backed up to Cloud Vault"
 msgstr "Últimos cambios respaldados en Cloud Vault"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting for backup"
 msgstr "Cambios pendientes de copia de seguridad"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes backed up"
 msgstr "Últimos cambios respaldados"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Resource backup not confirmed"
 msgstr "Copia de seguridad del recurso no confirmada"
 
@@ -13686,16 +13687,16 @@ msgstr "Copia de seguridad del recurso no confirmada"
 msgid "Last confirmed backup: {0}"
 msgstr "Última copia de seguridad confirmada: {0}"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting for peers"
 msgstr "Cambios pendientes de enviar a los pares"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes received"
 msgstr "Últimos cambios recibidos"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Resource copies not confirmed"
 msgstr "Copias del recurso sin confirmar"
 

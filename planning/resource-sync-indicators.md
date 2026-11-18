@@ -176,7 +176,8 @@ may adapt `1021eba25` without importing drive-level confirmation semantics.
   deletion/GC, late replies and scope changes at unit/integration/UI layers.
 - [x] Update protocol/product docs, coverage and actual desktop/mobile screenshots.
 - [x] Run required lint/format, type, compiler and Rust checks.
-- [ ] Publish to PR #2576 and follow exact-head CI.
+- [x] Publish attachment implementation to PR #2576.
+- [ ] Follow exact-head CI; the shared Mancave runner remains queued.
 
 Content identity is independent of the metadata version: renames must not erase
 valid byte proof, while changed blob/chunk references immediately lose coverage.
@@ -206,3 +207,10 @@ The browser cache has no Rust default signing agent. Its local byte checks and
 Vault inventory use the existing trusted local resource/blob access boundary;
 remote HTTP and peer checks still require their authenticated agent. Regression
 coverage verifies both private-cache confirmation and anonymous remote denial.
+
+The details panel loads on demand and opens only once its module is ready,
+keeping the embedded initial payload within the unchanged 1000 kB gzip budget
+(999.1 kB locally). The final mobile local/server journey passed twice with
+strict browser diagnostics and zero retries; the matching native Iroh renderer
+journey also passed. Repeated browser fixtures use unique contents because the
+server correctly reuses identical content-addressed blobs across test drives.

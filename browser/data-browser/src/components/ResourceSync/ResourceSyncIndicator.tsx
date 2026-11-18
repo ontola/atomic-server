@@ -1,4 +1,4 @@
-import { useId, useState, type JSX } from 'react';
+import { useEffect, useId, useState, type JSX } from 'react';
 import { useSaveState, useTitle, type Resource } from '@tomic/react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import {
@@ -25,7 +25,14 @@ import {
   type SyncSymbol,
   type SyncTone,
 } from './resourceSyncPresentation';
-import { ResourceSyncPanel } from './ResourceSyncPanel';
+type PanelModule = typeof import('./ResourceSyncPanel');
+let panelModulePromise: Promise<PanelModule> | undefined;
+
+function loadPanel(): Promise<PanelModule> {
+  panelModulePromise ??= import('./ResourceSyncPanel');
+
+  return panelModulePromise;
+}
 
 /** A resource's own confirmed copies, separate from drive connection status. */
 export function ResourceSyncIndicator({
@@ -34,6 +41,27 @@ export function ResourceSyncIndicator({
   resource: Resource;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [panelModule, setPanelModule] = useState<PanelModule>();
+  const [loadError, setLoadError] = useState<unknown>();
+  const opening = open && !panelModule;
+  const ResourceSyncPanel = panelModule?.ResourceSyncPanel;
+
+  useEffect(() => {
+    if (!open || panelModule) return;
+    let active = true;
+    void loadPanel().then(
+      module => {
+        if (active) setPanelModule(module);
+      },
+      error => {
+        if (active) setLoadError(error);
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [open, panelModule]);
   const [title] = useTitle(resource);
   const status = useResourceSyncStatus(resource);
   const vault = useResourceVaultSyncStatus(resource);
@@ -48,19 +76,24 @@ export function ResourceSyncIndicator({
     contents,
   );
   const headingId = useId();
+  if (loadError) throw loadError;
 
   return (
     <Root onClick={event => event.stopPropagation()} data-resource-sync>
       <SyncPopover
         aria-labelledby={headingId}
-        open={open}
-        onOpenChange={setOpen}
+        open={open && !!ResourceSyncPanel}
+        onOpenChange={next => setOpen(opening ? false : next)}
         noLock
         Trigger={
           <RadixPopover.Trigger asChild>
             <SyncButton
               type='button'
-              title={presentation.label}
+              title={opening ? 'Loading' : presentation.label}
+              aria-busy={opening || undefined}
+              onKeyDown={event => {
+                if (event.key === 'Escape' && opening) setOpen(false);
+              }}
               aria-label={`Copies and sync for ${title}: ${presentation.label}`}
               data-testid='resource-sync-indicator'
               data-sync-state={status.server.state}
@@ -83,7 +116,7 @@ export function ResourceSyncIndicator({
           </RadixPopover.Trigger>
         }
       >
-        {open && (
+        {open && ResourceSyncPanel && (
           <ResourceSyncPanel
             resource={resource}
             status={status}

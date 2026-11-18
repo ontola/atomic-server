@@ -1,10 +1,9 @@
 // @wc-ignore-file
+import { localCopyLabel, serverCopyLabel } from './resourceCopyLabels';
 import type { ResourceSaveState, ResourceSyncStatus } from '@tomic/react';
 import { describe, expect, it } from 'vitest';
 import {
-  localCopyLabel,
   resourceSyncPresentation,
-  serverCopyLabel,
   completePeerCopyCount,
   type ResourceAttachmentPresentationStatus,
 } from './resourceSyncPresentation';

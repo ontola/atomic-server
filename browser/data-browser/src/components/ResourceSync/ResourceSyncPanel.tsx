@@ -22,11 +22,7 @@ import { IconButton } from '../IconButton/IconButton';
 import { AtomicLink } from '../AtomicLink';
 import { paths } from '../../routes/paths';
 import {
-  localCopyLabel,
   resourceSyncPresentation,
-  serverCopyLabel,
-  vaultCopyLabel,
-  peerCopyLabel,
   attachmentCopyLabel,
   completePeerCopyCount,
   peerHasConfirmedContents,
@@ -34,6 +30,12 @@ import {
   type ResourceAttachmentPresentationStatus,
   type ResourceVaultPresentationStatus,
 } from './resourceSyncPresentation';
+import {
+  localCopyLabel,
+  serverCopyLabel,
+  vaultCopyLabel,
+  peerCopyLabel,
+} from './resourceCopyLabels';
 import {
   useResourceCopyContext,
   type ResourceCopyContext,

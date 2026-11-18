@@ -272,3 +272,8 @@ integration and matching renderer acceptance passed locally with zero retries.
 The native process owns the databases and networking; only address exchange and
 process control are test fixtures. Without the explicit executable this test is
 skipped, so an ordinary web E2E pass does not claim native renderer coverage.
+
+The resource panel loads on demand when opened. After changing its initial
+dependencies, also run `bash flutter/scripts/build_embed.sh` followed by
+`bash flutter/scripts/check_embed_size.sh` from the repository root to check
+the same embedded-app size budget as CI.

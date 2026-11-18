@@ -1304,7 +1304,7 @@ msgstr "Sinkronisasi"
 msgid "Offline"
 msgstr "Offline"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/SideBar/syncStatus.tsx
 msgid "Changes could not sync"
 msgstr "Perubahan tidak dapat disinkronkan"
@@ -11897,6 +11897,7 @@ msgstr "Kode atau alamat server"
 msgid "Add a device"
 msgstr "Tambahkan perangkat"
 
+#: src/components/ResourceSync/ResourceSyncIndicator.tsx
 #: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
@@ -13524,7 +13525,7 @@ msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda diki
 msgid "Copies and sync for {0}: {1}"
 msgstr "Salinan dan sinkronisasi untuk {0}: {1}"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not save on this device"
 msgstr "Tidak dapat menyimpan di perangkat ini"
@@ -13533,18 +13534,18 @@ msgstr "Tidak dapat menyimpan di perangkat ini"
 msgid "Changes could not be saved"
 msgstr "Perubahan tidak dapat disimpan"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting to save"
 msgstr "Perubahan menunggu untuk disimpan"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting to sync"
 msgstr "Perubahan menunggu sinkronisasi"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Saving changes…"
 msgstr "Menyimpan perubahan…"
@@ -13557,34 +13558,34 @@ msgstr "Perubahan terbaru disimpan di server"
 msgid "Server copy not confirmed"
 msgstr "Salinan di server belum dikonfirmasi"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Saved on this device"
 msgstr "Disimpan di perangkat ini"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Local storage unavailable"
 msgstr "Penyimpanan lokal tidak tersedia"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Local copy not confirmed"
 msgstr "Salinan lokal belum dikonfirmasi"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Saving on this device…"
 msgstr "Menyimpan di perangkat ini…"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "No server configured"
 msgstr "Belum ada server yang dikonfigurasi"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes saved"
 msgstr "Perubahan terbaru disimpan"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Copy not confirmed"
 msgstr "Salinan belum dikonfirmasi"
 
@@ -13666,16 +13667,16 @@ msgstr "Status pencadangan ruang kerja tidak tersedia"
 msgid "Latest changes backed up to Cloud Vault"
 msgstr "Perubahan terbaru dicadangkan ke Cloud Vault"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting for backup"
 msgstr "Perubahan menunggu pencadangan"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes backed up"
 msgstr "Perubahan terbaru dicadangkan"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Resource backup not confirmed"
 msgstr "Cadangan sumber daya belum dikonfirmasi"
 
@@ -13684,16 +13685,16 @@ msgstr "Cadangan sumber daya belum dikonfirmasi"
 msgid "Last confirmed backup: {0}"
 msgstr "Cadangan terakhir yang dikonfirmasi: {0}"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 #: src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting for peers"
 msgstr "Perubahan menunggu peer"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes received"
 msgstr "Perubahan terbaru diterima"
 
-#: src/components/ResourceSync/resourceSyncPresentation.ts
+#: src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Resource copies not confirmed"
 msgstr "Salinan sumber daya belum dikonfirmasi"
 
