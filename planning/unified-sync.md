@@ -74,6 +74,14 @@ is the shape around that call — see [Outbox modernization](#outbox-modernizati
 
 ## Remaining work (2026-09-04)
 
+Browser server storage evidence (#2538, stacked on #2596) extends the existing
+`ServerReceiptRequests` and `StoreEvents.ServerReplicaReceipt` contract to
+background outbox delivery and refreshed stored drive inventories. Receipt
+collection remains bounded and separate from save/sync completion. Authentication
+serialization and connection/account/database fencing prevent stale evidence
+attribution; ambiguous AUTH acknowledgements disable receipts until reconnect.
+Validation and release gates live in `atomic-browser-receipts-2538.md`.
+
 Native server storage evidence (#2538, stacked on #2594) now belongs in
 `atomic_lib::client::ws_receipts`: the bounded requester observes stored state
 for followed drives, preserves exact captured targets and fences account/AUTH/

@@ -101,7 +101,7 @@ const LOCAL_READ_DEADLINE_DURING_SYNC_MS = 150;
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
 import { initOntologies } from './ontologies/index.js';
-import { decodeB64, encodeB64Url } from './base64.js';
+import { decodeB64, encodeB64, encodeB64Url } from './base64.js';
 import {
   canonicalizeScheme,
   isAgentSubject,
@@ -912,6 +912,75 @@ export class Store {
   ): void {
     this.serverReceiptRequests.seed(endpoint, state);
   }
+  /** @internal Follow the actual authenticated socket and selected drive. */
+  public followServerReceiptDrive(
+    endpoint: string,
+    drive: string,
+    current: () => boolean,
+  ): void {
+    this.serverReceiptRequests.follow(endpoint, drive, current);
+  }
+
+  /** @internal Coalesced wake after a stored import, never from an unsaved edit. */
+  public refreshServerReceiptTargets(): void {
+    this.serverReceiptRequests.refresh();
+  }
+
+  private captureServerReceiptAcceptance(
+    endpoint: string,
+    subject: string,
+    version: Uint8Array,
+    generation: number,
+    databaseGeneration: number,
+    resource?: Resource,
+    genesis?: Uint8Array,
+  ): () => void {
+    try {
+      if (
+        this.identityGeneration !== generation ||
+        this.clientDbGeneration !== databaseGeneration
+      )
+        return () => {};
+
+      let drive = resource?.get('https://atomicdata.dev/properties/drive');
+      let isDrive = resource?.getClasses().includes(server.classes.drive);
+
+      if (genesis) {
+        const doc = new LoroLoader.Loro.LoroDoc();
+
+        try {
+          doc.import(genesis);
+          const props = doc.getMap('properties').toJSON();
+          drive = props['https://atomicdata.dev/properties/drive'];
+          isDrive =
+            Array.isArray(props[core.properties.isA]) &&
+            props[core.properties.isA].includes(server.classes.drive);
+        } finally {
+          doc.free();
+        }
+      }
+
+      if (isDrive) drive = subject;
+      if (typeof drive !== 'string') return () => {};
+      const accepted = this.serverReceiptRequests.captureAccepted(
+        endpoint,
+        drive,
+        subject,
+        encodeB64(version),
+      );
+
+      return () => {
+        try {
+          accepted();
+        } catch {
+          /* Receipt collection cannot fail acceptance. */
+        }
+      };
+    } catch {
+      return () => {};
+    }
+  }
+
   /** Mapped from origin to websocket */
   private webSockets: Map<string, WSClient>;
 
@@ -1270,7 +1339,7 @@ export class Store {
   }
 
   public setClientDb(clientDb: ClientDbWorker | undefined): void {
-    if (this.clientDb !== clientDb) this.serverReceiptRequests.reset();
+    if (this.clientDb !== clientDb) this.serverReceiptRequests.reset(true);
     if (this.clientDb !== clientDb) this.clientDbGeneration++;
     // `initClientDb` calls this three times per page load (eager,
     // post-init, post-init-error) to refresh sync status. Only the
@@ -2002,6 +2071,7 @@ export class Store {
     let entry = this.outbox.getEntry(subject);
     if (!entry) return;
     const generation = this.identityGeneration;
+    const databaseGeneration = this.clientDbGeneration;
 
     const assertCurrent = () => {
       if (this.identityGeneration !== generation) {
@@ -2062,11 +2132,33 @@ export class Store {
       }
 
       const serverTransport = this.commitTransport === undefined;
+      let accepted = () => {};
+
+      if (serverTransport) {
+        try {
+          accepted = this.captureServerReceiptAcceptance(
+            endpoint,
+            subject,
+            LoroLoader.Loro.decodeImportBlobMeta(
+              genesis.loroUpdate!,
+              false,
+            ).partialEndVersionVector.encode(),
+            generation,
+            databaseGeneration,
+            undefined,
+            genesis.loroUpdate,
+          );
+        } catch {
+          /* Malformed optional evidence must not prevent delivery. */
+        }
+      }
+
       const created = await this.postCommit(genesis, endpoint);
       assertCurrent();
       // Publish the acknowledgement before ResourceSaved listeners decide
       // whether this new resource can be subscribed on the server.
       this.outbox.clearGenesis(subject);
+      accepted();
 
       if (serverTransport && this.identityGeneration === generation) {
         try {
@@ -2311,6 +2403,17 @@ export class Store {
     let created: Commit;
     const serverTransport = this.commitTransport === undefined;
 
+    const accepted = serverTransport
+      ? this.captureServerReceiptAcceptance(
+          endpoint,
+          subject,
+          versionAfterExport.encode(),
+          generation,
+          databaseGeneration,
+          resource,
+        )
+      : () => {};
+
     try {
       created = await this.postCommit(commit, endpoint);
       assertCurrent();
@@ -2329,6 +2432,7 @@ export class Store {
       throw e;
     }
 
+    accepted();
     const commitId = commitIdOf(created);
 
     if (commitId) {
@@ -8484,6 +8588,7 @@ export class Store {
       .then(
         () => {
           entry.inFlight = undefined;
+          if (this.clientDb === db) this.refreshServerReceiptTargets();
         },
         e => {
           // Failed write: forget it so the next attempt is not skipped as a

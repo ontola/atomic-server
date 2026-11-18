@@ -50,18 +50,44 @@ function harness(kind: 'http' | 'websocket' = 'http') {
     current: () => state.active,
     request,
   };
+  const snapshots = new Map<string, Uint8Array>();
+  const getDriveSubjects = vi.fn(async () => [...snapshots.keys()]);
+  const getResourceWithSnapshot = vi.fn(async (resource: string) => ({
+    jsonAd: null,
+    snapshot: snapshots.get(resource),
+  }));
+  const db = {
+    getReplicaIdentity: getSource,
+    getDriveSubjects,
+    getResourceWithSnapshot,
+  };
+  let currentDb = db;
   const store = {
     resources: new Map([[subject, { get: () => drive, getClasses: () => [] }]]),
     getAgent: () => ({ subject: 'atomic:agent:test' }),
     getIdentityGeneration: () => state.identity,
     getClientDbGeneration: () => state.database,
-    getClientDb: () => ({ getReplicaIdentity: getSource }),
+    getClientDb: () => currentDb,
     getServerReceiptTransport: () => (state.active ? transport : undefined),
     notifyServerReplicaReceipt: emit,
   } as unknown as Store;
   const requests = new ServerReceiptRequests(store);
 
-  return { requests, request, emit, state, getSource, transport };
+  return {
+    requests,
+    request,
+    emit,
+    state,
+    getSource,
+    transport,
+    snapshots,
+    getDriveSubjects,
+    getResourceWithSnapshot,
+    db,
+    setDb: (next: typeof db) => {
+      currentDb = next;
+    },
+  };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -204,6 +230,11 @@ describe('automatic server receipts', () => {
         [1],
       ]),
     );
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc.setPeerId('1');
+    doc.getMap('properties').set('name', 'stored');
+    for (const resource of Object.keys(resources))
+      h.snapshots.set(resource, doc.export({ mode: 'snapshot' }));
     h.requests.seed('https://server.test/commit', {
       drive,
       driveHash: '',
@@ -215,6 +246,200 @@ describe('automatic server receipts', () => {
       new Set(h.emit.mock.calls.map(([e]) => e.observation.barrier.subject))
         .size,
     ).toBe(300);
+    h.requests.reset();
+  });
+
+  it('refreshes stored frontiers after imports without observing a save', async () => {
+    const h = harness('websocket');
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc.setPeerId('1');
+    doc.getMap('properties').set('name', 'C1');
+    doc.commit();
+    h.snapshots.set(subject, doc.export({ mode: 'snapshot' }));
+    h.requests.seed('https://server.test/commit', {
+      drive,
+      driveHash: '',
+      peers: ['1'],
+      resources: { [subject]: [1] },
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    doc.getMap('properties').set('name', 'C2');
+    doc.commit();
+    const expected = encodeB64(doc.version().encode());
+    h.snapshots.set(subject, doc.export({ mode: 'snapshot' }));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(
+      h.emit.mock.calls.some(
+        ([event]) => event.observation.barrier.version === expected,
+      ),
+    ).toBe(true);
+    h.requests.reset();
+  });
+
+  it('uses stored applied state instead of supplied inventory or unsaved memory', async () => {
+    const h = harness('websocket');
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc.setPeerId('1');
+    doc.getMap('properties').set('name', 'stored');
+    const stored = doc.export({ mode: 'snapshot' });
+    const expected = encodeB64(doc.version().encode());
+    h.snapshots.set(subject, stored);
+    doc.getMap('properties').set('name', 'not stored');
+    doc.commit();
+    h.requests.seed('https://server.test/commit', {
+      drive,
+      driveHash: '',
+      peers: ['1'],
+      resources: { [subject]: [999] },
+    });
+    await vi.advanceTimersByTimeAsync(35_000);
+    expect(h.request).toHaveBeenCalledOnce();
+    expect(h.request.mock.calls[0][0].version).toBe(expected);
+    expect(h.request.mock.calls[0][0].version).not.toBe(
+      encodeB64(doc.version().encode()),
+    );
+    doc.free();
+    h.requests.reset();
+  });
+
+  it('does not probe an update whose dependencies have not been applied', async () => {
+    const h = harness('websocket');
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc.setPeerId('1');
+    doc.getMap('properties').set('name', 'base');
+    doc.commit();
+    const base = doc.version();
+    doc.getMap('properties').set('name', 'depends on base');
+    doc.commit();
+    const missingDependencies = doc.export({ mode: 'update', from: base });
+    expect(
+      LoroLoader.Loro.decodeImportBlobMeta(
+        missingDependencies,
+        false,
+      ).partialEndVersionVector.toJSON().size,
+    ).toBeGreaterThan(0);
+    h.snapshots.set(subject, missingDependencies);
+    h.requests.follow('https://server.test/commit', drive, () => true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(h.request).not.toHaveBeenCalled();
+    h.snapshots.set(subject, doc.export({ mode: 'snapshot' }));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(h.request).toHaveBeenCalledOnce();
+    expect(h.request.mock.calls[0][0].version).toBe(
+      encodeB64(doc.version().encode()),
+    );
+    doc.free();
+    h.requests.reset();
+  });
+
+  it('bounds a hung inventory read and resumes a replacement database without stale work', async () => {
+    const h = harness('websocket');
+    let release!: (subjects: string[]) => void;
+    h.getDriveSubjects.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          release = resolve;
+        }),
+    );
+    h.requests.follow('https://server.test/commit', drive, () => true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(h.getDriveSubjects).toHaveBeenCalledOnce();
+    h.requests.reset(true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.getDriveSubjects).toHaveBeenCalledOnce();
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc.setPeerId('2');
+    doc.getMap('properties').set('name', 'replacement database');
+    const next = {
+      getReplicaIdentity: vi.fn().mockResolvedValue(undefined),
+      getDriveSubjects: vi.fn().mockResolvedValue([subject]),
+      getResourceWithSnapshot: vi.fn().mockResolvedValue({
+        jsonAd: null,
+        snapshot: doc.export({ mode: 'snapshot' }),
+      }),
+    };
+    h.state.database++;
+    h.setDb(next);
+    h.requests.reset(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(h.emit).toHaveBeenCalledOnce();
+    expect(h.emit.mock.calls[0][0].databaseGeneration).toBe(h.state.database);
+    release(['atomic:stale-subject']);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(h.getResourceWithSnapshot).not.toHaveBeenCalled();
+    expect(
+      h.request.mock.calls.every(([request]) => request.subject === subject),
+    ).toBe(true);
+    doc.free();
+    h.requests.reset();
+  });
+
+  it('drops a delayed snapshot and its targets when its drive is no longer followed', async () => {
+    const h = harness('websocket');
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc.getMap('properties').set('name', 'stored');
+    const snapshot = doc.export({ mode: 'snapshot' });
+    h.snapshots.set(subject, snapshot);
+    let followed = true;
+    let release!: () => void;
+    h.getResourceWithSnapshot.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          release = () => resolve({ jsonAd: null, snapshot });
+        }),
+    );
+    h.requests.follow('https://server.test/commit', drive, () => followed);
+    await vi.advanceTimersByTimeAsync(1);
+    followed = false;
+    release();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(h.request).not.toHaveBeenCalled();
+    expect(h.getResourceWithSnapshot).toHaveBeenCalledOnce();
+    doc.free();
+    h.requests.reset();
+  });
+
+  it.each(['identity', 'database', 'session'] as const)(
+    'does not rebind an accepted background target after %s replacement',
+    async changed => {
+      const h = harness();
+      const accepted = h.requests.captureAccepted(
+        'https://server.test/commit',
+        drive,
+        subject,
+        vv(),
+      );
+      if (changed === 'identity') h.state.identity += 2;
+      else if (changed === 'database') h.state.database += 2;
+      else h.state.active = false;
+      accepted();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(h.request).not.toHaveBeenCalled();
+      h.requests.reset();
+    },
+  );
+
+  it('pauses a saturated inventory and eventually reaches later stored subjects', async () => {
+    const h = harness('websocket');
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc.getMap('properties').set('name', 'stored');
+    const snapshot = doc.export({ mode: 'snapshot' });
+    for (let i = 0; i < 300; i++)
+      h.snapshots.set(`atomic:item-${String(i).padStart(3, '0')}`, snapshot);
+    h.request.mockImplementation(() => new Promise(() => {}));
+    h.requests.follow('https://server.test/commit', drive, () => true);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(h.getResourceWithSnapshot.mock.calls.length).toBeLessThanOrEqual(
+      132,
+    );
+    h.request.mockImplementation(async request => reply(request));
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(
+      new Set(
+        h.emit.mock.calls.map(([event]) => event.observation.barrier.subject),
+      ).size,
+    ).toBe(300);
+    doc.free();
     h.requests.reset();
   });
 

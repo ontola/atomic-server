@@ -701,6 +701,40 @@ larger than the queue. HTTP adapter tests cover capability discovery, redirect
 refusal, signed-body requests and size limits. Existing WebSocket, save-receipt
 and commit-fallback regressions preserve normal save semantics.
 
+### Automatic browser background receipts (#2538/#2596)
+
+`browser/lib/src/server-receipts-background.test.ts` exercises accepted background
+updates and unloaded genesis outboxes without an active save call or synthetic
+`SaveReceipt` event. `server-receipts.test.ts` covers refreshed stored frontiers
+and bounded scheduling alongside exact target correlation and stale-context
+rejection. Browser collection reads applied state from stored snapshots rather
+than memory editors or snapshot-header oplog vectors.
+
+`websockets.test.ts` covers serialized authentication, delayed/unsolicited
+acknowledgements, raw AUTH invalidation and account-generation fencing. Because
+AUTH acknowledgements have no request id, ambiguous authentication disables
+receipt eligibility until reconnect.
+
+`browser/lib/tests/server-receipts.integration.test.ts` includes real-server cold
+genesis/update outbox delivery, newly imported state without an observer save,
+and reconnect evidence matched to actual stored snapshots. The standalone
+`browser/e2e/scripts/verify-server-receipts.mjs` harness uses Chromium, the real
+ClientDbWorker and OPFS, and an isolated production API server. It covers offline
+close/reopen, background delivery, stored imports and reconnect with persistent
+source identity. Its Vite page loads library source directly; it is not a test of
+the application's rendered UI or the TablePage extraction.
+
+These tests do not establish every-intermediate-save delivery, browser eviction
+resistance, power-loss survival, physical independence, future retention,
+attachment/key coverage or complete backup recovery.
+
+The cold-genesis investigation also exposed a separate outbox replay gap: when a
+stored genesis envelope is followed by another offline edit before a cold drain,
+the drain can clear the entry after sending only the older genesis. The receipt
+correctly covers that sent frontier, not the newer queued snapshot. The genesis
+acceptance test isolates one creation; the update case covers edits to an already
+accepted resource. Fixing replay of edits after an unsent genesis remains open.
+
 ### Automatic native WebSocket and Flutter receipts (#2538/#2594)
 
 `server/tests/it/native_ws_receipts.rs` runs the native collector against the
