@@ -402,7 +402,6 @@ function ServerCard({
 
   return (
     <SyncCard
-      active={isActive}
       provider={onProvider}
       icon={onProvider ? <FaCloud /> : <FaServer />}
       iconTone={onProvider ? 'provider' : 'neutral'}
@@ -586,11 +585,8 @@ interface SyncCardProps {
   /** Rendered as a click-to-copy row. Pass the full `did:ad:node:…`. */
   nodeId?: string;
   footer?: ReactNode;
-  active?: boolean;
   /** Run by the provider: drawn in the account's blue. */
   provider?: boolean;
-  /** The standalone spacing "This device" uses; the list cards sit tighter. */
-  spacious?: boolean;
 }
 
 function SyncCard({
@@ -605,15 +601,13 @@ function SyncCard({
   children,
   nodeId,
   footer,
-  active,
   provider,
-  spacious,
 }: SyncCardProps): JSX.Element {
   const store = useStore();
   const shown = (facts ?? []).filter(f => !!f);
 
   return (
-    <ConnCard $active={active} $provider={provider} $spacious={spacious}>
+    <ConnCard $provider={provider}>
       <CardIcon $tone={iconTone}>{icon}</CardIcon>
       <ConnBody>
         <ConnTopRow>
@@ -2253,7 +2247,6 @@ export function SyncSettings({
               drive physically lives. */}
         {/* This device — always the source of truth for local-first data. */}
         <SyncCard
-          spacious
           icon={<FaLaptop />}
           title='This device'
           footer={<BrowserPeerPanel drive={status.drive ?? undefined} />}
@@ -2803,13 +2796,17 @@ const ProviderService = styled(ServiceSection)`
   }
 `;
 
+/** One gap between every card in the list, whatever kind of card it is. */
 const Section = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
   margin-bottom: 2rem;
 `;
 
 /** Same look as a settings subsection heading. */
 const SectionTitle = styled.h3`
-  margin: 0 0 0.8rem;
+  margin: 0 0 0.2rem;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -2927,27 +2924,16 @@ const NodeIdValue = styled.button`
 `;
 
 /**
- * One device or server card. `$active` marks the server in use with a neutral
- * emphasis. The list order is stable across switches, so that accent is the
- * only thing that changes: a reshuffling list is far harder to follow than a
- * highlighted row.
+ * One device or server card. Every card has the same border and spacing; the
+ * server in use says so in its status pill and "in use" line, not with a
+ * border of its own. Spacing lives on the list (`Section`), never on a card.
  *
  * A server the provider runs wears the provider's blue, like the account
  * card: it behaves differently from a self-hosted one, so it should look it.
  */
-const ConnCard = styled.div<{
-  $active?: boolean;
-  $provider?: boolean;
-  $spacious?: boolean;
-}>`
+const ConnCard = styled.div<{ $provider?: boolean }>`
   ${cardBase}
-  margin-bottom: ${p => (p.$spacious ? '1.5rem' : '0.6rem')};
-  border-color: ${p =>
-    p.$provider
-      ? p.theme.colors.main
-      : p.$active
-        ? p.theme.colors.textLight
-        : undefined};
+  border-color: ${p => (p.$provider ? p.theme.colors.main : undefined)};
   background: ${p => (p.$provider ? `${p.theme.colors.main}0a` : undefined)};
 `;
 
@@ -2959,7 +2945,7 @@ const LocalDriveNotice = styled.div`
 `;
 
 const ConnNote = styled.p`
-  margin: 0 0 0.6rem;
+  margin: 0;
   color: ${p => p.theme.colors.textLight};
   font-size: 0.82rem;
 `;
@@ -3412,6 +3398,6 @@ const StatusDot = styled.span<{ $state: LocalDbStatus }>`
 
 const PeerSyncResult = styled.div<{ $error: boolean }>`
   font-size: 0.8rem;
-  margin-top: 0.3rem;
+  margin: 0;
   color: ${p => (p.$error ? p.theme.colors.warning : p.theme.colors.main)};
 `;
