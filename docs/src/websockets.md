@@ -369,8 +369,10 @@ This optional extension is advertised as `browser-storage-receipts-v1` by
 WebRTC sessions and `iroh-storage-receipts-v1` by native Iroh sessions, only
 when the actual backing store can supply a durable replica identity. Neither
 capability is advertised globally by HTTP/WS responders. Native WebRTC links
-that delegate to the browser-peer session handler can also answer these
-requests. Both directions must authenticate before requests begin. Iroh
+that delegate to the browser-peer session handler also answer these requests.
+Native builds with the receipt runtime enabled request proof over WebRTC using
+`browser-storage-receipts-v1` from the authenticated peer’s `AUTH_OK`. Both
+directions must authenticate before requests begin. Iroh
 negotiation uses `AUTH_OK` and `HELLO` on a node-bound, drive-bound handshake.
 Old peers continue to sync normally without these frames; ordinary
 `COMMIT_OK` and `SYNC_OK` retain their existing meanings.
@@ -429,6 +431,20 @@ Reloading the embedded view can recover still-live host evidence; restarting the
 native process cannot recover it from disk. This bridge serves the native
 embedded renderer; the legacy Tauri renderer using a local HTTP server does not
 consume this native-host API.
+
+Native WebRTC and Iroh reuse the bounded requester and live evidence ledger.
+The native requester requires the resource-receipt capability; attachment probes
+also require `attachment-storage-receipts-v1`. A metadata-only peer can confirm
+resource details without confirming file contents.
+WebRTC uses an independent per-link lifetime token and a `webrtc:` connection ID;
+Iroh retains its node/connection-generation liveness check and `iroh:` namespace.
+Closing, dropping or failing a native WebRTC link invalidates its evidence and
+outstanding requests. WebRTC receipt frames leave through the host's existing
+live-frame channel, which owns transport framing. They do not emit Iroh-specific
+receipt events. If a local write batch temporarily prevents durable identity lookup during the
+handshake, periodic reconciliation retries requester setup after the batch ends.
+The native Flutter package already enables this receipt runtime;
+db-only/WASM builds retain their shared responder without a native requester.
 
 ### Attachment storage receipts (0x58 / 0x59)
 

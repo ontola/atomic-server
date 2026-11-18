@@ -3124,6 +3124,24 @@ impl Db {
         &self,
         receipt: crate::sync::iroh_receipts::IrohReplicaReceipt,
     ) {
+        self.record_replica_receipt(receipt, true);
+    }
+
+    /// WebRTC shares the private ledger, not the public Iroh event channel.
+    #[cfg(feature = "iroh")]
+    pub(crate) fn record_private_replica_receipt(
+        &self,
+        receipt: crate::sync::iroh_receipts::IrohReplicaReceipt,
+    ) {
+        self.record_replica_receipt(receipt, false);
+    }
+
+    #[cfg(feature = "iroh")]
+    fn record_replica_receipt(
+        &self,
+        receipt: crate::sync::iroh_receipts::IrohReplicaReceipt,
+        broadcast: bool,
+    ) {
         // This gate is shared even by isolated account views of the same KV.
         // Publication cannot race a successful deletion/tombstone epoch change.
         let Ok(_gate) = self.sync_receipts_gate.lock() else {
@@ -3143,7 +3161,9 @@ impl Db {
             return;
         }
         ledger.record(&receipt);
-        let _ = self.replica_receipts.send(receipt);
+        if broadcast {
+            let _ = self.replica_receipts.send(receipt);
+        }
     }
 
     /// Presence arriving from peers. See [`EphemeralEvent`].

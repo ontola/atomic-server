@@ -39,6 +39,11 @@ export interface ResourcePeerEvidenceProvider {
   ): Promise<ResourcePeerEvidence | undefined>;
 }
 
+/** Host-owned session namespaces; browser transport IDs are unprefixed tokens. */
+export function isNativePeerConnectionId(value: string): boolean {
+  return value.startsWith('iroh:') || value.startsWith('webrtc:');
+}
+
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
@@ -104,7 +109,7 @@ export function parseResourcePeerEvidence(
     if (
       !record(connection) ||
       !text(connection.connectionId) ||
-      !connection.connectionId.startsWith('iroh:') ||
+      !isNativePeerConnectionId(connection.connectionId) ||
       ids.has(connection.connectionId) ||
       !text(connection.drive) ||
       !text(connection.peerAgent) ||

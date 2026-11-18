@@ -660,9 +660,9 @@ The journey pauses the receiver for a newer edit, resumes to obtain a fresh
 receipt, opens a shared-storage tab without inflating the copy count, and checks
 departure and reload. It does not validate physical-device independence,
 production signaling or TURN. This journey covers resource metadata; separate
-attachment-byte journeys are described below. Native WebRTC uses
-the shared receipt responder; mixed browser/native WebRTC acceptance and native
-WebRTC requester evidence remain separate from the Iroh coverage below.
+attachment-byte journeys are described below. Native WebRTC uses the shared
+receipt responder and bounded native requester, with its separate session token
+and evidence namespace. Its mixed browser/native acceptance is described below.
 
 Native resource receipts use the shared stored-state/flush producer and optional
 `iroh-storage-receipts-v1` negotiation. `sync::iroh_receipts` unit tests cover
@@ -696,8 +696,39 @@ NativeChannel into the actual EmbedHost of the two-process Iroh fixture, renders
 the peer count and timestamp, reloads the view while its host remains alive,
 checks mobile layout and removes the confirmation after peer departure. It uses
 no fabricated receipts or production hooks. This does not exercise packaged
-Flutter/Tauri builds, physical devices, native WebRTC requester integration or
-the legacy Tauri renderer's local HTTP path.
+Flutter/Tauri builds, physical devices or the legacy Tauri renderer's local
+HTTP path. Native WebRTC has a separate opt-in journey below.
+
+### Native WebRTC resource confirmations
+
+`sync::webrtc_link` reuses the native receipt scheduler with WebRTC-specific
+liveness and raw-frame delivery. Unit regressions cover mutually authenticated
+capabilities (bare, attachment-only and metadata-only), actual stored bytes,
+late correlated replies after close, fatal input, Drop/reconnect, account
+A→B→A changes, bounded AUTH_OK parsing and no Iroh-specific broadcast events.
+A handshake during an open local batch retries setup after commit on periodic
+reconciliation without starting duplicate requesters. Shared receipt tests retain
+nonce/frontier/manifest correlation, removal epochs, permissions, bounds and byte
+expiry. DB-only/WASM builds preserve responder behavior without the optional
+native requester runtime.
+
+The Store/NativeClientDb lifecycle tests run against both native transport
+namespaces. They verify authoritative removal of omitted attachment proof,
+cross-transport storage deduplication and metadata/bytes matching within the same
+connection. The focused native/attachment library selection passes 52 tests.
+
+`native-webrtc-resource-sync.spec.ts` and `lib/tests/webrtc_receipts.rs` use a real
+browser/WASM peer and a real native database, WebRtcPeerLink and EmbedHost. A
+transport-only Chromium page carries native frames over the production ordered
+RTCDataChannel/framing/DTLS binding through a test-owned process bridge. The
+fixture controls rendezvous and holds actual blob frames, not receipt answers.
+Assertions cover metadata before bytes, complete copies, replacement contents,
+embedded-view reload, disconnect and desktop/mobile rendering. The mixed WebRTC/native journey passed 1/1 locally (73.622s), and the existing
+Iroh renderer regression passed 1/1 (75.543s), with strict diagnostics and zero
+retries. The 32 focused Rust WebRTC/shared-receipt cases also passed. It does not
+validate the packaged Flutter WebRTC plugin, physical-device networking or
+production TURN/signaling. The ignored Rust fixture entry point is driven by
+Playwright rather than counted as standalone Rust acceptance.
 
 ### Attachment content confirmations
 

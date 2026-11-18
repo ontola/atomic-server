@@ -1,3 +1,4 @@
+import { isNativePeerConnectionId } from './resource-peer-evidence.js';
 import { StoreEvents, type Store } from './store.js';
 import { ResourceEvents, type Resource } from './resource.js';
 import type { ReplicaIdentity } from './peer-receipts.js';
@@ -253,7 +254,7 @@ export class ResourceAttachmentSync {
   }
   replaceNative(subject: string, receipts: AttachmentPeerReceipt[]): void {
     for (const [id, rows] of this.peers)
-      if (id.startsWith('iroh:')) rows.delete(subject);
+      if (isNativePeerConnectionId(id)) rows.delete(subject);
     for (const receipt of receipts) this.acknowledge(receipt);
     this.notify(subject);
   }

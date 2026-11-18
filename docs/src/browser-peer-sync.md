@@ -19,9 +19,11 @@ have confirmed that resource's latest saved version. The purple peer icon uses
 authenticated storage acknowledgements, not the number of open connections.
 Tabs sharing one local database count once. Closing a remote tab or app removes
 its available-copy confirmation, and a reload requires a new acknowledgement.
-Compatible native apps using this WebRTC protocol can return the same receipts;
-labels do not assert a device type. These confirmations cover resource data;
-attachment bytes and independent, recoverable backups are separate. See
+Compatible native apps using this WebRTC protocol request and return the same
+confirmations. Their embedded views read the native host’s live evidence, so
+reloading a view does not open another connection. Resource details and file
+contents are confirmed separately; a complete copy requires both at the same
+peer. Labels do not assert a device type or a recoverable backup. See
 [resource confirmations](sync.md#checking-an-individual-resource).
 
 ## Discovery and transport

@@ -16,7 +16,7 @@ export interface ResourcePeerCopy {
   readonly generation?: string;
 }
 
-/** Live browser or native Iroh connections only. Counts never imply physical independence,
+/** Live browser or native peer connections only. Counts never imply physical independence,
  * attachment coverage, continued retention, or a recoverable backup.
  */
 export interface ResourcePeerSyncStatus {

@@ -39,9 +39,53 @@ pub(crate) fn wire_subject(db: &Db, subject: &str) -> String {
     )
 }
 
+/// Native transports share proof correlation/storage checks, but own their
+/// liveness and wire framing. WebRTC has no entry in the Iroh peer registry.
+#[derive(Clone)]
+enum ReceiptTransport {
+    Iroh,
+    WebRtc(Arc<std::sync::atomic::AtomicBool>),
+}
+impl ReceiptTransport {
+    fn current(&self, remote: &str, generation: u64, agent: &ForAgent) -> bool {
+        match self {
+            Self::Iroh => super::peer::current_receipt_peer(remote, generation, agent),
+            Self::WebRtc(live) => live.load(std::sync::atomic::Ordering::Acquire),
+        }
+    }
+    fn locally_live(&self) -> bool {
+        match self {
+            Self::Iroh => true,
+            Self::WebRtc(live) => live.load(std::sync::atomic::Ordering::Acquire),
+        }
+    }
+    fn retire(&self) {
+        if let Self::WebRtc(live) = self {
+            live.store(false, std::sync::atomic::Ordering::Release);
+        }
+    }
+    fn connection_id(&self, remote: &str, generation: u64) -> String {
+        let prefix = match self {
+            Self::Iroh => "iroh",
+            Self::WebRtc(_) => "webrtc",
+        };
+        format!("{prefix}:{remote}:{generation}")
+    }
+    fn frame(&self, frame: Vec<u8>) -> Vec<u8> {
+        if matches!(self, Self::WebRtc(_)) {
+            return frame;
+        }
+        let mut framed = Vec::with_capacity(frame.len() + 4);
+        framed.extend_from_slice(&(frame.len() as u32).to_be_bytes());
+        framed.extend(frame);
+        framed
+    }
+}
+
 #[derive(Clone)]
 struct LedgerConnection {
     remote: String,
+    transport: ReceiptTransport,
     generation: u64,
     agent_generation: u64,
     local_agent: String,
@@ -79,6 +123,7 @@ impl NativeReceiptLedger {
         }
         self.connections.push_back(LedgerConnection {
             remote: session.remote.clone(),
+            transport: session.transport.clone(),
             generation: session.generation,
             agent_generation: session.local_generation,
             local_agent: session.local_agent.clone(),
@@ -103,6 +148,7 @@ impl NativeReceiptLedger {
     pub(crate) fn record(&mut self, evidence: &IrohReplicaReceipt) {
         let Some(connection) = self.connections.iter_mut().find(|c| {
             c.remote == evidence.remote_node_id
+                && c.transport.locally_live()
                 && c.generation == evidence.connection_generation
                 && c.agent_generation == evidence.agent_generation
                 && c.local_agent == evidence.local_agent
@@ -196,7 +242,7 @@ struct ResourcePeerAttachmentReceipt {
 
 fn ledger_connection_current(db: &Db, c: &LedgerConnection) -> bool {
     db.agent_generation() == c.agent_generation
-        && super::peer::current_receipt_peer(&c.remote, c.generation, &c.peer_agent)
+        && c.transport.current(&c.remote, c.generation, &c.peer_agent)
         && db
             .kv
             .replica_identity(&c.drive)
@@ -311,7 +357,9 @@ pub async fn resource_peer_evidence(db: &Db, subjects: &[String]) -> ResourcePee
         }
         if relevant && ledger_connection_current(db, &session) {
             result.connections.push(ResourcePeerConnection {
-                connection_id: format!("iroh:{}:{}", session.remote, session.generation),
+                connection_id: session
+                    .transport
+                    .connection_id(&session.remote, session.generation),
                 drive: session.drive.clone(),
                 peer_agent: session.peer_agent.to_string(),
                 receipts,
@@ -551,6 +599,7 @@ impl AttachmentRequests {
 
 pub(crate) struct ReceiptSession {
     remote: String,
+    transport: ReceiptTransport,
     remote_agent: ForAgent,
     drive: String,
     generation: u64,
@@ -574,10 +623,56 @@ impl ReceiptSession {
         local_generation: u64,
         caps: &[String],
     ) -> Option<Arc<Self>> {
+        Self::new_transport(
+            db,
+            remote,
+            remote_agent,
+            drive,
+            generation,
+            local_generation,
+            caps,
+            ReceiptTransport::Iroh,
+        )
+    }
+
+    pub(crate) fn new_webrtc(
+        db: &Db,
+        nonce: String,
+        remote_agent: ForAgent,
+        drive: &str,
+        local_generation: u64,
+        caps: &[String],
+        live: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Option<Arc<Self>> {
+        Self::new_transport(
+            db,
+            nonce,
+            remote_agent,
+            drive,
+            1,
+            local_generation,
+            caps,
+            ReceiptTransport::WebRtc(live),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_transport(
+        db: &Db,
+        remote: String,
+        remote_agent: ForAgent,
+        drive: &str,
+        generation: u64,
+        local_generation: u64,
+        caps: &[String],
+        transport: ReceiptTransport,
+    ) -> Option<Arc<Self>> {
+        let capability = match transport {
+            ReceiptTransport::Iroh => protocol::CAP_IROH_STORAGE_RECEIPTS_V1,
+            ReceiptTransport::WebRtc(_) => protocol::CAP_BROWSER_STORAGE_RECEIPTS_V1,
+        };
         if matches!(remote_agent, ForAgent::Public)
-            || !caps
-                .iter()
-                .any(|c| c == protocol::CAP_IROH_STORAGE_RECEIPTS_V1)
+            || !caps.iter().any(|c| c == capability)
             || db.agent_generation() != local_generation
         {
             return None;
@@ -590,6 +685,7 @@ impl ReceiptSession {
         }
         let session = Arc::new(Self {
             remote,
+            transport,
             remote_agent,
             drive,
             generation,
@@ -616,6 +712,7 @@ impl ReceiptSession {
     }
 
     pub(crate) fn invalidate(&self) {
+        self.transport.retire();
         let mut requests = self.requests.lock().unwrap();
         requests.closed = true;
         requests.queued.clear();
@@ -631,7 +728,9 @@ impl ReceiptSession {
         let closed = self.requests.lock().unwrap().closed;
         !closed
             && db.agent_generation() == self.local_generation
-            && super::peer::current_receipt_peer(&self.remote, self.generation, &self.remote_agent)
+            && self
+                .transport
+                .current(&self.remote, self.generation, &self.remote_agent)
     }
 
     pub(crate) fn current(&self, db: &Db) -> bool {
@@ -756,21 +855,25 @@ impl ReceiptSession {
                 .then_some(requests.removal_generation)
         };
         if let Some(removal_generation) = accepted_generation {
-            super::peer::emit_receipt_if_current(
-                db,
-                &self.remote_agent,
-                IrohReplicaReceipt {
-                    receipt,
-                    source: self.source.clone(),
-                    remote_node_id: self.remote.clone(),
-                    remote_agent: self.remote_agent.to_string(),
-                    local_agent: self.local_agent.clone(),
-                    connection_generation: self.generation,
-                    agent_generation: self.local_generation,
-                    removal_generation,
-                    observed_at: crate::utils::now() as u64,
-                },
-            );
+            let evidence = IrohReplicaReceipt {
+                receipt,
+                source: self.source.clone(),
+                remote_node_id: self.remote.clone(),
+                remote_agent: self.remote_agent.to_string(),
+                local_agent: self.local_agent.clone(),
+                connection_generation: self.generation,
+                agent_generation: self.local_generation,
+                removal_generation,
+                observed_at: crate::utils::now() as u64,
+            };
+            match &self.transport {
+                ReceiptTransport::Iroh => {
+                    super::peer::emit_receipt_if_current(db, &self.remote_agent, evidence)
+                }
+                // Shared internal shape only: never publish a WebRTC event on
+                // the public Iroh-specific receipt subscription.
+                ReceiptTransport::WebRtc(_) => db.record_private_replica_receipt(evidence),
+            }
         }
     }
 
@@ -812,6 +915,7 @@ impl ReceiptSession {
         }
         if let Some(connection) = ledger.connections.iter_mut().find(|c| {
             c.remote == self.remote
+                && c.transport.locally_live()
                 && c.generation == self.generation
                 && c.agent_generation == self.local_generation
         }) {
@@ -893,9 +997,7 @@ impl ReceiptSession {
                         break;
                     }
                     if let Some(frame) = request.encode_frame() {
-                        let mut framed = Vec::with_capacity(frame.len() + 4);
-                        framed.extend_from_slice(&(frame.len() as u32).to_be_bytes());
-                        framed.extend(frame);
+                        let framed = session.transport.frame(frame);
                         if tx.try_send(framed).is_err() {
                             break;
                         }
@@ -916,9 +1018,7 @@ impl ReceiptSession {
                     let Some(frame) = request.encode_frame() else {
                         continue;
                     };
-                    let mut framed = Vec::with_capacity(frame.len() + 4);
-                    framed.extend_from_slice(&(frame.len() as u32).to_be_bytes());
-                    framed.extend(frame);
+                    let framed = session.transport.frame(frame);
                     // Dropping a request on backpressure is safe: it remains
                     // pending and can be retried. Never spawn unbounded sends.
                     if tx.try_send(framed).is_err() {

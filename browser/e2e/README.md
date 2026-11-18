@@ -277,3 +277,31 @@ The resource panel loads on demand when opened. After changing its initial
 dependencies, also run `bash flutter/scripts/build_embed.sh` followed by
 `bash flutter/scripts/check_embed_size.sh` from the repository root to check
 the same embedded-app size budget as CI.
+
+### Native WebRTC resource and attachment confirmations
+
+`native-webrtc-resource-sync.spec.ts` joins an actual browser/WASM peer to a
+native `WebRtcPeerLink` and persistent database. Build matching web/WASM and
+embedded assets, then build the test-owned host from the repository root with
+`cargo test -p atomic_lib --features db-redb,iroh --test webrtc_receipts --no-run`.
+Run against the matching production server from `browser/`:
+
+```sh
+ATOMIC_NATIVE_WEBRTC_TEST_BINARY=/absolute/path/to/webrtc_receipts-HASH \
+  ATOMIC_E2E_CARGO_PROFILE=dev pnpm test-e2e:local --skip-build \
+  tests/native-webrtc-resource-sync.spec.ts --workers=1 --retries=0
+```
+
+The test uses a real ordered RTCDataChannel with the production framing and
+DTLS binding. A transport-only Chromium page carries native frames through a
+test-owned process bridge; authentication, sync, stored-byte verification,
+automatic receipt requests and embedded evidence all run in the native Rust
+host. The other peer uses the production browser app and WASM database.
+The test controls signaling and withholds actual blob frames to distinguish
+metadata confirmation from complete file copies. It checks replacement bytes,
+view reload, departure and desktop/mobile rendering. No receipts are fabricated.
+This validates browser/native protocol and renderer integration, not the
+packaged Flutter plugin, physical devices or production TURN. The ignored Rust
+host entry point is invoked by the opt-in Playwright fixture; running cargo tests
+alone does not claim this acceptance. Without the explicit executable the
+Playwright journey is skipped.

@@ -53,6 +53,7 @@ export function signalingRoom() {
 
   return {
     install,
+    roomId: () => [...rooms.keys()][0],
     dispose: () => {
       disposed = true;
       for (const room of rooms.values()) room.clear();

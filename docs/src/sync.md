@@ -89,10 +89,12 @@ one peer copy, and another tab using this device's database never adds a
 remote copy. Distinct storage identities do not establish a separate physical
 device or guarantee a recoverable backup. Older peers can still synchronize
 without providing these confirmations. Compatible native WebRTC peers use the
-same storage acknowledgement; the receipt does not identify device type. Native
-Iroh peers negotiate resource receipts separately from drive-level sync. The
-native host supplies its live evidence to embedded resource views; those views
-do not open another peer connection.
+same storage acknowledgement in both directions; the receipt does not identify
+device type. Native Iroh peers negotiate resource receipts separately from
+drive-level sync. The native host supplies live WebRTC and Iroh evidence to
+embedded resource views; those views do not open another peer connection. A
+peer reached over both transports still counts once when its confirmed storage
+identity is the same.
 
 For files and directly attached files, the panel separates **resource details**
 from **file contents**. A destination gets a complete-copy check only when both

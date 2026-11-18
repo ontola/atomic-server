@@ -5,8 +5,9 @@ recovery and per-resource Cloud Vault confirmations are implemented in draft
 PR #2576. WebRTC and native Iroh peer confirmations are implemented and locally
 validated, including the embedded native renderer. Separate attachment-byte
 confirmation is implemented and locally validated in the real app. This plan remains
-open for native WebRTC and legacy Tauri integration, production infrastructure
-validation and multiple-server configuration. Exact-commit CI is tracked on the PR.
+open for legacy Tauri integration, production infrastructure validation and
+multiple-server configuration. Native WebRTC requester and embedded evidence are
+implemented and locally validated for resource details and attachment contents. Exact-commit CI is tracked on the PR.
 
 ## Ownership and dependency
 
@@ -79,8 +80,8 @@ based on authenticated stored-version acknowledgements, described below.
   Expose resource copy counts independently of connection counts, including
   peer departure, browser-tab lifetimes and identity changes.
 - [x] Extend per-resource evidence to native Iroh and its embedded renderer.
-- [ ] Extend native WebRTC requester/UI evidence and the legacy Tauri local-HTTP
-  renderer; native WebRTC responders already use the shared receipt handler.
+- [x] Extend native WebRTC requester/UI evidence for resource details and bytes.
+- [ ] Extend the legacy Tauri local-HTTP renderer.
 - [ ] Extend configuration when multiple active servers are supported, then
   derive the primary indicator from the user's intended destinations.
 - [x] Validate real peer-only journeys before enabling success icons. Browser
@@ -156,7 +157,7 @@ recoverable backup. Native WebRTC requester integration is separate from this
 Iroh phase; its shared responder remains supported.
 
 
-## Attachment confirmations (active phase)
+## Attachment confirmations
 
 Builds on native Iroh head `7968972a6b1e6762feedcb698dd47c414603978f` in the
 same owned worktree/branch. The original checkout remains at its recorded dirty
@@ -214,3 +215,64 @@ keeping the embedded initial payload within the unchanged 1000 kB gzip budget
 strict browser diagnostics and zero retries; the matching native Iroh renderer
 journey also passed. Repeated browser fixtures use unique contents because the
 server correctly reuses identical content-addressed blobs across test drives.
+
+
+## Native WebRTC confirmations (active phase)
+
+Continues on owned branch `codex/atomic-resource-sync` from
+`14bd4ace5bab20ba5992a7444500aab4b6d22845`, without merging unrelated develop
+changes. Original checkout status is recorded outside the repository at
+`/tmp/atomic-resource-sync-native-webrtc-original-status.txt`.
+
+- [x] Review shared receipt session, native WebRTC lifecycle and renderer bridge.
+- [x] Negotiate resource and attachment evidence only after mutual authentication.
+- [x] Request exact stored versions and content manifests using bounded queues.
+- [x] Share the native live evidence ledger while fencing transport/session,
+  agent/storage identity, resource removal and late responses.
+- [x] Expose native WebRTC evidence through the existing copies panel; retain
+  shared-storage deduplication across transports and metadata/bytes matching.
+- [x] Test unsupported peers, disconnect/close/reload, edits and attachment
+  replacement at Rust and library layers.
+- [x] Validate actual browser/native WebRTC resource and attachment confirmation
+  through the renderer, with strict diagnostics and zero retries.
+- [x] Update public docs and coverage; run focused checks and matching builds.
+- [ ] Publish to PR #2576 with required hooks and follow exact-head CI.
+
+Ownership: `sync_ui` owns Rust session/transport implementation and unit tests;
+`sync_architecture` owns architecture review and browser-library bridge parsing;
+`sync_ui_tests` owns independent acceptance fixtures/tests; coordinator owns
+integration, plan/docs/coverage, builds, review and publishing. Only coordinator
+runs frontend builds/catalog extraction. Tests must distinguish a native Rust
+protocol host using a test data-channel carrier from packaged Flutter and real
+physical-device/TURN acceptance.
+
+
+Approved integration contract: retain the native receipt queue/verifier and add
+transport-specific session liveness plus output framing. A unique per-link
+WebRTC token replaces Iroh's live-peer registry for that session; only mutually
+authenticated links with advertised browser-storage/attachment capabilities can
+start requesting proof. Raw frames leave through the existing live-frame API,
+so Flutter bridge bindings need no new method. Embedded evidence uses a separate
+`webrtc:` connection namespace while preserving storage-identity deduplication.
+The current native package enables `iroh`; builds without that feature retain
+existing WebRTC responder behavior and must continue compiling. This phase does
+not broaden that build-feature contract or add a second WebRTC transport stack.
+
+
+Validation review found that a native WebRTC handshake during a local write batch
+could leave optional requester setup permanently unavailable. Setup now marks
+success only after acquiring durable identity and retries on periodic reconcile;
+unsupported capabilities remain a cheap no-op. A regression covers the blocked
+handshake, committed batch, single requester recovery and close.
+
+
+Final local validation: 32 Rust WebRTC/shared-receipt cases and 52 focused library
+cases passed; native db-only compilation, frontend/library/E2E types and rustfmt
+passed. Matching WASM/library/embed/web/server builds passed, with 999.1 kB gzip
+initial embed payload within the unchanged 1000 kB limit. The actual mixed
+browser/native WebRTC journey passed 1/1 (73.622s), and the Iroh renderer
+regression passed 1/1 (75.543s), both with strict diagnostics and zero retries.
+The Iroh fixture initially timed out before emitting any Rust output; direct
+executable startup then succeeded and the unchanged-timeout rerun passed.
+Phase7 screenshots are shared outside the repository. Packaged Flutter/device
+transport and production TURN remain separate acceptance boundaries.
