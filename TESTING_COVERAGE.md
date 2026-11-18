@@ -2929,3 +2929,5 @@ Existing installs whose secret was already discarded require reinstalling;
 this does not rotate an app identity or repair provider delegations. New online
 installations still work with older nodes; automatic replay requires a node
 that advertises the initialization-only protocol.
+
+Cloud Vault file repair (#2579): `helpers/managed/vaultFileRepair.test.ts` covers a peer-first attempt, selective encrypted fallback, current references, cancellation, session changes, concurrent attempts, partial results and retry without importing resource history. `useVaultBackup.repair.test.tsx` and `VaultPanel.test.tsx` cover drive/session cancellation, progress, retry and independent file recovery. `lib/src/vault/sync.rs` covers BLOB-only records and refusing a late file result after deletion. `sync/peer.rs` covers exact requested hashes, paired drive scope and peer read permissions. `browser/e2e/tests/vault-file-repair.spec.ts` exercises actual WASM file sealing and recovery through the Sync action with mocked Vault storage, asserting exact recovered contents and unchanged drive version vectors and file metadata.

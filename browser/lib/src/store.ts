@@ -7597,6 +7597,32 @@ export class Store {
     };
   }
 
+  /** Ask connected devices for file bytes without changing drive resources. */
+  public async requestMissingFileContents(
+    drive: string,
+    hashes: string[],
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const db = this.getClientDb();
+    const agent = this.getAgent();
+    if (!db || !agent) return;
+    signal?.throwIfAborted();
+    const frames = await db.requestDriveBlobs(drive, hashes);
+    if (this.getClientDb() !== db || this.getAgent() !== agent) return;
+    signal?.throwIfAborted();
+    const normalized = this.normalizeSubject(drive);
+    const socket = this.isLocalOnlyDrive(normalized)
+      ? undefined
+      : (this.getDefaultWebSocket() ?? this.getWebSocketForSubject(normalized));
+
+    for (const bytes of frames) {
+      signal?.throwIfAborted();
+      const frame = Uint8Array.from(bytes);
+      socket?.requestFileContents(frame);
+      for (const listener of this.peerListeners) listener(normalized, frame);
+    }
+  }
+
   public async destroyLocalResource(commit: Commit): Promise<void> {
     if (!this.clientDb)
       throw new Error('Local storage is required to delete this resource');

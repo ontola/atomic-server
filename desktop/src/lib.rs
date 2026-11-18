@@ -259,6 +259,18 @@ mod vault_ipc {
     pub objects_unreadable: usize,
   }
 
+  #[derive(serde::Serialize)]
+  pub struct VaultBlobRestoreOut {
+    pub status: &'static str,
+    pub hash: Option<String>,
+  }
+
+  pub fn decode_hash(hash: &str) -> Result<[u8; 32], String> {
+    atomic_lib::Subject::from_raw(&atomic_lib::identifiers::blob_subject(hash), None)
+      .blob_hash()
+      .ok_or_else(|| "Invalid file hash.".to_string())
+  }
+
   pub fn decode_key(key_b64: &str, epoch: u32) -> Result<DriveVaultKey, String> {
     let raw = STANDARD
       .decode(key_b64)
@@ -460,6 +472,102 @@ async fn vault_import(
   .await
 }
 
+/// List the current drive's referenced files without importing Vault history.
+#[tauri::command]
+async fn vault_file_hashes(
+  drive_subject: String,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<Vec<String>, String> {
+  let store = vault_ipc::store_of(&node)?;
+  vault_ipc::on_worker_thread(move || {
+    use atomic_lib::Storelike as _;
+    let drive = atomic_lib::Subject::from_raw(&drive_subject, store.get_base_domain().as_deref());
+    vault_ipc::block_on(atomic_lib::vault::sync::drive_file_hashes(&store, &drive))
+  })
+  .await
+}
+
+#[tauri::command]
+async fn vault_blob_present(
+  hash: String,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<bool, String> {
+  let store = vault_ipc::store_of(&node)?;
+  let hash = vault_ipc::decode_hash(&hash)?;
+  store.has_blob(&hash).await.map_err(|e| e.to_string())
+}
+
+/// Restore only verified file bytes. Resource history and lane state stay local.
+#[tauri::command]
+async fn vault_blob_restore(
+  key: String,
+  key_epoch: u32,
+  blob_id: String,
+  chunks: Vec<String>,
+  wanted: Vec<String>,
+  drive_subject: Option<String>,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<vault_ipc::VaultBlobRestoreOut, String> {
+  let store = vault_ipc::store_of(&node)?;
+  let key = vault_ipc::decode_key(&key, key_epoch)?;
+  vault_ipc::on_worker_thread(move || {
+    use atomic_lib::vault::sync::{
+      restore_blob_group, restore_blob_group_for_drive, BlobGroupOutcome,
+    };
+    use atomic_lib::Storelike as _;
+    use base64::Engine as _;
+    let chunks: Vec<Vec<u8>> = chunks
+      .iter()
+      .map(|chunk| vault_ipc::STANDARD.decode(chunk).map_err(|e| e.to_string()))
+      .collect::<Result<_, _>>()?;
+    let refs: Vec<&[u8]> = chunks.iter().map(Vec::as_slice).collect();
+    let wanted = wanted
+      .into_iter()
+      .map(|hash| hash.to_ascii_lowercase())
+      .collect();
+    let result = if let Some(drive) = drive_subject {
+      let drive = atomic_lib::Subject::from_raw(&drive, store.get_base_domain().as_deref());
+      vault_ipc::block_on(restore_blob_group_for_drive(
+        &store, &key, &blob_id, &refs, &wanted, &drive,
+      ))?
+    } else {
+      vault_ipc::block_on(restore_blob_group(&store, &key, &blob_id, &refs, &wanted))?
+    }
+    .map_err(|e| e.to_string())?;
+    Ok(match result {
+      BlobGroupOutcome::Restored(hash) => vault_ipc::VaultBlobRestoreOut {
+        status: "restored",
+        hash: Some(hash),
+      },
+      BlobGroupOutcome::Unreferenced => vault_ipc::VaultBlobRestoreOut {
+        status: "unreferenced",
+        hash: None,
+      },
+      BlobGroupOutcome::Unreadable => vault_ipc::VaultBlobRestoreOut {
+        status: "unreadable",
+        hash: None,
+      },
+    })
+  })
+  .await
+}
+
+#[tauri::command]
+async fn vault_request_missing_files(
+  drive: String,
+  hashes: Vec<String>,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<(), String> {
+  let store = vault_ipc::store_of(&node)?;
+  vault_ipc::on_worker_thread(move || {
+    vault_ipc::block_on(atomic_lib::sync::peer::request_drive_blobs(
+      &store, &drive, &hashes,
+    ))?
+    .map_err(|e| e.to_string())
+  })
+  .await
+}
+
 /// Start the read-only NFS virtual drive (unix only). Returns the current status, including the `mount` command to run.
 #[cfg(unix)]
 #[tauri::command]
@@ -533,6 +641,10 @@ pub fn run() {
       vault_export,
       vault_commit_segment,
       vault_import,
+      vault_file_hashes,
+      vault_blob_present,
+      vault_blob_restore,
+      vault_request_missing_files,
       virtual_drive_start,
       virtual_drive_stop,
       virtual_drive_status,
@@ -545,7 +657,11 @@ pub fn run() {
     fetch_workspace,
     vault_export,
     vault_commit_segment,
-    vault_import
+    vault_import,
+    vault_file_hashes,
+    vault_blob_present,
+    vault_blob_restore,
+    vault_request_missing_files
   ]);
 
   builder

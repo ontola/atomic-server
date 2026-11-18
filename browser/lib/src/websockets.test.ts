@@ -12,6 +12,7 @@ import {
   decodeEphemeral,
   EphemeralKind,
   Flags,
+  encodeBlobResponse,
 } from './ws-v2.js';
 import {
   decodeHelloCaps,
@@ -128,6 +129,35 @@ describe('WSClient handshake', () => {
     globalThis.WebSocket = original;
     vi.restoreAllMocks();
     vi.useRealTimers();
+  });
+
+  it('verifies file contents before storing a response from the server', async () => {
+    const { client, socket, store } = await connectedClient();
+    const hash = new Uint8Array(32).fill(7);
+    const bytes = new Uint8Array([1, 2, 3]);
+    const db = {
+      blake3Hash: vi.fn().mockResolvedValue(new Uint8Array(32).fill(8)),
+      putBlob: vi.fn(),
+    };
+    vi.spyOn(store, 'getClientDb').mockReturnValue(db as never);
+    socket.receive(encodeBlobResponse(hash, bytes));
+    await vi.waitFor(() => assert(db.blake3Hash).toHaveBeenCalled());
+    assert(db.putBlob).not.toHaveBeenCalled();
+    db.blake3Hash.mockResolvedValue(hash);
+    socket.receive(encodeBlobResponse(hash, bytes));
+    await vi.waitFor(() =>
+      assert(db.putBlob).toHaveBeenCalledWith(hash, bytes),
+    );
+    client.close();
+  });
+
+  it('lets file recovery fall back when this server lacks the contents', async () => {
+    const { client, socket, store } = await connectedClient();
+    const notify = vi.spyOn(store, 'notifyError');
+    socket.receive(encodeError(0, ErrorCode.UNKNOWN, 'Blob not found'));
+    await Promise.resolve();
+    assert(notify).not.toHaveBeenCalled();
+    client.close();
   });
 
   it.each([

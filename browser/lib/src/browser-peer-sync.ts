@@ -6,6 +6,7 @@ import { createAuthentication } from './authentication.js';
 import { isLoopbackHost } from './urls.js';
 import { WebRtcPeer } from './webrtc-peer.js';
 import { Tag, decodeCommit, encodeAuth, encodeSync } from './ws-v2.js';
+import { bytesToHex } from './value.js';
 import type { WebRtcTransport } from './webrtc-transport.js';
 
 export interface BrowserPeerOptions {
@@ -577,6 +578,23 @@ class BrowserPeerConnection {
           this.unsubscribe = this.store.subscribePeerFrames(
             (subject, bytes) => {
               if (!current()) return;
+
+              if (
+                subject === this.options.drive &&
+                bytes[0] === Tag.BLOB_REQUEST
+              ) {
+                void this.db
+                  .requestPeerBlobs(session, [bytesToHex(bytes.subarray(1))])
+                  .then(async frames => {
+                    for (const request of frames) {
+                      if (current()) await pipe.send(Uint8Array.from(request));
+                    }
+                  })
+                  .catch(error => this.fail(error));
+
+                return;
+              }
+
               const resource = this.store.resources.get(subject);
               const drive = resource?.get(
                 'https://atomicdata.dev/properties/drive',

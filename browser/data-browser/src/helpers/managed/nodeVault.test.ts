@@ -5,7 +5,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...a: unknown[]) => invoke(...a),
 }));
 
-const { nodeVault } = await import('./nodeVault');
+const { nodeVault, requestNodeFileContents } = await import('./nodeVault');
 
 beforeEach(() => {
   invoke.mockReset();
@@ -164,5 +164,40 @@ describe('nodeVault', () => {
       devicePubkey: 'dev',
       segment: 9,
     });
+  });
+
+  it('restores file chunks across IPC without importing history', async () => {
+    const chunks = [new Uint8Array([0, 255, 128]), new Uint8Array([254, 1, 2])];
+    invoke.mockResolvedValue({ status: 'restored', hash: 'plain-hash' });
+    const result = await nodeVault.vaultBlobRestore!(
+      key,
+      3,
+      'vault-blob-id',
+      chunks,
+      ['plain-hash'],
+      'atomic:current-drive',
+    );
+    const [command, args] = invoke.mock.calls[0];
+    expect(command).toBe('vault_blob_restore');
+    expect(args.key).toBe(btoa(String.fromCharCode(...key)));
+    expect(args.keyEpoch).toBe(3);
+    expect(args.wanted).toEqual(['plain-hash']);
+    expect(args.driveSubject).toBe('atomic:current-drive');
+    expect(
+      args.chunks.map((chunk: string) =>
+        [...atob(chunk)].map(c => c.charCodeAt(0)),
+      ),
+    ).toEqual(chunks.map(chunk => [...chunk]));
+    expect(result).toEqual({ status: 'restored', hash: 'plain-hash' });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not request files after recovery has been cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      requestNodeFileContents('atomic:drive', ['hash'], controller.signal),
+    ).rejects.toThrow();
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

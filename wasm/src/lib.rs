@@ -246,6 +246,24 @@ impl ClientDb {
         }
     }
 
+    #[wasm_bindgen(js_name = "requestPeerBlobs")]
+    pub async fn request_peer_blobs(
+        &mut self,
+        session_id: u32,
+        hashes: Vec<String>,
+    ) -> Result<JsValue, JsError> {
+        let db = self.db().clone();
+        let session = self
+            .peer_sessions
+            .get_mut(&session_id)
+            .ok_or_else(|| JsError::new("Unknown peer session"))?;
+        let frames = session
+            .request_blobs(&db, &hashes)
+            .await
+            .map_err(to_js_err)?;
+        serde_wasm_bindgen::to_value(&frames).map_err(to_js_err)
+    }
+
     #[wasm_bindgen(js_name = "closePeerSession")]
     pub fn close_peer_session(&mut self, session_id: u32) {
         self.peer_sessions.remove(&session_id);
@@ -1765,6 +1783,43 @@ impl ClientDb {
         drive_file_hashes(self.db(), &subject).await
     }
 
+    /// Register requests only for missing file contents referenced by this drive.
+    #[wasm_bindgen(js_name = "requestDriveBlobs")]
+    pub async fn request_drive_blobs(
+        &self,
+        drive_subject: &str,
+        hashes: Vec<String>,
+    ) -> Result<JsValue, JsError> {
+        let drive = Subject::from_raw(drive_subject, self.db().get_base_domain().as_deref());
+        let referenced: std::collections::HashSet<_> = drive_file_hashes(self.db(), &drive)
+            .await
+            .into_iter()
+            .collect();
+        let mut frames = Vec::new();
+        let mut requested = std::collections::HashSet::new();
+        for hash in hashes {
+            let hash = hash.to_ascii_lowercase();
+            if !referenced.contains(&hash) || !requested.insert(hash.clone()) {
+                continue;
+            }
+            let hash = blake3::Hash::from_hex(&hash).map_err(to_js_err)?;
+            if self
+                .db()
+                .has_blob(hash.as_bytes())
+                .await
+                .map_err(to_js_err)?
+            {
+                continue;
+            }
+            self.db()
+                .note_pending_blob_request(*hash.as_bytes(), drive.pure_id());
+            frames.push(atomic_lib::sync::protocol::encode_blob_request(
+                hash.as_bytes(),
+            ));
+        }
+        serde_wasm_bindgen::to_value(&frames).map_err(to_js_err)
+    }
+
     /// Whether this device already holds the bytes for a hash.
     #[wasm_bindgen(js_name = "vaultBlobPresent")]
     pub async fn vault_blob_present(&self, hash_hex: &str) -> Result<bool, JsError> {
@@ -1874,15 +1929,28 @@ impl ClientDb {
         blob_id: &str,
         chunks: JsValue,
         wanted: Vec<String>,
+        drive_subject: Option<String>,
     ) -> Result<JsValue, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
         let chunks: Vec<Vec<u8>> = serde_wasm_bindgen::from_value(chunks).map_err(to_js_err)?;
         let refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
         let wanted: std::collections::HashSet<String> =
             wanted.into_iter().map(|h| h.to_ascii_lowercase()).collect();
-        let outcome = restore_blob_group(self.db(), &key, blob_id, &refs, &wanted)
+        let outcome = if let Some(drive_subject) = drive_subject {
+            let drive = Subject::from_raw(&drive_subject, self.db().get_base_domain().as_deref());
+            atomic_lib::vault::sync::restore_blob_group_for_drive(
+                self.db(),
+                &key,
+                blob_id,
+                &refs,
+                &wanted,
+                &drive,
+            )
             .await
-            .map_err(to_js_err)?;
+        } else {
+            restore_blob_group(self.db(), &key, blob_id, &refs, &wanted).await
+        }
+        .map_err(to_js_err)?;
         let result = match outcome {
             BlobGroupOutcome::Restored(hash) => VaultBlobRestoreResult {
                 status: "restored",

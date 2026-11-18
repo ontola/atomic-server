@@ -3224,6 +3224,7 @@ msgstr "Cari"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/connectableDrives.ts
+#: src/helpers/driveData.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
@@ -13546,3 +13547,55 @@ msgstr "Berkas disertakan. Berkas dienkripsi di perangkat ini seperti yang lainn
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Retry file recovery"
+msgstr "Coba lagi pemulihan berkas"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Recover missing files"
+msgstr "Pulihkan berkas yang hilang"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Cancel file recovery"
+msgstr "Batalkan pemulihan berkas"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Scanning for missing files…"
+msgstr "Memindai berkas yang hilang…"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Looking for file contents on connected devices…"
+msgstr "Mencari isi berkas di perangkat yang terhubung…"
+
+#. 0: progress.done; 1: progress.total
+#: src/components/Vault/VaultPanel.tsx
+msgid "Recovering files from Cloud Vault… {0} of {1}"
+msgstr "Memulihkan berkas dari Cloud Vault… {0} dari {1}"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Checking recovered files…"
+msgstr "Memeriksa berkas yang dipulihkan…"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "All referenced file contents are available on this device."
+msgstr "Semua isi berkas yang dirujuk tersedia di perangkat ini."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file recovered."
+msgid_plural "# files recovered."
+msgstr[0] "# berkas dipulihkan."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is still unavailable."
+msgid_plural "# files are still unavailable."
+msgstr[0] "# berkas masih belum tersedia."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup file could not be read."
+msgid_plural "# backup files could not be read."
+msgstr[0] "# berkas cadangan tidak dapat dibaca."
+
+#: src/helpers/managed/useVaultBackup.ts
+msgid "File recovery cancelled."
+msgstr "Pemulihan berkas dibatalkan."

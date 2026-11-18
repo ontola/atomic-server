@@ -5,6 +5,38 @@ import { bootstrapCoreVocab } from './test-vocab.js';
 import { testStore } from './test-store.js';
 
 describe('Store', () => {
+  it('requests the database-selected missing file contents from connected peers', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const frame = [0x34, ...new Uint8Array(32).fill(7)];
+    const db = { requestDriveBlobs: vi.fn().mockResolvedValue([frame]) };
+    vi.spyOn(store, 'getClientDb').mockReturnValue(db as never);
+    const socket = { requestFileContents: vi.fn() };
+    vi.spyOn(store, 'getDefaultWebSocket').mockReturnValue(socket as never);
+    const peer = vi.fn();
+    const stop = store.subscribePeerFrames(peer);
+    await store.requestMissingFileContents('atomic:drive', ['07'.repeat(32)]);
+    expect(db.requestDriveBlobs).toHaveBeenCalledWith('atomic:drive', [
+      '07'.repeat(32),
+    ]);
+    expect(socket.requestFileContents).toHaveBeenCalledWith(
+      Uint8Array.from(frame),
+    );
+    expect(peer).toHaveBeenCalledWith('atomic:drive', Uint8Array.from(frame));
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      store.requestMissingFileContents(
+        'atomic:drive',
+        ['07'.repeat(32)],
+        controller.signal,
+      ),
+    ).rejects.toThrow();
+    expect(peer).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
   it('settles concurrent readers when a WebSocket GET fails', async ({
     expect,
   }) => {

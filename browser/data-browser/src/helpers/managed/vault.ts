@@ -301,6 +301,7 @@ export type VaultBlobDb = {
     blobId: string,
     chunks: Uint8Array[],
     wanted: string[],
+    driveSubject?: string,
   ): Promise<VaultBlobRestoreResult> | VaultBlobRestoreResult;
 };
 
@@ -809,8 +810,11 @@ export function nextSegmentFor(
 
 export async function listVaultObjects(
   drivePseudonym: string,
+  signal?: AbortSignal,
 ): Promise<VaultObject[]> {
-  return api<VaultObject[]>(`/cloud-vault/${drivePseudonym}/objects`);
+  return api<VaultObject[]>(`/cloud-vault/${drivePseudonym}/objects`, {
+    signal,
+  });
 }
 
 /**
@@ -1443,7 +1447,9 @@ export async function downloadVaultObjects<T>(
   objects: VaultObject[],
   read: (response: Response) => Promise<T>,
   onProgress?: (done: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<T[]> {
+  signal?.throwIfAborted();
   if (objects.length === 0) return [];
 
   // The control plane signs at most DOWNLOAD_URL_BATCH objects per request,
@@ -1456,6 +1462,7 @@ export async function downloadVaultObjects<T>(
       `/cloud-vault/${drivePseudonym}/download-urls`,
       {
         method: 'POST',
+        signal,
         body: JSON.stringify({ object_ids: batch.map(o => o.object_id) }),
       },
     );
@@ -1475,6 +1482,7 @@ export async function downloadVaultObjects<T>(
   await Promise.all(
     Array.from({ length: Math.min(4, objects.length) }, async () => {
       while (!failed && next < objects.length) {
+        signal?.throwIfAborted();
         const index = next++;
         const object = objects[index];
 
@@ -1482,7 +1490,7 @@ export async function downloadVaultObjects<T>(
           const url = urlByKey.get(object.object_key);
           if (!url)
             throw new Error(`No download URL issued for ${object.object_key}`);
-          const response = await fetch(url);
+          const response = await fetch(url, { signal });
 
           if (!response.ok) {
             throw new Error(
@@ -1491,6 +1499,7 @@ export async function downloadVaultObjects<T>(
           }
 
           fetched[index] = await read(response);
+          signal?.throwIfAborted();
           completed++;
           if (!failed) onProgress?.(completed, objects.length);
         } catch (error) {
@@ -1639,6 +1648,9 @@ export async function restoreDriveBlobs({
   keyEpoch = 1,
   hashes: explicitHashes,
   onProgress,
+  signal,
+  beforeRestore,
+  repairOnly = false,
 }: {
   db: VaultCapableDb;
   driveSubject: string;
@@ -1647,10 +1659,17 @@ export async function restoreDriveBlobs({
   keyEpoch?: number;
   hashes?: string[];
   onProgress?: (done: number, total: number) => void;
+  signal?: AbortSignal;
+  /** Revalidate the operation and return only hashes that still need repair. */
+  beforeRestore?: (wanted: string[]) => Promise<string[]>;
+  /** Ask the database to recheck current drive references after decryption. */
+  repairOnly?: boolean;
 }): Promise<BlobRestoreOutcome | undefined> {
   if (!db.vaultFileHashes || !db.vaultBlobPresent || !db.vaultBlobRestore) {
     return undefined;
   }
+
+  signal?.throwIfAborted();
 
   const hashes = [
     ...new Set(
@@ -1668,13 +1687,14 @@ export async function restoreDriveBlobs({
   const wanted = new Set<string>();
 
   for (const hash of hashes) {
+    signal?.throwIfAborted();
     if (await db.vaultBlobPresent(hash)) outcome.present++;
     else wanted.add(hash);
   }
 
   const groups = new Map<string, { chunk: number; object: VaultObject }[]>();
 
-  for (const object of await listVaultObjects(drivePseudonym)) {
+  for (const object of await listVaultObjects(drivePseudonym, signal)) {
     const key = blobKeyOf(object);
 
     if (key) {
@@ -1688,6 +1708,17 @@ export async function restoreDriveBlobs({
   let done = 0;
 
   for (const [id, parts] of groups) {
+    signal?.throwIfAborted();
+
+    if (beforeRestore) {
+      const current = new Set(await beforeRestore([...wanted]));
+      signal?.throwIfAborted();
+
+      for (const hash of wanted) {
+        if (!current.has(hash)) wanted.delete(hash);
+      }
+    }
+
     if (wanted.size === 0) break;
 
     onProgress?.(done++, groups.size);
@@ -1699,25 +1730,69 @@ export async function restoreDriveBlobs({
       continue;
     }
 
+    let bodies: Uint8Array[];
+
     try {
-      const bodies = await downloadVaultObjects(
+      bodies = await downloadVaultObjects(
         drivePseudonym,
         parts.map(part => part.object),
         async response => new Uint8Array(await response.arrayBuffer()),
+        undefined,
+        signal,
       );
-      const result = await db.vaultBlobRestore(driveKey, keyEpoch, id, bodies, [
-        ...wanted,
-      ]);
+    } catch (error) {
+      signal?.throwIfAborted();
+
+      // Losing the session or the network says nothing about this file.
+      if (
+        error instanceof VaultSessionEndedError ||
+        error instanceof TypeError
+      ) {
+        throw error;
+      }
+
+      outcome.unreadable++;
+      continue;
+    }
+
+    // This can involve a fresh account check and a new local file inventory.
+    // Keep its failures outside the unreadable-object catch.
+    if (beforeRestore) {
+      const current = new Set(await beforeRestore([...wanted]));
+      signal?.throwIfAborted();
+
+      for (const hash of wanted) {
+        if (!current.has(hash)) wanted.delete(hash);
+      }
+    }
+
+    signal?.throwIfAborted();
+    if (wanted.size === 0) break;
+
+    try {
+      const result = repairOnly
+        ? await db.vaultBlobRestore(
+            driveKey,
+            keyEpoch,
+            id,
+            bodies,
+            [...wanted],
+            driveSubject,
+          )
+        : await db.vaultBlobRestore(driveKey, keyEpoch, id, bodies, [
+            ...wanted,
+          ]);
+      signal?.throwIfAborted();
 
       if (result.status === 'restored') {
         outcome.restored++;
-
         if (result.hash) wanted.delete(result.hash.toLowerCase());
       } else if (result.status === 'unreadable') {
         outcome.unreadable++;
       }
     } catch (error) {
-      // Losing the session or the network says nothing about this file.
+      signal?.throwIfAborted();
+
       if (
         error instanceof VaultSessionEndedError ||
         error instanceof TypeError

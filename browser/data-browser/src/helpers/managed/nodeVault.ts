@@ -15,7 +15,12 @@
 // agent's key already is. See `desktop/src/lib.rs`.
 import { decodeB64, encodeB64 } from '@tomic/lib';
 import { invoke } from '@tauri-apps/api/core';
-import type { RestoreOutcome, SegmentKind, VaultCapableDb } from './vault';
+import type {
+  RestoreOutcome,
+  SegmentKind,
+  VaultBlobRestoreResult,
+  VaultCapableDb,
+} from './vault';
 
 /**
  * Bytes cross the IPC boundary base64-encoded rather than as arrays.
@@ -28,7 +33,37 @@ import type { RestoreOutcome, SegmentKind, VaultCapableDb } from './vault';
  */
 type SealedObject = { objectKey: string; sealed: string };
 
+/** Ask existing native peer links for the drive's missing file contents. */
+export async function requestNodeFileContents(
+  drive: string,
+  hashes: string[],
+  signal?: AbortSignal,
+): Promise<void> {
+  signal?.throwIfAborted();
+  await invoke('vault_request_missing_files', { drive, hashes });
+  signal?.throwIfAborted();
+}
+
 export const nodeVault: VaultCapableDb = {
+  vaultFileHashes(driveSubject) {
+    return invoke<string[]>('vault_file_hashes', { driveSubject });
+  },
+
+  vaultBlobPresent(hash) {
+    return invoke<boolean>('vault_blob_present', { hash });
+  },
+
+  vaultBlobRestore(key, keyEpoch, blobId, chunks, wanted, driveSubject) {
+    return invoke<VaultBlobRestoreResult>('vault_blob_restore', {
+      key: encodeB64(key),
+      keyEpoch,
+      blobId,
+      chunks: chunks.map(chunk => encodeB64(chunk)),
+      wanted,
+      driveSubject,
+    });
+  },
+
   async vaultExport(
     driveSubject,
     key,
