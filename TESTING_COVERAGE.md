@@ -1284,6 +1284,12 @@ This does not yet prove restoration of the user's private staging workspace.
   GitHub account without replacing its mirror. It runs against a real
   Atomic Server with a protocol-checking proxy fixture. The live GitHub OAuth
   and proxy deployment are separate from this browser test.
+- The same flow adds GitHub Organizations and GitHub Repositories using **+**,
+  checks their kinds, counts and actions, keeps the raw Table schema unchanged,
+  and navigates away during a deliberately delayed issue import. Runtime unit
+  tests cover deduplication, pause, stale completion and source/session changes.
+  Directory tests cover compatible local row browsing and scoped Open actions;
+  these custom views do not require provider credentials to read stored rows.
 - `syncablePlatform.test.ts`, `syncableHierarchy.test.ts`,
   `syncablesHost.test.ts`, `syncablesProxyScope.test.ts` and
   `proxyConnections.test.ts` cover stable source bindings after moves, source

@@ -221,7 +221,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
   const showsRows =
     appView === undefined &&
     viewKind !== 'dashboard' &&
-    viewKind !== 'syncables';
+    viewKind !== 'syncables' &&
+    viewKind !== 'github-organizations' &&
+    viewKind !== 'github-repositories';
 
   // The visible stored columns, each language of a split column on its own:
   // what the quick filter reads a row's text from.
@@ -1524,6 +1526,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
           {!embedded && (
             <TableViewTabs
               rowClass={tableClass.subject}
+              drive={getTableDrive(store, resource) ?? store.getDrive()}
               views={views}
               activeView={activeView}
               setActiveView={setActiveView}
@@ -1592,11 +1595,14 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 table={resource.subject}
               />
             </AppViewWrapper>
-          ) : viewKind === 'syncables' ? (
+          ) : viewKind === 'syncables' ||
+            viewKind === 'github-organizations' ||
+            viewKind === 'github-repositories' ? (
             <AppViewWrapper>
               <SyncablesFrame
                 table={resource.subject}
-                drive={store.getDrive()!}
+                drive={(getTableDrive(store, resource) ?? store.getDrive())!}
+                presentation={viewKind === 'syncables' ? 'sync' : 'directory'}
               />
             </AppViewWrapper>
           ) : viewKind === 'dashboard' && embedded ? (

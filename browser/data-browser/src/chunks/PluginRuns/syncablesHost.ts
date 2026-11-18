@@ -15,6 +15,11 @@ import {
   type SyncableNodeInput,
 } from './syncableHierarchy';
 import { syncablesProxyUrl } from './syncablesProxyScope';
+import {
+  githubDirectoryType,
+  githubDirectoryRows,
+  openGithubDirectoryRow,
+} from './githubDirectory';
 
 /**
  * Only the built-in, CSP-sandboxed Syncables iframe may call these operations.
@@ -43,6 +48,7 @@ export interface BuiltinSyncablesRequest {
   added?: unknown;
   changed?: unknown;
   unchanged?: unknown;
+  row?: unknown;
 }
 
 interface Context {
@@ -742,6 +748,23 @@ export async function syncablesHostRequest(
 ): Promise<unknown> {
   if (!store.getAgent()?.subject)
     throw new Error('Sign in to use connected services');
+  signal?.throwIfAborted();
+  if (request.op === 'syncablesDirectoryRows')
+    return githubDirectoryRows(store, drive, table, signal);
+  if (request.op === 'syncablesOpenDirectoryRow')
+    return openGithubDirectoryRow(store, drive, table, request.row);
+
+  if (request.op === 'syncablesDirectoryContext') {
+    const kind = await githubDirectoryType(store, drive, table);
+    const terms = await findSchema(store, drive, syncableHierarchySchema());
+    const resource = await store.getResource(table);
+    const sourceProperty = terms.properties?.['syncable-source-key'];
+    // Ordinary tables of these row classes can browse stored rows. An existing
+    // provider binding must still pass every source and proxy check below.
+    if (!sourceProperty || resource.get(sourceProperty) === undefined)
+      return { platform: 'github-issues', kind, storedOnly: true };
+  }
+
   const context = await contextOf(store, drive, table);
   if (
     context.mode !== 'public' &&
@@ -755,7 +778,10 @@ export async function syncablesHostRequest(
 
   signal?.throwIfAborted();
 
-  if (request.op === 'syncablesContext') {
+  if (
+    request.op === 'syncablesContext' ||
+    request.op === 'syncablesDirectoryContext'
+  ) {
     const canReconnect =
       context.platform === 'github-issues' &&
       !!context.connectionId &&

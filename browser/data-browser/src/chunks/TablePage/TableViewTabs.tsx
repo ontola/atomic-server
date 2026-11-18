@@ -58,7 +58,6 @@ import { usePropertyTitles } from './helpers/usePropertyTitles';
 import { ColumnFilterDropdown } from './ColumnFilterDropdown';
 import {
   normalizeViewKind,
-  VIEW_KINDS,
   VIEW_KIND_LABELS,
   VIEW_KIND_ICONS,
   ViewKind,
@@ -71,11 +70,17 @@ import {
 import { QuickAddDialog } from './QuickAddDialog';
 import type { QuickAddSpec } from './quickAdd';
 import { QuickFilterField } from './QuickFilterField';
+import {
+  selectableViewKinds,
+  useGitHubViews,
+} from '@chunks/PluginRuns/githubViews';
 
 /** Tabs sit in a row: a dragged one must not wander off it. */
 const keepHorizontal: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
 interface TableViewTabsProps {
+  /** Owning drive, for a table opened independently of the active drive. */
+  drive?: string;
   /** The class of this table's rows, which decides what apps can show it. */
   rowClass: string;
   views: string[];
@@ -125,6 +130,7 @@ interface TableViewTabsProps {
  * tab is renamed inline by double-clicking it.
  */
 export function TableViewTabs({
+  drive: tableDrive,
   rowClass,
   views,
   activeView,
@@ -150,7 +156,17 @@ export function TableViewTabs({
 }: TableViewTabsProps): JSX.Element {
   // A table with no saved views yet still shows one implicit "Default View" tab.
   const tabs = views.length > 0 ? views : [undefined];
-  const driveApps = useDriveApps(useStore().getDrive());
+  const store = useStore();
+  const drive = tableDrive ?? store.getDrive();
+  const driveApps = useDriveApps(drive);
+  const githubViews = useGitHubViews(drive, rowClass);
+  const builtinKinds = selectableViewKinds(githubViews.kinds);
+
+  const refreshApps = () => {
+    driveApps.refresh();
+    githubViews.refresh();
+  };
+
   const apps = appsForClass(driveApps.apps, rowClass);
   const typesBySubject = useViewTypes(views);
 
@@ -201,7 +217,8 @@ export function TableViewTabs({
                 }
                 canDelete={!subject || canDeleteView(subject, typesBySubject)}
                 apps={apps}
-                refreshApps={driveApps.refresh}
+                builtinKinds={builtinKinds}
+                refreshApps={refreshApps}
                 duplicateView={duplicateView}
                 deleteView={deleteView}
                 classProperties={allColumns}
@@ -213,7 +230,8 @@ export function TableViewTabs({
               <AddViewMenu
                 createView={createView}
                 apps={apps}
-                refreshApps={driveApps.refresh}
+                builtinKinds={builtinKinds}
+                refreshApps={refreshApps}
               />
             )}
           </Tabs>
@@ -274,16 +292,18 @@ const AddViewTrigger = buildDefaultTrigger(<FaPlus />, () => 'Add view');
 function AddViewMenu({
   createView,
   apps,
+  builtinKinds,
   refreshApps,
 }: {
   createView: (kind?: ViewKind | string, label?: string) => void;
   apps: DriveApp[];
+  builtinKinds: ViewKind[];
   /** Asks the drive for its apps again; called as the menu opens. */
   refreshApps: () => void;
 }): JSX.Element {
   const items = useMemo(
     (): DropdownItem[] => [
-      ...VIEW_KINDS.filter(kind => kind !== 'syncables').map(kind => {
+      ...builtinKinds.map(kind => {
         const Icon = VIEW_KIND_ICONS[kind];
 
         return {
@@ -302,7 +322,7 @@ function AddViewMenu({
         onClick: () => createView(app.subject, app.name),
       })),
     ],
-    [createView, apps],
+    [createView, apps, builtinKinds],
   );
 
   return (
@@ -434,6 +454,7 @@ function ViewTab({
   canChangeType,
   canDelete,
   apps,
+  builtinKinds,
   refreshApps,
   duplicateView,
   deleteView,
@@ -459,6 +480,7 @@ function ViewTab({
   canDelete: boolean;
   /** Resolved once by the tab bar rather than once per tab. */
   apps: DriveApp[];
+  builtinKinds: ViewKind[];
   /** Asks the drive for its apps again; called as the menu opens. */
   refreshApps: () => void;
   duplicateView: (subject: string) => void;
@@ -554,7 +576,7 @@ function ViewTab({
           header: true,
           onClick: () => undefined,
         },
-        ...VIEW_KINDS.map(kind => {
+        ...builtinKinds.map(kind => {
           const Icon = VIEW_KIND_ICONS[kind];
 
           return {
@@ -581,18 +603,18 @@ function ViewTab({
                 header: true,
                 onClick: () => undefined,
               },
-              ...VIEW_KINDS.filter(
-                kind => kind !== ownType && kind !== 'syncables',
-              ).map(kind => {
-                const Icon = VIEW_KIND_ICONS[kind];
+              ...builtinKinds
+                .filter(kind => kind !== ownType)
+                .map(kind => {
+                  const Icon = VIEW_KIND_ICONS[kind];
 
-                return {
-                  id: `kind-${kind}`,
-                  label: VIEW_KIND_LABELS[kind],
-                  icon: <Icon />,
-                  onClick: () => setViewKind(subject, kind),
-                };
-              }),
+                  return {
+                    id: `kind-${kind}`,
+                    label: VIEW_KIND_LABELS[kind],
+                    icon: <Icon />,
+                    onClick: () => setViewKind(subject, kind),
+                  };
+                }),
               ...apps
                 .filter(app => app.subject !== ownType)
                 .map(app => ({

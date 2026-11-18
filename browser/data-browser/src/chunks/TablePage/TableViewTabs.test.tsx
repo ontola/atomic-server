@@ -25,6 +25,16 @@ import { buildTheme } from '../../styling';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS, type ViewKind } from './tableViewKinds';
 
+const githubKinds = vi.hoisted(() => ({ values: [] as string[] }));
+
+vi.mock('@chunks/PluginRuns/githubViews', async importOriginal => ({
+  ...(await importOriginal<typeof import('@chunks/PluginRuns/githubViews')>()),
+  useGitHubViews: () => ({
+    kinds: githubKinds.values,
+    refresh: () => undefined,
+  }),
+}));
+
 vi.mock('@chunks/AppPage/useDriveApps', () => ({
   useDriveApps: () => ({ apps: [], refresh: () => {} }),
   appsForClass: () => [],
@@ -45,7 +55,10 @@ beforeAll(async () => {
   await LoroLoader.initializeLoro();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  githubKinds.values = [];
+});
 
 let n = 0;
 
@@ -196,5 +209,53 @@ it('offers an in-place change while another table view remains', async () => {
   expect(setViewKind).toHaveBeenCalledWith(
     expect.stringMatching(/^_new:view-/),
     'calendar',
+  );
+});
+
+it('keeps GitHub views out of an unrelated table menu', async () => {
+  await setup([['All pieces', 'table']]);
+  const menu = await openMenu('All pieces');
+
+  expect(within(menu).queryByText('GitHub Organizations')).toBeNull();
+  expect(within(menu).queryByText('GitHub Repositories')).toBeNull();
+  expect(within(menu).queryByText('Sync')).toBeNull();
+});
+
+it('manually adds an applicable GitHub view while keeping the Table tab', async () => {
+  githubKinds.values = ['github-organizations'];
+  await setup([['All pieces', 'table']]);
+  fireEvent.click(screen.getByRole('button', { name: 'Add view' }));
+  const menu = await screen.findByRole('menu');
+  expect(within(menu).queryByText('GitHub Repositories')).toBeNull();
+  fireEvent.click(
+    within(menu).getByRole('menuitem', { name: 'GitHub Organizations' }),
+  );
+
+  await waitFor(() =>
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual([
+      'All pieces',
+      'GitHub Organizations',
+    ]),
+  );
+});
+
+it('offers only the applicable GitHub view in the add and change menus', async () => {
+  githubKinds.values = ['github-repositories'];
+  const { setViewKind } = await setup([
+    ['All repositories', 'table'],
+    ['Another table', 'table'],
+  ]);
+  const menu = await openMenu('All repositories');
+  const choices = within(menu).getAllByRole('menuitem', {
+    name: 'GitHub Repositories',
+  });
+
+  expect(choices).toHaveLength(2);
+  expect(within(menu).queryByText('GitHub Organizations')).toBeNull();
+  expect(within(menu).queryByText('Sync')).toBeNull();
+  fireEvent.click(choices[1]);
+  expect(setViewKind).toHaveBeenCalledWith(
+    expect.stringMatching(/^_new:view-/),
+    'github-repositories',
   );
 });

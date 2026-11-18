@@ -24,6 +24,7 @@ import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { constructOpenURL } from '../helpers/navigation';
 import { getHomeDrive } from '../helpers/homeDrive';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { SyncablesRuntimeProvider } from '../chunks/PluginRuns/SyncablesRuntime';
 
 export const appRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -55,7 +56,9 @@ export const rootRoute = createRootRoute({
         {/* Silently keep the device's Atomic agent aligned with the signed-in
             Managed Sync account (no-op when there's no managed session). */}
         <IdentityReconcileGate>
-          <Outlet />
+          <SyncablesRuntimeProvider>
+            <Outlet />
+          </SyncablesRuntimeProvider>
         </IdentityReconcileGate>
         {/* Consumes scanned/tapped atomic://pair deep links (QR pairing). */}
         <PairingLinkHandler />

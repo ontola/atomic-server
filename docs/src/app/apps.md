@@ -28,9 +28,12 @@ From My Drive, open the account menu and choose **Apps**. Turn on **Show
 experimental plugins** to see services from your configured integration proxy.
 Choose **Add to Drive** on GitHub to create or reopen its table.
 
-Open the table’s **Sync** view and connect your GitHub account. Browse
-organizations or your personal owner namespace, select a repository, then
-choose **Sync issues**. In the resulting Issues table, choose **Sync now** to
+Open the table’s **Sync** view and connect your GitHub account. Choose
+**Browse organizations**, then use **+** to add **GitHub Organizations**.
+Open an organization or your personal owner namespace, and add **GitHub
+Repositories** with **+** on its repositories table. These views show kinds,
+counts and actions for their row types. Select a repository and choose
+**Sync issues**. In the resulting Issues table, choose **Sync now** to
 import issues. The **Table** view shows the imported rows. Run Sync again to
 update changed rows. **Pause** keeps the rows in your drive and prevents
 refreshes until you resume.
@@ -40,7 +43,11 @@ To link a public repository, choose **Public repositories** in GitHub's
 The Issues table appears under **GitHub → Public** in the sidebar. This
 branch reads from GitHub's public API and works without a GitHub account.
 
-The integration runs when you use the Sync view. Changes you make in Atomic
+Sync starts from **Sync now** and continues while you browse other views or
+resources in the app. Closing the app stops the run. The **Sync** view contains
+controls and status; the **Table** view follows the stored schema. GitHub custom
+views are optional and can be added wherever their row types are used.
+Changes you make in Atomic
 stay in your drive. An interrupted or incomplete import keeps cached issues.
 Moving an Issues table within the same drive keeps its source binding.
 

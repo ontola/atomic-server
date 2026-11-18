@@ -99,6 +99,7 @@ document.head.appendChild(styles);
 
 let root;
 let current;
+let syncPoll;
 function renderBase(title, subtitle) {
   root.replaceChildren();
   const bar = el('div', null, 'toolbar');
@@ -187,6 +188,17 @@ async function loadRepositories() {
           type: owner.type === 'Organization' ? 'organization' : 'personal',
         },
         hasIssues: repo.has_issues !== false,
+        visibility:
+          repo.private === true
+            ? 'Private'
+            : repo.private === false
+              ? 'Public'
+              : 'Unknown',
+        openIssueCount:
+          Number.isSafeInteger(repo.open_issues_count) &&
+          repo.open_issues_count >= 0
+            ? repo.open_issues_count
+            : null,
       });
     }
   });
@@ -243,6 +255,32 @@ async function renderAccounts() {
     );
     empty.append(button('Connect GitHub account', connectAccount));
     root.append(empty);
+    return;
+  }
+  if (current.presentation === 'sync') {
+    root.append(el('p', connected.length + ' connected accounts', 'note'));
+    for (const account of connected) {
+      const card = el('div', null, 'metric');
+      card.append(
+        el('strong', account.login),
+        el('p', account.healthy ? 'Connected' : 'Needs attention'),
+      );
+      if (!account.healthy && account.canReconnect)
+        card.append(reconnectButton(account.connectionId));
+      if (account.healthy)
+        card.append(
+          button(
+            'Browse organizations',
+            async () => {
+              await call('syncablesOpenAccount', {
+                connectionId: account.connectionId,
+              });
+            },
+            true,
+          ),
+        );
+      root.append(card);
+    }
     return;
   }
   table(
@@ -302,9 +340,64 @@ function publicRepositoryLink() {
   return container;
 }
 
-function renderPublic() {
-  renderBase('Public repositories');
-  root.append(publicRepositoryLink());
+async function renderPublic() {
+  const bar = renderBase('Public repositories');
+  if (current.presentation === 'directory') {
+    bar.append(button('Refresh list', renderPublic, true));
+    root.append(publicRepositoryLink());
+    await renderStoredRows();
+  } else
+    root.append(
+      el('p', 'Link repositories from the Public repositories view.', 'note'),
+    );
+}
+
+async function renderStoredRows() {
+  const { rows, complete } = await call('syncablesDirectoryRows');
+  const owners = current.kind !== 'repositories';
+  table(
+    owners
+      ? ['Owner namespace', 'Kind', 'Repositories', 'Action']
+      : ['Repository', 'Kind', 'Children', 'Action'],
+    rows.map(row => {
+      const cells = [el('span', row.name, 'rowtitle')];
+      if (owners)
+        cells.push(
+          row.kind === 'organization'
+            ? 'Organization'
+            : row.kind === 'personal'
+              ? 'Personal owner'
+              : '',
+        );
+      else cells.push('Repository');
+      cells.push(row.count === null ? '—' : row.count);
+      cells.push(
+        button(
+          'Open',
+          async () => {
+            await call('syncablesOpenDirectoryRow', { row: row.subject });
+          },
+          true,
+        ),
+      );
+      return cells;
+    }),
+  );
+  if (!complete)
+    root.append(
+      el('p', 'More resources are available in the Table view.', 'note'),
+    );
+}
+
+async function renderStoredDirectory() {
+  const refresh = async () => {
+    await renderStoredDirectory();
+  };
+  const bar = renderBase(
+    current.kind === 'organizations' ? 'Organizations' : 'Repositories',
+  );
+  bar.append(button('Refresh list', refresh, true));
+  await renderStoredRows();
 }
 
 async function renderOrganizations() {
@@ -360,6 +453,7 @@ async function renderOrganizations() {
         'note',
       ),
     );
+  if (current.presentation === 'sync') return;
   table(
     ['Owner namespace', 'Kind', 'Repositories', 'Action'],
     owners.map(owner => [
@@ -408,14 +502,17 @@ async function renderRepositories() {
         'note',
       ),
     );
+  if (current.presentation === 'sync') return;
   table(
-    ['Repository', 'Owner', 'Issues', 'Action'],
+    ['Repository', 'Owner', 'Kind', 'Open issues + PRs', 'Issues', 'Action'],
     selected.map(repo => [
       labelAndSub(
         repo.name,
         repo.fullName || current.ownerLogin + '/' + repo.name,
       ),
       current.ownerLogin,
+      repo.visibility,
+      repo.openIssueCount === null ? '—' : repo.openIssueCount,
       repo.hasIssues ? 'Available' : 'Disabled in GitHub',
       repo.hasIssues
         ? button(
@@ -437,18 +534,28 @@ async function renderRepositories() {
 }
 
 async function renderMirror() {
+  clearTimeout(syncPoll);
+  const { running } = await call('syncablesSyncState');
   const status = await call('syncablesMirrorStatus');
   const bar = renderBase(
     'Issues sync',
     current.ownerLogin + '/' + current.repoName,
   );
   const controls = el('div', null, 'controls');
-  if (!status.paused) controls.append(button('Sync now', syncIssues));
+  if (!status.paused) {
+    const start = button(running ? 'Syncing' : 'Sync now', async () => {
+      await call('syncablesStartSync');
+      await renderMirror();
+    });
+    start.disabled = running;
+    controls.append(start);
+  }
   controls.append(
     button(
       status.paused ? 'Resume' : 'Pause',
       async () => {
-        await call('syncablesSetPaused', { paused: !status.paused });
+        if (status.paused) await call('syncablesSetPaused', { paused: false });
+        else await call('syncablesPauseSync');
         await renderMirror();
       },
       true,
@@ -461,7 +568,13 @@ async function renderMirror() {
   const cards = [
     [status.rows || 0, 'Imported issues'],
     [
-      status.paused ? 'Paused' : status.error ? 'Needs attention' : 'Ready',
+      status.paused
+        ? 'Paused'
+        : running
+          ? 'Syncing'
+          : status.error
+            ? 'Needs attention'
+            : 'Ready',
       'Synchronization',
     ],
     [status.lastSuccess || 'Never', 'Last successful sync'],
@@ -500,6 +613,10 @@ async function renderMirror() {
       'note',
     ),
   );
+  if (running)
+    syncPoll = setTimeout(() => {
+      void renderMirror().catch(showError);
+    }, 500);
   root.append(
     el(
       'p',
@@ -539,21 +656,36 @@ async function syncIssues() {
       imported: counts.added + counts.changed + counts.unchanged,
       incomplete: !complete,
     });
-    await renderMirror();
   } catch (error) {
     await call('syncablesRecordFailure', {
       message: String(error?.message ?? error).slice(0, 1024),
     }).catch(() => undefined);
-    await renderMirror();
     throw error;
   }
 }
 
 export async function view({ root: viewRoot }) {
+  clearTimeout(syncPoll);
   root = viewRoot;
   root.replaceChildren(el('p', 'Opening Syncables…', 'muted'));
   try {
     current = await call('syncablesContext');
+    if (current.presentation === 'worker') {
+      if (current.kind !== 'mirror')
+        throw new Error('Only an Issues mirror can run a sync worker.');
+      try {
+        await syncIssues();
+      } catch {
+        // The sync attempt records its failure on the mirror.
+      } finally {
+        await call('syncablesSyncFinished');
+      }
+      return;
+    }
+    if (current.presentation === 'directory' && current.storedOnly) {
+      await renderStoredDirectory();
+      return;
+    }
     if (current.platform !== 'github-issues') {
       renderBase('Syncables', 'Generic API selection for ' + current.platform);
       root.append(
@@ -570,7 +702,7 @@ export async function view({ root: viewRoot }) {
         await renderAccounts();
         break;
       case 'public':
-        renderPublic();
+        await renderPublic();
         break;
       case 'organizations':
         await renderOrganizations();

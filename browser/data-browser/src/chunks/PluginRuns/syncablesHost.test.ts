@@ -140,6 +140,49 @@ async function openOrganizations(
   return { ...ctx, platform, organizations };
 }
 
+describe('GitHub custom directory context', () => {
+  it('lets compatible unbound tables browse stored rows without provider access', async () => {
+    const { store, resources, organizations, request, proxy } =
+      await openOrganizations();
+    const terms = await findSchema(store, 'drive', syncableHierarchySchema());
+    resources.set('ordinary-owners', {
+      [core.properties.parent]: 'drive',
+      [core.properties.classtype]:
+        resources.get(organizations)![core.properties.classtype],
+    });
+    vi.mocked(proxy.readKeyed).mockClear();
+    const writesBefore = resources.size;
+    expect(
+      await request('ordinary-owners', 'syncablesDirectoryContext'),
+    ).toEqual({
+      platform: 'github-issues',
+      kind: 'organizations',
+      storedOnly: true,
+    });
+    await expect(
+      request('ordinary-owners', 'syncablesRead', { read: 'organizations' }),
+    ).rejects.toThrow('not a Syncables table');
+    expect(proxy.readKeyed).not.toHaveBeenCalled();
+    expect(resources.size).toBe(writesBefore);
+    resources.get('ordinary-owners')![
+      terms.properties!['syncable-source-key']
+    ] = 'invalid';
+    await expect(
+      request('ordinary-owners', 'syncablesDirectoryContext'),
+    ).rejects.toThrow('source binding');
+  });
+
+  it('validates existing bindings and rejects unrelated row classes', async () => {
+    const { organizations, platform, request } = await openOrganizations();
+    expect(
+      await request(organizations, 'syncablesDirectoryContext'),
+    ).toMatchObject({ kind: 'organizations', connectionId: 'test-connection' });
+    await expect(
+      request(platform, 'syncablesDirectoryContext'),
+    ).rejects.toThrow('row type');
+  });
+});
+
 async function scaffold(
   installed?: Awaited<ReturnType<typeof installPlatform>>,
 ) {

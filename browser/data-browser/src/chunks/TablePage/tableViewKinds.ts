@@ -7,6 +7,7 @@ import {
   FaChartPie,
   FaRegCircleDot,
   FaPlug,
+  FaGithub,
 } from 'react-icons/fa6';
 
 /**
@@ -29,6 +30,8 @@ export const VIEW_KINDS = [
   'dashboard',
   'issues',
   'syncables',
+  'github-organizations',
+  'github-repositories',
 ] as const;
 
 export type ViewKind = (typeof VIEW_KINDS)[number];
@@ -68,6 +71,8 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   dashboard: 'Dashboard',
   issues: 'Issues',
   syncables: 'Sync',
+  'github-organizations': 'GitHub Organizations',
+  'github-repositories': 'GitHub Repositories',
 };
 
 export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
@@ -78,4 +83,6 @@ export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
   dashboard: FaChartPie,
   issues: FaRegCircleDot,
   syncables: FaPlug,
+  'github-organizations': FaGithub,
+  'github-repositories': FaGithub,
 };

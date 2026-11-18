@@ -83,7 +83,7 @@ These are host-recognized view kinds that can be rendered by one generic built-i
 - Whether mirror tables can be provisioned in bulk or only lazily (MVP: only on explicit selection).
 - Cross-account reuse policies and grants when multiple OAuth connections can access one canonical organization.
 - Full bidirectional editing and conflict resolution.
-- True background jobs/offline syncing.
+- Durable background jobs/offline syncing after the app closes.
 - Whether all source/collection classes are shared vocabularies or generated per integration; retain stable schema identities until settled.
 
 ## Milestones and validation
@@ -97,6 +97,24 @@ These are host-recognized view kinds that can be rendered by one generic built-i
 A clickable HTML **concept** (not a production host implementation) accompanies the wireframes; use it to validate wording and navigation before wiring the live state.
 
 ## Implementation and verification
+
+### Optional GitHub row-type views
+
+- [x] Offer GitHub Organizations and GitHub Repositories through **+** and
+  the tab menus for matching per-drive row classes. Do not create these tabs
+  automatically or add presentation columns to the raw Table schema.
+- [x] Keep kinds, counts and Open actions inside the server-bundled GitHub
+  iframe presentation. Compatible unbound tables can browse stored rows without
+  acquiring provider capabilities.
+- [x] Separate Sync controls/status from directory tables. Run issue imports
+  in root-mounted hidden iframes so resource navigation retains the run.
+  Bind every run to its source, drive, signed-in agent, server and proxy;
+  deduplicate per mirror and cancel on pause or identity/source changes.
+- [x] Verify custom-view navigation and a running sync with native E2E.
+  Final native run: 2 passed, no failures, skips or flakes; 121 focused tests
+  and Data Browser/E2E typechecks pass.
+- [x] Check live rendered custom views on localhost using the real GitHub account.
+- [ ] Verify final exact-commit CI (full pipeline awaiting its runner).
 
 - [x] Configured catalog, account-menu entry and idempotent GitHub installation.
 - [x] Source-scoped iframe operations and owner-signed keyed proxy reads.
