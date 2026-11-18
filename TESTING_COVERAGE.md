@@ -2814,3 +2814,9 @@ localId durability contract still uses one flush.
 Manual acceptance measurements and their limits are recorded in PR #2361.
 The private-dataset harness is kept outside the repository; it is not a CI
 speed assertion. Crash durability is covered by the abort test above.
+
+
+Property-name content split: `browser/table/src/schema/PropertyNameField.test.tsx`
+covers existing versus provisional shortnames, raw callbacks, fixed input identity
+and delayed focus reset when the resource changes. The Atomic host retains its
+error wrapper and baseline text-format save. No new persistence guarantee.

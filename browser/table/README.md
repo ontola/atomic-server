@@ -151,3 +151,11 @@ on failure, the failed and unattempted steps remain for an explicit retry. Recor
 and clearing are blocked while undo is running. There is no redo or transactional
 rollback. Native saved-cell undo uses the saved values as conflict baselines through
 `executeTableRowMutation`; Atomic retains its existing restoration/save policies.
+
+
+`PropertyNameField` moves the existing controlled name input and delayed focus
+behavior. The host keeps its original error wrapper and form submission rules.
+`nameTableProperty` retains the pre-existing shortname policy. Accessibility,
+focus-policy changes and removing explicit text-format saves are separate review
+items, not part of this move. This legacy-base content split is not a clean-base
+TablePage merge prerequisite.
