@@ -1,8 +1,16 @@
-import { useCallback, type JSX } from 'react';
-import { InputStyled, InputWrapper } from './InputStyles';
-import { Row } from '../Row';
+import {
+  useCallback,
+  type ComponentType,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type JSX,
+} from 'react';
 
-interface MinMaxInputProps {
+export interface PropertyRangeFieldProps {
+  Input: ComponentType<
+    InputHTMLAttributes<HTMLInputElement> & { $invalid?: boolean }
+  >;
+  Container: ComponentType<{ children: ReactNode }>;
   minValue?: number;
   maxValue?: number;
   round?: boolean;
@@ -21,40 +29,42 @@ const toOptionalNum = (value: string, round: boolean): number | undefined => {
   return round ? Math.floor(num) : num;
 };
 
-export function validateRange(
+export function validatePropertyRange(
   min: number | undefined,
   max: number | undefined,
   shouldBeRounded = false,
+  messages = {
+    rounded: 'Value should be a round number.',
+    order: 'Min must be a less than max',
+  },
 ): string | undefined {
   let error: string | undefined = undefined;
 
   if (min !== undefined && shouldBeRounded) {
-    error = Number.isInteger(min)
-      ? undefined
-      : 'Value should be a round number.';
+    error = Number.isInteger(min) ? undefined : messages.rounded;
   }
 
   if (max !== undefined && shouldBeRounded) {
-    error = Number.isInteger(min)
-      ? undefined
-      : 'Value should be a round number.';
+    error = Number.isInteger(min) ? undefined : messages.rounded;
   }
 
   if (min !== undefined && max !== undefined) {
-    error = min < max ? undefined : 'Min must be a less than max';
+    error = min < max ? undefined : messages.order;
   }
 
   return error;
 }
 
-export function MinMaxInput({
+export function PropertyRangeField({
+  Input,
+  Container,
   round = false,
   minValue,
   maxValue,
   invalid,
   onBlur,
   onChange,
-}: MinMaxInputProps): JSX.Element {
+}: PropertyRangeFieldProps): JSX.Element {
   const handleMinChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const num = toOptionalNum(e.target.value, round);
@@ -72,28 +82,26 @@ export function MinMaxInput({
   );
 
   return (
-    <Row center gap='0.5rem'>
-      <InputWrapper $invalid={invalid}>
-        <InputStyled
-          type='number'
-          max={maxValue}
-          placeholder='min'
-          defaultValue={minValue}
-          onBlur={onBlur}
-          onChange={handleMinChange}
-        />
-      </InputWrapper>
+    <Container>
+      <Input
+        $invalid={invalid}
+        type='number'
+        max={maxValue}
+        placeholder='min'
+        defaultValue={minValue}
+        onBlur={onBlur}
+        onChange={handleMinChange}
+      />
       {' - '}
-      <InputWrapper $invalid={invalid}>
-        <InputStyled
-          type='number'
-          placeholder='max'
-          min={minValue}
-          defaultValue={maxValue}
-          onBlur={onBlur}
-          onChange={handleMaxChange}
-        />
-      </InputWrapper>
-    </Row>
+      <Input
+        $invalid={invalid}
+        type='number'
+        placeholder='max'
+        min={minValue}
+        defaultValue={maxValue}
+        onBlur={onBlur}
+        onChange={handleMaxChange}
+      />
+    </Container>
   );
 }

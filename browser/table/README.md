@@ -157,3 +157,10 @@ rollback. Native saved-cell undo uses the saved values as conflict baselines thr
 between property drafts. `nameTableProperty` preserves an existing property's
 shortname when changing its display label; only a new draft derives a provisional
 shortname. Category controls and schema activation remain adapter work.
+
+
+`PropertyRangeField` relocates the complete existing min/max input, including
+uncontrolled values, floor-on-change conversion and its original validator.
+The Atomic adapter supplies its existing Row/Input primitives and translated
+validation messages. Corrected max-only/equal bounds, strict raw drafts and
+form-submit guards belong to the separate behavior review.
