@@ -455,3 +455,10 @@ export type {
   BrowserReplicaReceipt,
   ReplicaIdentity,
 } from './peer-receipts.js';
+
+export type {
+  ResourcePeerEvidence,
+  ResourcePeerEvidenceConnection,
+  ResourcePeerEvidenceReceipt,
+  ResourcePeerEvidenceProvider,
+} from './resource-peer-evidence.js';

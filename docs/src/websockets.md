@@ -138,8 +138,8 @@ logged and dropped, not answered.
 | `0x51` | `CALL_RESULT` | Iroh responder | the dialer of the `CALL`. |
 | `0x52` | `INVITE` | Iroh dialer, after `AUTH` | `atomic_lib::sync::invite`. Iroh only; the WS server answers it with an `ERROR`. |
 | `0x53` | `INVITE_OK` | Iroh responder | the dialer of the `INVITE`. A refusal is an `ERROR` with code 13 (`INVITE_REFUSED`). |
-| `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated browser peer | Browser peer session advertising `browser-storage-receipts-v1`. |
-| `0x57` | `STORAGE_RECEIPT` | authenticated browser peer | Correlated live request on that same WebRTC connection. |
+| `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated peer | WebRTC `browser-storage-receipts-v1` or native `iroh-storage-receipts-v1`. |
+| `0x57` | `STORAGE_RECEIPT` | authenticated peer | Correlated live request on that same WebRTC or Iroh connection. |
 
 ## Frame layouts
 
@@ -361,14 +361,16 @@ read. `max_usages` of the token is not counted: that needs state shared by all
 the inviter's devices. In the link form of the Flutter package this is
 `atomic:invite?token=<token>`; the web app does not parse that form yet.
 
-### Browser storage receipts (0x56 / 0x57)
+### Resource storage receipts (0x56 / 0x57)
 
-This optional browser-peer extension is advertised as
-`browser-storage-receipts-v1` in `AUTH_OK` only when the actual backing store can
-supply a durable replica identity. It is not advertised globally by HTTP/WS or
-Iroh responders. Native WebRTC links that delegate to the same browser-peer
-session handler can also answer these requests. Both directions must authenticate before the browser initiates
-requests. Old peers continue to sync normally without these frames; ordinary
+This optional extension is advertised as `browser-storage-receipts-v1` by
+WebRTC sessions and `iroh-storage-receipts-v1` by native Iroh sessions, only
+when the actual backing store can supply a durable replica identity. Neither
+capability is advertised globally by HTTP/WS responders. Native WebRTC links
+that delegate to the browser-peer session handler can also answer these
+requests. Both directions must authenticate before requests begin. Iroh
+negotiation uses `AUTH_OK` and `HELLO` on a node-bound, drive-bound handshake.
+Old peers continue to sync normally without these frames; ordinary
 `COMMIT_OK` and `SYNC_OK` retain their existing meanings.
 
 ```
@@ -377,7 +379,9 @@ requests. Old peers continue to sync normally without these frames; ordinary
 ```
 
 Receipt requests are bounded to 64 KiB and version strings to 16 KiB. The requested
-frontier must be valid and nonempty. The Rust session checks authentication, the
+frontier must be valid and nonempty. Standard padded and URL-safe unpadded
+base64 are accepted; the response preserves the exact requested spelling.
+The Rust session checks authentication, the
 session's drive, current read permission, and a non-tombstoned stored resource whose
 **state** version vector covers the requested frontier. Announced or buffered operations with unresolved dependencies do not qualify. After coverage
 is established, the persistent flush must succeed and coverage/identity must still
@@ -399,12 +403,30 @@ it holds, even when the stored snapshot has advanced. The requester's live nonce
 drive, subject and exact version must all match; a response never acknowledges a
 later local edit. Request correlation is scoped to the mutually authenticated,
 channel-bound session and invalidated on account/database replacement or disconnect.
-The browser records session-scoped resource evidence automatically. The resource
-UI counts each confirmed storage identity/generation once and excludes the local
+Both transports record session-scoped resource evidence automatically. Native
+requesters scan stored resource frontiers after bulk reconciliation and observe
+live changes, with bounded requests and retries. They do not promise a receipt
+for each intermediate edit when several edits coalesce before capture. The
+resource UI counts each confirmed storage identity/generation once and excludes the local
 store. Different IDs or authenticated agents alone are not evidence of separate
 physical devices; these are peer copies, not an independent-backup guarantee. Receipts do not
 attest whether a peer is a browser tab or a native app. This receipt covers resource metadata only,
 not blobs, deletion/tombstone recovery, keys, retention or a recoverable backup.
+
+The native host keeps a bounded in-memory view of these observations, separate
+from resource data. `EmbedHost.getResourcePeerEvidence(subjects)` returns only
+requested, locally readable resources on current authorized sessions, with exact
+confirmed versions and storage identities. `NativeClientDb` and Store refresh
+this evidence while resource status subscribers exist. An unavailable host,
+changed account, replaced database or closed session cannot supply live proof.
+A shared, store-wide removal generation conservatively clears native evidence
+and outstanding targets after deletion or a tombstone, including changes made
+through another account view of the database. Live connections remain open and
+request fresh proof; identical-version recreation cannot recover an old receipt.
+Reloading the embedded view can recover still-live host evidence; restarting the
+native process cannot recover it from disk. This bridge serves the native
+embedded renderer; the legacy Tauri renderer using a local HTTP server does not
+consume this native-host API.
 
 ### EPHEMERAL (0x40)
 

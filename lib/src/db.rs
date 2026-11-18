@@ -441,6 +441,13 @@ pub struct Db {
     /// Optional remote file storage. Configure before sharing this Db.
     pub blob_backend: Option<Arc<dyn blob_backend::BlobBackend>>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
+    #[cfg(feature = "iroh")]
+    pub(crate) native_receipt_ledger: Arc<Mutex<crate::sync::iroh_receipts::NativeReceiptLedger>>,
+    /// Shared by all account views of this backing DB; deletion ends a resource lifecycle.
+    #[cfg(feature = "iroh")]
+    native_removal_generation: Arc<std::sync::atomic::AtomicU64>,
+    #[cfg(feature = "iroh")]
+    agent_generation: Arc<std::sync::atomic::AtomicU64>,
     /// The key this node wraps stored secrets with, set once at startup.
     ///
     /// Held here rather than passed to each call so it cannot be forgotten at
@@ -456,6 +463,10 @@ pub struct Db {
     on_commit: Option<Arc<HandleCommit>>,
     /// Broadcast channel for all resource mutations.
     db_events: tokio::sync::broadcast::Sender<DbEvent>,
+    /// Best-effort, per-store observations from authenticated native peers.
+    #[cfg(feature = "iroh")]
+    replica_receipts:
+        tokio::sync::broadcast::Sender<crate::sync::iroh_receipts::IrohReplicaReceipt>,
     /// Presence arriving from a peer. Deliberately NOT `db_events`: presence is
     /// ephemeral and must never reach the store, and every consumer of
     /// `DbEvent` writes or indexes. Cursor positions merged into the CRDT would
@@ -610,11 +621,19 @@ impl Db {
             write_log,
             probe_cache: Default::default(),
             default_agent: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "iroh")]
+            native_receipt_ledger: Default::default(),
+            #[cfg(feature = "iroh")]
+            native_removal_generation: Default::default(),
+            #[cfg(feature = "iroh")]
+            agent_generation: Default::default(),
             node_key: Arc::new(std::sync::OnceLock::new()),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            #[cfg(feature = "iroh")]
+            replica_receipts: tokio::sync::broadcast::channel(128).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
@@ -1654,12 +1673,53 @@ impl Db {
     pub fn with_own_agent(&self, agent: Option<crate::agents::Agent>) -> Db {
         let mut db = self.clone();
         db.default_agent = Arc::new(Mutex::new(agent));
+        #[cfg(feature = "iroh")]
+        {
+            db.agent_generation = Default::default();
+            db.native_receipt_ledger = Default::default();
+            db.replica_receipts = tokio::sync::broadcast::channel(128).0;
+        }
         db
     }
 
     /// Clear the default agent.
     pub fn clear_default_agent(&self) {
-        self.default_agent.lock().unwrap().take();
+        let mut agent = self.default_agent.lock().unwrap();
+        if agent.take().is_some() {
+            #[cfg(feature = "iroh")]
+            self.native_receipt_ledger.lock().unwrap().clear();
+            #[cfg(feature = "iroh")]
+            self.agent_generation
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    /// Changes even when an agent is replaced and subsequently restored.
+    #[cfg(feature = "iroh")]
+    pub(crate) fn agent_generation(&self) -> u64 {
+        self.agent_generation
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[cfg(feature = "iroh")]
+    pub(crate) fn native_removal_generation(&self) -> u64 {
+        self.native_removal_generation
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[cfg(feature = "iroh")]
+    pub(crate) fn record_tombstone_with_native_invalidation(&self, key: &[u8]) {
+        let Ok(_gate) = self.sync_receipts_gate.lock() else {
+            return;
+        };
+        let mut ledger = self.native_receipt_ledger.lock().unwrap();
+        if self.kv.insert(Tree::PluginMeta, key, &[1]).is_ok() {
+            let generation = self
+                .native_removal_generation
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                + 1;
+            ledger.sync_removals(generation);
+        }
     }
 
     /// Create a new drive owned by the current agent.
@@ -3046,6 +3106,44 @@ impl Db {
         self.db_events.subscribe()
     }
 
+    /// Observe future version-specific Iroh persistence receipts for this store.
+    /// Subscribe before syncing or saving. This bounded channel has no replay or
+    /// retention guarantee; a lagging consumer must handle `RecvError::Lagged`.
+    /// Authentication and a completed remote flush do not prove independence.
+    #[cfg(feature = "iroh")]
+    pub fn subscribe_replica_receipts(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<crate::sync::iroh_receipts::IrohReplicaReceipt> {
+        self.replica_receipts.subscribe()
+    }
+
+    #[cfg(feature = "iroh")]
+    pub(crate) fn emit_replica_receipt(
+        &self,
+        receipt: crate::sync::iroh_receipts::IrohReplicaReceipt,
+    ) {
+        // This gate is shared even by isolated account views of the same KV.
+        // Publication cannot race a successful deletion/tombstone epoch change.
+        let Ok(_gate) = self.sync_receipts_gate.lock() else {
+            return;
+        };
+        // Serialize publication with account replacement, including A→B→A.
+        let agent = self.default_agent.lock().unwrap();
+        if self.agent_generation() != receipt.agent_generation
+            || agent.as_ref().map(|a| a.subject.as_str()) != Some(receipt.local_agent.as_str())
+        {
+            return;
+        }
+        let mut ledger = self.native_receipt_ledger.lock().unwrap();
+        let removal_generation = self.native_removal_generation();
+        ledger.sync_removals(removal_generation);
+        if removal_generation != receipt.removal_generation {
+            return;
+        }
+        ledger.record(&receipt);
+        let _ = self.replica_receipts.send(receipt);
+    }
+
     /// Presence arriving from peers. See [`EphemeralEvent`].
     pub fn subscribe_ephemeral(&self) -> tokio::sync::broadcast::Receiver<EphemeralEvent> {
         self.ephemeral_events.subscribe()
@@ -4079,7 +4177,25 @@ impl Db {
         for event in events {
             self.queue_drive_event(event, &mut sequence, transaction)?;
         }
+        #[cfg(feature = "iroh")]
+        let has_removal = transaction
+            .iter()
+            .any(|op| op.tree == Tree::Resources && matches!(op.method, Method::Delete));
+        // Holding the owning ledger across the atomic deletion means no query
+        // or accepted reply can expose its old rows after this operation returns.
+        #[cfg(feature = "iroh")]
+        let mut native_ledger = has_removal.then(|| self.native_receipt_ledger.lock().unwrap());
         self.kv.apply_batch(transaction)?;
+        #[cfg(feature = "iroh")]
+        if let Some(ledger) = native_ledger.as_mut() {
+            let generation = self
+                .native_removal_generation
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                + 1;
+            ledger.sync_removals(generation);
+        }
+        #[cfg(feature = "iroh")]
+        drop(native_ledger);
         drop(sequence);
 
         for op in transaction.iter() {
@@ -5982,7 +6098,14 @@ impl Storelike for Db {
     }
 
     fn set_default_agent(&self, agent: crate::agents::Agent) {
-        self.default_agent.lock().unwrap().replace(agent);
+        let mut current = self.default_agent.lock().unwrap();
+        #[cfg(feature = "iroh")]
+        if current.as_ref().map(|previous| &previous.subject) != Some(&agent.subject) {
+            self.native_receipt_ledger.lock().unwrap().clear();
+            self.agent_generation
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        current.replace(agent);
     }
 
     fn begin_batch(&self) {

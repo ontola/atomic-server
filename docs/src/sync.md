@@ -69,22 +69,30 @@ selected. Going offline in an already verified session preserves its confirmatio
 Older backups without resource evidence stay unconfirmed until a subsequent
 backup includes that resource's version.
 
-Peers connected over WebRTC confirm a resource only after an authenticated peer
-checks the requested version against its stored data and completes its storage flush. A
-connection, cursor, or workspace sync message alone cannot confirm a copy.
+Peers connected over WebRTC or native Iroh confirm a resource only after an
+authenticated peer checks the requested version against its stored data and
+completes its storage flush. A connection, cursor, or workspace sync message
+alone cannot confirm a copy.
 The panel shows the confirmed peer-copy count and each peer's confirmation
 time. A purple peer icon distinguishes these copies from server or Vault copies.
 Later edits remain waiting for peers until their version is confirmed.
 
-Peer confirmations describe currently connected WebRTC sessions. Closing a
-peer tab or app removes its available-copy confirmation; reloading requires a
-fresh connection and acknowledgement. Multiple tabs sharing one database count as
+Peer confirmations describe currently connected peer sessions. Closing a
+peer tab or app removes its available-copy confirmation once the disconnection
+is detected. An abruptly lost native peer can remain listed until its connection
+liveness timeout expires. Restarting the native
+node or reconnecting requires fresh acknowledgements. Reloading an embedded
+resource view can read the native host’s existing live confirmations; a browser
+tab that owns its WebRTC connection needs a new connection and acknowledgement.
+Multiple tabs sharing one database count as
 one peer copy, and another tab using this device's database never adds a
 remote copy. Distinct storage identities do not establish a separate physical
 device or guarantee a recoverable backup. Older peers can still synchronize
 without providing these confirmations. Compatible native WebRTC peers use the
 same storage acknowledgement; the receipt does not identify device type. Native
-Iroh drive-level acknowledgements are not used as per-resource evidence here.
+Iroh peers negotiate resource receipts separately from drive-level sync. The
+native host supplies its live evidence to embedded resource views; those views
+do not open another peer connection.
 
 File resource confirmations describe the resource data, not whether every
 destination has its attachment bytes.

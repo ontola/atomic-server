@@ -1,3 +1,4 @@
+import type { ResourcePeerEvidence } from './resource-peer-evidence.js';
 import { decodeB64 } from './base64.js';
 import { LoroLoader } from './loro-loader.js';
 import type {
@@ -15,7 +16,7 @@ export interface ResourcePeerCopy {
   readonly generation?: string;
 }
 
-/** Live browser connections only. Counts never imply physical independence,
+/** Live browser or native Iroh connections only. Counts never imply physical independence,
  * attachment coverage, continued retention, or a recoverable backup.
  */
 export interface ResourcePeerSyncStatus {
@@ -53,6 +54,7 @@ function covers(receipt: Receipt, resource: Resource): boolean {
 /** Store owns identity/database epochs and resource change subscriptions. */
 export class ResourcePeerSyncStatusTracker {
   private connections = new Map<string, Connection>();
+  private native = new Map<string, Map<string, Connection>>();
   private listeners = new Set<{
     subject: () => string;
     drive: () => string | undefined;
@@ -88,6 +90,7 @@ export class ResourcePeerSyncStatusTracker {
 
   reset(): void {
     this.connections.clear();
+    this.native.clear();
     this.changed();
   }
 
@@ -113,11 +116,63 @@ export class ResourcePeerSyncStatusTracker {
   }
 
   remove(subject: string): void {
+    this.native.delete(subject);
+
     for (const connection of this.connections.values()) {
       connection.receipts.delete(subject);
     }
 
     this.changed(subject);
+  }
+
+  /** Native snapshots are authoritative only for their requested subjects.
+   * A disappeared receipt must not survive through monotonic browser merging.
+   */
+  replaceNative(
+    subjects: string[],
+    evidence: ResourcePeerEvidence | undefined,
+    valid: (subject: string) => boolean = () => true,
+  ): void {
+    for (const subject of subjects) {
+      if (!valid(subject)) continue;
+      const connections = new Map<string, Connection>();
+
+      for (const connection of evidence?.connections ?? []) {
+        const receipt = connection.receipts.find(
+          entry => entry.subject === subject,
+        );
+        const receipts = new Map<string, Receipt>();
+
+        if (receipt) {
+          receipts.set(subject, {
+            version: LoroLoader.Loro.VersionVector.decode(
+              decodeB64(receipt.version),
+            ).toJSON(),
+            confirmedAt: receipt.confirmedAt,
+          });
+        }
+
+        connections.set(connection.connectionId, {
+          drive: connection.drive,
+          peerAgent: connection.peerAgent,
+          source: receipt?.source,
+          replica: receipt?.replica,
+          receipts,
+        });
+      }
+
+      if (connections.size) this.native.set(subject, connections);
+      else this.native.delete(subject);
+      this.changed(subject);
+    }
+  }
+
+  clearNative(subject?: string): void {
+    const subjects = subject ? [subject] : [...this.native.keys()];
+
+    for (const key of subjects) {
+      if (this.native.delete(key)) this.changed(key);
+    }
   }
 
   acknowledge(receipt: BrowserReplicaReceipt): void {
@@ -179,7 +234,10 @@ export class ResourcePeerSyncStatusTracker {
     let connectedCount = 0;
     const copies = new Map<string, ResourcePeerCopy>();
 
-    for (const [connectionId, connection] of this.connections) {
+    for (const [connectionId, connection] of [
+      ...this.connections,
+      ...(this.native.get(subject) ?? []),
+    ]) {
       if (!drive || connection.drive !== drive) continue;
       connectedCount++;
       const { replica, source } = connection;

@@ -2,9 +2,10 @@
 
 Resource-row indicators, the “Copies & sync” panel, browser server-confirmation
 recovery and per-resource Cloud Vault confirmations are implemented in draft
-PR #2576. WebRTC peer confirmation is implemented and locally validated. This plan remains open for
-attachment confirmation, native per-resource peer evidence and multiple-server
-configuration. Exact-commit CI is tracked on the PR.
+PR #2576. WebRTC and native Iroh peer confirmations are implemented and locally
+validated, including the embedded native renderer. This plan remains open for
+attachment confirmation, native WebRTC and legacy Tauri integration, and
+multiple-server configuration. Exact-commit CI is tracked on the PR.
 
 ## Ownership and dependency
 
@@ -76,8 +77,9 @@ based on authenticated stored-version acknowledgements, described below.
 - [x] Add typed WebRTC per-peer receipts after verified persistent storage.
   Expose resource copy counts independently of connection counts, including
   peer departure, browser-tab lifetimes and identity changes.
-- [ ] Extend per-resource evidence to native Iroh and native requester/UI paths;
-  native WebRTC responders already use the shared receipt handler.
+- [x] Extend per-resource evidence to native Iroh and its embedded renderer.
+- [ ] Extend native WebRTC requester/UI evidence and the legacy Tauri local-HTTP
+  renderer; native WebRTC responders already use the shared receipt handler.
 - [ ] Extend configuration when multiple active servers are supported, then
   derive the primary indicator from the user's intended destinations.
 - [x] Validate real peer-only journeys before enabling success icons. Browser
@@ -91,82 +93,62 @@ See `unified-sync.md`, `atomic-lib-runtime.md` and `sync-onboarding-ux.md` for
 transport/runtime boundaries. The mockup's multiple authoritative destinations
 remain a target rather than a capability inferred from several rendered rows.
 
-## Validation baseline, 2026-11-18
+## Browser peer contract
 
-- Targeted Rust storage/export, library adapter/handoff/parser tests pass,
-  including generation rotation/replay, durable reopen, scope isolation and the
-  exact exported version versus unchanged/later edits.
-- Vault ledger/automatic/manual/native regressions: 66 passing; backup
-  orchestration: 73 passing; ResourceSync UI: 20 passing.
-- Full frontend typecheck, matching lib/WASM/UI/native builds and all six
-  translation catalogs pass. Five new messages are translated. Component compiler
-  checks pass; the manual Vault hook's existing suppression diagnostic was
-  independently reproduced against HEAD before these changes.
-- Four distinct native Chromium tests pass across the integrated run and
-  targeted rerun, one worker and zero retries. The new two-test Vault spec uses
-  real WASM encryption and durable storage with a test-owned HTTP service: it
-  checks successful backup, same-account reload without a new upload, account
-  isolation, edits during upload and failed upload. It does not claim live S3 or
-  control-plane validation. Desktop/mobile/footer/pending screenshots were
-  reviewed and shared in chat. Test diagnostics remain strict; no ResizeObserver
-  errors are suppressed.
-- Previous server phase: 134 library regressions, 40 adapter/storage regressions,
-  seven Rust receipt tests and seven distinct native browser checks passed. The
-  first-phase full frontend baseline was 2,614 Vitest and two MCP integration
-  tests under TZ=UTC. The unchanged date-formula test depends on DST; no unrelated
-  formula code was changed. Exact-head CI results belong on PR #2576.
+WebRTC confirmation is implemented on this branch at
+`3faa50118e4c0393961faccfc4d999b3292dc9d9`, building on Vault commit
+`4f1adad7d119a2c888989e1d839a477de7ba87f7`. The protocol, scoped storage
+identity and bounded requester adapt `788bc98682b6aae91995e578afa968d716745ce7`
+without importing the separate SaveReceipt/evidence-policy API stack.
 
-## Peer confirmation phase (in progress, 2026-11-18)
+Proof belongs to an authenticated live session and exact stored version. Shared
+storage counts once; newer edits, removal, disconnect and account/database
+changes invalidate coverage as appropriate. Browser-owned connections require
+fresh proof after reload. The real WebRTC acceptance covers these cases with
+strict diagnostics. Production signaling/TURN and mixed browser/native WebRTC
+remain separate release checks. Native full-drive/blob confirmation work uses
+different frames and does not establish individual resource evidence.
 
-Authorized in the same chat, based on unmerged Vault commit
-`4f1adad7d119a2c888989e1d839a477de7ba87f7`. Reuse this owned worktree/branch.
-The original checkout still has only the four baseline untracked entries.
+Current local validation and exact-head CI results are recorded on PR #2576;
+coverage and unverified boundaries are maintained in `TESTING_COVERAGE.md`.
 
-- [x] Review existing `browser-storage-receipts-v1` work on
-  `codex/atomic-peer-receipts-2538` and reuse its protocol where applicable.
-- [x] Add authenticated, exact-version resource peer evidence after the
-  receiver's storage barrier; connection counts and generic sync completion
-  must never create confirmations.
-- [x] Scope evidence to peer identity and live connection generation. A closed
-  or replaced browser tab cannot count as a currently available copy. Shared
-  local storage must not be counted again merely because another tab is open.
-- [x] Present distinct browser copies, current/pending/unavailable state and
-  confirmation time, with a distinct peer icon and clear browser availability.
-- [x] Verify initial reconciliation, newer edits, departure, reload, legacy
-  peers and failed/malformed acknowledgements at appropriate layers.
-- [x] Run actual browser peer acceptance, capture desktop/mobile UI, settle
-  translations, update docs/coverage, and independently review integration.
-- [ ] Commit/push this phase to the existing PR and follow exact-head CI.
+## Native Iroh resource confirmations
 
-Ownership for this phase: coordinator owns UI/docs/catalogs/plan/PR/CI;
-`sync_architecture` owns the bounded design and then JS evidence/transport;
-`sync_ui` owns Rust/WASM/backend adapter bridges; `sync_ui_tests` owns UI and
-browser acceptance tests. No other task's worktree will be modified.
+This phase builds on this PR's WebRTC commit
+`3faa50118e4c0393961faccfc4d999b3292dc9d9`. It selectively adapts the native
+receipt producer/requester from `166e64fc63734726a8ef35a729e5f66c0033eeeb`
+(`codex/atomic-iroh-receipts-2538`), without importing that branch's separate
+save-policy API stack. The optional `iroh-storage-receipts-v1` capability uses
+the same resource receipt frames; full-drive/blob confirmations remain separate.
 
-The backend protocol, scoped backing-store identity and bounded request design
-are adapted from `788bc98682b6aae91995e578afa968d716745ce7` on
-`codex/atomic-peer-receipts-2538`. This phase integrates that contract directly
-with resource status and does not import the separate SaveReceipt/evidence-policy
-API stack. Shared wire definitions are intentionally identical. Native Iroh's
-full-drive/blob confirmation work (`1021eba25`, different protocol frames) is
-not sufficient evidence for an individual resource and remains a separate
-dependency. Browser proof is session-only: reloading requires fresh evidence.
+Ownership for this phase:
+- `sync_ui`: Rust shared producer, native transport/requester, per-Db live
+  evidence, EmbedHost bridge and unit regressions.
+- `sync_architecture`: architecture, NativeClientDb/Store polling and tracker
+  integration, independent review.
+- `sync_ui_tests`: native two-process acceptance and renderer integration tests.
+- Coordinator: integration, documentation, validation, PR and CI.
 
+Acceptance and design:
+- [x] Review native authentication, stored-state proof and renderer ownership.
+- [x] Negotiate exact-version receipts only on mutually authenticated native
+  links; retain normal sync with older or unsupported peers.
+- [x] Maintain bounded live evidence owned by the native database, fenced by
+  local agent/storage identity and connection generation. Closing a session
+  removes its evidence; opening a renderer can read existing live evidence.
+- [x] Expose authorized resource evidence through the existing host bridge.
+  Poll only mounted resource subscribers, batch requests, reject stale replies
+  and clear unavailable evidence. The renderer opens no transport.
+- [x] Reuse current peer presentation and storage-identity deduplication. Newer
+  local edits remain pending until their exact version is confirmed.
+- [x] Invalidate native receipt targets and retained evidence across deletion
+  and identical-version recreation, including changes through shared-store facades.
+- [x] Validate native bulk/live/reopen and departure across real processes,
+  plus renderer identity changes, malformed evidence and old-host fallback.
+- [ ] Update public protocol/product docs and coverage; run required checks.
+- [ ] Publish this phase in PR #2576 and follow exact-head CI.
 
-Peer validation: 23 Rust peer-session tests, 3 backing-store identity tests,
-3 flush/concurrency tests, 13 existing server/Vault receipt storage tests and
-22 adapter tests pass. Focused final peer JS tests: 42 pass; the earlier combined
-server/peer regression run passed 83 tests, with later legacy/live-send race
-cases verified in their affected suites. ResourceSync UI tests: 25 pass. Full
-frontend/E2E typechecks, library lint, compiler checks, matching builds and all
-six translation catalogs (3,088 active messages, zero missing) pass.
-
-Five distinct native Chromium journeys pass across the initial combined run
-(existing server/Vault four) and targeted peer rerun (one worker, zero retries).
-The peer test checks real WebRTC/WASM receipts, paused receiver/newer edits,
-shared-storage tabs, peer departure/reload and absence from server inventory.
-Only rendezvous is a test fixture; production signaling, TURN and a live mixed
-browser/native journey remain separate acceptance. Initial peer test setup was
-corrected to wait for active server sync to finish and set preferences only on
-the app origin; strict diagnostics remain enabled. Exact-head CI is tracked on
-PR #2576 rather than inferred from these local results.
+Evidence is session-local and metadata-only. Distinct storage identities do not
+establish independent physical devices, retention, attachment coverage or a
+recoverable backup. Native WebRTC requester integration is separate from this
+Iroh phase; its shared responder remains supported.

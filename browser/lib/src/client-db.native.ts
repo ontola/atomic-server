@@ -1,3 +1,7 @@
+import {
+  parseResourcePeerEvidence,
+  type ResourcePeerEvidence,
+} from './resource-peer-evidence.js';
 /**
  * Native-side ClientDb: the `ClientDbWorker` surface, answered by the host app
  * instead of by a WASM database in this page.
@@ -64,6 +68,10 @@ export class NativeClientDb {
   initError: Error | undefined;
   private ready = false;
   private initPromise: Promise<boolean> | undefined;
+  private peerEvidenceUnsupported = false;
+  private peerEvidenceInFlight?: Promise<unknown>;
+  private peerEvidenceEpoch = 0;
+  private destroyed = false;
 
   constructor(private readonly channel: NativeChannel) {}
 
@@ -102,9 +110,55 @@ export class NativeClientDb {
 
   destroy(): void {
     this.ready = false;
+    this.destroyed = true;
+    this.peerEvidenceEpoch++;
   }
 
   /* --------------------------------- Reads --------------------------------- */
+
+  /** Live Iroh proof owned by the native process, batched by the Store's UI
+   * subscriptions. Older hosts remain usable and simply offer no proof.
+   */
+  async getResourcePeerEvidence(
+    subjects: string[],
+  ): Promise<ResourcePeerEvidence | undefined> {
+    if (this.destroyed || this.peerEvidenceUnsupported) return undefined;
+    if (this.peerEvidenceInFlight)
+      throw new Error('Native peer evidence query is still running');
+    const epoch = this.peerEvidenceEpoch;
+    const pending = this.channel.call('getResourcePeerEvidence', [subjects]);
+    this.peerEvidenceInFlight = pending;
+
+    try {
+      const reply = await pending;
+      if (epoch !== this.peerEvidenceEpoch)
+        throw new Error('Native peer evidence query cancelled');
+      if (reply === undefined || reply === null) return undefined;
+      const evidence = parseResourcePeerEvidence(reply);
+      if (!evidence) throw new Error('Invalid native peer evidence reply');
+
+      return evidence;
+    } catch (error) {
+      if (
+        /getResourcePeerEvidence: not available in the embedded renderer yet|mock host: no getResourcePeerEvidence/.test(
+          String(error),
+        ) ||
+        (/getResourcePeerEvidence/i.test(String(error)) &&
+          /unknown.{0,30}method|unsupported method|method not implemented/i.test(
+            String(error),
+          ))
+      ) {
+        this.peerEvidenceUnsupported = true;
+
+        return undefined;
+      }
+
+      throw error;
+    } finally {
+      if (this.peerEvidenceInFlight === pending)
+        this.peerEvidenceInFlight = undefined;
+    }
+  }
 
   async getResource(subject: string): Promise<string | null> {
     return (

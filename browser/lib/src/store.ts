@@ -1,4 +1,8 @@
 import {
+  parseResourcePeerEvidence,
+  type ResourcePeerEvidenceProvider,
+} from './resource-peer-evidence.js';
+import {
   ResourcePeerSyncStatusTracker,
   type ResourcePeerSyncStatus,
 } from './resource-peer-sync-status.js';
@@ -6037,6 +6041,188 @@ export class Store {
 
   private resourcePeerSyncStatus = new ResourcePeerSyncStatusTracker();
   private peerSyncGeneration = 0;
+  private resourcePeerWatchers = new Map<Resource, number>();
+  private nativePeerReadTokens = new Map<string, object>();
+  private nativePeerPoll?: object;
+  private nativePeerTimer?: ReturnType<typeof setTimeout>;
+  private nativePeerDeadline?: ReturnType<typeof setTimeout>;
+  private nativePeerAbort?: () => void;
+  private nativePeerHostGeneration?: string;
+  private nativePeerUnsupportedDb?: ClientDbWorker;
+
+  private scheduleNativePeerEvidence(): void {
+    const db = this.clientDb as
+      | (ClientDbWorker & Partial<ResourcePeerEvidenceProvider>)
+      | undefined;
+    if (
+      !this.resourcePeerWatchers.size ||
+      !db?.getResourcePeerEvidence ||
+      db === this.nativePeerUnsupportedDb ||
+      this.nativePeerPoll ||
+      this.nativePeerTimer
+    )
+      return;
+    // A single microtask collects rows mounted in the same render. Rendering
+    // getResourcePeerSyncStatus itself never performs I/O or starts a timer.
+    const token = {};
+    this.nativePeerPoll = token;
+    queueMicrotask(() => void this.readNativePeerEvidence(db, token));
+  }
+
+  private stopNativePeerEvidence(clear = true): void {
+    clearTimeout(this.nativePeerTimer);
+    clearTimeout(this.nativePeerDeadline);
+    this.nativePeerTimer = undefined;
+    this.nativePeerDeadline = undefined;
+    this.nativePeerPoll = undefined;
+    this.nativePeerAbort?.();
+    this.nativePeerAbort = undefined;
+    this.nativePeerReadTokens.clear();
+    this.nativePeerHostGeneration = undefined;
+    if (clear) this.resourcePeerSyncStatus.clearNative();
+  }
+
+  private async readNativePeerEvidence(
+    db: ClientDbWorker & Partial<ResourcePeerEvidenceProvider>,
+    token: object,
+  ): Promise<void> {
+    const generation = this.peerSyncGeneration;
+    const agent = this.agent?.subject;
+    const current = () =>
+      this.nativePeerPoll === token &&
+      this.clientDb === db &&
+      this.peerSyncGeneration === generation &&
+      this.agent?.subject === agent &&
+      this.resourcePeerWatchers.size > 0;
+    if (!current() || !db.getResourcePeerEvidence) return;
+
+    if (!agent) {
+      this.nativePeerPoll = undefined;
+      this.resourcePeerSyncStatus.clearNative();
+
+      return;
+    }
+
+    const subjects = [
+      ...new Set(
+        [...this.resourcePeerWatchers.keys()].map(resource =>
+          this.normalizeSubject(resource.subject),
+        ),
+      ),
+    ].filter(
+      subject => !this.isDestroyed(subject) && !this.hasPendingDestroy(subject),
+    );
+    const watched = (subject: string) =>
+      [...this.resourcePeerWatchers.keys()].some(
+        resource => this.normalizeSubject(resource.subject) === subject,
+      );
+
+    try {
+      if (!LoroLoader.isLoaded()) return;
+
+      for (let offset = 0; offset < subjects.length; offset += 128) {
+        const requested = subjects.slice(offset, offset + 128);
+        const readTokens = new Map(
+          requested.map(subject => {
+            const readToken = this.nativePeerReadTokens.get(subject) ?? {};
+            this.nativePeerReadTokens.set(subject, readToken);
+
+            return [subject, readToken] as const;
+          }),
+        );
+        let deadline: ReturnType<typeof setTimeout> | undefined;
+        let abort: (() => void) | undefined;
+        let evidence;
+
+        try {
+          const reply = await Promise.race([
+            db.getResourcePeerEvidence(requested),
+            new Promise<never>((_, reject) => {
+              abort = () => reject(new Error('Native peer evidence cancelled'));
+              this.nativePeerAbort = abort;
+              deadline = setTimeout(
+                () => reject(new Error('Native peer evidence timed out')),
+                5000,
+              );
+              this.nativePeerDeadline = deadline;
+            }),
+          ]);
+          if (!current()) return;
+
+          if (reply === undefined || reply === null) {
+            this.nativePeerUnsupportedDb = db;
+            this.resourcePeerSyncStatus.clearNative();
+
+            return;
+          }
+
+          evidence = parseResourcePeerEvidence(reply);
+          if (!evidence) throw new Error('Invalid native peer evidence reply');
+        } finally {
+          clearTimeout(deadline);
+          if (this.nativePeerAbort === abort) this.nativePeerAbort = undefined;
+          if (this.nativePeerDeadline === deadline)
+            this.nativePeerDeadline = undefined;
+        }
+
+        if (
+          this.normalizeSubject(evidence.agent || '_local:signed-out') !==
+          this.normalizeSubject(agent)
+        ) {
+          this.resourcePeerSyncStatus.clearNative();
+
+          return;
+        }
+
+        if (this.nativePeerHostGeneration !== evidence.agentGeneration) {
+          this.nativePeerHostGeneration = evidence.agentGeneration;
+          this.resourcePeerSyncStatus.clearNative();
+        }
+
+        if (!current()) return;
+        const valid = (subject: string) =>
+          current() &&
+          watched(subject) &&
+          this.nativePeerReadTokens.get(subject) === readTokens.get(subject) &&
+          !this.isDestroyed(subject) &&
+          !this.hasPendingDestroy(subject);
+        const accepted = requested.filter(valid);
+        const acceptedSet = new Set(accepted);
+        this.resourcePeerSyncStatus.replaceNative(
+          accepted,
+          {
+            ...evidence,
+            connections: evidence.connections.map(connection => ({
+              ...connection,
+              drive: this.normalizeSubject(connection.drive),
+              receipts: connection.receipts
+                .map(receipt => ({
+                  ...receipt,
+                  subject: this.normalizeSubject(receipt.subject),
+                }))
+                .filter(receipt => acceptedSet.has(receipt.subject)),
+            })),
+          },
+          valid,
+        );
+      }
+    } catch {
+      // Availability diagnostics must not affect accepted native saves. A
+      // failed bridge call cannot continue presenting its old live proof.
+      if (current()) this.resourcePeerSyncStatus.clearNative();
+    } finally {
+      if (current()) {
+        this.nativePeerPoll = undefined;
+
+        if (this.nativePeerUnsupportedDb !== db) {
+          this.nativePeerTimer = setTimeout(() => {
+            this.nativePeerTimer = undefined;
+            this.scheduleNativePeerEvidence();
+          }, 1000);
+        }
+      }
+    }
+  }
 
   /** @internal Invalidates browser sessions across identity/DB A→B→A changes. */
   public getPeerSyncGeneration(): number {
@@ -6045,7 +6231,10 @@ export class Store {
 
   private resetPeerSyncEvidence(): void {
     this.peerSyncGeneration++;
+    this.stopNativePeerEvidence(false);
+    this.nativePeerUnsupportedDb = undefined;
     this.resourcePeerSyncStatus.reset();
+    this.scheduleNativePeerEvidence();
   }
 
   /** @internal Called only after both sides of a browser channel authenticate. */
@@ -6115,6 +6304,10 @@ export class Store {
     callback: () => void,
   ): () => void {
     const target = resource.__internalObject;
+    this.resourcePeerWatchers.set(
+      target,
+      (this.resourcePeerWatchers.get(target) ?? 0) + 1,
+    );
     const unsubscribers = [
       this.resourcePeerSyncStatus.subscribe(
         () => this.normalizeSubject(target.subject),
@@ -6125,8 +6318,25 @@ export class Store {
       this.subscribe(target.subject, callback),
     ];
 
+    this.scheduleNativePeerEvidence();
+
     return () => {
       unsubscribers.forEach(unsubscribe => unsubscribe());
+      const remaining = (this.resourcePeerWatchers.get(target) ?? 1) - 1;
+      if (remaining) this.resourcePeerWatchers.set(target, remaining);
+      else this.resourcePeerWatchers.delete(target);
+      const subject = this.normalizeSubject(target.subject);
+
+      if (
+        ![...this.resourcePeerWatchers.keys()].some(
+          watched => this.normalizeSubject(watched.subject) === subject,
+        )
+      ) {
+        this.nativePeerReadTokens.delete(subject);
+        this.resourcePeerSyncStatus.clearNative(subject);
+      }
+
+      if (!this.resourcePeerWatchers.size) this.stopNativePeerEvidence();
     };
   }
 
@@ -6866,6 +7076,7 @@ export class Store {
     this.lastPersisted.delete(resolved);
     this.resourceSyncStatus.remove(this.normalizeSubject(resolved));
     this.resourcePeerSyncStatus.remove(this.normalizeSubject(resolved));
+    this.nativePeerReadTokens.delete(this.normalizeSubject(resolved));
     void this.eventManager.emit(
       StoreEvents.ResourcePeerEvidenceRemoved,
       this.normalizeSubject(resolved),

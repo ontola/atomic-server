@@ -658,9 +658,44 @@ The journey pauses the receiver for a newer edit, resumes to obtain a fresh
 receipt, opens a shared-storage tab without inflating the copy count, and checks
 departure and reload. It does not validate physical-device independence,
 production signaling or TURN. These indicators cover resource metadata;
-attachment-byte and native Iroh per-resource confirmations remain outside this
-coverage. Native WebRTC uses the shared receipt responder, but mixed browser/native
-acceptance and native requester/UI evidence remain untested here.
+attachment-byte confirmations remain outside this coverage. Native WebRTC uses
+the shared receipt responder; mixed browser/native WebRTC acceptance and native
+WebRTC requester evidence remain separate from the Iroh coverage below.
+
+Native resource receipts use the shared stored-state/flush producer and optional
+`iroh-storage-receipts-v1` negotiation. `sync::iroh_receipts` unit tests cover
+exact request correlation, retries and bounds, account/storage/connection
+changes, live ledger recovery, HTTP storage keys, permission checks and deletion.
+Removal regressions cover identical-version recreation through a separate agent
+view, pending/accepted late replies, direct tombstones and monotonic removal epochs.
+Protocol tests validate receipt envelopes and both supported base64 encodings;
+BrowserPeerSession regressions preserve browser behavior and reject unknown HTTP
+subjects without fetching them. Native evidence queries fence concurrent resource
+and permission changes around asynchronous authorization.
+
+`lib/tests/iroh_receipts.rs` runs separate source and receiver processes with real
+QUIC, authentication, disk databases and storage barriers. It checks bulk and
+subsequent live versions, source/replica identity, actual EmbedHost output,
+receiver death, reopening the same durable database and fresh connection proof.
+Only discovery is replaced with a local address exchange. Its ignored receiver
+entry point is invoked by the parent test.
+
+`browser/lib/src/native-resource-peer-sync.test.ts` exercises Store and
+NativeClientDb with real Loro versions and a controlled host channel: current
+versus newer edits, source/replica deduplication, missing evidence, account/DB
+replacement, view subscription lifetime, transient errors and malformed replies,
+old-host fallback and a hung host with a bounded underlying RPC. Browser peer
+proof stays independent when the native bridge fails.
+
+`browser/e2e/tests/native-resource-peer-sync.spec.ts` is an opt-in real native
+renderer journey: build `dist-embed` and the `iroh_receipts` integration binary,
+then set `ATOMIC_NATIVE_EMBED_TEST_BINARY` to that binary. It forwards the existing
+NativeChannel into the actual EmbedHost of the two-process Iroh fixture, renders
+the peer count and timestamp, reloads the view while its host remains alive,
+checks mobile layout and removes the confirmation after peer departure. It uses
+no fabricated receipts or production hooks. This does not exercise packaged
+Flutter/Tauri builds, physical devices, native WebRTC requester integration or
+the legacy Tauri renderer's local HTTP path.
 
 ### Protocol — well covered
 

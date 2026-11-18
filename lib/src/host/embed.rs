@@ -463,6 +463,13 @@ impl EmbedHost {
                 Ok(agent) => json!(agent.subject.to_string()),
                 Err(_) => Json::Null,
             },
+            #[cfg(feature = "iroh")]
+            "getResourcePeerEvidence" => {
+                json!(
+                    crate::sync::iroh_receipts::resource_peer_evidence(store, &strings(&args, 0))
+                        .await
+                )
+            }
             "getResource" => {
                 let raw = vec![str_arg(&args, 0)?.to_string()];
                 read_many(store, &self.profiles, &raw).await[0]["jsonAd"].clone()

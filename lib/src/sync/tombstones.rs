@@ -24,6 +24,9 @@ fn tombstone_key(subject: &str) -> Vec<u8> {
 /// Remember that this subject was intentionally destroyed on this device.
 pub fn record_tombstone(store: &Db, subject: &str) {
     let key = tombstone_key(subject);
+    #[cfg(feature = "iroh")]
+    store.record_tombstone_with_native_invalidation(&key);
+    #[cfg(not(feature = "iroh"))]
     let _ = store.kv.insert(Tree::PluginMeta, &key, &[1]);
 }
 

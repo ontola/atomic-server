@@ -221,3 +221,25 @@ behavior. The typing unit regressions are `loro-typing-history.test.ts` and
 `loro-typing-collaboration.test.ts` in the same directory; `editor-typing.spec.ts`
 checks real keystrokes against the built app so minification cannot silently
 disable the optimization.
+
+### Native Iroh resource confirmations
+
+`native-resource-peer-sync.spec.ts` uses the actual native host and two Iroh
+processes, so it runs directly instead of through the web-server launcher.
+Build `@tomic/lib`, then build the embedded renderer from `data-browser/` with
+`TAURI=1 pnpm exec vite build -c vite.embed.config.ts`. From the repository root,
+run `cargo test -p atomic_lib --features db-redb,iroh --test iroh_receipts --no-run`
+and use the printed integration executable path:
+
+```sh
+# From browser/e2e; set this to the executable printed by Cargo.
+ATOMIC_NATIVE_EMBED_TEST_BINARY=/absolute/path/to/iroh_receipts-HASH \
+  pnpm exec playwright test tests/native-resource-peer-sync.spec.ts \
+  --project=chromium --workers=1 --retries=0
+```
+
+The fixture serves `dist-embed`, forwards the renderer's existing host calls to
+Rust, and checks real resource evidence through view reload and peer departure.
+The native process owns the databases and networking; only address exchange and
+process control are test fixtures. Without the explicit executable this test is
+skipped, so an ordinary web E2E pass does not claim native renderer coverage.
