@@ -13657,3 +13657,7 @@ msgstr "Nur auf diesem Gerät gespeichert"
 #: src/components/SideBar/accountRowName.ts
 msgid "Account"
 msgstr "Konto"
+
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Edit profile"
+msgstr "Profil bearbeiten"

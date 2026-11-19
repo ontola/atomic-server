@@ -13654,3 +13654,7 @@ msgstr "Enregistré uniquement sur cet appareil"
 #: src/components/SideBar/accountRowName.ts
 msgid "Account"
 msgstr "Compte"
+
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Edit profile"
+msgstr "Modifier le profil"

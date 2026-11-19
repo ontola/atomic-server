@@ -13649,3 +13649,7 @@ msgstr "Hanya tersimpan di perangkat ini"
 #: src/components/SideBar/accountRowName.ts
 msgid "Account"
 msgstr "Akun"
+
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Edit profile"
+msgstr "Edit profil"

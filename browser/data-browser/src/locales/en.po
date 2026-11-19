@@ -13660,3 +13660,7 @@ msgstr "Only saved on this device"
 #: src/components/SideBar/accountRowName.ts
 msgid "Account"
 msgstr "Account"
+
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Edit profile"
+msgstr "Edit profile"
