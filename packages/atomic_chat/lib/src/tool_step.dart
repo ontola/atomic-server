@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:atomic_flutter/atomic_flutter.dart'
-    show AppColors, AppColorsExt;
+    show AppColors, AppColorsExt, AtomicSpinner;
 import 'package:flutter/material.dart';
 
 import 'chat_parts.dart';
@@ -179,10 +179,7 @@ class _ToolStepRowState extends State<ToolStepRow> {
         ? SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(
-              strokeWidth: 1.6,
-              color: c.textSecondary,
-            ),
+            child: AtomicSpinner(color: c.textSecondary),
           )
         : Icon(
             failed ? Icons.close_rounded : Icons.check_rounded,
