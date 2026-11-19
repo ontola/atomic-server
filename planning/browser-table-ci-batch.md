@@ -1,6 +1,6 @@
 # Browser/table review batch and CI infrastructure repair
 
-Status: active; this branch is for trekmeester review, not authorization to merge.
+Status: published as draft [PR #2601](https://github.com/ontola/atomic-server/pull/2601); awaiting trekmeester review, integration against current develop and full CI.
 
 - Task: `01a1ef40-c012-7c33-8df9-342e05408dd9`.
 - Worktree: `/Users/michieldejong/.codex/worktrees/browser-table-ci-batch/atomic-server`.
@@ -18,8 +18,9 @@ Status: active; this branch is for trekmeester review, not authorization to merg
 - [x] Reconcile numeric constraints: Michiel selected decimal minimum/maximum bounds for integer-valued columns, as JSON Schema allows.
 - [x] Repair CI environment handling and offer explicit hosted validation that preserves downstream SaaS, full tests and required checks.
 - [x] Validate workflow behavior, focused component tests, type checking, lint and required hooks.
-- [ ] Open one reviewable batch PR with source inventory and exact validation evidence.
-- [ ] Hand this batch and local validation to trekmeester for full CI on its final merge candidate; do not independently dispatch this batch.
+- [x] Open one reviewable batch PR with source inventory and exact validation evidence (#2601).
+- [x] Publish the batch and local validation for trekmeester; no worker dispatch.
+- [ ] Trekmeester reviews the 24 draft sources, resolves integration conflicts and runs full CI on the final merge candidate.
 
 ## Infrastructure evidence
 
