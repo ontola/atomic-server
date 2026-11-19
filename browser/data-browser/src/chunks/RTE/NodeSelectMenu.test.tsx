@@ -3,7 +3,9 @@ import type { Editor } from '@tiptap/react';
 import { NodeSelectMenu } from '@tomic/resource-ui/chunks/RTE/NodeSelectMenu';
 
 const state = vi.hoisted(() => ({ editor: {} as Editor }));
-vi.mock('./TiptapContext', () => ({ useTipTapEditor: () => state.editor }));
+vi.mock('@tomic/resource-ui/chunks/RTE/TiptapContext', () => ({
+  useTipTapEditor: () => state.editor,
+}));
 vi.mock('@tiptap/react', () => ({
   useEditorState: ({
     selector,
@@ -11,7 +13,7 @@ vi.mock('@tiptap/react', () => ({
     selector: (snapshot: { editor: Editor }) => unknown;
   }) => selector({ editor: state.editor }),
 }));
-vi.mock('../../components/forms/BasicSelect', () => ({
+vi.mock('@tomic/ui/components/forms/BasicSelect', () => ({
   BasicSelect: 'select',
 }));
 

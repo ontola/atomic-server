@@ -14,18 +14,25 @@ import { ResourceLinkNavigationContext } from '@tomic/resource-ui/components/Res
 afterEach(cleanup);
 
 const fixture = vi.hoisted(() => ({ navigate: vi.fn() }));
-vi.mock('../hooks/useNavigateWithTransition', () => ({
+vi.mock('@tomic/resource-ui/ResourceUIHost', async original => ({
+  ...(await original<typeof import('@tomic/resource-ui/ResourceUIHost')>()),
+  useResourceUIHost: () => ({ isRunningInTauri: () => false }),
   useNavigateWithTransition: () => fixture.navigate,
+  useResourceNavigation: () => ({
+    constructOpenURL: (subject: string) =>
+      subject === 'current' ? window.location.href : '/app/open?subject=next',
+    pathToURL: (path: string) => path,
+  }),
 }));
-vi.mock('../helpers/navigation', () => ({
-  constructOpenURL: (subject: string) =>
-    subject === 'current' ? window.location.href : '/app/open?subject=next',
-  pathToURL: (path: string) => path,
+vi.mock(
+  '@tomic/resource-ui/components/ResourceContextMenu/ResourceContextMenuContext',
+  () => ({
+    useResourceContextMenu: () => ({ openResourceMenu: vi.fn() }),
+  }),
+);
+vi.mock('@tomic/resource-ui/hooks/useIsInRTE', () => ({
+  useIsInRTE: () => false,
 }));
-vi.mock('@components/ResourceContextMenu/ResourceContextMenuContext', () => ({
-  useResourceContextMenu: () => ({ openResourceMenu: vi.fn() }),
-}));
-vi.mock('@hooks/useIsInRTE', () => ({ useIsInRTE: () => false }));
 
 function show(subject: string, onNavigate?: () => void) {
   return render(

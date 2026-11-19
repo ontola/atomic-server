@@ -181,7 +181,9 @@ it('turns red immediately for an unsaved edit after a completed sync', () => {
 });
 
 it('stays red when a later edit arrives while an earlier save awaits acknowledgement', async () => {
-  const { store, postCommitSpy } = await testStore();
+  // The commit transport is controlled below. A live WebSocket to example.com
+  // must not race this online-acknowledgement scenario by disconnecting it.
+  const { store, postCommitSpy } = await testStore({ connect: false });
   const resource = await store.newResource({
     noParent: true,
     propVals: { [core.properties.name]: 'initial' },

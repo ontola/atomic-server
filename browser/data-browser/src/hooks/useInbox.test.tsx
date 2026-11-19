@@ -3,7 +3,15 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { createRequire } from 'node:module';
 import type { ReactNode } from 'react';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import {
   Resource,
   Store,
@@ -11,6 +19,8 @@ import {
   collections,
   core,
   notifications,
+  Datatype,
+  server,
 } from '@tomic/react';
 import { LoroLoader, type ClientDbWorker } from '@tomic/lib';
 import { useInbox } from './useInbox';
@@ -34,7 +44,15 @@ const HOME = 'https://app.example.com';
 const PRIVATE = 'did:ad:private';
 const TEAM = 'did:ad:team';
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+    new Error('The inbox fixture must not make external requests.'),
+  );
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 // jsdom looks like a browser to the Loro loader, which then fetches the wasm
 // over HTTP. The node build is the same engine.
@@ -46,9 +64,9 @@ beforeAll(() => {
 
 async function notification(store: Store, subject: string, at: number) {
   const resource = new Resource(subject);
+  store.addResource(resource);
   await resource.set(core.properties.isA, [notifications.classes.notification]);
   await resource.set(notifications.properties.occurredAt, at);
-  store.addResource(resource);
 
   return resource;
 }
@@ -61,12 +79,33 @@ async function device({
   connected: boolean;
 }) {
   const store = new Store({ serverUrl: HOME, connect: false });
-  // This device has nothing of the private drive locally.
+
+  // Define the vocabulary locally: sorting and Resource.set use real property
+  // metadata, rather than fetching ontology documents during the fixture.
+  for (const [subject, datatype, shortname] of [
+    [core.properties.isA, Datatype.RESOURCEARRAY, 'isA'],
+    [notifications.properties.occurredAt, Datatype.TIMESTAMP, 'occurredAt'],
+  ]) {
+    const property = new Resource(subject);
+    await property.set(core.properties.isA, [core.classes.property], false);
+    await property.set(core.properties.datatype, datatype, false);
+    await property.set(core.properties.shortname, shortname, false);
+    await property.set(core.properties.description, '', false);
+    store.addResource(property);
+  }
+
+  // The local query index has no private-drive notifications. Cache writes
+  // below are only in-memory acknowledgements, not persistence evidence.
   store.setClientDb({
     isReady: true,
+    isInitialized: true,
     waitForReady: async () => true,
     waitForInit: async () => undefined,
     query: vi.fn(async () => ({ subjects: [], count: 0 })),
+    getResourcesWithSnapshots: vi.fn(async (subjects: string[]) =>
+      subjects.map(() => ({ jsonAd: null, snapshot: null })),
+    ),
+    putResourceWithSnapshot: vi.fn(async () => undefined),
   } as unknown as ClientDbWorker);
 
   const onServer = ['did:ad:n1', 'did:ad:n2'];
@@ -76,16 +115,36 @@ async function device({
   const queries: URL[] = [];
   store.injectFetch(async input => {
     const url = new URL(String(input));
-    queries.push(url);
+    if (url.origin !== HOME)
+      throw new Error(`Unexpected inbox fixture request: ${url.href}`);
 
-    return new Response(
-      JSON.stringify({
+    if (url.pathname === '/query') {
+      queries.push(url);
+
+      return Response.json({
         '@id': url.href,
         [collections.properties.members]: onServer,
         [collections.properties.totalMembers]: onServer.length,
-      }),
-      { status: 200 },
+      });
+    }
+
+    const subject = store.normalizeSubject(
+      url.searchParams.get('subject') ?? url.href,
     );
+
+    if (
+      [PRIVATE, TEAM]
+        .map(value => store.normalizeSubject(value))
+        .includes(subject)
+    ) {
+      return Response.json({
+        '@id': subject,
+        [core.properties.isA]: [server.classes.drive],
+        [core.properties.name]: 'Fixture drive',
+      });
+    }
+
+    throw new Error(`Unexpected inbox fixture request: ${url.href}`);
   });
   store.setDrive(activeDrive);
   store.finishDriveSync(activeDrive, 1, Date.now());

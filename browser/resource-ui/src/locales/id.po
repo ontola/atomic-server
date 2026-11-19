@@ -13619,51 +13619,50 @@ msgstr "Tidak ada cadangan dari 7 hari terakhir yang dapat diverifikasi."
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "# plugin needs server features this server doesn’t have."
 msgid_plural "# plugins need server features this server doesn’t have."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "# plugin memerlukan fitur server yang tidak dimiliki server ini."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Sign in to answer this request."
-msgstr ""
+msgstr "Masuk untuk menjawab permintaan ini."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Loading the request…"
-msgstr ""
+msgstr "Memuat permintaan…"
 
 #. 0: ' '; 1: ' '
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "<0/> asks to give{0} <1/> a token for its{1} <2/> endpoints."
-msgstr ""
+msgstr "<0/> meminta untuk memberi{0} <1/> token untuk endpoint{1} <2/> miliknya."
 
 #. 0: ' '
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "<0/> asks to issue a token for its{0} <1/> endpoints."
-msgstr ""
+msgstr "<0/> meminta untuk menerbitkan token untuk endpoint{0} <1/> miliknya."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "No specific permissions."
-msgstr ""
+msgstr "Tidak ada izin khusus."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "With these permissions"
-msgstr ""
+msgstr "Dengan izin berikut"
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Allowing…"
-msgstr ""
+msgstr "Mengizinkan…"
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Denying…"
-msgstr ""
+msgstr "Menolak…"
 
 #. 0: ask.redirectOrigin
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "You can revoke the token later from the plugin. After you answer, you go back to {0}."
-msgstr ""
+msgstr "Anda dapat mencabut token nanti melalui plugin. Setelah menjawab, Anda kembali ke {0}."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Allow access?"
-msgstr ""
+msgstr "Izinkan akses?"
 
 #. 0: ago
 #. 0: syncedAgo
@@ -13686,782 +13685,782 @@ msgstr "Aktivitas sinkronisasi terakhir {0}"
 
 #: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Saved locally"
-msgstr ""
+msgstr "Disimpan secara lokal"
 
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "This app"
-msgstr ""
+msgstr "Aplikasi ini"
 
 #. 0: appName
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "{0} wants to change 1 row"
-msgstr ""
+msgstr "{0} ingin mengubah 1 baris"
 
 #. 0: appName; 1: rows
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "{0} wants to change {1} rows"
-msgstr ""
+msgstr "{0} ingin mengubah {1} baris"
 
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "Allow all edits by this view on this table"
-msgstr ""
+msgstr "Izinkan semua pengeditan oleh tampilan ini pada tabel ini"
 
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "Apply"
-msgstr ""
+msgstr "Terapkan"
 
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "Decline"
-msgstr ""
+msgstr "Tolak"
 
 #. 0: tableName
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "<0/> stopped following changes to {0}: <1/>"
-msgstr ""
+msgstr "<0/> berhenti mengikuti perubahan pada {0}: <1/>"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "Open link"
-msgstr ""
+msgstr "Buka tautan"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 msgid "This app wants to open <0/> in a new tab. <1/>"
-msgstr ""
+msgstr "Aplikasi ini ingin membuka <0/> di tab baru. <1/>"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 msgid "Open a link"
-msgstr ""
+msgstr "Buka tautan"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 #: ../table-page/src/TablePage/RowGrantDialog.tsx
 msgid "Allow editing"
-msgstr ""
+msgstr "Izinkan pengeditan"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 msgid "Let this app edit rows"
-msgstr ""
+msgstr "Izinkan aplikasi ini mengedit baris"
 
 #: ../data-browser/src/chunks/AppPage/AppImporterRun.tsx
 msgid "Choose file"
-msgstr ""
+msgstr "Pilih berkas"
 
 #: ../data-browser/src/chunks/AppPage/AppImporterRun.tsx
 msgid "Import with this app"
-msgstr ""
+msgstr "Impor dengan aplikasi ini"
 
 #. 0: ' '
 #: ../data-browser/src/chunks/AppPage/AppImporterRun.tsx
 msgid "This app wants to import <0/> with{0} <1/>. You review the changes before anything is saved."
-msgstr ""
+msgstr "Aplikasi ini ingin mengimpor <0/> dengan{0} <1/>. Anda meninjau perubahan sebelum apa pun disimpan."
 
 #: ../data-browser/src/chunks/AppPage/AppImporterRun.tsx
 msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
-msgstr ""
+msgstr "Aplikasi ini ingin mengimpor berkas dengan <0/>. Pilih berkas di sini. Anda meninjau perubahan sebelum apa pun disimpan."
 
 #: src/chunks/AppPage/RowGrantText.tsx
 msgid "It also keeps its own sync information on the rows. That is not shown as columns, only under \"Kept by apps\" when you open a row. "
-msgstr ""
+msgstr "Aplikasi ini juga menyimpan informasi sinkronisasinya sendiri pada baris. Informasi tersebut tidak ditampilkan sebagai kolom, hanya di bagian \"Disimpan oleh aplikasi\" saat Anda membuka baris. "
 
 #. 0: extras
 #: src/chunks/AppPage/RowGrantText.tsx
 msgid "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. {0}You can take this back from the tab's menu."
-msgstr ""
+msgstr "<0/> dapat mengedit baris dalam tabel ini. Aplikasi ini dapat mengisi kolom tabel dan menambahkan baris, tetapi tidak dapat menghapus baris atau mengubah tabel itu sendiri. {0}Anda dapat mencabut izin ini melalui menu tab."
 
 #: src/chunks/AppPage/RowGrantText.tsx
 msgid "<0/> is told when rows change, also when this tab is closed."
-msgstr ""
+msgstr "<0/> diberi tahu saat baris berubah, juga ketika tab ini ditutup."
 
 #: ../table-page/src/DashboardPage/useBlockQuery.ts
 #: ../table-page/src/TablePage/useTableView.ts
 msgid "Saved view is unavailable in this table."
-msgstr ""
+msgstr "Tampilan tersimpan tidak tersedia dalam tabel ini."
 
 #: ../table-page/src/DashboardPage/useBlockQuery.ts
 #: ../table-page/src/TablePage/useTableData.ts
 #: ../table-page/src/TablePage/useTableView.ts
 msgid "Saved view configuration is invalid."
-msgstr ""
+msgstr "Konfigurasi tampilan tersimpan tidak valid."
 
 #. 0: offer.path .map(step => lensNames.get(step.lens) ?? step.lens) .join(', then ')
 #: src/chunks/Pieces/usePieceOffers.ts
 msgid "Through {0}"
-msgstr ""
+msgstr "Melalui {0}"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "the resource in the config key <0/>, which is not set"
-msgstr ""
+msgstr "sumber daya pada kunci konfigurasi <0/>, yang belum diatur"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "Set <0/> in the config below to the resource that should receive these items, or leave this unchecked."
-msgstr ""
+msgstr "Atur <0/> dalam konfigurasi di bawah ke sumber daya yang harus menerima item ini, atau biarkan opsi ini tidak dicentang."
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "Let <0/> add items to <1/> when other servers send them"
-msgstr ""
+msgstr "Izinkan <0/> menambahkan item ke <1/> ketika server lain mengirimkannya"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "Incoming items"
-msgstr ""
+msgstr "Item masuk"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "The plugin gets write rights on these resources, and may only change or delete what it added. Revoking or uninstalling it takes the rights back. Unchecked, anything sent to these endpoints is refused."
-msgstr ""
+msgstr "Plugin mendapatkan hak tulis pada sumber daya ini, dan hanya boleh mengubah atau menghapus apa yang ditambahkannya. Mencabut izin atau menghapus instalasinya akan mencabut hak tersebut. Jika tidak dicentang, apa pun yang dikirim ke endpoint ini akan ditolak."
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "Route writes"
-msgstr ""
+msgstr "Penulisan melalui rute"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Serving"
-msgstr ""
+msgstr "Melayani"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Paused"
-msgstr ""
+msgstr "Dijeda"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Retired"
-msgstr ""
+msgstr "Dihentikan"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Turned off"
-msgstr ""
+msgstr "Dinonaktifkan"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Not active"
-msgstr ""
+msgstr "Tidak aktif"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Errors"
-msgstr ""
+msgstr "Kesalahan"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Public endpoints are turned off on this server"
-msgstr ""
+msgstr "Endpoint publik dinonaktifkan pada server ini"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Its URLs answer 404 and its deliveries wait. Its data, keys and tokens are kept, and it comes back without a new review once the server allows it."
-msgstr ""
+msgstr "URL-nya memberikan respons 404 dan pengirimannya menunggu. Data, kunci, dan tokennya tetap disimpan, dan plugin akan kembali tanpa peninjauan baru setelah server mengizinkannya."
 
 #. 0: status; 1: when(at); 2: message
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Last error ({0}, {1}): {2}"
-msgstr ""
+msgstr "Kesalahan terakhir ({0}, {1}): {2}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No address yet: <0/> is not set."
-msgstr ""
+msgstr "Belum ada alamat: <0/> belum diatur."
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Deliveries waiting: <0/>"
-msgstr ""
+msgstr "Pengiriman menunggu: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Requests (24 h): <0/>"
-msgstr ""
+msgstr "Permintaan (24 jam): <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Errors (24 h): <0/>"
-msgstr ""
+msgstr "Kesalahan (24 jam): <0/>"
 
 #. 0: failure.attempts
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Dead letter (gave up after attempt {0})"
-msgstr ""
+msgstr "Pengiriman gagal permanen (menyerah setelah percobaan {0})"
 
 #. 0: failure.attempts; 1: when(failure.nextAt)
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Retrying (attempt {0}), next at {1}"
-msgstr ""
+msgstr "Mencoba lagi (percobaan {0}), berikutnya pada {1}"
 
 #. 0: failure.attempts
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Retrying (attempt {0})"
-msgstr ""
+msgstr "Mencoba lagi (percobaan {0})"
 
 #. 0: failure.error ?? ''
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No answer; it may have arrived. {0}"
-msgstr ""
+msgstr "Tidak ada jawaban; kiriman mungkin telah tiba. {0}"
 
 #. 0: failure.status; 1: failure.error ?? ''
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Answered {0}. {1}"
-msgstr ""
+msgstr "Dijawab {0}. {1}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "<0/> to <1/>"
-msgstr ""
+msgstr "<0/> ke <1/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Sent today: <0/>"
-msgstr ""
+msgstr "Dikirim hari ini: <0/>"
 
 #. 0: cap
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Sent today: <0/> of {0}"
-msgstr ""
+msgstr "Dikirim hari ini: <0/> dari {0}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Queued: <0/>"
-msgstr ""
+msgstr "Dalam antrean: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Sending: <0/>"
-msgstr ""
+msgstr "Sedang dikirim: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Delivered (24 h): <0/>"
-msgstr ""
+msgstr "Terkirim (24 jam): <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Dead letters: <0/>"
-msgstr ""
+msgstr "Pengiriman gagal permanen: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Deliveries"
-msgstr ""
+msgstr "Pengiriman"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Waiting for tomorrow’s cap: <0/>"
-msgstr ""
+msgstr "Menunggu batas pengiriman besok: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Held while the endpoints are off: <0/>"
-msgstr ""
+msgstr "Ditahan selama endpoint dinonaktifkan: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No failed deliveries."
-msgstr ""
+msgstr "Tidak ada pengiriman yang gagal."
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Recent failures"
-msgstr ""
+msgstr "Kegagalan terbaru"
 
 #. 0: when(token.issuedAt)
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Issued {0}"
-msgstr ""
+msgstr "Diterbitkan {0}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No scopes"
-msgstr ""
+msgstr "Tidak ada cakupan"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Scopes: <0/>"
-msgstr ""
+msgstr "Cakupan: <0/>"
 
 #. 0: when(expiresAt)
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Expires {0}"
-msgstr ""
+msgstr "Kedaluwarsa {0}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Revoke token"
-msgstr ""
+msgstr "Cabut token"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Issued tokens"
-msgstr ""
+msgstr "Token yang diterbitkan"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Refresh"
-msgstr ""
+msgstr "Muat ulang"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No tokens issued."
-msgstr ""
+msgstr "Belum ada token yang diterbitkan."
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Endpoints"
-msgstr ""
+msgstr "Endpoint"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Token revoked"
-msgstr ""
+msgstr "Token dicabut"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteMoveDialog.tsx
 msgid "Move incoming items"
-msgstr ""
+msgstr "Pindahkan item masuk"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteMoveDialog.tsx
 msgid "This config stores what other servers send somewhere else. Approve the new place to move the plugin’s write rights there, or save without it to stop accepting these items."
-msgstr ""
+msgstr "Konfigurasi ini menyimpan kiriman dari server lain di tempat lain. Setujui lokasi baru untuk memindahkan hak tulis plugin ke sana, atau simpan tanpa persetujuan tersebut untuk berhenti menerima item ini."
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteMoveDialog.tsx
 msgid "Save config"
-msgstr ""
+msgstr "Simpan konfigurasi"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Callers sign in with their Atomic agent."
-msgstr ""
+msgstr "Pemanggil masuk dengan agen Atomic mereka."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Other servers sign their requests (HTTP Signatures)."
-msgstr ""
+msgstr "Server lain menandatangani permintaan mereka (HTTP Signatures)."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Callers present an access token this plugin issued."
-msgstr ""
+msgstr "Pemanggil menunjukkan token akses yang diterbitkan plugin ini."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Callers present an access token bound to their key (DPoP)."
-msgstr ""
+msgstr "Pemanggil menunjukkan token akses yang terikat pada kunci mereka (DPoP)."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Anyone can call it, without signing in."
-msgstr ""
+msgstr "Siapa pun dapat memanggilnya tanpa masuk."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The plugin answers as itself, with the rights this installation grants it."
-msgstr ""
+msgstr "Plugin menjawab sebagai dirinya sendiri, dengan hak yang diberikan instalasi ini."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The plugin answers as the caller, with the caller’s rights."
-msgstr ""
+msgstr "Plugin menjawab sebagai pemanggil, dengan hak pemanggil tersebut."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The plugin answers with public data only."
-msgstr ""
+msgstr "Plugin hanya menjawab dengan data publik."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Served at <0/>. This address becomes the plugin’s public identity."
-msgstr ""
+msgstr "Dilayani di <0/>. Alamat ini menjadi identitas publik plugin."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Served on this drive’s own host name, next to its resources. That address becomes the plugin’s public identity."
-msgstr ""
+msgstr "Dilayani pada nama host milik drive ini, di samping sumber dayanya. Alamat tersebut menjadi identitas publik plugin."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Served at its own address under the server’s routes origin, which this server has not set (<0/>). That address becomes the plugin’s public identity."
-msgstr ""
+msgstr "Dilayani pada alamatnya sendiri di bawah origin rute server, yang belum diatur oleh server ini (<0/>). Alamat tersebut menjadi identitas publik plugin."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The server must run with <0/> or higher."
-msgstr ""
+msgstr "Server harus dijalankan dengan <0/> atau yang lebih tinggi."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The server must run with <0/>."
-msgstr ""
+msgstr "Server harus dijalankan dengan <0/>."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Answers for <0/> names only."
-msgstr ""
+msgstr "Hanya menjawab untuk nama <0/>."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Stores what callers send in <0/>."
-msgstr ""
+msgstr "Menyimpan kiriman pemanggil di <0/>."
 
 #. 0: route.enqueues.join(', ')
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Can send requests to other servers: {0}"
-msgstr ""
+msgstr "Dapat mengirim permintaan ke server lain: {0}"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Only this plugin answers this address on its host."
-msgstr ""
+msgstr "Hanya plugin ini yang menjawab alamat ini pada host-nya."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Shared with other plugins on its host; this plugin answers only its own entries."
-msgstr ""
+msgstr "Dibagikan dengan plugin lain pada host-nya; plugin ini hanya menjawab entrinya sendiri."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Stores incoming data: <0/>"
-msgstr ""
+msgstr "Menyimpan data masuk: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Callers add resources to <0/> unattended."
-msgstr ""
+msgstr "Pemanggil menambahkan sumber daya ke <0/> tanpa pengawasan."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The server keeps the private key; the plugin can only ask it to sign."
-msgstr ""
+msgstr "Server menyimpan kunci privat; plugin hanya dapat memintanya untuk menandatangani."
 
 #. 0: key.alg
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Signing key: <0/> ({0})"
-msgstr ""
+msgstr "Kunci penandatanganan: <0/> ({0})"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The plugin issues access tokens to other apps; the server stores them."
-msgstr ""
+msgstr "Plugin menerbitkan token akses untuk aplikasi lain; server menyimpannya."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Access tokens: <0/>"
-msgstr ""
+msgstr "Token akses: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "A raw port the server operator opens for this plugin."
-msgstr ""
+msgstr "Port mentah yang dibuka operator server untuk plugin ini."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Network port: <0/>"
-msgstr ""
+msgstr "Port jaringan: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The operator binds it with <0/>."
-msgstr ""
+msgstr "Operator mengikatnya dengan <0/>."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "A service the server operator runs next to the server."
-msgstr ""
+msgstr "Layanan yang dijalankan operator server di samping server."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Local service: <0/>"
-msgstr ""
+msgstr "Layanan lokal: <0/>"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The operator names it in <0/>."
-msgstr ""
+msgstr "Operator menentukannya dalam <0/>."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Public endpoints"
-msgstr ""
+msgstr "Endpoint publik"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Anyone on the internet can call these endpoints; this plugin decides what they may see."
-msgstr ""
+msgstr "Siapa pun di internet dapat memanggil endpoint ini; plugin ini menentukan apa yang boleh mereka lihat."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Needs public endpoints"
-msgstr ""
+msgstr "Memerlukan endpoint publik"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Requirements unknown"
-msgstr ""
+msgstr "Persyaratan tidak diketahui"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "This server couldn’t read what this release needs. The review checks it before installing."
-msgstr ""
+msgstr "Server ini tidak dapat membaca apa yang dibutuhkan rilis ini. Peninjauan memeriksanya sebelum instalasi."
 
 #: ../table-page/src/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Delete property and its children"
-msgstr ""
+msgstr "Hapus properti dan turunannya"
 
 #: ../table-page/src/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Removing column…"
-msgstr ""
+msgstr "Menghapus kolom…"
 
 #: ../table-page/src/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Column removal is unavailable. Check access and the selected table."
-msgstr ""
+msgstr "Penghapusan kolom tidak tersedia. Periksa akses dan tabel yang dipilih."
 
 #: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 msgid "The view or column definitions changed. Close this editor and reopen it."
-msgstr ""
+msgstr "Definisi tampilan atau kolom telah berubah. Tutup editor ini dan buka kembali."
 
 #: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 msgid "Retry to finish saving this change. Closing leaves any partially applied save pending."
-msgstr ""
+msgstr "Coba lagi untuk menyelesaikan penyimpanan perubahan ini. Menutupnya akan membiarkan penyimpanan yang diterapkan sebagian tetap tertunda."
 
 #: ../table-page/src/TablePage/ExpandedRowDialog.tsx
 msgid "Kept by apps"
-msgstr ""
+msgstr "Disimpan oleh aplikasi"
 
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 msgid "Choose a compatible column and a valid preset value."
-msgstr ""
+msgstr "Pilih kolom yang kompatibel dan nilai prasetel yang valid."
 
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 msgid "Additional stored presets are retained. This form edits the first preset."
-msgstr ""
+msgstr "Nilai prasetel tersimpan tambahan tetap dipertahankan. Formulir ini mengedit nilai prasetel pertama."
 
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 msgid "Enter a finite number."
-msgstr ""
+msgstr "Masukkan bilangan berhingga."
 
 #. 0: appName
 #: ../table-page/src/TablePage/RowGrantDialog.tsx
 msgid "Let {0} edit rows?"
-msgstr ""
+msgstr "Izinkan {0} mengedit baris?"
 
 #: ../table-page/src/TablePage/TableFilterBar.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "Unavailable column"
-msgstr ""
+msgstr "Kolom tidak tersedia"
 
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
 msgid "Filter value"
-msgstr ""
+msgstr "Nilai filter"
 
 #: ../table-page/src/TablePage/TableFilterBar.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "This column is unavailable."
-msgstr ""
+msgstr "Kolom ini tidak tersedia."
 
 #. 0: message
 #: ../table-page/src/TablePage/ViewSaveError.tsx
 msgid "Could not save view changes: {0}"
-msgstr ""
+msgstr "Tidak dapat menyimpan perubahan tampilan: {0}"
 
 #: ../table-page/src/TablePage/ViewSaveError.tsx
 msgid "Retry view save"
-msgstr ""
+msgstr "Coba simpan tampilan lagi"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Read-only"
-msgstr ""
+msgstr "Hanya baca"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "This table is read-only."
-msgstr ""
+msgstr "Tabel ini hanya dapat dibaca."
 
 #. 0: appName
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "{0} stopped following changes to this table"
-msgstr ""
+msgstr "{0} berhenti mengikuti perubahan pada tabel ini"
 
 #. 0: appName
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "{0} wants to change rows"
-msgstr ""
+msgstr "{0} ingin mengubah baris"
 
 #. 0: appName
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Stop {0} editing rows"
-msgstr ""
+msgstr "Hentikan {0} mengedit baris"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "It keeps showing the rows, read-only."
-msgstr ""
+msgstr "Aplikasi ini tetap menampilkan baris dalam mode hanya baca."
 
 #. 0: appName
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Let {0} edit rows"
-msgstr ""
+msgstr "Izinkan {0} mengedit baris"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Rename view"
-msgstr ""
+msgstr "Ganti nama tampilan"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Sync this table with"
-msgstr ""
+msgstr "Sinkronkan tabel ini dengan"
 
 #. 0: offer.pendingReview .map(l => lensNames.get(l) ?? l) .join(', ')
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Waiting for review of {0}"
-msgstr ""
+msgstr "Menunggu peninjauan {0}"
 
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "This app wants to open a link in a new tab."
-msgstr ""
+msgstr "Aplikasi ini ingin membuka tautan di tab baru."
 
 #. 0: ask.url.host
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "Open {0}?"
-msgstr ""
+msgstr "Buka {0}?"
 
 #. 0: ask.title
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "This app wants to open {0}, leaving the app."
-msgstr ""
+msgstr "Aplikasi ini ingin membuka {0} dan meninggalkan aplikasi."
 
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "Leave this app?"
-msgstr ""
+msgstr "Tinggalkan aplikasi ini?"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Not syncing with a server"
-msgstr ""
+msgstr "Tidak sedang menyinkronkan dengan server"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Sync not confirmed"
-msgstr ""
+msgstr "Sinkronisasi belum dikonfirmasi"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Synced with server"
-msgstr ""
+msgstr "Tersinkron dengan server"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Changes not yet synced"
-msgstr ""
+msgstr "Perubahan belum tersinkron"
 
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "No proposed edits are waiting."
-msgstr ""
+msgstr "Tidak ada usulan pengeditan yang menunggu."
 
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "One proposed edit is waiting for review."
-msgstr ""
+msgstr "Satu usulan pengeditan menunggu peninjauan."
 
 #. 0: waiting
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "{0} proposed edits are waiting for review."
-msgstr ""
+msgstr "{0} usulan pengeditan menunggu peninjauan."
 
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "Tables it follows"
-msgstr ""
+msgstr "Tabel yang diikutinya"
 
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "One row waiting"
-msgstr ""
+msgstr "Satu baris menunggu"
 
 #. 0: sub.pending.rows
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "{0} rows waiting"
-msgstr ""
+msgstr "{0} baris menunggu"
 
 #. 0: table.title || 'this table'
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "Stopped following changes to {0}: <0/>"
-msgstr ""
+msgstr "Berhenti mengikuti perubahan pada {0}: <0/>"
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Connected · <0/>"
-msgstr ""
+msgstr "Terhubung · <0/>"
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Disconnecting…"
-msgstr ""
+msgstr "Memutuskan koneksi…"
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Use existing connection"
-msgstr ""
+msgstr "Gunakan koneksi yang ada"
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Use this connection"
-msgstr ""
+msgstr "Gunakan koneksi ini"
 
 #. 0: proxyOrigin
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
-msgstr ""
+msgstr "Plugin ini akan menggunakan akun <0/> Anda melalui {0}. Proksi menyimpan koneksi tersebut di bawah akun Anda; plugin ini dapat menggunakannya sampai Anda memutuskan koneksinya."
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Connect an account"
-msgstr ""
+msgstr "Hubungkan akun"
 
 #. 0: platformName(platform)
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "{0} connected"
-msgstr ""
+msgstr "{0} terhubung"
 
 #. 0: platformName(platform)
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "{0} disconnected"
-msgstr ""
+msgstr "{0} terputus"
 
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "Config saved, rights moved"
-msgstr ""
+msgstr "Konfigurasi disimpan, hak dipindahkan"
 
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "Config saved"
-msgstr ""
+msgstr "Konfigurasi disimpan"
 
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "from <0/>"
-msgstr ""
+msgstr "dari <0/>"
 
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "Set <0/> to the resource that should receive incoming items. The plugin's route grant stores them there, so this config can't be saved without it."
-msgstr ""
+msgstr "Atur <0/> ke sumber daya yang harus menerima item masuk. Izin rute plugin menyimpannya di sana, sehingga konfigurasi ini tidak dapat disimpan tanpa pengaturan tersebut."
 
 #: ../table-page/src/DashboardPage/blocks/ChartBlock.tsx
 #: ../table-page/src/DashboardPage/blocks/StatBlock.tsx
 msgid "The configured measurement is unavailable."
-msgstr ""
+msgstr "Pengukuran yang dikonfigurasi tidak tersedia."
 
 #: ../table-page/src/TablePage/EditorCells/JSONCell.tsx
 msgid "Preview shortened. Open edit dialog for complete JSON."
-msgstr ""
+msgstr "Pratinjau dipersingkat. Buka dialog pengeditan untuk melihat JSON lengkap."
 
 #: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 msgid "Property attachment is unavailable. Check access and the selected table."
-msgstr ""
+msgstr "Penautan properti tidak tersedia. Periksa akses dan tabel yang dipilih."
 
 #: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 msgid "Attachment started. Retry to finish adding this property to the table."
-msgstr ""
+msgstr "Penautan telah dimulai. Coba lagi untuk menyelesaikan penambahan properti ini ke tabel."
 
 #. 0: kind
 #: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "New {0} Column"
-msgstr ""
+msgstr "Kolom {0} Baru"
 
 #: ../table-page/src/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Preparing column…"
-msgstr ""
+msgstr "Menyiapkan kolom…"
 
 #: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Column creation is unavailable. Check access and the selected table."
-msgstr ""
+msgstr "Pembuatan kolom tidak tersedia. Periksa akses dan tabel yang dipilih."
 
 #: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Column definition saved. Retry to finish adding it to the table."
-msgstr ""
+msgstr "Definisi kolom disimpan. Coba lagi untuk menyelesaikan penambahannya ke tabel."
 
 #: ../table-page/src/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Column editing is unavailable. Check access and the selected table."
-msgstr ""
+msgstr "Pengeditan kolom tidak tersedia. Periksa akses dan tabel yang dipilih."
 
 #: ../table-page/src/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "This draft is locked after a partial save. Retry to finish saving."
-msgstr ""
+msgstr "Draf ini dikunci setelah penyimpanan sebagian. Coba lagi untuk menyelesaikan penyimpanan."
 
 #: ../table-page/src/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Number format"
-msgstr ""
+msgstr "Format angka"
 
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
-msgstr ""
+msgstr "Nama kolom"
 
 #: ../table-page/src/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "Allow multiple values"
-msgstr ""
+msgstr "Izinkan beberapa nilai"
 
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text format"
-msgstr ""
+msgstr "Format teks"
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Date format"
-msgstr ""
+msgstr "Format tanggal"
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Enter a whole number between 0 and 20, or leave empty."
-msgstr ""
+msgstr "Masukkan bilangan bulat antara 0 dan 20, atau biarkan kosong."
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Enter whole numbers or leave the bounds empty."
-msgstr ""
+msgstr "Masukkan bilangan bulat atau biarkan batasnya kosong."
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Enter finite numbers or leave the bounds empty."
-msgstr ""
+msgstr "Masukkan bilangan berhingga atau biarkan batasnya kosong."
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Bounds cannot be negative."
-msgstr ""
+msgstr "Batas tidak boleh negatif."
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Minimum must not exceed maximum."
-msgstr ""
+msgstr "Minimum tidak boleh melebihi maksimum."
 
 #: ../data-browser/src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
@@ -14818,69 +14817,69 @@ msgstr "Perubahan terbaru diterima oleh peer"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File contents confirmed"
-msgstr ""
+msgstr "Isi berkas dikonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Checking file contents…"
-msgstr ""
+msgstr "Memeriksa isi berkas…"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not confirm file contents"
-msgstr ""
+msgstr "Tidak dapat mengonfirmasi isi berkas"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File storage unavailable"
-msgstr ""
+msgstr "Penyimpanan berkas tidak tersedia"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File contents not confirmed"
-msgstr ""
+msgstr "Isi berkas belum dikonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not confirm file contents on this device"
-msgstr ""
+msgstr "Tidak dapat mengonfirmasi isi berkas pada perangkat ini"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents saved to server"
-msgstr ""
+msgstr "Sumber daya dan isi berkas disimpan ke server"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents backed up to Cloud Vault"
-msgstr ""
+msgstr "Sumber daya dan isi berkas dicadangkan ke Cloud Vault"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents received by peers"
-msgstr ""
+msgstr "Sumber daya dan isi berkas diterima oleh peer"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Server file contents not confirmed"
-msgstr ""
+msgstr "Isi berkas di server belum dikonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Cloud Vault file contents not confirmed"
-msgstr ""
+msgstr "Isi berkas di Cloud Vault belum dikonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Peer file copies not confirmed"
-msgstr ""
+msgstr "Salinan berkas pada peer belum dikonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents saved on this device"
-msgstr ""
+msgstr "Sumber daya dan isi berkas disimpan pada perangkat ini"
 
 #. 0: peers.confirmedCount
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource-details copies: {0}"
-msgstr ""
+msgstr "Salinan detail sumber daya: {0}"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "A complete copy needs both resource details and file contents at the same destination."
-msgstr ""
+msgstr "Salinan lengkap memerlukan detail sumber daya dan isi berkas pada tujuan yang sama."
 
 #. 0: description
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource details: {0}"
-msgstr ""
+msgstr "Detail sumber daya: {0}"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Retry file recovery"
@@ -14936,4 +14935,4 @@ msgstr "Pemulihan berkas dibatalkan."
 
 #: ../table-page/src/TablePage/TableResource.tsx
 msgid "This host does not support this app view."
-msgstr ""
+msgstr "Host ini tidak mendukung tampilan aplikasi ini."

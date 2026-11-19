@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { allowLensEndpointKeysInRenders } from '@tomic/react';
 import ResourceArray from '@tomic/resource-ui/components/datatypes/ResourceArray';
 
-vi.mock('../../views/ResourceInline', () => ({
+vi.mock('@tomic/resource-ui/views/ResourceInline/index', () => ({
   ResourceInline: ({ subject }: { subject: string }) => (
     <span data-testid='inline'>{subject}</span>
   ),

@@ -2,11 +2,28 @@
 // @wc-ignore-file
 import React, { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render as renderReact,
+  screen,
+} from '@testing-library/react';
+import {
+  ThemeProvider,
+  buildTheme,
+} from '../../../resource-ui/test/providers.js';
 import {
   IconPickerDialog,
   TitleIcon,
 } from '@tomic/resource-ui/components/ResourceDecorations';
+
+function render(ui: React.ReactNode) {
+  return renderReact(ui, {
+    wrapper: ({ children }) => (
+      <ThemeProvider theme={buildTheme()}>{children}</ThemeProvider>
+    ),
+  });
+}
 
 // The resource's properties, shared between the mocked hooks and the asserts.
 const db = vi.hoisted(() => ({ props: {} as Record<string, unknown> }));
@@ -44,14 +61,20 @@ vi.mock('@tomic/react', async () => {
     useSubject: useProp,
   };
 });
-vi.mock('../hooks/useUpload', () => ({
+vi.mock('@tomic/resource-ui/hooks/useUpload', () => ({
   useUpload: () => ({ upload: vi.fn() }),
 }));
 vi.mock('../handlers/errorHandler', () => ({ errorHandler: vi.fn() }));
-vi.mock('../views/ErrorPage', () => ({ ErrorBoundary: () => null }));
-vi.mock('./ResourceGlyph', () => ({ ResourceGlyph: () => <i>glyph</i> }));
-vi.mock('./AvatarCropper', () => ({ AvatarCropper: () => null }));
-vi.mock('./Button', () => ({
+vi.mock('@tomic/resource-ui/components/ErrorBoundary', () => ({
+  ErrorBoundary: () => null,
+}));
+vi.mock('@tomic/resource-ui/components/ResourceGlyph', () => ({
+  ResourceGlyph: () => <i>glyph</i>,
+}));
+vi.mock('@tomic/resource-ui/components/AvatarCropper', () => ({
+  AvatarCropper: () => null,
+}));
+vi.mock('@tomic/ui/components/Button', () => ({
   Button: ({
     children,
     onClick,
@@ -60,14 +83,14 @@ vi.mock('./Button', () => ({
     onClick?: () => void;
   }) => <button onClick={onClick}>{children}</button>,
 }));
-vi.mock('./Row', () => ({
+vi.mock('@tomic/ui/components/Row', () => ({
   Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Column: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
 }));
 // A dialog that is open exactly as long as its owner says so.
-vi.mock('./Dialog', () => ({
+vi.mock('@tomic/resource-ui/components/Dialog/index', () => ({
   Dialog: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DialogContent: ({ children }: { children: React.ReactNode }) => (
@@ -79,19 +102,24 @@ vi.mock('./Dialog', () => ({
     () => bindShow(false),
   ],
 }));
-vi.mock('./forms/FilePicker/FilePickerDialog', () => ({
-  FilePickerDialog: ({
-    show,
-    onResourcePicked,
-  }: {
-    show: boolean;
-    onResourcePicked: (subject: string) => void;
-  }) =>
-    show ? (
-      <button onClick={() => onResourcePicked('did:ad:file')}>the file</button>
-    ) : null,
-}));
-vi.mock('../chunks/EmojiInput/EmojiInput', () => ({
+vi.mock(
+  '@tomic/resource-ui/components/forms/FilePicker/FilePickerDialog',
+  () => ({
+    FilePickerDialog: ({
+      show,
+      onResourcePicked,
+    }: {
+      show: boolean;
+      onResourcePicked: (subject: string) => void;
+    }) =>
+      show ? (
+        <button onClick={() => onResourcePicked('did:ad:file')}>
+          the file
+        </button>
+      ) : null,
+  }),
+);
+vi.mock('@tomic/resource-ui/chunks/EmojiInput/EmojiInput', () => ({
   EmojiPickerPanel: ({
     onEmojiSelect,
   }: {

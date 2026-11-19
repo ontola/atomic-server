@@ -14,7 +14,7 @@ import inbox from '../../../../../testdata/plugin-routes/inbox/manifest.json';
 
 const dialog = vi.hoisted(() => [{}, () => undefined, () => undefined, true]);
 
-vi.mock('@components/Dialog', async original => {
+vi.mock('@tomic/resource-ui/components/Dialog/index', async original => {
   const Pass = ({ children }: { children?: React.ReactNode }) => (
     <div>{children}</div>
   );
@@ -31,7 +31,7 @@ vi.mock('@components/Dialog', async original => {
     useDialog: () => dialog,
   };
 });
-vi.mock('@views/ResourceInline', () => ({
+vi.mock('@tomic/resource-ui/views/ResourceInline/index', () => ({
   ResourceInline: ({ subject }: { subject: string }) => <span>{subject}</span>,
 }));
 

@@ -7,8 +7,11 @@ import { useUpload } from '@tomic/resource-ui/hooks/useUpload';
 
 const errorHandler = vi.fn();
 
-vi.mock('../handlers/errorHandler', () => ({
-  errorHandler: (e: unknown) => errorHandler(e),
+vi.mock('@tomic/resource-ui/ResourceUIHost', async original => ({
+  ...(await original<typeof import('@tomic/resource-ui/ResourceUIHost')>()),
+  useResourceUIHost: () => ({
+    reportError: (e: unknown) => errorHandler(e),
+  }),
 }));
 
 it('shows a failed upload and passes the optimistic option to the store', async () => {

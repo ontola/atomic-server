@@ -6,13 +6,17 @@ This candidate includes the complete TablePage extraction, Syncables, per-resour
 
 ## Validation
 
-- [x] Package-boundary source audit: no host imports, missing local sources or package cycles.
-- [x] SDK/UI/grid/resource/page distributions and declarations; complete Atomic app types including tests.
-- [x] SDK2316 tests (one existing skip), grid211, shared resource UI104 and complete page667 tests; targeted app/proxy/Syncables121 plus28 host regressions.
-- [x] Fresh own Rust/WASM release build and Binaryen117 optimization; all667 page tests pass with real formula WASM.
-- [x] Unchanged delivered embed budgets:966.9KB first-use gzip and15.10MB total. Executable frames, specialized resource views and onboarding UI load on actual use.
-- [ ] Final full-app unit aggregate, post-fix external package proof and mandatory normal commit hook; rustfmt already passes.
-- [ ] Public candidate CI and final review evidence.
+- [x] Canonical source boundaries: no host imports, missing local sources or package cycles.
+- [x] SDK/UI/grid/resource/page distributions and declarations; final complete Atomic app types including tests.
+- [x] SDK aggregate2316 passing tests (one existing skip), grid211, shared resource UI104, complete page667, and final full Atomic app2575 tests across349 files. Focused loopback/public-export checks also pass after the SDK barrel resolution.
+- [x] Fresh own Rust/WASM release build and Binaryen117 optimization; all667 page tests pass with the real formula evaluator.
+- [x] Mandatory normal commit hook at5581cf0ce: complete browser lint/format and workspace/all-target native Clippy with light+wasm-plugins and denied warnings. Rustfmt passes; no Rust changes follow it.
+- [x] Final production web/embed builds and fresh seven-archive clean external consumer: NodeNext declarations, direct SDK Resource/property InputString editing, Dutch validation, foreign-catalog isolation and keyed-message patch.
+- [x] Unchanged actual Flutter payload budgets:966.9KB first-use gzip and15.109MB total. Executable frames, specialized resource views and onboarding UI load on actual use.
+- [x] Built embedded renderer desktop/mobile folder-to-lazy-class journeys pass with zero page errors using188 genuine SDK causal Loro snapshots through a synthetic native host. This is rendering/module-dispatch evidence, not backend/persistence acceptance.
+- [x] All3353 active catalog IDs in each of six locales are translated; placeholder/plural audit and second-clean stability pass with no known translation loss.
+- [x] Initial aggregate Flutter CI is green at5581cf0ce; final-head workflows remain required.
+- [ ] Final published-head Main/downstream and package CI. Matching SaaS alignment PR: https://github.com/ontola/atomic-saas/pull/272. No alias or immutable tag advances before those gates.
 
 ## ELFA acceptance remaining
 

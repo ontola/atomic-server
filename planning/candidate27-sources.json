@@ -1130,10 +1130,12 @@
     "Private tree union retains TableChanges and SyncReceipts; Tree::ALL count updated to21 and validated by fresh Rust/WASM compilation.",
     "Executable Syncables/afterCommit and resource evidence indicators are lazy Atomic host services, preserving extracted page ownership and avoiding eager executable app UI in startup.",
     "Retain unchanged1000000-byte first-use gzip and16777216-byte delivered embed budgets. Executable app frames, specialized resource pages and account-setup UI now load on actual use through existing Suspense boundaries; folder/default/drive startup remains eager. No SDK save/query/durability API changed for size.",
-    "Preserve the established SDK root isLoopbackHost export from urls.ts (reserved *.localhost and127/8 behavior). The newer receipt-specific strict helper remains included and directly used by its private modules; its explicit barrel re-export cannot shadow the existing public API."
+    "Preserve the established SDK root isLoopbackHost export from urls.ts (reserved *.localhost and127/8 behavior). The newer receipt-specific strict helper remains included and directly used by its private modules; its explicit barrel re-export cannot shadow the existing public API.",
+    "Two identical browser-peer regression function bodies arrived through overlapping receipt branches. Retain each full assertion body once, removing duplicate definitions that prevented all-target Rust compilation.",
+    "The later-edit/earlier-ACK sidebar fixture disables the unrelated real WebSocket via public connect:false while preserving explicit online state, both versions, both controlled ACKs and every original warning assertion."
   ],
   "validation": {
-    "status": "Fresh own WASM/page/core/resource tests passed. Full app aggregate, final rebuilt package proof, mandatory Rust hook and hosted CI remain in progress.",
+    "status": "All local gates passed. Full hosted Main/downstream and dedicated package workflows must validate the final published commit before any shared alias or immutable candidate tag advances.",
     "package_boundaries": {
       "production_modules": 513,
       "host_imports_missing_sources_cycles": 0
@@ -1147,12 +1149,13 @@
       "resource-ui",
       "table-page"
     ],
-    "atomic_app_typecheck": "pass including tests",
+    "atomic_app_typecheck": "Final post-fixture complete app typecheck passes, including tests.",
     "sdk_tests": {
       "passed": 2316,
       "skipped": 1,
       "files": 221,
-      "skip_note": "Existing skip retained; no new skip."
+      "skip_note": "Existing skip retained; no new skip.",
+      "checkpoint_note": "Aggregate implementation tests passed before minimal public-barrel export resolution; subsequent private-loopback8 tests, built public export assertions, complete app2575 tests and fresh package graph validate that resolution."
     },
     "table_tests": {
       "passed": 211,
@@ -1181,14 +1184,19 @@
       "scope": "Receipt/Vault/recovery source combined before extraction; SDK aggregate rerun above includes2522."
     },
     "rust_format": "pass",
-    "native_clippy_hook": "pending",
+    "native_clippy_hook": {
+      "status": "pass",
+      "commit": "5581cf0cebcd09faa74736171c2746bce69c6b3c",
+      "command": "cargo clippy --workspace --exclude atomic-server-tauri --no-deps --all-targets --no-default-features --features light,wasm-plugins -- -D warnings",
+      "note": "Mandatory normal hook checked the actual staged snapshot; no subsequent Rust changes."
+    },
     "hosted_ci": "pending",
     "embed_first_use": {
       "gzip_bytes": 966900,
       "budget": 1000000,
-      "delivered_directory_bytes": 15098600,
+      "delivered_directory_bytes": 15109000,
       "directory_budget": 16777216,
-      "note": "Exact coordinator delivery check passed; no budget increase."
+      "note": "Coordinator checked the actual Flutter delivery payload; unchanged budgets pass."
     },
     "react_compiler": "New host service wrappers, LazyAppFrame, LazyGettingStartedFlow and ResourcePage compile without diagnostics; other existing host diagnostics independently compared against source baselines.",
     "targeted_ui_fixtures": {
@@ -1196,6 +1204,58 @@
       "files": 3,
       "fix": "Two leaf mocks now target canonical shared AtomicLink; assertions unchanged. Adjacent sync status suite passed unchanged."
     },
-    "full_app_tests": "Pending complete rerun after canonical fixture and public SDK barrel fixes; interrupted initial aggregate is not a pass."
+    "full_app_tests": {
+      "passed": 2575,
+      "files": 349,
+      "failed": 0,
+      "errors": 0
+    },
+    "packed_consumer": "Fresh seven-archive external install passes declarations/NodeNext, direct SDK Resource/property InputString editing, Dutch validation, foreign-catalog isolation and keyed-message patch.",
+    "production_builds": [
+      "Final SDK/react/UI/resource/page dependency graph",
+      "Final production Atomic web app",
+      "Final Flutter embedded app"
+    ],
+    "embedded_browser": {
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "journey": "Folder rendering to lazily loaded class renderer",
+      "page_errors": 0,
+      "fixture": "188 genuine SDK causal Loro snapshots through synthetic native channel; rendering/module dispatch proof only, no production-backend or persistence claim.",
+      "baseline_note": "The older repository JSON-only native mock also produces Untitled on complete-extraction baseline2595; no SDK behavior was changed to hide that inaccurate fixture."
+    },
+    "catalogs": {
+      "active_ids_per_locale": 3353,
+      "locales": 6,
+      "missing_translations": 0,
+      "placeholder_plural_issues": 0,
+      "known_translation_loss": 0,
+      "second_clean_byte_stable": true
+    },
+    "additional_tooling_tests": {
+      "react_compiler": 8,
+      "catalog_audits": 10,
+      "mcp_scripts": 2
+    },
+    "initial_flutter_ci": {
+      "status": "success",
+      "commit": "5581cf0cebcd09faa74736171c2746bce69c6b3c",
+      "url": "https://github.com/ontola/atomic-server/actions/runs/44482847264",
+      "note": "Final frontend follow-up requires its own fresh remote workflow result."
+    }
+  },
+  "selection": {
+    "open_pull_requests": 85,
+    "drafts_included": 32,
+    "snapshot_policy": "All open authored PR heads frozen at request start, including drafts; exact heads and supersessions above."
+  },
+  "initial_hook_checked_aggregate": "5581cf0cebcd09faa74736171c2746bce69c6b3c",
+  "candidate_branch": "claude/atomic-plugins-pin-candidate27",
+  "paired_saas": {
+    "pull_request": "https://github.com/ontola/atomic-saas/pull/272",
+    "scope": "Minimal lockfile and development-profile alignment; no SaaS behavior or deployment.",
+    "status": "Draft matching-branch PR published for full hosted downstream CI."
   }
 }

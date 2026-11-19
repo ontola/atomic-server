@@ -13624,51 +13624,51 @@ msgstr "Aucune sauvegarde des 7 derniers jours n’a pu être vérifiée."
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "# plugin needs server features this server doesn’t have."
 msgid_plural "# plugins need server features this server doesn’t have."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "# plugin nécessite des fonctionnalités serveur dont ce serveur ne dispose pas."
+msgstr[1] "# plugins nécessitent des fonctionnalités serveur dont ce serveur ne dispose pas."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Sign in to answer this request."
-msgstr ""
+msgstr "Connectez-vous pour répondre à cette demande."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Loading the request…"
-msgstr ""
+msgstr "Chargement de la demande…"
 
 #. 0: ' '; 1: ' '
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "<0/> asks to give{0} <1/> a token for its{1} <2/> endpoints."
-msgstr ""
+msgstr "<0/> demande de fournir à{0} <1/> un jeton pour ses{1} points de terminaison <2/>."
 
 #. 0: ' '
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "<0/> asks to issue a token for its{0} <1/> endpoints."
-msgstr ""
+msgstr "<0/> demande d’émettre un jeton pour ses{0} points de terminaison <1/>."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "No specific permissions."
-msgstr ""
+msgstr "Aucune autorisation particulière."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "With these permissions"
-msgstr ""
+msgstr "Avec ces autorisations"
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Allowing…"
-msgstr ""
+msgstr "Autorisation…"
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Denying…"
-msgstr ""
+msgstr "Refus…"
 
 #. 0: ask.redirectOrigin
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "You can revoke the token later from the plugin. After you answer, you go back to {0}."
-msgstr ""
+msgstr "Vous pourrez révoquer le jeton depuis le plugin. Après votre réponse, vous reviendrez à {0}."
 
 #: ../data-browser/src/routes/RouteConsentRoute.tsx
 msgid "Allow access?"
-msgstr ""
+msgstr "Autoriser l’accès ?"
 
 #. 0: ago
 #. 0: syncedAgo
@@ -13691,782 +13691,782 @@ msgstr "Dernière activité de synchronisation {0}"
 
 #: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Saved locally"
-msgstr ""
+msgstr "Enregistré localement"
 
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "This app"
-msgstr ""
+msgstr "Cette application"
 
 #. 0: appName
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "{0} wants to change 1 row"
-msgstr ""
+msgstr "{0} souhaite modifier 1 ligne"
 
 #. 0: appName; 1: rows
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "{0} wants to change {1} rows"
-msgstr ""
+msgstr "{0} souhaite modifier {1} lignes"
 
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "Allow all edits by this view on this table"
-msgstr ""
+msgstr "Autoriser toutes les modifications de cette vue sur cette table"
 
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "Apply"
-msgstr ""
+msgstr "Appliquer"
 
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "Decline"
-msgstr ""
+msgstr "Refuser"
 
 #. 0: tableName
 #: ../data-browser/src/chunks/AppPage/AfterCommitBar.tsx
 msgid "<0/> stopped following changes to {0}: <1/>"
-msgstr ""
+msgstr "<0/> a cessé de suivre les modifications de {0} : <1/>"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "Open link"
-msgstr ""
+msgstr "Ouvrir le lien"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 msgid "This app wants to open <0/> in a new tab. <1/>"
-msgstr ""
+msgstr "Cette application souhaite ouvrir <0/> dans un nouvel onglet. <1/>"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 msgid "Open a link"
-msgstr ""
+msgstr "Ouvrir un lien"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 #: ../table-page/src/TablePage/RowGrantDialog.tsx
 msgid "Allow editing"
-msgstr ""
+msgstr "Autoriser la modification"
 
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 msgid "Let this app edit rows"
-msgstr ""
+msgstr "Autoriser cette application à modifier les lignes"
 
 #: ../data-browser/src/chunks/AppPage/AppImporterRun.tsx
 msgid "Choose file"
-msgstr ""
+msgstr "Choisir un fichier"
 
 #: ../data-browser/src/chunks/AppPage/AppImporterRun.tsx
 msgid "Import with this app"
-msgstr ""
+msgstr "Importer avec cette application"
 
 #. 0: ' '
 #: ../data-browser/src/chunks/AppPage/AppImporterRun.tsx
 msgid "This app wants to import <0/> with{0} <1/>. You review the changes before anything is saved."
-msgstr ""
+msgstr "Cette application souhaite importer <0/> avec{0} <1/>. Vous examinerez les modifications avant tout enregistrement."
 
 #: ../data-browser/src/chunks/AppPage/AppImporterRun.tsx
 msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
-msgstr ""
+msgstr "Cette application souhaite importer un fichier avec <0/>. Choisissez le fichier ici. Vous examinerez les modifications avant tout enregistrement."
 
 #: src/chunks/AppPage/RowGrantText.tsx
 msgid "It also keeps its own sync information on the rows. That is not shown as columns, only under \"Kept by apps\" when you open a row. "
-msgstr ""
+msgstr "Elle conserve aussi ses propres informations de synchronisation sur les lignes. Elles ne sont pas affichées comme des colonnes, mais seulement sous « Conservé par les applications » lorsque vous ouvrez une ligne. "
 
 #. 0: extras
 #: src/chunks/AppPage/RowGrantText.tsx
 msgid "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. {0}You can take this back from the tab's menu."
-msgstr ""
+msgstr "<0/> peut modifier les lignes de cette table. Elle peut renseigner les colonnes et ajouter des lignes, mais ne peut ni supprimer de lignes ni modifier la table elle-même. {0}Vous pourrez révoquer cette autorisation dans le menu de l’onglet."
 
 #: src/chunks/AppPage/RowGrantText.tsx
 msgid "<0/> is told when rows change, also when this tab is closed."
-msgstr ""
+msgstr "<0/> est informée des modifications des lignes, même lorsque cet onglet est fermé."
 
 #: ../table-page/src/DashboardPage/useBlockQuery.ts
 #: ../table-page/src/TablePage/useTableView.ts
 msgid "Saved view is unavailable in this table."
-msgstr ""
+msgstr "La vue enregistrée n’est pas disponible dans cette table."
 
 #: ../table-page/src/DashboardPage/useBlockQuery.ts
 #: ../table-page/src/TablePage/useTableData.ts
 #: ../table-page/src/TablePage/useTableView.ts
 msgid "Saved view configuration is invalid."
-msgstr ""
+msgstr "La configuration de la vue enregistrée est invalide."
 
 #. 0: offer.path .map(step => lensNames.get(step.lens) ?? step.lens) .join(', then ')
 #: src/chunks/Pieces/usePieceOffers.ts
 msgid "Through {0}"
-msgstr ""
+msgstr "Via {0}"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "the resource in the config key <0/>, which is not set"
-msgstr ""
+msgstr "la ressource de la clé de configuration <0/>, qui n’est pas définie"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "Set <0/> in the config below to the resource that should receive these items, or leave this unchecked."
-msgstr ""
+msgstr "Définissez <0/> dans la configuration ci-dessous avec la ressource qui doit recevoir ces éléments, ou laissez cette case décochée."
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "Let <0/> add items to <1/> when other servers send them"
-msgstr ""
+msgstr "Autoriser <0/> à ajouter des éléments à <1/> lorsque d’autres serveurs les envoient"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "Incoming items"
-msgstr ""
+msgstr "Éléments entrants"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "The plugin gets write rights on these resources, and may only change or delete what it added. Revoking or uninstalling it takes the rights back. Unchecked, anything sent to these endpoints is refused."
-msgstr ""
+msgstr "Le plugin obtient des droits d’écriture sur ces ressources et ne peut modifier ou supprimer que ce qu’il a ajouté. La révocation ou la désinstallation lui retire ces droits. Si cette case reste décochée, tout envoi vers ces points de terminaison est refusé."
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "Route writes"
-msgstr ""
+msgstr "Écritures des routes"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Serving"
-msgstr ""
+msgstr "En service"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Paused"
-msgstr ""
+msgstr "En pause"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Retired"
-msgstr ""
+msgstr "Retiré du service"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Turned off"
-msgstr ""
+msgstr "Désactivé"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Not active"
-msgstr ""
+msgstr "Inactif"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Errors"
-msgstr ""
+msgstr "Erreurs"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Public endpoints are turned off on this server"
-msgstr ""
+msgstr "Les points de terminaison publics sont désactivés sur ce serveur"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Its URLs answer 404 and its deliveries wait. Its data, keys and tokens are kept, and it comes back without a new review once the server allows it."
-msgstr ""
+msgstr "Ses URL répondent avec une erreur 404 et ses livraisons restent en attente. Ses données, clés et jetons sont conservés ; le service reprend sans nouvel examen dès que le serveur l’autorise."
 
 #. 0: status; 1: when(at); 2: message
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Last error ({0}, {1}): {2}"
-msgstr ""
+msgstr "Dernière erreur ({0}, {1}) : {2}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No address yet: <0/> is not set."
-msgstr ""
+msgstr "Pas encore d’adresse : <0/> n’est pas défini."
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Deliveries waiting: <0/>"
-msgstr ""
+msgstr "Livraisons en attente : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Requests (24 h): <0/>"
-msgstr ""
+msgstr "Requêtes (24 h) : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Errors (24 h): <0/>"
-msgstr ""
+msgstr "Erreurs (24 h) : <0/>"
 
 #. 0: failure.attempts
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Dead letter (gave up after attempt {0})"
-msgstr ""
+msgstr "Livraison abandonnée après la tentative {0}"
 
 #. 0: failure.attempts; 1: when(failure.nextAt)
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Retrying (attempt {0}), next at {1}"
-msgstr ""
+msgstr "Nouvelle tentative ({0}), prochaine à {1}"
 
 #. 0: failure.attempts
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Retrying (attempt {0})"
-msgstr ""
+msgstr "Nouvelle tentative ({0})"
 
 #. 0: failure.error ?? ''
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No answer; it may have arrived. {0}"
-msgstr ""
+msgstr "Aucune réponse ; l’envoi a peut-être été reçu. {0}"
 
 #. 0: failure.status; 1: failure.error ?? ''
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Answered {0}. {1}"
-msgstr ""
+msgstr "Réponse {0}. {1}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "<0/> to <1/>"
-msgstr ""
+msgstr "<0/> vers <1/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Sent today: <0/>"
-msgstr ""
+msgstr "Envoyés aujourd’hui : <0/>"
 
 #. 0: cap
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Sent today: <0/> of {0}"
-msgstr ""
+msgstr "Envoyés aujourd’hui : <0/> sur {0}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Queued: <0/>"
-msgstr ""
+msgstr "En attente : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Sending: <0/>"
-msgstr ""
+msgstr "En cours d’envoi : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Delivered (24 h): <0/>"
-msgstr ""
+msgstr "Livrés (24 h) : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Dead letters: <0/>"
-msgstr ""
+msgstr "Livraisons abandonnées : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Deliveries"
-msgstr ""
+msgstr "Livraisons"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Waiting for tomorrow’s cap: <0/>"
-msgstr ""
+msgstr "En attente du plafond de demain : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Held while the endpoints are off: <0/>"
-msgstr ""
+msgstr "Retenus pendant la désactivation des points de terminaison : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No failed deliveries."
-msgstr ""
+msgstr "Aucune livraison échouée."
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Recent failures"
-msgstr ""
+msgstr "Échecs récents"
 
 #. 0: when(token.issuedAt)
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Issued {0}"
-msgstr ""
+msgstr "Émis le {0}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No scopes"
-msgstr ""
+msgstr "Aucune autorisation"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Scopes: <0/>"
-msgstr ""
+msgstr "Autorisations : <0/>"
 
 #. 0: when(expiresAt)
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Expires {0}"
-msgstr ""
+msgstr "Expire le {0}"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Revoke token"
-msgstr ""
+msgstr "Révoquer le jeton"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Issued tokens"
-msgstr ""
+msgstr "Jetons émis"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Refresh"
-msgstr ""
+msgstr "Actualiser"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "No tokens issued."
-msgstr ""
+msgstr "Aucun jeton émis."
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Endpoints"
-msgstr ""
+msgstr "Points de terminaison"
 
 #: ../data-browser/src/chunks/Plugins/EndpointHealth.tsx
 msgid "Token revoked"
-msgstr ""
+msgstr "Jeton révoqué"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteMoveDialog.tsx
 msgid "Move incoming items"
-msgstr ""
+msgstr "Déplacer les éléments entrants"
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteMoveDialog.tsx
 msgid "This config stores what other servers send somewhere else. Approve the new place to move the plugin’s write rights there, or save without it to stop accepting these items."
-msgstr ""
+msgstr "Cette configuration stocke ailleurs ce que les autres serveurs envoient. Approuvez le nouvel emplacement pour y déplacer les droits d’écriture du plugin, ou enregistrez sans l’approuver pour cesser d’accepter ces éléments."
 
 #: ../data-browser/src/chunks/Plugins/RouteWriteMoveDialog.tsx
 msgid "Save config"
-msgstr ""
+msgstr "Enregistrer la configuration"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Callers sign in with their Atomic agent."
-msgstr ""
+msgstr "Les appelants s’identifient avec leur agent Atomic."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Other servers sign their requests (HTTP Signatures)."
-msgstr ""
+msgstr "Les autres serveurs signent leurs requêtes (HTTP Signatures)."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Callers present an access token this plugin issued."
-msgstr ""
+msgstr "Les appelants présentent un jeton d’accès émis par ce plugin."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Callers present an access token bound to their key (DPoP)."
-msgstr ""
+msgstr "Les appelants présentent un jeton d’accès lié à leur clé (DPoP)."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Anyone can call it, without signing in."
-msgstr ""
+msgstr "Tout le monde peut l’appeler, sans se connecter."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The plugin answers as itself, with the rights this installation grants it."
-msgstr ""
+msgstr "Le plugin répond en son propre nom, avec les droits accordés par cette installation."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The plugin answers as the caller, with the caller’s rights."
-msgstr ""
+msgstr "Le plugin répond au nom de l’appelant, avec les droits de celui-ci."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The plugin answers with public data only."
-msgstr ""
+msgstr "Le plugin répond uniquement avec des données publiques."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Served at <0/>. This address becomes the plugin’s public identity."
-msgstr ""
+msgstr "Disponible à l’adresse <0/>. Cette adresse devient l’identité publique du plugin."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Served on this drive’s own host name, next to its resources. That address becomes the plugin’s public identity."
-msgstr ""
+msgstr "Disponible sur le nom d’hôte propre à ce lecteur, à côté de ses ressources. Cette adresse devient l’identité publique du plugin."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Served at its own address under the server’s routes origin, which this server has not set (<0/>). That address becomes the plugin’s public identity."
-msgstr ""
+msgstr "Disponible à sa propre adresse sous l’origine des routes du serveur, que ce serveur n’a pas définie (<0/>). Cette adresse devient l’identité publique du plugin."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The server must run with <0/> or higher."
-msgstr ""
+msgstr "Le serveur doit fonctionner avec <0/> ou un niveau supérieur."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The server must run with <0/>."
-msgstr ""
+msgstr "Le serveur doit fonctionner avec <0/>."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Answers for <0/> names only."
-msgstr ""
+msgstr "Répond uniquement pour les noms <0/>."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Stores what callers send in <0/>."
-msgstr ""
+msgstr "Stocke ce que les appelants envoient dans <0/>."
 
 #. 0: route.enqueues.join(', ')
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Can send requests to other servers: {0}"
-msgstr ""
+msgstr "Peut envoyer des requêtes à d’autres serveurs : {0}"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Only this plugin answers this address on its host."
-msgstr ""
+msgstr "Seul ce plugin répond à cette adresse sur son hôte."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Shared with other plugins on its host; this plugin answers only its own entries."
-msgstr ""
+msgstr "Partagé avec d’autres plugins sur son hôte ; ce plugin répond uniquement pour ses propres entrées."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Stores incoming data: <0/>"
-msgstr ""
+msgstr "Stocke les données entrantes : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Callers add resources to <0/> unattended."
-msgstr ""
+msgstr "Les appelants ajoutent des ressources à <0/> sans intervention."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The server keeps the private key; the plugin can only ask it to sign."
-msgstr ""
+msgstr "Le serveur conserve la clé privée ; le plugin peut seulement lui demander de signer."
 
 #. 0: key.alg
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Signing key: <0/> ({0})"
-msgstr ""
+msgstr "Clé de signature : <0/> ({0})"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The plugin issues access tokens to other apps; the server stores them."
-msgstr ""
+msgstr "Le plugin émet des jetons d’accès pour d’autres applications ; le serveur les stocke."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Access tokens: <0/>"
-msgstr ""
+msgstr "Jetons d’accès : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "A raw port the server operator opens for this plugin."
-msgstr ""
+msgstr "Un port réseau brut que l’opérateur du serveur ouvre pour ce plugin."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Network port: <0/>"
-msgstr ""
+msgstr "Port réseau : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The operator binds it with <0/>."
-msgstr ""
+msgstr "L’opérateur l’associe avec <0/>."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "A service the server operator runs next to the server."
-msgstr ""
+msgstr "Un service que l’opérateur exécute à côté du serveur."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Local service: <0/>"
-msgstr ""
+msgstr "Service local : <0/>"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "The operator names it in <0/>."
-msgstr ""
+msgstr "L’opérateur le nomme dans <0/>."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Public endpoints"
-msgstr ""
+msgstr "Points de terminaison publics"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Anyone on the internet can call these endpoints; this plugin decides what they may see."
-msgstr ""
+msgstr "Toute personne sur Internet peut appeler ces points de terminaison ; ce plugin décide de ce qu’elle peut voir."
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Needs public endpoints"
-msgstr ""
+msgstr "Nécessite des points de terminaison publics"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Requirements unknown"
-msgstr ""
+msgstr "Exigences inconnues"
 
 #: ../data-browser/src/chunks/Plugins/PublicEndpoints.tsx
 msgid "This server couldn’t read what this release needs. The review checks it before installing."
-msgstr ""
+msgstr "Ce serveur n’a pas pu lire les exigences de cette version. L’examen les vérifie avant l’installation."
 
 #: ../table-page/src/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Delete property and its children"
-msgstr ""
+msgstr "Supprimer la propriété et ses enfants"
 
 #: ../table-page/src/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Removing column…"
-msgstr ""
+msgstr "Suppression de la colonne…"
 
 #: ../table-page/src/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Column removal is unavailable. Check access and the selected table."
-msgstr ""
+msgstr "La suppression de colonne n’est pas disponible. Vérifiez l’accès et la table sélectionnée."
 
 #: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 msgid "The view or column definitions changed. Close this editor and reopen it."
-msgstr ""
+msgstr "Les définitions de la vue ou des colonnes ont changé. Fermez cet éditeur et rouvrez-le."
 
 #: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 msgid "Retry to finish saving this change. Closing leaves any partially applied save pending."
-msgstr ""
+msgstr "Réessayez pour terminer l’enregistrement de cette modification. Fermer laisse les enregistrements partiellement appliqués en attente."
 
 #: ../table-page/src/TablePage/ExpandedRowDialog.tsx
 msgid "Kept by apps"
-msgstr ""
+msgstr "Conservé par les applications"
 
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 msgid "Choose a compatible column and a valid preset value."
-msgstr ""
+msgstr "Choisissez une colonne compatible et une valeur prédéfinie valide."
 
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 msgid "Additional stored presets are retained. This form edits the first preset."
-msgstr ""
+msgstr "Les autres valeurs prédéfinies enregistrées sont conservées. Ce formulaire modifie la première."
 
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 msgid "Enter a finite number."
-msgstr ""
+msgstr "Saisissez un nombre fini."
 
 #. 0: appName
 #: ../table-page/src/TablePage/RowGrantDialog.tsx
 msgid "Let {0} edit rows?"
-msgstr ""
+msgstr "Autoriser {0} à modifier les lignes ?"
 
 #: ../table-page/src/TablePage/TableFilterBar.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "Unavailable column"
-msgstr ""
+msgstr "Colonne indisponible"
 
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
 msgid "Filter value"
-msgstr ""
+msgstr "Valeur du filtre"
 
 #: ../table-page/src/TablePage/TableFilterBar.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "This column is unavailable."
-msgstr ""
+msgstr "Cette colonne n’est pas disponible."
 
 #. 0: message
 #: ../table-page/src/TablePage/ViewSaveError.tsx
 msgid "Could not save view changes: {0}"
-msgstr ""
+msgstr "Impossible d’enregistrer les modifications de la vue : {0}"
 
 #: ../table-page/src/TablePage/ViewSaveError.tsx
 msgid "Retry view save"
-msgstr ""
+msgstr "Réessayer l’enregistrement de la vue"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Read-only"
-msgstr ""
+msgstr "Lecture seule"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "This table is read-only."
-msgstr ""
+msgstr "Cette table est en lecture seule."
 
 #. 0: appName
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "{0} stopped following changes to this table"
-msgstr ""
+msgstr "{0} a cessé de suivre les modifications de cette table"
 
 #. 0: appName
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "{0} wants to change rows"
-msgstr ""
+msgstr "{0} souhaite modifier des lignes"
 
 #. 0: appName
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Stop {0} editing rows"
-msgstr ""
+msgstr "Empêcher {0} de modifier les lignes"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "It keeps showing the rows, read-only."
-msgstr ""
+msgstr "Les lignes restent affichées, en lecture seule."
 
 #. 0: appName
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Let {0} edit rows"
-msgstr ""
+msgstr "Autoriser {0} à modifier les lignes"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Rename view"
-msgstr ""
+msgstr "Renommer la vue"
 
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Sync this table with"
-msgstr ""
+msgstr "Synchroniser cette table avec"
 
 #. 0: offer.pendingReview .map(l => lensNames.get(l) ?? l) .join(', ')
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 msgid "Waiting for review of {0}"
-msgstr ""
+msgstr "En attente de l’examen de {0}"
 
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "This app wants to open a link in a new tab."
-msgstr ""
+msgstr "Cette application souhaite ouvrir un lien dans un nouvel onglet."
 
 #. 0: ask.url.host
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "Open {0}?"
-msgstr ""
+msgstr "Ouvrir {0} ?"
 
 #. 0: ask.title
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "This app wants to open {0}, leaving the app."
-msgstr ""
+msgstr "Cette application souhaite ouvrir {0} en quittant l’application."
 
 #: ../data-browser/src/components/HostUI/hostUI.tsx
 msgid "Leave this app?"
-msgstr ""
+msgstr "Quitter cette application ?"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Not syncing with a server"
-msgstr ""
+msgstr "Aucune synchronisation avec un serveur"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Sync not confirmed"
-msgstr ""
+msgstr "Synchronisation non confirmée"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Synced with server"
-msgstr ""
+msgstr "Synchronisé avec le serveur"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Changes not yet synced"
-msgstr ""
+msgstr "Modifications pas encore synchronisées"
 
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "No proposed edits are waiting."
-msgstr ""
+msgstr "Aucune modification proposée n’est en attente."
 
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "One proposed edit is waiting for review."
-msgstr ""
+msgstr "Une modification proposée attend un examen."
 
 #. 0: waiting
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "{0} proposed edits are waiting for review."
-msgstr ""
+msgstr "{0} modifications proposées attendent un examen."
 
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "Tables it follows"
-msgstr ""
+msgstr "Tables suivies"
 
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "One row waiting"
-msgstr ""
+msgstr "Une ligne en attente"
 
 #. 0: sub.pending.rows
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "{0} rows waiting"
-msgstr ""
+msgstr "{0} lignes en attente"
 
 #. 0: table.title || 'this table'
 #: ../data-browser/src/views/Installation/AfterCommitTables.tsx
 msgid "Stopped following changes to {0}: <0/>"
-msgstr ""
+msgstr "Le suivi des modifications de {0} a cessé : <0/>"
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Connected · <0/>"
-msgstr ""
+msgstr "Connecté · <0/>"
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Disconnecting…"
-msgstr ""
+msgstr "Déconnexion…"
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Use existing connection"
-msgstr ""
+msgstr "Utiliser une connexion existante"
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Use this connection"
-msgstr ""
+msgstr "Utiliser cette connexion"
 
 #. 0: proxyOrigin
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
-msgstr ""
+msgstr "Ce plugin utilisera votre compte <0/> via {0}. Le proxy conserve la connexion sous votre compte ; ce plugin peut l’utiliser jusqu’à ce que vous le déconnectiez."
 
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "Connect an account"
-msgstr ""
+msgstr "Connecter un compte"
 
 #. 0: platformName(platform)
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "{0} connected"
-msgstr ""
+msgstr "{0} connecté"
 
 #. 0: platformName(platform)
 #: ../data-browser/src/views/Installation/InstallationConnections.tsx
 msgid "{0} disconnected"
-msgstr ""
+msgstr "{0} déconnecté"
 
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "Config saved, rights moved"
-msgstr ""
+msgstr "Configuration enregistrée, droits déplacés"
 
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "Config saved"
-msgstr ""
+msgstr "Configuration enregistrée"
 
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "from <0/>"
-msgstr ""
+msgstr "depuis <0/>"
 
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "Set <0/> to the resource that should receive incoming items. The plugin's route grant stores them there, so this config can't be saved without it."
-msgstr ""
+msgstr "Définissez <0/> avec la ressource qui doit recevoir les éléments entrants. L’autorisation de route du plugin les stocke à cet endroit ; cette configuration ne peut donc pas être enregistrée sans cette valeur."
 
 #: ../table-page/src/DashboardPage/blocks/ChartBlock.tsx
 #: ../table-page/src/DashboardPage/blocks/StatBlock.tsx
 msgid "The configured measurement is unavailable."
-msgstr ""
+msgstr "La mesure configurée n’est pas disponible."
 
 #: ../table-page/src/TablePage/EditorCells/JSONCell.tsx
 msgid "Preview shortened. Open edit dialog for complete JSON."
-msgstr ""
+msgstr "Aperçu abrégé. Ouvrez la boîte de dialogue de modification pour voir le JSON complet."
 
 #: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 msgid "Property attachment is unavailable. Check access and the selected table."
-msgstr ""
+msgstr "Le rattachement de propriété n’est pas disponible. Vérifiez l’accès et la table sélectionnée."
 
 #: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 msgid "Attachment started. Retry to finish adding this property to the table."
-msgstr ""
+msgstr "Rattachement démarré. Réessayez pour terminer l’ajout de cette propriété à la table."
 
 #. 0: kind
 #: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "New {0} Column"
-msgstr ""
+msgstr "Nouvelle colonne {0}"
 
 #: ../table-page/src/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Preparing column…"
-msgstr ""
+msgstr "Préparation de la colonne…"
 
 #: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Column creation is unavailable. Check access and the selected table."
-msgstr ""
+msgstr "La création de colonne n’est pas disponible. Vérifiez l’accès et la table sélectionnée."
 
 #: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Column definition saved. Retry to finish adding it to the table."
-msgstr ""
+msgstr "Définition de colonne enregistrée. Réessayez pour terminer son ajout à la table."
 
 #: ../table-page/src/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Column editing is unavailable. Check access and the selected table."
-msgstr ""
+msgstr "La modification de colonne n’est pas disponible. Vérifiez l’accès et la table sélectionnée."
 
 #: ../table-page/src/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "This draft is locked after a partial save. Retry to finish saving."
-msgstr ""
+msgstr "Ce brouillon est verrouillé après un enregistrement partiel. Réessayez pour terminer l’enregistrement."
 
 #: ../table-page/src/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Number format"
-msgstr ""
+msgstr "Format numérique"
 
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
-msgstr ""
+msgstr "Nom de la colonne"
 
 #: ../table-page/src/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "Allow multiple values"
-msgstr ""
+msgstr "Autoriser plusieurs valeurs"
 
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text format"
-msgstr ""
+msgstr "Format de texte"
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Date format"
-msgstr ""
+msgstr "Format de date"
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Enter a whole number between 0 and 20, or leave empty."
-msgstr ""
+msgstr "Saisissez un nombre entier entre 0 et 20, ou laissez vide."
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Enter whole numbers or leave the bounds empty."
-msgstr ""
+msgstr "Saisissez des nombres entiers ou laissez les bornes vides."
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Enter finite numbers or leave the bounds empty."
-msgstr ""
+msgstr "Saisissez des nombres finis ou laissez les bornes vides."
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Bounds cannot be negative."
-msgstr ""
+msgstr "Les bornes ne peuvent pas être négatives."
 
 #: ../table-page/src/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 msgid "Minimum must not exceed maximum."
-msgstr ""
+msgstr "Le minimum ne doit pas dépasser le maximum."
 
 #: ../data-browser/src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
@@ -14823,69 +14823,69 @@ msgstr "Dernières modifications reçues par les pairs"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File contents confirmed"
-msgstr ""
+msgstr "Contenu des fichiers confirmé"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Checking file contents…"
-msgstr ""
+msgstr "Vérification du contenu des fichiers…"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not confirm file contents"
-msgstr ""
+msgstr "Impossible de confirmer le contenu des fichiers"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File storage unavailable"
-msgstr ""
+msgstr "Stockage des fichiers indisponible"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File contents not confirmed"
-msgstr ""
+msgstr "Contenu des fichiers non confirmé"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not confirm file contents on this device"
-msgstr ""
+msgstr "Impossible de confirmer le contenu des fichiers sur cet appareil"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents saved to server"
-msgstr ""
+msgstr "Ressource et contenu des fichiers enregistrés sur le serveur"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents backed up to Cloud Vault"
-msgstr ""
+msgstr "Ressource et contenu des fichiers sauvegardés dans le Coffre cloud"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents received by peers"
-msgstr ""
+msgstr "Ressource et contenu des fichiers reçus par des pairs"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Server file contents not confirmed"
-msgstr ""
+msgstr "Contenu des fichiers non confirmé par le serveur"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Cloud Vault file contents not confirmed"
-msgstr ""
+msgstr "Contenu des fichiers non confirmé dans le Coffre cloud"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Peer file copies not confirmed"
-msgstr ""
+msgstr "Copies des fichiers chez les pairs non confirmées"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents saved on this device"
-msgstr ""
+msgstr "Ressource et contenu des fichiers enregistrés sur cet appareil"
 
 #. 0: peers.confirmedCount
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource-details copies: {0}"
-msgstr ""
+msgstr "Copies des détails de la ressource : {0}"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "A complete copy needs both resource details and file contents at the same destination."
-msgstr ""
+msgstr "Une copie complète nécessite à la fois les détails de la ressource et le contenu des fichiers à la même destination."
 
 #. 0: description
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource details: {0}"
-msgstr ""
+msgstr "Détails de la ressource : {0}"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Retry file recovery"
@@ -14944,4 +14944,4 @@ msgstr "Récupération des fichiers annulée."
 
 #: ../table-page/src/TablePage/TableResource.tsx
 msgid "This host does not support this app view."
-msgstr ""
+msgstr "Cet hôte ne prend pas en charge cette vue d’application."

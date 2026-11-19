@@ -40,7 +40,7 @@ vi.mock('@hooks/useLastEditor', () => ({
 vi.mock('@components/RightPanel/RightPanelContext', () => ({
   useRightPanel: () => ({ setPanelOpen: () => {} }),
 }));
-vi.mock('@components/Presence/AgentAvatar', () => ({
+vi.mock('@tomic/resource-ui/components/Presence/AgentAvatar', () => ({
   AgentAvatar: ({ agentSubject }: { agentSubject: string }) => (
     <span data-avatar={agentSubject} />
   ),
@@ -51,7 +51,7 @@ vi.mock('@hooks/useRecentComments', () => ({
 vi.mock('@hooks/useVisibleDriveChildren', () => ({
   useHiddenDriveSubjects: () => new Set(['atomic:hidden-doc']),
 }));
-vi.mock('@helpers/recentResources', () => ({
+vi.mock('@tomic/resource-ui/helpers/recentResources', () => ({
   getRecentResources: (d: string) => recents[d] ?? [],
 }));
 vi.mock('@tomic/react', () => ({
@@ -80,7 +80,7 @@ vi.mock('@tomic/react', () => ({
       ]),
     ),
 }));
-vi.mock('@views/ResourceRow', () => ({
+vi.mock('@tomic/resource-ui/views/ResourceRow', () => ({
   ResourceRow: ({
     subject,
     trailing,
@@ -108,12 +108,12 @@ vi.mock('@components/forms/NewForm/useNewResourceUI', () => ({
   useNewResourceUI: () => vi.fn(),
 }));
 vi.mock('@helpers/useNewRoute', () => ({ useNewRoute: () => vi.fn() }));
-vi.mock('@components/Button', () => ({
+vi.mock('@tomic/ui/components/Button', () => ({
   Button: ({ children }: { children: React.ReactNode }) => (
     <button>{children}</button>
   ),
 }));
-vi.mock('@components/Row', () => ({
+vi.mock('@tomic/ui/components/Row', () => ({
   Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('react-icons/fa6', async importOriginal => importOriginal());

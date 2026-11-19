@@ -3,7 +3,7 @@ import { dataBrowser, type Store } from '@tomic/lib';
 import { resizeImageFile } from '@tomic/resource-ui/helpers/resizeImage';
 import { installIntegrationIcon } from './installIntegrationIcon';
 
-vi.mock('@helpers/resizeImage', () => ({
+vi.mock('@tomic/resource-ui/helpers/resizeImage', () => ({
   resizeImageFile: vi.fn(async file => file),
 }));
 afterEach(() => vi.restoreAllMocks());

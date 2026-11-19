@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { ThemeProvider } from 'styled-components';
+import { ThemeProvider } from '../../../resource-ui/test/providers.js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { buildTheme } from '../styling';
 import { ResourceRow } from './ResourceRow';
@@ -15,34 +15,36 @@ vi.mock('@tomic/react', async importOriginal => ({
   useTitle: () => ['Project notes'],
   useString: () => ['Notes for the project'],
 }));
-vi.mock('./ResourceInline/ResourceInline', () => ({
+vi.mock('@tomic/resource-ui/views/ResourceInline/ResourceInline', () => ({
   ResourceInline: ({ subject: value }: { subject: string }) => (
     <a href={`/app?subject=${value}`}>Project notes</a>
   ),
 }));
-vi.mock('../components/ResourceGlyph', () => ({
+vi.mock('@tomic/resource-ui/components/ResourceGlyph', () => ({
   ResourceGlyph: () => <span aria-hidden>Document</span>,
 }));
-vi.mock('../helpers/navigation', () => ({
-  constructOpenURL: (value: string) => `/app?subject=${value}`,
-}));
-vi.mock('../hooks/useNavigateWithTransition', () => ({
-  useNavigateWithTransition: () => navigate,
-}));
-vi.mock('../components/ResourceSync/ResourceSyncIndicator', () => ({
-  ResourceSyncIndicator: () => (
-    <button type='button' aria-label='Copies and sync'>
-      <span>Sync</span>
-    </button>
-  ),
-}));
+const SyncStatus = () => (
+  <button type='button' aria-label='Copies and sync'>
+    <span>Sync</span>
+  </button>
+);
 
 beforeEach(() => navigate.mockReset());
 afterEach(cleanup);
 
 function show(props: Partial<React.ComponentProps<typeof ResourceRow>> = {}) {
   return render(
-    <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
+    <ThemeProvider
+      theme={buildTheme(false, '#1b50d8')}
+      host={{
+        navigateWithTransition: navigate,
+        links: {
+          constructOpenURL: value => `/app?subject=${value}`,
+          pathToURL: value => value,
+        },
+        ResourceSyncIndicator: SyncStatus,
+      }}
+    >
       <ResourceRow subject={subject} clickable {...props} />
     </ThemeProvider>,
   );

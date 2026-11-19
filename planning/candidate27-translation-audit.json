@@ -16,35 +16,41 @@
       "duplicateEntries": 0,
       "restoredKnownTranslations": 0,
       "lostKnownTranslations": 0,
-      "untranslatedMessageIds": 207
+      "untranslatedMessageIds": 0,
+      "missingSourceMessagesFilled": 207
     },
     "fr": {
       "activeMessageIds": 3353,
       "duplicateEntries": 0,
       "restoredKnownTranslations": 0,
       "lostKnownTranslations": 0,
-      "untranslatedMessageIds": 207
+      "untranslatedMessageIds": 0,
+      "missingSourceMessagesFilled": 207
     },
     "de": {
       "activeMessageIds": 3353,
       "duplicateEntries": 0,
       "restoredKnownTranslations": 0,
       "lostKnownTranslations": 0,
-      "untranslatedMessageIds": 207
+      "untranslatedMessageIds": 0,
+      "missingSourceMessagesFilled": 207
     },
     "nl": {
       "activeMessageIds": 3353,
       "duplicateEntries": 0,
       "restoredKnownTranslations": 0,
       "lostKnownTranslations": 0,
-      "untranslatedMessageIds": 207
+      "untranslatedMessageIds": 0,
+      "missingSourceMessagesFilled": 207
     },
     "id": {
       "activeMessageIds": 3353,
       "duplicateEntries": 0,
       "restoredKnownTranslations": 0,
       "lostKnownTranslations": 0,
-      "untranslatedMessageIds": 207
+      "untranslatedMessageIds": 0,
+      "missingSourceMessagesFilled": 207
     }
-  }
+  },
+  "translationCompletion": "Filled207 previously missing messages per non-English locale; original nonempty translations preserved."
 }
