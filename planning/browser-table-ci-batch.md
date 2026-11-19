@@ -17,7 +17,7 @@ Status: active; this branch is for trekmeester review, not authorization to merg
 - [x] Integrate compatible changes with focused regression checks; document any genuinely unresolved contract rather than silently choosing behavior.
 - [x] Reconcile numeric constraints: Michiel selected decimal minimum/maximum bounds for integer-valued columns, as JSON Schema allows.
 - [x] Repair CI environment handling and offer explicit hosted validation that preserves downstream SaaS, full tests and required checks.
-- [ ] Validate workflow behavior, focused component tests, type checking, lint and required hooks.
+- [x] Validate workflow behavior, focused component tests, type checking, lint and required hooks.
 - [ ] Open one reviewable batch PR with source inventory and exact validation evidence.
 - [ ] Hand this batch and local validation to trekmeester for full CI on its final merge candidate; do not independently dispatch this batch.
 
@@ -101,11 +101,25 @@ routing; the reserved trekmeester/* branch convention identifies batch runs.
 - Full browser workspace lint and rustfmt pass. Local WASM, production frontend
   and matching native debug server build successfully. The initial production
   E2E run passed 25/27; after the fixes, all ten affected tests pass. Desktop
-  screenshots are captured and mobile verification is in progress.
+  screenshots and a 390×844 mobile quick-add/action-dialog check pass. The
+  mobile harness first left the navigation overlay open after resizing; closing
+  it through the normal sidebar button fixed the harness. No product workaround.
 - Vite extraction visited all 1,404 app source modules. Its temporary middleware
   process reported an unsettled close promise after extraction and exited; no
   writer remains. Catalog checks subsequently pass for all six locales (3,073
   active strings, zero missing entries or issues). Eight erased translations
   restored from the base; 34 new messages translated into five languages.
-- CI infrastructure: 16 tests, including 19 actual routing-shell cases, pass;
+- CI infrastructure: 17 tests, including 19 actual Main routing-shell cases
+  and 15 image-publisher runner-expression cases, pass;
   independent reviews pass. No new shared batch CI is dispatched by this worker.
+
+- Normal commit hooks passed the complete staged browser lint/format snapshot
+  and workspace Clippy with warnings denied. The original checkout's four
+  untracked paths are unchanged.
+- The manual develop-image publisher also forces non-trekmeester dispatch refs
+  onto hosted runners before global overrides. Independent workflow audit found
+  no additional manual self-hosted entry point. No publishing was performed.
+- Remaining shared-CI blocker: the unchanged Flutter bridge test shares a store
+  with a live-peer test; a profile push can drain its outbox before the assertion.
+  The specific interleaving is not reproduced. Do not remove the assertion or
+  claim the full batch green; trekmeester owns final integration and validation.

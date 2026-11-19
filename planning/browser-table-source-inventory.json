@@ -30,7 +30,8 @@
     "All 57 review vehicles remain open at fresh verification. No source head changed since inventory except #2597, where this task published the same CI-only repair now included here.",
     "Recovered missing clean foundation prerequisites ViewTabs and parsed-editor text drafts explicitly using canonical shared UI; did not merge the legacy full-page ancestor.",
     "Adapted foundation tests to source API changes while retaining their behavior: raw numeric text rather than spinbutton, preserved extra presets, row-action draft callback, strict precision errors.",
-    "The batch does not complete the full TablePage/ELFA port. #2377 retains unique app ports and is not a closure candidate."
+    "The batch does not complete the full TablePage/ELFA port. #2377 retains unique app ports and is not a closure candidate.",
+    "Combined local tests, production desktop/mobile checks and normal commit hooks pass; no full shared CI was dispatched for this batch. The separate #2597 hosted run failed an unchanged Flutter bridge outbox assertion after downstream passed. Closure still requires trekmeester acceptance and validation."
   ],
   "sources": [
     {
@@ -46,7 +47,7 @@
       "own_delta_merge_base_sha": "c2771949ced2979ef4160409e64bd09b1508044b",
       "own_delta_spec": "c2771949ced2979ef4160409e64bd09b1508044b..e58f1f84a38cb82e798f587f9596b89cf4412442",
       "suggested_integration_position": 2,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2536
       ],
@@ -70,7 +71,7 @@
       "own_delta_merge_base_sha": "e58f1f84a38cb82e798f587f9596b89cf4412442",
       "own_delta_spec": "e58f1f84a38cb82e798f587f9596b89cf4412442..4e023bb333f1b129c3dd2483db0c7ae0e68cfe21",
       "suggested_integration_position": 3,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2486
       ],
@@ -94,7 +95,7 @@
       "own_delta_merge_base_sha": "4e023bb333f1b129c3dd2483db0c7ae0e68cfe21",
       "own_delta_spec": "4e023bb333f1b129c3dd2483db0c7ae0e68cfe21..91e3d6a58c99fca66bde2da27f5455a94c43dbf5",
       "suggested_integration_position": 4,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2487
       ],
@@ -121,7 +122,7 @@
       "own_delta_merge_base_sha": "91e3d6a58c99fca66bde2da27f5455a94c43dbf5",
       "own_delta_spec": "91e3d6a58c99fca66bde2da27f5455a94c43dbf5..6565c5549702ef86fade02881fe0c59d0f43dede",
       "suggested_integration_position": 5,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2488
       ],
@@ -145,7 +146,7 @@
       "own_delta_merge_base_sha": "6565c5549702ef86fade02881fe0c59d0f43dede",
       "own_delta_spec": "6565c5549702ef86fade02881fe0c59d0f43dede..44d9f53089b9937af1627826bcdb21bc4fc23a7c",
       "suggested_integration_position": 6,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2489
       ],
@@ -169,7 +170,7 @@
       "own_delta_merge_base_sha": "44d9f53089b9937af1627826bcdb21bc4fc23a7c",
       "own_delta_spec": "44d9f53089b9937af1627826bcdb21bc4fc23a7c..4f831d56be3358dac49b452b0ed3043f5dec4370",
       "suggested_integration_position": 7,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2491
       ],
@@ -195,7 +196,7 @@
       "own_delta_merge_base_sha": "4f831d56be3358dac49b452b0ed3043f5dec4370",
       "own_delta_spec": "4f831d56be3358dac49b452b0ed3043f5dec4370..34f59acfdb32b4d50551bf5e4113261dc68261d1",
       "suggested_integration_position": 8,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2492
       ],
@@ -219,7 +220,7 @@
       "own_delta_merge_base_sha": "cbaa6c1f126a38c6d4a6220b42841da4148eb991",
       "own_delta_spec": "cbaa6c1f126a38c6d4a6220b42841da4148eb991..faa6ba012ba4570ad2154ba4c39cfb3df661e799",
       "suggested_integration_position": 1,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2536
       ],
@@ -243,7 +244,7 @@
       "own_delta_merge_base_sha": "c640d1a6f97250258c974a3cfabcb8913a78899f",
       "own_delta_spec": "c640d1a6f97250258c974a3cfabcb8913a78899f..9f39e36362cf34a055fafedbcf425974cdefe50f",
       "suggested_integration_position": 9,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2496,
         2497
@@ -268,7 +269,7 @@
       "own_delta_merge_base_sha": "ce77c496dd1969245a292913cf125338f50be051",
       "own_delta_spec": "ce77c496dd1969245a292913cf125338f50be051..a1c1bb1f127ce4ccfbcf00501f6ac145d7c71a31",
       "suggested_integration_position": 14,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2540,
         2491,
@@ -298,7 +299,7 @@
       "own_delta_merge_base_sha": "a1c1bb1f127ce4ccfbcf00501f6ac145d7c71a31",
       "own_delta_spec": "a1c1bb1f127ce4ccfbcf00501f6ac145d7c71a31..79d4d4eafb88897a0ff3af2d1b1ffd72ee04a525",
       "suggested_integration_position": 15,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2501
       ],
@@ -322,7 +323,7 @@
       "own_delta_merge_base_sha": "79d4d4eafb88897a0ff3af2d1b1ffd72ee04a525",
       "own_delta_spec": "79d4d4eafb88897a0ff3af2d1b1ffd72ee04a525..b295b930ae879947ff2a09e892ce7d0b54b5e9a8",
       "suggested_integration_position": 16,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2502
       ],
@@ -346,7 +347,7 @@
       "own_delta_merge_base_sha": "b295b930ae879947ff2a09e892ce7d0b54b5e9a8",
       "own_delta_spec": "b295b930ae879947ff2a09e892ce7d0b54b5e9a8..4ce75daa114df4e28552ef5776ad58589f8c0596",
       "suggested_integration_position": 17,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2503
       ],
@@ -372,7 +373,7 @@
       "own_delta_merge_base_sha": "4ce75daa114df4e28552ef5776ad58589f8c0596",
       "own_delta_spec": "4ce75daa114df4e28552ef5776ad58589f8c0596..19b4dc2e36c0693f472a817bae881cd68ce6bc1a",
       "suggested_integration_position": 18,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2504
       ],
@@ -400,7 +401,7 @@
       "own_delta_merge_base_sha": "9d2b5b49d1321778bb8a86ab1a7e19ea0a8bf8e0",
       "own_delta_spec": "9d2b5b49d1321778bb8a86ab1a7e19ea0a8bf8e0..c5fd099fc8558c6807081e6f9c3a0d0f99cc6003",
       "suggested_integration_position": 20,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2542
       ],
@@ -429,7 +430,7 @@
       "own_delta_merge_base_sha": "fb6e5642c37153f82b7197f887d8f6833d77cc67",
       "own_delta_spec": "fb6e5642c37153f82b7197f887d8f6833d77cc67..122a075167034913bb4f4b4ed9494c8461b4d985",
       "suggested_integration_position": 23,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2544
       ],
@@ -453,7 +454,7 @@
       "own_delta_merge_base_sha": "122a075167034913bb4f4b4ed9494c8461b4d985",
       "own_delta_spec": "122a075167034913bb4f4b4ed9494c8461b4d985..503849b0a495c6f0edb4429b2194a4d349e96b59",
       "suggested_integration_position": 24,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2509
       ],
@@ -477,7 +478,7 @@
       "own_delta_merge_base_sha": "d068b5c4aca03baf9c960a31f584ef4131732b8a",
       "own_delta_spec": "d068b5c4aca03baf9c960a31f584ef4131732b8a..1b822f4aa6d42dacf7a20dfa0e18a64534d8e1d1",
       "suggested_integration_position": 27,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2546
       ],
@@ -501,7 +502,7 @@
       "own_delta_merge_base_sha": "ee16c09e5d337739ff32233699be46eb0a8b8208",
       "own_delta_spec": "ee16c09e5d337739ff32233699be46eb0a8b8208..bb34c8847c60a37c082ae7ca95f8a0fb7c68d656",
       "suggested_integration_position": 29,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2578
       ],
@@ -525,7 +526,7 @@
       "own_delta_merge_base_sha": "bb34c8847c60a37c082ae7ca95f8a0fb7c68d656",
       "own_delta_spec": "bb34c8847c60a37c082ae7ca95f8a0fb7c68d656..10bbd74e0e78c426654a9cd54b6bcea1ac6a38b4",
       "suggested_integration_position": 30,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2513
       ],
@@ -551,7 +552,7 @@
       "own_delta_merge_base_sha": "10bbd74e0e78c426654a9cd54b6bcea1ac6a38b4",
       "own_delta_spec": "10bbd74e0e78c426654a9cd54b6bcea1ac6a38b4..f616d467e5cee911d309579d138cc1fdee261c50",
       "suggested_integration_position": 31,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2514
       ],
@@ -575,7 +576,7 @@
       "own_delta_merge_base_sha": "f616d467e5cee911d309579d138cc1fdee261c50",
       "own_delta_spec": "f616d467e5cee911d309579d138cc1fdee261c50..39ccc69b735022e6f5957e95f5fad8b0f9f22f43",
       "suggested_integration_position": 32,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2515
       ],
@@ -599,7 +600,7 @@
       "own_delta_merge_base_sha": "39ccc69b735022e6f5957e95f5fad8b0f9f22f43",
       "own_delta_spec": "39ccc69b735022e6f5957e95f5fad8b0f9f22f43..f945d11cb25abcf24d1d9631ff8fbd11974ae9c3",
       "suggested_integration_position": 33,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2516
       ],
@@ -623,7 +624,7 @@
       "own_delta_merge_base_sha": "f945d11cb25abcf24d1d9631ff8fbd11974ae9c3",
       "own_delta_spec": "f945d11cb25abcf24d1d9631ff8fbd11974ae9c3..fbb4f02d95cdee412d49239282abff1977650447",
       "suggested_integration_position": 34,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2517
       ],
@@ -649,7 +650,7 @@
       "own_delta_merge_base_sha": "1fd70ed1df9527dd6c6e5114f232edb8f4de40b1",
       "own_delta_spec": "1fd70ed1df9527dd6c6e5114f232edb8f4de40b1..66d1c14b25644c08502167fd1e8789cdede1177c",
       "suggested_integration_position": 36,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2548
       ],
@@ -673,7 +674,7 @@
       "own_delta_merge_base_sha": "66d1c14b25644c08502167fd1e8789cdede1177c",
       "own_delta_spec": "66d1c14b25644c08502167fd1e8789cdede1177c..962df2cd7c478fe81c9da3dd397b56e7f52e3d16",
       "suggested_integration_position": 37,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2520
       ],
@@ -699,7 +700,7 @@
       "own_delta_merge_base_sha": "962df2cd7c478fe81c9da3dd397b56e7f52e3d16",
       "own_delta_spec": "962df2cd7c478fe81c9da3dd397b56e7f52e3d16..e6752490e992630f14b983ae627a2181aeb898c2",
       "suggested_integration_position": 38,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2523
       ],
@@ -727,7 +728,7 @@
       "own_delta_merge_base_sha": "e6752490e992630f14b983ae627a2181aeb898c2",
       "own_delta_spec": "e6752490e992630f14b983ae627a2181aeb898c2..08b6b0e554a36cc6055638551c535a912714aa39",
       "suggested_integration_position": 39,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2524
       ],
@@ -753,7 +754,7 @@
       "own_delta_merge_base_sha": "324191063b6bd23937f044f089faf2f5dc69e790",
       "own_delta_spec": "324191063b6bd23937f044f089faf2f5dc69e790..cccaa3ad348f4f77d1e0a5fb62cdc69815f52b11",
       "suggested_integration_position": 42,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2552
       ],
@@ -777,7 +778,7 @@
       "own_delta_merge_base_sha": "4ea3a9a683687f8c86ed1e46f82ce6538c29c655",
       "own_delta_spec": "4ea3a9a683687f8c86ed1e46f82ce6538c29c655..bc355edf4bff2a62a7402ff790570df436577cd6",
       "suggested_integration_position": 43,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2529
       ],
@@ -807,7 +808,7 @@
       "own_delta_merge_base_sha": "3bb040ca0934cd80d5fdbabdc5ccb6067bbadbdb",
       "own_delta_spec": "3bb040ca0934cd80d5fdbabdc5ccb6067bbadbdb..67b7bbe46fbbd509c0aab29959c5fc8eaf1f6ba5",
       "suggested_integration_position": 45,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2554
       ],
@@ -905,7 +906,7 @@
       "own_delta_merge_base_sha": "3960c94ec2f801b218549d594211f575d43e97ca",
       "own_delta_spec": "3960c94ec2f801b218549d594211f575d43e97ca..a784bff42f3fb680ff98e9b4f9ab0bc60ab28bee",
       "suggested_integration_position": 13,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2539,
         2583
@@ -956,7 +957,7 @@
       "own_delta_merge_base_sha": "f00acf330e1b8a9131d6c9ef01600b2501cbd859",
       "own_delta_spec": "f00acf330e1b8a9131d6c9ef01600b2501cbd859..d39f3e5cc15ad467e150e1b2bcbb7bb03413471c",
       "suggested_integration_position": 19,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2541,
         2505
@@ -983,7 +984,7 @@
       "own_delta_merge_base_sha": "c5fd099fc8558c6807081e6f9c3a0d0f99cc6003",
       "own_delta_spec": "c5fd099fc8558c6807081e6f9c3a0d0f99cc6003..640fbe471428e73cab25fb3fa23ba0f4f712fe83",
       "suggested_integration_position": 21,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2507
       ],
@@ -1007,7 +1008,7 @@
       "own_delta_merge_base_sha": "640fbe471428e73cab25fb3fa23ba0f4f712fe83",
       "own_delta_spec": "640fbe471428e73cab25fb3fa23ba0f4f712fe83..535bb3250b9091f5fe1c883478895babc794629e",
       "suggested_integration_position": 22,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2543
       ],
@@ -1059,7 +1060,7 @@
       "own_delta_merge_base_sha": "527868e68abc914611526b9d66c65d6198bfa0e4",
       "own_delta_spec": "527868e68abc914611526b9d66c65d6198bfa0e4..89ba743e8e9dec754711a8356098f0871a283361",
       "suggested_integration_position": 26,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2545,
         2577
@@ -1108,7 +1109,7 @@
       "own_delta_merge_base_sha": "1571f68ac65b1f3d74865b81bec6b63c7b73b6c2",
       "own_delta_spec": "1571f68ac65b1f3d74865b81bec6b63c7b73b6c2..a3e598e9ec51fa3fc838a441dd206bf9daaa872b",
       "suggested_integration_position": 35,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2547,
         2518
@@ -1157,7 +1158,7 @@
       "own_delta_merge_base_sha": "d7e0dfe10b9ac2da11e04a80db09886f819b0bd3",
       "own_delta_spec": "d7e0dfe10b9ac2da11e04a80db09886f819b0bd3..616d64a6ede9f3ae785869fbf1cbd854f6f5d406",
       "suggested_integration_position": 40,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2549,
         2525
@@ -1206,7 +1207,7 @@
       "own_delta_merge_base_sha": "5190a4993dfb1bd0d3d41712cd701a6ab5ad4c2d",
       "own_delta_spec": "5190a4993dfb1bd0d3d41712cd701a6ab5ad4c2d..57a6419b16c790f2f382cf7a2767cfe13efebeac",
       "suggested_integration_position": 41,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2551,
         2550
@@ -1255,7 +1256,7 @@
       "own_delta_merge_base_sha": "4d383167dcd8ac8c71474ab22703905eb42de61a",
       "own_delta_spec": "4d383167dcd8ac8c71474ab22703905eb42de61a..75c8a62fe1b789c95b9bac9042ad2d5857635853",
       "suggested_integration_position": 44,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2553,
         2530
@@ -1304,7 +1305,7 @@
       "own_delta_merge_base_sha": "7a856c99838a745d51d07c221d5406567f713fa9",
       "own_delta_spec": "7a856c99838a745d51d07c221d5406567f713fa9..a0020f326c50b6ce66772ff489da17fecfc5927e",
       "suggested_integration_position": 46,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2556,
         2532
@@ -1329,7 +1330,7 @@
       "own_delta_merge_base_sha": "503849b0a495c6f0edb4429b2194a4d349e96b59",
       "own_delta_spec": "503849b0a495c6f0edb4429b2194a4d349e96b59..48827bc5e785efd6747149e6f3bb3413629b222c",
       "suggested_integration_position": 25,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2510
       ],
@@ -1356,7 +1357,7 @@
       "own_delta_merge_base_sha": "1b822f4aa6d42dacf7a20dfa0e18a64534d8e1d1",
       "own_delta_spec": "1b822f4aa6d42dacf7a20dfa0e18a64534d8e1d1..123feeb835c9541feb86dd2f855ee5d7f6ec739f",
       "suggested_integration_position": 28,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2512
       ],
@@ -1383,7 +1384,7 @@
       "own_delta_merge_base_sha": "9f39e36362cf34a055fafedbcf425974cdefe50f",
       "own_delta_spec": "9f39e36362cf34a055fafedbcf425974cdefe50f..8fafeef3555705ae690e439abe22976021da9a9d",
       "suggested_integration_position": 10,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2498
       ],
@@ -1411,7 +1412,7 @@
       "own_delta_merge_base_sha": "8a8e3659398bde0d4765121500bc22acb7a7db2a",
       "own_delta_spec": "8a8e3659398bde0d4765121500bc22acb7a7db2a..114fda09d114d290ff149ad4c606a257f7cdcd03",
       "suggested_integration_position": 11,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2498,
         2580
@@ -1436,7 +1437,7 @@
       "own_delta_merge_base_sha": "114fda09d114d290ff149ad4c606a257f7cdcd03",
       "own_delta_spec": "114fda09d114d290ff149ad4c606a257f7cdcd03..d29b786a516ecd6610fdfc57dedc71a762ec03ac",
       "suggested_integration_position": 12,
-      "disposition": "own_delta_integrated_pending_combined_validation",
+      "disposition": "own_delta_integrated_awaiting_trekmeester_review_and_ci",
       "integration_dependencies": [
         2581,
         2580

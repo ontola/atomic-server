@@ -2,6 +2,7 @@
 """Exercise the real routing/gate shell and Docker preflight failure behavior."""
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import re
@@ -66,6 +67,20 @@ class WorkflowTests(unittest.TestCase):
                 })
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(output.read_text().strip(), f"host={expected}")
+
+    def test_manual_image_publisher_also_reserves_mancave_for_trekmeester(self):
+        source = (ROOT / ".github/workflows/publish-develop-image.yml").read_text()
+        expression = re.search(r"runs-on: \$\{\{ (.+) \}\}", job(source, "publish"))[1]
+        expression = expression.replace("!startsWith", "not startsWith").replace("&&", "and").replace("||", "or")
+        for ref in ["refs/heads/codex/fix", "refs/heads/develop", "refs/tags/trekmeester/batch", "refs/heads/trekmeester-other/batch", "refs/heads/trekmeester/batch"]:
+            for override in ["", '["self-hosted", "Linux", "X64"]', '["ubuntu-latest"]']:
+                with self.subTest(ref=ref, override=override):
+                    actual = eval(expression.replace("github.ref", repr(ref)).replace("vars.CI_RUNNER_OVERRIDE", repr(override)), {
+                        "__builtins__": {}, "fromJSON": json.loads,
+                        "startsWith": lambda value, prefix: value.startswith(prefix),
+                    })
+                    expected = json.loads(override or '["self-hosted", "Linux", "X64"]') if ref == "refs/heads/trekmeester/batch" else ["ubuntu-latest"]
+                    self.assertEqual(actual, expected)
 
     def test_actual_gate_requires_both_suites_for_every_trusted_runner(self):
         for event in ["push", "workflow_dispatch"]:
