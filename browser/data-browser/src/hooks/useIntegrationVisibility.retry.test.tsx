@@ -28,6 +28,7 @@ vi.mock('@tomic/react', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/react')>()),
   useStore: () => store,
   useResource: () => ({ ...driveResource }),
+  useValue: (resource: typeof driveResource) => [resource.get(), vi.fn()],
   useCurrentAgent: () => [{ subject: ACTOR }],
 }));
 vi.mock('./usePrivateDrive', () => ({

@@ -2,6 +2,7 @@ import {
   useCurrentAgent,
   useResource,
   useStore,
+  useValue,
   type Store,
 } from '@tomic/react';
 import { useEffect, useRef, useState } from 'react';
@@ -84,6 +85,7 @@ export function useIntegrationVisibility({
   /** A facilitator unlocked the experimental toggle on this device. */
   const [unlocked, setUnlocked] = useState(() => readPreviewUnlocked(actor));
   const flushing = useRef(false);
+  const carriedFor = useRef<string | undefined>(undefined);
   const [saveError, setSaveError] = useState<string>();
 
   useEffect(() => {
@@ -107,11 +109,23 @@ export function useIntegrationVisibility({
 
   const ready =
     !loading && !!privateDrive && !resource.loading && !resource.error;
-  const stored = integrationVisibility(resource);
-  const savedApi = resource.get(visibilityProperties['show-api-plugins']);
-  const savedExperimental = resource.get(
+  // Read through `useValue`: a plain `resource.get` in render is not re-read
+  // when a save changes the value, so this hook kept seeing the value from
+  // before its own write.
+  const [savedApi] = useValue(
+    resource,
+    visibilityProperties['show-api-plugins'],
+  );
+  const [savedExperimental] = useValue(
+    resource,
     visibilityProperties['show-experimental-plugins'],
   );
+  const stored = integrationVisibility({
+    get: property =>
+      property === visibilityProperties['show-api-plugins']
+        ? savedApi
+        : savedExperimental,
+  });
 
   // Writes are queued rather than awaited, so a slow or unreachable server
   // never blocks the toggle that triggered them.
@@ -153,7 +167,14 @@ export function useIntegrationVisibility({
   // Choices made before these preferences had fixed properties live only in
   // this agent's cache: queue them so they land on the drive.
   useEffect(() => {
-    if (!ready || !actor) return;
+    if (!ready || !actor || !privateDrive) return;
+
+    // Once per agent and drive: a carry-over is a migration, not a sync rule.
+    const migration = `${actor}|${privateDrive}`;
+
+    if (carriedFor.current === migration) return;
+    carriedFor.current = migration;
+
     const carried = carryOver(
       {
         'show-api-plugins': savedApi,
@@ -173,7 +194,7 @@ export function useIntegrationVisibility({
     });
     setUnconfirmed(current => [...current, ...fresh]);
     setQueue(current => ({ ...current, ...carried }));
-  }, [ready, actor, savedApi, savedExperimental, unconfirmed]);
+  }, [ready, actor, privateDrive, savedApi, savedExperimental, unconfirmed]);
 
   // Once the drive is readable and in sync, it is the source of truth again.
   useEffect(() => {
