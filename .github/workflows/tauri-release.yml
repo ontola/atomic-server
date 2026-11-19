@@ -164,12 +164,6 @@ jobs:
             args: "--bundles nsis"
             rust-targets: "wasm32-unknown-unknown"
     runs-on: ${{ matrix.os }}
-    env:
-      # pnpm runs package scripts through the platform shell, which on Windows
-      # is cmd.exe. data-browser's `build` script uses `if [ ... ]` and died
-      # there ("$SKIP_WASM_BUILD" was unexpected at this time) on beta.8.
-      # Git for Windows ships bash on the runner's PATH.
-      npm_config_script_shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
@@ -227,6 +221,16 @@ jobs:
       # resolves through CreateProcess, which does not find the `pnpm.cmd` shim —
       # so letting build.rs do the work would break the Windows job specifically,
       # in a way that looks identical to this failure.
+      # pnpm runs package scripts through the platform shell, which on Windows
+      # is cmd.exe. data-browser's `build:wasm` is `cd .. && export VAR=...`,
+      # which cmd.exe cannot run ("'export' is not recognized"). The
+      # `npm_config_script_shell` env var did not take effect with this pnpm, so
+      # set it in pnpm's own config. Git for Windows ships bash on the runner.
+      - name: Run package scripts with bash (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: pnpm config set script-shell "$(cygpath -w "$(command -v bash)")"
+
       - name: Install dependencies and prepare embedded assets
         shell: bash
         run: |
