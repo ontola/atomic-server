@@ -1,14 +1,17 @@
 import { useSettings } from '@helpers/AppSettings';
 import {
   isSyncablesNavigationTable,
+  isSyncablesPlatformRoot,
   withoutTableViews,
 } from '@chunks/PluginRuns/syncablesNavigation';
+import { syncableHierarchySchema } from '@chunks/PluginRuns/syncableHierarchy';
 import { shortenSubject } from '@tomic/react';
 import {
   ai,
   CollectionBuilder,
   core,
   dataBrowser,
+  findSchema,
   isCommitSubject,
   useStore,
   type Store,
@@ -78,6 +81,7 @@ export function useGetDriveStructure() {
   const buildTree = async (
     subjects: string[],
     visited: Set<string>,
+    getSourceKeyProperty: () => Promise<string | undefined>,
   ): Promise<TreeNode> => {
     const node: TreeNode = {};
 
@@ -99,9 +103,20 @@ export function useGetDriveStructure() {
       };
 
       const classes = resource.getClasses();
-      const isDirectory =
+      const localId = resource.get(core.properties.localId);
+      const legacyDirectory =
         classes.includes(dataBrowser.classes.table) &&
-        isSyncablesNavigationTable(resource.get(core.properties.localId));
+        isSyncablesNavigationTable(localId);
+      const keyProperty =
+        legacyDirectory && !isSyncablesPlatformRoot(localId)
+          ? await getSourceKeyProperty()
+          : undefined;
+      const isDirectory =
+        legacyDirectory &&
+        isSyncablesNavigationTable(
+          localId,
+          keyProperty ? resource.get(keyProperty) : undefined,
+        );
 
       if (!hideChildrenOf(classes, isDirectory)) {
         const children = await fetchChildren(store, subject);
@@ -113,7 +128,11 @@ export function useGetDriveStructure() {
           : children;
 
         if (visibleChildren.length > 0) {
-          element.children = await buildTree(visibleChildren, visited);
+          element.children = await buildTree(
+            visibleChildren,
+            visited,
+            getSourceKeyProperty,
+          );
         }
       }
 
@@ -124,8 +143,19 @@ export function useGetDriveStructure() {
   };
 
   return async (): Promise<TreeNode> => {
+    let sourceKeyProperty: Promise<string | undefined> | undefined;
+
+    const getSourceKeyProperty = () => {
+      if (!sourceKeyProperty)
+        sourceKeyProperty = findSchema(store, drive, syncableHierarchySchema())
+          .then(terms => terms.properties?.['syncable-source-key'])
+          .catch(() => undefined);
+
+      return sourceKeyProperty;
+    };
+
     const rootSubjects = await fetchChildren(store, drive);
 
-    return buildTree(rootSubjects, new Set([drive]));
+    return buildTree(rootSubjects, new Set([drive]), getSourceKeyProperty);
   };
 }

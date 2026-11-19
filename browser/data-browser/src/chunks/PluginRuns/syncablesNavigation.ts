@@ -1,4 +1,5 @@
 import { canonicalizeScheme } from '@tomic/lib';
+import { parseSyncableSourceKey } from './syncableSource';
 
 const PLATFORM_ID = /^syncables:platform:https?%3A%2F%2F[^:]+:[a-z0-9-]{1,80}$/;
 const NODE_PREFIX = 'syncables:node:';
@@ -9,7 +10,20 @@ export function isSyncablesPlatformRoot(localId: unknown): boolean {
 }
 
 /** These tables hold resources that belong in the drive's navigation tree. */
-export function isSyncablesNavigationTable(localId: unknown): boolean {
+export function isSyncablesNavigationTable(
+  localId: unknown,
+  currentSourceKey?: unknown,
+): boolean {
+  if (currentSourceKey !== undefined) {
+    try {
+      const source = parseSyncableSourceKey(currentSourceKey);
+      // Adoption keeps the local ID but changes the collection's current role.
+      if (source.version === 3 && source.kind === 'collection') return false;
+    } catch {
+      // Malformed metadata grants no navigation exception or role override.
+    }
+  }
+
   if (typeof localId !== 'string') return false;
   if (localId === 'syncables:accounts') return true;
   if (isSyncablesPlatformRoot(localId)) return true;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sourceKey } from './builtinSyncIdentity.js';
 import {
   isSyncablesNavigationTable,
   isSyncablesPlatformRoot,
@@ -130,4 +131,32 @@ it('keeps canonical entity tables as leaves while principals expose their entity
       ),
     ).toBe(false);
   }
+});
+
+it('uses the current canonical collection identity after migration retains a directory localId', () => {
+  const classify = isSyncablesNavigationTable as (
+    localId: unknown,
+    currentSourceKey?: unknown,
+  ) => boolean;
+  const retainedLocalId = catalogNodeId();
+  const currentKey = sourceKey({
+    version: 3,
+    kind: 'collection',
+    proxyOrigin: 'https://proxy.example',
+    platform: 'calendar-service',
+    principal: { kind: 'public' },
+    resource: 'events',
+  });
+
+  expect(classify(retainedLocalId)).toBe(true);
+  expect(classify(retainedLocalId, currentKey)).toBe(false);
+  // A malformed/unrelated annotation cannot hide an ordinary legacy directory.
+  expect(classify(retainedLocalId, '{"version":3}')).toBe(true);
+  expect(
+    classify(
+      retainedLocalId,
+      JSON.stringify({ version: 3, kind: 'collection' }),
+    ),
+  ).toBe(true);
+  expect(classify(nodeId('account'), undefined)).toBe(true);
 });

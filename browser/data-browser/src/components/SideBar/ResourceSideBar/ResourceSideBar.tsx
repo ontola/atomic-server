@@ -1,9 +1,9 @@
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import {
-  isSyncablesNavigationTable,
   isSyncablesPlatformRoot,
   withoutTableViews,
 } from '@chunks/PluginRuns/syncablesNavigation';
+import { useSyncablesNavigation } from '@chunks/PluginRuns/useSyncablesNavigation';
 import { findSyncableLegacyAccounts } from '@chunks/PluginRuns/syncablePlatform';
 import {
   Fragment,
@@ -70,6 +70,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
 
     const snapshot = useResourceSnapshot(subject, { allowIncomplete: true });
     const resource = snapshot.resource;
+    const syncableNavigation = useSyncablesNavigation(resource);
     const store = useStore();
     const drive = store.getDrive();
     const canWrite = useCanWrite(resource);
@@ -95,9 +96,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
       const current = snapshot.resource;
       const currentClasses = current.getClasses();
       const table = currentClasses.includes(dataBrowser.classes.table);
-      const directory =
-        table &&
-        isSyncablesNavigationTable(current.get(core.properties.localId));
+      const directory = table && syncableNavigation.isDirectory;
       const icon = current.get(dataBrowser.properties.icon);
 
       return {
@@ -116,7 +115,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
           ...(typeof icon === 'string' ? [icon] : []),
         ],
       };
-    }, [snapshot]);
+    }, [snapshot, syncableNavigation.isDirectory]);
     const [legacyNavigation, setLegacyNavigation] = useState<{
       snapshot: typeof snapshot;
       drive: string;

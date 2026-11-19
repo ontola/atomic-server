@@ -477,17 +477,25 @@ async function mockIntegrationProxy(
       providerPath === '/user/repos' ||
       providerPath === '/orgs/ontola/repos'
     ) {
-      expect(url.searchParams.get('per_page')).toBe('100');
       state.repositoryRequests++;
+
       if (providerPath.startsWith('/orgs/')) {
+        // Related reads bind the collection's fixed query and use provider
+        // paging defaults; the root rule keeps its explicit page-size hint.
+        expect(url.searchParams.get('per_page')).toBeNull();
         expect(url.searchParams.get('type')).toBe('all');
         await send(repos.filter(repo => repo.owner.id === 123));
-      } else await send(repos);
+      } else {
+        expect(url.searchParams.get('per_page')).toBe('100');
+        await send(repos);
+      }
 
       return;
     }
 
     if (providerPath === '/repositories/790/issues') {
+      expect(url.searchParams.get('state')).toBe('all');
+      expect(url.searchParams.get('per_page')).toBeNull();
       await send([]);
 
       return;
@@ -495,7 +503,7 @@ async function mockIntegrationProxy(
 
     if (providerPath === '/repositories/456/issues') {
       expect(url.searchParams.get('state')).toBe('all');
-      expect(url.searchParams.get('per_page')).toBe('100');
+      expect(url.searchParams.get('per_page')).toBeNull();
       state.issueConnections.push(connectionId);
       await state.issueGate;
 
@@ -545,6 +553,9 @@ async function openConsent(
 }
 
 async function sourceState(page: Page, subject: string) {
+  await waitForSynced(page);
+  await waitForDriveSettled(page);
+
   return page.evaluate(async tableSubject => {
     const store = window.store;
     const base = 'https://atomicdata.dev/properties/';
@@ -563,7 +574,64 @@ async function sourceState(page: Page, subject: string) {
     const config = property('syncable-source-config');
     const table = await store.getResource(tableSubject);
     const rowClass = table.get(base + 'classtype');
-    const rows = [...store.resources.values()].filter(
+    // A cold navigation materializes only the selected filter's rows. Verify
+    // canonical storage independently of that view and the JS resource cache.
+    const subjects = new Set<string>();
+    const drive = store.getDrive();
+    if (!drive) throw new Error('Missing fixture drive');
+
+    for (const field of [base + 'parent', property('syncable-entity-table')]) {
+      const seen = new Set<string>();
+      let total: number | undefined;
+
+      for (let current = 0; ; current++) {
+        const query = new URL('/query', store.getServerUrl());
+        for (const [name, value] of Object.entries({
+          drive,
+          property: field,
+          value: tableSubject,
+          page_size: '100',
+          current_page: String(current),
+          include_nested: 'false',
+        }))
+          query.searchParams.set(name, value);
+        const result = await store.fetchResourceFromServer(query.href, {
+          noWebSocket: true,
+          // Each virtual query is a new server snapshot, not shared CRDT state.
+          forceOverride: true,
+        });
+        if (result.error) throw result.error;
+        const count = result.get(base + 'collection/totalMembers');
+        if (
+          typeof count !== 'number' ||
+          !Number.isSafeInteger(count) ||
+          count < 0 ||
+          count > 10_000 ||
+          (total !== undefined && count !== total)
+        )
+          throw new Error('Invalid or changing canonical fixture row count');
+        total = count;
+        const members = result.getSubjects(base + 'collection/members');
+        if (members.length !== Math.min(100, total - current * 100))
+          throw new Error('Incomplete canonical fixture row page');
+
+        for (const member of members) {
+          if (seen.has(member))
+            throw new Error('Duplicate canonical fixture row across pages');
+
+          seen.add(member);
+          subjects.add(member);
+        }
+
+        if (seen.size === total) break;
+      }
+    }
+
+    const rows = (
+      await Promise.all(
+        [...subjects].map(rowSubject => store.getResource(rowSubject)),
+      )
+    ).filter(
       resource =>
         (resource.get(base + 'parent') === tableSubject ||
           resource.get(property('syncable-entity-table')) === tableSubject) &&
@@ -1292,7 +1360,13 @@ test.describe('catalog-driven built-in Syncables', () => {
       iframe.getByRole('button', { name: 'Syncing', exact: true }),
     ).toBeDisabled();
     expect(requests.providerRequests).toHaveLength(backgroundReads);
-    expect(requests.documentRequests).toHaveLength(backgroundDocuments);
+    // The native view did no provider/catalog reads. Reopening the Sync iframe
+    // derives a fresh scoped host profile from the current document + selection,
+    // while the existing background worker keeps running without another read.
+    expect(requests.documentRequests.slice(backgroundDocuments)).toEqual([
+      '/catalog/github-issues.yaml',
+      '/catalog/github-issues.selection.json',
+    ]);
     release?.();
     requests.issueGate = undefined;
     await expect(

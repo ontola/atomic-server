@@ -1308,6 +1308,12 @@ This does not yet prove restoration of the user's private staging workspace.
   stored-data rendering with unrelated schema subjects, typed/enum values,
   cache isolation and navigation checks. The view never creates child collections
   or refreshes a provider; Open revalidates the saved row/target and drive.
+- `syncablesNavigation.test.ts` and `useSyncablesNavigation.test.tsx` verify that
+  canonical collection metadata takes precedence over retained legacy local IDs.
+  Adopted collections remain leaves in the sidebar and AI tree; metadata updates
+  react in place, and ordinary tables incur no Syncables schema lookup.
+- Browser storage assertions query complete signed canonical row sets independently
+  of the active filter and the browser's partially materialized resource cache.
 - `syncablePlatform.test.ts`, App resolver and sidebar tests cover direct App
   mounting, idempotent installation, preserved icons, verified legacy Accounts
   relocation and hiding, interrupted migration and user-moved resources.
