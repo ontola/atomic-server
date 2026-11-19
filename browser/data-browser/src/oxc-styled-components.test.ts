@@ -104,9 +104,10 @@ describe('oxc styled-components plugin', () => {
     expect(styled.code).not.toContain('withConfig');
   });
 
-  it('gives Button.tsx named styled components after both passes', async () => {
+  it('gives the shared Button.tsx named styled components after both passes', async () => {
     const transform = await loadRolldownTransform();
-    const file = join(srcDir, 'components/Button.tsx');
+    // The host path is a compatibility re-export; Vite compiles this shared source.
+    const file = join(srcDir, '../../ui/src/components/Button.tsx');
     const { compiled, styled } = compileThenStyle(
       transform,
       file,

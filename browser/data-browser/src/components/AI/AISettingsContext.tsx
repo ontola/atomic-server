@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useContext, useMemo, type JSX } from 'react';
 import { useLocalNetworkBlocked } from '@helpers/localNetworkAccess';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { AIProvider } from './aiContstants';
 import type { AIModelIdentifier, MCPServer } from '@chunks/AI/types';
 import {

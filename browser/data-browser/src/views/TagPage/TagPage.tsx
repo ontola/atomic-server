@@ -8,16 +8,16 @@ import {
   type DataBrowser,
 } from '@tomic/react';
 import type { ResourcePageProps } from '../ResourcePage';
-import { ContainerNarrow } from '../../components/Containers';
-import { Column, Row } from '../../components/Row';
-import { ReferenceUsage } from '../../components/ResourceUsage/ReferenceUsage';
-import { PalettePicker } from '../../components/PalettePicker';
-import { tagColours } from '../../components/Tag/tagColours';
-import { Card } from '../../components/Card';
-import { Tag } from '../../components/Tag';
-import { EmojiInput } from '../../components/forms/EmojiInput';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { ReferenceUsage } from '@tomic/resource-ui/components/ResourceUsage/ReferenceUsage';
+import { PalettePicker } from '@tomic/ui/components/PalettePicker';
+import { tagColours } from '@tomic/resource-ui/components/Tag/tagColours';
+import { Card } from '@tomic/ui/components/Card';
+import { Tag } from '@tomic/resource-ui/components/Tag/index';
+import { EmojiInput } from '@tomic/resource-ui/components/forms/EmojiInput';
 import { styled } from 'styled-components';
-import InputSwitcher from '../../components/forms/InputSwitcher';
+import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
 import { TagPropertyCard } from './TagPropertyCard';
 
 export function TagPage({ resource }: ResourcePageProps<DataBrowser.Tag>) {

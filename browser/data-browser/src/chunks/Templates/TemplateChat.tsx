@@ -1,10 +1,10 @@
 import { lazy, Suspense, useState, useRef, useEffect } from 'react';
 import { generateText } from 'ai';
 import { parseTemplateProposal } from './aiProposal';
-import { Card } from '../../components/Card';
-import { Column, Row } from '../../components/Row';
-import { Button } from '../../components/Button';
-import { ErrorBlock } from '../../components/ErrorLook';
+import { Card } from '@tomic/ui/components/Card';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { ErrorBlock } from '@tomic/resource-ui/components/ErrorLook';
 import { useAISettings } from '../../components/AI/AISettingsContext';
 import { useGetModel } from '../AI/useModel';
 import { selectGenerativeFeaturesModel } from '../AI/useGenerativeData';

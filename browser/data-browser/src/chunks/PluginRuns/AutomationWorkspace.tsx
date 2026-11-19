@@ -5,10 +5,10 @@ import {
   useStore,
   type Resource,
 } from '@tomic/react';
-import { Card } from '@components/Card';
-import { Column } from '@components/Row';
-import { Button } from '@components/Button';
-import { TextAreaStyled } from '@components/forms/InputStyles';
+import { Card } from '@tomic/ui/components/Card';
+import { Column } from '@tomic/ui/components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { TextAreaStyled } from '@tomic/ui/components/forms/InputStyles';
 import { styled } from 'styled-components';
 import { setPluginSource } from './runScript';
 import { useAISidebar } from '@components/AI/AISidebarContext';

@@ -31,8 +31,9 @@ Playwright owns worker counts, filters, repetitions, sharding and reports. The
 launcher defaults to Chromium, zero retries, failure traces and line/HTML/JSON
 reporters; normal Playwright arguments can override these. `run.json` retains
 build/startup/test phase durations, and `report.json` contains test outcomes,
-skips and step timings. Cloud Vault tests need an explicit
-`ATOMIC_VAULT_PORTAL_URL`; unrelated local portals are never discovered.
+skips and step timings. Full Cloud Vault backup/restore tests need an explicit
+`ATOMIC_VAULT_PORTAL_URL`; unrelated local portals are never discovered. The
+resource confirmation specs below instead own their HTTP control-plane fixture.
 
 ### Comparing concurrency
 
@@ -139,6 +140,13 @@ pnpm test-server         # serves the configured port from <repo>/.e2e-store
 pnpm test-server-fresh   # same, but wipes that store first
 ```
 
+For manual provider integration testing, pass `--mock-proxy` to
+`./scripts/e2e-server.sh`. It runs the mock in a sibling
+[`atomic-plugins` checkout](https://github.com/ontola/atomic-plugins). Set
+`ATOMIC_PLUGINS_CHECKOUT` if your checkout is elsewhere. For a Vite-served app,
+set `MOCK_FRONTEND_ORIGIN` to the Vite origin so OAuth can return to it.
+Provider integration specs run in Atomic Plugins.
+
 ### Keep the binary in step with the branch
 
 `build.rs` embeds the data-browser bundle into the server, and the **invite and
@@ -221,3 +229,86 @@ behavior. The typing unit regressions are `loro-typing-history.test.ts` and
 `loro-typing-collaboration.test.ts` in the same directory; `editor-typing.spec.ts`
 checks real keystrokes against the built app so minification cannot silently
 disable the optimization.
+
+### Resource metadata and attachment confirmations
+
+The scoped web acceptance set has seven journeys across four specs. From
+`browser/`, after building matching app/WASM/server artifacts:
+
+```sh
+pnpm test-e2e:local --skip-build tests/resource-sync.spec.ts tests/resource-peer-sync.spec.ts \
+  tests/resource-attachment-sync.spec.ts tests/resource-vault-sync.spec.ts \
+  --workers=1 --retries=0
+```
+
+`resource-attachment-sync.spec.ts` distinguishes metadata from actual local,
+HTTP-server and WebRTC-peer file bytes. It checks missing bytes, real transfers,
+rename versus content replacement, direct attachment references, reload and
+peer departure. No receipt is injected. `resource-vault-sync.spec.ts` holds one
+chunk of a real encrypted 8 MiB-plus file, then checks complete confirmation,
+account-scoped recovery and failed/newer exports. That spec owns the control
+plane and object-store HTTP boundary; it does not certify production SaaS or S3.
+The other two specs retain metadata/offline-recovery and peer-dedup regressions.
+
+These attachment journeys passed locally against the matching production build
+with zero retries (five in the full run, two corrected fixtures in a focused
+rerun). Preserve strict diagnostics, report the actual test count and inspect
+desktop/mobile screenshots.
+The native journey below is separate from these seven web tests.
+
+### Native Iroh resource confirmations
+
+`native-resource-peer-sync.spec.ts` uses the actual native host and two Iroh
+processes, so it runs directly instead of through the web-server launcher.
+Build `@tomic/lib`, then build the embedded renderer from `data-browser/` with
+`TAURI=1 pnpm exec vite build -c vite.embed.config.ts`. From the repository root,
+run `cargo test -p atomic_lib --features db-redb,iroh --test iroh_receipts --no-run`
+and use the printed integration executable path:
+
+```sh
+# From browser/e2e; set this to the executable printed by Cargo.
+ATOMIC_NATIVE_EMBED_TEST_BINARY=/absolute/path/to/iroh_receipts-HASH \
+  pnpm exec playwright test tests/native-resource-peer-sync.spec.ts \
+  --project=chromium --workers=1 --retries=0
+```
+
+The fixture serves `dist-embed`, forwards the renderer's existing host calls to
+Rust, and checks both metadata and file contents for an actual File/direct
+attachment through view reload and peer departure. Both the two-process Rust
+integration and matching renderer acceptance passed locally with zero retries.
+The native process owns the databases and networking; only address exchange and
+process control are test fixtures. Without the explicit executable this test is
+skipped, so an ordinary web E2E pass does not claim native renderer coverage.
+
+The resource panel loads on demand when opened. After changing its initial
+dependencies, also run `bash flutter/scripts/build_embed.sh` followed by
+`bash flutter/scripts/check_embed_size.sh` from the repository root to check
+the same embedded-app size budget as CI.
+
+### Native WebRTC resource and attachment confirmations
+
+`native-webrtc-resource-sync.spec.ts` joins an actual browser/WASM peer to a
+native `WebRtcPeerLink` and persistent database. Build matching web/WASM and
+embedded assets, then build the test-owned host from the repository root with
+`cargo test -p atomic_lib --features db-redb,iroh --test webrtc_receipts --no-run`.
+Run against the matching production server from `browser/`:
+
+```sh
+ATOMIC_NATIVE_WEBRTC_TEST_BINARY=/absolute/path/to/webrtc_receipts-HASH \
+  ATOMIC_E2E_CARGO_PROFILE=dev pnpm test-e2e:local --skip-build \
+  tests/native-webrtc-resource-sync.spec.ts --workers=1 --retries=0
+```
+
+The test uses a real ordered RTCDataChannel with the production framing and
+DTLS binding. A transport-only Chromium page carries native frames through a
+test-owned process bridge; authentication, sync, stored-byte verification,
+automatic receipt requests and embedded evidence all run in the native Rust
+host. The other peer uses the production browser app and WASM database.
+The test controls signaling and withholds actual blob frames to distinguish
+metadata confirmation from complete file copies. It checks replacement bytes,
+view reload, departure and desktop/mobile rendering. No receipts are fabricated.
+This validates browser/native protocol and renderer integration, not the
+packaged Flutter plugin, physical devices or production TURN. The ignored Rust
+host entry point is invoked by the opt-in Playwright fixture; running cargo tests
+alone does not claim this acceptance. Without the explicit executable the
+Playwright journey is skipped.

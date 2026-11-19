@@ -9,12 +9,12 @@ import {
 } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import { AtomicLink } from '../../components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { CommitDetail } from '../../components/CommitDetail';
 import { ViewProps } from './FolderDisplayStyle';
-import { getIconForClass } from '../../helpers/iconMap';
+import { ResourceGlyph } from '@tomic/resource-ui/components/ResourceGlyph';
 import { QuickCreateRow } from '../../components/NewInstanceButton';
-import { CommentCountBadge } from '../../components/CommentCountBadge';
+import { CommentCountBadge } from '@components/CommentCountBadge';
 
 import type { JSX } from 'react';
 
@@ -71,13 +71,11 @@ interface CellProps {
 
 function Title({ resource }: CellProps): JSX.Element {
   const [title] = useTitle(resource);
-  const [classType] = useString(resource, core.properties.isA);
-  const Icon = getIconForClass(classType ?? '');
 
   return (
     <TitleWrapper>
       <IconWrapper>
-        <Icon />
+        <ResourceGlyph resource={resource} />
       </IconWrapper>
       <AtomicLink subject={resource.subject}>{title}</AtomicLink>
       <CommentCountBadge subject={resource.subject} />

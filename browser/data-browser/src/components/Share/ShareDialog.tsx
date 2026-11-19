@@ -26,9 +26,9 @@ import toast from 'react-hot-toast';
 import { styled } from 'styled-components';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 
-import { Dialog, useDialog } from '../Dialog';
-import { Button } from '../Button';
-import { ErrorLook } from '../ErrorLook';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 import { TeamProfileStep } from '../TeamProfileStep';
 import {
   profileReviewedBefore,
@@ -48,7 +48,7 @@ import { sendShareInvites } from '../../helpers/managed/shareInvites';
 import { EmailInviteInput, isEmailAddress } from './EmailInviteInput';
 import { describeEditorSeats, useEditorSeats } from './useEditorSeats';
 import { PeopleWithAccess, effectiveRole } from './PeopleWithAccess';
-import { ResourceLinkNavigationContext } from '../ResourceLinkNavigationContext';
+import { ResourceLinkNavigationContext } from '@tomic/resource-ui/components/ResourceLinkNavigationContext';
 import { PublicAccess } from './PublicAccess';
 import { RoleSwitch, type ShareRole } from './RoleSelect';
 import { useShareRights } from './useShareRights';

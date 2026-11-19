@@ -6,7 +6,7 @@ import {
   isLoopbackHost,
   useStore,
 } from '@tomic/react';
-import { Button } from '../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   ConnectAppForm,
   ConnectPage,

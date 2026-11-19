@@ -1,5 +1,5 @@
-import { Spinner } from '../../components/Spinner';
-import { Column } from '../../components/Row';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
+import { Column } from '@tomic/ui/components/Row';
 import { CardSubtitle, CardTitle } from './chrome';
 
 export function WorkspaceLoading({

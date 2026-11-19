@@ -36,6 +36,13 @@ cargo doc --locked -p atomic_lib --no-deps --features db,iroh,ws,discovery
 `atomic_lib` is beta; application-facing breaking changes are expected before
 1.0. Internal extensions have no separate application API stability guarantee.
 
-[docs.rs](https://docs.rs/atomic_lib/latest/atomic_lib/)
+Generate a local reference with the database and native transports enabled:
 
-[repository + issue tracker](https://github.com/ontola/atomic-server).
+```sh
+cargo doc --locked -p atomic_lib --no-deps --features db,iroh,ws,discovery
+```
+
+The [published API reference](https://docs.rs/atomic_lib/latest/atomic_lib/)
+describes the released version, which may differ from the current checkout.
+
+[Repository and issue tracker](https://github.com/ontola/atomic-server).

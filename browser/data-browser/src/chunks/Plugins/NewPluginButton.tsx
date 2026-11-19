@@ -1,9 +1,10 @@
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   installRelease,
   publishZipRelease,
   readInstallationReview,
   useStore,
+  type DeclaredWriteTarget,
   type JSONValue,
   type Resource,
   type Server,
@@ -12,7 +13,7 @@ import { useRef, useState } from 'react';
 import { FaPlus } from 'react-icons/fa6';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import {
   InstallationReviewDialog,
   type PendingInstallation,
@@ -68,6 +69,7 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
     p: PendingInstallation,
     config: JSONValue | undefined,
     grants: string[],
+    routeWrites: DeclaredWriteTarget[] | undefined,
   ) => {
     // The server compares these with the zip's manifest, so they must be
     // the manifest's own identifiers.
@@ -84,6 +86,7 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
       version: p.review.version,
       config,
       grants,
+      routeWrites,
     });
     await refreshCustomViews();
     navigate(constructOpenURL(subject));

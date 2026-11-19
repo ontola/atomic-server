@@ -1,4 +1,4 @@
-import { Spinner } from '../../components/Spinner';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 import { resumeInviteUrl } from '../../helpers/inviteSignup';
 import { signInAccountWithAgent } from '../../helpers/managed/agentSession';
 import { WorkspaceLoading } from './WorkspaceLoading';
@@ -33,9 +33,9 @@ import { privateHomeNudge } from '../../helpers/privateHomeNudge';
 import { withDeadline } from '../../helpers/withDeadline';
 import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
-import { Button } from '../../components/Button';
-import { Column } from '../../components/Row';
-import { ResourceRow } from '../ResourceRow';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import { ResourceRow } from '@tomic/resource-ui/views/ResourceRow';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
 import {
   accountAddress,
@@ -51,6 +51,7 @@ import {
 import {
   ensureVaultBackup,
   restoreFromVault,
+  startFirstVaultBackup,
 } from '../../helpers/managed/vaultAutoBackup';
 import { isOriginWithoutNode } from '../../helpers/originNode';
 import { isRunningInTauri } from '../../helpers/tauri';
@@ -76,13 +77,16 @@ import {
   type RecoverySecret,
   type SecretAccountConflict,
 } from '../../helpers/managed/recovery';
-import { IconButton } from '../../components/IconButton/IconButton';
-import { CodeBlock } from '../../components/CodeBlock';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { CodeBlock } from '@tomic/resource-ui/components/CodeBlock';
 import {
   AccountSignInPanel,
   AccountSignInViaBrowser,
 } from './AccountSignInPanel';
-import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { FaArrowLeft, FaKey, FaXmark } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
@@ -336,17 +340,12 @@ export function GettingStartedFlow({
    * Sync page. That also puts the honest version of the pitch first — the tier
    * we cannot read comes as standard, and the tier we can read is opt-in.
    *
-   * Best-effort, exactly as the sync enrollment was: the identity and drive
-   * both exist by the time this runs, so a failure here leaves a working
-   * workspace with backup switched off rather than blocking onboarding. The
-   * Sync page will offer it again.
+   * The workspace opens while the first backup runs. The app keeps the
+   * first-backup status visible until Cloud Vault confirms a copy.
    */
-  async function enableEncryptedBackup(driveSubject: string) {
+  function enableEncryptedBackup(driveSubject: string) {
     newDriveSubject.current = driveSubject;
-    // Enrols and backs up straight away. A brand-new drive is a few KB, and an
-    // enrollment with nothing in it would report a protection the account
-    // does not yet have. Failures are swallowed inside — see above.
-    await ensureVaultBackup(store, driveSubject);
+    startFirstVaultBackup(store, driveSubject);
   }
 
   function requireAgentSubject(): string {

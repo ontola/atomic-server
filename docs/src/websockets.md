@@ -14,6 +14,26 @@ truth for tag bytes and layouts) and `browser/lib/src/ws-v2.ts`
 (TypeScript). A golden-vector file pins the two together; see
 [Conformance](#conformance).
 
+## SYNC_PUSH durability
+
+The receiver stages accepted resource changes within one SYNC_PUSH frame and
+validates the accompanying signed envelopes against that staged state. Resource,
+snapshot and query/search index projections, retained envelopes, and change-log
+and drive-event records are applied in one storage transaction. Resource-change
+notifications follow that transaction, so listeners can read the retained
+envelopes with the new resource state.
+
+Envelope validation can use schema and signer resources from the same frame.
+External schema fetched during validation is cached for that frame; these reads
+do not create separate persistent resources in the receiver.
+
+Malformed or invalidly signed envelopes are dropped while valid resource
+projections proceed. A storage failure rejects the import. Intermediate
+acknowledgements indicate receipt; the final LAST frame (including an empty
+terminator) calls the durability flush before successful completion. A flush
+failure rejects completion but does not undo an already applied transaction.
+Frame admission and cross-drive permissions are unchanged.
+
 ## Overview and transports
 
 A frame is `[tag: u8] [payload...]`. There is no envelope, no version
@@ -138,6 +158,10 @@ logged and dropped, not answered.
 | `0x51` | `CALL_RESULT` | Iroh responder | the dialer of the `CALL`. |
 | `0x52` | `INVITE` | Iroh dialer, after `AUTH` | `atomic_lib::sync::invite`. Iroh only; the WS server answers it with an `ERROR`. |
 | `0x53` | `INVITE_OK` | Iroh responder | the dialer of the `INVITE`. A refusal is an `ERROR` with code 13 (`INVITE_REFUSED`). |
+| `0x56` | `STORAGE_RECEIPT_REQUEST` | authenticated browser, native Iroh or WS client | Session advertising the transport-specific storage-receipt capability. |
+| `0x57` | `STORAGE_RECEIPT` | authenticated browser/native Iroh peer or WS server | Correlated live request on that same connection. |
+| `0x58` | `ATTACHMENT_RECEIPT_REQUEST` | authenticated peer | Negotiated `attachment-storage-receipts-v1` on WebRTC or native Iroh. |
+| `0x59` | `ATTACHMENT_RECEIPT` | authenticated peer | Exact live nonce, manifest and metadata target on the same connection. |
 
 ## Frame layouts
 
@@ -222,6 +246,20 @@ keys and runs the full reconcile. The drive hash is SHA-256 over
 counters ordered by the sorted peer set (`engine::compute_drive_hash`; the
 browser builds the byte-identical string and hashes it with
 `crypto.subtle`).
+
+For a resource drive this node has never stored, a probe answers
+`SYNC_RESEND` when the authenticated session's hosting policy permits its
+first upload. The receiver then sends the full version vectors, allowing
+the normal `SYNC_DIFF` / `SYNC_PUSH` exchange to import the drive. This
+preview does not enroll the drive or start a managed bootstrap grace
+window; actual import still performs admission checks. A missing drive
+never answers `SYNC_OK`, even for an empty-inventory hash.
+
+Existing unreadable drives, destroyed drives and denied bootstrap attempts
+answer `ERROR UNAUTHORIZED_READ` (`SYNC refused for <drive>: <reason>`).
+The browser records a current probe refusal as a failed drive sync rather
+than leaving its progress indicator running. Subscription refusals retain
+their separate handling.
 
 ### SYNC_DIFF (0x32)
 
@@ -358,6 +396,197 @@ an ordinary `SYNC`, which the sync policy admits because the invitee can now
 read. `max_usages` of the token is not counted: that needs state shared by all
 the inviter's devices. In the link form of the Flutter package this is
 `atomic:invite?token=<token>`; the web app does not parse that form yet.
+
+### Resource storage receipts (0x56 / 0x57)
+
+This optional extension is advertised as `browser-storage-receipts-v1` by
+WebRTC sessions and `iroh-storage-receipts-v1` by native Iroh sessions, only
+when the actual backing store can supply a durable replica identity. Neither
+capability is advertised globally by HTTP/WS responders. Native WebRTC links
+that delegate to the browser-peer session handler also answer these requests.
+Native builds with the receipt runtime enabled request proof over WebRTC using
+`browser-storage-receipts-v1` from the authenticated peer’s `AUTH_OK`. Both
+directions must authenticate before requests begin. Iroh
+negotiation uses `AUTH_OK` and `HELLO` on a node-bound, drive-bound handshake.
+Old peers continue to sync normally without these frames; ordinary
+`COMMIT_OK` and `SYNC_OK` retain their existing meanings.
+
+```
+[0x56] [json {"nonce":"<64 lowercase hex>","drive":"atomic:…","subject":"atomic:…","version":"<base64 Loro VV>"}]
+[0x57] [json {"nonce":"…","drive":"…","subject":"…","version":"…","replica":{"storageId":"<64 lowercase hex>","generation":"<64 lowercase hex>"},"barrier":"atomic-redb-flush-v1"}]
+```
+
+Receipt requests are bounded to 64 KiB and version strings to 16 KiB. The requested
+frontier must be valid and nonempty. Standard padded and URL-safe unpadded
+base64 are accepted; the response preserves the exact requested spelling.
+The Rust session checks authentication, the
+session's drive, current read permission, and a non-tombstoned stored resource whose
+**state** version vector covers the requested frontier. Announced or buffered operations with unresolved dependencies do not qualify. After coverage
+is established, the persistent flush must succeed and coverage/identity must still
+hold before any positive frame is constructed. Pending transaction overlays cannot
+serve as durable evidence. Target reads are local-only: a missing HTTP subject
+does not trigger a fetch. Unsolicited native replies are rejected before resource
+resolution. Missing or non-covering state returns no positive frame;
+normal synchronization can supply it and the requester can retry. Authorization,
+malformed-frame and flush errors follow the session's existing error handling.
+
+The named barrier is the persistent Redb store's Immediate commit/flush boundary,
+including its browser OPFS backing. Memory and unknown/custom backends cannot
+advertise it by merely returning success from a no-op flush. The identity seed and
+generation are created atomically in private store metadata and made durable before
+advertisement; only drive-scoped pseudonyms cross the wire. Reopen and tab-leader
+handoff preserve them, database recreation creates fresh metadata, and byte clones
+retain copied identity rather than claiming an independent copy.
+
+`version` in the positive response is the requested frontier the receiver proved
+it holds, even when the stored snapshot has advanced. The requester's live nonce,
+drive, subject and exact version must all match; a response never acknowledges a
+later local edit. Request correlation is scoped to the authenticated transport session and
+invalidated on account/database replacement or disconnect. Native evidence carries
+the authenticated QUIC node, verified agent and connection/account generations;
+it is emitted through `Db::subscribe_replica_receipts()`. Browser AUTH is bound to
+the WebRTC channel. The native dialer AUTH names the drive and receiving QUIC
+node; the verified auth-back names the dialer's QUIC node. A later AUTH disables
+receipts on that stream; reconnect to establish a fresh receipt session.
+The SDK delivers immutable observations automatically; callers still choose and
+validate their independence policy. Different IDs or authenticated agents alone
+are not evidence of separate devices. This receipt covers resource metadata only,
+not blobs, deletion/tombstone recovery, keys, retention or a recoverable backup.
+
+#### HTTP/WebSocket server adapter
+
+The server adapter separately advertises `server-storage-receipts-v1` in WS
+`AUTH_OK`. A client opts in through `HELLO`; authenticated receipt requests use
+the same 0x56/0x57 JSON above. Server AUTH binds the origin, rather than a single
+drive: each receipt request must pass its own drive-membership and read checks.
+Reauthentication invalidates pending receipt work. This capability describes
+adapter support; a positive receipt still requires actual persistent storage.
+
+A successful HTTP `POST /commit` exposes
+`X-Atomic-Storage-Receipts: server-storage-receipts-v1` through CORS. Compatible
+clients can then send signed `POST /storage-receipt`, with the same request JSON
+and a 64 KiB body limit. Existing Atomic HTTP authentication binds the exact
+request URL. The response is 200 with the receipt JSON when the shared producer
+completes its proof, or 204 when no positive evidence is available. Authentication,
+authorization and malformed requests follow ordinary HTTP error handling.
+Responses are not a cacheable receipt service.
+
+The SDK automatically correlates nonce, drive, subject and exact version and
+publishes `StoreEvents.ServerReplicaReceipt`. Its envelope identifies the actual
+server origin, endpoint, HTTP/WS transport and client/session generations. An
+optional source identity is omitted for memory-only clients. HTTP/WS provenance
+depends on origin/transport trust, unlike an Iroh peer's verified QUIC identity.
+Browser collection includes background outbox acceptance and periodically
+refreshed stored state for followed drives, so an application does not need to
+save again or issue a probe after reconnect or a remote edit. Captured targets
+are immutable even when a newer version arrives. Browser AUTH exchanges are
+serialized; ambiguous acknowledgements disable receipt eligibility until a
+fresh socket establishes authentication. Account and database changes invalidate
+pending collection work.
+Receipt requests never change commit acknowledgement semantics, and old clients
+and servers continue ordinary saves and synchronization.
+
+Native `WsClient` sessions also opt into this server capability. The automatic
+`client::ws_receipts::WsReceiptSession` observes stored applied frontiers on
+followed drives, correlates exact pending tuples, and publishes
+`Db::subscribe_server_replica_receipts()` events. Native replication attaches this
+collector automatically; Flutter's server session binds it to
+`node.sync.watchReplicaReceipts()`. Their evidence records the server origin,
+authenticated client, local agent and connection/account generations. It does
+not manufacture a verified server agent. Reauthentication, account replacement
+and session closure invalidate pending evidence. Memory clients can receive
+remote evidence without claiming a persistent source identity.
+later local edit. Request correlation is scoped to the mutually authenticated,
+channel-bound session and invalidated on account/database replacement or disconnect.
+Both transports record session-scoped resource evidence automatically. Native
+requesters scan stored resource frontiers after bulk reconciliation and observe
+live changes, with bounded requests and retries. They do not promise a receipt
+for each intermediate edit when several edits coalesce before capture. The
+resource UI counts each confirmed storage identity/generation once and excludes the local
+store. Different IDs or authenticated agents alone are not evidence of separate
+physical devices; these are peer copies, not an independent-backup guarantee. Receipts do not
+attest whether a peer is a browser tab or a native app. This receipt covers resource metadata only,
+not blobs, deletion/tombstone recovery, keys, retention or a recoverable backup.
+
+The native host keeps a bounded in-memory view of these observations, separate
+from resource data. `EmbedHost.getResourcePeerEvidence(subjects)` returns only
+requested, locally readable resources on current authorized sessions, with exact
+confirmed versions and storage identities. `NativeClientDb` and Store refresh
+this evidence while resource status subscribers exist. An unavailable host,
+changed account, replaced database or closed session cannot supply live proof.
+A shared, store-wide removal generation conservatively clears native evidence
+and outstanding targets after deletion or a tombstone, including changes made
+through another account view of the database. Live connections remain open and
+request fresh proof; identical-version recreation cannot recover an old receipt.
+Reloading the embedded view can recover still-live host evidence; restarting the
+native process cannot recover it from disk. This bridge serves the native
+embedded renderer; the legacy Tauri renderer using a local HTTP server does not
+consume this native-host API.
+
+Native WebRTC and Iroh reuse the bounded requester and live evidence ledger.
+The native requester requires the resource-receipt capability; attachment probes
+also require `attachment-storage-receipts-v1`. A metadata-only peer can confirm
+resource details without confirming file contents.
+WebRTC uses an independent per-link lifetime token and a `webrtc:` connection ID;
+Iroh retains its node/connection-generation liveness check and `iroh:` namespace.
+Closing, dropping or failing a native WebRTC link invalidates its evidence and
+outstanding requests. WebRTC receipt frames leave through the host's existing
+live-frame channel, which owns transport framing. They do not emit Iroh-specific
+receipt events. If a local write batch temporarily prevents durable identity lookup during the
+handshake, periodic reconciliation retries requester setup after the batch ends.
+The native Flutter package already enables this receipt runtime;
+db-only/WASM builds retain their shared responder without a native requester.
+
+### Attachment storage receipts (0x58 / 0x59)
+
+The separate optional `attachment-storage-receipts-v1` capability adds
+`ATTACHMENT_RECEIPT_REQUEST` (`0x58`) and `ATTACHMENT_RECEIPT` (`0x59`). Resource
+receipts (`0x56` / `0x57`) retain their metadata-only meaning. Older peers ignore
+this unnegotiated capability and never acquire implicit attachment proof.
+
+An attachment request binds the authenticated drive, resource subject, requested
+metadata frontier, nonce and an exact canonical content manifest:
+
+```json
+{"files":[{"subject":"atomic:example-file","hash":"<lowercase BLAKE3 hex>","chunks":[]}]}
+```
+
+Files are sorted by canonical subject. `chunks` is empty for one stored blob;
+otherwise it contains ordered BLAKE3 chunk hashes and `hash` is the complete
+assembled-file hash. The manifest includes the resource's own File contents and
+its explicit direct attachment references. External or unreadable references,
+missing hashes and unsupported representations cannot be confirmed. Neither a
+resource version nor a file size substitutes for this content identity.
+
+The responder verifies read permission for every included resource, derives the
+manifest from local stored state, checks actual bytes and the storage barrier,
+and rechecks resource, blob, account and backend generations across asynchronous
+work. The reply echoes the exact request, supplies a scoped replica identity,
+and uses `atomic-attachment-flush-v1`. Requesters reject stale nonces, changed
+manifests and replaced sessions. Attachment probes refresh after 10 seconds;
+positive byte proof expires after 30 seconds without a fresh acknowledgement,
+even when the peer remains connected and its metadata receipt is still valid.
+Both metadata and contents must match the same
+current destination before a complete resource copy is displayed.
+
+Verification is bounded and cached under blob mutation and backend-version
+fences. Native verification runs outside the transport read loop. Missing or
+corrupt chunks, failed barriers and oversized requests produce no positive
+receipt. External object backends cannot use the local metadata database's
+identity to claim another peer file copy.
+
+`getResourceAttachmentEvidence(subjects)` supplies local byte evidence to WASM
+and embedded views. `POST /attachment-evidence` supplies the server equivalent:
+a version-2 signed JSON body `{"subjects":[...]}`, at most 128 subjects and 64 KiB,
+with a `no-store` JSON response. Root and referenced File snapshots and bytes
+are read from local storage; a missing root or File is not fetched to create
+evidence. Local WASM cache reads use the same trusted boundary as existing local
+resource/blob reads; a browser cache has no Rust default signing agent. Remote
+HTTP and peer requests retain inherited permission checks, which may resolve an
+uncached ancestor. Configured S3 storage
+uses its explicit complete-object/version contract plus verified reads; a local
+KV flush alone never confirms S3 bytes. Native peer evidence remains session
+scoped and expires when the host detects disconnection.
 
 ### EPHEMERAL (0x40)
 
@@ -526,9 +755,21 @@ Everything else is open to an anonymous socket and gated per subject by
 | `10` | `IMMUTABLE_COMMIT` | The commit's subject is itself a Commit, which can never be edited. Terminal: drop the entry; nothing is lost. |
 | `11` | `CAUSALITY_CONFLICT` | A new Loro write lost against stored state. Keep the local edit; stop sending the same stale update until it is rebased. |
 | `12` | `BUSY` | The node is overloaded with writes, or the agent spent its write rate budget. Refused **before** any work; nothing landed. The message carries `retry_after_ms=<n>`. Not a failure: keep the edit, wait, send one merged delta, and do not retry over another transport. See [Write load and pacing](#write-load-and-pacing). |
+| `13` | `INVITE_REFUSED` | An Iroh invitation was refused; no access was granted. |
 | `14` | `DEPRECATED_CLIENT` | A notice, not a refusal, sent with `request_id` 0 in answer to the `HELLO` to a client that predates `canonical-scheme` (see [Versioning and capabilities](#versioning-and-capabilities)). The connection stays usable; log it and carry on. A client that predates the code sees an unknown code with request id 0. |
 
-Codes `1` to `4` and `9` to `12` come from `classify_commit_error`, which pattern-matches the
+| `16` | `HOST_FEATURE_UNAVAILABLE` | A commit activating a plugin Installation (install, upgrade, resume) was refused because the release opens public endpoints this node's plugin-routes gates don't allow. Blocking, not terminal: the operator can open the gates. The message carries the typed problem (see below). Over HTTP, `/commit` answers `409`. |
+
+A refusal with structured fields appends them to the message: the sentence,
+then `\nproblem+json: `, then one JSON object with RFC 9457 fields (`type`,
+`detail` and the problem's own). The `/commit` Error resource's
+`description` carries the same string. A client splits at the marker and
+shows the sentence; one that doesn't know the marker still shows the sentence
+first. Code `16` carries the `host-feature-unavailable` problem this way:
+`{ type, feature, needed, compiled, level, surfaces, listeners, sidecars,
+detail }`, the same fields `/plugin-release-pin` answers with.
+
+Codes `1` to `4` and `9` to `13` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
 are **not** classified and go out as `UNKNOWN` with a descriptive message: an
 invalid frame of any kind, `No state`, a failed `GET` lookup,

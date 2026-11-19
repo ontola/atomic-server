@@ -21,6 +21,31 @@ It looks and functions a lot like React's useState hook.
 The `useValue` hook does not save the resource by default when the value is changed.
 This can be configured by passing an options object as the third argument with `commit` set to true.
 
+Awaiting the setter waits for local processing, not for a save. Validation
+failures use `handleValidationError` or the Store's error reporting.
+With `commit: true`, the hook schedules a debounced save. Observe progress with
+`useSaveState(resource)` from `@tomic/react`, or with
+`store.getSaveState(resource)` and `store.subscribeSaveState(resource, callback)`
+outside React. These report scheduling, pending work and errors; they are not
+receipts for an independent copy of the data.
+
+When an action needs the save result, await `resource.save()` and inspect its
+result. A child waiting for an unsaved parent returns `'queued'`: it is held in
+memory until its parent is saved, with no completed local persistence or server
+acceptance. This used to return `'offline'`. Callers that treat `'offline'` as an
+incomplete remote save must also handle `'queued'`, including exhaustive
+`SaveResult` switches. Saving the parent still drains the child batch in order.
+`'noop'` means there was nothing to save; `'persisted'` means server acceptance
+for a hosted resource, or local persistence for a local-only resource. Server
+acceptance does not by itself promise a disk flush or another independent copy.
+
+Awaiting the setter waits for local processing, not for its debounced save.
+For version-specific completion evidence, await `resource.saveWithReceipt()`
+and inspect its optional `local` and `server` fields. See the
+[persistence guide](../local-first-guide/4-persist.md#read-version-specific-receipts)
+for examples and limits. The `useSaveState(resource)` hook reports progress and
+errors; it is not a receipt for a particular version.
+
 In practice, you will use typed versions of `useValue` more often.
 These offer better typescript typing and validation on writes.
 

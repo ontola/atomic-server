@@ -1,6 +1,6 @@
 import { type JSX } from 'react';
 import { styled } from 'styled-components';
-import { Spinner } from './Spinner';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 
 const Wrap = styled.span`
   display: inline-flex;

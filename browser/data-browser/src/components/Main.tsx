@@ -1,12 +1,12 @@
 import { PropsWithChildren, memo, type JSX } from 'react';
-import { VisuallyHidden } from './VisuallyHidden';
+import { VisuallyHidden } from '@tomic/ui/components/VisuallyHidden';
 import { styled } from 'styled-components';
 import {
   RESOURCE_PAGE_TRANSITION_TAG,
   transitionName,
-} from '../helpers/transitionName';
-import { ViewTransitionProps } from '../helpers/ViewTransitionProps';
-import { CalculatedPageHeight } from '../globalCssVars';
+} from '@tomic/ui/helpers/transitionName';
+import { ViewTransitionProps } from '@tomic/resource-ui/helpers/ViewTransitionProps';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
 
 /** Main landmark. Every page should have one of these.
  * If the pages shows a resource a subject can be passed that enables view transitions to work. */

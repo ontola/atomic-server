@@ -1,0 +1,50 @@
+{
+  "source": "Frozen candidate27 inventory: current develop, candidate26 and all85 open PR heads",
+  "uniqueSourceCatalogBlobs": 234,
+  "externalTranslationServiceUsed": false,
+  "secondCleanByteStable": true,
+  "locales": {
+    "en": {
+      "activeMessageIds": 3353,
+      "duplicateEntries": 0,
+      "restoredKnownTranslations": 0,
+      "lostKnownTranslations": 0,
+      "untranslatedMessageIds": 0
+    },
+    "es": {
+      "activeMessageIds": 3353,
+      "duplicateEntries": 0,
+      "restoredKnownTranslations": 0,
+      "lostKnownTranslations": 0,
+      "untranslatedMessageIds": 207
+    },
+    "fr": {
+      "activeMessageIds": 3353,
+      "duplicateEntries": 0,
+      "restoredKnownTranslations": 0,
+      "lostKnownTranslations": 0,
+      "untranslatedMessageIds": 207
+    },
+    "de": {
+      "activeMessageIds": 3353,
+      "duplicateEntries": 0,
+      "restoredKnownTranslations": 0,
+      "lostKnownTranslations": 0,
+      "untranslatedMessageIds": 207
+    },
+    "nl": {
+      "activeMessageIds": 3353,
+      "duplicateEntries": 0,
+      "restoredKnownTranslations": 0,
+      "lostKnownTranslations": 0,
+      "untranslatedMessageIds": 207
+    },
+    "id": {
+      "activeMessageIds": 3353,
+      "duplicateEntries": 0,
+      "restoredKnownTranslations": 0,
+      "lostKnownTranslations": 0,
+      "untranslatedMessageIds": 207
+    }
+  }
+}

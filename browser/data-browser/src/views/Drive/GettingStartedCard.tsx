@@ -8,9 +8,9 @@ import {
 import type { JSX } from 'react';
 import { FaCircleCheck, FaRegCircle } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Button } from '@components/Button';
-import { Card } from '@components/Card';
-import { Column, Row } from '@components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Card } from '@tomic/ui/components/Card';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { useAISidebar } from '@components/AI/AISidebarContext';
 import { openShareDialog } from '@components/Share/shareDialogState';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';

@@ -3,9 +3,9 @@ import { core, useArray, useResource, useString } from '@tomic/react';
 import { PropertyLineRead } from '../Property/PropertyLineRead';
 import { styled } from 'styled-components';
 import { FaCube } from 'react-icons/fa6';
-import { Column, Row } from '../../../components/Row';
-import Markdown from '../../../components/datatypes/Markdown';
-import { AtomicLink } from '../../../components/AtomicLink';
+import { Column, Row } from '@tomic/ui/components/Row';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { NewClassInstanceButton } from './NewClassInstanceButton';
 
 import type { JSX } from 'react';

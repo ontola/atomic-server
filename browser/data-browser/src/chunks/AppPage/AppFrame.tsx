@@ -1,11 +1,13 @@
 import { HostError, isViewRequest } from '@tomic/plugin';
 import { viewSession } from '@helpers/extensions/viewSession';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { styled } from 'styled-components';
 import {
   errorMessageFromResponse,
-  signRequest,
+  signedRequestInit,
+  useCurrentAgent,
   useResource,
+  useServerURL,
   useStore,
   useTitle,
 } from '@tomic/react';
@@ -13,14 +15,29 @@ import { appSourceOf, readSchema, schemaValue } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
 import {
   appChanges,
+  isWithinApp,
   handleRequest,
   isHostRequest,
-  isWithinApp,
+  resolveAppImporter,
+  resourceToOpen,
+  assertHostProfile,
+  authorizeViewWrite,
+  bindHostProfile,
+  type HostStoreProfile,
   type HostReply,
 } from './hostStore';
-import { LoaderBlock } from '@components/Loader';
-import { Button } from '@components/Button';
-import { Row } from '@components/Row';
+import {
+  checkExternalLink,
+  openInNewTab,
+} from '@helpers/extensions/externalLink';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { paths } from '../../routes/paths';
+import { AppImporterRun, type ImporterAsk } from './AppImporterRun';
+import { describePluginSource } from '@chunks/PluginRuns/runScript';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
+
 import { newContextItem, useAISidebar } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
 
@@ -32,8 +49,10 @@ import {
 import { getIntegrationProxy } from '@helpers/integrationProxy';
 import {
   isPlatformId,
+  platformName,
   ProxyConnections,
   type ProxyConnection,
+  type ProxyHost,
 } from '@helpers/proxyConnections';
 import { NO_SERVER_APP_MESSAGE } from './noServer';
 import {
@@ -41,15 +60,57 @@ import {
   appFrameDocument,
   newFrameNonce,
 } from './appFrameDocument';
-import { appAgentOf } from './appAgent';
 import { subscribeAppKeyHandover } from './appKeyHandover';
 import { ConnectDialog } from './ConnectDialog';
 import { useHostUI } from '@components/HostUI/hostUI';
 import type { ViewChanges } from '@helpers/extensions/viewApply';
+import { ProxyConsentBar, ProxyConsentText } from '@components/ProxyConsentBar';
+import { appAgentOf } from './appAgent';
+import { grantRowAccess, rowAccessQuestion } from './rowGrant';
+import { RowGrantText } from './RowGrantText';
+import { useAppFrameIdentity } from './appFrameIdentity';
+import { registerRuntimesInBackground } from '@helpers/useInstallationRuntimes';
+
+const IMPORT_WAITING = 'An import from this app is already waiting for you.';
+
+/** A fixed built-in source and authority chosen by the native mounting host. */
+export interface AppFrameProfile extends HostStoreProfile {
+  source: string;
+  proxy?: ProxyHost;
+  /** Called after the existing native Connect dialog receives consent. */
+  connect?: (platform: string, connectionId?: string) => Promise<string>;
+}
+
+/** Source authority comes from the native mount, confined to its own node. */
+export function appFrameProfileSource(source: string, server: string): string {
+  const url = new URL(source, server);
+  if (
+    url.origin !== new URL(server).origin ||
+    url.username ||
+    url.password ||
+    url.hash
+  )
+    throw new Error('Built-in views must be served by this Atomic Server');
+
+  return url.href;
+}
+
+function profileSource(profile: AppFrameProfile | undefined, server: string) {
+  if (!profile) return undefined;
+
+  try {
+    return { src: appFrameProfileSource(profile.source, server) };
+  } catch (reason) {
+    return { problem: (reason as Error).message };
+  }
+}
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
   const store = useStore();
+  const identity = useAppFrameIdentity(props);
+  const [actor] = useCurrentAgent();
+  const [server] = useServerURL();
   const [identityRevision, setIdentityRevision] = useState(0);
   useEffect(
     () =>
@@ -66,7 +127,11 @@ export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
         props.app,
         props.drive,
         props.table,
+        identity,
         identityRevision,
+        props.profile?.source,
+        props.profile?.context,
+        ...(props.profile ? [actor?.subject, server] : []),
       ])}
       {...props}
     />
@@ -94,11 +159,20 @@ function AppFrameSession({
   app,
   drive,
   table,
+  resource: targetResource,
+  view,
   onOutcome,
   silent,
+  profile,
 }: {
   app: string;
   drive: string;
+  /**
+   * The View (tab) showing this app on `table`. An app that asks to edit the
+   * table's rows gets a grant tied to this view, so removing the tab takes
+   * it back.
+   */
+  view?: string;
   /**
    * The table this app is a view of, when it is being used as one.
    *
@@ -107,6 +181,8 @@ function AppFrameSession({
    * app that owns its data and an app that is a way of looking at data.
    */
   table?: string;
+  /** Host-selected folder or individual resource. Never a table row grant. */
+  resource?: string;
   /**
    * Told once, when the app either finishes rendering or fails.
    *
@@ -117,18 +193,42 @@ function AppFrameSession({
   onOutcome?: (outcome: AppOutcome) => void;
   /** Report the outcome, but do not draw the error bar. For an unattended run. */
   silent?: boolean;
+  profile?: AppFrameProfile;
 }): React.JSX.Element {
   const store = useStore();
-  const [src, setSrc] = useState<string>();
+  const fixed = profileSource(profile, store.getServerUrl());
+  const [appSrc, setSrc] = useState<string>();
+  const src = fixed?.src ?? appSrc;
   const [srcDoc, setSrcDoc] = useState<string>();
-  const [entrypoint, setEntrypoint] = useState<string | null>();
-  const [problem, setProblem] = useState<string>();
+  const [entrypoint, setEntrypoint] = useState<string | null | undefined>(
+    profile?.source,
+  );
+  const [loadProblem, setProblem] = useState<string>();
+  const problem = fixed?.problem ?? loadProblem;
   const [appError, setAppError] = useState<AppError>();
   // An app asking to connect a proxy platform. Drawn by this page, not the
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
+  const [importerAsk, setImporterAsk] = useState<ImporterAsk>();
+  const importerPending = useRef<{ ask?: ImporterAsk } | undefined>(undefined);
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
   const [appTitle] = useTitle(useResource(app));
+  // An app asking to open a link outside the drive. Same rule: only a click
+  // here opens it, so the frame never needs popup rights.
+  const [externalAsk, setExternalAsk] = useState<ExternalAsk>();
+  const externalAskRef = useRef<ExternalAsk | undefined>(undefined);
+  const navigate = useNavigateWithTransition();
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+  // An app asking to run its own importer: a picker and a review, both drawn
+  // by this page. One at a time, so a review is never swapped out under the
+  // person.
+  // An app asking to edit the table's rows (#1740). Drawn by this page, and
+  // only a click here grants it.
+  const [rowAsk, setRowAsk] = useState<RowAsk>();
+  const rowAskRef = useRef<RowAsk | undefined>(undefined);
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -140,10 +240,19 @@ function AppFrameSession({
   // Subject to the store's unsubscribe, so a view that re-renders does not
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
+  const authority = useMemo(
+    () => profile && bindHostProfile(store, profile),
+    [store, profile],
+  );
   const stylesheet = useCreateThemeVars();
   const hostUI = useHostUI({
-    writeRoot: app,
-    mayWriteUnder: subject => isWithinApp(store, subject, app),
+    writeRoot: profile?.access.root ?? app,
+    mayWriteUnder: async subject => {
+      if (!authority) return isWithinApp(store, subject, app);
+      await authorizeViewWrite(store, subject, app, authority);
+
+      return true;
+    },
     appTitle,
     frame: frameRef,
     table,
@@ -155,6 +264,8 @@ function AppFrameSession({
   // table tab and an app page both need it, and two copies would drift.
   useEffect(() => {
     let cancelled = false;
+
+    if (profile) return;
 
     (async () => {
       const schema = await readSchema(store, drive);
@@ -173,12 +284,22 @@ function AppFrameSession({
     return () => {
       cancelled = true;
     };
-  }, [store, drive, app]);
+  }, [store, drive, app, profile]);
+
+  // An Installation's nodes act for its app id at the proxy only once they
+  // are registered as its runtimes. Covers coming back from a connect
+  // handoff, which delegates and then reloads this page. A no-op for
+  // `createApp` apps.
+  useEffect(() => {
+    registerRuntimesInBackground(store, app);
+  }, [store, app]);
 
   useEffect(() => {
     if (!entrypoint) return;
 
     let cancelled = false;
+
+    if (profile) return;
 
     if (store.noServer) {
       appSourceOf(store, drive, entrypoint)
@@ -235,13 +356,17 @@ function AppFrameSession({
     return () => {
       cancelled = true;
     };
-  }, [store, drive, entrypoint, app]);
+  }, [store, drive, entrypoint, app, profile]);
 
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
     // Per frame: `undo` reverts what this frame applied, nothing older.
-    const changes = appChanges(store, drive, app);
+    const controller = new AbortController();
+    const selected = authority
+      ? bindHostProfile(store, authority, controller.signal)
+      : undefined;
+    const changes = appChanges(store, drive, app, selected ?? table);
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
       const canonical = isViewRequest(wire);
       const data = canonical
@@ -255,6 +380,7 @@ function AppFrameSession({
       if (forwardKey(message)) return;
 
       if (message.type === '__atomic_plugin_error') {
+        if (selected?.access.signal?.aborted) return;
         const failure: AppError = {
           message: String(message.message ?? 'Something went wrong.'),
           stack: typeof message.stack === 'string' ? message.stack : undefined,
@@ -267,6 +393,7 @@ function AppFrameSession({
       }
 
       if (message.type === '__atomic_plugin_rendered') {
+        if (selected?.access.signal?.aborted) return;
         onOutcomeRef.current?.({
           ok: true,
           children: typeof message.children === 'number' ? message.children : 0,
@@ -277,7 +404,16 @@ function AppFrameSession({
 
       if (!isHostRequest(data)) return;
 
+      try {
+        assertHostProfile(selected);
+      } catch (reason) {
+        session.post({ id: data.id, error: String(reason?.message ?? reason) });
+
+        return;
+      }
+
       if (
+        data.op !== 'openResource' &&
         handleUI(
           data as unknown as Parameters<typeof handleUI>[0],
           session.post,
@@ -299,6 +435,15 @@ function AppFrameSession({
           return;
         }
 
+        if (profile && !profile.connect) {
+          session.post({
+            id: data.id,
+            error: 'This view cannot connect an account',
+          });
+
+          return;
+        }
+
         // One question at a time; a second ask answers the first.
         const previous = connectAskRef.current;
         previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
@@ -306,6 +451,10 @@ function AppFrameSession({
           id: data.id,
           platform: data.platform!,
           reply: session.post,
+          connectionId:
+            profile && typeof data.connectionId === 'string'
+              ? data.connectionId
+              : undefined,
         };
         connectAskRef.current = ask;
         setConnectAsk(ask);
@@ -313,7 +462,10 @@ function AppFrameSession({
         // Offer a connection the person already has for this platform, so
         // using it for one more app needs no second trip through OAuth. A
         // proxy that cannot list them still lets them connect a new one.
-        existingConnections(store, data.platform!)
+        (profile
+          ? Promise.resolve([])
+          : existingConnections(store, data.platform!)
+        )
           .catch((): ProxyConnection[] => [])
           .then(existing => {
             if (connectAskRef.current !== ask) return;
@@ -325,12 +477,121 @@ function AppFrameSession({
         return;
       }
 
+      if (data.op === 'requestRowAccess') {
+        const previous = rowAskRef.current;
+        previous?.reply({
+          id: previous.id,
+          result: { status: 'denied', reason: /* @wc-ignore */ 'Asked again' },
+        });
+        rowAskRef.current = undefined;
+        setRowAsk(undefined);
+
+        rowAccessQuestion(store, { app, drive, table, view }, () =>
+          appLabel(store, app),
+        )
+          .then(outcome => {
+            if (outcome.ask === false) {
+              session.post({ id: data.id, result: outcome.result });
+
+              return;
+            }
+
+            const ask: RowAsk = {
+              id: data.id,
+              appName: outcome.appName,
+              keepsExtras: outcome.extras.length > 0,
+              reply: session.post,
+            };
+            rowAskRef.current = ask;
+            setRowAsk(ask);
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
+
+        return;
+      }
+
+      if (data.op === 'openExternal') {
+        const link = checkExternalLink(data.url);
+
+        if ('error' in link) {
+          session.post({ id: data.id, error: link.error });
+
+          return;
+        }
+
+        const { url } = link;
+        // One question at a time; a second ask answers the first.
+        const previous = externalAskRef.current;
+        previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
+        const ask: ExternalAsk = { id: data.id, url, reply: session.post };
+        externalAskRef.current = ask;
+        setExternalAsk(ask);
+
+        return;
+      }
+
+      if (data.op === 'openResource') {
+        resourceToOpen(store, data.subject)
+          .then(subject => {
+            session.post({
+              id: data.id,
+              result: { status: 'opened', subject },
+            });
+            void navigateRef.current(
+              `${paths.show}?${new URLSearchParams({ subject })}`,
+            );
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
+
+        return;
+      }
+
+      if (data.op === 'runImporter') {
+        if (importerPending.current) {
+          session.post({
+            id: data.id,
+            error: IMPORT_WAITING,
+          });
+
+          return;
+        }
+
+        const pending: { ask?: ImporterAsk } = {};
+        importerPending.current = pending;
+        resolveAppImporter(
+          store,
+          drive,
+          table,
+          data,
+          describePluginSource,
+        ).then(
+          resolved => {
+            if (importerPending.current !== pending) return;
+            const ask = { id: data.id, resolved, reply: session.post };
+            pending.ask = ask;
+            setImporterAsk(ask);
+          },
+          (error: Error) => {
+            if (importerPending.current !== pending) return;
+            importerPending.current = undefined;
+            session.post({ id: data.id, error: error.message });
+          },
+        );
+
+        return;
+      }
+
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
         session.watch(subject, () =>
-          store.subscribe(subject, () =>
-            session.post({ __atomicChanged: subject }),
-          ),
+          store.subscribe(subject, () => {
+            try {
+              assertHostProfile(selected);
+              session.post({ __atomicChanged: subject });
+            } catch {
+              session.unwatch(subject);
+            }
+          }),
         );
         session.post({ id: data.id, result: true });
 
@@ -344,15 +605,50 @@ function AppFrameSession({
         return;
       }
 
-      void answer(store, app, drive, table, data, session.post, changes);
+      void answer(
+        store,
+        app,
+        drive,
+        table,
+        data,
+        session.post,
+        changes,
+        targetResource,
+        selected,
+        profile?.proxy,
+      );
     });
     bridgeRef.current = bridge;
+    const stop = () => bridge.close();
+    selected?.access.signal?.addEventListener('abort', stop, { once: true });
 
     return () => {
+      const previous = importerPending.current?.ask;
+      previous?.reply({
+        id: previous.id,
+        result: { status: 'cancelled', importer: previous.resolved.importer },
+      });
+      importerPending.current = undefined;
+      setImporterAsk(undefined);
+      selected?.access.signal?.removeEventListener('abort', stop);
+      controller.abort();
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src, srcDoc, handleUI, forwardKey]);
+  }, [
+    store,
+    app,
+    drive,
+    table,
+    targetResource,
+    view,
+    src,
+    srcDoc,
+    handleUI,
+    forwardKey,
+    profile,
+    authority,
+  ]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`, colorScheme);
@@ -410,6 +706,15 @@ function AppFrameSession({
   const connect = async (ask: ConnectAsk) => {
     if (!store.getAgent()) throw new Error('Sign in to connect an account.');
 
+    if (profile?.connect) {
+      assertHostProfile(authority);
+      const url = await profile.connect(ask.platform, ask.connectionId);
+      assertHostProfile(authority);
+      if (connectAskRef.current?.id === ask.id) location.assign(url);
+
+      return;
+    }
+
     const appAgent = await appAgentOf(store, { drive, app });
     const url = await proxyConnections(store).start(
       { drive, app, appAgent },
@@ -429,6 +734,52 @@ function AppFrameSession({
       appAgent,
       await appLabel(store, app),
     );
+    registerRuntimesInBackground(store, app);
+  };
+
+  const finishExternal = (status: 'opened' | 'cancelled') => {
+    if (!externalAsk) return;
+
+    // Opened from this click, so the browser allows the new tab without the
+    // frame ever holding popup rights.
+    if (status === 'opened') openInNewTab(externalAsk.url);
+    externalAsk.reply({ id: externalAsk.id, result: { status } });
+    externalAskRef.current = undefined;
+    setExternalAsk(undefined);
+  };
+
+  const externalHost = externalAsk?.url.host;
+
+  const finishRowAsk = (reply: HostReply) => {
+    rowAsk?.reply(reply);
+    rowAskRef.current = undefined;
+    setRowAsk(undefined);
+  };
+
+  const allowRows = () => {
+    if (!rowAsk || !table || !view) return;
+
+    grantRowAccess(store, { drive, table, app, view, via: 'request' })
+      .then(() =>
+        finishRowAsk({ id: rowAsk.id, result: { status: 'granted' } }),
+      )
+      .catch((e: Error) =>
+        finishRowAsk({
+          id: rowAsk.id,
+          result: { status: 'denied', reason: e.message },
+        }),
+      );
+  };
+
+  const declineRows = () => {
+    if (!rowAsk) return;
+    finishRowAsk({
+      id: rowAsk.id,
+      result: {
+        status: 'denied',
+        reason: /* @wc-ignore */ 'The person said no',
+      },
+    });
   };
 
   const fixIt = () => {
@@ -470,6 +821,17 @@ function AppFrameSession({
           </Row>
         </ErrorBar>
       )}
+      {importerAsk && (
+        <AppImporterRun
+          key={String(importerAsk.id)}
+          ask={importerAsk}
+          drive={drive}
+          onDone={() => {
+            importerPending.current = undefined;
+            setImporterAsk(undefined);
+          }}
+        />
+      )}
       {hostUI.element}
       {connectAsk && (
         <ConnectDialog
@@ -481,6 +843,36 @@ function AppFrameSession({
           onUseExisting={shareExisting}
           onClosed={used => finishAsk(connectAsk, used)}
         />
+      )}
+      {externalAsk && (
+        <ProxyConsentBar aria-label='Open a link'>
+          <ProxyConsentText>
+            This app wants to open <Host>{externalHost}</Host> in a new tab.
+            <ExternalUrl>{externalAsk.url.href}</ExternalUrl>
+          </ProxyConsentText>
+          <Row gap='0.5rem'>
+            <Button onClick={() => finishExternal('opened')}>Open link</Button>
+            <Button subtle onClick={() => finishExternal('cancelled')}>
+              Cancel
+            </Button>
+          </Row>
+        </ProxyConsentBar>
+      )}
+      {rowAsk && (
+        <ProxyConsentBar aria-label='Let this app edit rows'>
+          <ProxyConsentText>
+            <RowGrantText
+              appName={rowAsk.appName}
+              keepsExtras={rowAsk.keepsExtras}
+            />
+          </ProxyConsentText>
+          <Row gap='0.5rem'>
+            <Button onClick={allowRows}>Allow editing</Button>
+            <Button subtle onClick={declineRows}>
+              Not now
+            </Button>
+          </Row>
+        </ProxyConsentBar>
       )}
       <Frame
         ref={frameRef}
@@ -495,7 +887,6 @@ function AppFrameSession({
         // So an app can go full screen (`element.requestFullscreen()`); a
         // frame is not allowed to without it.
         allow='fullscreen'
-        allowFullScreen
         title='App'
       />
     </Wrapper>
@@ -527,19 +918,25 @@ async function answer(
   request: Parameters<typeof handleRequest>[3],
   post: (reply: HostReply) => void,
   changes: ViewChanges,
+  resource?: string,
+  profile?: HostStoreProfile,
+  selectedProxy?: ProxyHost,
 ): Promise<void> {
   try {
+    const result = await handleRequest(
+      store,
+      app,
+      drive,
+      request,
+      table,
+      profile ? selectedProxy : proxyHost(store, app, drive),
+      changes,
+      profile ?? resource,
+    );
+    assertHostProfile(profile);
     post({
       id: request.id,
-      result: await handleRequest(
-        store,
-        app,
-        drive,
-        request,
-        table,
-        proxyHost(store, app, drive),
-        changes,
-      ),
+      result,
     });
   } catch (e) {
     post({
@@ -618,20 +1015,27 @@ async function appLabel(
   }
 }
 
-/** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
-function platformName(id: string) {
-  return id
-    .split('-')
-    .map(word => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
-    .join(' ');
+interface RowAsk {
+  id: number | string;
+  appName: string;
+  /** Whether the app declares row extras the grant would cover (#1849). */
+  keepsExtras: boolean;
+  reply: (reply: HostReply) => void;
 }
 
 interface ConnectAsk {
   id: number | string;
   platform: string;
   reply: (reply: HostReply) => void;
-  /** Connections the person already has for this platform; unset while looking. */
+  /** Connections the person already has for this platform. */
   existing?: ProxyConnection[];
+  connectionId?: string;
+}
+
+interface ExternalAsk {
+  id: number | string;
+  url: URL;
+  reply: (reply: HostReply) => void;
 }
 
 type MintResult = { ok: true; token: string } | { ok: false; error: string };
@@ -653,18 +1057,14 @@ async function mintViewToken(
   const url = `${store.getServerUrl()}/plugin-view-token`;
 
   try {
-    const payload = JSON.stringify({ drive, plugin });
-    const headers = await signRequest(
+    const response = await fetch(
       url,
-      agent,
-      {},
-      { method: 'POST', body: payload },
+      await signedRequestInit(url, agent, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ drive, plugin }),
+      }),
     );
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: payload,
-    });
 
     if (!response.ok) {
       return {
@@ -724,6 +1124,16 @@ const ErrorText = styled.span`
   color: ${p => p.theme.colors.textLight};
   overflow-wrap: anywhere;
   min-width: 0;
+`;
+
+/** The destination host, in full: what the person is deciding about. */
+const Host = styled.strong``;
+
+/** The whole link, under the host, for anyone who wants to check the path. */
+const ExternalUrl = styled.span`
+  display: block;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
 `;
 
 const Problem = styled.p`

@@ -35,7 +35,7 @@ import {
   FaTurnUp,
   FaWindowMaximize,
 } from 'react-icons/fa6';
-import { atomicArgu } from '../ontologies/atomic-argu';
+import { atomicArgu } from '@tomic/resource-ui/ontologies/atomic-argu';
 import { getOrCreateForksFolder } from '../helpers/forksFolder';
 import {
   constructOpenURL,
@@ -44,16 +44,16 @@ import {
   historyURL,
   importerURL,
 } from '../helpers/navigation';
-import { isContentAddressed } from '../helpers/propertyIdentity';
+import { isContentAddressed } from '@tomic/resource-ui/helpers/propertyIdentity';
 import { paths } from '../routes/paths';
-import { shortcuts } from './shortcuts';
+import { shortcuts } from '@tomic/ui/actions/shortcuts';
 import type { ActionContext, ActionDefinition } from './types';
 import { useMemberNames } from '../views/Conversation/ConversationTitle';
 import { leaveConversation } from '../helpers/conversations/hiddenConversations';
 import { moveToTrash } from '../helpers/trash';
-import { removeRecentResource } from '../helpers/recentResources';
-import { openSearchOverlay } from '../components/overlayState';
-import { AIIcon } from '../components/AI/AIIcon';
+import { removeRecentResource } from '@tomic/resource-ui/helpers/recentResources';
+import { openSearchOverlay } from '@tomic/resource-ui/components/overlayState';
+import { AIIcon } from '@tomic/resource-ui/components/AI/AIIcon';
 import { openShareDialog } from '../components/Share/shareDialogState';
 
 /** Asks the resource bar to open its tag picker for `detail` (a subject). */

@@ -22,9 +22,13 @@ import { useDriveVisits } from '../../hooks/useDriveVisits';
 import { useSavedDrives } from '../../hooks/useSavedDrives';
 import { usePrivateDrive } from '../../hooks/usePrivateDrive';
 import { paths } from '../../routes/paths';
-import { type DropdownItem, DIVIDER, DropdownMenu } from '../Dropdown';
-import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
-import type { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
+import {
+  type DropdownItem,
+  DIVIDER,
+  DropdownMenu,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
+import type { DropdownTriggerComponent } from '@tomic/ui/components/Dropdown/DropdownTrigger';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 

@@ -1,9 +1,9 @@
 import { useMemo, useState, type JSX } from 'react';
 import { useResource, type Version } from '@tomic/react';
 
-import { ContainerNarrow } from '../../components/Containers';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
-import { ErrorLook } from '../../components/ErrorLook';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 import { styled } from 'styled-components';
 import { useVersions } from './useVersions';
 import { groupVersionsByMonth } from './versionHelpers';
@@ -12,12 +12,12 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 import { constructOpenURL } from '../../helpers/navigation';
 import { HistoryDesktopView } from './HistoryDesktopView';
 import { HistoryMobileView } from './HistoryMobileView';
-import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useMediaQuery } from '@tomic/resource-ui/hooks/useMediaQuery';
 import { Main } from '../../components/Main';
 import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
 import { createRoute } from '@tanstack/react-router';
-import { useOnValueChange } from '@helpers/useOnValueChange';
+import { useOnValueChange } from '@tomic/ui/helpers/useOnValueChange';
 
 export const HistoryRoute = createRoute({
   path: pathNames.history,

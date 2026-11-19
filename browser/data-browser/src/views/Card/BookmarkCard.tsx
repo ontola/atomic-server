@@ -1,14 +1,14 @@
 import { urls, useString } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import Markdown from '../../components/datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import {
   ExternalLink,
   ExternalLinkVariant,
 } from '../../components/ExternalLink';
 import { CardViewProps } from './CardViewProps';
 import { ResourceCardTitle } from './ResourceCardTitle';
-import { Column } from '../../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 
 import type { JSX } from 'react';
 

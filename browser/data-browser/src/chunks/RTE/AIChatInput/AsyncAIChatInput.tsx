@@ -3,12 +3,12 @@ import { styled } from 'styled-components';
 import StarterKit from '@tiptap/starter-kit';
 import Mention from '@tiptap/extension-mention';
 import FileHandler from '@tiptap/extension-file-handler';
-import { TiptapContextProvider } from '../TiptapContext';
-import { EditorWrapperBase } from '../EditorWrapperBase';
+import { TiptapContextProvider } from '@tomic/resource-ui/chunks/RTE/TiptapContext';
+import { EditorWrapperBase } from '@tomic/resource-ui/chunks/RTE/EditorWrapperBase';
 import { searchSuggestionBuilder } from './mcpSuggestions';
 import { skillSuggestionBuilder } from './skillSuggestions';
 import { useEffect, useRef, useState } from 'react';
-import { EditorEvents } from '../EditorEvents';
+import { EditorEvents } from '@tomic/resource-ui/chunks/RTE/EditorEvents';
 import { Markdown } from '@tiptap/markdown';
 import { useStore } from '@tomic/react';
 import { useSettings } from '../../../helpers/AppSettings';
@@ -20,13 +20,13 @@ import type {
   MentionItem,
   SkillSuggestion,
 } from './types';
-import { Row } from '../../../components/Row';
+import { Row } from '@tomic/ui/components/Row';
 import {
   IconButton,
   IconButtonVariant,
-} from '../../../components/IconButton/IconButton';
+} from '@tomic/ui/components/IconButton/IconButton';
 import { FaArrowRight } from 'react-icons/fa6';
-import { addIf } from '../../../helpers/addIf';
+import { addIf } from '@tomic/resource-ui/helpers/addIf';
 import { useAISettings } from '@components/AI/AISettingsContext';
 
 const createAttribute = (propName: string, dataName: string) => {

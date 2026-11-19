@@ -20,7 +20,7 @@ import {
 } from '@tomic/react';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../helpers/navigation';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { sendChatMessage } from '../../views/ChatRoom/ChatRoomView';
 import { isEmbedded } from '../../helpers/embedMode';

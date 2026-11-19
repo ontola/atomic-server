@@ -4,7 +4,7 @@ import {
   addRecentResource,
   getRecentResources,
   removeRecentResource,
-} from './recentResources';
+} from '@tomic/resource-ui/helpers/recentResources';
 
 const DRIVE = 'did:ad:drive:one';
 const OTHER_DRIVE = 'did:ad:drive:two';

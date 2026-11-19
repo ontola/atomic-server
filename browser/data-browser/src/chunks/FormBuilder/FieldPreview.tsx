@@ -23,10 +23,13 @@ import {
   tableColumns,
   type FieldOptions,
 } from '@tomic/form-renderer';
-import { Row } from '@components/Row';
+import { Row } from '@tomic/ui/components/Row';
 import { useColumnOptions } from './formDataClass';
-import { parseFieldOptions } from './FieldOptions/useFieldOptions';
-import { isChoiceFieldType, type FormFieldType } from './fieldTypes';
+import { parseFieldOptions } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
+import {
+  isChoiceFieldType,
+  type FormFieldType,
+} from '@tomic/resource-ui/chunks/FormBuilder/fieldTypes';
 
 /** Picture options stop here; the rest collapses into an `and x more`. They
  * are cards with thumbnails, so a long list costs several rows of height —

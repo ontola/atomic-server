@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Resource, core } from '@tomic/react';
 import { styled } from 'styled-components';
 import { FaPlus } from 'react-icons/fa6';
-import { NewFormDialog } from '../../components/forms/NewForm/NewFormDialog';
-import { Dialog, useDialog } from '../../components/Dialog';
-import { ClassSelectorDialog } from '../../components/ClassSelectorDialog';
+import { NewFormDialog } from '@tomic/resource-ui/components/forms/NewForm/NewFormDialog';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { ClassSelectorDialog } from '@tomic/resource-ui/components/ClassSelectorDialog';
 
 interface CreateInstanceButtonProps {
   ontology: Resource;

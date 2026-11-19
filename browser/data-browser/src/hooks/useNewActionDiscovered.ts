@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useLocalStorage } from './useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 
 const NEW_ACTION_DISCOVERED_KEY = 'atomic.newActionDiscovered';
 

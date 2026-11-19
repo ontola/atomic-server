@@ -1,15 +1,18 @@
-import { useTableFormColumns } from './useTableFormColumns';
+import { useTableFormColumns } from '@tomic/resource-ui/chunks/FormBuilder/useTableFormColumns';
 import { useFormQuestions } from './useFormQuestions';
 import toast from 'react-hot-toast';
 import { Resource, forms, useArray, useResource, useStore } from '@tomic/react';
 import type { JSX } from 'react';
 import { styled } from 'styled-components';
-import { Column } from '@components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { AddFieldMenu } from './AddFieldMenu';
 import { FieldRow } from './FieldRow';
 import { ReorderableList } from './ReorderableList';
 import { useFormFieldPropertySync } from './useFormFieldPropertySync';
-import { FIELD_TYPE_META, type AddableFieldType } from './fieldTypes';
+import {
+  FIELD_TYPE_META,
+  type AddableFieldType,
+} from '@tomic/resource-ui/chunks/FormBuilder/fieldTypes';
 
 interface FieldListProps {
   dataClassSubject: string;

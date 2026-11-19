@@ -1,6 +1,35 @@
+import {
+  ResourceAttachmentSync,
+  type AttachmentPeerReceipt,
+} from './resource-attachment-sync.js';
+import type { ResourceAttachmentSyncStatus } from './resource-attachment-evidence.js';
+import {
+  parseResourcePeerEvidence,
+  type ResourcePeerEvidenceProvider,
+} from './resource-peer-evidence.js';
+import {
+  ResourcePeerSyncStatusTracker,
+  type ResourcePeerSyncStatus,
+} from './resource-peer-sync-status.js';
+import type { BrowserReplicaReceipt } from './peer-receipts.js';
 import { randomUUID } from './uuid.js';
+import {
+  ServerReceiptRequests,
+  serverReceiptEndpoint,
+  type ServerReceiptTransport,
+  type ServerReplicaReceipt,
+} from './server-receipts.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
+import {
+  ResourceSyncStatusTracker,
+  type ResourceSyncStatus,
+} from './resource-sync-status.js';
+import {
+  normalizeResourceSyncScope,
+  type ResourceSyncScope,
+  type SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
 import {
   encodeCommit as encodePeerCommit,
@@ -32,6 +61,11 @@ import {
 } from './authentication.js';
 import { Client, isOwnServerUrl, type FileOrFileLike } from './client.js';
 import { isOriginBackoffError, noteOriginReachable } from './origin-backoff.js';
+import {
+  fetchTableChanges,
+  type TableChangesOptions,
+  type TableChangesPage,
+} from './table-changes.js';
 import {
   CommitBuilder,
   commitIdOf,
@@ -67,6 +101,7 @@ import {
   Resource,
   unknownSubject,
   type ResourceReadState,
+  type SaveReceipt,
 } from './resource.js';
 import {
   type SearchOpts,
@@ -80,6 +115,7 @@ import { WSClient } from './websockets.js';
 import { LoroLoader } from './loro-loader.js';
 import { loroCall } from './loro-context.js';
 import { withDeadline } from './withDeadline.js';
+import { isLoopbackHost } from './loopback.js';
 
 /** How long a connected store waits on its local database before asking the server. */
 const LOCAL_READ_DEADLINE_MS = 1_000;
@@ -94,7 +130,7 @@ const LOCAL_READ_DEADLINE_DURING_SYNC_MS = 150;
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
 import { initOntologies } from './ontologies/index.js';
-import { decodeB64, encodeB64Url } from './base64.js';
+import { decodeB64, encodeB64, encodeB64Url } from './base64.js';
 import {
   canonicalizeScheme,
   isAgentSubject,
@@ -376,10 +412,11 @@ export interface CommitLogEntry {
   /**
    * - `pending`  — locally signed, queued, not yet posted to the server.
    * - `sent`     — server accepted the commit.
+   * - `local`    — saved locally without sending to a server.
    * - `failed`   — server rejected, or the network call threw.
    * - `received` — incoming commit pushed to us by the server.
    */
-  status: 'pending' | 'sent' | 'failed' | 'received';
+  status: 'pending' | 'sent' | 'local' | 'failed' | 'received';
   subject: string;
   signer?: string;
   previousCommit?: string;
@@ -397,8 +434,14 @@ export enum StoreEvents {
    * performs a save action.
    */
   ResourceSaved = 'resource-saved',
+  /** @internal Immutable completed boundaries of one save invocation. */
+  SaveReceipt = 'save-receipt',
+  /** Completed remote storage evidence; independence still requires policy. */
+  ServerReplicaReceipt = 'server-replica-receipt',
   /** User perform a Remove action */
   ResourceRemoved = 'resource-removed',
+  /** @internal Invalidates pending peer probes even for silent cache eviction. */
+  ResourcePeerEvidenceRemoved = 'resource-peer-evidence-removed',
   /**
    * User explicitly created a Resource through a conscious action, e.g. through
    * the SideBar.
@@ -501,7 +544,10 @@ export interface CreateDriveOpts {
  */
 type StoreEventHandlers = {
   [StoreEvents.ResourceSaved]: ResourceCallback;
+  [StoreEvents.SaveReceipt]: (receipt: SaveReceipt) => void;
+  [StoreEvents.ServerReplicaReceipt]: (receipt: ServerReplicaReceipt) => void;
   [StoreEvents.ResourceRemoved]: SubjectCallback;
+  [StoreEvents.ResourcePeerEvidenceRemoved]: SubjectCallback;
   [StoreEvents.ResourceManuallyCreated]: ResourceCallback;
   [StoreEvents.AgentChanged]: AgentCallback;
   [StoreEvents.ServerURLChanged]: ServerURLCallback;
@@ -813,6 +859,161 @@ export class Store {
 
   /** Current Agent, used for signing commits. Is required for posting things. */
   private agent?: Agent;
+  private identityGeneration = 0;
+
+  /** @internal Fences asynchronous saves, including A→B→A identity changes. */
+  public getIdentityGeneration(): number {
+    return this.identityGeneration;
+  }
+
+  private clientDbGeneration = 0;
+
+  /** @internal Fences peer sessions against database replacement and A→B→A. */
+  public getClientDbGeneration(): number {
+    return this.clientDbGeneration;
+  }
+
+  /** @internal Emitted after finalization; observer failures cannot reject save. */
+  public notifySaveReceipt(receipt: SaveReceipt): void {
+    // Capture before a listener can change account or database.
+    try {
+      this.serverReceiptRequests.observe(receipt);
+    } catch {
+      /* Optional evidence. */
+    }
+
+    void this.eventManager.emit(StoreEvents.SaveReceipt, receipt);
+  }
+
+  private readonly serverReceiptRequests = new ServerReceiptRequests(this);
+  private serverReceiptEpoch = 0;
+
+  /** @internal Observer failures cannot change a save or its storage evidence. */
+  public notifyServerReplicaReceipt(receipt: ServerReplicaReceipt): void {
+    void this.eventManager
+      .emit(StoreEvents.ServerReplicaReceipt, receipt)
+      .catch(() => undefined);
+  }
+
+  /** @internal Actual endpoint and active authenticated connection provenance. */
+  public getServerReceiptTransport(
+    commitEndpoint: string,
+  ): ServerReceiptTransport | undefined {
+    if (this.noServer || this.commitTransport) return;
+
+    try {
+      const endpoint = serverReceiptEndpoint(commitEndpoint);
+      const ws = this.getWebSocketForEndpoint(commitEndpoint);
+      const session = ws?.getStorageReceiptSession();
+      if (ws && session)
+        return {
+          endpoint,
+          transport: 'websocket',
+          connectionId: session,
+          current: () => ws.getStorageReceiptSession() === session,
+          request: (request, _agent, signal) =>
+            ws.requestStorageReceipt(request, signal),
+        };
+      if (!this.client?.supportsStorageReceipts(endpoint)) return;
+      const epoch = this.serverReceiptEpoch;
+
+      return {
+        endpoint,
+        transport: 'http',
+        connectionId: `http:${endpoint}:${epoch}`,
+        current: () =>
+          this.serverReceiptEpoch === epoch &&
+          this.client.supportsStorageReceipts(endpoint),
+        request: (request, agent, signal, current) =>
+          this.client.requestStorageReceipt(
+            endpoint,
+            request,
+            agent,
+            signal,
+            current,
+          ),
+      };
+    } catch {
+      return;
+    }
+  }
+
+  /** @internal Only stored reconciliation versions, never a current edit. */
+  public seedServerReceiptTargets(
+    endpoint: string,
+    state: DriveSyncState,
+  ): void {
+    this.serverReceiptRequests.seed(endpoint, state);
+  }
+  /** @internal Follow the actual authenticated socket and selected drive. */
+  public followServerReceiptDrive(
+    endpoint: string,
+    drive: string,
+    current: () => boolean,
+  ): void {
+    this.serverReceiptRequests.follow(endpoint, drive, current);
+  }
+
+  /** @internal Coalesced wake after a stored import, never from an unsaved edit. */
+  public refreshServerReceiptTargets(): void {
+    this.serverReceiptRequests.refresh();
+  }
+
+  private captureServerReceiptAcceptance(
+    endpoint: string,
+    subject: string,
+    version: Uint8Array,
+    generation: number,
+    databaseGeneration: number,
+    resource?: Resource,
+    genesis?: Uint8Array,
+  ): () => void {
+    try {
+      if (
+        this.identityGeneration !== generation ||
+        this.clientDbGeneration !== databaseGeneration
+      )
+        return () => {};
+
+      let drive = resource?.get('https://atomicdata.dev/properties/drive');
+      let isDrive = resource?.getClasses().includes(server.classes.drive);
+
+      if (genesis) {
+        const doc = new LoroLoader.Loro.LoroDoc();
+
+        try {
+          doc.import(genesis);
+          const props = doc.getMap('properties').toJSON();
+          drive = props['https://atomicdata.dev/properties/drive'];
+          isDrive =
+            Array.isArray(props[core.properties.isA]) &&
+            props[core.properties.isA].includes(server.classes.drive);
+        } finally {
+          doc.free();
+        }
+      }
+
+      if (isDrive) drive = subject;
+      if (typeof drive !== 'string') return () => {};
+      const accepted = this.serverReceiptRequests.captureAccepted(
+        endpoint,
+        drive,
+        subject,
+        encodeB64(version),
+      );
+
+      return () => {
+        try {
+          accepted();
+        } catch {
+          /* Receipt collection cannot fail acceptance. */
+        }
+      };
+    } catch {
+      return () => {};
+    }
+  }
+
   /** Mapped from origin to websocket */
   private webSockets: Map<string, WSClient>;
 
@@ -1171,12 +1372,25 @@ export class Store {
   }
 
   public setClientDb(clientDb: ClientDbWorker | undefined): void {
+    if (this.clientDb !== clientDb) this.serverReceiptRequests.reset(true);
+    if (this.clientDb !== clientDb) this.clientDbGeneration++;
     // `initClientDb` calls this three times per page load (eager,
     // post-init, post-init-error) to refresh sync status. Only the
     // first call introduces a new worker; the others just want
     // `emitSyncStatus`.
-    const attached = !!clientDb && clientDb !== this.clientDb;
+    const changed = clientDb !== this.clientDb;
+    const attached = !!clientDb && changed;
     this.clientDb = clientDb;
+
+    if (changed) {
+      this.resetPeerSyncEvidence();
+      this.resetResourceSyncEvidence();
+    } else {
+      for (const resource of this.resourceSyncWatchers.keys()) {
+        this.resourceSyncReads.delete(this.normalizeSubject(resource.subject));
+        this.ensureResourceSyncEvidence(resource.subject);
+      }
+    }
 
     if (isOutboxDatabase(clientDb)) this.outbox.expectDatabase();
 
@@ -1234,8 +1448,21 @@ export class Store {
   public registerLocalOnlyDrive(drive: string): void {
     const normalized = this.normalizeSubject(drive);
 
+    if (this.localOnlyDrives.has(normalized)) return;
+
     this.localOnlyDrives.add(normalized);
+    this._syncedDrives.delete(normalized);
+    this._driveSyncs.delete(normalized);
+
+    if (
+      this._lastDriveSync &&
+      this.normalizeSubject(this._lastDriveSync.drive) === normalized
+    ) {
+      this._lastDriveSync = undefined;
+    }
+
     this.persistLocalOnlyDrives();
+    this.emitSyncStatus();
   }
 
   /** The drive a subject belongs to, for naming it to the person. */
@@ -1388,6 +1615,7 @@ export class Store {
     if (!this.localOnlyDrives.delete(this.normalizeSubject(drive))) return;
 
     this.persistLocalOnlyDrives();
+    this.emitSyncStatus();
   }
 
   /** Remember the local-only drives across reloads. Full or blocked storage
@@ -1900,6 +2128,16 @@ export class Store {
   private drainOutboxSubject = async (subject: string): Promise<void> => {
     let entry = this.outbox.getEntry(subject);
     if (!entry) return;
+    const generation = this.identityGeneration;
+    const databaseGeneration = this.clientDbGeneration;
+
+    const assertCurrent = () => {
+      if (this.identityGeneration !== generation) {
+        throw new RequestCancelledError(
+          'Identity changed during commit delivery',
+        );
+      }
+    };
 
     // A `_new:` subject has no derived DID yet — it must be sign-genesis'd
     // (which renames it to `did:ad:<sig>`) before it can be POSTed. The
@@ -1951,10 +2189,51 @@ export class Store {
           ?.appliedCommitSignatures.add(genesis.signature);
       }
 
+      const serverTransport = this.commitTransport === undefined;
+      let accepted = () => {};
+
+      if (serverTransport) {
+        try {
+          accepted = this.captureServerReceiptAcceptance(
+            endpoint,
+            subject,
+            LoroLoader.Loro.decodeImportBlobMeta(
+              genesis.loroUpdate!,
+              false,
+            ).partialEndVersionVector.encode(),
+            generation,
+            databaseGeneration,
+            undefined,
+            genesis.loroUpdate,
+          );
+        } catch {
+          /* Malformed optional evidence must not prevent delivery. */
+        }
+      }
+
       const created = await this.postCommit(genesis, endpoint);
+      assertCurrent();
       // Publish the acknowledgement before ResourceSaved listeners decide
       // whether this new resource can be subscribed on the server.
       this.outbox.clearGenesis(subject);
+      accepted();
+
+      if (serverTransport && this.identityGeneration === generation) {
+        try {
+          this.resources
+            .get(subject)
+            ?.recordServerAcceptance(
+              endpoint,
+              genesis,
+              LoroLoader.Loro.decodeImportBlobMeta(genesis.loroUpdate!, false)
+                .partialEndVersionVector,
+              generation,
+            );
+        } catch (error) {
+          console.warn('Could not record the accepted genesis receipt', error);
+        }
+      }
+
       const commitId = commitIdOf(created);
       const resource = this.resources.get(subject);
 
@@ -2009,6 +2288,7 @@ export class Store {
       // OPFS-first, then server. Throws on hard failure (offline DID,
       // network error) — the outbox failure/backoff machinery takes over.
       resource = await this.getResource(subject);
+      assertCurrent();
 
       if (resource.error) {
         throw resource.error;
@@ -2084,6 +2364,7 @@ export class Store {
         try {
           const { jsonAd, snapshot } =
             await this.clientDb.getResourceWithSnapshot(subject);
+          assertCurrent();
 
           if (jsonAd) {
             this.hydrateResourceFromJson(subject, JSON.parse(jsonAd));
@@ -2102,6 +2383,7 @@ export class Store {
 
           if (refreshed) resource = refreshed;
         } catch (e) {
+          if (e instanceof RequestCancelledError) throw e;
           console.warn(
             `[Outbox] OPFS rehydrate before offline drain failed for ${subject}:`,
             e,
@@ -2164,7 +2446,9 @@ export class Store {
     const { bytes: delta, versionAfterExport } = exported;
     const builder = new CommitBuilder(subject);
     builder.setLoroUpdate(delta);
+    assertCurrent();
     const commit = await builder.sign(agent);
+    assertCurrent();
 
     // Registered before the POST, not after the ack: the server echoes the
     // commit to this connection too, and under load that echo lands before
@@ -2175,9 +2459,22 @@ export class Store {
     }
 
     let created: Commit;
+    const serverTransport = this.commitTransport === undefined;
+
+    const accepted = serverTransport
+      ? this.captureServerReceiptAcceptance(
+          endpoint,
+          subject,
+          versionAfterExport.encode(),
+          generation,
+          databaseGeneration,
+          resource,
+        )
+      : () => {};
 
     try {
       created = await this.postCommit(commit, endpoint);
+      assertCurrent();
     } catch (e) {
       // Pending-deps rejection: the delta we just sent starts past ops the
       // server never received (an earlier commit was lost after the save
@@ -2193,6 +2490,7 @@ export class Store {
       throw e;
     }
 
+    accepted();
     const commitId = commitIdOf(created);
 
     if (commitId) {
@@ -2237,6 +2535,19 @@ export class Store {
       this.addResource(resource, { skipCommitCompare: true });
     } else {
       this.outbox.markDirty(subject);
+    }
+
+    if (serverTransport && this.identityGeneration === generation) {
+      try {
+        resource.recordServerAcceptance(
+          endpoint,
+          commit,
+          versionAfterExport,
+          generation,
+        );
+      } catch (error) {
+        console.warn('Could not record the accepted update receipt', error);
+      }
     }
 
     this.notifyResourceSaved(resource);
@@ -2560,6 +2871,8 @@ export class Store {
       resource,
       source: 'offline-replay',
     });
+
+    if (outcome === 'applied') this.ensureResourceSyncEvidence(subject);
 
     return outcome === 'applied' ? this.getResolved(subject) : undefined;
   }
@@ -2952,6 +3265,9 @@ export class Store {
     ) {
       if (!isCommitSubject(subject)) {
         existing.importLoroUpdate(change.loroBytes);
+        // The echo can add server-owned causal metadata after our save finished.
+        // Keep that exact merged state locally without re-notifying editors.
+        this.writeToClientDb(existing);
       }
 
       return 'deduped';
@@ -4937,28 +5253,54 @@ export class Store {
 
     const ws = this.getWebSocketForSubject(fetchSubject);
 
+    let useHttp = true;
+
     if (
+      (!opts.method || opts.method === 'GET') &&
       !opts.fromProxy &&
       !opts.noWebSocket &&
       supportsWebSockets() &&
       ws?.readyState === WebSocket.OPEN
     ) {
+      // OPEN is not proof that the peer can answer: a blocked sync worker or
+      // a half-open connection used to hold every table query for ten seconds.
+      // Give a healthy local socket one round trip, then use the existing
+      // authenticated HTTP read path. Remote nodes get a normal WAN budget.
+      const controller = new AbortController();
+      let expired = false;
+      const timer = setTimeout(() => {
+        expired = true;
+        controller.abort(
+          new RequestCancelledError('WebSocket read yielded to HTTP'),
+        );
+      }, this.webSocketReadDeadlineMs(fetchSubject));
+
       try {
-        await ws.fetch(fetchSubject);
+        await ws.fetch(fetchSubject, { signal: controller.signal });
+        useHttp = false;
       } catch (error) {
-        // A hook may already have installed a loading placeholder. Settle it
-        // so concurrent getResource callers receive the failure, not a timeout.
-        const pending = this.getResolved(subject);
+        // Only our own deadline enables fallback. An explicit refusal (401,
+        // 404, etc.) is an answer and must retain its original meaning.
+        if (!expired) {
+          const pending = this.getResolved(subject);
 
-        if (pending && !this.hasRenderableContent(pending)) {
-          this.failResource(subject, asError(error));
+          if (pending && !this.hasRenderableContent(pending)) {
+            this.failResource(
+              subject,
+              error instanceof Error ? error : new Error(String(error)),
+            );
 
-          return pending as Resource<C>;
+            return pending as Resource<C>;
+          }
+
+          throw error;
         }
-
-        throw error;
+      } finally {
+        clearTimeout(timer);
       }
-    } else {
+    }
+
+    if (useHttp) {
       const signInfo = this.agent
         ? { agent: this.agent, serverURL: this.getServerUrl() }
         : undefined;
@@ -5180,6 +5522,25 @@ export class Store {
     ]);
 
     return mergeHistoryAttributions(remote, local);
+  }
+
+  /**
+   * Rows of `table` that changed since `opts.since`, including rows that
+   * left it (tombstones), each with its Loro version. Without `since`, lists
+   * every current row. Page through with the returned `cursor` while
+   * `hasMore`. Throws {@link TableChangesCursorExpiredError} when the cursor
+   * is older than the server's retention: resync without `since`.
+   * `GET /changes` on the connected server (atomic-server #1850).
+   */
+  public async getTableChanges(
+    table: string,
+    opts: TableChangesOptions = {},
+  ): Promise<TableChangesPage> {
+    if (!this.serverUrl) {
+      throw new Error('getTableChanges needs a server');
+    }
+
+    return fetchTableChanges(this.serverUrl, this.getAgent(), table, opts);
   }
 
   private async fetchHistoryAttributionFromServer(
@@ -5884,7 +6245,9 @@ export class Store {
    * signed here and handed over, and `save()` resolves once the host has it.
    */
   public setCommitTransport(transport: CommitTransport | undefined): void {
+    const changed = transport !== this.commitTransport;
     this.commitTransport = transport;
+    if (changed) this.resetResourceSyncEvidence();
     this.emitSyncStatus();
     this.scheduleOutboxDrain();
   }
@@ -6000,6 +6363,654 @@ export class Store {
     }
   }
 
+  private resourceAttachmentSync = new ResourceAttachmentSync(
+    this,
+    async (subjects, signal) => {
+      const agent = this.getAgent();
+      if (!agent || this.noServer || this.commitTransport || !this.serverUrl)
+        return undefined;
+      const url = new URL('/attachment-evidence', this.serverUrl).toString();
+      const body = JSON.stringify({ subjects });
+      const headers = await signRequest(
+        url,
+        agent,
+        { 'Content-Type': 'application/json', Accept: 'application/json' },
+        { method: 'POST', body },
+      );
+      const response = await (this.injectedFetch ?? fetch)(url, {
+        method: 'POST',
+        headers,
+        body,
+        signal,
+      });
+      if (!response.ok) return undefined;
+
+      return response.json();
+    },
+  );
+
+  public getResourceAttachmentSyncStatus(
+    resource: Resource,
+  ): ResourceAttachmentSyncStatus {
+    return this.resourceAttachmentSync.get(resource);
+  }
+
+  public subscribeResourceAttachmentSyncStatus(
+    resource: Resource,
+    callback: () => void,
+  ): () => void {
+    return this.resourceAttachmentSync.subscribe(resource, callback);
+  }
+
+  /** @internal Exact authenticated content receipt, independent of metadata coverage. */
+  public acknowledgeResourceAttachmentReceipt(
+    receipt: AttachmentPeerReceipt,
+  ): void {
+    this.resourceAttachmentSync.acknowledge(receipt);
+  }
+
+  private resourcePeerSyncStatus = new ResourcePeerSyncStatusTracker();
+  private peerSyncGeneration = 0;
+  private resourcePeerWatchers = new Map<Resource, number>();
+  private nativePeerReadTokens = new Map<string, object>();
+  private nativePeerPoll?: object;
+  private nativePeerTimer?: ReturnType<typeof setTimeout>;
+  private nativePeerDeadline?: ReturnType<typeof setTimeout>;
+  private nativePeerAbort?: () => void;
+  private nativePeerHostGeneration?: string;
+  private nativePeerUnsupportedDb?: ClientDbWorker;
+
+  private scheduleNativePeerEvidence(): void {
+    const db = this.clientDb as
+      | (ClientDbWorker & Partial<ResourcePeerEvidenceProvider>)
+      | undefined;
+    if (
+      !this.resourcePeerWatchers.size ||
+      !db?.getResourcePeerEvidence ||
+      db === this.nativePeerUnsupportedDb ||
+      this.nativePeerPoll ||
+      this.nativePeerTimer
+    )
+      return;
+    // A single microtask collects rows mounted in the same render. Rendering
+    // getResourcePeerSyncStatus itself never performs I/O or starts a timer.
+    const token = {};
+    this.nativePeerPoll = token;
+    queueMicrotask(() => void this.readNativePeerEvidence(db, token));
+  }
+
+  private stopNativePeerEvidence(clear = true): void {
+    clearTimeout(this.nativePeerTimer);
+    clearTimeout(this.nativePeerDeadline);
+    this.nativePeerTimer = undefined;
+    this.nativePeerDeadline = undefined;
+    this.nativePeerPoll = undefined;
+    this.nativePeerAbort?.();
+    this.nativePeerAbort = undefined;
+    this.nativePeerReadTokens.clear();
+    this.nativePeerHostGeneration = undefined;
+    if (clear) this.resourcePeerSyncStatus.clearNative();
+  }
+
+  private async readNativePeerEvidence(
+    db: ClientDbWorker & Partial<ResourcePeerEvidenceProvider>,
+    token: object,
+  ): Promise<void> {
+    const generation = this.peerSyncGeneration;
+    const agent = this.agent?.subject;
+    const current = () =>
+      this.nativePeerPoll === token &&
+      this.clientDb === db &&
+      this.peerSyncGeneration === generation &&
+      this.agent?.subject === agent &&
+      this.resourcePeerWatchers.size > 0;
+    if (!current() || !db.getResourcePeerEvidence) return;
+
+    if (!agent) {
+      this.nativePeerPoll = undefined;
+      this.resourcePeerSyncStatus.clearNative();
+
+      return;
+    }
+
+    const subjects = [
+      ...new Set(
+        [...this.resourcePeerWatchers.keys()].map(resource =>
+          this.normalizeSubject(resource.subject),
+        ),
+      ),
+    ].filter(
+      subject => !this.isDestroyed(subject) && !this.hasPendingDestroy(subject),
+    );
+    const watched = (subject: string) =>
+      [...this.resourcePeerWatchers.keys()].some(
+        resource => this.normalizeSubject(resource.subject) === subject,
+      );
+
+    try {
+      if (!LoroLoader.isLoaded()) return;
+
+      for (let offset = 0; offset < subjects.length; offset += 128) {
+        const requested = subjects.slice(offset, offset + 128);
+        const readTokens = new Map(
+          requested.map(subject => {
+            const readToken = this.nativePeerReadTokens.get(subject) ?? {};
+            this.nativePeerReadTokens.set(subject, readToken);
+
+            return [subject, readToken] as const;
+          }),
+        );
+        let deadline: ReturnType<typeof setTimeout> | undefined;
+        let abort: (() => void) | undefined;
+        let evidence;
+
+        try {
+          const reply = await Promise.race([
+            db.getResourcePeerEvidence(requested),
+            new Promise<never>((_, reject) => {
+              abort = () => reject(new Error('Native peer evidence cancelled'));
+              this.nativePeerAbort = abort;
+              deadline = setTimeout(
+                () => reject(new Error('Native peer evidence timed out')),
+                5000,
+              );
+              this.nativePeerDeadline = deadline;
+            }),
+          ]);
+          if (!current()) return;
+
+          if (reply === undefined || reply === null) {
+            this.nativePeerUnsupportedDb = db;
+            this.resourcePeerSyncStatus.clearNative();
+
+            return;
+          }
+
+          evidence = parseResourcePeerEvidence(reply);
+          if (!evidence) throw new Error('Invalid native peer evidence reply');
+        } finally {
+          clearTimeout(deadline);
+          if (this.nativePeerAbort === abort) this.nativePeerAbort = undefined;
+          if (this.nativePeerDeadline === deadline)
+            this.nativePeerDeadline = undefined;
+        }
+
+        if (
+          this.normalizeSubject(evidence.agent || '_local:signed-out') !==
+          this.normalizeSubject(agent)
+        ) {
+          this.resourcePeerSyncStatus.clearNative();
+
+          return;
+        }
+
+        if (this.nativePeerHostGeneration !== evidence.agentGeneration) {
+          this.nativePeerHostGeneration = evidence.agentGeneration;
+          this.resourcePeerSyncStatus.clearNative();
+        }
+
+        if (!current()) return;
+        const valid = (subject: string) =>
+          current() &&
+          watched(subject) &&
+          this.nativePeerReadTokens.get(subject) === readTokens.get(subject) &&
+          !this.isDestroyed(subject) &&
+          !this.hasPendingDestroy(subject);
+        const accepted = requested.filter(valid);
+        const acceptedSet = new Set(accepted);
+
+        for (const subject of accepted) {
+          if (!valid(subject)) continue;
+          this.resourceAttachmentSync.replaceNative(
+            subject,
+            evidence.connections.flatMap(connection =>
+              (connection.attachmentReceipts ?? [])
+                .filter(
+                  receipt => this.normalizeSubject(receipt.subject) === subject,
+                )
+                .map(receipt => ({
+                  ...receipt,
+                  subject,
+                  connectionId: connection.connectionId,
+                })),
+            ),
+          );
+        }
+
+        this.resourcePeerSyncStatus.replaceNative(
+          accepted,
+          {
+            ...evidence,
+            connections: evidence.connections.map(connection => ({
+              ...connection,
+              drive: this.normalizeSubject(connection.drive),
+              receipts: connection.receipts
+                .map(receipt => ({
+                  ...receipt,
+                  subject: this.normalizeSubject(receipt.subject),
+                }))
+                .filter(receipt => acceptedSet.has(receipt.subject)),
+            })),
+          },
+          valid,
+        );
+      }
+    } catch {
+      // Availability diagnostics must not affect accepted native saves. A
+      // failed bridge call cannot continue presenting its old live proof.
+      if (current()) this.resourcePeerSyncStatus.clearNative();
+    } finally {
+      if (current()) {
+        this.nativePeerPoll = undefined;
+
+        if (this.nativePeerUnsupportedDb !== db) {
+          this.nativePeerTimer = setTimeout(() => {
+            this.nativePeerTimer = undefined;
+            this.scheduleNativePeerEvidence();
+          }, 1000);
+        }
+      }
+    }
+  }
+
+  /** @internal Invalidates browser sessions across identity/DB A→B→A changes. */
+  public getPeerSyncGeneration(): number {
+    return this.peerSyncGeneration;
+  }
+
+  private resetPeerSyncEvidence(): void {
+    this.peerSyncGeneration++;
+    this.stopNativePeerEvidence(false);
+    this.nativePeerUnsupportedDb = undefined;
+    this.resourcePeerSyncStatus.reset();
+    this.scheduleNativePeerEvidence();
+  }
+
+  /** @internal Called only after both sides of a browser channel authenticate. */
+  public registerResourcePeerSession(
+    connectionId: string,
+    drive: string,
+    peerAgent: string,
+  ): () => void {
+    const close = this.resourcePeerSyncStatus.open(
+      connectionId,
+      this.normalizeSubject(drive),
+      peerAgent,
+    );
+
+    return () => {
+      close();
+      this.resourceAttachmentSync.closePeer(connectionId);
+    };
+  }
+
+  /** @internal The connection observed replacement of its backing storage. */
+  public invalidateResourcePeerSession(connectionId: string): void {
+    this.resourcePeerSyncStatus.invalidate(connectionId);
+    this.resourceAttachmentSync.closePeer(connectionId);
+  }
+
+  /** @internal Only the negotiated authenticated receipt consumer may call this. */
+  public acknowledgeResourcePeerReceipt(receipt: BrowserReplicaReceipt): void {
+    if (
+      this.isDestroyed(receipt.subject) ||
+      this.hasPendingDestroy(receipt.subject)
+    )
+      return;
+    this.resourcePeerSyncStatus.acknowledge({
+      ...receipt,
+      subject: this.normalizeSubject(receipt.subject),
+      drive: this.normalizeSubject(receipt.drive),
+    });
+  }
+
+  private resourcePeerDrive(resource: Resource): string | undefined {
+    let current: Resource | undefined = resource;
+    const seen = new Set<string>();
+
+    while (current && seen.size < 64) {
+      const subject = this.normalizeSubject(current.subject);
+      if (seen.has(subject)) return undefined;
+      seen.add(subject);
+      const drive = current.get('https://atomicdata.dev/properties/drive');
+      if (typeof drive === 'string') return this.normalizeSubject(drive);
+      const parent = current.get(core.properties.parent);
+      if (typeof parent !== 'string') return subject;
+      current = this.resources.get(this.normalizeSubject(parent));
+    }
+
+    return undefined;
+  }
+
+  public getResourcePeerSyncStatus(resource: Resource): ResourcePeerSyncStatus {
+    const target = resource.__internalObject;
+
+    return this.resourcePeerSyncStatus.get(
+      this.normalizeSubject(target.subject),
+      this.isDestroyed(target.subject) || this.hasPendingDestroy(target.subject)
+        ? undefined
+        : this.resourcePeerDrive(target),
+      target,
+    );
+  }
+
+  public subscribeResourcePeerSyncStatus(
+    resource: Resource,
+    callback: () => void,
+  ): () => void {
+    const target = resource.__internalObject;
+    this.resourcePeerWatchers.set(
+      target,
+      (this.resourcePeerWatchers.get(target) ?? 0) + 1,
+    );
+    const unsubscribers = [
+      this.resourcePeerSyncStatus.subscribe(
+        () => this.normalizeSubject(target.subject),
+        () => this.resourcePeerDrive(target),
+        callback,
+      ),
+      this.subscribeSaveState(target, callback),
+      this.subscribe(target.subject, callback),
+    ];
+
+    this.scheduleNativePeerEvidence();
+
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe());
+      const remaining = (this.resourcePeerWatchers.get(target) ?? 1) - 1;
+      if (remaining) this.resourcePeerWatchers.set(target, remaining);
+      else this.resourcePeerWatchers.delete(target);
+      const subject = this.normalizeSubject(target.subject);
+
+      if (
+        ![...this.resourcePeerWatchers.keys()].some(
+          watched => this.normalizeSubject(watched.subject) === subject,
+        )
+      ) {
+        this.nativePeerReadTokens.delete(subject);
+        this.resourcePeerSyncStatus.clearNative(subject);
+      }
+
+      if (!this.resourcePeerWatchers.size) this.stopNativePeerEvidence();
+    };
+  }
+
+  private resourceSyncStatus = new ResourceSyncStatusTracker();
+  private resourceSyncEpoch = 0;
+  private resourceSyncWatchers = new Map<Resource, number>();
+  private resourceSyncReads = new Map<string, object>();
+  private resourceSyncReadBatch:
+    | {
+        epoch: number;
+        db: ClientDbWorker;
+        scope?: ResourceSyncScope;
+        entries: Map<
+          string,
+          {
+            token: object;
+            restore: ReturnType<ResourceSyncStatusTracker['restore']>;
+          }
+        >;
+      }
+    | undefined;
+  private resourceSyncWriteBatch:
+    | {
+        epoch: number;
+        db: ClientDbWorker;
+        scope: ResourceSyncScope;
+        receipts: Map<string, SerializedServerReceipt>;
+      }
+    | undefined;
+
+  private resourceSyncScope(): ResourceSyncScope | undefined {
+    const agent = this.agent?.subject;
+    if (!agent || this.noServer || this.commitTransport) return undefined;
+
+    return normalizeResourceSyncScope({ agent, serverUrl: this.serverUrl });
+  }
+
+  private resetResourceSyncEvidence(): void {
+    this.resourceSyncEpoch++;
+    this.resourceSyncReads.clear();
+    this.resourceSyncReadBatch = undefined;
+    this.resourceSyncWriteBatch = undefined;
+    this.resourceSyncStatus.reset();
+    // Configuration is assigned before reset notifies subscribers. Schedule
+    // recovery outside getResourceSyncStatus, which React calls during render.
+    queueMicrotask(() => {
+      for (const resource of this.resourceSyncWatchers.keys()) {
+        this.ensureResourceSyncEvidence(resource.subject);
+      }
+    });
+  }
+
+  /** Read-only proof recovery, batched across mounted rows. Ordinary DB reads
+   * may observe unflushed writes; this optional RPC supplies its own barrier.
+   */
+  private ensureResourceSyncEvidence(subjectRaw: string): void {
+    const db = this.clientDb;
+    const subject = this.normalizeSubject(subjectRaw);
+    if (
+      !db ||
+      typeof db.getResourceSyncEvidence !== 'function' ||
+      this.resourceSyncReads.has(subject) ||
+      this.isDestroyed(subject) ||
+      this.hasPendingDestroy(subject)
+    )
+      return;
+    const token = {};
+    this.resourceSyncReads.set(subject, token);
+    let batch = this.resourceSyncReadBatch;
+
+    if (!batch) {
+      batch = {
+        epoch: this.resourceSyncEpoch,
+        db,
+        scope: this.resourceSyncScope(),
+        entries: new Map(),
+      };
+      this.resourceSyncReadBatch = batch;
+      const pending = batch;
+      queueMicrotask(() => {
+        void this.restoreResourceSyncBatch(pending);
+      });
+    }
+
+    batch.entries.set(subject, {
+      token,
+      restore: this.resourceSyncStatus.restore(subject),
+    });
+  }
+
+  private async restoreResourceSyncBatch(
+    batch: NonNullable<Store['resourceSyncReadBatch']>,
+  ): Promise<void> {
+    if (this.resourceSyncReadBatch === batch)
+      this.resourceSyncReadBatch = undefined;
+    const current = () =>
+      this.resourceSyncEpoch === batch.epoch && this.clientDb === batch.db;
+    if (!current()) return;
+    const subjects = [...batch.entries.keys()];
+
+    try {
+      if (
+        typeof batch.db.waitForInit === 'function' &&
+        !(await batch.db.waitForInit())
+      )
+        return;
+      if (!current()) return;
+      const rows = await batch.db.getResourceSyncEvidence(
+        subjects,
+        batch.scope,
+      );
+      if (!current() || !rows) return;
+      const bySubject = new Map(
+        rows.map(row => [this.normalizeSubject(row.subject), row]),
+      );
+
+      for (const [subject, entry] of batch.entries) {
+        if (
+          this.resourceSyncReads.get(subject) !== entry.token ||
+          this.isDestroyed(subject) ||
+          this.hasPendingDestroy(subject)
+        )
+          continue;
+        const row = bySubject.get(subject);
+        if (!row) continue;
+        entry.restore({
+          ...row,
+          subject,
+          serverReceipt:
+            batch.scope &&
+            !this.isLocalOnlySubject(subject) &&
+            row.serverReceipt
+              ? {
+                  ...row.serverReceipt,
+                  subject: this.normalizeSubject(row.serverReceipt.subject),
+                }
+              : undefined,
+        });
+      }
+    } catch (error) {
+      if (!current()) return;
+
+      for (const [subject, entry] of batch.entries) {
+        if (this.resourceSyncReads.get(subject) === entry.token)
+          entry.restore(undefined, error);
+      }
+    }
+  }
+
+  /** Coalesce diagnostic writes under the same account/database scope. They
+   * participate in reload readiness but never turn an accepted save into failure.
+   */
+  private queueResourceSyncReceipt(subject: string): void {
+    const db = this.clientDb;
+    const scope = this.resourceSyncScope();
+    const receipt = this.resourceSyncStatus.serverReceipt(subject);
+    if (
+      !db ||
+      !scope ||
+      !receipt ||
+      typeof db.putResourceSyncReceipts !== 'function' ||
+      this.isLocalOnlySubject(subject) ||
+      this.isDestroyed(subject) ||
+      this.hasPendingDestroy(subject)
+    )
+      return;
+    let batch = this.resourceSyncWriteBatch;
+
+    if (!batch) {
+      batch = { epoch: this.resourceSyncEpoch, db, scope, receipts: new Map() };
+      this.resourceSyncWriteBatch = batch;
+      this.startScheduledSave();
+      const pending = batch;
+      queueMicrotask(() => {
+        void this.persistResourceSyncBatch(pending);
+      });
+    }
+
+    batch.receipts.set(subject, receipt);
+  }
+
+  private async persistResourceSyncBatch(
+    batch: NonNullable<Store['resourceSyncWriteBatch']>,
+  ): Promise<void> {
+    if (this.resourceSyncWriteBatch === batch)
+      this.resourceSyncWriteBatch = undefined;
+
+    try {
+      if (batch.epoch !== this.resourceSyncEpoch || batch.db !== this.clientDb)
+        return;
+      const receipts = [...batch.receipts.values()].filter(
+        receipt =>
+          !this.isDestroyed(receipt.subject) &&
+          !this.hasPendingDestroy(receipt.subject),
+      );
+      if (receipts.length)
+        await batch.db.putResourceSyncReceipts(batch.scope, receipts);
+    } catch {
+      // The remote acknowledgement remains valid in this session. A failed
+      // diagnostic write only means recovery must stay unknown after reload.
+    } finally {
+      this.finishScheduledSave();
+    }
+  }
+
+  private trackServerResourceReceipt(
+    subjectRaw: string,
+    bytes: Uint8Array | undefined,
+  ): () => void {
+    const subject = this.normalizeSubject(subjectRaw);
+    const epoch = this.resourceSyncEpoch;
+    const acknowledge = this.resourceSyncStatus.serverWrite(subject, bytes);
+
+    return () => {
+      const receipt = acknowledge();
+      if (receipt && epoch === this.resourceSyncEpoch)
+        this.queueResourceSyncReceipt(subject);
+    };
+  }
+
+  /** Version-scoped evidence for the resource itself; excludes attachment bytes.
+   * Unknown is intentional: idle save state or a finished drive sync is not proof.
+   */
+  public getResourceSyncStatus(resource: Resource): ResourceSyncStatus {
+    const target = resource.__internalObject;
+    const db = this.clientDb;
+
+    return this.resourceSyncStatus.get(
+      this.normalizeSubject(target.subject),
+      target,
+      {
+        localAvailable: !!db && !db.unsupportedEnvironment,
+        localError: db?.initError?.message,
+        serverUrl:
+          this.noServer ||
+          this.commitTransport ||
+          this.isLocalOnlySubject(target.subject)
+            ? undefined
+            : this.serverUrl,
+      },
+    );
+  }
+
+  public subscribeResourceSyncStatus(
+    resource: Resource,
+    callback: () => void,
+  ): () => void {
+    const target = resource.__internalObject;
+    this.resourceSyncWatchers.set(
+      target,
+      (this.resourceSyncWatchers.get(target) ?? 0) + 1,
+    );
+    this.ensureResourceSyncEvidence(target.subject);
+
+    const refresh = () => {
+      this.ensureResourceSyncEvidence(target.subject);
+      callback();
+    };
+
+    const unsubscribers = [
+      this.resourceSyncStatus.subscribe(
+        () => this.normalizeSubject(target.subject),
+        callback,
+      ),
+      this.subscribeSaveState(target, callback),
+      this.subscribe(target.subject, callback),
+      this.on(StoreEvents.SyncStatusChanged, refresh),
+      this.on(StoreEvents.AgentChanged, refresh),
+      this.on(StoreEvents.ServerURLChanged, refresh),
+    ];
+
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe());
+      const remaining = (this.resourceSyncWatchers.get(target) ?? 1) - 1;
+      if (remaining) this.resourceSyncWatchers.set(target, remaining);
+      else this.resourceSyncWatchers.delete(target);
+    };
+  }
+
   private saveStatus = new SaveStatusCoordinator({
     getOutboxEntry: subject => this.outbox.getEntry(subject),
     isConnected: () => this.canCommit,
@@ -6074,10 +7085,20 @@ export class Store {
   ): void {
     this._driveSyncInProgress = false;
     this._driveSyncPulling = false;
+
+    // An acknowledgement can arrive after a drive was made local-only (or
+    // after its HTTP origin became foreign). Settle progress without keeping
+    // a receipt that could incorrectly certify a later promotion.
+    if (!this.isLiveSyncedDrive(drive)) {
+      this.emitSyncStatus();
+
+      return;
+    }
+
     this._lastDriveSync = { drive, count, timestamp };
 
     if (drive) {
-      this._syncedDrives.add(drive);
+      this._syncedDrives.add(this.normalizeSubject(drive));
       this._driveSyncs.set(this.normalizeSubject(drive), {
         drive,
         count,
@@ -6120,7 +7141,16 @@ export class Store {
     this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
 
     if (drive) {
-      this._syncedDrives.delete(drive);
+      this._syncedDrives.delete(this.normalizeSubject(drive));
+      this._driveSyncs.delete(this.normalizeSubject(drive));
+
+      if (
+        this._lastDriveSync &&
+        this.normalizeSubject(this._lastDriveSync.drive) ===
+          this.normalizeSubject(drive)
+      ) {
+        this._lastDriveSync = undefined;
+      }
     }
 
     this.emitSyncStatus();
@@ -6143,6 +7173,16 @@ export class Store {
     return this._driveSyncInProgress
       ? LOCAL_READ_DEADLINE_DURING_SYNC_MS
       : LOCAL_READ_DEADLINE_MS;
+  }
+
+  /** How long an individual WebSocket GET waits before yielding to HTTP.
+   * Override alongside localReadDeadlineMs when adapting read budgets. */
+  public webSocketReadDeadlineMs(subject: string): number {
+    const hostname = new URL(
+      /^https?:/.test(subject) ? subject : this.getServerUrl(),
+    ).hostname;
+
+    return isLoopbackHost(hostname) ? 50 : 1_000;
   }
 
   /** True once a drive sync has finished FOR THIS DRIVE in this session.
@@ -6171,7 +7211,9 @@ export class Store {
 
   /** The server started sending resources for a drive sync. */
   public startDriveSyncPull(): void {
+    if (this._driveSyncPulling) return;
     this._driveSyncPulling = true;
+    this.emitSyncStatus();
   }
 
   /** The finished sync of the open drive when there is one, else the most
@@ -6187,7 +7229,7 @@ export class Store {
   public hasCompletedDriveSyncFor(drive: string | undefined): boolean {
     if (!drive) return false;
 
-    return this._syncedDrives.has(drive);
+    return this._syncedDrives.has(this.normalizeSubject(drive));
   }
 
   /**
@@ -6469,6 +7511,19 @@ export class Store {
     const resolved = this.resolveSubject(subjectRaw);
     // A subsequently loaded resource must not inherit the old cache stamp.
     this.lastPersisted.delete(resolved);
+    this.resourceSyncStatus.remove(this.normalizeSubject(resolved));
+    this.resourcePeerSyncStatus.remove(this.normalizeSubject(resolved));
+    this.resourceAttachmentSync.remove(this.normalizeSubject(resolved));
+    this.nativePeerReadTokens.delete(this.normalizeSubject(resolved));
+    void this.eventManager.emit(
+      StoreEvents.ResourcePeerEvidenceRemoved,
+      this.normalizeSubject(resolved),
+    );
+    this.resourceSyncReads.delete(this.normalizeSubject(resolved));
+    this.resourceSyncReadBatch?.entries.delete(this.normalizeSubject(resolved));
+    this.resourceSyncWriteBatch?.receipts.delete(
+      this.normalizeSubject(resolved),
+    );
     this._withoutLoroHistory.delete(resolved);
 
     if (this.resources.delete(resolved)) {
@@ -6511,11 +7566,22 @@ export class Store {
    * might have security implications for your application.
    */
   public setAgent(agent: Agent | undefined): void {
+    if (this.agent !== agent) this.serverReceiptRequests.reset();
+    if (this.agent !== agent) this.identityGeneration++;
+
     // The current drive is an account context, not a server preference. Clear
     // it before reauthenticating, so the next identity never subscribes or
     // reconciles the previous identity's private workspace.
-    if (this.agent && this.agent.subject !== agent?.subject) this.setDrive('');
+    if (this.agent?.subject !== agent?.subject) {
+      this.clearDriveSyncReceipts();
+      if (this.agent) this.setDrive('');
+    }
+
+    const changed = this.agent?.subject !== agent?.subject;
+    const peerChanged = this.agent !== agent;
     this.agent = agent;
+    if (peerChanged) this.resetPeerSyncEvidence();
+    if (changed) this.resetResourceSyncEvidence();
 
     // The outbox is identity-scoped: rebind to this agent's own queue so a new
     // identity never drains a previous agent's commits (whose `did:ad:<sig>`
@@ -6859,6 +7925,9 @@ export class Store {
    * `connect: false` keeps the socket closed — see `StoreOpts.connect`.
    */
   public setServerUrl(url: string, { connect = true } = {}): void {
+    this.serverReceiptEpoch++;
+    this.serverReceiptRequests.reset();
+    this.client?.clearStorageReceiptCapabilities();
     Client.tryValidSubject(url);
 
     if (url.substring(-1) === '/') {
@@ -6868,6 +7937,7 @@ export class Store {
     const previous = this.serverUrl;
 
     this.serverUrl = url;
+    if (previous !== url) this.resetResourceSyncEvidence();
 
     // Switching servers: tear down the old socket and reset the connection
     // status. `serverConnected` / `serverConnectionError` describe *the current
@@ -6875,6 +7945,7 @@ export class Store {
     // overwriting them, which surfaces the previous server's error on the new
     // server's card.
     if (previous && previous !== url) {
+      this.clearDriveSyncReceipts();
       const stale = this.webSockets.get(previous);
 
       if (stale) {
@@ -7029,6 +8100,9 @@ export class Store {
 
   /** Close the WebSocket connection. Persists across refresh until reconnect(). */
   public disconnect(): void {
+    this.serverReceiptEpoch++;
+    this.serverReceiptRequests.reset();
+    this.client?.clearStorageReceiptCapabilities();
     const existing = this.webSockets.get(this.serverUrl);
 
     if (existing) {
@@ -7499,6 +8573,13 @@ export class Store {
     );
   }
 
+  private clearDriveSyncReceipts(): void {
+    this._syncedDrives.clear();
+    this._driveSyncs.clear();
+    this._lastDriveSync = undefined;
+    this._lastDriveSyncError = undefined;
+  }
+
   private emitSyncStatus(): void {
     this.eventManager.emit(StoreEvents.SyncStatusChanged, this.getSyncStatus());
   }
@@ -7597,6 +8678,79 @@ export class Store {
     };
   }
 
+  /** Ask connected devices for file bytes without changing drive resources. */
+  public async requestMissingFileContents(
+    drive: string,
+    hashes: string[],
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const db = this.getClientDb();
+    const agent = this.getAgent();
+    if (!db || !agent) return;
+    signal?.throwIfAborted();
+    const frames = await db.requestDriveBlobs(drive, hashes);
+    if (this.getClientDb() !== db || this.getAgent() !== agent) return;
+    signal?.throwIfAborted();
+    const normalized = this.normalizeSubject(drive);
+    const socket = this.isLocalOnlyDrive(normalized)
+      ? undefined
+      : (this.getDefaultWebSocket() ?? this.getWebSocketForSubject(normalized));
+
+    for (const bytes of frames) {
+      signal?.throwIfAborted();
+      const frame = Uint8Array.from(bytes);
+      socket?.requestFileContents(frame);
+      for (const listener of this.peerListeners) listener(normalized, frame);
+    }
+  }
+
+  private fileContentRecovery?: (
+    hash: string,
+    drive?: string,
+  ) => Promise<boolean>;
+  private fileContentRecoveryListeners = new Set<(hash?: string) => void>();
+
+  /** Install the app's recovery path for a file whose bytes are absent locally. */
+  public setFileContentRecovery(
+    recover: (hash: string, drive?: string) => Promise<boolean>,
+  ): () => void {
+    this.fileContentRecovery = recover;
+    this.retryFileContentRecovery();
+
+    return () => {
+      if (this.fileContentRecovery === recover) {
+        this.fileContentRecovery = undefined;
+        this.retryFileContentRecovery();
+      }
+    };
+  }
+
+  /** Retry mounted file readers after connectivity or recovery availability changes. */
+  public retryFileContentRecovery(hash?: string): void {
+    for (const listener of this.fileContentRecoveryListeners) listener(hash);
+  }
+
+  public onFileContentRecoveryChanged(
+    listener: (hash?: string) => void,
+  ): () => void {
+    this.fileContentRecoveryListeners.add(listener);
+
+    return () => {
+      this.fileContentRecoveryListeners.delete(listener);
+    };
+  }
+
+  public hasFileContentRecovery(): boolean {
+    return this.fileContentRecovery !== undefined;
+  }
+
+  public recoverMissingFileContents(
+    hash: string,
+    drive?: string,
+  ): Promise<boolean> {
+    return this.fileContentRecovery?.(hash, drive) ?? Promise.resolve(false);
+  }
+
   public async destroyLocalResource(commit: Commit): Promise<void> {
     if (!this.clientDb)
       throw new Error('Local storage is required to delete this resource');
@@ -7637,7 +8791,7 @@ export class Store {
 
   public logLocalOnlyCommitSettled(commit: Commit): void {
     this.pushCommitLog(
-      this.buildCommitLogEntry(commit, 'outgoing', 'sent'),
+      this.buildCommitLogEntry(commit, 'outgoing', 'local'),
       commit.loroUpdate,
     );
   }
@@ -7827,11 +8981,13 @@ export class Store {
 
   /** Push a resource's blob; a failure is shown once per resource, not per retry. */
   private pushBlobOrNotify(resource: Resource): Promise<void> {
-    return this.maybePushBlobForResource(resource).catch(e => {
-      console.warn('[Store] blob push failed', resource.subject, e);
+    return this.maybePushBlobForResource(resource)
+      .catch(e => {
+        console.warn('[Store] blob push failed', resource.subject, e);
 
-      this.notifyErrorOnce(`blob:${resource.subject}`, e);
-    });
+        this.notifyErrorOnce(`blob:${resource.subject}`, e);
+      })
+      .finally(() => this.emitSyncStatus());
   }
 
   /**
@@ -7979,14 +9135,62 @@ export class Store {
     this.outbox.setServerPace(paceMs);
   }
 
+  /** @internal Capture only the bytes received from the current server socket.
+   * The caller acknowledges after a valid import. Capturing before import also
+   * fences identity/destination changes triggered by resource subscribers.
+   */
+  public captureServerResourceReceipt(
+    source: WSClient,
+    subject: string,
+    bytes: Uint8Array,
+  ): (() => void) | undefined {
+    if (
+      this.noServer ||
+      this.commitTransport ||
+      source !== this.getDefaultWebSocket()
+    )
+      return undefined;
+
+    return this.trackServerResourceReceipt(subject, bytes);
+  }
+
+  private captureServerReceipt(
+    commit: Commit,
+    endpoint: string,
+  ): (() => void) | undefined {
+    try {
+      if (
+        this.commitTransport ||
+        this.noServer ||
+        new URL(endpoint).origin !== new URL(this.serverUrl).origin
+      )
+        return undefined;
+
+      return this.trackServerResourceReceipt(
+        commit.subject,
+        typeof commit.loroUpdate === 'string'
+          ? decodeB64(commit.loroUpdate)
+          : commit.loroUpdate,
+      );
+    } catch {
+      // Evidence is diagnostic and must not change a save's behavior.
+      return undefined;
+    }
+  }
+
   /** Posts a Commit to some endpoint. Returns the Commit created by the server. */
   public async postCommit(commit: Commit, endpoint: string): Promise<Commit> {
     const close = perfSpan('store.postCommit', {
       genesis: !!commit.isGenesis,
     });
 
+    // Capture only the bytes sent to this destination. A later edit, an identity
+    // switch or a custom host transport must never turn into a server receipt.
+    const acknowledge = this.captureServerReceipt(commit, endpoint);
+
     try {
       const created = await this.sendCommit(commit, endpoint);
+      acknowledge?.();
       this.outbox.noteCommitted(commit.subject);
       close('ok');
       this.pushCommitLog(
@@ -8333,13 +9537,29 @@ export class Store {
       done: Promise.resolve(),
       inFlight: { jsonAd, snapshot },
     };
+    const receiptEpoch = this.resourceSyncEpoch;
+    const settle =
+      db === this.clientDb
+        ? this.resourceSyncStatus.localWrite(
+            this.normalizeSubject(subject),
+            snapshot,
+          )
+        : undefined;
     entry.done = db
       .putResourceWithSnapshot(subject, jsonAd, snapshot, outbox)
       .then(
         () => {
           entry.inFlight = undefined;
+          if (this.clientDb === db) this.refreshServerReceiptTargets();
+          settle?.();
+
+          if (receiptEpoch === this.resourceSyncEpoch && db === this.clientDb) {
+            this.queueResourceSyncReceipt(this.normalizeSubject(subject));
+          }
         },
         e => {
+          settle?.(e);
+
           // Failed write: forget it so the next attempt is not skipped as a
           // duplicate of a write that never landed.
           if (this.lastPersisted.get(subject) === entry) {
@@ -8439,6 +9659,8 @@ export class Store {
   /** Resources were stored without a notification each (see
    *  `WSClient.applyPulledStates`): re-run the queries that are still alive. */
   public notifyBulkApplied(): void {
+    this.emitSyncStatus();
+
     for (const ref of this.bulkRefreshables) {
       const collection = ref.deref();
 

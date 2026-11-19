@@ -10,7 +10,7 @@ import {
 } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { afterEach, expect, it, vi } from 'vitest';
-import { DialogGlobalContextProvider } from '../Dialog/DialogGlobalContextProvider';
+import { DialogGlobalContextProvider } from '@tomic/ui/components/Dialog/DialogGlobalContextProvider';
 import { RootWelcomeLayoutProvider } from '../../context/RootWelcomeLayoutContext';
 import { VaultPanel } from './VaultPanel';
 import { buildTheme } from '../../styling';
@@ -56,6 +56,12 @@ function vault(): UseVaultBackup {
     error: null,
     restore: vi.fn(async () => ({})),
     restoreProgress: null,
+    canRecoverFiles: false,
+    recoverMissingFiles: vi.fn(async () => null),
+    cancelFileRecovery: vi.fn(),
+    fileRecoveryProgress: null,
+    fileRecoveryResult: null,
+    fileRecoveryError: null,
     refresh: vi.fn(),
   } as unknown as UseVaultBackup;
 }

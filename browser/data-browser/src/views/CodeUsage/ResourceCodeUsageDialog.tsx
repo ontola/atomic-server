@@ -4,7 +4,7 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '../../components/Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import { useResource } from '@tomic/react';
 import { ResourceCodeUsage } from './ResourceCodeUsage';
 import { styled } from 'styled-components';

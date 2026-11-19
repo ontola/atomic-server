@@ -1,5 +1,5 @@
 import type { Store } from '@tomic/react';
-import { removeRecentResource } from './recentResources';
+import { removeRecentResource } from '@tomic/resource-ui/helpers/recentResources';
 
 /**
  * Parks a resource in the drive's Trash (see `store.trash`) and forgets it in

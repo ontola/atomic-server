@@ -1,9 +1,9 @@
 import { lazy, Suspense, useState, type JSX } from 'react';
 import { useStore } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Card } from '@components/Card';
-import { ErrorBlock } from '@components/ErrorLook';
-import { Column } from '@components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Card } from '@tomic/ui/components/Card';
+import { ErrorBlock } from '@tomic/resource-ui/components/ErrorLook';
+import { Column } from '@tomic/ui/components/Row';
 import { TEMPLATE_CATALOG } from '../../chunks/Templates/catalog';
 import {
   planTemplate,

@@ -1,4 +1,4 @@
-import { ContainerNarrow } from '../components/Containers';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
 import { NotificationList } from '../components/Notifications/NotificationList';
 
 /** The Inbox resource itself shows the same list as the Notifications page. */

@@ -2,12 +2,12 @@ import * as React from 'react';
 import { useState, useMemo, useEffect } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { HexColorPicker } from 'react-colorful';
-import { ContainerNarrow } from '../components/Containers';
-import { Button } from '../components/Button';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import { Button } from '@tomic/ui/components/Button';
 import { useSettings } from '../helpers/AppSettings';
 import { DarkModeOption } from '../helpers/useDarkMode';
-import { Column, Row } from '../components/Row';
-import { Checkbox, CheckboxLabel } from '../components/forms/Checkbox';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
 import { Main } from '../components/Main';
 import { Panel, usePanelList } from '../components/SideBar/usePanelList';
 import { pathNames } from './paths';
@@ -17,9 +17,9 @@ import AISettings from '@components/AI/AISettings';
 import { VirtualDriveSettings } from '@components/Settings/VirtualDriveSettings';
 import { NotificationSettings } from '@components/Settings/NotificationSettings';
 import { isVirtualDriveAvailable } from '../helpers/virtualDrive';
-import { useLocale } from '@components/LocaleContext';
-import { SUPPORTED_LOCALES } from '@helpers/preloadLocale';
-import { BasicSelect } from '@components/forms/BasicSelect';
+import { useLocale } from '@tomic/resource-ui/components/LocaleContext';
+import { SUPPORTED_LOCALES } from '@tomic/resource-ui/helpers/preloadLocale';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { styled } from 'styled-components';
 import {
   SettingsGroup,
@@ -27,7 +27,10 @@ import {
   SettingsSearchProvider,
 } from '@components/Settings';
 import { presetColors } from '../styling';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 import {
   showAppearanceOption,

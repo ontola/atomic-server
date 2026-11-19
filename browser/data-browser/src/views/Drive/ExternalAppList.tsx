@@ -1,7 +1,7 @@
 import type React from 'react';
 import { FaArrowUpRightFromSquare } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import ResourceRow from '../ResourceRow';
+import ResourceRow from '@tomic/resource-ui/views/ResourceRow';
 import { SettingsSection } from '@components/Settings';
 import { useExternalApps } from '@hooks/useExternalApps';
 

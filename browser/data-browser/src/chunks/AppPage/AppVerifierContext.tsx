@@ -8,7 +8,7 @@ import {
   type PropsWithChildren,
 } from 'react';
 import { styled } from 'styled-components';
-import { AppFrame, type AppOutcome } from './AppFrame';
+import { AppFrame, type AppOutcome } from './LazyAppFrame';
 
 /**
  * How long to wait before calling it inconclusive.

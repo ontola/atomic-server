@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "operations": [
+    {
+      "id": "query",
+      "method": "POST",
+      "url": "atomic-sidecar:/nextgraph/v1/query",
+      "effect": "read"
+    },
+    {
+      "id": "update",
+      "method": "POST",
+      "url": "atomic-sidecar:/nextgraph/v1/update",
+      "effect": "write"
+    }
+  ],
+  "http": {
+    "sidecars": [
+      {
+        "name": "nextgraph",
+        "reason": "Reads and writes NextGraph documents through the operator's wallet"
+      }
+    ]
+  }
+}

@@ -9,10 +9,14 @@ import {
 import { useCallback, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../../helpers/navigation';
-import { getIconForClass } from '../../../helpers/iconMap';
+import { ResourceGlyph } from '@tomic/resource-ui/components/ResourceGlyph';
 import { BookmarkGridItem } from './BookmarkGridItem';
 import { BasicGridItem } from './BasicGridItem';
-import { GridCard, GridItemTitle, GridItemWrapper } from './components';
+import {
+  GridCard,
+  GridItemTitle,
+  GridItemWrapper,
+} from '@tomic/resource-ui/views/FolderPage/GridItem/components';
 import { DefaultGridItem } from './DefaultGridItem';
 import { GridItemViewProps } from './GridItemViewProps';
 import { FaFolder } from 'react-icons/fa6';
@@ -21,10 +25,10 @@ import { DocumentGridItem } from './DocumentGridItem';
 import { DocumentV2GridItem } from './DocumentV2GridItem';
 import { ErrorBoundary } from '../../ErrorPage';
 import { useNavigateWithTransition } from '../../../hooks/useNavigateWithTransition';
-import { LoaderBlock } from '../../../components/Loader';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 import { ArticleGridItem } from './ArticleGridItem';
-import { FilePreviewThumbnail } from '../../File/FilePreviewThumbnail';
-import { CommentCountBadge } from '../../../components/CommentCountBadge';
+import { FilePreviewThumbnail } from '@tomic/resource-ui/views/File/FilePreviewThumbnail';
+import { CommentCountBadge } from '@components/CommentCountBadge';
 
 export interface ResourceGridItemProps {
   subject: string;
@@ -58,8 +62,6 @@ export function ResourceGridItem({
   const classType = useResource(classTypeSubject);
   const [classTypeName] = useTitle(classType);
 
-  const Icon = getIconForClass(classTypeSubject ?? '');
-
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -90,7 +92,7 @@ export function ResourceGridItem({
       ) : (
         <GridCard subject={transitionSubject}>
           <ClassBanner>
-            <Icon />
+            <ResourceGlyph resource={resource} />
             <span>{classTypeName}</span>
           </ClassBanner>
           <ErrorBoundary FallBackComponent={GridItemError}>

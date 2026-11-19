@@ -11,7 +11,7 @@ import {
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import { isOriginWithoutNode } from '../../helpers/originNode';
 import { onboardingKeys } from '../../hooks/useOnboardingProgress';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 
 export interface InviteLinkOptions {
   write: boolean;

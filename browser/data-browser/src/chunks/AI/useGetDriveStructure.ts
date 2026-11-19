@@ -1,4 +1,8 @@
 import { useSettings } from '@helpers/AppSettings';
+import {
+  isSyncablesNavigationTable,
+  withoutTableViews,
+} from '@chunks/PluginRuns/syncablesNavigation';
 import { shortenSubject } from '@tomic/react';
 import {
   ai,
@@ -56,10 +60,10 @@ async function fetchChildren(store: Store, parent: string): Promise<string[]> {
  *  them (table rows, chat messages) would flood the tree. Same set the
  *  sidebar hides children for — including "class not loaded yet", so a
  *  table's rows don't flash in the tree before `isA` arrives. */
-function hideChildrenOf(classes: string[]): boolean {
+function hideChildrenOf(classes: string[], isDirectory: boolean): boolean {
   return (
     classes.length === 0 ||
-    classes.includes(dataBrowser.classes.table) ||
+    (classes.includes(dataBrowser.classes.table) && !isDirectory) ||
     classes.includes(dataBrowser.classes.chatroom) ||
     classes.includes(dataBrowser.classes.meeting) ||
     classes.includes(ai.classes.aiChat) ||
@@ -94,11 +98,22 @@ export function useGetDriveStructure() {
         subject,
       };
 
-      if (!hideChildrenOf(resource.getClasses())) {
-        const children = await fetchChildren(store, subject);
+      const classes = resource.getClasses();
+      const isDirectory =
+        classes.includes(dataBrowser.classes.table) &&
+        isSyncablesNavigationTable(resource.get(core.properties.localId));
 
-        if (children.length > 0) {
-          element.children = await buildTree(children, visited);
+      if (!hideChildrenOf(classes, isDirectory)) {
+        const children = await fetchChildren(store, subject);
+        const visibleChildren = isDirectory
+          ? withoutTableViews(
+              children,
+              resource.getSubjects(dataBrowser.properties.tableViews),
+            )
+          : children;
+
+        if (visibleChildren.length > 0) {
+          element.children = await buildTree(visibleChildren, visited);
         }
       }
 

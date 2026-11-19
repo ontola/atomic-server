@@ -4,14 +4,14 @@ import { useState, type JSX } from 'react';
 import toast from 'react-hot-toast';
 import { FaPen, FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Button } from '../../components/Button';
-import Markdown from '../../components/datatypes/Markdown';
-import ResourceField from '../../components/forms/ResourceField';
+import { Button } from '@tomic/ui/components/Button';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import ResourceField from '@tomic/resource-ui/components/forms/ResourceField';
 import {
   IconButton,
   IconButtonVariant,
-} from '../../components/IconButton/IconButton';
-import { transition } from '../../helpers/transition';
+} from '@tomic/ui/components/IconButton/IconButton';
+import { transition } from '@tomic/ui/helpers/transition';
 
 interface ArticleDescriptionProps {
   resource: Resource;

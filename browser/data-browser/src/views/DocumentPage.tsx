@@ -4,14 +4,14 @@ import { styled } from 'styled-components';
 
 import { ElementShow } from './Element';
 import { ResourcePageProps } from './ResourcePage';
-import { Column, Row } from '../components/Row';
-import { Spinner } from '../components/Spinner';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 import { upgradeDocument } from './Document/upgradeDocument';
 import {
   PAGE_TITLE_TRANSITION_TAG,
   transitionName,
-} from '../helpers/transitionName';
-import { ViewTransitionProps } from '../helpers/ViewTransitionProps';
+} from '@tomic/ui/helpers/transitionName';
+import { ViewTransitionProps } from '@tomic/resource-ui/helpers/ViewTransitionProps';
 
 /** Full-page view for a V1 document. Writable ones migrate to V2 silently. */
 export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {

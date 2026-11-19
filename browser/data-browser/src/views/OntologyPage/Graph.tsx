@@ -1,7 +1,7 @@
 import { Resource } from '@tomic/react';
 import { lazy, Suspense, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { Spinner } from '../../components/Spinner';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 
 const OntologyGraph = lazy(
   () => import('../../chunks/GraphViewer/OntologyGraph'),

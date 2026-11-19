@@ -1,9 +1,9 @@
 import { urls, useResource, useString } from '@tomic/react';
 
-import Markdown from '../../components/datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import { CardViewProps } from './CardViewProps';
 import { ResourceCardTitle } from './ResourceCardTitle';
-import { Column } from '../../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 
 import type { JSX } from 'react';
 

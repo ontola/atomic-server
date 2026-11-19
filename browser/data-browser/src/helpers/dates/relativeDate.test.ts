@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toShortRelativeTime } from './relativeDate';
+import { toShortRelativeTime } from '@tomic/resource-ui/helpers/dates/relativeDate';
 
 const NOW = Date.UTC(2026, 5, 15, 12, 0, 0);
 const MIN = 60_000;

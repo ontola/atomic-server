@@ -1,9 +1,12 @@
 // @wc-ignore-file
 import { z } from 'zod';
 import type { Constraint, JSONValue } from '@tomic/react';
-import type { AddableFieldType } from './fieldTypes';
-import { parseFieldOptions } from './FieldOptions/useFieldOptions';
-import { assertOptionsTighten, normalizeFieldOptions } from './formConstraints';
+import type { AddableFieldType } from '@tomic/resource-ui/chunks/FormBuilder/fieldTypes';
+import { parseFieldOptions } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
+import {
+  assertOptionsTighten,
+  normalizeFieldOptions,
+} from '@tomic/resource-ui/chunks/FormBuilder/formConstraints';
 
 /** Mirrors the editable form-field-options keys in the builder. Resolved
  * choices, storage datatype and choice sources are managed separately. */

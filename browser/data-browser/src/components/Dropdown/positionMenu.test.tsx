@@ -5,9 +5,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../../styling';
-import { DropdownMenu } from './index';
-import { DropdownContainer } from './DropdownContainer';
-import type { DropdownTriggerProps } from './DropdownTrigger';
+import { DropdownMenu } from '@tomic/resource-ui/components/Dropdown/index';
+import { DropdownContainer } from '@tomic/ui/components/Dropdown/DropdownContainer';
+import type { DropdownTriggerProps } from '@tomic/ui/components/Dropdown/DropdownTrigger';
 
 const theme = buildTheme(false, '#1b50d8');
 

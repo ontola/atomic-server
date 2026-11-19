@@ -17,6 +17,11 @@
 
 ## Goal
 
+Replica durability and independence need a separate contract from transport
+connectivity. [Replica identity and durable acknowledgement](replica-independence.md)
+is a **design-only proposal** for storage identity, failure domains and per-change
+receipts; it does not change the existing protocol or claim implementation.
+
 One **transport-agnostic sync API** in `atomic_lib` that apps use the same way whether
 the carrier is **WebSocket** (browser ↔ server, mobile ↔ server) or **Iroh** (optional
 device-to-device). Callers subscribe to **node events** (including live queries); they
@@ -73,6 +78,23 @@ the socket is open, and only falls back to HTTP when it isn't. What *is* still H
 is the shape around that call — see [Outbox modernization](#outbox-modernization) below.
 
 ## Remaining work (2026-09-04)
+
+Browser server storage evidence (#2538, stacked on #2596) extends the existing
+`ServerReceiptRequests` and `StoreEvents.ServerReplicaReceipt` contract to
+background outbox delivery and refreshed stored drive inventories. Receipt
+collection remains bounded and separate from save/sync completion. Authentication
+serialization and connection/account/database fencing prevent stale evidence
+attribution; ambiguous AUTH acknowledgements disable receipts until reconnect.
+Validation and release gates live in `atomic-browser-receipts-2538.md`.
+
+Native server storage evidence (#2538, stacked on #2594) now belongs in
+`atomic_lib::client::ws_receipts`: the bounded requester observes stored state
+for followed drives, preserves exact captured targets and fences account/AUTH/
+connection changes. Native replication attaches it; Flutter's `SyncSession`
+only manages its lifecycle and forwards a continuous typed stream through
+`node.sync.watchReplicaReceipts()`. This is historical resource evidence, separate
+from successful sync, commit acceptance and complete backup recovery. Validation
+and remaining release gates live in `atomic-native-ws-receipts-2538.md`.
 
 ### Browser-to-browser transport (#1396, assessed 2026-09-09)
 
@@ -152,6 +174,10 @@ that turned out to be already done, or blocked by a finding, say so inline.
   unchanged. The live-write `Err(_) => true` ACL skip is gone.
   ([`foss-public-host-mode.md`](./foss-public-host-mode.md),
   [`serverless-p2p.md`](./serverless-p2p.md))
+- [x] (2026-10-06) — First-upload hash probes (#2116) preview bootstrap
+  admission without enrolling or starting grace, then request full sync.
+  Stored unreadable and tombstoned drives stay refused. A current browser
+  probe refusal terminates the drive's in-progress state.
 - [x] (2026-09-04) — F6: the unchecked replica applier (`ws_apply`'s old
   `apply_commit_json`) turned out to be reachable only through the pre-v2
   `COMMIT` text frame, which no server sends. It is deleted, along with the

@@ -1,12 +1,12 @@
 import { properties, useCanWrite } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import { ContainerWide } from '../../components/Containers';
-import { EditableTitle } from '../../components/EditableTitle';
-import { ValueForm } from '../../components/forms/ValueForm';
-import { Column, Row } from '../../components/Row';
-import { useFileInfo } from '../../hooks/useFile';
-import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { ContainerWide } from '@tomic/ui/components/Containers';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
+import { ValueForm } from '@tomic/resource-ui/components/forms/ValueForm/index';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { useFileInfo } from '@tomic/resource-ui/hooks/useFile';
+import { useMediaQuery } from '@tomic/resource-ui/hooks/useMediaQuery';
 import { ResourcePageProps } from '../ResourcePage';
 import { DownloadButton, DownloadIconButton } from './DownloadButton';
 import { ConvertToDocumentButton } from './ConvertToDocumentButton';

@@ -130,7 +130,57 @@ A plugin whose view edits schema (a form builder, a table editor) can declare th
 
 Drive apps follow a stricter rule: they read what the signed-in person can read, and write only under their own app resource, signed by the app's own agent.
 
+### Confirmed app navigation and file imports
+
+`await store.openExternal(url)` asks in host UI before opening an absolute
+HTTP(S) link in a new tab. The host names the complete destination host and
+URL, refuses credentials in the URL, and opens with `noopener,noreferrer`.
+It returns `{ status: 'opened' | 'cancelled' }`; the frame gains no popup
+permission.
+
+`await store.openResource(subject)` first reads the resource through the
+person's store, then asks before leaving the app. It refuses non-resource
+identifiers and returns `{ status: 'opened' | 'cancelled', subject }`.
+These confirmed operations share HostUI's one-question rule. The existing
+`store.ui.openResource(subject)` API keeps its immediate navigation behavior.
+
+An app shown as a view of a table can call `await store.importer.run()` to
+ask the host to choose a file, or pass `{ file: { name, mediaType?, text } }`.
+The host resolves the importer whose Set up created the table, checks its
+stored configuration and file-size limit, then shows a confirmation and the
+ordinary import review. Only applying that review writes anything. The result
+reports `applied` counts, `cancelled`, `nothing`, or `blocked` with errors.
+An app on its own page cannot pick another importer to run. This host's
+`accepts` contract is text-only; a base64/binary request is refused before
+preview. Confirmation and review requests wait for the person without a
+one-minute timeout.
+### Built-in service apps
+
+Server-bundled Sync apps use the same frame, request protocol and Store APIs.
+Their native host selects a fixed server source and a single collection root.
+Writes use the signed-in person's existing rights, limited to that root and its
+children. The frame cannot choose a wider destination or receive connection keys.
+The host limits proxy reads to the selected service, account and collection.
+
+For hosts that provide execution control, `store.execution('start' | 'state' |
+'cancel')` manages the current collection's run. A run continues across navigation
+inside the app and stops on pause, source or identity changes, or closing the app.
+Hosts without this capability reject execution requests. Account connection still
+requires the native confirmation dialog.
+
+The built-in GitHub Organizations and Repositories views are native views of
+stored Atomic data. They use no frame or provider connection. Refreshing GitHub
+belongs to the separate Sync app.
+
 ### Host UI
+
+An app may call `await store.proxy.disconnect({ platform })` to give up its
+own delegation for that platform. The host signs the delegation removals as
+the connection owner. The result is `{ status: 'disconnected', platform,
+connectionIds }`. Shared connections and other apps' delegations remain;
+deleting a connection is a separate action in the connection-management page.
+The generated frame client drops cached capabilities for the platform and
+must ask the host again before its next provider request.
 
 Some things a frame cannot do well on its own: a menu is cut off at the frame's edge, and a share dialog or a confirmation should look like the rest of Atomic. `store.ui` asks the Data Browser to draw them with its own components. Each one names your plugin to the person, so a prompt can never pass as the Data Browser's own. One question is open at a time: asking a new one answers the open one as cancelled.
 
@@ -192,4 +242,69 @@ store.onThemeChange(({ colorScheme }) => chart.setDark(colorScheme === 'dark'));
 
 ```css
 .saved { color: var(--t-color-success); }
+```
+
+## App frames
+
+A drive app's view (an app made with `createApp`, or an Installation's app) gets a `store` from `/plugin-ui?format=client` instead of an `RPCClient`. It speaks the same versioned wire protocol (`atomic.view.request` / `atomic.view.response`, the `ViewOperation`s in `@tomic/plugin`). Besides reading and writing resources, it can ask the host to do what a sandboxed, null-origin frame cannot do itself.
+
+#### `store.getMany(subjects): Promise<Array<Resource | { subject, error }>>`
+
+Reads up to 100 resources in one round trip to the host, instead of one `getResource` per row. Each subject is read exactly as `getResource` reads it: through the signed-in person's store, so the app sees what they can see, including their own writes. The array is in the order asked. A subject that cannot be read is `{ subject, error }` in its place, so one missing row does not fail the rest. More than 100 subjects are refused, so ask in batches.
+
+```js
+const subjects = await store.query({ property: PARENT, value: table });
+const rows = await store.getMany(subjects.slice(0, 100));
+for (const row of rows) if (!row.error) render(row.get(NAME));
+```
+
+#### `store.getTheme(): { colorScheme: 'light' | 'dark' }` and `store.onThemeChange(handler)`
+
+Whether the host is drawn light or dark, from the host's actual setting. `onThemeChange` calls back with `{ colorScheme }` when the person switches, and returns a function that stops it. For colours, use the `--t-color-*` CSS variables. They change with the theme, so CSS that uses them needs no JavaScript.
+
+```js
+const { colorScheme } = store.getTheme();
+chart.setDark(colorScheme === 'dark');
+store.onThemeChange(({ colorScheme }) => chart.setDark(colorScheme === 'dark'));
+```
+
+```css
+.saved { color: var(--t-color-success); }
+```
+
+#### `store.openExternal(url): Promise<{ status: 'opened' | 'cancelled' }>`
+
+Opens an `http:` or `https:` link in a new tab. The frame has no popup rights (`allow-popups` is not in its sandbox), so `window.open` and `target="_blank"` do nothing. Instead, the host shows a bar naming the destination's host in full, with the whole link under it, and opens the link only when the person clicks **Open link**. It opens with `noopener,noreferrer`. Other schemes, and links with a user name or password in them, are refused. A second call before the person answers resolves the first as `cancelled`.
+
+```js
+const { status } = await store.openExternal('https://www.notion.so/My-page-abc123');
+```
+
+#### `store.openResource(subject): Promise<{ status: 'opened', subject }>`
+
+Shows a resource in the host page, leaving the app. Only a resource the signed-in person can already read: the host loads it with their store first and refuses it when that fails. Agents, commits, blobs, nodes and anything that is not a resource subject are refused.
+
+```js
+await store.openResource(table.subject);
+```
+
+#### `store.routes.status()`, `store.routes.tokens()` and `store.routes.revokeToken(id)`
+
+This app's public endpoints (plugin routes), as the Installation page's **Endpoints** section shows them. Only for a person who can edit the app's Installation; for anyone else they reject. The view never calls a route itself.
+
+- `status()` (view op `readRouteStatus`) resolves to `{ state, degraded, refusal, level, mount, routes, deliveries }` (`RouteStatusResult` in `@tomic/plugin`): per route its `url`, `path`, `methods`, `auth`, `requests24h`, `errors24h`, `lastError`, `queueDepth` and `oldestQueueFailure`; `deliveries` has the queue's counts, today's use of the daily cap and the last failures; `refusal` is the `host-feature-unavailable` problem when the server's gates hold the release back. `null` on a server built without plugin routes.
+- `tokens()` (`routeTokens`) resolves to `{ tokens: [{ id, name, scopes, client, issuedAt, expiresAt, approvedBy }] }`: the bearer tokens this app's routes issued, never their values (the server keeps only hashes).
+- `revokeToken(id)` (`revokeRouteToken`, `{ tokenId }`) revokes one; it resolves to `{ revoked }`, `false` when it was already gone.
+
+```js
+const status = await store.routes.status();
+if (status) for (const route of status.routes) show(route.url, route.errors24h);
+```
+
+#### `store.proxy.disconnect({ platform }): Promise<{ status: 'disconnected', platform, connectionIds }>`
+
+Stops this app using an integration-proxy platform. The host takes this app's delegation off each `platform` connection delegated to it (`DELETE /connections/{id}/agents/{app agent}` at the proxy, signed by the user), and for an Installation also removes `integrationConnections[platform]`, as the Installation page's **Disconnect** does. The connection itself is never deleted: other apps may share it, so deleting it stays something the person does on a page. `connectionIds` lists the connections the delegation was taken off. The frame drops its cached capabilities for that platform; `store.proxy.connect({ platform })` connects again.
+
+```js
+await store.proxy.disconnect({ platform: 'notion' });
 ```

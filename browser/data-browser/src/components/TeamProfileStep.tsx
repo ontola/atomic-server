@@ -6,7 +6,7 @@ import {
   useString,
 } from '@tomic/react';
 import { ProfileForm } from './ProfileForm';
-import { ResourceGlyph } from './ResourceGlyph';
+import { ResourceGlyph } from '@tomic/resource-ui/components/ResourceGlyph';
 
 /** The profile form for an agent that already exists: saves to its resource. */
 export function TeamProfileStep({

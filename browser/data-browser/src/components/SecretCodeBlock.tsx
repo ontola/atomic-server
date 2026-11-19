@@ -1,5 +1,5 @@
 import { styled } from 'styled-components';
-import { CodeBlock } from './CodeBlock';
+import { CodeBlock } from '@tomic/resource-ui/components/CodeBlock';
 
 /** Enough to recognise which secret this is, far too little to use it. */
 const DEFAULT_VISIBLE_CHARS = 6;

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { styled } from 'styled-components';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { CARD_ACTIONS_GAP, CARD_SUB_FONT } from '../cardSurface';
 import { openExternal } from '../../helpers/openExternal';
 import { isRunningInTauri } from '../../helpers/tauri';

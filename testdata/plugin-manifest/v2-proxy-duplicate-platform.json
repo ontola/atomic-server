@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "proxy": [
+    "clockify",
+    "clockify"
+  ]
+}

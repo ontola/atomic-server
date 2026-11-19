@@ -33,12 +33,12 @@ import {
   toEntryId,
   windowChat,
   type Timed,
-} from '../../helpers/chatLog';
+} from '@tomic/resource-ui/helpers/chatLog';
 import {
   useChatLogEntry,
   useChatLogPages,
   useChatLogRevision,
-} from '../../hooks/useChatLog';
+} from '@tomic/resource-ui/hooks/useChatLog';
 import toast from 'react-hot-toast';
 import {
   FaCopy,
@@ -51,17 +51,17 @@ import {
   FaXmark,
 } from 'react-icons/fa6';
 import { css, keyframes, styled } from 'styled-components';
-import { AtomicLink } from '../../components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { PresenceAvatarMenu } from '../../components/Presence/PresenceAvatarMenu';
-import { Button } from '../../components/Button';
-import { IconButton } from '../../components/IconButton/IconButton';
+import { Button } from '@tomic/ui/components/Button';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { ChatMessagesContainer } from '../../components/ChatMessagesContainer';
-import Markdown from '../../components/datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import { Detail } from '../../components/Detail';
-import { Spinner } from '../../components/Spinner';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 import { editURL } from '../../helpers/navigation';
 import { formatCompactDateTime } from '../../helpers/dates/compactDateTime';
-import { ResourceInline } from '../ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { TypingIndicator } from '../../components/Presence/TypingIndicator';
 import {

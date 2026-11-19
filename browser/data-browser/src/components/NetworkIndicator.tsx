@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useOnline } from '../hooks/useOnline';
+import { useOnline } from '@tomic/resource-ui/hooks/useOnline';
 import toast from 'react-hot-toast';
 import { StoreEvents, useStore } from '@tomic/react';
 import { MdSignalWifiOff } from 'react-icons/md';

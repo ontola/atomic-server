@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { listShortcutHelp } from './catalog';
 import { resourceActions } from './resourceActions';
 import { appActions } from './appActions';
-import { shortcuts } from './shortcuts';
+import { shortcuts } from '@tomic/ui/actions/shortcuts';
 
 describe('listShortcutHelp', () => {
   it('lists every action that carries a shortcut, from the registry', () => {

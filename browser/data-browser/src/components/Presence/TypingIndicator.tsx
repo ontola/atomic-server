@@ -1,6 +1,6 @@
 import { styled, keyframes } from 'styled-components';
 import { useResource, useTitle, type PresenceItem } from '@tomic/react';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentAvatar } from '@tomic/resource-ui/components/Presence/AgentAvatar';
 
 interface TypingIndicatorProps {
   /** Other sessions typing in this thread — from {@link useTypingPresence}. */

@@ -1,0 +1,275 @@
+// @vitest-environment jsdom
+// @wc-ignore-file
+import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { useRef, useState } from 'react';
+import { afterEach, beforeAll, expect, it, vi } from 'vitest';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+
+import {
+  core,
+  dataBrowser,
+  LoroLoader,
+  Store,
+  StoreContext,
+} from '@tomic/react';
+import { DropdownPortalContext } from '@tomic/ui/components/Dropdown/dropdownContext';
+import { buildTheme, ThemeProvider } from '../../test/providers.js';
+import { TableViewTabs } from './TableViewTabs.js';
+import { VIEW_KIND_LABELS, type ViewKind } from './tableViewKinds.js';
+
+const collectionView = vi.hoisted(() => ({ applicable: false }));
+
+// jsdom has no layout; the menu scrolls its selected item into view.
+Element.prototype.scrollIntoView = () => undefined;
+
+beforeAll(async () => {
+  // As in TableCell.test.tsx: hand loro its WASM from disk.
+  const wasm = await readFile(
+    createRequire(import.meta.url).resolve('loro-crdt/web/loro_wasm_bg.wasm'),
+  );
+  const web = (await import('loro-crdt/web')) as unknown as {
+    default: (opts: { module_or_path: Uint8Array }) => Promise<unknown>;
+  };
+  await web.default({ module_or_path: wasm });
+  await LoroLoader.initializeLoro();
+});
+
+afterEach(() => {
+  cleanup();
+  collectionView.applicable = false;
+});
+
+let n = 0;
+
+async function newView(store: Store, name: string, kind: string) {
+  const view = await store.newResource({
+    subject: `_new:view-${++n}`,
+    noParent: true,
+  });
+  await view.set(core.properties.name, name, false);
+  await view.set(dataBrowser.properties.viewKind, kind, false);
+
+  return view.subject;
+}
+
+/**
+ * The tab bar with the hook's view list stood in for: `createView` adds a
+ * view named after its kind and switches to it, as `useTableView` does.
+ */
+function Harness({
+  store,
+  initial,
+  setViewKind,
+}: {
+  store: Store;
+  initial: string[];
+  setViewKind: (subject: string, kind: string) => void;
+}) {
+  const portal = useRef<HTMLDivElement>(null);
+  const [views, setViews] = useState(initial);
+  const [active, setActive] = useState(initial[0]);
+
+  const createView = (kind: ViewKind | string = 'table', label?: string) => {
+    void newView(store, label ?? VIEW_KIND_LABELS[kind as ViewKind], kind).then(
+      subject => {
+        setViews(v => [...v, subject]);
+        setActive(subject);
+      },
+    );
+  };
+
+  return (
+    <StoreContext value={store}>
+      <ThemeProvider
+        theme={buildTheme(false, '#1b50d8')}
+        host={{
+          DriveApps: ({ children }) =>
+            children({
+              apps: [],
+              refresh: () => {},
+              collectionView: {
+                applicable: collectionView.applicable,
+                refresh: () => {},
+              },
+            }),
+        }}
+      >
+        <DropdownPortalContext.Provider value={portal}>
+          <TableViewTabs
+            table='atomic:table'
+            rowClass='https://example.com/classes/piece'
+            views={views}
+            activeView={active}
+            setActiveView={setActive}
+            reorderViews={setViews}
+            createView={async (...args) => {
+              createView(...args);
+
+              return undefined;
+            }}
+            setViewKind={async (...args) => {
+              setViewKind(args[0], args[1]);
+
+              return undefined;
+            }}
+            duplicateView={() => undefined}
+            deleteView={() => undefined}
+            viewName=''
+            renameView={() => undefined}
+            allColumns={[]}
+            columns={[]}
+            derivedColumns={[]}
+            showColumn={() => undefined}
+            hideColumn={() => undefined}
+            lockedColumns={new Set()}
+            lockedReason=''
+            canWrite
+            quickAdd={undefined}
+            requestQuickAddEdit={() => undefined}
+          />
+          <div ref={portal} />
+        </DropdownPortalContext.Provider>
+      </ThemeProvider>
+    </StoreContext>
+  );
+}
+
+async function setup(views: Array<[string, string]>) {
+  const store = new Store({ serverUrl: 'https://example.com', connect: false });
+  const subjects: string[] = [];
+
+  for (const [name, kind] of views) {
+    subjects.push(await newView(store, name, kind));
+  }
+
+  const setViewKind = vi.fn();
+  render(
+    <Harness
+      store={store}
+      initial={subjects}
+      setViewKind={async (...args) => {
+        setViewKind(args[0], args[1]);
+
+        return undefined;
+      }}
+    />,
+  );
+
+  return { setViewKind };
+}
+
+/** Clicking the active tab opens its menu. */
+async function openMenu(tabName: string) {
+  fireEvent.click(await screen.findByRole('tab', { name: tabName }));
+
+  return screen.findByRole('menu');
+}
+
+it('adds a Calendar view from the only Table tab and keeps the table (#1806)', async () => {
+  const { setViewKind } = await setup([['All pieces', 'table']]);
+
+  const menu = await openMenu('All pieces');
+  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Calendar' }));
+
+  await waitFor(() =>
+    expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual([
+      'All pieces',
+      'Calendar',
+    ]),
+  );
+  expect(setViewKind).not.toHaveBeenCalled();
+  expect(
+    screen.getByRole('tab', { name: 'Calendar' }).getAttribute('aria-selected'),
+  ).toBe('true');
+});
+
+it('offers no in-place change, and no delete, on the last table view', async () => {
+  await setup([
+    ['All pieces', 'table'],
+    ['Calendar', 'calendar'],
+  ]);
+
+  const menu = await openMenu('All pieces');
+
+  expect(within(menu).queryByText('Change this view to')).toBeNull();
+  expect(
+    within(menu)
+      .getByRole('menuitem', { name: /Delete/ })
+      .hasAttribute('disabled'),
+  ).toBe(true);
+});
+
+it('offers an in-place change while another table view remains', async () => {
+  const { setViewKind } = await setup([
+    ['All pieces', 'table'],
+    ['By author', 'table'],
+  ]);
+
+  const menu = await openMenu('All pieces');
+
+  expect(within(menu).getByText('Change this view to')).toBeTruthy();
+  // The change list sits after the add list; its Calendar is the second one.
+  const calendars = within(menu).getAllByRole('menuitem', {
+    name: 'Calendar',
+  });
+  expect(calendars).toHaveLength(2);
+  fireEvent.click(calendars[1]);
+
+  expect(setViewKind).toHaveBeenCalledWith(
+    expect.stringMatching(/^_new:view-/),
+    'calendar',
+  );
+});
+
+it('keeps collection views out of a table without a valid descriptor', async () => {
+  await setup([['All pieces', 'table']]);
+  const menu = await openMenu('All pieces');
+
+  expect(within(menu).queryByText('Syncable Collection')).toBeNull();
+  expect(within(menu).queryByText('Sync')).toBeNull();
+});
+
+it('manually adds an applicable generic collection view while keeping the Table tab', async () => {
+  collectionView.applicable = true;
+  await setup([['All pieces', 'table']]);
+  fireEvent.click(screen.getByRole('button', { name: 'Add view' }));
+  const menu = await screen.findByRole('menu');
+  fireEvent.click(
+    within(menu).getByRole('menuitem', { name: 'Syncable Collection' }),
+  );
+
+  await waitFor(() =>
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual([
+      'All pieces',
+      'Syncable Collection',
+    ]),
+  );
+});
+
+it('offers the generic collection view in applicable add and change menus', async () => {
+  collectionView.applicable = true;
+  const { setViewKind } = await setup([
+    ['All repositories', 'table'],
+    ['Another table', 'table'],
+  ]);
+  const menu = await openMenu('All repositories');
+  const choices = within(menu).getAllByRole('menuitem', {
+    name: 'Syncable Collection',
+  });
+
+  expect(choices).toHaveLength(2);
+  expect(within(menu).queryByText('Sync')).toBeNull();
+  fireEvent.click(choices[1]);
+  expect(setViewKind).toHaveBeenCalledWith(
+    expect.stringMatching(/^_new:view-/),
+    'syncable-collection',
+  );
+});

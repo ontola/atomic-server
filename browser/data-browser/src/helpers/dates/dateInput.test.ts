@@ -4,7 +4,7 @@ import {
   dateInputPlaceholder,
   formatDateInput,
   parseDateInput,
-} from './dateInput';
+} from '@tomic/ui/helpers/dates/dateInput';
 
 describe('parseDateInput', () => {
   it('reads year-first dates without zero padding', () => {

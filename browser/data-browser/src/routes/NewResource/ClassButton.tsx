@@ -1,5 +1,5 @@
 import { useResource, useTitle } from '@tomic/react';
-import { getIconForClass } from '../../helpers/iconMap';
+import { getIconForClass } from '@tomic/resource-ui/helpers/iconMap';
 import { NewInstanceButton } from '../../components/NewInstanceButton';
 
 import type { JSX } from 'react';

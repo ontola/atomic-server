@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 3,
+  "runtime": "atomic-js/1",
+  "world": "extension",
+  "entrypoints": {
+    "run": true,
+    "view": "ui.js"
+  },
+  "capabilities": [
+    "custom-view"
+  ],
+  "secrets": [],
+  "operations": [
+    {
+      "id": "deliver",
+      "method": "POST",
+      "url": "https://*/inbox",
+      "effect": "write"
+    }
+  ],
+  "http": {
+    "mount": "drive-prefix",
+    "routes": [
+      {
+        "id": "actor",
+        "path": "/users/{name}",
+        "methods": [
+          "GET",
+          "HEAD"
+        ],
+        "principal": "anonymous",
+        "auth": "none",
+        "accept": [
+          "application/activity+json",
+          "application/ld+json"
+        ],
+        "cors": "none"
+      },
+      {
+        "id": "inbox",
+        "path": "/users/{name}/inbox",
+        "methods": [
+          "POST"
+        ],
+        "principal": "anonymous",
+        "auth": "http-signature",
+        "maxBodyBytes": 262144,
+        "body": "json",
+        "writes": [
+          "inbox-items"
+        ],
+        "enqueues": [
+          "deliver"
+        ],
+        "timeoutMs": 3000
+      },
+      {
+        "id": "nodeinfo-links",
+        "path": "/nodeinfo",
+        "methods": [
+          "GET"
+        ]
+      },
+      {
+        "id": "files",
+        "path": "/files/{*rest}",
+        "methods": [
+          "PUT",
+          "DELETE"
+        ],
+        "principal": "caller",
+        "auth": "atomic",
+        "body": "blob"
+      }
+    ],
+    "wellKnown": [
+      {
+        "name": "nodeinfo",
+        "kind": "exclusive",
+        "route": "nodeinfo-links"
+      }
+    ],
+    "writeTargets": [
+      {
+        "id": "inbox-items",
+        "parent": "config:inboxTable",
+        "classes": [
+          "https://atomicdata.dev/classes/Activity"
+        ]
+      }
+    ],
+    "keys": [
+      {
+        "name": "actor-key",
+        "alg": "rsa-sha256",
+        "reason": "Signs deliveries to other fediverse servers"
+      }
+    ],
+    "tokens": [
+      {
+        "name": "storage",
+        "reason": "Bearer tokens this plugin issues to apps"
+      }
+    ],
+    "reason": "Lets other fediverse servers follow and message this drive's actor."
+  }
+}

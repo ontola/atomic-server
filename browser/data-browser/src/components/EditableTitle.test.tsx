@@ -4,7 +4,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider, type DefaultTheme } from 'styled-components';
-import { EditableTitle } from './EditableTitle';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
 
 vi.mock('@tomic/react', () => ({
   StoreEvents: { ResourceManuallyCreated: 'created' },

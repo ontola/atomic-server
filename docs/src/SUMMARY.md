@@ -115,6 +115,7 @@
   - [Atomic Data Extended](extended.md)
     - [Identifiers](identifiers.md)
     - [Endpoints](endpoints.md)
+      - [Table change list](changes.md)
     - [Collections, filtering, sorting](schema/collections.md)
     - [Uploading and downloading files](files.md)
   - [Wire protocol: WebSocket and Iroh](websockets.md)

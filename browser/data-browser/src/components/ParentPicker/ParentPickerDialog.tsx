@@ -5,10 +5,10 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '../Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import { ParentPicker } from './ParentPicker';
-import { Button } from '../Button';
-import { waitForActiveDocument } from '../Dialog/waitForActiveDocument';
+import { Button } from '@tomic/ui/components/Button';
+import { waitForActiveDocument } from '@tomic/ui/components/Dialog/waitForActiveDocument';
 
 interface ParentPickerDialogProps {
   root?: string;

@@ -6,7 +6,10 @@ use super::{
 };
 use crate::errors::AtomicResult;
 use async_trait::async_trait;
-use std::sync::Arc;
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 /// One stored blob, as listed for garbage collection.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,6 +34,20 @@ pub trait BlobBackend: Send + Sync {
     async fn put(&self, key: &[u8], bytes: &[u8]) -> AtomicResult<()>;
     /// Metadata only: usage accounting must not download every file.
     async fn size(&self, key: &[u8]) -> AtomicResult<Option<u64>>;
+
+    /// Fresh strong object version and size, if this backend can provide one.
+    /// A version must change whenever bytes change. None disables caching.
+    async fn verification_token(&self, _key: &[u8]) -> AtomicResult<Option<(u64, String)>> {
+        Ok(None)
+    }
+
+    /// Optional proof contract: every named object is durably stored and the
+    /// returned token changes whenever its bytes/existence change. Call before
+    /// and after verified complete-object reads. None means unsupported/missing.
+    /// A KV flush is deliberately not a barrier for external object storage.
+    async fn durable_token(&self, _keys: &[Vec<u8>]) -> AtomicResult<Option<String>> {
+        Ok(None)
+    }
 
     // Garbage collection (planning/s3-blob-storage.md, "GC / refcounting").
     // The defaults refuse, so a backend written before GC existed keeps
@@ -199,6 +216,82 @@ impl BlobBackend for RedbBlobBackend {
     }
 }
 
+struct VerifiedBlob {
+    backend: Arc<dyn BlobBackend>,
+    key: [u8; 32],
+    token: (u64, String),
+}
+
+#[derive(Default)]
+pub(crate) struct VerificationCache(Mutex<VecDeque<VerifiedBlob>>);
+
+impl Db {
+    /// Verify bytes at a content-addressed key. A versioned backend may reuse
+    /// an earlier hash check only after a fresh HEAD of that same object.
+    pub async fn verified_blob(&self, key: &[u8; 32]) -> AtomicResult<bool> {
+        let Some(backend) = &self.blob_backend else {
+            return Ok(self
+                .get_blob(key)
+                .await?
+                .is_some_and(|bytes| blake3::hash(&bytes).as_bytes() == key));
+        };
+        let token_result = backend.verification_token(key).await;
+        if token_result.is_err() {
+            self.verified_blobs
+                .0
+                .lock()
+                .map_err(|_| "Verification cache poisoned")?
+                .retain(|entry| !(Arc::ptr_eq(&entry.backend, backend) && entry.key == *key));
+        }
+        let token = token_result?;
+        if let Some(token) = &token {
+            let cache = self
+                .verified_blobs
+                .0
+                .lock()
+                .map_err(|_| "Verification cache poisoned")?;
+            if cache.iter().any(|entry| {
+                Arc::ptr_eq(&entry.backend, backend) && entry.key == *key && entry.token == *token
+            }) {
+                return Ok(true);
+            }
+        }
+        self.verified_blobs
+            .0
+            .lock()
+            .map_err(|_| "Verification cache poisoned")?
+            .retain(|entry| !(Arc::ptr_eq(&entry.backend, backend) && entry.key == *key));
+        let Some(bytes) = backend.get(key).await? else {
+            return Ok(false);
+        };
+        if blake3::hash(&bytes).as_bytes() != key {
+            return Ok(false);
+        }
+        if let Some(token) = token {
+            if token.0 != bytes.len() as u64
+                || backend.verification_token(key).await? != Some(token.clone())
+            {
+                return Ok(false);
+            }
+            let mut cache = self
+                .verified_blobs
+                .0
+                .lock()
+                .map_err(|_| "Verification cache poisoned")?;
+            cache.retain(|entry| !(Arc::ptr_eq(&entry.backend, backend) && entry.key == *key));
+            if cache.len() >= 512 {
+                cache.pop_front();
+            }
+            cache.push_back(VerifiedBlob {
+                backend: backend.clone(),
+                key: *key,
+                token,
+            });
+        }
+        Ok(true)
+    }
+}
+
 impl Db {
     /// The backend in use: the configured remote one, else the local tree.
     pub fn blob_store(&self) -> Arc<dyn BlobBackend> {
@@ -216,7 +309,11 @@ impl Db {
     }
 
     pub async fn put_blob(&self, key: &[u8], bytes: &[u8]) -> AtomicResult<()> {
-        self.blob_store().put(key, bytes).await
+        self.blob_store().put(key, bytes).await?;
+        if let Ok(hash) = <[u8; 32]>::try_from(key) {
+            let _ = self.blob_writes.send(hash);
+        }
+        Ok(())
     }
 
     pub async fn blob_size(&self, key: &[u8]) -> AtomicResult<Option<u64>> {
@@ -252,5 +349,197 @@ impl Db {
             migrated += 1;
         }
         Ok(migrated)
+    }
+}
+
+#[cfg(test)]
+mod verification_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    struct Versioned {
+        bytes: Mutex<Option<Vec<u8>>>,
+        revision: AtomicUsize,
+        reads: AtomicUsize,
+        fail_head: AtomicBool,
+    }
+    #[async_trait]
+    impl BlobBackend for Versioned {
+        async fn get(&self, _: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
+            self.reads.fetch_add(1, Ordering::Relaxed);
+            Ok(self.bytes.lock().unwrap().clone())
+        }
+        async fn put(&self, _: &[u8], bytes: &[u8]) -> AtomicResult<()> {
+            *self.bytes.lock().unwrap() = Some(bytes.to_vec());
+            self.revision.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+        async fn size(&self, _: &[u8]) -> AtomicResult<Option<u64>> {
+            Ok(self.bytes.lock().unwrap().as_ref().map(|v| v.len() as u64))
+        }
+        async fn verification_token(&self, _: &[u8]) -> AtomicResult<Option<(u64, String)>> {
+            if self.fail_head.load(Ordering::Relaxed) {
+                return Err("HEAD failed".into());
+            }
+            Ok(self.bytes.lock().unwrap().as_ref().map(|v| {
+                (
+                    v.len() as u64,
+                    self.revision.load(Ordering::Relaxed).to_string(),
+                )
+            }))
+        }
+    }
+
+    #[tokio::test]
+    async fn cache_requires_fresh_matching_version_and_backend_identity() {
+        let backend = Arc::new(Versioned {
+            bytes: Mutex::new(None),
+            revision: AtomicUsize::new(0),
+            reads: AtomicUsize::new(0),
+            fail_head: AtomicBool::new(false),
+        });
+        let mut db = Db::init_redb(None).await.unwrap();
+        db.blob_backend = Some(backend.clone());
+        let hash = blake3::hash(b"good");
+        db.put_blob(hash.as_bytes(), b"good").await.unwrap();
+        assert!(db.verified_blob(hash.as_bytes()).await.unwrap());
+        assert!(db.verified_blob(hash.as_bytes()).await.unwrap());
+        assert_eq!(backend.reads.load(Ordering::Relaxed), 1);
+        backend.fail_head.store(true, Ordering::Relaxed);
+        assert!(db.verified_blob(hash.as_bytes()).await.is_err());
+        backend.fail_head.store(false, Ordering::Relaxed);
+        db.put_blob(hash.as_bytes(), b"evil").await.unwrap();
+        assert!(!db.verified_blob(hash.as_bytes()).await.unwrap());
+        let other = Arc::new(Versioned {
+            bytes: Mutex::new(Some(b"evil".to_vec())),
+            revision: AtomicUsize::new(1),
+            reads: AtomicUsize::new(0),
+            fail_head: AtomicBool::new(false),
+        });
+        db.blob_backend = Some(other);
+        assert!(!db.verified_blob(hash.as_bytes()).await.unwrap());
+    }
+}
+
+#[cfg(test)]
+mod blob_write_notification_tests {
+    use super::*;
+    use tokio::sync::{broadcast::error::TryRecvError, Notify};
+
+    struct DeferredStorage {
+        inner: Arc<dyn BlobBackend>,
+        started: Notify,
+        release: Notify,
+        fail: bool,
+    }
+
+    #[async_trait]
+    impl BlobBackend for DeferredStorage {
+        async fn get(&self, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
+            self.inner.get(key).await
+        }
+
+        async fn put(&self, key: &[u8], bytes: &[u8]) -> AtomicResult<()> {
+            self.started.notify_one();
+            self.release.notified().await;
+            if self.fail {
+                return Err("test storage failed".into());
+            }
+            self.inner.put(key, bytes).await
+        }
+
+        async fn size(&self, key: &[u8]) -> AtomicResult<Option<u64>> {
+            self.inner.size(key).await
+        }
+    }
+
+    #[tokio::test]
+    async fn blob_write_notification_waits_for_success_and_is_shared_by_clones() {
+        let mut db = Db::init_temp("blob_write_notification_success")
+            .await
+            .unwrap();
+        let backend = Arc::new(DeferredStorage {
+            inner: db.blob_store(),
+            started: Notify::new(),
+            release: Notify::new(),
+            fail: false,
+        });
+        db.blob_backend = Some(backend.clone());
+        let mut events = db.clone().subscribe_blob_writes();
+        let bytes = b"file bytes are readable before the event";
+        let hash = *blake3::hash(bytes).as_bytes();
+        let writer = db.clone();
+        let writing = tokio::spawn(async move { writer.put_blob(&hash, bytes).await });
+        backend.started.notified().await;
+        assert_eq!(events.try_recv(), Err(TryRecvError::Empty));
+        assert!(db.get_blob(&hash).await.unwrap().is_none());
+        backend.release.notify_one();
+        writing.await.unwrap().unwrap();
+        assert_eq!(events.try_recv().unwrap(), hash);
+        assert_eq!(
+            db.get_blob(&hash).await.unwrap().as_deref(),
+            Some(bytes.as_slice())
+        );
+        assert_eq!(events.try_recv(), Err(TryRecvError::Empty));
+    }
+
+    #[tokio::test]
+    async fn blob_write_notification_ignores_failed_storage_and_non_hash_keys() {
+        let mut db = Db::init_temp("blob_write_notification_failure")
+            .await
+            .unwrap();
+        let mut events = db.subscribe_blob_writes();
+        db.put_blob(&[1; 16], b"old storage key").await.unwrap();
+        assert_eq!(events.try_recv(), Err(TryRecvError::Empty));
+        let backend = Arc::new(DeferredStorage {
+            inner: db.blob_store(),
+            started: Notify::new(),
+            release: Notify::new(),
+            fail: true,
+        });
+        db.blob_backend = Some(backend.clone());
+        let hash = *blake3::hash(b"fails to persist").as_bytes();
+        let writer = db.clone();
+        let writing =
+            tokio::spawn(async move { writer.put_blob(&hash, b"fails to persist").await });
+        backend.started.notified().await;
+        assert_eq!(events.try_recv(), Err(TryRecvError::Empty));
+        backend.release.notify_one();
+        assert!(writing.await.unwrap().is_err());
+        assert_eq!(events.try_recv(), Err(TryRecvError::Empty));
+        assert!(db.get_blob(&hash).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn blob_write_notification_follows_only_a_valid_requested_sync_response() {
+        use crate::{
+            agents::ForAgent,
+            sync::{engine, protocol},
+        };
+
+        let db = Db::init_temp("blob_write_notification_sync").await.unwrap();
+        let mut events = db.subscribe_blob_writes();
+        let mut agent = ForAgent::Sudo;
+        let bytes = b"bytes from the peer";
+        let hash = *blake3::hash(bytes).as_bytes();
+        let response = protocol::encode_blob_response(&hash, bytes);
+        engine::handle_frame(&response, &db, &mut agent).await;
+        assert_eq!(events.try_recv(), Err(TryRecvError::Empty));
+        db.note_pending_blob_request(hash, "atomic:test-drive".into());
+        engine::handle_frame(
+            &protocol::encode_blob_response(&hash, b"wrong bytes"),
+            &db,
+            &mut agent,
+        )
+        .await;
+        assert_eq!(events.try_recv(), Err(TryRecvError::Empty));
+        assert!(db.get_blob(&hash).await.unwrap().is_none());
+        db.note_pending_blob_request(hash, "atomic:test-drive".into());
+        engine::handle_frame(&response, &db, &mut agent).await;
+        assert_eq!(events.try_recv().unwrap(), hash);
+        assert_eq!(
+            db.get_blob(&hash).await.unwrap().as_deref(),
+            Some(bytes.as_slice())
+        );
     }
 }

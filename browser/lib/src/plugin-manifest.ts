@@ -1,4 +1,5 @@
 import type { JSONValue } from './value.js';
+import { validateHttp, type DeclaredHttp } from './plugin-manifest-http.js';
 
 /**
  * What a plugin declares it needs.
@@ -63,6 +64,9 @@ export interface DeclaredConfig {
   required?: string[];
 }
 
+/** How an accepted file reaches the plugin; see {@link DeclaredAccept}. */
+export type AcceptEncoding = 'text' | 'base64';
+
 /** What the host accepts when no `maxBytes` is declared: 5 MiB. */
 export const DEFAULT_ACCEPT_MAX_BYTES = 5 * 1024 * 1024;
 /**
@@ -75,17 +79,29 @@ export const ACCEPT_MAX_BYTES_CEILING = 20 * 1024 * 1024;
 /**
  * A file a plugin can be handed by the host, instead of fetching data itself.
  *
- * The host draws the picker, enforces `maxBytes`, decodes the file and passes
- * it as `input.upload` = `{ name, mediaType, size, text }`. `extensions` and
- * `mediaTypes` only filter the picker; the plugin must still validate the
- * content it is given. Only `as: 'text'` exists so far: UTF-8, falling back to
- * Windows-1252.
+ * The host draws the picker, enforces `maxBytes` on the file's raw size and
+ * passes it as `input.upload` (`ctx.upload` in `run`), in the declared
+ * encoding, under a field named after it:
+ *
+ * - `as: 'text'` (the default when `as` is left out):
+ *   `{ name, mediaType, size, text }`, decoded as UTF-8 and falling back to
+ *   Windows-1252 when the file is not valid UTF-8.
+ * - `as: 'base64'`: `{ name, mediaType, size, base64 }`, the file's exact bytes
+ *   base64-encoded (standard alphabet, padded), with no charset detection.
+ *
+ * `size` is always the byte size of the file. `extensions` and `mediaTypes`
+ * only filter the picker; the plugin must still validate the content it is
+ * given. See `PluginUpload` in `plugin-upload.ts`.
  */
 export interface DeclaredAccept {
   /** Lower-case, with the leading dot: `.xml`. */
   extensions?: string[];
   mediaTypes?: string[];
-  as: 'text';
+  /**
+   * How the host hands over the file. Left out, it is `text`, and it stays
+   * left out when serialized, so a release's id does not change.
+   */
+  as?: AcceptEncoding;
   /** Bytes, at most {@link ACCEPT_MAX_BYTES_CEILING}. */
   maxBytes?: number;
 }
@@ -175,6 +191,11 @@ export interface DeclaredEntrypoints {
   view?: string;
   /** Class URLs whose hooks this package exports. Only in `server-extension`. */
   classExtender?: string[];
+  /**
+   * Exports `afterCommit(ctx)`: told when rows change in tables where it is
+   * added as a view (#1851). Only in `extension`. Grants nothing by itself.
+   */
+  afterCommit?: boolean;
 }
 
 /**
@@ -198,6 +219,12 @@ export interface PluginManifestV2 {
   operations?: DeclaredOperation[];
   actions?: DeclaredAction[];
   network?: DeclaredNetwork;
+  /**
+   * Integration-proxy platforms the plugin calls with
+   * `atomic-proxy:/<platform>/...` URLs, which the server host resolves to the
+   * installation's delegated connection and signs. Operations name those URLs.
+   */
+  proxy?: string[];
   config?: DeclaredConfig;
   configSchema?: Record<string, JSONValue>;
   defaultConfig?: Record<string, JSONValue>;
@@ -210,11 +237,24 @@ export interface PluginManifestV2 {
   author?: string;
 }
 
+/**
+ * Version three adds the optional `http` block: public endpoints, which need
+ * the node's plugin-routes gates. Without it, a v3 manifest is a v2 one.
+ */
+export interface PluginManifestV3 extends Omit<
+  PluginManifestV2,
+  'schemaVersion'
+> {
+  schemaVersion: 3;
+  http?: DeclaredHttp;
+}
+
 export interface PluginManifest extends Omit<
   PluginManifestV2,
   'schemaVersion'
 > {
-  schemaVersion?: 1 | 2;
+  schemaVersion?: 1 | 2 | 3;
+  http?: DeclaredHttp;
 }
 
 export interface DeclaredAction {
@@ -397,12 +437,12 @@ export function validateManifest(raw: unknown): PluginManifest {
 
   const entry = object(raw, 'manifest');
   const version = entry.schemaVersion;
-  if (version !== 1 && version !== 2)
+  if (version !== 1 && version !== 2 && version !== 3)
     throw new Error('unsupported manifest schemaVersion');
   known(
     entry,
     version === 1
-      ? ['schemaVersion', 'secrets', 'operations', 'actions', 'config']
+      ? ['schemaVersion', 'secrets', 'operations', 'actions', 'proxy', 'config']
       : [
           'schemaVersion',
           'runtime',
@@ -413,6 +453,7 @@ export function validateManifest(raw: unknown): PluginManifest {
           'operations',
           'actions',
           'network',
+          'proxy',
           'config',
           'configSchema',
           'defaultConfig',
@@ -423,8 +464,18 @@ export function validateManifest(raw: unknown): PluginManifest {
           'version',
           'description',
           'author',
+          'http',
         ],
   );
+
+  const proxy = list(entry.proxy, 'proxy').map(value => {
+    if (typeof value !== 'string' || !PROXY_PLATFORM.test(value))
+      throw new Error(PROXY_PLATFORMS_RULE);
+
+    return value;
+  });
+  if (new Set(proxy).size !== proxy.length)
+    throw new Error(PROXY_PLATFORMS_RULE);
 
   const names = new Set<string>();
   const secrets = list(entry.secrets, 'secrets').map(value => {
@@ -447,6 +498,12 @@ export function validateManifest(raw: unknown): PluginManifest {
     return secret as unknown as DeclaredSecret;
   });
   names.clear();
+  // Declared in `http.sidecars`, which is validated last (as in Rust); only
+  // the names are needed here, to check `atomic-sidecar:` operations.
+  const httpEntry = entry.http as { sidecars?: unknown } | undefined;
+  const declaredSidecars = Array.isArray(httpEntry?.sidecars)
+    ? httpEntry.sidecars.map(s => (s as { name?: unknown } | null)?.name)
+    : [];
   const operations = list(entry.operations, 'operations').map(value => {
     const operation = object(value);
     known(operation, ['id', 'method', 'url', 'effect']);
@@ -457,7 +514,31 @@ export function validateManifest(raw: unknown): PluginManifest {
     )
       throw new Error('operation IDs must be nonempty and unique');
     names.add(operation.id);
-    endpoint(operation.url);
+    const sidecar =
+      typeof operation.url === 'string'
+        ? parseSidecarRelative(operation.url)
+        : undefined;
+    const relative =
+      typeof operation.url === 'string' && !sidecar
+        ? parseProxyRelative(operation.url)
+        : undefined;
+
+    if (sidecar) {
+      if (sidecar.query !== undefined) throw new Error(SIDECAR_URL_RULE);
+      if (!declaredSidecars.includes(sidecar.name))
+        throw new Error(
+          `operation ${operation.id} does not declare sidecar '${sidecar.name}' in \`http.sidecars\``,
+        );
+    } else if (relative) {
+      if (relative.query !== undefined) throw new Error(PROXY_URL_RULE);
+      if (!proxy.includes(relative.platform))
+        throw new Error(
+          `operation ${operation.id} does not declare proxy platform '${relative.platform}' in \`proxy\``,
+        );
+    } else {
+      endpoint(operation.url);
+    }
+
     if (
       typeof operation.method !== 'string' ||
       !['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(
@@ -559,6 +640,7 @@ export function validateManifest(raw: unknown): PluginManifest {
       secrets,
       operations,
       ...(actions.length ? { actions } : {}),
+      ...(proxy.length ? { proxy } : {}),
       ...(declaredConfig
         ? { config: declaredConfig as unknown as DeclaredConfig }
         : {}),
@@ -627,16 +709,25 @@ export function validateManifest(raw: unknown): PluginManifest {
     run: entry.entrypoints === undefined,
     view: undefined as unknown as string,
     classExtender: undefined as unknown as string[],
+    afterCommit: false,
   };
 
   if (entry.entrypoints !== undefined) {
     const declared = object(entry.entrypoints, 'entrypoints');
-    known(declared, ['run', 'view', 'classExtender']);
+    known(declared, ['run', 'view', 'classExtender', 'afterCommit']);
 
     if (declared.run !== undefined) {
       if (typeof declared.run !== 'boolean')
         throw new Error('entrypoints.run: invalid type, expected a boolean');
       entrypoints.run = declared.run;
+    }
+
+    if (declared.afterCommit !== undefined) {
+      if (typeof declared.afterCommit !== 'boolean')
+        throw new Error(
+          'entrypoints.afterCommit: invalid type, expected a boolean',
+        );
+      entrypoints.afterCommit = declared.afterCommit;
     }
 
     if (declared.view !== undefined)
@@ -663,6 +754,10 @@ export function validateManifest(raw: unknown): PluginManifest {
 
   if (world === 'extension' && classUrls.length > 0)
     throw new Error('world extension may not declare classExtender');
+  if (world === 'server-extension' && entrypoints.afterCommit)
+    throw new Error(
+      'entrypoints.afterCommit is for world extension; a server extension hooks commits with classExtender',
+    );
   if (
     world === 'server-extension' &&
     runtime !== 'wasip2/1' &&
@@ -696,8 +791,12 @@ export function validateManifest(raw: unknown): PluginManifest {
   const accepts = list(entry.accepts, 'accepts').map(value => {
     const accept = object(value, 'accepts entry');
     known(accept, ['extensions', 'mediaTypes', 'as', 'maxBytes']);
-    if (accept.as !== 'text')
-      throw new Error('accepts entries must be read `as` text');
+    if (
+      accept.as !== undefined &&
+      accept.as !== 'text' &&
+      accept.as !== 'base64'
+    )
+      throw new Error('accepts entries must be read `as` text or base64');
     const extensions = list(accept.extensions, 'accepts.extensions').map(
       extension => {
         if (
@@ -736,7 +835,8 @@ export function validateManifest(raw: unknown): PluginManifest {
     return {
       ...(extensions.length ? { extensions } : {}),
       ...(mediaTypes.length ? { mediaTypes } : {}),
-      as: 'text' as const,
+      // Kept exactly as declared: an absent `as` stays absent.
+      ...(accept.as !== undefined ? { as: accept.as as AcceptEncoding } : {}),
       ...(accept.maxBytes !== undefined
         ? { maxBytes: accept.maxBytes as number }
         : {}),
@@ -776,13 +876,31 @@ export function validateManifest(raw: unknown): PluginManifest {
       );
   }
 
+  // Last, as in Rust: the http block is validated after everything else.
+  if (entry.http !== undefined && version !== 3)
+    throw new Error('the http block needs schemaVersion 3');
+  const http =
+    entry.http === undefined
+      ? undefined
+      : validateHttp(entry.http, {
+          serverExtension: world === 'server-extension',
+          operations: operations.map(o => ({
+            id: o.id,
+            method: o.method,
+            effect: o.effect,
+            url: o.url,
+          })),
+        });
+
   const entrypointsDefault =
     entrypoints.run === true &&
     entrypoints.view === undefined &&
-    entrypoints.classExtender === undefined;
+    entrypoints.classExtender === undefined &&
+    !entrypoints.afterCommit;
 
   return {
-    schemaVersion: 2,
+    schemaVersion: version,
+    ...(http ? { http } : {}),
     ...(runtime !== 'atomic-js/1' ? { runtime } : {}),
     ...(world !== 'extension' ? { world } : {}),
     ...(entrypointsDefault
@@ -796,6 +914,7 @@ export function validateManifest(raw: unknown): PluginManifest {
             ...(entrypoints.classExtender !== undefined
               ? { classExtender: entrypoints.classExtender }
               : {}),
+            ...(entrypoints.afterCommit ? { afterCommit: true } : {}),
           },
         }),
     ...(capabilities.length ? { capabilities } : {}),
@@ -815,6 +934,7 @@ export function validateManifest(raw: unknown): PluginManifest {
           },
         }
       : {}),
+    ...(proxy.length ? { proxy } : {}),
     ...(entry.configSchema !== undefined
       ? {
           configSchema: object(entry.configSchema, 'configSchema') as Record<
@@ -988,5 +1108,97 @@ function validateDestination(
     schema: { properties, classes },
     ...(primary ? { table: primary } : {}),
     ...(keyed ? { tables: keyed } : {}),
+  };
+}
+
+const PROXY_PLATFORM = /^[A-Za-z0-9_-]{1,64}$/;
+const PROXY_PLATFORMS_RULE =
+  'proxy platforms must be unique identifiers of letters, digits, `-` and `_`';
+const PROXY_URL_RULE =
+  'atomic-proxy: URLs are `atomic-proxy:/<platform>/<path>`, with no dot segments, backslashes, fragment or (in an operation) query';
+
+const SIDECAR_URL_RULE =
+  'atomic-sidecar: URLs are `atomic-sidecar:/<name>/<path>`, with no dot segments, backslashes, fragment or (in an operation) query';
+const SIDECAR_NAME = /^[a-z0-9-]{1,64}$/;
+
+/** An `atomic-sidecar:/<name>/<path>?<query>` URL, split. */
+export interface SidecarRelativeUrl {
+  name: string;
+  /** Starts with `/`. */
+  path: string;
+  query?: string;
+}
+
+/**
+ * Splits an `atomic-sidecar:` URL the way the server does
+ * (`SidecarRelative::parse` in `server/src/plugins/manifest.rs`): the path
+ * rules of `atomic-proxy:`, and a name as `http.sidecars` names one. Returns
+ * `undefined` for any other URL and throws for a malformed one.
+ */
+export function parseSidecarRelative(
+  raw: string,
+): SidecarRelativeUrl | undefined {
+  if (!raw.startsWith('atomic-sidecar:')) return undefined;
+  let split: ProxyRelativeUrl | undefined;
+
+  try {
+    split = parseProxyRelative(
+      `atomic-proxy:${raw.slice('atomic-sidecar:'.length)}`,
+    );
+  } catch {
+    throw new Error(SIDECAR_URL_RULE);
+  }
+
+  if (!split || !SIDECAR_NAME.test(split.platform))
+    throw new Error(SIDECAR_URL_RULE);
+
+  return {
+    name: split.platform,
+    path: split.path,
+    ...(split.query !== undefined ? { query: split.query } : {}),
+  };
+}
+
+/** An `atomic-proxy:/<platform>/<path>?<query>` URL, split. */
+export interface ProxyRelativeUrl {
+  platform: string;
+  /** Starts with `/`. */
+  path: string;
+  query?: string;
+}
+
+/**
+ * Splits an `atomic-proxy:` URL the way the server does
+ * (`ProxyRelative::parse` in `server/src/plugins/manifest.rs`). Returns
+ * `undefined` for any other URL and throws for a malformed one.
+ */
+export function parseProxyRelative(raw: string): ProxyRelativeUrl | undefined {
+  if (!raw.startsWith('atomic-proxy:')) return undefined;
+  const rest = raw.slice('atomic-proxy:'.length);
+  if (rest.includes('#') || rest.includes('\\'))
+    throw new Error(PROXY_URL_RULE);
+  const q = rest.indexOf('?');
+  const pathPart = q === -1 ? rest : rest.slice(0, q);
+  const query = q === -1 ? undefined : rest.slice(q + 1);
+  if (!pathPart.startsWith('/')) throw new Error(PROXY_URL_RULE);
+  const slash = pathPart.indexOf('/', 1);
+  if (slash === -1) throw new Error(PROXY_URL_RULE);
+  const platform = pathPart.slice(1, slash);
+  const path = pathPart.slice(slash + 1);
+  if (!PROXY_PLATFORM.test(platform) || !path) throw new Error(PROXY_URL_RULE);
+
+  const dot = (segment: string) => {
+    const decoded = segment.toLowerCase().replaceAll('%2e', '.');
+
+    return decoded === '.' || decoded === '..';
+  };
+
+  if (path.split('/').some(dot) || path.toLowerCase().includes('%2f'))
+    throw new Error(PROXY_URL_RULE);
+
+  return {
+    platform,
+    path: `/${path}`,
+    ...(query !== undefined ? { query } : {}),
   };
 }

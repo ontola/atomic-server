@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { autoUpdate, computePosition, offset, shift } from '@floating-ui/dom';
 import toast from 'react-hot-toast';
 import { FaMicrophone } from 'react-icons/fa6';
-import { IconButton } from '@components/IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { hasManagedApi, managedFetch } from '@helpers/managed/api';
 import { onManagedLogout } from '@helpers/managed/session';
 import { recordingWav, voiceRequest } from './voiceTurn';

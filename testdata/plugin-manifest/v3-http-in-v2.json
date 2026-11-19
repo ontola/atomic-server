@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 2,
+  "secrets": [],
+  "operations": [],
+  "entrypoints": {
+    "run": true
+  },
+  "http": {
+    "mount": "installation-origin",
+    "routes": [
+      {
+        "id": "webfinger",
+        "path": "/.well-known/webfinger",
+        "methods": [
+          "GET",
+          "HEAD"
+        ],
+        "principal": "anonymous",
+        "auth": "none",
+        "accept": [
+          "application/jrd+json"
+        ],
+        "cors": "any-origin-no-credentials"
+      },
+      {
+        "id": "profile",
+        "path": "/users/{name}",
+        "methods": [
+          "GET"
+        ]
+      }
+    ],
+    "wellKnown": [
+      {
+        "name": "webfinger",
+        "kind": "shared",
+        "match": {
+          "resourcePrefix": "acct:"
+        },
+        "route": "webfinger"
+      }
+    ],
+    "reason": "Answers WebFinger lookups for this drive's handles."
+  }
+}

@@ -1,9 +1,9 @@
 import { useString, useCreatedAt, useCreatedBy, core } from '@tomic/react';
 
 import { CommitDetail } from '../../components/CommitDetail';
-import Markdown from '../../components/datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import { Detail, Details } from '../../components/Detail';
-import { ResourceInline } from '../ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 import { ResourcePageProps } from '../ResourcePage';
 
 /** Card Message view that shows parent */

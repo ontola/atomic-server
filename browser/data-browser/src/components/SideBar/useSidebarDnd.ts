@@ -18,18 +18,18 @@ import { moveBlockedReason } from '../../helpers/moveResource';
 import {
   SIDEBAR_TRANSITION_TAG,
   getTransitionName,
-} from '../../helpers/transitionName';
+} from '@tomic/ui/helpers/transitionName';
 import { useSettings } from '../../helpers/AppSettings';
 import { useFavorites } from '../../hooks/useFavorites';
 import { moveToTrash } from '../../helpers/trash';
 import { leaveConversation } from '../../helpers/conversations/hiddenConversations';
-import { useResourceContextMenu } from '../ResourceContextMenu/ResourceContextMenuContext';
+import { useResourceContextMenu } from '@tomic/resource-ui/components/ResourceContextMenu/ResourceContextMenuContext';
 import { HoldMoveTouchSensor } from './holdMoveTouchSensor';
 // Fractional-key math shared with table row insertion.
 import {
   computeSortOrder,
   readSortKey,
-} from '../../helpers/fractionalSortOrder';
+} from '@tomic/resource-ui/helpers/fractionalSortOrder';
 
 /**
  * Data attached to a sidebar drop target.

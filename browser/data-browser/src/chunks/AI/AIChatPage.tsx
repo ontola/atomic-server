@@ -3,10 +3,10 @@ import { Ai, dataBrowser, useCanWrite, useStore, useTitle } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import toast from 'react-hot-toast';
 import { type AIMessageContext, type AtomicUIMessage } from './types';
-import { Column, Row } from '@components/Row';
-import { EditableTitle } from '@components/EditableTitle';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
 import { ResourceContextMenu } from '@components/ResourceContextMenu';
-import { ResourceCoverImage } from '@components/ResourceDecorations';
+import { ResourceCoverImage } from '@tomic/resource-ui/components/ResourceDecorations';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { useGenerativeData } from './useGenerativeData';
 import {
@@ -21,7 +21,7 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import { styled } from 'styled-components';
 import { consumePendingFirstMessage } from './pendingFirstMessage';
 import { userTiming } from '@helpers/userTiming';
-import { Spinner } from '@components/Spinner';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 
 const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const store = useStore();

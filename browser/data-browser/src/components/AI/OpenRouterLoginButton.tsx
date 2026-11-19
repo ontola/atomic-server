@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { ButtonLink } from '../ButtonLink';
+import { ButtonLink } from '@tomic/resource-ui/components/ButtonLink';
 import { paths } from '../../routes/paths';
 
 const TEXT = 'Login with OpenRouter';

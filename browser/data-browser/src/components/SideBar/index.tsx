@@ -12,19 +12,19 @@ import {
   DragAreaBase,
   responsiveWidth,
   useResizable,
-} from '../../hooks/useResizable';
-import { useCombineRefs } from '../../hooks/useCombineRefs';
+} from '@tomic/ui/hooks/useResizable';
+import { useCombineRefs } from '@tomic/ui/hooks/useCombineRefs';
 import { AccountMenu } from './AccountMenu';
 import { SideBarHomePanels } from './SideBarHomePanels';
-import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useMediaQuery } from '@tomic/resource-ui/hooks/useMediaQuery';
 import { useSidebarSwipe } from '../../hooks/useSidebarSwipe';
-import { Column } from '../Row';
+import { Column } from '@tomic/ui/components/Row';
 import { OntologiesPanel } from './OntologySideBar/OntologiesPanel';
 import { SideBarPanel } from './SideBarPanel';
 import { Panel, panelTitle, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
-import { CalculatedPageHeight } from '../../globalCssVars';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
 import { AIChatsPanel } from './AIPanel';
 import { ChromeTheme } from '../../styling';
 import { PanelBackdrop, PanelLayout, panelTransition } from '../PanelLayout';

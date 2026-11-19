@@ -1,11 +1,11 @@
 import { core } from '@tomic/react';
-import AllProps from '../components/AllProps';
+import AllProps from '@tomic/resource-ui/components/AllProps';
 import { ClassDetail } from '../components/ClassDetail';
-import { ContainerNarrow } from '../components/Containers';
-import { ValueForm } from '../components/forms/ValueForm';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import { ValueForm } from '@tomic/resource-ui/components/forms/ValueForm/index';
 import { NewInstanceButton } from '../components/NewInstanceButton';
-import { Title } from '../components/Title';
-import { Column, Row } from '../components/Row';
+import { Title } from '@tomic/resource-ui/components/Title';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ResourcePageProps } from './ResourcePage';
 import { defaultHiddenProps } from './ResourcePageDefault';
 

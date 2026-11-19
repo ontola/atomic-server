@@ -1,6 +1,6 @@
 import { css, keyframes, styled } from 'styled-components';
 import { toAnchorId } from '../../helpers/toAnchorId';
-import { Card } from '../../components/Card';
+import { Card } from '@tomic/ui/components/Card';
 
 import ResourceCard from '../Card/ResourceCard';
 

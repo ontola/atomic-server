@@ -1,6 +1,6 @@
 import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { Button } from './Button';
+import { Button } from '@tomic/ui/components/Button';
 
 interface ConnectToDeviceFormProps {
   /** Receives a raw pasted code — not yet known to be well-formed. */

@@ -9,39 +9,10 @@ import {
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { useAppClass } from '@chunks/PluginRuns/useDriveClass';
 
-export interface DriveApp {
-  subject: string;
-  name: string;
-  /** The row classes this app can show. */
-  renders: string[];
-}
+import type { DriveApp, DriveApps } from '@tomic/resource-ui/helpers/driveApps';
 
-export interface DriveApps {
-  apps: DriveApp[];
-  /**
-   * Ask again. Call it when a menu that lists the apps opens, so opening it
-   * always reflects what the drive holds now.
-   */
-  refresh: () => void;
-}
-
-/**
- * The apps that can show rows of `rowClass`.
- *
- * An app declares what it handles, and is offered nowhere else. Listing every
- * app on every table would mean a calendar app offered for a table of
- * invoices — and with fifty apps on a drive, a menu nobody can read.
- *
- * Pure, so the rule can be read and tested without a store.
- */
-export function appsForClass(
-  apps: DriveApp[],
-  rowClass: string | undefined,
-): DriveApp[] {
-  if (!rowClass) return [];
-
-  return apps.filter(app => app.renders.includes(rowClass));
-}
+export type { DriveApp, DriveApps } from '@tomic/resource-ui/helpers/driveApps';
+export { appsForClass } from '@tomic/resource-ui/helpers/driveApps';
 
 /**
  * `resource` as a drive app, or `undefined` when it is not one (any more).
@@ -54,12 +25,16 @@ export function readDriveApp(
   resource: Resource,
   appClass: string,
   rendersProperty: string | undefined,
+  resourceRendersProperty?: string,
 ): DriveApp | undefined {
   const classes = resource.get(core.properties.isA);
 
   if (!Array.isArray(classes) || !classes.includes(appClass)) return undefined;
 
   const renders = rendersProperty ? resource.get(rendersProperty) : undefined;
+  const resourceRenders = resourceRendersProperty
+    ? resource.get(resourceRendersProperty)
+    : undefined;
 
   return {
     subject: resource.subject,
@@ -67,6 +42,13 @@ export function readDriveApp(
     renders: Array.isArray(renders)
       ? renders.filter((c): c is string => typeof c === 'string')
       : [],
+    ...(Array.isArray(resourceRenders)
+      ? {
+          resourceRenders: resourceRenders.filter(
+            (c): c is string => typeof c === 'string',
+          ),
+        }
+      : {}),
   };
 }
 
@@ -76,7 +58,9 @@ const sameApp = (a: DriveApp | undefined, b: DriveApp | undefined) =>
     !!b &&
     a.name === b.name &&
     a.renders.length === b.renders.length &&
-    a.renders.every((c, i) => c === b.renders[i]));
+    a.renders.every((c, i) => c === b.renders[i]) &&
+    (a.resourceRenders?.length ?? 0) === (b.resourceRenders?.length ?? 0) &&
+    (a.resourceRenders ?? []).every((c, i) => c === b.resourceRenders?.[i]));
 
 /**
  * A resource whose state says nothing about what it is: a draft that has not
@@ -142,6 +126,7 @@ export function useDriveApps(drive: string | undefined): DriveApps {
 
     const known = new Map<string, DriveApp>();
     let rendersProperty: string | undefined;
+    let resourceRendersProperty: string | undefined;
 
     const fold = (subject: string, app: DriveApp | undefined) => {
       if (cancelled || sameApp(known.get(subject), app)) return;
@@ -155,7 +140,15 @@ export function useDriveApps(drive: string | undefined): DriveApps {
     const read = (resource: Resource) => {
       if (undecided(resource)) return;
 
-      fold(resource.subject, readDriveApp(resource, appClass, rendersProperty));
+      fold(
+        resource.subject,
+        readDriveApp(
+          resource,
+          appClass,
+          rendersProperty,
+          resourceRendersProperty,
+        ),
+      );
     };
 
     const load = async () => {
@@ -164,8 +157,12 @@ export function useDriveApps(drive: string | undefined): DriveApps {
 
       if (cancelled) return;
 
-      if (schema.properties?.renders !== rendersProperty) {
+      if (
+        schema.properties?.renders !== rendersProperty ||
+        schema.properties?.['resource-renders'] !== resourceRendersProperty
+      ) {
         rendersProperty = schema.properties?.renders;
+        resourceRendersProperty = schema.properties?.['resource-renders'];
 
         // What was folded without it has no `renders`; read it again.
         for (const subject of known.keys()) {

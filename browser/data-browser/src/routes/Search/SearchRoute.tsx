@@ -1,24 +1,24 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { ContainerNarrow } from '../../components/Containers';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { constructOpenURL } from '../../helpers/navigation';
 import ResourceCard from '../../views/Card/ResourceCard';
 import { dataBrowser, useServerSearch } from '@tomic/react';
-import { ErrorLook } from '../../components/ErrorLook';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 import { styled } from 'styled-components';
 import { FaMagnifyingGlass } from 'react-icons/fa6';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import { useSettings } from '../../helpers/AppSettings';
-import { Column, Row } from '../../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { Main } from '../../components/Main';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { createRoute, useSearch } from '@tanstack/react-router';
 import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
 import { base64StringToFilter } from './searchUtils';
-import { InlineFormattedResourceList } from '../../components/InlineFormattedResourceList';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
 import { ErrorBoundary } from '../../views/ErrorPage';
-import { useOnValueChange } from '@helpers/useOnValueChange';
+import { useOnValueChange } from '@tomic/ui/helpers/useOnValueChange';
 
 type SearchRouteQueryParams = {
   query?: string;

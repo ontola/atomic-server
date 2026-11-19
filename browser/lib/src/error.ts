@@ -160,12 +160,15 @@ export class AtomicError extends Error {
    */
   public code?: number;
   /**
-   * Set when the server answered "busy, come back later" (`ErrorCode.BUSY`,
-   * HTTP 429 or 503 with a retry hint): how long to wait, in ms. The write
-   * was not attempted, so this is neither a failure nor a reason to switch
-   * transport. See `busyRetryAfterMs`.
+   * Set when the server is busy: how long to wait before retrying, in ms.
    */
   public retryAfterMs?: number;
+
+  /**
+   * The typed problem (RFC 9457 fields) a commit refusal carried after its
+   * message, e.g. `host-feature-unavailable`. See {@link splitProblem}.
+   */
+  public problem?: Record<string, unknown>;
 
   /** Creates an AtomicError. The message can be either a plain string, or a JSON-AD Error Resource */
   public constructor(message: string, type = ErrorType.Client, code?: number) {
@@ -198,6 +201,12 @@ export class AtomicError extends Error {
       // ignore
     }
 
+    // Both commit paths (the WS `ERROR` frame and the `/commit` Error
+    // resource) carry a refusal's typed problem after its message.
+    const [text, problem] = splitProblem(this.message);
+    this.message = text;
+    this.problem = problem;
+
     if (!this.message) {
       this.message = this.createMessage();
     }
@@ -221,6 +230,45 @@ export class AtomicError extends Error {
         return 'Unknown error.';
     }
   }
+}
+
+/**
+ * What separates a commit error's message from the typed problem that may
+ * follow it (mirrors `PROBLEM_MARKER` in `lib/src/sync/protocol.rs`). Commit
+ * errors travel as one string, so structured fields ride after the sentence.
+ */
+export const PROBLEM_MARKER = '\nproblem+json: ';
+
+/**
+ * The human message and, when one follows {@link PROBLEM_MARKER}, the typed
+ * problem. A prefix a wrapper added stays with the message; text after the
+ * JSON is dropped. A marker without a JSON object after it is just text.
+ */
+export function splitProblem(
+  message: string,
+): [string, Record<string, unknown> | undefined] {
+  const at = message.indexOf(PROBLEM_MARKER);
+  if (at === -1) return [message, undefined];
+  const rest = message.slice(at + PROBLEM_MARKER.length);
+
+  // The problem is one JSON object; find where it ends by trying each `}`.
+  for (
+    let end = rest.indexOf('}');
+    end !== -1;
+    end = rest.indexOf('}', end + 1)
+  ) {
+    try {
+      const parsed = JSON.parse(rest.slice(0, end + 1));
+
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return [message.slice(0, at), parsed as Record<string, unknown>];
+      }
+    } catch {
+      // Not the end of the object yet.
+    }
+  }
+
+  return [message, undefined];
 }
 
 /** An operation cancelled by this client, rather than refused by the server. */

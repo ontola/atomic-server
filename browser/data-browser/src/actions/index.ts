@@ -21,4 +21,4 @@ export {
   PALETTE_MIN_QUERY_LENGTH,
 } from './matchActions';
 export { deriveActionTools, actionToolNames } from './deriveTools';
-export { shortcuts, displayShortcut } from './shortcuts';
+export { shortcuts, displayShortcut } from '@tomic/ui/actions/shortcuts';

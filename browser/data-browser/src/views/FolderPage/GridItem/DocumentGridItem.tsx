@@ -1,7 +1,10 @@
 import { properties, useArray, useResource, useString } from '@tomic/react';
 
-import Markdown from '../../../components/datatypes/Markdown';
-import { GridItemDescription, InnerWrapper } from './components';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import {
+  GridItemDescription,
+  InnerWrapper,
+} from '@tomic/resource-ui/views/FolderPage/GridItem/components';
 import { GridItemViewProps } from './GridItemViewProps';
 
 import type { JSX } from 'react';

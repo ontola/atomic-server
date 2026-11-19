@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState, type JSX, useMemo } from 'react';
-import { plural } from '@helpers/plural';
+import { plural } from '@tomic/resource-ui/helpers/plural';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
-import { displayShortcut, shortcuts } from '../actions/shortcuts';
+import { displayShortcut, shortcuts } from '@tomic/ui/actions/shortcuts';
 import { listShortcutHelp } from '../actions/catalog';
 import {
   matchActionsForPalette,
   PALETTE_MIN_QUERY_LENGTH,
 } from '../actions/matchActions';
 import { useAppMenuItems } from '../actions/appMenuItems';
-import { isItem, matchesQuery, type MenuItemMinimial } from './Dropdown';
+import {
+  isItem,
+  matchesQuery,
+  type MenuItemMinimial,
+} from '@tomic/resource-ui/components/Dropdown/index';
 import { resourceActions } from '../actions/resourceActions';
 import { runAction } from '../actions/runAction';
 import { useActionContext } from '../actions/useActionContext';
@@ -20,9 +24,9 @@ import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from './ConfirmationDialog';
-import { ResourceInline } from '../views/ResourceInline';
-import { ResourceUsage } from './ResourceUsage';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
+import { ResourceUsage } from '@tomic/resource-ui/components/ResourceUsage/index';
 import {
   useServerSearch,
   useStore,
@@ -43,14 +47,14 @@ import {
 import { useSettings } from '../helpers/AppSettings';
 import { usePrivateDrive } from '../hooks/usePrivateDrive';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
-import { Column, Row } from './Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ErrorBoundary } from '../views/ErrorPage';
-import { ErrorLook } from './ErrorLook';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 
-import { InlineFormattedResourceList } from './InlineFormattedResourceList';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
 import { FaMagnifyingGlass, FaComments } from 'react-icons/fa6';
 import ResourceCard from '../views/Card/ResourceCard';
-import ResourceRow from '@views/ResourceRow';
+import ResourceRow from '@tomic/resource-ui/views/ResourceRow';
 import { ChatMatchRow } from '../routes/Search/ChatMatchRow';
 import { useChatMatches } from '../routes/Search/useChatMatches';
 import { DEFAULT_AICHAT_NAME } from './AI/aiContstants';
@@ -64,12 +68,12 @@ import {
   pendingSearchOverlayQuery,
   pendingSearchOverlayScope,
   type OverlayType,
-} from './overlayState';
+} from '@tomic/resource-ui/components/overlayState';
 import {
   getRecentResources,
   removeRecentResource,
-} from '../helpers/recentResources';
-import { withoutUnavailable } from '../helpers/unavailableResources';
+} from '@tomic/resource-ui/helpers/recentResources';
+import { withoutUnavailable } from '@tomic/resource-ui/helpers/unavailableResources';
 import { useDocumentText } from '../hooks/useDocumentText';
 import { getSearchResultHint } from '../helpers/searchResultHint';
 

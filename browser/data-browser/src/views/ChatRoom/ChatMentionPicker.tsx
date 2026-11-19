@@ -5,14 +5,14 @@ import { styled } from 'styled-components';
 import {
   CommandList,
   type CommandListRefType,
-} from '../../chunks/RTE/SlashMenu/CommandList';
-import type { SuggestionItem } from '../../chunks/RTE/types';
+} from '@tomic/resource-ui/chunks/RTE/SlashMenu/CommandList';
+import type { SuggestionItem } from '@tomic/resource-ui/chunks/RTE/types';
 import type { MentionTrigger } from '../../helpers/chatMention';
-import { getIconForClass } from '../../helpers/iconMap';
+import { getIconForClass } from '@tomic/resource-ui/helpers/iconMap';
 import {
   findMemberSubjects,
   findMentionSubjects,
-} from '../../helpers/mentionSearch';
+} from '@tomic/resource-ui/helpers/mentionSearch';
 import { useSettings } from '../../helpers/AppSettings';
 
 export interface ChatMentionPickerHandle {

@@ -7,7 +7,7 @@ import {
 import { useCurrentAgent, useStore } from '@tomic/react';
 import { validateSetupArguments, type SetupArguments } from '@tomic/lib';
 import { useSettings } from '../../helpers/AppSettings';
-import { Dialog, useDialog } from '../Dialog';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
 import { AppSetupForm } from './AppSetupForm';
 import { getAppSetup } from './registry';
 

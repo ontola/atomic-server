@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { styled } from 'styled-components';
-import { AtomicLink } from '../AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { SideBarItem } from './SideBarItem';
 
 /** Children the sidebar lists per folder; the rest are on the folder's page. */

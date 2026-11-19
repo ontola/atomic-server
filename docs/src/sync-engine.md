@@ -16,6 +16,9 @@ It keeps a full local copy on every device, merges concurrent edits as [Loro](ht
 
 For recommendations by app type, see [choosing transports and designing for offline edits](local-first-guide/7-design-decisions.md).
 
+For recommendations by app type, see [choosing transports and designing for offline edits](local-first-guide/7-design-decisions.md).
+The transport connects replicas; your application still defines record identity, business rules, and how rejected or ambiguous changes are reviewed.
+
 ## Using it
 
 The [local-first guide](local-first-guide/1-index.md) takes you from a keypair and a server-less Store through persistence, syncing to an always-on server, and the same Drive on a phone. The reference pages are:

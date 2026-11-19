@@ -4,16 +4,16 @@ import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
 import { FloatingActions, floatingHoverStyles } from './FloatingActions';
 import { useResource, useTitle } from '@tomic/react';
-import { ResourceGlyph } from '../../ResourceGlyph';
+import { ResourceGlyph } from '@tomic/resource-ui/components/ResourceGlyph';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { DraggableAttributes } from '@dnd-kit/core';
 import { StyledLink, TextWrapper } from './shared';
 import {
   SIDEBAR_TRANSITION_TAG,
   getTransitionName,
-} from '../../../helpers/transitionName';
+} from '@tomic/ui/helpers/transitionName';
 import { useSettings } from '../../../helpers/AppSettings';
-import { IconButton } from '../../IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { FaCaretRight, FaGripVertical } from 'react-icons/fa6';
 import { SidebarPresence } from '../../Presence/SidebarPresence';
 

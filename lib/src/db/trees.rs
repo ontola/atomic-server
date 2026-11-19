@@ -53,6 +53,12 @@ pub enum Tree {
     /// subject_pure_id`, value a JSON [`crate::sync::outbox::OutboxEntry`].
     /// See `crate::sync::outbox`.
     Outbox,
+    /// Per-table change list (#1850): rows of a table changed since a
+    /// cursor, with tombstones. Keys are prefixed by kind and table pure id;
+    /// see `crate::change_log`.
+    TableChanges,
+    /// Private, per-agent and server resource-version acknowledgements.
+    SyncReceipts,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -84,10 +90,12 @@ const SEARCH_DOCS: &str = "search_docs_v2";
 const SEARCH_TRIGRAMS: &str = "search_trigrams_v2";
 const ENVELOPES: &str = "envelopes_v1";
 const OUTBOX: &str = "outbox_v1";
+const TABLE_CHANGES: &str = "table_changes_v1";
+const SYNC_RECEIPTS: &str = "sync_receipts_v1";
 
 impl Tree {
     /// Every tree, in the order backends create them.
-    pub const ALL: [Tree; 19] = [
+    pub const ALL: [Tree; 21] = [
         Tree::Resources,
         Tree::WatchedQueries,
         Tree::PropValSub,
@@ -107,6 +115,8 @@ impl Tree {
         Tree::SearchTrigrams,
         Tree::Envelopes,
         Tree::Outbox,
+        Tree::TableChanges,
+        Tree::SyncReceipts,
     ];
 
     /// The on-disk name of this tree. Every backend (sled tree, redb table)
@@ -133,6 +143,8 @@ impl Tree {
             Tree::SearchTrigrams => SEARCH_TRIGRAMS,
             Tree::Envelopes => ENVELOPES,
             Tree::Outbox => OUTBOX,
+            Tree::TableChanges => TABLE_CHANGES,
+            Tree::SyncReceipts => SYNC_RECEIPTS,
         }
     }
 }

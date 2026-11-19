@@ -40,6 +40,7 @@ use crate::{appstate::AppState, config::Opts};
 pub(crate) fn any_origin() -> Cors {
     Cors::permissive().expose_headers([
         crate::serve::SERVER_VERSION_HEADER,
+        crate::handlers::storage_receipt::CAPABILITY_HEADER,
         crate::write_load::PACE_HEADER,
         crate::write_load::RETRY_AFTER_MS_HEADER,
         "Retry-After",
@@ -103,6 +104,19 @@ pub(crate) async fn credentials_gate(
     if !trusted {
         res.headers_mut()
             .remove(header::ACCESS_CONTROL_ALLOW_CREDENTIALS);
+    }
+    // A plugin route is exactly as cross-origin as its manifest declared:
+    // replace whatever the layer above added.
+    #[cfg(feature = "plugin-routes")]
+    {
+        let declared = res
+            .response()
+            .extensions()
+            .get::<crate::plugins::route_exec::RouteCors>()
+            .cloned();
+        if let Some(declared) = declared {
+            declared.apply(res.headers_mut());
+        }
     }
     Ok(res)
 }

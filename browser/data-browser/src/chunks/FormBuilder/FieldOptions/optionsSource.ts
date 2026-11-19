@@ -7,10 +7,10 @@ import {
   type JSONValue,
   type Store,
 } from '@tomic/react';
-import { optionSubjects } from '@helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 import type { OptionsSource } from '@tomic/form-renderer';
 import { useCallback } from 'react';
-import { useFieldOptions } from './useFieldOptions';
+import { useFieldOptions } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
 
 export type { OptionsSource };
 

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { CodeGenerator, GeneratorLanguage } from './generators/CodeGenerator';
-import { HighlightedCodeBlock } from '../../components/HighlightedCodeBlock';
+import { HighlightedCodeBlock } from '@tomic/resource-ui/components/HighlightedCodeBlock';
 import { TabPanel, Tabs } from '../../components/Tabs';
 import { ExternalLink } from '../../components/ExternalLink';
-import { Column } from '../../components/Row';
-import { VAR_DIALOG_INNER_WIDTH } from '../../components/Dialog';
+import { Column } from '@tomic/ui/components/Row';
+import { VAR_DIALOG_INNER_WIDTH } from '@tomic/resource-ui/components/Dialog/index';
 
 interface CodeUsageProps {
   generator: CodeGenerator;

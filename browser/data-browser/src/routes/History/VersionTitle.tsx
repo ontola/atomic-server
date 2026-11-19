@@ -7,7 +7,7 @@ import {
 import { styled } from 'styled-components';
 
 import type { JSX } from 'react';
-import { ResourceInline } from '../../views/ResourceInline/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 
 const formatter = new Intl.DateTimeFormat('default', {
   month: 'long',

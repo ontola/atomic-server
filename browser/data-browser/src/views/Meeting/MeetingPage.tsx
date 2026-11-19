@@ -7,11 +7,11 @@ import {
   type DataBrowser,
 } from '@tomic/react';
 import type { ResourcePageProps } from '../ResourcePage';
-import { EditableTitle } from '../../components/EditableTitle';
-import { ResourceCoverImage } from '../../components/ResourceDecorations';
-import { Button } from '../../components/Button';
-import { Spinner } from '../../components/Spinner';
-import { Row, Column } from '../../components/Row';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
+import { ResourceCoverImage } from '@tomic/resource-ui/components/ResourceDecorations';
+import { Button } from '@tomic/ui/components/Button';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
+import { Row, Column } from '@tomic/ui/components/Row';
 import { useFollow } from '../../components/Presence/FollowContext';
 import { useRightPanel } from '../../components/RightPanel/RightPanelContext';
 import {

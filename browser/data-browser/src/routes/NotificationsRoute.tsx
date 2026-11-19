@@ -1,5 +1,5 @@
 import { createRoute } from '@tanstack/react-router';
-import { ContainerNarrow } from '../components/Containers';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
 import { Main } from '../components/Main';
 import { NotificationList } from '../components/Notifications/NotificationList';
 import { pathNames } from './paths';

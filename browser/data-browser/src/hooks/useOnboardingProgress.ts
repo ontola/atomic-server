@@ -6,7 +6,7 @@ import { useDriveChats } from '@components/SideBar/AIPanel';
 import { readManagedAccountBinding } from '@helpers/managed/binding';
 import { isDeviceLinked } from '@helpers/managed/deviceLink';
 import { useHasManagedAccount } from './useHasManagedAccount';
-import { useLocalStorage } from './useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { usePrivateDrive } from './usePrivateDrive';
 import { useSavedDrives } from './useSavedDrives';
 

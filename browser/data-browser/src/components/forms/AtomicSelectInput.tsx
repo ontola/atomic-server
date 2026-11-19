@@ -1,6 +1,6 @@
 import { Resource, useValue } from '@tomic/react';
 
-import { BasicSelect } from './BasicSelect';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 
 import type { JSX } from 'react';
 

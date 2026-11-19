@@ -1,6 +1,6 @@
 // @wc-ignore-file
 import { createLazyRoute } from '@tanstack/react-router';
-import { ContainerFull } from '../components/Containers';
+import { ContainerFull } from '@tomic/ui/components/Containers';
 
 import type { JSX } from 'react';
 

@@ -9,7 +9,7 @@ import {
 } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { afterEach, expect, it, vi } from 'vitest';
-import { DialogGlobalContextProvider } from '../Dialog/DialogGlobalContextProvider';
+import { DialogGlobalContextProvider } from '@tomic/ui/components/Dialog/DialogGlobalContextProvider';
 import { RootWelcomeLayoutProvider } from '../../context/RootWelcomeLayoutContext';
 import { VaultStorage } from './VaultStorage';
 import { buildTheme } from '../../styling';

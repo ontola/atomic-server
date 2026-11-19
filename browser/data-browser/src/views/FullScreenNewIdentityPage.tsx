@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSettings } from '../helpers/AppSettings';
-import { GettingStartedFlow } from './getting-started/GettingStartedFlow';
+import { GettingStartedFlow } from './getting-started/LazyGettingStartedFlow';
 
 /**
  * First-run experience: create an agent, set a name, auto-create a private home drive, then open it.

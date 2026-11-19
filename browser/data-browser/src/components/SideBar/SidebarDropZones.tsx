@@ -2,7 +2,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { useCanWrite, useResource } from '@tomic/react';
 import { FaStar, FaTrash } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { transition } from '../../helpers/transition';
+import { transition } from '@tomic/ui/helpers/transition';
 import type { SideBarZoneData, SideBarZoneKind } from './useSidebarDnd';
 
 interface SidebarDropZonesProps {

@@ -1,10 +1,10 @@
 import { commits, unknownSubject, useResource } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import { ErrorLook } from '../ErrorLook';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 
 import type { JSX } from 'react';
-import { ResourceRow } from '@views/ResourceRow';
+import { ResourceRow } from '@tomic/resource-ui/views/ResourceRow';
 
 interface UsageRowProps {
   subject: string;

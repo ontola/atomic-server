@@ -1,3 +1,8 @@
+import type {
+  AttachmentManifest,
+  ResourceAttachmentEvidence,
+  SerializedVaultAttachmentReceipt,
+} from './resource-attachment-evidence.js';
 /**
  * Web Worker that hosts the WASM ClientDb.
  * Communicates with the main thread via typed postMessage.
@@ -5,8 +10,19 @@
  * The WASM module URL is passed as the first message after creation.
  */
 
+import type {
+  ResourceVaultEvidence,
+  VaultSyncScope,
+  SerializedVaultReceipt,
+} from './resource-vault-evidence.js';
+import type {
+  ResourceSyncEvidence,
+  ResourceSyncScope,
+  SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
 import { wasmBinaryUrl } from './wasm-url.js';
+import type { ReplicaIdentity } from './replica-evidence.js';
 import type {
   ClientDbOutboxWrite,
   ClientDbQueryOpts,
@@ -29,6 +45,30 @@ export interface VaultExportResult {
   unchanged: number;
   tombstones: number;
   coverage: Record<string, number>;
+  /** Exact versions sealed in this object. Local-only; absent on older WASM. */
+  resourceVersions?: Record<string, Record<string, number>>;
+}
+
+/** How a local file would be uploaded; see `vaultBlobOpen` in `wasm/`. */
+export interface VaultBlobPlan {
+  /** `missing` also covers bytes that do not match their hash. */
+  status: 'ready' | 'missing' | 'tooLarge';
+  size: number;
+  /** The file's id in this vault (keyed BLAKE3 hex); empty unless `ready`. */
+  blobId: string;
+  /** `length` is plaintext, `sealedLength` what is uploaded and charged. */
+  chunks: {
+    index: number;
+    offset: number;
+    length: number;
+    sealedLength: number;
+  }[];
+}
+
+export interface VaultBlobRestoreResult {
+  status: 'restored' | 'unreferenced' | 'unreadable';
+  /** Plain BLAKE3 hex of the stored file, when `restored`. */
+  hash?: string | null;
 }
 
 /** How a local file would be uploaded; see `vaultBlobOpen` in `wasm/`. */
@@ -93,6 +133,48 @@ export interface ClientDbInitRequest {
 export interface ClientDbRpc {
   init: [ClientDbInitRequest, ClientDbInitTimings];
   getResource: [{ subject: string }, string | null];
+  getResourceSyncEvidence: [
+    { subjects: string[]; scope?: ResourceSyncScope },
+    ResourceSyncEvidence[] | undefined,
+  ];
+  putResourceSyncReceipts: [
+    { scope: ResourceSyncScope; receipts: SerializedServerReceipt[] },
+    void,
+  ];
+  vaultAttachmentManifests: [
+    { drive: string },
+    { subject: string; manifest: AttachmentManifest }[] | undefined,
+  ];
+  getResourceAttachmentEvidence: [
+    { subjects: string[] },
+    ResourceAttachmentEvidence[] | undefined,
+  ];
+  getResourceVaultAttachmentReceipts: [
+    { subjects: string[]; scope: VaultSyncScope },
+    SerializedVaultAttachmentReceipt[] | undefined,
+  ];
+  putResourceVaultAttachmentReceipts: [
+    {
+      scope: VaultSyncScope;
+      receipts: SerializedVaultAttachmentReceipt[];
+      generation: number;
+    },
+    boolean,
+  ];
+  getResourceVaultEvidence: [
+    { subjects: string[]; scope: VaultSyncScope },
+    ResourceVaultEvidence[] | undefined,
+  ];
+  getResourceVaultGeneration: [{ scope: VaultSyncScope }, number | undefined];
+  clearResourceVaultReceipts: [{ scope: VaultSyncScope }, void];
+  putResourceVaultReceipts: [
+    {
+      scope: VaultSyncScope;
+      receipts: SerializedVaultReceipt[];
+      generation: number;
+    },
+    boolean,
+  ];
   getResourceWithSnapshot: [{ subject: string }, Rows[number] | null];
   getResourcesWithSnapshots: [{ subjects: string[] }, Rows | null];
   putResource: [{ jsonAd: string }, void];
@@ -148,13 +230,19 @@ export interface ClientDbRpc {
   applyStateUpdates: [{ subjects: string[]; states: Uint8Array[] }, number];
   getVersionVectorsForSubjects: [{ subjects: string[] }, unknown];
   indexPendingSearch: [{ limit: number }, number];
+  getReplicaIdentity: [{ drive: string }, ReplicaIdentity | undefined];
   createPeerSession: [
     { drive: string; expectedPeer?: string; challenge: string },
     number,
   ];
   handlePeerFrame: [
     { session: number; frame: Uint8Array },
-    { frames: number[][]; changed: string[]; ephemeral?: number[] },
+    {
+      frames: number[][];
+      changed: string[];
+      ephemeral?: number[];
+      peerAgent?: string;
+    },
   ];
   canSendPeerFrame: [{ session: number; subject: string }, boolean];
   closePeerSession: [{ session: number }, void];
@@ -193,6 +281,8 @@ export interface ClientDbRpc {
   // File bytes (`planning/vault-file-blobs.md`): hashing, chunking, sealing
   // and opening are Rust; the main thread only moves sealed chunks.
   vaultFileHashes: [{ driveSubject: string }, string[]];
+  requestDriveBlobs: [{ driveSubject: string; hashes: string[] }, number[][]];
+  requestPeerBlobs: [{ session: number; hashes: string[] }, number[][]];
   vaultBlobPresent: [{ hash: string }, boolean];
   vaultBlobOpen: [
     { hash: string; key: Uint8Array; keyEpoch: number },
@@ -210,6 +300,7 @@ export interface ClientDbRpc {
       blobId: string;
       chunks: Uint8Array[];
       wanted: string[];
+      driveSubject?: string;
     },
     VaultBlobRestoreResult,
   ];
@@ -267,12 +358,111 @@ const handlers: Handlers = {
 
     return initPromise;
   },
+  getReplicaIdentity: m => db!.getReplicaIdentity?.(m.drive),
   canSendPeerFrame: m => db!.canSendPeerFrame(m.session, m.subject),
   createPeerSession: m =>
     db!.createPeerSession(m.drive, m.expectedPeer, m.challenge),
   handlePeerFrame: m => db!.handlePeerFrame(m.session, m.frame),
   closePeerSession: m => db!.closePeerSession(m.session),
   getResource: m => db!.getResource(m.subject),
+  getResourceSyncEvidence: m => {
+    if (typeof db!.getResourceSyncEvidence !== 'function') return undefined;
+    dirty = true;
+    const evidence = db!.getResourceSyncEvidence(
+      JSON.stringify(m.subjects),
+      m.scope ? JSON.stringify(m.scope) : undefined,
+    ) as ResourceSyncEvidence[];
+    // The Rust method also flushes; keep the RPC durability boundary explicit.
+    flushNow();
+
+    return evidence;
+  },
+  putResourceSyncReceipts: m => {
+    if (typeof db!.putResourceSyncReceipts !== 'function') return;
+    dirty = true;
+    db!.putResourceSyncReceipts(
+      JSON.stringify(m.scope),
+      JSON.stringify(m.receipts),
+    );
+    flushNow();
+  },
+  vaultAttachmentManifests: async m => {
+    if (typeof db!.vaultAttachmentManifests !== 'function') return undefined;
+
+    return db!.vaultAttachmentManifests(m.drive);
+  },
+  getResourceAttachmentEvidence: async m => {
+    if (typeof db!.getResourceAttachmentEvidence !== 'function')
+      return undefined;
+
+    // Keep this worker self-contained; the main-thread RPC adapter validates
+    // the evidence before exposing it to callers.
+    return db!.getResourceAttachmentEvidence(JSON.stringify(m.subjects));
+  },
+  getResourceVaultAttachmentReceipts: m => {
+    if (typeof db!.getResourceVaultAttachmentReceipts !== 'function')
+      return undefined;
+
+    return db!.getResourceVaultAttachmentReceipts(
+      JSON.stringify(m.subjects),
+      JSON.stringify(m.scope),
+    );
+  },
+  putResourceVaultAttachmentReceipts: m => {
+    if (typeof db!.putResourceVaultAttachmentReceipts !== 'function')
+      return false;
+    dirty = true;
+    const accepted =
+      db!.putResourceVaultAttachmentReceipts(
+        JSON.stringify(m.scope),
+        JSON.stringify(m.receipts),
+        m.generation,
+      ) === true;
+    flushNow();
+
+    return accepted;
+  },
+  getResourceVaultEvidence: m => {
+    if (typeof db!.getResourceVaultEvidence !== 'function') return undefined;
+    dirty = true;
+    const evidence = db!.getResourceVaultEvidence(
+      JSON.stringify(m.subjects),
+      JSON.stringify(m.scope),
+    ) as ResourceVaultEvidence[];
+    // The Rust method also flushes; keep the RPC durability boundary explicit.
+    flushNow();
+
+    return evidence;
+  },
+  getResourceVaultGeneration: m => {
+    if (typeof db!.getResourceVaultGeneration !== 'function') return undefined;
+    dirty = true;
+    const generation = db!.getResourceVaultGeneration(
+      JSON.stringify(m.scope),
+    ) as number;
+    flushNow();
+
+    return generation;
+  },
+  clearResourceVaultReceipts: m => {
+    if (typeof db!.clearResourceVaultReceipts !== 'function') return;
+    dirty = true;
+    db!.clearResourceVaultReceipts(JSON.stringify(m.scope));
+    flushNow();
+  },
+  putResourceVaultReceipts: m => {
+    if (typeof db!.putResourceVaultReceipts !== 'function') return false;
+    dirty = true;
+    const accepted =
+      db!.putResourceVaultReceipts(
+        JSON.stringify(m.scope),
+        JSON.stringify(m.receipts),
+        m.generation,
+      ) === true;
+    flushNow();
+
+    return accepted;
+  },
   // One round trip for a whole list: opening a chat asks for every message and
   // part at once, and a postMessage per subject queued behind boot-time sync
   // traffic made that the slow part of the open.
@@ -472,6 +662,8 @@ const handlers: Handlers = {
     flushNow();
   },
   vaultFileHashes: m => db!.vaultFileHashes(m.driveSubject),
+  requestDriveBlobs: m => db!.requestDriveBlobs(m.driveSubject, m.hashes),
+  requestPeerBlobs: m => db!.requestPeerBlobs(m.session, m.hashes),
   vaultBlobPresent: m => db!.vaultBlobPresent(m.hash),
   vaultBlobOpen: m => db!.vaultBlobOpen(m.hash, m.key, m.keyEpoch),
   vaultBlobChunk: m => db!.vaultBlobChunk(m.hash, m.key, m.keyEpoch, m.index),
@@ -483,6 +675,7 @@ const handlers: Handlers = {
       m.blobId,
       m.chunks,
       m.wanted,
+      m.driveSubject,
     );
 
     // Same reasoning as `vaultImport`: a restore may be followed by a reload.

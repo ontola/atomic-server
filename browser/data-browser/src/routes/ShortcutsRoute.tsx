@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { styled } from 'styled-components';
-import { ContainerNarrow } from '../components/Containers';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
 import { listShortcutHelp } from '../actions/catalog';
-import { Shortcut } from '../components/Shortcut';
+import { Shortcut } from '@tomic/ui/components/Shortcut';
 import { Main } from '../components/Main';
 import { createRoute } from '@tanstack/react-router';
 import { pathNames } from './paths';

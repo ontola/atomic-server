@@ -1,5 +1,5 @@
-import { Button } from '@components/Button';
-import { Dialog, useDialog } from '@components/Dialog';
+import { Button } from '@tomic/ui/components/Button';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
 import { ParentPicker } from '@components/ParentPicker/ParentPicker';
 import {
   commits,
@@ -14,7 +14,7 @@ import {
 import { useState } from 'react';
 import { PermissionRow } from './PermissionRow';
 import { TableList } from '@components/TableList';
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { FaPlus, FaShield } from 'react-icons/fa6';
 import { DashedButton } from '@views/OntologyPage/DashedButton';
 import { styled } from 'styled-components';

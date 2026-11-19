@@ -5,11 +5,11 @@ import {
   DialogContent,
   DialogTitle,
   InternalDialogProps,
-} from '../../../components/Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import { styled } from 'styled-components';
-import InputSwitcher from '../../../components/forms/InputSwitcher';
+import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
 import { PropertyFormCommon } from './PropertyFormCommon';
-import { isContentAddressed } from '../../../helpers/propertyIdentity';
+import { isContentAddressed } from '@tomic/resource-ui/helpers/propertyIdentity';
 
 import type { JSX } from 'react';
 

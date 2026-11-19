@@ -1,13 +1,13 @@
 import { core, useString } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import { AtomicLink } from '../../components/AtomicLink';
-import { markdownToPlainText } from '../../helpers/markdown';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { markdownToPlainText } from '@tomic/resource-ui/helpers/markdown';
 import {
   PAGE_TITLE_TRANSITION_TAG,
   transitionName,
-} from '../../helpers/transitionName';
-import { ViewTransitionProps } from '../../helpers/ViewTransitionProps';
+} from '@tomic/ui/helpers/transitionName';
+import { ViewTransitionProps } from '@tomic/resource-ui/helpers/ViewTransitionProps';
 import { CardViewProps } from '../Card/CardViewProps';
 
 import type { JSX } from 'react';

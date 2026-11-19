@@ -1,5 +1,5 @@
 import { Dispatch, useEffect, useRef, useState } from 'react';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import {
   getHostColorScheme,
   HOST_COLOR_SCHEME_EVENT,

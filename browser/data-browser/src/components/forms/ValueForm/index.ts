@@ -1,1 +1,1 @@
-export { ValueForm } from './ValueForm';
+export * from '@tomic/resource-ui/components/forms/ValueForm/index';

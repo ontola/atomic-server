@@ -2576,3 +2576,275 @@ async fn genesis_route_serves_only_the_certificate_of_a_drive() {
         );
     }
 }
+
+/// An unclaimed `/.well-known/` name is `404`, also for a client that sends no
+/// `Accept` header (which otherwise gets the app's HTML), in every build.
+#[actix_rt::test]
+async fn unclaimed_well_known_names_are_not_found() {
+    let appstate = init_test_appstate(&[]).await;
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    for accept in [None, Some("text/html"), Some("application/json")] {
+        for path in [
+            "/.well-known/nodeinfo",
+            "/.well-known/webfinger?resource=acct:a@b",
+            "/.well-known/acme-challenge/token",
+            "/.well-known/",
+            "/.well-known",
+        ] {
+            let mut req = TestRequest::get().uri(path);
+            if let Some(accept) = accept {
+                req = req.insert_header(("Accept", accept));
+            }
+            let resp = test::call_service(&app, req.to_request()).await;
+            assert_eq!(resp.status().as_u16(), 404, "{path} {accept:?}");
+            assert_eq!(
+                resp.headers().get("content-type").unwrap(),
+                "application/problem+json",
+                "{path} {accept:?}"
+            );
+            let body = get_body(resp);
+            assert!(!body.contains("<html"), "{path} {accept:?}: {body}");
+        }
+    }
+    // The app itself is still served for other paths.
+    let resp = test::call_service(&app, TestRequest::get().uri("/app/x").to_request()).await;
+    assert!(resp.status().is_success());
+    assert!(get_body(resp).contains("html"));
+}
+
+/// A `/_routes/` path no active route serves is `404`, for any method and
+/// `Accept`, in every build: without the `plugin-routes` feature, and with
+/// it at the default level (`off`).
+#[actix_rt::test]
+async fn unserved_plugin_route_paths_are_not_found() {
+    use actix_web::http::Method;
+    let appstate = init_test_appstate(&[]).await;
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    for accept in [None, Some("text/html"), Some("application/json")] {
+        for method in [Method::GET, Method::POST, Method::HEAD, Method::DELETE] {
+            for path in ["/_routes/x/y", "/_routes/x", "/_routes/", "/_routes"] {
+                let mut req = TestRequest::default().method(method.clone()).uri(path);
+                if let Some(accept) = accept {
+                    req = req.insert_header(("Accept", accept));
+                }
+                let resp = test::call_service(&app, req.to_request()).await;
+                assert_eq!(resp.status().as_u16(), 404, "{method} {path} {accept:?}");
+                assert_eq!(
+                    resp.headers().get("content-type").unwrap(),
+                    "application/problem+json",
+                    "{method} {path} {accept:?}"
+                );
+                if method != Method::HEAD {
+                    let body = get_body(resp);
+                    assert!(!body.contains("<html"), "{path} {accept:?}: {body}");
+                }
+            }
+        }
+    }
+}
+
+/// `GET /changes` (#1850): a table's changed rows since a cursor, with typed
+/// refusals for a bad or expired cursor and no answer for a stranger.
+#[actix_rt::test]
+async fn table_changes_endpoint() {
+    use atomic_lib::{Resource, Value};
+    let appstate = init_test_appstate(&[]).await;
+    let store = &appstate.store;
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let mut class = Resource::new_generate_subject(store).unwrap();
+    class
+        .set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::CLASS.into()]),
+            store,
+        )
+        .await
+        .unwrap();
+    class
+        .set(urls::SHORTNAME.into(), Value::Slug("task".into()), store)
+        .await
+        .unwrap();
+    class
+        .set(urls::DESCRIPTION.into(), Value::Markdown("t".into()), store)
+        .await
+        .unwrap();
+    class.save(store).await.unwrap();
+    let class = class.get_subject().to_string();
+
+    let mut table = Resource::new_generate_subject(store).unwrap();
+    table
+        .set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::TABLE.into()]),
+            store,
+        )
+        .await
+        .unwrap();
+    table
+        .set(
+            urls::CLASSTYPE_PROP.into(),
+            Value::AtomicUrl(class.clone().into()),
+            store,
+        )
+        .await
+        .unwrap();
+    table
+        .set(urls::NAME.into(), Value::String("Tasks".into()), store)
+        .await
+        .unwrap();
+    table.save(store).await.unwrap();
+    let table = table.get_subject().to_string();
+
+    let mut row = Resource::new_generate_subject(store).unwrap();
+    row.set(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![class.clone().into()]),
+        store,
+    )
+    .await
+    .unwrap();
+    row.set(
+        urls::PARENT.into(),
+        Value::AtomicUrl(table.clone().into()),
+        store,
+    )
+    .await
+    .unwrap();
+    row.save(store).await.unwrap();
+
+    let path = |since: Option<&str>| {
+        let mut p = format!("/changes?table={}", urlencoding::encode(&table));
+        if let Some(s) = since {
+            p.push_str(&format!("&since={}", urlencoding::encode(s)));
+        }
+        p
+    };
+
+    // First listing: the row, as `created`, with its version.
+    let resp = test::call_service(
+        &app,
+        build_request_authenticated(&path(None), &appstate).to_request(),
+    )
+    .await;
+    let status = resp.status();
+    let body = get_body(resp);
+    assert!(status.is_success(), "{status}: {body}");
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(json["changes"].as_array().unwrap().len(), 1, "{body}");
+    assert_eq!(json["changes"][0]["kind"], "created");
+    assert!(json["changes"][0]["version"].is_object(), "{body}");
+    assert_eq!(json["hasMore"], false);
+    let cursor = json["cursor"].as_str().unwrap().to_string();
+
+    // A stranger learns nothing.
+    let resp =
+        test::call_service(&app, test::TestRequest::with_uri(&path(None)).to_request()).await;
+    let status = resp.status();
+    let body = get_body(resp);
+    assert!(status.is_client_error(), "{status}: {body}");
+    assert!(!body.contains("changes"), "{body}");
+
+    // A malformed cursor is a typed 400.
+    let resp = test::call_service(
+        &app,
+        build_request_authenticated(&path(Some("garbage!")), &appstate).to_request(),
+    )
+    .await;
+    assert_eq!(resp.status(), 400);
+    assert!(get_body(resp).contains("INVALID_CURSOR"));
+
+    // A tombstone pruned past the cursor: 410, resync.
+    store.set_table_change_retention(std::time::Duration::ZERO);
+    let mut row = store.get_resource(row.get_subject()).await.unwrap();
+    row.destroy(store).await.unwrap();
+    let resp = test::call_service(
+        &app,
+        build_request_authenticated(&path(Some(&cursor)), &appstate).to_request(),
+    )
+    .await;
+    assert_eq!(resp.status(), 410);
+    assert!(get_body(resp).contains("CURSOR_EXPIRED"));
+}
+
+#[actix_rt::test]
+async fn drive_sync_confirmation_endpoint_is_signed_and_fail_closed() {
+    use clap::Parser;
+    let id = atomic_lib::utils::random_string(10);
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{id}/db"),
+        "--config-dir",
+        &format!("./.temp/{id}/config"),
+    ]);
+    let mut config = config::build_config(opts).unwrap();
+    config.search_index_path = format!("./.temp/{id}/search_index").into();
+    let appstate = AppState::init(config).await.unwrap();
+    let drive = atomic_lib::test_utils::create_test_drive(&appstate.store)
+        .await
+        .unwrap();
+    let (hash, _, _) =
+        atomic_lib::sync::confirmation::confirm_drive(&appstate.store, &drive, &ForAgent::Sudo, "")
+            .await
+            .unwrap();
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let path = format!(
+        "/drive-sync-confirmation?subject={}&hash={hash}&hashVersion=2",
+        urlencoding::encode(drive.as_str())
+    );
+    let response = test::call_service(
+        &app,
+        build_request_authenticated(&path, &appstate).to_request(),
+    )
+    .await;
+    assert!(
+        response.status().is_success(),
+        "status {}",
+        response.status()
+    );
+    assert_eq!(response.headers().get("cache-control").unwrap(), "no-store");
+    let body: serde_json::Value = serde_json::from_str(&get_body(response)).unwrap();
+    assert_eq!(body["version"], 1);
+    assert_eq!(body["driveHash"], hash);
+    assert_eq!(body["hashVersion"], 2);
+    assert_eq!(body["confirmed"], true);
+    let invalid = path.replace("hashVersion=2", "hashVersion=1");
+    let response = test::call_service(
+        &app,
+        build_request_authenticated(&invalid, &appstate).to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
+    let foreign = format!(
+        "/drive-sync-confirmation?subject={}&hash={hash}&hashVersion=2",
+        urlencoding::encode("https://foreign.invalid/drive")
+    );
+    let response = test::call_service(
+        &app,
+        build_request_authenticated(&foreign, &appstate).to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), actix_web::http::StatusCode::NOT_FOUND);
+}

@@ -6,6 +6,7 @@ import { getAgentFromIDB, saveAgentToIDB } from './helpers/agentStorage';
 import { shouldLock } from './helpers/deviceLock';
 import { registerCustomCreateActions } from './components/forms/NewForm/CustomCreateActions';
 import { registerCustomDeleteDialogs } from './components/ResourceContextMenu/customDeleteDialogs';
+import { registerPiecesValidation } from '@chunks/Pieces/piecesFlag';
 import { serverURLStorage } from './helpers/serverURLStorage';
 import { driveStorage } from './helpers/driveStorage';
 import { isRunningInTauri } from './helpers/tauri';
@@ -251,6 +252,7 @@ declare global {
 
 registerCustomCreateActions();
 registerCustomDeleteDialogs();
+registerPiecesValidation();
 // Register global event handlers.
 registerHandlers(store);
 
@@ -259,6 +261,10 @@ registerHandlers(store);
 import { startAppKeyRecovery } from './chunks/AppPage/appKeyHandover';
 const stopAppKeyRecovery = startAppKeyRecovery(store);
 if (import.meta.hot) import.meta.hot.dispose(stopAppKeyRecovery);
+
+import { startAutomaticFileRecovery } from './helpers/managed/automaticFileRecovery';
+const stopAutomaticFileRecovery = startAutomaticFileRecovery(store);
+if (import.meta.hot) import.meta.hot.dispose(stopAutomaticFileRecovery);
 
 // Make the Store available globally for debugging
 window.store = store;

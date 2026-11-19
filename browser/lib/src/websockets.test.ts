@@ -1,4 +1,6 @@
 import { Resource } from './resource.js';
+import { Agent } from './agent.js';
+import { core } from './ontologies/core.js';
 import { AtomicError, ErrorType } from './error.js';
 import { describe, it, vi, afterEach, expect as assert } from 'vitest';
 import { testStore } from './test-store.js';
@@ -9,9 +11,11 @@ import {
   CLIENT_CAPABILITIES,
   decodeCommit,
   encodeEphemeral,
+  encodeSyncPush,
   decodeEphemeral,
   EphemeralKind,
   Flags,
+  encodeBlobResponse,
 } from './ws-v2.js';
 import {
   decodeHelloCaps,
@@ -104,7 +108,7 @@ const signedCommit = (): Commit =>
     signature: 'sig-abc',
   }) as unknown as Commit;
 
-async function connectedClient() {
+async function connectedClient(manualAuth = false) {
   globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
   const { store } = await testStore();
   // Keep the open handler's side effects (drain, drive sync, auth) out of
@@ -113,8 +117,13 @@ async function connectedClient() {
   vi.spyOn(store, 'getDrive').mockReturnValue(undefined);
   const client = new WSClient('wss://example.com/ws', store);
   const socket = socketOf(client);
+  // Receipt AUTH regressions drive every attempt explicitly, including failure.
+  const automaticAuth = manualAuth
+    ? vi.spyOn(client, 'authenticate').mockResolvedValueOnce(undefined)
+    : undefined;
   socket.open();
   await Promise.resolve();
+  automaticAuth?.mockRestore();
 
   return { client, socket, store };
 }
@@ -128,6 +137,635 @@ describe('WSClient handshake', () => {
     globalThis.WebSocket = original;
     vi.restoreAllMocks();
     vi.useRealTimers();
+  });
+
+  it('does not keep a SYNC_DIFF receipt if the drive becomes local-only while reading', async () => {
+    const { client, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    let release!: (value: Uint8Array | undefined) => void;
+    const snapshot = new Promise<Uint8Array | undefined>(resolve => {
+      release = resolve;
+    });
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: () => snapshot,
+    } as never);
+    const diff = (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:doc'], push: [] });
+    store.registerLocalOnlyDrive(drive);
+    release(undefined);
+    await diff;
+    store.unregisterLocalOnlyDrive(drive);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().lastDriveSync).toBeUndefined();
+    client.close();
+  });
+
+  it('reprobes a removal-only diff once, then leaves a repeated mismatch unconfirmed', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    const flush = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(store, 'getClientDb').mockReturnValue({ flush } as never);
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive,
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    } as never);
+    const diff = (
+      client as unknown as { handleSyncDiff: (value: unknown) => Promise<void> }
+    ).handleSyncDiff.bind(client);
+    store.startDriveSync();
+    await diff({ drive, pull: [], push: [], remove: ['atomic:gone'] });
+    assert(flush).toHaveBeenCalledOnce();
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(1);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    await diff({ drive, pull: [], push: [] });
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(1);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().syncInProgress).toBe(false);
+    client.close();
+  });
+
+  it('allows a new probe after an authorization refusal', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive,
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    } as never);
+    await client.resyncDrive(drive);
+    socket.receive(
+      encodeError(0, ErrorCode.AUTH_REQUIRED, 'authenticate again'),
+    );
+    await client.resyncDrive(drive);
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(2);
+    client.close();
+  });
+
+  it('allows a new probe after a local flush failure', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      flush: async () => {
+        throw new Error('flush failed');
+      },
+    } as never);
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive,
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    } as never);
+    await client.resyncDrive(drive);
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: [], push: [] });
+    await client.resyncDrive(drive);
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(2);
+    client.close();
+  });
+
+  it('does not send overlapping probes for the same drive', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive,
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    } as never);
+    const start = (
+      client as unknown as {
+        startVVSync: (drive: string, explicit: boolean) => Promise<void>;
+      }
+    ).startVVSync.bind(client);
+    await start(drive, true);
+    await start(drive, true);
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(1);
+    client.close();
+  });
+
+  it('does not let a delayed inbound flush undo a sync refusal', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let release!: () => void;
+    const flushed = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => new Uint8Array([1]),
+      envelopesFor: async () => ({}),
+      flush: () => flushed,
+    } as never);
+    store.startDriveSync();
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:one'], push: ['atomic:remote'] });
+    socket.receive(encodeSyncPush(drive, [], true));
+    socket.receive(
+      encodeError(
+        0,
+        ErrorCode.SYNC_REJECTED,
+        `SYNC_PUSH rejected for drive ${drive}: no access`,
+      ),
+    );
+    release();
+    await flushed;
+    await Promise.resolve();
+    vi.spyOn(store, 'applyIncoming').mockImplementation(() => {});
+    socket.receive(
+      encodeSyncPush(
+        drive,
+        [{ subject: 'atomic:late', loroBytes: new Uint8Array([1]) }],
+        true,
+      ),
+    );
+    await Promise.resolve();
+    assert(store.isDriveSyncPulling()).toBe(false);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().lastDriveSyncError?.message).toContain(
+      'no access',
+    );
+    client.close();
+  });
+
+  it('does not accept a late chunk acknowledgement after a sync refusal', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => new Uint8Array(50_000),
+      envelopesFor: async () => ({}),
+    } as never);
+    store.startDriveSync();
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:one', 'atomic:two'], push: [] });
+    socket.receive(
+      encodeError(
+        0,
+        ErrorCode.SYNC_REJECTED,
+        `SYNC_PUSH rejected for drive ${drive}: no access`,
+      ),
+    );
+    const bytes = new TextEncoder().encode(drive);
+    socket.receive(new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]));
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    client.close();
+  });
+
+  it('waits for the final outbound chunk acknowledgement', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => new Uint8Array(50_000),
+      envelopesFor: async () => ({}),
+    } as never);
+    store.startDriveSync();
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:one', 'atomic:two'], push: [] });
+    assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(2);
+    const bytes = new TextEncoder().encode(drive);
+    const ack = () =>
+      socket.receive(new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]));
+    ack();
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    ack();
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(true);
+    client.close();
+  });
+
+  it.each(['ack-first', 'pull-first'] as const)(
+    'requires both directions to finish (%s)',
+    async order => {
+      const { client, socket, store } = await connectedClient();
+      const drive = 'atomic:drive';
+      vi.mocked(store.getDrive).mockReturnValue(drive);
+      vi.spyOn(store, 'getClientDb').mockReturnValue({
+        getLoroSnapshot: async () => new Uint8Array([1, 2]),
+        envelopesFor: async () => ({}),
+      } as never);
+      store.startDriveSync();
+      await (
+        client as unknown as {
+          handleSyncDiff: (input: unknown) => Promise<void>;
+        }
+      ).handleSyncDiff({
+        drive,
+        pull: ['atomic:doc'],
+        push: ['atomic:remote'],
+      });
+      const bytes = new TextEncoder().encode(drive);
+      const ack = () =>
+        socket.receive(
+          new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]),
+        );
+      const pull = () => socket.receive(encodeSyncPush(drive, [], true));
+      if (order === 'ack-first') ack();
+      else pull();
+      assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+      if (order === 'ack-first') pull();
+      else ack();
+      assert(store.hasCompletedDriveSyncFor(drive)).toBe(true);
+      client.close();
+    },
+  );
+
+  it('serializes every AUTH contender before accepting receipt provenance', async () => {
+    const { client, socket } = await connectedClient(true);
+    socket.receive(encodeChallenge('receipt-serial'));
+    const first = client.authenticate();
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    const second = client.authenticate(true);
+    const third = client.authenticate(true);
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await first;
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(2),
+    );
+    assert(client.getStorageReceiptSession()).toBeUndefined();
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await second;
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(3),
+    );
+    assert(client.getStorageReceiptSession()).toBeUndefined();
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await third;
+    assert(client.getStorageReceiptSession()).toBeDefined();
+    client.close();
+  });
+
+  it('never restores receipt eligibility after a failed AUTH and delayed ACK', async () => {
+    const { client, socket, store } = await connectedClient(true);
+    socket.receive(encodeChallenge('receipt-late'));
+    vi.spyOn(store, 'notifyError').mockImplementation(() => {});
+    const first = client.authenticate().catch(() => undefined);
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(
+      encodeError(0, ErrorCode.AUTH_FAILED, 'refused authentication'),
+    );
+    await first;
+    const second = client.authenticate(true);
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(2),
+    );
+    // No request id identifies this as the old attempt's late response.
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await second;
+    assert(client.getStorageReceiptSession()).toBeUndefined();
+    client.close();
+  });
+
+  it('rejects superseded B while C waits behind an in-flight A authentication', async () => {
+    const { client, socket, store } = await connectedClient(true);
+    let agent = store.getAgent();
+    let generation = store.getIdentityGeneration();
+    vi.spyOn(store, 'getAgent').mockImplementation(() => agent);
+    vi.spyOn(store, 'getIdentityGeneration').mockImplementation(
+      () => generation,
+    );
+    socket.receive(encodeChallenge('receipt-contenders'));
+    const first = client.authenticate().catch(error => error);
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    agent = await Agent.generateNonExtractable();
+    generation++;
+    const second = client.authenticate(true).catch(error => error);
+    agent = await Agent.generateNonExtractable();
+    generation++;
+    const third = client.authenticate(true);
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    assert(await first).toBeInstanceOf(Error);
+    assert(await second).toBeInstanceOf(Error);
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(2),
+    );
+    const frame = framesWithTag(socket, Tag.AUTH)[1];
+    assert(
+      JSON.parse(new TextDecoder().decode(frame.subarray(1)))[
+        'https://atomicdata.dev/properties/auth/agent'
+      ],
+    ).toBe(agent.subject.replace(/^atomic:/, 'did:ad:'));
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await third;
+    assert(client.getStorageReceiptSession()).toBeUndefined();
+    client.close();
+  });
+
+  it('reauthenticates A after returning while B is already awaiting its ACK', async () => {
+    const { client, socket, store } = await connectedClient(true);
+    const originalAgent = store.getAgent()!;
+    let agent = originalAgent;
+    let generation = store.getIdentityGeneration();
+    vi.spyOn(store, 'getAgent').mockImplementation(() => agent);
+    vi.spyOn(store, 'getIdentityGeneration').mockImplementation(
+      () => generation,
+    );
+    socket.receive(encodeChallenge('receipt-away-back'));
+    const first = client.authenticate();
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await first;
+    agent = await Agent.generateNonExtractable();
+    generation++;
+    const second = client.authenticate().catch(error => error);
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(2),
+    );
+    agent = originalAgent;
+    generation++;
+    const restored = client.authenticate();
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    assert(await second).toBeInstanceOf(Error);
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(3),
+    );
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await restored;
+    assert(
+      (client as unknown as { authenticatedWith: string }).authenticatedWith,
+    ).toBe(originalAgent.subject);
+    // A failed sent attempt still makes receipt provenance ambiguous until reconnect.
+    assert(client.getStorageReceiptSession()).toBeUndefined();
+    client.close();
+  });
+
+  it('cannot attribute a timed-out AUTH acknowledgement to a later attempt', async () => {
+    const { client, socket } = await connectedClient(true);
+    socket.receive(encodeChallenge('receipt-timeout'));
+    const internal = client as unknown as {
+      waitForTag(tag: number, timeout?: number): Promise<void>;
+    };
+    const wait = internal.waitForTag.bind(client);
+    let first = true;
+    vi.spyOn(internal, 'waitForTag').mockImplementation((tag, timeout) => {
+      if (tag === Tag.AUTH_OK && first) {
+        first = false;
+
+        return wait(tag, 5);
+      }
+
+      return wait(tag, timeout);
+    });
+    await assert(client.authenticate()).rejects.toThrow(/Timed out/);
+    const next = client.authenticate(true);
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(2),
+    );
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await next;
+    assert(client.getStorageReceiptSession()).toBeUndefined();
+    client.close();
+  });
+
+  it.each(['unsolicited ACK', 'raw AUTH'])(
+    'retires receipts after %s',
+    async mode => {
+      const { client, socket } = await connectedClient();
+      socket.receive(encodeChallenge('receipt-untracked'));
+      const auth = client.authenticate();
+      await vi.waitFor(() =>
+        assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+      );
+      socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+      await auth;
+      assert(client.getStorageReceiptSession()).toBeDefined();
+      const pending = client.requestStorageReceipt(
+        {
+          nonce: 'a'.repeat(64),
+          drive: 'atomic:drive',
+          subject: 'atomic:resource',
+          version: 'captured',
+        },
+        new AbortController().signal,
+      );
+      if (mode === 'raw AUTH') {
+        (
+          client as unknown as { sendBinary(frame: Uint8Array): void }
+        ).sendBinary(new Uint8Array([Tag.AUTH]));
+      } else socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+      assert(client.getStorageReceiptSession()).toBeUndefined();
+      assert(await pending).toBeUndefined();
+      client.close();
+    },
+  );
+
+  it('does not certify a pushed drive until the server acknowledges it', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => new Uint8Array([1, 2]),
+      envelopesFor: async () => ({}),
+    } as never);
+    store.startDriveSync();
+    await (
+      client as unknown as { handleSyncDiff: (input: unknown) => Promise<void> }
+    ).handleSyncDiff({ drive, pull: ['atomic:doc'], push: [] });
+    assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    const bytes = new TextEncoder().encode(drive);
+    socket.receive(new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]));
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(true);
+    client.close();
+  });
+
+  it('ignores a late SYNC_OK after a drive becomes local-only', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:drive';
+    vi.mocked(store.getDrive).mockReturnValue(drive);
+    store.startDriveSync();
+    (
+      client as unknown as { activeReconciles: Set<string> }
+    ).activeReconciles.add(drive);
+    store.registerLocalOnlyDrive(drive);
+    const bytes = new TextEncoder().encode(drive);
+    socket.receive(new Uint8Array([Tag.SYNC_OK, 0, bytes.length, ...bytes]));
+    store.unregisterLocalOnlyDrive(drive);
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    assert(store.getSyncStatus().lastDriveSync).toBeUndefined();
+    assert(store.getSyncStatus().syncInProgress).toBe(false);
+    client.close();
+  });
+
+  it.each(['server', 'agent', 'drive', 'local-only', 'unchanged'] as const)(
+    'records a deferred sync only when the context is unchanged (%s)',
+    async context => {
+      const { client, socket, store } = await connectedClient();
+      const drive = 'atomic:drive';
+      const getDrive = vi.mocked(store.getDrive);
+      getDrive.mockReturnValue(drive);
+      let release!: () => void;
+      const flush = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const flushDb = vi.fn(() => flush);
+      vi.spyOn(store, 'getClientDb').mockReturnValue({
+        flush: flushDb,
+      } as never);
+      const finished = vi.spyOn(store, 'finishDriveSync');
+      (
+        client as unknown as { activeReconciles: Set<string> }
+      ).activeReconciles.add(drive);
+      socket.receive(encodeSyncPush(drive, [], true));
+      await Promise.resolve();
+      assert(flushDb).toHaveBeenCalledOnce();
+      if (context === 'server') client.close();
+      if (context === 'agent') store.setAgent(undefined);
+      if (context === 'drive') getDrive.mockReturnValue('atomic:other');
+      if (context === 'local-only') store.registerLocalOnlyDrive(drive);
+      release();
+      await flush;
+      await Promise.resolve();
+      if (context === 'unchanged' || context === 'local-only') {
+        assert(finished).toHaveBeenCalledOnce();
+        assert(store.hasCompletedDriveSyncFor(drive)).toBe(
+          context === 'unchanged',
+        );
+      } else assert(finished).not.toHaveBeenCalled();
+      client.close();
+    },
+  );
+
+  it('verifies file contents before storing a response from the server', async () => {
+    const { client, socket, store } = await connectedClient();
+    const retry = vi.spyOn(store, 'retryFileContentRecovery');
+    const hash = new Uint8Array(32).fill(7);
+    const bytes = new Uint8Array([1, 2, 3]);
+    const stored = Promise.withResolvers<void>();
+    const db = {
+      blake3Hash: vi.fn().mockResolvedValue(new Uint8Array(32).fill(8)),
+      putBlob: vi.fn().mockReturnValue(stored.promise),
+    };
+    vi.spyOn(store, 'getClientDb').mockReturnValue(db as never);
+    socket.receive(encodeBlobResponse(hash, bytes));
+    await vi.waitFor(() => assert(db.blake3Hash).toHaveBeenCalled());
+    assert(db.putBlob).not.toHaveBeenCalled();
+    assert(retry).not.toHaveBeenCalled();
+    db.blake3Hash.mockResolvedValue(hash);
+    socket.receive(encodeBlobResponse(hash, bytes));
+    await vi.waitFor(() =>
+      assert(db.putBlob).toHaveBeenCalledWith(hash, bytes),
+    );
+    assert(retry).not.toHaveBeenCalled();
+    stored.resolve();
+    await vi.waitFor(() => assert(retry).toHaveBeenCalledOnce());
+    client.close();
+  });
+
+  it.each(['closed connection', 'replaced database'])(
+    'does not refresh file readers after storage completes for a %s',
+    async stale => {
+      const { client, socket, store } = await connectedClient();
+      const retry = vi.spyOn(store, 'retryFileContentRecovery');
+      const hash = new Uint8Array(32).fill(7);
+      const stored = Promise.withResolvers<void>();
+      const db = {
+        blake3Hash: vi.fn().mockResolvedValue(hash),
+        putBlob: vi.fn().mockReturnValue(stored.promise),
+      };
+      const getDb = vi.spyOn(store, 'getClientDb').mockReturnValue(db as never);
+      socket.receive(encodeBlobResponse(hash, new Uint8Array([1, 2, 3])));
+      await vi.waitFor(() => assert(db.putBlob).toHaveBeenCalledOnce());
+      if (stale === 'closed connection') client.close();
+      else getDb.mockReturnValue({} as never);
+      stored.resolve();
+      await stored.promise;
+      await Promise.resolve();
+      assert(retry).not.toHaveBeenCalled();
+      client.close();
+    },
+  );
+
+  it('restores receipt eligibility only on a freshly authenticated physical socket', async () => {
+    const { client, socket } = await connectedClient();
+    socket.receive(encodeChallenge('receipt-first-socket'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await auth;
+    const originalReceiptSession = client.getStorageReceiptSession();
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    assert(client.getStorageReceiptSession()).toBeUndefined();
+    socket.close();
+    socket.fire('close', {});
+    await vi.waitFor(() => assert(socketOf(client)).not.toBe(socket), {
+      timeout: 2000,
+    });
+    const replacement = socketOf(client);
+    replacement.open();
+    replacement.receive(encodeChallenge('receipt-new-socket'));
+    const next = client.authenticate();
+    await vi.waitFor(() =>
+      assert(framesWithTag(replacement, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    assert(client.getStorageReceiptSession()).toBeUndefined();
+    replacement.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await next;
+    assert(client.getStorageReceiptSession()).toBeDefined();
+    assert(client.getStorageReceiptSession()).not.toBe(originalReceiptSession);
+    client.close();
+  });
+
+  it('rejects a signing attempt after its account leaves and returns', async () => {
+    const { client, socket, store } = await connectedClient();
+    let generation = store.getIdentityGeneration();
+    vi.spyOn(store, 'getIdentityGeneration').mockImplementation(
+      () => generation,
+    );
+    socket.receive(encodeChallenge('receipt-account'));
+    let release!: (signature: string) => void;
+    const sign = vi
+      .spyOn(store.getAgent()!, 'createSignature')
+      .mockImplementation(
+        () =>
+          new Promise(resolve => {
+            release = resolve;
+          }),
+      );
+    const auth = client.authenticate();
+    const rejected = assert(auth).rejects.toThrow(/identity|account/i);
+    await vi.waitFor(() => assert(sign).toHaveBeenCalled());
+    generation += 2;
+    release('stale-signature');
+    await rejected;
+    assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(0);
+    assert(client.getStorageReceiptSession()).toBeUndefined();
+    client.close();
+  });
+
+  it('lets file recovery fall back when this server lacks the contents', async () => {
+    const { client, socket, store } = await connectedClient();
+    const notify = vi.spyOn(store, 'notifyError');
+    socket.receive(encodeError(0, ErrorCode.UNKNOWN, 'Blob not found'));
+    await Promise.resolve();
+    assert(notify).not.toHaveBeenCalled();
+    client.close();
   });
 
   it.each([
@@ -600,6 +1238,92 @@ describe('WSClient legacy scheme sync', () => {
     vi.restoreAllMocks();
   });
 
+  it.each(['atomic:drive', 'did:ad:drive'])(
+    'a probe refusal for %s ends the pending drive sync',
+    async drive => {
+      const { client, socket, store } = await connectedClient();
+      const internal = client as unknown as {
+        _pendingSyncState: Map<string, unknown>;
+      };
+      internal._pendingSyncState.set('atomic:drive', {
+        state: {},
+        current: () => true,
+      });
+      store.startDriveSync();
+      const failure = vi.spyOn(store, 'failDriveSync');
+      const reason =
+        drive === 'did:ad:drive'
+          ? 'This server does not host new Drives.\n\nUse another server.'
+          : 'not readable';
+      const message = `SYNC refused for ${drive}: ${reason}`;
+      socket.receive(encodeError(0, ErrorCode.UNAUTHORIZED_READ, message));
+      assert(failure).toHaveBeenCalledWith('atomic:drive', message);
+      assert(store.getSyncStatus().syncInProgress).toBe(false);
+      assert(store.getSyncStatus().lastDriveSyncError).toMatchObject({
+        drive: 'atomic:drive',
+        message,
+      });
+      assert(internal._pendingSyncState.size).toBe(0);
+      socket.receive(encodeSyncResend(drive));
+      assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(0);
+      client.close();
+    },
+  );
+
+  it('subscription refusals leave sync, presence and pending requests alone', async () => {
+    const { client, socket, store } = await connectedClient();
+    const internal = client as unknown as {
+      _pendingSyncState: Map<string, unknown>;
+    };
+    internal._pendingSyncState.set('atomic:drive', {
+      state: {},
+      current: () => true,
+    });
+    store.startDriveSync();
+    const failure = vi.spyOn(store, 'failDriveSync');
+    const notify = vi.spyOn(store, 'notifyError');
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    for (const message of [
+      'SUB refused for atomic:drive: not readable',
+      'PRESENCE_SUBSCRIBE refused for atomic:drive: not readable',
+      'SYNC refused for atomic:unrelated: not readable',
+    ]) {
+      socket.receive(encodeError(0, ErrorCode.UNAUTHORIZED_READ, message));
+    }
+
+    assert(warning).toHaveBeenCalled();
+    assert(failure).not.toHaveBeenCalled();
+    assert(notify).not.toHaveBeenCalled();
+    assert(store.getSyncStatus().syncInProgress).toBe(true);
+    assert(internal._pendingSyncState.size).toBe(1);
+    client.close();
+  });
+
+  it('ignores a probe refusal invalidated by an identity or drive switch', async () => {
+    const { client, socket, store } = await connectedClient();
+    const internal = client as unknown as {
+      _pendingSyncState: Map<string, unknown>;
+    };
+    internal._pendingSyncState.set('atomic:drive', {
+      state: {},
+      current: () => false,
+    });
+    store.startDriveSync();
+    const failure = vi.spyOn(store, 'failDriveSync');
+    socket.receive(
+      encodeError(
+        0,
+        ErrorCode.UNAUTHORIZED_READ,
+        'SYNC refused for did:ad:drive: not readable',
+      ),
+    );
+    assert(failure).not.toHaveBeenCalled();
+    assert(store.getSyncStatus().syncInProgress).toBe(true);
+    assert(internal._pendingSyncState.size).toBe(0);
+    client.close();
+  });
+
   it('uses legacy nested subjects in the full sync', async () => {
     const { client, socket } = await connectedClient();
     const internal = client as unknown as {
@@ -719,6 +1443,37 @@ describe('WSClient drive subscription', () => {
   afterEach(() => {
     globalThis.WebSocket = original;
     vi.restoreAllMocks();
+  });
+
+  it('follows stored receipt inventories only for its active authenticated drive', async () => {
+    const { client, socket, store } = await connectedClient(true);
+    let drive: string | undefined = 'atomic:followed-drive';
+    vi.mocked(store.getDrive).mockImplementation(() => drive);
+    vi.spyOn(store, 'isLiveSyncedDrive').mockReturnValue(true);
+    const follow = vi.fn();
+    Object.assign(store, { followServerReceiptDrive: follow });
+    socket.receive(encodeChallenge('receipt-follow'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    assert(follow).not.toHaveBeenCalled();
+    socket.receive(encodeAuthOk(['server-storage-receipts-v1']));
+    await auth;
+    assert(follow).toHaveBeenCalledWith(
+      'https://example.com/commit',
+      drive,
+      assert.any(Function),
+    );
+    const current = follow.mock.calls.at(-1)![2] as () => boolean;
+    assert(current()).toBe(true);
+    vi.spyOn(store, 'getClientDbGeneration').mockReturnValue(900);
+    assert(current()).toBe(true); // The collector refreshes against the replacement DB.
+    drive = 'atomic:different-drive';
+    assert(current()).toBe(false);
+    drive = 'atomic:followed-drive';
+    client.close();
+    assert(current()).toBe(false);
   });
 
   it('subscribes mounted agent profiles, restores them on reconnect, and releases the last reader', async ({
@@ -1431,6 +2186,73 @@ describe('WSClient.fetchMany', () => {
   const requestIdOf = (frame: Uint8Array) =>
     new DataView(frame.buffer, frame.byteOffset).getUint16(1);
 
+  it('cancels a GET waiting for authentication without sending it later', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    let finish!: () => void;
+    vi.spyOn(client, 'authenticate').mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        }),
+    );
+    const controller = new AbortController();
+    const read = client.fetch('atomic:cancelled', {
+      signal: controller.signal,
+    });
+    const rejected = expect(read).rejects.toBeDefined();
+    controller.abort();
+    await rejected;
+    finish();
+    await Promise.resolve();
+    expect(framesWithTag(socket, Tag.GET)).toHaveLength(0);
+    client.close();
+  });
+
+  it('ignores a cancelled GET response and still admits subscription pushes', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    vi.spyOn(client, 'authenticate').mockResolvedValue(undefined);
+    const controller = new AbortController();
+    const read = client.fetch('atomic:cancelled', {
+      signal: controller.signal,
+    });
+    const rejected = expect(read).rejects.toBeDefined();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.GET)).toHaveLength(1),
+    );
+    const requestId = requestIdOf(framesWithTag(socket, Tag.GET)[0]);
+    controller.abort();
+    await rejected;
+    const ingress = vi.spyOn(store, 'applyIncoming');
+    socket.receive(
+      updateFrame(requestId, 'atomic:cancelled', new Uint8Array()),
+    );
+    expect(ingress).not.toHaveBeenCalled();
+    const { LoroDoc } = LoroLoader.Loro;
+    const doc = new LoroDoc();
+    doc
+      .getMap('properties')
+      .set('https://atomicdata.dev/properties/name', 'Live update');
+    doc.commit();
+    const push = updateFrame(
+      0,
+      'atomic:cancelled',
+      doc.export({ mode: 'snapshot' }),
+    );
+    push[1] |= Flags.PUSH;
+    socket.receive(push);
+    expect(ingress).toHaveBeenCalledOnce();
+    expect(
+      store
+        .getResourceLoading('atomic:cancelled')
+        .get('https://atomicdata.dev/properties/name'),
+    ).toBe('Live update');
+    client.close();
+  });
+
   it('sends one GET_MANY and settles every entry in order', async ({
     expect,
   }) => {
@@ -1517,6 +2339,154 @@ describe('WSClient.fetchMany', () => {
     const settled = await results;
     expect(settled).toHaveLength(2);
     expect(settled[0]).toMatchObject({ type: ErrorType.NotFound });
+    client.close();
+  });
+});
+
+describe('WSClient resource server receipts', () => {
+  const original = globalThis.WebSocket;
+
+  afterEach(() => {
+    globalThis.WebSocket = original;
+    vi.restoreAllMocks();
+  });
+
+  function updateFrame(subject: string, loro: Uint8Array) {
+    const encoded = new TextEncoder().encode(subject);
+    const frame = new Uint8Array(6 + encoded.length + loro.length);
+    frame[0] = Tag.UPDATE;
+    frame[1] = Flags.PUSH;
+    new DataView(frame.buffer).setUint16(4, encoded.length);
+    frame.set(encoded, 6);
+    frame.set(loro, 6 + encoded.length);
+
+    return frame;
+  }
+
+  async function receiptClient() {
+    const ctx = await connectedClient();
+    vi.spyOn(ctx.store, 'getDefaultWebSocket').mockReturnValue(ctx.client);
+    ctx.socket.receive(encodeChallenge('resource-receipt'));
+    const authentication = ctx.client.authenticate();
+    await vi.waitFor(() =>
+      assert(framesWithTag(ctx.socket, Tag.AUTH)).toHaveLength(1),
+    );
+    ctx.socket.receive(encodeAuthOk([]));
+    await authentication;
+
+    return ctx;
+  }
+
+  function resourceWithServerCopy(
+    store: Awaited<ReturnType<typeof testStore>>['store'],
+  ) {
+    const resource = new Resource('https://example.com/receipt-document');
+    resource.setStore(store);
+    resource
+      .getLoroDoc()!
+      .getMap('properties')
+      .set(core.properties.name, 'First');
+    resource.sealPendingEdits();
+    store.resources.set(resource.subject, resource);
+    const serverDoc = new LoroLoader.Loro.LoroDoc();
+    serverDoc.import(resource.getLoroDoc()!.export({ mode: 'snapshot' }));
+
+    return { resource, serverDoc };
+  }
+
+  it('confirms server-added operations from the exact UPDATE and not newer local edits', async () => {
+    const { client, socket, store } = await receiptClient();
+    const { resource, serverDoc } = resourceWithServerCopy(store);
+    // First establish the received server version, then a server-owned metadata
+    // operation. Real commit echoes add createdAt/lastCommit under another peer.
+    socket.receive(
+      updateFrame(resource.subject, serverDoc.export({ mode: 'snapshot' })),
+    );
+    assert(store.getResourceSyncStatus(resource).server.state).toBe(
+      'confirmed',
+    );
+    const beforeMetadata = serverDoc.oplogVersion();
+    serverDoc
+      .getMap('properties')
+      .set(core.properties.description, 'Server metadata');
+    serverDoc.commit();
+    socket.receive(
+      updateFrame(
+        resource.subject,
+        serverDoc.export({ mode: 'update', from: beforeMetadata }),
+      ),
+    );
+    assert(store.getResourceSyncStatus(resource).server.state).toBe(
+      'confirmed',
+    );
+    assert(resource.get(core.properties.description)).toBe('Server metadata');
+
+    // A new local op created after the server prepared its message must not be
+    // acknowledged by observing the merged live document after import.
+    serverDoc
+      .getMap('properties')
+      .set(core.properties.description, 'New server metadata');
+    serverDoc.commit();
+    const incoming = serverDoc.export({ mode: 'snapshot' });
+    resource
+      .getLoroDoc()!
+      .getMap('properties')
+      .set(core.properties.name, 'Not sent');
+    resource.sealPendingEdits();
+    socket.receive(updateFrame(resource.subject, incoming));
+    assert(store.getResourceSyncStatus(resource).server.state).toBe('pending');
+    assert(resource.get(core.properties.name)).toBe('Not sent');
+    client.close();
+  });
+
+  it.each([
+    'foreign socket',
+    'old identity',
+    'closed socket',
+    'custom transport',
+    'peer ingress',
+  ])('does not claim a server receipt for %s', async boundary => {
+    const { client, socket, store } = await receiptClient();
+    const { resource, serverDoc } = resourceWithServerCopy(store);
+    const bytes = serverDoc.export({ mode: 'snapshot' });
+
+    if (boundary === 'foreign socket') {
+      vi.mocked(store.getDefaultWebSocket).mockReturnValue(undefined);
+    } else if (boundary === 'old identity') {
+      store.setAgent(undefined);
+    } else if (boundary === 'closed socket') {
+      client.close();
+    } else if (boundary === 'custom transport') {
+      store.setCommitTransport(async commit => commit);
+    }
+
+    if (boundary === 'peer ingress') {
+      store.applyIncoming({
+        subject: resource.subject,
+        loroBytes: bytes,
+        source: 'peer-sync',
+      });
+    } else {
+      socket.receive(updateFrame(resource.subject, bytes));
+    }
+
+    assert(store.getResourceSyncStatus(resource).server.state).toBe(
+      boundary === 'custom transport' ? 'not-configured' : 'unknown',
+    );
+    client.close();
+  });
+
+  it('discards a receipt when resource notification switches the destination during import', async () => {
+    const { client, socket, store } = await receiptClient();
+    const { resource, serverDoc } = resourceWithServerCopy(store);
+    const unsubscribe = store.subscribe(resource.subject, () => {
+      store.setServerUrl('https://other.example', { connect: false });
+    });
+    socket.receive(
+      updateFrame(resource.subject, serverDoc.export({ mode: 'snapshot' })),
+    );
+    assert(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    unsubscribe();
     client.close();
   });
 });

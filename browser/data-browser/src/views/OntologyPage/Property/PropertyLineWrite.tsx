@@ -7,18 +7,18 @@ import {
 } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import InputSwitcher from '../../../components/forms/InputSwitcher';
-import { Row } from '../../../components/Row';
-import InputString from '../../../components/forms/InputString';
+import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
+import { Row } from '@tomic/ui/components/Row';
+import InputString from '@tomic/resource-ui/components/forms/InputString';
 import { PropertyDatatypePicker } from '../PropertyDatatypePicker';
-import { IconButton } from '../../../components/IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { FaSliders, FaXmark } from 'react-icons/fa6';
-import { useDialog } from '../../../components/Dialog';
+import { useDialog } from '@tomic/resource-ui/components/Dialog/index';
 import { PropertyWriteDialog } from './PropertyWriteDialog';
 import { useOntologyContext } from '../OntologyContext';
-import { ErrorLook } from '../../../components/ErrorLook';
-import { Button } from '../../../components/Button';
-import { isContentAddressed } from '../../../helpers/propertyIdentity';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
+import { Button } from '@tomic/ui/components/Button';
+import { isContentAddressed } from '@tomic/resource-ui/helpers/propertyIdentity';
 import { ClassConstraintEditor } from '../Class/ClassConstraintEditor';
 
 import type { JSX } from 'react';

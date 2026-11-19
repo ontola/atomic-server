@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Column } from '../Row';
-import { Checkbox, CheckboxLabel } from '../forms/Checkbox';
+import { Column } from '@tomic/ui/components/Row';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
 import {
   osNotificationState,
   turnOffOsNotifications,

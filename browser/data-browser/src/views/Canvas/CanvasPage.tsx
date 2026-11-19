@@ -38,9 +38,9 @@ import {
 } from './canvas-elements';
 import { useEmbedGestures } from '../../embed/gestures';
 import { useStore, type Store } from '@tomic/react';
-import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
-import { useUpload } from '../../hooks/useUpload';
-import { imageMimeTypes } from '../../helpers/filetypes';
+import { FilePickerDialog } from '@tomic/resource-ui/components/forms/FilePicker/FilePickerDialog';
+import { useUpload } from '@tomic/resource-ui/hooks/useUpload';
+import { imageMimeTypes } from '@tomic/resource-ui/helpers/filetypes';
 import { errorHandler } from '../../handlers/errorHandler';
 import {
   FaCircleInfo,
@@ -59,7 +59,7 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '@components/Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import { FanOverlay } from './FanOverlay';
 import {
   hoveredColor as resolveHoveredColor,
@@ -131,9 +131,18 @@ async function resolveImageUrl(
   const blob = file.get(FILE_BLOB_PROPERTY);
   const clientDb = store.getClientDb?.();
 
-  if (typeof blob === 'string' && isBlobSubject(blob) && clientDb) {
+  if (typeof blob === 'string' && isBlobSubject(blob)) {
     const hash = blobHashHex(blob);
-    const bytes = hash ? await clientDb.getBlob(hexToBytes(hash)) : null;
+    let bytes = hash ? await clientDb?.getBlob(hexToBytes(hash)) : null;
+
+    if (!bytes && hash && store.hasFileContentRecovery()) {
+      const drive = file.get('https://atomicdata.dev/properties/drive');
+      await store.recoverMissingFileContents(
+        hash,
+        typeof drive === 'string' ? drive : undefined,
+      );
+      bytes = await clientDb?.getBlob(hexToBytes(hash));
+    }
 
     if (bytes) return URL.createObjectURL(new Blob([bytes as BlobPart]));
   }

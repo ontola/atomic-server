@@ -33,6 +33,8 @@ pub struct SledStore {
     search_trigrams: sled::Tree,
     envelopes: sled::Tree,
     outbox: sled::Tree,
+    table_changes: sled::Tree,
+    sync_receipts: sled::Tree,
 }
 
 impl SledStore {
@@ -65,6 +67,8 @@ impl SledStore {
         let search_trigrams = db.open_tree(Tree::SearchTrigrams)?;
         let envelopes = db.open_tree(Tree::Envelopes)?;
         let outbox = db.open_tree(Tree::Outbox)?;
+        let table_changes = db.open_tree(Tree::TableChanges)?;
+        let sync_receipts = db.open_tree(Tree::SyncReceipts)?;
 
         Ok(SledStore {
             db,
@@ -87,6 +91,8 @@ impl SledStore {
             search_trigrams,
             envelopes,
             outbox,
+            table_changes,
+            sync_receipts,
         })
     }
 
@@ -116,6 +122,8 @@ impl SledStore {
             Tree::SearchTrigrams => &self.search_trigrams,
             Tree::Envelopes => &self.envelopes,
             Tree::Outbox => &self.outbox,
+            Tree::TableChanges => &self.table_changes,
+            Tree::SyncReceipts => &self.sync_receipts,
         }
     }
 }
@@ -204,6 +212,8 @@ impl KvStore for SledStore {
         let mut batch_search_trigrams = sled::Batch::default();
         let mut batch_envelopes = sled::Batch::default();
         let mut batch_outbox = sled::Batch::default();
+        let mut batch_table_changes = sled::Batch::default();
+        let mut batch_sync_receipts = sled::Batch::default();
 
         for op in operations {
             let batch = match op.tree {
@@ -226,6 +236,8 @@ impl KvStore for SledStore {
                 Tree::SearchTrigrams => &mut batch_search_trigrams,
                 Tree::Envelopes => &mut batch_envelopes,
                 Tree::Outbox => &mut batch_outbox,
+                Tree::TableChanges => &mut batch_table_changes,
+                Tree::SyncReceipts => &mut batch_sync_receipts,
             };
             match op.method {
                 Method::Insert => {
@@ -237,7 +249,9 @@ impl KvStore for SledStore {
             }
         }
 
-        (
+        // Slice transactions have no tuple-size limit: a resource deletion,
+        // its snapshot and every receipt must land together.
+        let trees = [
             &self.resources,
             &self.prop_val_sub_index,
             &self.reference_index,
@@ -246,34 +260,30 @@ impl KvStore for SledStore {
             &self.plugin_meta,
             &self.drive_mapping,
             &self.did_mapping,
-        )
-            .transaction(
-                |(
-                    tx_resources,
-                    tx_prop_val_sub_index,
-                    tx_reference_index,
-                    tx_watched_queries,
-                    tx_query_index,
-                    tx_plugin_meta,
-                    tx_drive_mapping,
-                    tx_did_mapping,
-                )| {
-                    tx_resources.apply_batch(&batch_resources)?;
-                    tx_prop_val_sub_index.apply_batch(&batch_propvalsub)?;
-                    tx_reference_index.apply_batch(&batch_valpropsub)?;
-                    tx_watched_queries.apply_batch(&batch_watched_queries)?;
-                    tx_query_index.apply_batch(&batch_query_members)?;
-                    tx_plugin_meta.apply_batch(&batch_plugin_meta)?;
-                    tx_drive_mapping.apply_batch(&batch_drive_mapping)?;
-                    tx_did_mapping.apply_batch(&batch_did_mapping)?;
-                    Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
-                },
-            )
+            &self.loro_snapshots,
+            &self.sync_receipts,
+        ];
+        trees
+            .as_slice()
+            .transaction(|tx| {
+                for (tree, batch) in tx.iter().zip([
+                    &batch_resources,
+                    &batch_propvalsub,
+                    &batch_valpropsub,
+                    &batch_watched_queries,
+                    &batch_query_members,
+                    &batch_plugin_meta,
+                    &batch_drive_mapping,
+                    &batch_did_mapping,
+                    &batch_loro_snapshots,
+                    &batch_sync_receipts,
+                ]) {
+                    tree.apply_batch(batch)?;
+                }
+                Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
+            })
             .map_err(|e: TransactionError<_>| format!("Failed to apply transaction: {}", e))?;
 
-        // LoroSnapshots, Blobs, PluginSecret and search trees sit outside the main
-        // transaction (sled limits tuple size to 9). Secrets are written rarely
-        // and never alongside resource writes, so they lose nothing by it.
         self.plugin_secret
             .apply_batch(batch_plugin_secret)
             .map_err(|e| format!("Failed to apply plugin_secret batch: {}", e))?;
@@ -286,9 +296,6 @@ impl KvStore for SledStore {
         self.app_agent
             .apply_batch(batch_app_agent)
             .map_err(|e| format!("Failed to apply app_agent batch: {}", e))?;
-        self.loro_snapshots
-            .apply_batch(batch_loro_snapshots)
-            .map_err(|e| format!("Failed to apply loro_snapshots batch: {}", e))?;
 
         self.blobs
             .apply_batch(batch_blobs)
@@ -309,6 +316,9 @@ impl KvStore for SledStore {
         self.outbox
             .apply_batch(batch_outbox)
             .map_err(|e| format!("Failed to apply outbox batch: {}", e))?;
+        self.table_changes
+            .apply_batch(batch_table_changes)
+            .map_err(|e| format!("Failed to apply table_changes batch: {}", e))?;
 
         Ok(())
     }

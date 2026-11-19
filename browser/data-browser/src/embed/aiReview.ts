@@ -6,7 +6,7 @@
  * forwards its choices.
  */
 import type { Resource, Store } from '@tomic/react';
-import { getChangedProps } from '../components/ResourceDiff/resourceDiffUtils';
+import { getChangedProps } from '@tomic/resource-ui/components/ResourceDiff/resourceDiffUtils';
 
 export interface AiReviewItem {
   subject: string;

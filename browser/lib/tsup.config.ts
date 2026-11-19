@@ -36,7 +36,7 @@ export default defineConfig(options => ({
   external: ['loro-crdt'],
   // rrule advertises an ESM entry to bundlers but only exposes CommonJS to
   // Node. Bundle it so the published ESM build also works in the MCP CLI.
-  noExternal: ['rrule'],
+  noExternal: ['rrule', /^@tomic\/utils(?:\/|$)/],
   // We need to generate the type definition files ourselves because the build in rollup dts plugin does not work with the way we use module augmentation.
   // Tsup will switch to microsoft-api-extractor in the future but they don't even support rolling up module augments at all. https://github.com/microsoft/rushstack/issues/1709
   onSuccess: async () => {
@@ -51,7 +51,14 @@ export default defineConfig(options => ({
 
         // We need a copy of index.d.ts for cjs builds but the actual content can be the same so we can just copy it.
         console.log('Creating index.d.cts...');
-        fs.copyFile('dist/src/index.d.ts', 'dist/src/index.d.cts')
+        Promise.all(
+          ['EventManager', 'calendar-date'].map(name =>
+            fs.copyFile(`../utils/dist/${name}.d.ts`, `dist/src/${name}.d.ts`),
+          ),
+        )
+          .then(() =>
+            fs.copyFile('dist/src/index.d.ts', 'dist/src/index.d.cts'),
+          )
           .then(() => {
             console.log('Build Finished!');
             resolve();

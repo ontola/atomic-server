@@ -12,12 +12,12 @@ import {
   useArray,
   ai,
 } from '@tomic/react';
-import AllProps from '../../components/AllProps';
-import { AtomicLink } from '../../components/AtomicLink';
-import { Card } from '../../components/Card';
+import AllProps from '@tomic/resource-ui/components/AllProps';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { Card } from '@tomic/ui/components/Card';
 import CollectionCard from './CollectionCard';
-import { ErrorLook } from '../../components/ErrorLook';
-import { ValueForm } from '../../components/forms/ValueForm';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
+import { ValueForm } from '@tomic/resource-ui/components/forms/ValueForm/index';
 import FileCard from '../File/FileCard';
 import { defaultHiddenProps } from '../ResourcePageDefault';
 import { MessageCard } from './MessageCard';
@@ -27,16 +27,16 @@ import { ElementCard } from './ElementCard';
 import { ArticleCard } from '../Article';
 import { styled } from 'styled-components';
 import { ResourceCardTitle } from './ResourceCardTitle';
-import { Column, Row } from '../../components/Row';
-import { Tag } from '../../components/Tag';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Tag } from '@tomic/resource-ui/components/Tag/index';
 import { ResourceContextMenu } from '../../components/ResourceContextMenu';
 import { AIChatContentCard } from './AIChatContentCard';
 import { DocumentV2Card } from './DocumentV2Card';
 import { MeetingCard } from './MeetingCard';
-import { HideInPrint } from '@components/HideInPrint';
-import { useOnValueChange } from '@helpers/useOnValueChange';
+import { HideInPrint } from '@tomic/ui/components/HideInPrint';
+import { useOnValueChange } from '@tomic/ui/helpers/useOnValueChange';
 import { FolderCard } from './FolderCard';
-import { Spinner } from '../../components/Spinner';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 
 interface ResourceCardProps extends CardViewPropsBase {
   /** The subject URL - the identifier of the resource. */

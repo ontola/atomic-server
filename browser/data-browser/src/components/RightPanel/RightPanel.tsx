@@ -4,9 +4,9 @@ import {
   DragAreaBase,
   responsiveWidth,
   useResizable,
-} from '@hooks/useResizable';
-import { CSSVar } from '@helpers/CSSVar';
-import { useMediaQuery } from '../../hooks/useMediaQuery';
+} from '@tomic/ui/hooks/useResizable';
+import { CSSVar } from '@tomic/ui/helpers/CSSVar';
+import { useMediaQuery } from '@tomic/resource-ui/hooks/useMediaQuery';
 import { useRightPanel } from './RightPanelContext';
 import { PanelBackdrop, PanelLayout, panelTransition } from '../PanelLayout';
 import { RIGHT_PANEL_OVERLAY_BREAKPOINT } from './layout';

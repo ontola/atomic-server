@@ -13,15 +13,15 @@ import {
   useTitle,
 } from '@tomic/react';
 import { useFollow } from './FollowContext';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentAvatar } from '@tomic/resource-ui/components/Presence/AgentAvatar';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useChatMessages } from '../../views/ChatRoom/ChatRoomView';
 import {
   isFollowEntry,
   parseEntryId,
   readLogEntry,
-} from '../../helpers/chatLog';
-import { useChatLogEntry } from '../../hooks/useChatLog';
+} from '@tomic/resource-ui/helpers/chatLog';
+import { useChatLogEntry } from '@tomic/resource-ui/hooks/useChatLog';
 import {
   ToastBody,
   ToastCard,

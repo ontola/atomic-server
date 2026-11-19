@@ -11,22 +11,22 @@ import {
   type CatalogApp,
   type InstalledCatalogApp,
 } from '@tomic/react';
-import { Card } from '@components/Card';
-import { Column, Row } from '@components/Row';
-import { Button } from '@components/Button';
+import { Card } from '@tomic/ui/components/Card';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Button } from '@tomic/ui/components/Button';
 import { ShareLink } from '@components/ShareLink';
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   useDialog,
-} from '@components/Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import { FaShareNodes } from 'react-icons/fa6';
 import { getPluginCatalogUrl } from '@helpers/pluginCatalogUrl';
 import { paths } from '../../routes/paths';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { handOverAppKey } from '@chunks/AppPage/appAgent';
+import { appAgentOf, handOverAppKey } from '@chunks/AppPage/appAgent';
 import type { CatalogEntry } from './pluginCatalog';
 
 /**
@@ -159,7 +159,11 @@ export function CatalogApps({
     setBusy(app.id);
 
     try {
-      await updateCatalogApp(store, { drive, subject, app });
+      const agent =
+        app.dataKind === 'folder'
+          ? await appAgentOf(store, { drive, app: subject })
+          : undefined;
+      await updateCatalogApp(store, { drive, subject, app, agent });
       await refresh();
     } catch (error) {
       toast.error(String(error instanceof Error ? error.message : error));

@@ -1,20 +1,23 @@
 import { useState } from 'react';
 import {
   dataBrowser,
-  signRequest,
+  signedRequestInit,
   useStore,
   ensureSchema,
   pluginSchema,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column } from '@components/Row';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import { InputStyled, TextAreaStyled } from '@components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import {
+  InputStyled,
+  TextAreaStyled,
+} from '@tomic/ui/components/forms/InputStyles';
 import { useAISidebar } from '@components/AI/AISidebarContext';
 import { automationAssistantAsk } from './automationAssistant';
-import { ResourceInline } from '../../views/ResourceInline/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import { createPlugin } from './runScript';
 import {
   eventAutomationSource,
@@ -66,30 +69,21 @@ export function CreateEventAutomation({
       await script.set(dataBrowser.properties.emoji, '⚡');
       await script.save();
       const url = `${store.getServerUrl()}/plugin-trigger`;
-      const payload = JSON.stringify({
-        drive,
-        plugin: subject,
-        filters: selected.filters,
-        onEnter: true,
-        onLeave: false,
-        autoApply: false,
-      });
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          ...(await signRequest(
-            url,
-            store.getAgent()!,
-            {},
-            {
-              method: 'POST',
-              body: payload,
-            },
-          )),
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-      });
+      const response = await fetch(
+        url,
+        await signedRequestInit(url, store.getAgent()!, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            drive,
+            plugin: subject,
+            filters: selected.filters,
+            onEnter: true,
+            onLeave: false,
+            autoApply: false,
+          }),
+        }),
+      );
       if (!response.ok) throw new Error(await response.text());
       navigate(constructOpenURL(subject));
       if (withAssistant)

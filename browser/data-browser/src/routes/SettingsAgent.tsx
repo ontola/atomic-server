@@ -3,13 +3,13 @@ import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { core, server, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
-import { Button } from '../components/Button';
-import { Margin } from '../components/Card';
-import { ContainerNarrow } from '../components/Containers';
+import { Button } from '@tomic/ui/components/Button';
+import { Margin } from '@tomic/ui/components/Card';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
 import { editURL } from '../helpers/navigation';
 import { Main } from '../components/Main';
-import { Column, Row } from '../components/Row';
-import { WarningBlock } from '../components/WarningBlock';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { WarningBlock } from '@tomic/ui/components/WarningBlock';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { createRoute } from '@tanstack/react-router';
 import { pathNames } from './paths';
@@ -21,8 +21,8 @@ import {
   InputStyled,
   InputWrapper,
   LabelStyled,
-} from '../components/forms/InputStyles';
-import { ErrorLook } from '../components/ErrorLook';
+} from '@tomic/ui/components/forms/InputStyles';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 import { DrivesCard } from '../components/Drives/DrivesCard';
 import { AccountRecoveryCard } from '../components/AccountRecoveryCard';
 import { ConnectedAppsCard } from '../components/ConnectedAppsCard';

@@ -31,6 +31,8 @@ export 'src/server_sync.dart'
         HomeServerDiscovery,
         ResumeStatus,
         SyncStatus;
+export 'src/replica_receipts.dart'
+    show ReplicaIdentity, ResourceStorageReceipt, ServerReplicaReceipt;
 export 'src/sharing.dart'
     show
         Sharing,

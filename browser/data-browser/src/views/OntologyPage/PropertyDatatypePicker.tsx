@@ -7,13 +7,13 @@ import {
   useStore,
   useString,
 } from '@tomic/react';
-import { AtomicSelectInput } from '../../components/forms/AtomicSelectInput';
-import { BasicSelect } from '../../components/forms/BasicSelect';
+import { AtomicSelectInput } from '@components/forms/AtomicSelectInput';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import {
   createPropertyDraft,
   isContentAddressed,
   recreatePropertyWithDatatype,
-} from '../../helpers/propertyIdentity';
+} from '@tomic/resource-ui/helpers/propertyIdentity';
 import toast from 'react-hot-toast';
 import styled from 'styled-components';
 import type { JSX } from 'react';

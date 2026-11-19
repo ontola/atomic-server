@@ -13,6 +13,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { buildWebsiteRuntime } from './scripts/build-website-runtime.mjs';
+import { bundleBuiltinSyncables } from './scripts/build-builtin-syncables.mjs';
 
 // TAURI=1 produces a Tauri-compatible bundle: no CSP nonces (Tauri serves
 // HTML verbatim, so the server's runtime ATOMICSERVER_NONCE substitution
@@ -135,6 +136,36 @@ export default defineConfig(({ mode }) => {
       // Deduping forces a single shared instance so the `instanceof` holds.
       dedupe: ['prosemirror-view', 'prosemirror-state', 'prosemirror-model'],
       alias: [
+        {
+          find: '@tomic/resource-ui/locale-runtime',
+          replacement: path.resolve(
+            __dirname,
+            '../resource-ui/src/locales/main.loader.js',
+          ),
+        },
+        {
+          find: '@tomic/resource-ui/locale-message',
+          replacement: path.resolve(
+            __dirname,
+            '../resource-ui/src/locales/message.js',
+          ),
+        },
+        {
+          find: '@tomic/resource-ui',
+          replacement: path.resolve(__dirname, '../resource-ui/src'),
+        },
+        {
+          find: '@tomic/table-page',
+          replacement: path.resolve(__dirname, '../table-page/src'),
+        },
+        {
+          find: '@tomic/table',
+          replacement: path.resolve(__dirname, '../table/src/index.ts'),
+        },
+        {
+          find: '@tomic/ui',
+          replacement: path.resolve(__dirname, '../ui/src'),
+        },
         // Force EVERY `loro-crdt` import (our `enableLoro`, plus
         // `loro-prosemirror` used by the editor) onto the `web` build.
         // The default entry resolves via the `module` field to the
@@ -185,14 +216,14 @@ export default defineConfig(({ mode }) => {
           find: '@integration-host/table/createTableFromSpec',
           replacement: path.resolve(
             __dirname,
-            'src/chunks/TablePage/createTableFromSpec.ts',
+            '../table-page/src/TablePage/createTableFromSpec.ts',
           ),
         },
         {
           find: '@integration-host/table/tableTemplates',
           replacement: path.resolve(
             __dirname,
-            'src/chunks/TablePage/tableTemplates.ts',
+            '../table-page/src/TablePage/tableTemplates.ts',
           ),
         },
         { find: /^loro-crdt$/, replacement: 'loro-crdt/web' },
@@ -212,6 +243,17 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       wasm(),
+      {
+        name: 'builtin-syncables-bundle',
+        async generateBundle() {
+          const bundle = await bundleBuiltinSyncables();
+          this.emitFile({
+            type: 'asset',
+            fileName: 'builtin-syncables.js',
+            source: bundle.outputFiles[0].text,
+          });
+        },
+      },
       {
         // `src/chunks/Website/runtime/{search-view.html,website-runtime.min.js}`
         // are gitignored bundles of the runtime's `.ts` sources. `config` runs
@@ -338,7 +380,13 @@ export default defineConfig(({ mode }) => {
             .replaceAll('__APP_DESCRIPTION__', appDescription),
       },
       !isVitest && webfontDownload(),
-      !isVitest && wuchale(),
+      !isVitest &&
+        wuchale({
+          configPath: path.resolve(
+            __dirname,
+            '../resource-ui/wuchale.config.js',
+          ),
+        }),
       // Native React Compiler (oxc-transform-react). Must run before JSX
       // transforms; this plugin does compiler + TS + JSX + Fast Refresh in one
       // pass. Replace with `react({ compiler: true })` once plugin-react 6.1.0
@@ -349,9 +397,7 @@ export default defineConfig(({ mode }) => {
       // `node_modules`, so the compiler sees its hooks. Tests compile just
       // that package, so a hook the compiler would cache wrongly fails here.
       ...oxcReactCompiler(
-        isVitest
-          ? { only: /\/browser\/react\/src\// }
-          : { compile: true },
+        isVitest ? { only: /\/browser\/react\/src\// } : { compile: true },
       ),
       react(),
       !isVitest &&
@@ -646,7 +692,12 @@ export default defineConfig(({ mode }) => {
       // dynamic import ("Outdated Optimize Dep" → "Failed to fetch dynamically
       // imported module: CollaborativeEditor.tsx"). Crawling the chunk roots at
       // boot pre-optimizes everything, so first-open is warm and e2e is stable.
-      entries: ['./index.html', './src/chunks/**/*.{ts,tsx}'],
+      entries: [
+        './index.html',
+        './src/chunks/**/*.{ts,tsx}',
+        '../resource-ui/src/chunks/**/*.{ts,tsx}',
+        '../table-page/src/**/*.{ts,tsx}',
+      ],
     },
     test: {
       setupFiles: ['./src/test-setup.ts'],

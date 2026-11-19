@@ -8,14 +8,14 @@ import {
 import { useCallback, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { CommitDetail } from '../../components/CommitDetail';
-import { ContainerWide } from '../../components/Containers';
-import { EditableTitle } from '../../components/EditableTitle';
+import { ContainerWide } from '@tomic/ui/components/Containers';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
 import UploadForm from '../../components/forms/UploadForm';
 import { NewCard } from '../../components/NewCard';
-import { Column } from '../../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import ResourceCard from '../Card/ResourceCard';
 import { ResourcePageProps } from '../ResourcePage';
-import { ResourceCoverImage } from '../../components/ResourceDecorations';
+import { ResourceCoverImage } from '@tomic/resource-ui/components/ResourceDecorations';
 import { ArticleDescription } from './ArticleDescription';
 import { useNewResourceUI } from '../../components/forms/NewForm/useNewResourceUI';
 

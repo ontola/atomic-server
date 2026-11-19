@@ -10,12 +10,12 @@ import {
   useString,
   useTitle,
 } from '@tomic/react';
-import { ContainerNarrow } from '../components/Containers';
-import Markdown from '../components/datatypes/Markdown';
-import { AtomicLink } from '../components/AtomicLink';
-import { Button } from '../components/Button';
-import { Row } from '../components/Row';
-import { formatTimeAgo } from '../helpers/formatTimeAgo';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
+import { formatTimeAgo } from '@tomic/resource-ui/helpers/formatTimeAgo';
 import { actorName } from '../helpers/notifications/actorName';
 import { markRead } from '../helpers/notifications/inbox';
 import { paths } from '../routes/paths';

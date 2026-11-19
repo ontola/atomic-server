@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TEMPLATE_CATALOG } from './catalog';
 import { planTemplate, type TemplateDefinition } from './model';
-import { TABLE_TEMPLATES } from '../TablePage/tableTemplates';
+import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 describe('shared template planning', () => {
   it('composes the exact table catalog into a workspace without copying schemas', () => {
     const workspace = TEMPLATE_CATALOG.find(t => t.id === 'student')!;

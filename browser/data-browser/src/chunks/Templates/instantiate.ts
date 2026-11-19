@@ -8,7 +8,7 @@ import {
   type Store,
   type Resource,
 } from '@tomic/react';
-import { TABLE_TEMPLATES } from '../TablePage/tableTemplates';
+import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 import { instantiateTableTemplate } from './instantiateTable';
 
 import type { TemplatePlan } from './model';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { GettingStartedFlow } from './getting-started/GettingStartedFlow';
+import { GettingStartedFlow } from './getting-started/LazyGettingStartedFlow';
 
 type Props = {
   /** Canonical subject for the server home (used to refetch after sign-in). */

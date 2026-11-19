@@ -288,19 +288,14 @@ const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
   // Four browser workers total, one per shard/server. At eight, full develop
   // runs repeatedly exhausted settings-save and app-creation waits while the
   // same journeys passed in focused runs. The full local suite also passed
-  // with two workers and no retries. Keep browser headroom alongside the
-  // Rust, WASM and frontend jobs instead of widening every interaction wait.
+  // with two workers and no retries. `ci()` builds the shared E2E binary
+  // alongside the other checks, then starts browsers after those checks.
   mancave: {
     e2eShardCount: 4,
     e2ePlaywrightWorkers: '1',
-    // Back to the suite's own documented default (playwright.config.ts): three
-    // attempts catch a genuinely flaky path while a real regression still
-    // fails all three. This branch dropped it to 1 for runtime, and that trade
-    // stopped paying: what remains red here rotates run to run — a click that
-    // did not land, a menu that did not open — which is the shape of a
-    // contended host, not of a broken test. Mitigation, not a fix; the fix is
-    // headroom, and `ci()` still runs these browsers alongside clippy,
-    // nextest, flutter and two vitest suites.
+    // Keep the suite's documented default (playwright.config.ts): three
+    // attempts. CI phase ordering provides browser headroom without changing
+    // these retries or the individual interaction budgets.
     e2ePlaywrightRetries: '2',
     // Measured 2026-09-15 on a 15-minute smoke run (24 threads, 31 GiB): the
     // engine sat at 14 to 20 cores while compiling, but only 7 to 13 cores for
@@ -318,10 +313,8 @@ const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
   //
   // Only the *build* widths move. Rust compilation is the dominant cost here
   // and scales cleanly with cores. The test widths stay where they are on
-  // purpose: `ci()` runs endToEnd concurrently with clippy, nextest, flutter
-  // and vitest, so raising those would stack more browsers and more test
-  // threads onto the same four cores — the starvation the mancave notes
-  // above describe. Build jobs mostly occupy phases the tests are not in.
+  // purpose. `ci()` separates browser interactions from the other checks;
+  // that is not a reason to increase either phase's existing concurrency.
   //
   // This profile is not the fallback it reads as: `CI_RUNNER` has been set to
   // `["ubuntu-latest"]` since 2026-09-08, and `pick` treats that as an
@@ -438,8 +431,14 @@ export class AtomicServer {
     return (
       container
         .withExec([
-          'rustup', 'toolchain', 'install', RUST_VERSION,
-          '--profile', 'minimal', '--component', 'rustfmt,clippy',
+          'rustup',
+          'toolchain',
+          'install',
+          RUST_VERSION,
+          '--profile',
+          'minimal',
+          '--component',
+          'rustfmt,clippy',
         ])
         .withEnvVariable('RUSTUP_TOOLCHAIN', RUST_VERSION)
         .withMountedCache(
@@ -543,10 +542,7 @@ export class AtomicServer {
         )
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
         // `flutter/pubspec.yaml` points at ../packages/atomic_flutter.
-        .withDirectory(
-          '/workspace/packages',
-          this.source.directory('packages'),
-        )
+        .withDirectory('/workspace/packages', this.source.directory('packages'))
         .withWorkdir('/workspace/flutter')
         .withExec([
           'bash',
@@ -618,22 +614,21 @@ export class AtomicServer {
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
     await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
 
-    // Rust clippy/test still share the `rust-target` cache mount — keep
+    // Rust clippy/test share the `rust-checks-target` cache mount — keep
     // them serialized (parallel cargo contended the target lock for
-    // ~16 minutes and exited 101). Everything else is independent.
+    // ~16 minutes and exited 101).
+    //
+    // Compile the E2E server in parallel, using the same graph as
+    // atomicService(true). Dagger reuses that result when the browser phase
+    // starts. Defer browser interactions until the other checks finish.
+    // Fresh-drive setup repeatedly reached its 30s limit while four shards
+    // overlapped nextest's twelve threads and JS/Flutter in run 40482227107.
+    // Preserve the suite, workers, retries and interaction budgets while
+    // removing that same-pipeline overlap.
     await Promise.all([
       this.docsPublish(netlifyAuthToken, publishDocs),
       this.typedocPublish(netlifyAuthToken, publishDocs),
-      this.endToEnd(
-        netlifyAuthToken,
-        playwrightMode,
-        playwrightWorkers,
-        playwrightShards,
-        playwrightRetries,
-        '',
-        playwrightCloneSessions,
-        resultsKey,
-      ),
+      this.rustBuild(false, 'x86_64-unknown-linux-musl', true).sync(),
       this.jsTest(),
       this.jsTestIntegration(),
       this.flutterTest(),
@@ -642,6 +637,17 @@ export class AtomicServer {
         await this.rustTest();
       })(),
     ]);
+
+    await this.endToEnd(
+      netlifyAuthToken,
+      playwrightMode,
+      playwrightWorkers,
+      playwrightShards,
+      playwrightRetries,
+      '',
+      playwrightCloneSessions,
+      resultsKey,
+    );
 
     return 'CI pipeline completed successfully';
   }
@@ -682,25 +688,11 @@ export class AtomicServer {
         // 2. Packages reached through node_modules need a `dist`. Building
         //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
         //    `@tomic/edit-mode/react` unresolvable, and `@tomic/form-app`
-        //    needs `@tomic/form-renderer`. All six build from TypeScript
+        //    needs `@tomic/form-renderer`. Build the complete dependency graph,
+        //    including the shared UI/table/pure-helper packages, from TypeScript
         //    alone, so this stays in the cheap static tier beside lint and
         //    `cargo fmt`: no WASM, no Rust.
-        .withExec([
-          'pnpm',
-          '--filter',
-          '@tomic/form-renderer',
-          '--filter',
-          '@tomic/lib',
-          '--filter',
-          '@tomic/react',
-          '--filter',
-          '@tomic/plugin',
-          '--filter',
-          '@tomic/service-ui',
-          '--filter',
-          '@tomic/edit-mode',
-          'build',
-        ])
+        .withExec(['pnpm', '--filter', '@tomic/data-browser^...', 'build'])
         .withExec([
           'pnpm',
           '--filter=!@tomic/data-browser',
@@ -709,18 +701,8 @@ export class AtomicServer {
           '--parallel',
           'typecheck',
         ])
-        // 3. data-browser is the one package that reaches repo-root
-        //    `integrations`, and those files import
-        //    `../../browser/lib/src/index.js`, which here is /browser: the
-        //    symlink `jsSource()` makes so integration tsconfigs can find
-        //    `../../browser/tsconfig.build.json`. `tsc` keeps whichever
-        //    prefix it is handed, so compiling data-browser as /app while its
-        //    own imports arrive as /browser produces two unrelated
-        //    declarations of every type in `lib`, which is the wall of
-        //    "Store is not assignable to Store" the first attempt hit.
-        //    Naming the project by its /browser path puts both ends on one
-        //    prefix. A workdir cannot do this: the kernel resolves the
-        //    symlink, so `process.cwd()` would be /app again.
+        // 3. Pass the /browser project path explicitly so TypeScript uses
+        //    that prefix. A working directory resolves the symlink to /app.
         .withExec([
           'pnpm',
           '--filter',
@@ -743,15 +725,6 @@ export class AtomicServer {
       depsContainer
         .withWorkdir('/app')
         .withExec(['pnpm', 'run', 'test'])
-        // jsBuild mounts external integration tests at /integrations and
-        // exposes the installed browser workspace at /browser.
-        .withExec([
-          '/app/node_modules/.bin/vitest',
-          'run',
-          '--config',
-          '/integrations/localthought/vitest.config.ts',
-        ])
-        .withWorkdir('/app')
         .withExec([
           'node',
           '--test',
@@ -811,7 +784,8 @@ export class AtomicServer {
           'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi',
         ])
         .withExec([
-          'sh', '-c',
+          'sh',
+          '-c',
           `${pathPrefix}; rustup toolchain install ${RUST_VERSION} --profile minimal`,
         ])
         .withDirectory('/workspace/lib', this.source.directory('lib'))
@@ -913,7 +887,10 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         // The host ABI's WIT, read by the server's and the examples' bindgen.
-        .withDirectory('/code/atomic-host', this.source.directory('atomic-host'))
+        .withDirectory(
+          '/code/atomic-host',
+          this.source.directory('atomic-host'),
+        )
         .withDirectory('/code/tools', this.source.directory('tools'))
         .withMountedCache(
           '/code/target',
@@ -953,7 +930,7 @@ export class AtomicServer {
           .withExec([
             'sh',
             '-c',
-            'apt-get update -qq && apt-get install -y protobuf-compiler',
+            'apt-get update -qq && apt-get install -y protobuf-compiler libclang-dev clang',
           ]),
         CARGO_HOME_BOOKWORM,
       )
@@ -977,14 +954,23 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         // The host ABI's WIT, read by the server's and the examples' bindgen.
-        .withDirectory('/code/atomic-host', this.source.directory('atomic-host'))
+        .withDirectory(
+          '/code/atomic-host',
+          this.source.directory('atomic-host'),
+        )
         .withDirectory('/code/tools', this.source.directory('tools'))
         // `server/src/forms.rs` pins its validation verdicts to the cases the
         // browser form renderer shares (`include_str!`), so the Rust tests need
         // this one file from `browser/`.
         .withFile(
           '/code/browser/form-renderer/shared/validation-cases.json',
-          this.source.file('browser/form-renderer/shared/validation-cases.json'),
+          this.source.file(
+            'browser/form-renderer/shared/validation-cases.json',
+          ),
+        )
+        .withMountedCache(
+          '/code/target',
+          this.targetCache('rust-slim-target-v3'),
         )
         // server/build.rs copies the app view client from the browser into
         // assets_tmp, and plugin_ui.rs's tests read the frame shell it pairs
@@ -1021,6 +1007,14 @@ export class AtomicServer {
         // symptom. `jsTestIntegration` (this container's only caller) tests
         // `@tomic/lib`'s NodeClientDb sync path — it never touches
         // vector-search, so dropping it here costs no real coverage.
+        //
+        // It does run server-side plugins (`after-commit.integration.test.ts`
+        // reads an app's manifest through the embedded plugin runtime), so
+        // this build needs `wasm32-wasip2` like `rustTest()` and the e2e
+        // build. Without it build.rs ships an empty runtime and the test
+        // fails far from the cause (candidate17, run 36624214790).
+        .withExec(['rustup', 'target', 'add', 'wasm32-wasip2'])
+        .withEnvVariable('ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME', 'true')
         .withExec([
           'cargo',
           'build',
@@ -1093,6 +1087,17 @@ export class AtomicServer {
         '/repo/browser/data-browser/package.json',
         browser.file('data-browser/package.json'),
       )
+      .withFile('/repo/browser/ui/package.json', browser.file('ui/package.json'))
+      .withFile('/repo/browser/utils/package.json', browser.file('utils/package.json'))
+      .withFile('/repo/browser/table/package.json', browser.file('table/package.json'))
+      .withFile(
+        '/repo/browser/resource-ui/package.json',
+        browser.file('resource-ui/package.json'),
+      )
+      .withFile(
+        '/repo/browser/table-page/package.json',
+        browser.file('table-page/package.json'),
+      )
       .withFile(
         '/repo/browser/lib/package.json',
         browser.file('lib/package.json'),
@@ -1153,6 +1158,7 @@ export class AtomicServer {
     // integration tests, except @tomic/mcp: hosted-mcp.integration.test.ts
     // imports its bridge from `../../mcp/src`.
     const withSource = installed
+      .withDirectory('/repo/browser/utils', browser.directory('utils'))
       .withDirectory('/repo/browser/lib', browser.directory('lib'))
       .withDirectory('/repo/browser/mcp', browser.directory('mcp'));
 
@@ -1161,6 +1167,8 @@ export class AtomicServer {
         permissions: 0o755,
       })
       .withDirectory('/repo/wasm/pkg', wasmPkg)
+      .withWorkdir('/repo/browser/utils')
+      .withExec(['pnpm', 'run', 'build'])
       .withWorkdir('/repo/browser/lib')
       .withExec(['pnpm', 'run', 'test:integration'])
       .stdout();
@@ -1356,6 +1364,17 @@ export class AtomicServer {
         '/app/data-browser/package.json',
         browser.file('data-browser/package.json'),
       )
+      .withFile('/app/ui/package.json', browser.file('ui/package.json'))
+      .withFile('/app/utils/package.json', browser.file('utils/package.json'))
+      .withFile('/app/table/package.json', browser.file('table/package.json'))
+      .withFile(
+        '/app/resource-ui/package.json',
+        browser.file('resource-ui/package.json'),
+      )
+      .withFile(
+        '/app/table-page/package.json',
+        browser.file('table-page/package.json'),
+      )
       .withFile('/app/lib/package.json', browser.file('lib/package.json'))
       .withFile('/app/react/package.json', browser.file('react/package.json'))
       .withFile('/app/svelte/package.json', browser.file('svelte/package.json'))
@@ -1394,9 +1413,6 @@ export class AtomicServer {
     // (it overwrites OS /lib). Mount alongside browser and resolve via alias in vite.config.
     const sourceContainer = workspaceContainer
       .withDirectory('/app', browser)
-      // Integration sources live at the repository root. The browser mounts at
-      // /app, and its raw imports resolve these paths from /integrations.
-      .withDirectory('/integrations', this.source.directory('integrations'))
       // `@tomic/plugin`'s export-bindings test reads the Rust example's
       // manifest and checked-in bindings from the repository root, which
       // resolves from /app/plugin/src to /plugin-examples.
@@ -1404,9 +1420,7 @@ export class AtomicServer {
         '/plugin-examples/host-abi-statement',
         this.source.directory('plugin-examples/host-abi-statement'),
       )
-      // integrations/localthought/tsconfig.json extends the repo-root-relative
-      // `../../browser/tsconfig.build.json`. Alias /browser to the /app mount
-      // so that relative path resolves.
+      // jsTypecheck() addresses the data-browser project through this alias.
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
       // data-browser imports the repo-root logo from `../../../../logo.svg`
@@ -1616,7 +1630,15 @@ export class AtomicServer {
     // at an optimisation level where commit round-trips stop dominating, and
     // cheap enough to compile that Playwright is not left waiting on LTO.
     const buildArgs = e2e
-      ? ['cargo', 'build', '--locked', '--profile', 'e2e', '-p', 'atomic-server']
+      ? [
+          'cargo',
+          'build',
+          '--locked',
+          '--profile',
+          'e2e',
+          '-p',
+          'atomic-server',
+        ]
       : release
         ? ['cargo', 'build', '--locked', '--release', '-p', 'atomic-server']
         : ['cargo', 'build', '--locked', '-p', 'atomic-server'];
@@ -1810,7 +1832,6 @@ export class AtomicServer {
           source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
         )
         .withDirectory('/code/server', source.directory('server'))
-        .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
         .withDirectory('/code/lib', source.directory('lib'))
         .withDirectory(
@@ -1827,7 +1848,10 @@ export class AtomicServer {
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/atomic-host', source.directory('atomic-host'))
         .withDirectory('/code/tools', source.directory('tools'))
-        .withMountedCache('/code/target', this.targetCache('rust-checks-target-v3'))
+        .withMountedCache(
+          '/code/target',
+          this.targetCache('rust-checks-target-v3'),
+        )
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
@@ -1907,6 +1931,21 @@ export class AtomicServer {
             `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
             `--retries ${this.hostKnobs.nextestRetries}`,
         ])
+        // The `plugin-routes` feature (#1711) is off in every release build,
+        // so gated code would rot unseen. Its tests run here, scoped to
+        // `atomic-server` (the only crate with the feature); the
+        // `release_feature_sets_exclude_plugin_routes` unit test above, in
+        // the default pass, fails if a release feature set ever turns it on.
+        .withExec([
+          'sh',
+          '-c',
+          'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
+            'cargo nextest run --locked -p atomic-server --lib ' +
+            '--no-default-features --features light,wasm-plugins,plugin-routes ' +
+            `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
+            `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
+            `--retries ${this.hostKnobs.nextestRetries}`,
+        ])
         .stdout()
     );
   }
@@ -1957,6 +1996,12 @@ export class AtomicServer {
         '--no-default-features',
         '--features',
         'light',
+      ])
+      // Candidate-only public plugin endpoints retain their own lint gate.
+      .withExec([
+        'cargo', 'clippy', '--locked', '-p', 'atomic-server', '--no-deps',
+        '--all-targets', '--no-default-features', '--features',
+        'light,wasm-plugins,plugin-routes',
       ])
       .stdout();
   }
@@ -2308,6 +2353,14 @@ export class AtomicServer {
           '/app/data-browser/src/chunks/AppPage/viewClient.js',
           this.source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
         )
+        // Syncables shares the composed catalog, selection and logo fixtures
+        // with browser unit tests. Playwright reads them directly from disk.
+        .withDirectory(
+          '/app/data-browser/src/chunks/PluginRuns/fixtures',
+          this.source.directory(
+            'browser/data-browser/src/chunks/PluginRuns/fixtures',
+          ),
+        )
         .withWorkdir('/app/e2e')
         .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
         .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
@@ -2411,7 +2464,7 @@ export class AtomicServer {
         grep: playwrightGrep,
       };
     console.info(
-      `E2E budget: ${this.e2eRun.shardCount} shards x ${this.e2eRun.workers} workers = ${this.e2eRun.shardCount * Number(this.e2eRun.workers)} browser workers; retries=${this.e2eRun.retries}; cloned profiles=${this.e2eCloneSessions}; concurrent CI cargo jobs=${this.hostKnobs.cargoBuildJobs}, nextest threads=${this.hostKnobs.nextestTestThreads}. JS/Flutter jobs also share this host.`,
+      `E2E budget: ${this.e2eRun.shardCount} shards x ${this.e2eRun.workers} workers = ${this.e2eRun.shardCount * Number(this.e2eRun.workers)} browser workers; retries=${this.e2eRun.retries}; cloned profiles=${this.e2eCloneSessions}; CI cargo jobs=${this.hostKnobs.cargoBuildJobs}, nextest threads=${this.hostKnobs.nextestTestThreads}. ci() finishes its other checks before starting browser interactions.`,
     );
     const shardCount = this.e2eRun.shardCount;
     const base = this.e2eBaseContainer();
@@ -2510,7 +2563,10 @@ export class AtomicServer {
         .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'));
 
       for (const r of failed) {
-        container = container.withDirectory(`/in/shard-${r.shard}`, r.testResults);
+        container = container.withDirectory(
+          `/in/shard-${r.shard}`,
+          r.testResults,
+        );
       }
 
       await container

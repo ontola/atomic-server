@@ -1,5 +1,9 @@
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import {
+  isSyncablesNavigationTable,
+  withoutTableViews,
+} from '@chunks/PluginRuns/syncablesNavigation';
+import {
   Fragment,
   memo,
   useCallback,
@@ -13,7 +17,7 @@ import {
   dataBrowser,
   forms,
   notifications,
-  useResource,
+  useResourceSnapshot,
   useCanWrite,
   unknownSubject,
 } from '@tomic/react';
@@ -24,11 +28,11 @@ import { useChildren } from '@tomic/react';
 import '../../../helpers/useCurrentSubject';
 import { useAncestryIfAncestor, useIsCurrentSubject } from './SidebarSelection';
 import { SideBarItem } from '../SideBarItem';
-import { AtomicLink } from '../../AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { styled } from 'styled-components';
-import { Details } from '../../Details';
-import { errorLookStyle } from '../../ErrorLook';
-import { LoaderInline } from '../../Loader';
+import { Details } from '@tomic/ui/components/Details';
+import { errorLookStyle } from '@tomic/resource-ui/components/ErrorLook';
+import { LoaderInline } from '@tomic/ui/components/Loader';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { SidebarItemTitle } from './SidebarItemTitle';
@@ -37,7 +41,7 @@ import { DropEdge } from './DropEdge';
 import { SIDEBAR_CHILD_LIMIT, SideBarMoreRow } from '../SideBarMoreRow';
 import { SideBarDragData, SideBarDropData } from '../useSidebarDnd';
 import { transparentize } from 'polished';
-import { transition } from '../../../helpers/transition';
+import { transition } from '@tomic/ui/helpers/transition';
 
 interface ResourceSideBarProps {
   subject: string;
@@ -64,40 +68,66 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
       return null;
     }
 
-    const resource = useResource(subject, { allowIncomplete: true });
+    const snapshot = useResourceSnapshot(subject, { allowIncomplete: true });
+    const resource = snapshot.resource;
     const canWrite = useCanWrite(resource);
     const active = useIsCurrentSubject(subject);
     const ancestryWhenAncestor = useAncestryIfAncestor(subject);
     const [open, setOpen] = useState(active);
 
-    // Classes that own their children's display in their own UI — skip the
-    // sidebar tree for them. Tables show rows in the grid view, chatrooms
-    // and meetings show messages in the timeline, AI chats show messages
-    // in the AI panel, ontologies show classes/properties in their
-    // dedicated panel, forms show their results table via the builder's
-    // Results tab. Listing those children again in the sidebar would be
-    // noisy and confuses drop targeting.
+    // Ordinary tables show rows in the grid. Syncables directory tables hold
+    // navigable resources. Other views such as chatrooms and forms present
+    // their children in their own UI.
     //
     // `allowIncomplete` means `classes` is `[]` until `isA` hydrates. Treat
     // that as hidden too: otherwise `useChildren` fetches every table row
     // into the tree, then hides them when the class arrives — the sidebar
     // flash on open.
-    const classes = resource.getClasses();
+    const { classes, isTable, isDirectory, navigationDecorations } =
+      useMemo(() => {
+        const current = snapshot.resource;
+        const currentClasses = current.getClasses();
+        const table = currentClasses.includes(dataBrowser.classes.table);
+        const directory =
+          table &&
+          isSyncablesNavigationTable(current.get(core.properties.localId));
+        const icon = current.get(dataBrowser.properties.icon);
+
+        return {
+          classes: currentClasses,
+          isTable: table,
+          isDirectory: directory,
+          // An app's icon is stored alongside its data, but is not a folder to browse.
+          navigationDecorations: [
+            ...(directory
+              ? current.getSubjects(dataBrowser.properties.tableViews)
+              : []),
+            ...(typeof icon === 'string' ? [icon] : []),
+          ],
+        };
+      }, [snapshot]);
     const websiteClass = useWebsiteClass(classes.join('|'));
     const hideChildren =
       !!websiteClass ||
       classes.length === 0 ||
-      classes.includes(dataBrowser.classes.table) ||
+      (isTable && !isDirectory) ||
       classes.includes(dataBrowser.classes.chatroom) ||
       classes.includes(dataBrowser.classes.meeting) ||
       classes.includes(ai.classes.aiChat) ||
       classes.includes(core.classes.ontology) ||
       classes.includes(forms.classes.form);
+    const hideDropTargets = hideChildren || isTable;
 
-    const { subjects: subResources, total: totalChildren } = useChildren(
+    const { subjects: children, total } = useChildren(
       hideChildren ? undefined : subject,
-      { limit: SIDEBAR_CHILD_LIMIT },
+      { limit: SIDEBAR_CHILD_LIMIT + navigationDecorations.length },
     );
+    const visibleChildren = withoutTableViews(children, navigationDecorations);
+    const totalChildren = total - (children.length - visibleChildren.length);
+    const subResources =
+      visibleChildren.length > SIDEBAR_CHILD_LIMIT
+        ? visibleChildren.slice(0, SIDEBAR_CHILD_LIMIT)
+        : visibleChildren;
 
     const dragData: SideBarDragData = {
       renderedUnder: renderedHierarchy.at(-1)!,
@@ -124,13 +154,11 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     //  - the user can't write here,
     //  - this row IS the dragged item (drop-on-self),
     //  - an ancestor of this row is being dragged (would create a cycle),
-    //  - this row's class never renders children in the sidebar
-    //    (tables, chatrooms) — accepting a drop would silently reparent
-    //    the item under something that can't show it.
+    //  - this row owns app data (such as table rows or chat messages).
     const draggedId = draggingNode?.id as string | undefined;
     const dropDisabled =
       !canWrite ||
-      hideChildren ||
+      hideDropTargets ||
       (!!draggedId &&
         (draggedId === subject || renderedHierarchy.includes(draggedId)));
     const dropData: SideBarDropData = {
@@ -214,7 +242,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
       return null;
     }
 
-    if (resource.loading) {
+    if (snapshot.loading) {
       return (
         <TreeLoadingRow
           onClick={onClick}
@@ -227,7 +255,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
       );
     }
 
-    if (resource.error) {
+    if (snapshot.error) {
       return (
         <StyledLink subject={subject} clean>
           <TreeLoadingRow
@@ -258,7 +286,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
         >
           {hasSubResources && (
             <>
-              {!websiteClass && (
+              {!hideDropTargets && (
                 <DropEdge
                   parentHierarchy={hierarchyWithItself}
                   index={0}
@@ -273,7 +301,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
                     renderedHierarchy={hierarchyWithItself}
                     onClick={onClick}
                   />
-                  {!websiteClass && (
+                  {!hideDropTargets && (
                     <DropEdge
                       parentHierarchy={hierarchyWithItself}
                       index={idx + 1}

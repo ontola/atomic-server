@@ -1,6 +1,9 @@
 import { properties, useString } from '@tomic/react';
 
-import { GridItemDescription, InnerWrapper } from './components';
+import {
+  GridItemDescription,
+  InnerWrapper,
+} from '@tomic/resource-ui/views/FolderPage/GridItem/components';
 import { GridItemViewProps } from './GridItemViewProps';
 
 import type { JSX } from 'react';

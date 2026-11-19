@@ -1,7 +1,10 @@
 import { Core, Resource } from '@tomic/react';
 import { FaPlus, FaAtom, FaTable } from 'react-icons/fa6';
-import { DropdownItem, DropdownMenu } from '../../../components/Dropdown';
-import { buildDefaultTrigger } from '../../../components/Dropdown/DefaultTrigger';
+import {
+  DropdownItem,
+  DropdownMenu,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
 import { useState } from 'react';
 import { ParentPickerDialog } from '../../../components/ParentPicker/ParentPickerDialog';
 import { useNewResourceUI } from '../../../components/forms/NewForm/useNewResourceUI';

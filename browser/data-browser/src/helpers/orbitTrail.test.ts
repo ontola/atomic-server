@@ -1,7 +1,7 @@
 // @wc-ignore-file
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { orbitTrailMarkup, trailBands } from './orbitTrail';
+import { orbitTrailMarkup, trailBands } from '@tomic/ui/helpers/orbitTrail';
 
 const brandSvgUrl = new URL(
   '../../../../brand/src/place-mark.svg',

@@ -1,18 +1,17 @@
 import { useResource } from '@tomic/react';
-import { ResourceForm } from '../ResourceForm';
-import { NewFormTitle } from './NewFormTitle';
-import { SubjectField } from './SubjectField';
-import { useNewForm } from './useNewForm';
-import { Column } from '../../Row';
+import { ResourceForm } from '@tomic/resource-ui/components/forms/ResourceForm';
+import { NewFormTitle } from '@tomic/resource-ui/components/forms/NewForm/NewFormTitle';
+import { SubjectField } from '@tomic/resource-ui/components/forms/NewForm/SubjectField';
+import { useNewForm } from '@tomic/resource-ui/components/forms/NewForm/useNewForm';
+import { Column } from '@tomic/ui/components/Row';
 
 import type { JSX } from 'react';
 import { useSearch } from '@tanstack/react-router';
 import { paths } from '../../../routes/paths';
 import { NewRoute } from '../../../routes/NewResource/NewRoute';
 
-export interface NewFormProps {
-  classSubject: string;
-}
+export type { NewFormProps } from '@tomic/resource-ui/components/forms/NewForm/NewFormDialog';
+import type { NewFormProps } from '@tomic/resource-ui/components/forms/NewForm/NewFormDialog';
 
 /** Fullpage Form for instantiating a new Resource from some Class */
 export const NewFormFullPage = ({

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { canonicalizeScheme } from '@tomic/lib';
-import { useLocalStorage } from './useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 
 /** Last visit time (ms) per drive, keyed by canonical subject. */
 export function useDriveVisits(): [

@@ -1,4 +1,4 @@
-import { formatTimeAgo } from '../formatTimeAgo';
+import { formatTimeAgo } from '@tomic/resource-ui/helpers/formatTimeAgo';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 

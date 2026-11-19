@@ -22,7 +22,7 @@ import { getDefaultAgent } from '../chunks/AI/AgentConfig';
 import { useTools } from '../chunks/AI/useTools';
 import { LazyMCPContext } from '../components/AI/MCP/LazyMCPProvider';
 import { LazyAIChangesContext } from '../components/AI/AIChanges/LazyAIChangesProvider';
-import { useAIChanges } from '../components/AIChangesContext';
+import { useAIChanges } from '@tomic/resource-ui/components/AIChangesContext';
 import { createAiReview } from './aiReview';
 import atomicAgentPrompt from '../chunks/AI/system-prompts/atomic-agent.md?raw';
 import {

@@ -2,12 +2,12 @@ import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { urls, useResource, useTitle } from '@tomic/react';
-import { AgentAvatar } from '../Presence/AgentAvatar';
+import { AgentAvatar } from '@tomic/resource-ui/components/Presence/AgentAvatar';
 import { RoleSelect, roleLabel, type ShareRole } from './RoleSelect';
 import type { DirectRight } from './useShareRights';
 import type { MergedRight } from '../../routes/Share/useRights';
 import { useClassLabel } from './useClassLabel';
-import { AtomicLink } from '../AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { FaEnvelope } from 'react-icons/fa6';
 import type { PendingInvite } from '../../helpers/pendingInvites';
 

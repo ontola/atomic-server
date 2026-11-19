@@ -1,0 +1,92 @@
+{
+  "@id": "https://ontola.github.io/atomic-plugins/ontology/lenses/solid-bookmark-v1",
+  "lensFormat": 1,
+  "release": "https://ontola.github.io/atomic-plugins/ontology/lenses/v1",
+  "name": "Solid bookmark ↔ Bookmark",
+  "description": "An RDF bookmark node in expanded JSON-LD (a Solid Pod document) and the host's built-in Bookmark class: its dcterms:title literal and its bookmark:recalls link.",
+  "source": {
+    "rdf": "http://www.w3.org/2002/01/bookmark#Bookmark"
+  },
+  "target": {
+    "class": "https://atomicdata.dev/class/Bookmark"
+  },
+  "mapping": {
+    "version": 2,
+    "fields": [
+      {
+        "source": "/http:~1~1purl.org~1dc~1terms~1title/0/@value",
+        "target": "https://atomicdata.dev/properties/name"
+      },
+      {
+        "source": "/http:~1~1www.w3.org~12002~101~1bookmark#recalls/0/@id",
+        "target": "https://atomicdata.dev/property/url"
+      }
+    ]
+  },
+  "limits": [
+    "Only the dcterms:title and bookmark:recalls predicates: the code lens also reads rdfs:label and as:name titles, as:url links, links written as literals, and the bookmark#BookMark and as:Note types, and refuses a node with two title or two link predicates.",
+    "No domain guard on the RDF objects: the code lens refuses literals with other datatypes, several objects for one predicate and links that are not absolute http(s) URLs.",
+    "The result is a changed node, not a Pod write: a host still needs the document's ETag and, where present, its CRDT protocol."
+  ],
+  "implementation": "integrations/solid/devonian/bookmarks/lens/index.ts",
+  "examples": [
+    {
+      "source": {
+        "@id": "https://pod.example/bookmarks/index.ttl#one",
+        "@type": [
+          "http://www.w3.org/2002/01/bookmark#Bookmark"
+        ],
+        "http://purl.org/dc/terms/title": [
+          {
+            "@value": "Original",
+            "@language": "nl"
+          }
+        ],
+        "http://www.w3.org/2002/01/bookmark#recalls": [
+          {
+            "@id": "https://example.org/article"
+          }
+        ],
+        "http://www.w3.org/2002/01/bookmark#hasTopic": [
+          {
+            "@value": "Invented topic"
+          }
+        ]
+      },
+      "target": {
+        "https://atomicdata.dev/properties/name": "Original",
+        "https://atomicdata.dev/property/url": "https://example.org/article"
+      },
+      "edits": [
+        {
+          "target": {
+            "https://atomicdata.dev/properties/name": "Changed",
+            "https://atomicdata.dev/property/url": "https://example.org/next"
+          },
+          "source": {
+            "@id": "https://pod.example/bookmarks/index.ttl#one",
+            "@type": [
+              "http://www.w3.org/2002/01/bookmark#Bookmark"
+            ],
+            "http://purl.org/dc/terms/title": [
+              {
+                "@value": "Changed",
+                "@language": "nl"
+              }
+            ],
+            "http://www.w3.org/2002/01/bookmark#recalls": [
+              {
+                "@id": "https://example.org/next"
+              }
+            ],
+            "http://www.w3.org/2002/01/bookmark#hasTopic": [
+              {
+                "@value": "Invented topic"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

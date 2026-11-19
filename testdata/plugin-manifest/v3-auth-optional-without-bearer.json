@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [
+      {
+        "id": "read",
+        "path": "/storage/{*rest}",
+        "methods": ["GET"],
+        "authOptional": true
+      }
+    ]
+  }
+}

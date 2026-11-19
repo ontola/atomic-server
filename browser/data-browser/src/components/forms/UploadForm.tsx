@@ -1,10 +1,10 @@
 import { useCallback, useState, type JSX } from 'react';
 import { Resource } from '@tomic/react';
 import { useDropzone } from 'react-dropzone';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import FilePill from '../FilePill';
-import { ErrMessage } from './InputStyles';
-import { useUpload } from '../../hooks/useUpload';
+import { ErrMessage } from '@tomic/ui/components/forms/InputStyles';
+import { useUpload } from '@tomic/resource-ui/hooks/useUpload';
 
 interface UploadFormProps {
   /**

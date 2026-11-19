@@ -13,14 +13,17 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '../../components/Dialog';
-import { Button } from '../../components/Button';
-import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
-import { stringToSlug } from '../../helpers/stringToSlug';
-import { Column } from '../../components/Row';
+} from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
+import { Column } from '@tomic/ui/components/Row';
 import { newProperty } from './ontologyUtils';
 import { toAnchorId } from '../../helpers/toAnchorId';
-import { BasicSelect } from '../../components/forms/BasicSelect';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { datatypeOptions } from './PropertyDatatypePicker';
 import { DashedButton } from './DashedButton';
 import { useOntologyContext } from './OntologyContext';

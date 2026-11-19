@@ -10,7 +10,19 @@ import {
   type ActionStore,
 } from './integration-actions.js';
 vi.mock('./authentication.js', () => ({
-  signRequest: async () => ({ 'x-test-signature': 'signed' }),
+  signedRequestInit: async (
+    _url: string,
+    _agent: unknown,
+    request: { method: string; body?: string; headers?: object },
+  ) => ({
+    method: request.method,
+    headers: {
+      ...request.headers,
+      'x-test-signature': 'signed',
+      'x-atomic-signature-version': '2',
+    },
+    body: request.body,
+  }),
 }));
 afterEach(() => vi.unstubAllGlobals());
 it('MCP discovery and calls use the signed host API and never approve writes', async () => {
@@ -34,6 +46,8 @@ it('MCP discovery and calls use the signed host API and never approve writes', a
     vi.fn(async (url, init) => {
       seen.push({ url: String(url), body: JSON.parse(init.body) });
       expect(init.headers['x-test-signature']).toBe('signed');
+      // Every integration-action route requires a version 2 signature.
+      expect(init.headers['x-atomic-signature-version']).toBe('2');
 
       return new Response(
         JSON.stringify(

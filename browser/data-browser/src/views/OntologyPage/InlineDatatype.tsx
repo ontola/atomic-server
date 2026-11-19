@@ -7,7 +7,7 @@ import {
   type Core,
   datatypeFromUrl,
 } from '@tomic/react';
-import { ResourceInline } from '../ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 import { toAnchorId } from '../../helpers/toAnchorId';
 import { useOntologyContext } from './OntologyContext';
 

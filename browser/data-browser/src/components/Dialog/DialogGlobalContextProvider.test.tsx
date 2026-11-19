@@ -6,7 +6,7 @@ import {
   DialogContext,
   DialogGlobalContextProvider,
   useDialogGlobalContext,
-} from './DialogGlobalContextProvider';
+} from '@tomic/ui/components/Dialog/DialogGlobalContextProvider';
 
 /**
  * A dialog decides whether to answer an Escape while the key is being handled,

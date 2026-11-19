@@ -8,12 +8,15 @@ import { appActions } from '../actions/appActions';
 import { resourceActions } from '../actions/resourceActions';
 import { runAction } from '../actions/runAction';
 import { useActionContext } from '../actions/useActionContext';
-import { shortcuts } from '../actions/shortcuts';
-import { openSearchOverlay, openShortcutsOverlay } from './overlayState';
+import { shortcuts } from '@tomic/ui/actions/shortcuts';
+import {
+  openSearchOverlay,
+  openShortcutsOverlay,
+} from '@tomic/resource-ui/components/overlayState';
 
 import type { JSX } from 'react';
 
-export { shortcuts, displayShortcut } from '../actions/shortcuts';
+export { shortcuts, displayShortcut } from '@tomic/ui/actions/shortcuts';
 
 type Props = {
   children: React.ReactNode;

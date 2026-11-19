@@ -1,13 +1,13 @@
 import { useArray, useString, core, collections } from '@tomic/react';
 import { FC, PropsWithChildren, useState, type JSX } from 'react';
 
-import Markdown from '../../components/datatypes/Markdown';
-import { CardInsideFull, CardRow } from '../../components/Card';
-import { ResourceInline } from '../ResourceInline';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import { CardInsideFull, CardRow } from '@tomic/ui/components/Card';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 import { CardViewProps } from './CardViewProps';
-import { Button } from '../../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { ResourceCardTitle } from './ResourceCardTitle';
-import { Column } from '../../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { styled } from 'styled-components';
 
 const MAX_COUNT = 5;

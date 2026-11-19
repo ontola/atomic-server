@@ -33,7 +33,40 @@ unimplemented atomicity fix.
 
 `LocalOutbox` holds dirty subjects and signs at drain time, with pre-signed genesis
 and destroy exceptions. It does **not** hold an ordered list of signed commits per
-resource. See [sign-at-drain.md](./completed/sign-at-drain.md) for that decision. Do not restore
+resource. Local-only resources retain signed envelopes in memory across a failed
+local write so a retry can persist their genesis/history before publishing them
+to peers; that retry buffer is not a second delivery outbox. Offline and local-only
+saves require a successful client-database write. Online saves keep their local
+mirror best effort after remote acceptance. See
+[the persistence guide](../docs/src/local-first-guide/4-persist.md) for the
+observable completion signals and remaining unsaved-parent exception.
+`Resource.saveWithReceipt` uses these same write/drain boundaries to return
+captured local snapshot and accepted server commit versions. Missing evidence
+asserts nothing; memory backends and custom host transports cannot masquerade as
+durable local storage or a server endpoint. Identity generations fence receipt
+completion across account replacement, including a switch away and back. This
+does not add a delivery queue or independent-replica/server-fsync evidence.
+`evaluateReplicaEvidence` separately evaluates adapter-supplied exact-version
+barrier observations under an explicit storage/device independence policy. Its
+immutable unsupported/unknown/pending/satisfied result is a pure observation, not
+another registry or sync engine. Browser WebRTC peers automatically produce
+correlated persistent-storage observations through
+`BrowserPeerOptions.onReplicaReceipt`; physical independence still requires the
+caller's policy. `SaveReceipt` selects a target; server acceptance is not a
+persistence barrier. Persistent Redb identity/generation is exposed through the
+worker; the browser producer verifies target coverage and flushes before responding.
+Native Iroh peers also produce exact-target receipts through a per-Db subscription after bulk and during live sync, using the same persistence proof.
+Native targets are observed stored states rather than immutable save events.
+HTTP/WS servers expose the same shared persistence proof through signed HTTP
+requests or negotiated WS frames. The SDK automatically emits
+`StoreEvents.ServerReplicaReceipt` after saves and during reconciliation, carrying
+server-origin provenance and account/database/connection context. Memory-only
+clients can receive remote evidence without a fabricated source identity.
+Backup guarantees remain future runtime/sync work (#2537/#2538), separate from
+the TablePage extraction. The evaluator matches exact targets; the browser
+producer proves that its stored state covers the requested frontier. Retention
+and recoverable-backup claims remain outside this slice.
+See [sign-at-drain.md](./completed/sign-at-drain.md) for the outbox decision. Do not restore
 the superseded signed-at-every-save queue design.
 
 Only user-origin local edits enqueue work. Imports, history checkouts and runtime

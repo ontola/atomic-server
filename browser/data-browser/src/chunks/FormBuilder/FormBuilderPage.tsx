@@ -1,8 +1,8 @@
 import { FaArrowLeft } from 'react-icons/fa6';
-import { useTableFormColumns } from './useTableFormColumns';
+import { useTableFormColumns } from '@tomic/resource-ui/chunks/FormBuilder/useTableFormColumns';
 import { useFormQuestions } from './useFormQuestions';
-import { columnLabel } from './tableColumns';
-import { AtomicLink } from '@components/AtomicLink';
+import { columnLabel } from '@tomic/resource-ui/chunks/FormBuilder/tableColumns';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import {
   core,
   forms,
@@ -14,7 +14,7 @@ import {
 } from '@tomic/react';
 import { useEffect, useId, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { EditableTitle } from '@components/EditableTitle';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { PageTabBar } from './PageTabBar';
 import { FieldList } from './FieldList';

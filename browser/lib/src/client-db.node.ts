@@ -1,3 +1,9 @@
+import {
+  parseResourceAttachmentEvidence,
+  type AttachmentManifest,
+  type ResourceAttachmentEvidence,
+  type SerializedVaultAttachmentReceipt,
+} from './resource-attachment-evidence.js';
 /**
  * Node-side ClientDb: same public surface as `ClientDbWorker`, but runs the
  * WASM module on the main thread (no Worker, no BroadcastChannel, no OPFS).
@@ -7,6 +13,16 @@
  * use, keep `ClientDbWorker`.
  */
 
+import type {
+  ResourceVaultEvidence,
+  VaultSyncScope,
+  SerializedVaultReceipt,
+} from './resource-vault-evidence.js';
+import type {
+  ResourceSyncEvidence,
+  ResourceSyncScope,
+  SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 import { versionVectorRecords } from './version-vector-records.js';
 import {
   parseHistoryAttribution,
@@ -20,6 +36,7 @@ import type {
   ClientDbQueryResult,
 } from './client-db.js';
 import { asError } from './error.js';
+import type { ReplicaIdentity } from './replica-evidence.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
@@ -34,6 +51,8 @@ export interface NodeClientDbOptions {
 }
 
 export class NodeClientDb {
+  /** Whether completed writes include a reload-durable storage flush. */
+  readonly supportsDurablePersistence: boolean = false;
   private db: WasmModule | null = null;
   private wasm: WasmModule | null = null;
   private opts: NodeClientDbOptions;
@@ -159,6 +178,13 @@ export class NodeClientDb {
     return Promise.all(subjects.map(s => this.getResourceWithSnapshot(s)));
   }
 
+  /** The actual WASM memory backend supplies no persistent replica identity. */
+  async getReplicaIdentity(
+    drive: string,
+  ): Promise<ReplicaIdentity | undefined> {
+    return this.requireDb().getReplicaIdentity?.(drive) ?? undefined;
+  }
+
   /** Match the worker persistence barrier for headless Store clients. */
   async flush(): Promise<void> {
     this.requireDb().flush();
@@ -221,6 +247,137 @@ export class NodeClientDb {
 
   async applyCommit(commitJsonAd: string): Promise<void> {
     await this.requireDb().applyCommit(commitJsonAd);
+  }
+
+  async getResourceSyncEvidence(
+    subjects: string[],
+    scope?: ResourceSyncScope,
+  ): Promise<ResourceSyncEvidence[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceSyncEvidence !== 'function') return undefined;
+    const evidence = db.getResourceSyncEvidence(
+      JSON.stringify(subjects),
+      scope ? JSON.stringify(scope) : undefined,
+    ) as ResourceSyncEvidence[];
+    db.flush();
+
+    return evidence;
+  }
+
+  async putResourceSyncReceipts(
+    scope: ResourceSyncScope,
+    receipts: SerializedServerReceipt[],
+  ): Promise<void> {
+    const db = this.requireDb();
+    if (typeof db.putResourceSyncReceipts !== 'function') return;
+    db.putResourceSyncReceipts(JSON.stringify(scope), JSON.stringify(receipts));
+    db.flush();
+  }
+
+  async vaultAttachmentManifests(
+    drive: string,
+  ): Promise<{ subject: string; manifest: AttachmentManifest }[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.vaultAttachmentManifests !== 'function') return undefined;
+
+    return db.vaultAttachmentManifests(drive);
+  }
+
+  async getResourceAttachmentEvidence(
+    subjects: string[],
+  ): Promise<ResourceAttachmentEvidence[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceAttachmentEvidence !== 'function')
+      return undefined;
+
+    return parseResourceAttachmentEvidence(
+      await db.getResourceAttachmentEvidence(JSON.stringify(subjects)),
+    );
+  }
+
+  async getResourceVaultAttachmentReceipts(
+    subjects: string[],
+    scope: VaultSyncScope,
+  ): Promise<SerializedVaultAttachmentReceipt[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceVaultAttachmentReceipts !== 'function')
+      return undefined;
+
+    return db.getResourceVaultAttachmentReceipts(
+      JSON.stringify(subjects),
+      JSON.stringify(scope),
+    );
+  }
+
+  async putResourceVaultAttachmentReceipts(
+    scope: VaultSyncScope,
+    receipts: SerializedVaultAttachmentReceipt[],
+    generation: number,
+  ): Promise<boolean> {
+    const db = this.requireDb();
+    if (typeof db.putResourceVaultAttachmentReceipts !== 'function')
+      return false;
+
+    return (
+      db.putResourceVaultAttachmentReceipts(
+        JSON.stringify(scope),
+        JSON.stringify(receipts),
+        generation,
+      ) === true
+    );
+  }
+
+  async getResourceVaultEvidence(
+    subjects: string[],
+    scope: VaultSyncScope,
+  ): Promise<ResourceVaultEvidence[] | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceVaultEvidence !== 'function') return undefined;
+    const evidence = db.getResourceVaultEvidence(
+      JSON.stringify(subjects),
+      JSON.stringify(scope),
+    ) as ResourceVaultEvidence[];
+    db.flush();
+
+    return evidence;
+  }
+
+  async getResourceVaultGeneration(
+    scope: VaultSyncScope,
+  ): Promise<number | undefined> {
+    const db = this.requireDb();
+    if (typeof db.getResourceVaultGeneration !== 'function') return undefined;
+    const generation = db.getResourceVaultGeneration(
+      JSON.stringify(scope),
+    ) as number;
+    db.flush();
+
+    return generation;
+  }
+
+  async clearResourceVaultReceipts(scope: VaultSyncScope): Promise<void> {
+    const db = this.requireDb();
+    if (typeof db.clearResourceVaultReceipts !== 'function') return;
+    db.clearResourceVaultReceipts(JSON.stringify(scope));
+    db.flush();
+  }
+
+  async putResourceVaultReceipts(
+    scope: VaultSyncScope,
+    receipts: SerializedVaultReceipt[],
+    generation: number,
+  ): Promise<boolean> {
+    const db = this.requireDb();
+    if (typeof db.putResourceVaultReceipts !== 'function') return false;
+    const accepted =
+      db.putResourceVaultReceipts(
+        JSON.stringify(scope),
+        JSON.stringify(receipts),
+        generation,
+      ) === true;
+    db.flush();
+
+    return accepted;
   }
 
   async removeResource(subject: string): Promise<void> {

@@ -7,14 +7,14 @@ import {
   DialogContent,
   DialogActions,
   useDialog,
-} from '../Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import {
   InputStyled,
   InputWrapper,
   TextAreaStyled,
-} from '../forms/InputStyles';
-import { Button } from '../Button';
-import { Column } from '../Row';
+} from '@tomic/ui/components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
 import { errorFeedbackMessage, submitFeedback } from '../../helpers/feedback';
 
 interface UseFeedbackDialogOptions {

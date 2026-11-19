@@ -8,10 +8,10 @@ import {
   useTitle,
 } from '@tomic/react';
 import { SideBarMenuRow } from '../SideBarMenuItem';
-import { Row } from '../../Row';
-import { AtomicLink } from '../../AtomicLink';
-import { getIconForClass } from '../../../helpers/iconMap';
-import { ErrorLook } from '../../ErrorLook';
+import { Row } from '@tomic/ui/components/Row';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { getIconForClass } from '@tomic/resource-ui/helpers/iconMap';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useSettings } from '../../../helpers/AppSettings';
 

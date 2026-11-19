@@ -10,15 +10,15 @@ use atomic_lib::{
     parse::ParseOpts,
     runtime::{AtomicNode, IngestPolicy},
     storelike::{Query, QueryResult, Storelike},
+    vault::blob_export::{prepare_blob_export, seal_export_chunk},
     vault::dek::DriveVaultKey,
     vault::keys::{argon2id_derive_key, Argon2Params},
     vault::secret_envelope::{NewWrapper, SecretEnvelope, Unlock},
     vault::store::{MemoryVaultStore, VaultObjectStore},
     vault::sync::{
-        blob_chunks, blob_id_hex, commit_lane_state, drive_file_hashes, drive_prefix,
-        export_vault_segment, import_vault_batch, read_verified_blob, restore_blob_group,
-        seal_blob_chunk, BlobGroupOutcome, CheckpointPolicy, HistoryKeep, SegmentKind,
-        BLOB_SEAL_OVERHEAD,
+        commit_lane_state, drive_file_hashes, drive_prefix, export_vault_segment,
+        import_vault_batch, restore_blob_group, BlobGroupOutcome, CheckpointPolicy, HistoryKeep,
+        SegmentKind,
     },
     Db, Resource, Subject, Value,
 };
@@ -195,6 +195,20 @@ impl ClientDb {
         })
     }
 
+    /// Drive-scoped persistent storage identity. Memory/custom backends return
+    /// no identity; the backing store makes metadata durable before exposing it.
+    #[wasm_bindgen(js_name = "getReplicaIdentity")]
+    pub fn get_replica_identity(&self, drive: &str) -> Result<JsValue, JsError> {
+        if !atomic_lib::identifiers::is_resource_id(drive) || drive.contains(['#', '?']) {
+            return Err(JsError::new(
+                "Replica identities require a canonical drive subject",
+            ));
+        }
+        let scope = atomic_lib::identifiers::canonicalize_scheme(drive);
+        let identity = self.db().kv.replica_identity(&scope).map_err(to_js_err)?;
+        serde_wasm_bindgen::to_value(&identity).map_err(to_js_err)
+    }
+
     /// Create a separately authenticated peer ingress, never a cache write.
     #[wasm_bindgen(js_name = "createPeerSession")]
     pub fn create_peer_session(
@@ -246,6 +260,24 @@ impl ClientDb {
         }
     }
 
+    #[wasm_bindgen(js_name = "requestPeerBlobs")]
+    pub async fn request_peer_blobs(
+        &mut self,
+        session_id: u32,
+        hashes: Vec<String>,
+    ) -> Result<JsValue, JsError> {
+        let db = self.db().clone();
+        let session = self
+            .peer_sessions
+            .get_mut(&session_id)
+            .ok_or_else(|| JsError::new("Unknown peer session"))?;
+        let frames = session
+            .request_blobs(&db, &hashes)
+            .await
+            .map_err(to_js_err)?;
+        serde_wasm_bindgen::to_value(&frames).map_err(to_js_err)
+    }
+
     #[wasm_bindgen(js_name = "closePeerSession")]
     pub fn close_peer_session(&mut self, session_id: u32) {
         self.peer_sessions.remove(&session_id);
@@ -279,6 +311,175 @@ impl ClientDb {
             }
             Err(_) => Ok(JsValue::NULL),
         }
+    }
+
+    /// Durable resource bytes and scoped acknowledgement metadata. No network IO.
+    #[wasm_bindgen(js_name = "getResourceSyncEvidence")]
+    pub fn get_resource_sync_evidence(
+        &self,
+        subjects: &str,
+        scope: Option<String>,
+    ) -> Result<JsValue, JsError> {
+        let subjects: Vec<String> = serde_json::from_str(subjects)?;
+        let scope = scope
+            .map(|value| {
+                serde_json::from_str::<atomic_lib::db::sync_receipts::ResourceSyncScope>(&value)
+            })
+            .transpose()?;
+        let rows = self
+            .db()
+            .get_resource_sync_evidence(&subjects, scope.as_ref())?;
+        let array = js_sys::Array::new();
+        for evidence in rows {
+            let row = js_sys::Object::new();
+            js_sys::Reflect::set(&row, &"subject".into(), &evidence.subject.into())
+                .map_err(|_| JsError::new("could not build evidence"))?;
+            let snapshot = evidence
+                .snapshot
+                .map(|bytes| js_sys::Uint8Array::from(bytes.as_slice()).into())
+                .unwrap_or(JsValue::NULL);
+            js_sys::Reflect::set(&row, &"snapshot".into(), &snapshot)
+                .map_err(|_| JsError::new("could not build evidence"))?;
+            if let Some(receipt) = evidence.server_receipt {
+                let receipt = js_sys::JSON::parse(&serde_json::to_string(&receipt)?)
+                    .map_err(|_| JsError::new("could not encode receipt"))?;
+                js_sys::Reflect::set(&row, &"serverReceipt".into(), &receipt)
+                    .map_err(|_| JsError::new("could not build evidence"))?;
+            }
+            array.push(&row);
+        }
+        Ok(array.into())
+    }
+
+    #[wasm_bindgen(js_name = "getResourceAttachmentEvidence")]
+    pub async fn get_resource_attachment_evidence(
+        &self,
+        subjects: &str,
+    ) -> Result<JsValue, JsError> {
+        let subjects: Vec<String> = serde_json::from_str(subjects)?;
+        // This private cache boundary already permits local queries and reads.
+        // Browser workers have no default signing agent; remote boundaries use
+        // resource_attachment_evidence with their authenticated ForAgent.
+        let rows = atomic_lib::sync::attachment_receipts::local_resource_attachment_evidence(
+            self.db(),
+            &subjects,
+        )
+        .await?;
+        js_sys::JSON::parse(&serde_json::to_string(&rows)?)
+            .map_err(|_| JsError::new("Could not encode attachment evidence"))
+    }
+    #[wasm_bindgen(js_name = "getResourceVaultAttachmentReceipts")]
+    pub fn get_resource_vault_attachment_receipts(
+        &self,
+        subjects: &str,
+        scope: &str,
+    ) -> Result<JsValue, JsError> {
+        let subjects: Vec<String> = serde_json::from_str(subjects)?;
+        let scope = serde_json::from_str(scope)?;
+        let rows = self
+            .db()
+            .get_resource_vault_attachment_receipts(&subjects, &scope)?;
+        js_sys::JSON::parse(&serde_json::to_string(&rows)?)
+            .map_err(|_| JsError::new("Could not encode attachment receipts"))
+    }
+    #[wasm_bindgen(js_name = "putResourceVaultAttachmentReceipts")]
+    pub fn put_resource_vault_attachment_receipts(
+        &self,
+        scope: &str,
+        receipts: &str,
+        generation: f64,
+    ) -> Result<bool, JsError> {
+        if !generation.is_finite()
+            || generation < 0.0
+            || generation.fract() != 0.0
+            || generation > 9_007_199_254_740_991.0
+        {
+            return Err(JsError::new("Invalid vault receipt generation"));
+        }
+        let scope = serde_json::from_str(scope)?;
+        let receipts: Vec<atomic_lib::db::sync_receipts::SerializedVaultAttachmentReceipt> =
+            serde_json::from_str(receipts)?;
+        Ok(self.db().put_resource_vault_attachment_receipts(
+            &scope,
+            &receipts,
+            generation as u64,
+        )?)
+    }
+
+    #[wasm_bindgen(js_name = "putResourceSyncReceipts")]
+    pub fn put_resource_sync_receipts(&self, scope: &str, receipts: &str) -> Result<(), JsError> {
+        let scope = serde_json::from_str(scope)?;
+        let receipts: Vec<atomic_lib::db::sync_receipts::SerializedServerReceipt> =
+            serde_json::from_str(receipts)?;
+        self.db().put_resource_sync_receipts(&scope, &receipts)?;
+        Ok(())
+    }
+
+    /// Durable resource bytes and scoped acknowledgement metadata. No network IO.
+    #[wasm_bindgen(js_name = "getResourceVaultEvidence")]
+    pub fn get_resource_vault_evidence(
+        &self,
+        subjects: &str,
+        scope: &str,
+    ) -> Result<JsValue, JsError> {
+        let subjects: Vec<String> = serde_json::from_str(subjects)?;
+        let scope: atomic_lib::db::sync_receipts::VaultSyncScope = serde_json::from_str(scope)?;
+        let rows = self.db().get_resource_vault_evidence(&subjects, &scope)?;
+        let array = js_sys::Array::new();
+        for evidence in rows {
+            let row = js_sys::Object::new();
+            js_sys::Reflect::set(&row, &"subject".into(), &evidence.subject.into())
+                .map_err(|_| JsError::new("could not build evidence"))?;
+            let snapshot = evidence
+                .snapshot
+                .map(|bytes| js_sys::Uint8Array::from(bytes.as_slice()).into())
+                .unwrap_or(JsValue::NULL);
+            js_sys::Reflect::set(&row, &"snapshot".into(), &snapshot)
+                .map_err(|_| JsError::new("could not build evidence"))?;
+            if let Some(receipt) = evidence.vault_receipt {
+                let receipt = js_sys::JSON::parse(&serde_json::to_string(&receipt)?)
+                    .map_err(|_| JsError::new("could not encode receipt"))?;
+                js_sys::Reflect::set(&row, &"vaultReceipt".into(), &receipt)
+                    .map_err(|_| JsError::new("could not build evidence"))?;
+            }
+            array.push(&row);
+        }
+        Ok(array.into())
+    }
+
+    #[wasm_bindgen(js_name = "getResourceVaultGeneration")]
+    pub fn get_resource_vault_generation(&self, scope: &str) -> Result<f64, JsError> {
+        let scope = serde_json::from_str(scope)?;
+        Ok(self.db().get_resource_vault_generation(&scope)? as f64)
+    }
+
+    #[wasm_bindgen(js_name = "clearResourceVaultReceipts")]
+    pub fn clear_resource_vault_receipts(&self, scope: &str) -> Result<(), JsError> {
+        let scope = serde_json::from_str(scope)?;
+        self.db().clear_resource_vault_receipts(&scope)?;
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = "putResourceVaultReceipts")]
+    pub fn put_resource_vault_receipts(
+        &self,
+        scope: &str,
+        receipts: &str,
+        generation: f64,
+    ) -> Result<bool, JsError> {
+        if !generation.is_finite()
+            || generation < 0.0
+            || generation.fract() != 0.0
+            || generation > 9_007_199_254_740_991.0
+        {
+            return Err(JsError::new("Invalid vault receipt generation"));
+        }
+        let scope = serde_json::from_str(scope)?;
+        let receipts: Vec<atomic_lib::db::sync_receipts::SerializedVaultReceipt> =
+            serde_json::from_str(receipts)?;
+        Ok(self
+            .db()
+            .put_resource_vault_receipts(&scope, &receipts, generation as u64)?)
     }
 
     /// A resource's stored row as JSON-AD plus its Loro snapshot, as
@@ -1314,6 +1515,9 @@ struct VaultExportResult {
     /// Checkpoints only: lanes this object provably subsumes. JS publishes this
     /// verbatim; the control plane prunes against it.
     coverage: std::collections::BTreeMap<String, u32>,
+    /// Local-only exact versions; never send this map to the control plane.
+    resource_versions:
+        std::collections::BTreeMap<String, atomic_lib::vault::sync::VersionVectorMap>,
 }
 
 /// Add `sealed` to a serialised {@link VaultExportResult} as a `Uint8Array`.
@@ -1334,32 +1538,6 @@ fn attach_sealed(value: JsValue, sealed: &[u8]) -> Result<JsValue, JsError> {
 struct VaultObjectInput {
     object_key: String,
     sealed: Vec<u8>,
-}
-
-/// One slice of a file for upload.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct VaultBlobChunkInfo {
-    index: u32,
-    offset: u64,
-    /// Plaintext bytes in this chunk.
-    length: u64,
-    /// Bytes once sealed: what the control plane is told and charged.
-    sealed_length: u64,
-}
-
-/// What `vaultBlobOpen` found.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct VaultBlobPlan {
-    /// `ready`, `missing` (absent, empty, or not matching its hash) or
-    /// `tooLarge`.
-    status: &'static str,
-    size: u64,
-    /// The file's id in this vault: keyed BLAKE3 of its bytes, hex. Empty
-    /// unless `ready`.
-    blob_id: String,
-    chunks: Vec<VaultBlobChunkInfo>,
 }
 
 #[derive(Serialize)]
@@ -1663,7 +1841,7 @@ impl ClientDb {
         };
 
         let sealed = staging.get(&summary.object_key).map_err(to_js_err)?;
-        let result = serde_wasm_bindgen::to_value(&VaultExportResult {
+        let result = VaultExportResult {
             object_key: summary.object_key,
             kind: match summary.kind {
                 SegmentKind::Pack => "pack",
@@ -1673,7 +1851,18 @@ impl ClientDb {
             unchanged: summary.unchanged,
             tombstones: summary.tombstones,
             coverage: summary.coverage,
-        })
+            resource_versions: summary
+                .resource_versions
+                .into_iter()
+                .map(|(subject, version)| {
+                    (
+                        Subject::from(subject.as_str()).resolve(&self.origin()),
+                        version,
+                    )
+                })
+                .collect(),
+        }
+        .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(to_js_err)?;
 
         attach_sealed(result, &sealed)
@@ -1765,6 +1954,54 @@ impl ClientDb {
         drive_file_hashes(self.db(), &subject).await
     }
 
+    #[wasm_bindgen(js_name = "vaultAttachmentManifests")]
+    pub async fn vault_attachment_manifests(
+        &self,
+        drive_subject: &str,
+    ) -> Result<JsValue, JsError> {
+        let subject = Subject::from_raw(drive_subject, self.db().get_base_domain().as_deref());
+        let rows = atomic_lib::vault::sync::vault_attachment_manifests(self.db(), &subject).await?;
+        js_sys::JSON::parse(&serde_json::to_string(&rows)?)
+            .map_err(|_| JsError::new("Could not encode attachment inventory"))
+    }
+
+    /// Register requests only for missing file contents referenced by this drive.
+    #[wasm_bindgen(js_name = "requestDriveBlobs")]
+    pub async fn request_drive_blobs(
+        &self,
+        drive_subject: &str,
+        hashes: Vec<String>,
+    ) -> Result<JsValue, JsError> {
+        let drive = Subject::from_raw(drive_subject, self.db().get_base_domain().as_deref());
+        let referenced: std::collections::HashSet<_> = drive_file_hashes(self.db(), &drive)
+            .await
+            .into_iter()
+            .collect();
+        let mut frames = Vec::new();
+        let mut requested = std::collections::HashSet::new();
+        for hash in hashes {
+            let hash = hash.to_ascii_lowercase();
+            if !referenced.contains(&hash) || !requested.insert(hash.clone()) {
+                continue;
+            }
+            let hash = blake3::Hash::from_hex(&hash).map_err(to_js_err)?;
+            if self
+                .db()
+                .has_blob(hash.as_bytes())
+                .await
+                .map_err(to_js_err)?
+            {
+                continue;
+            }
+            self.db()
+                .note_pending_blob_request(*hash.as_bytes(), drive.pure_id());
+            frames.push(atomic_lib::sync::protocol::encode_blob_request(
+                hash.as_bytes(),
+            ));
+        }
+        serde_wasm_bindgen::to_value(&frames).map_err(to_js_err)
+    }
+
     /// Whether this device already holds the bytes for a hash.
     #[wasm_bindgen(js_name = "vaultBlobPresent")]
     pub async fn vault_blob_present(&self, hash_hex: &str) -> Result<bool, JsError> {
@@ -1789,40 +2026,13 @@ impl ClientDb {
     ) -> Result<JsValue, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
         *self.blob_cache.borrow_mut() = None;
-        let status = |status, size, blob_id, chunks| VaultBlobPlan {
-            status,
-            size,
-            blob_id,
-            chunks,
-        };
-        let plan = match read_verified_blob(self.db(), hash_hex)
+        let (plan, bytes) = prepare_blob_export(self.db(), hash_hex, &key)
             .await
-            .map_err(to_js_err)?
-        {
-            None => status("missing", 0, String::new(), vec![]),
-            Some(bytes) => match blob_chunks(bytes.len() as u64) {
-                None => status("tooLarge", bytes.len() as u64, String::new(), vec![]),
-                Some(chunks) => {
-                    let plan = status(
-                        "ready",
-                        bytes.len() as u64,
-                        blob_id_hex(&key, &bytes),
-                        chunks
-                            .iter()
-                            .map(|c| VaultBlobChunkInfo {
-                                index: c.index,
-                                offset: c.offset,
-                                length: c.length,
-                                sealed_length: c.length + BLOB_SEAL_OVERHEAD as u64,
-                            })
-                            .collect(),
-                    );
-                    *self.blob_cache.borrow_mut() =
-                        Some((hash_hex.to_ascii_lowercase(), std::rc::Rc::new(bytes)));
-                    plan
-                }
-            },
-        };
+            .map_err(to_js_err)?;
+        if let Some(bytes) = bytes {
+            *self.blob_cache.borrow_mut() =
+                Some((hash_hex.to_ascii_lowercase(), std::rc::Rc::new(bytes)));
+        }
 
         serde_wasm_bindgen::to_value(&plan).map_err(to_js_err)
     }
@@ -1846,12 +2056,7 @@ impl ClientDb {
     ) -> Result<Vec<u8>, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
         let bytes = self.open_blob(hash_hex)?;
-        let chunk = blob_chunks(bytes.len() as u64)
-            .and_then(|chunks| chunks.get(index as usize).copied())
-            .ok_or_else(|| JsError::new("this file has no such chunk"))?;
-        let start = chunk.offset as usize;
-
-        seal_blob_chunk(&key, &bytes[start..start + chunk.length as usize]).map_err(to_js_err)
+        seal_export_chunk(&key, &bytes, index).map_err(to_js_err)
     }
 
     /// Release the file held by `vaultBlobOpen`.
@@ -1874,15 +2079,28 @@ impl ClientDb {
         blob_id: &str,
         chunks: JsValue,
         wanted: Vec<String>,
+        drive_subject: Option<String>,
     ) -> Result<JsValue, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
         let chunks: Vec<Vec<u8>> = serde_wasm_bindgen::from_value(chunks).map_err(to_js_err)?;
         let refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
         let wanted: std::collections::HashSet<String> =
             wanted.into_iter().map(|h| h.to_ascii_lowercase()).collect();
-        let outcome = restore_blob_group(self.db(), &key, blob_id, &refs, &wanted)
+        let outcome = if let Some(drive_subject) = drive_subject {
+            let drive = Subject::from_raw(&drive_subject, self.db().get_base_domain().as_deref());
+            atomic_lib::vault::sync::restore_blob_group_for_drive(
+                self.db(),
+                &key,
+                blob_id,
+                &refs,
+                &wanted,
+                &drive,
+            )
             .await
-            .map_err(to_js_err)?;
+        } else {
+            restore_blob_group(self.db(), &key, blob_id, &refs, &wanted).await
+        }
+        .map_err(to_js_err)?;
         let result = match outcome {
             BlobGroupOutcome::Restored(hash) => VaultBlobRestoreResult {
                 status: "restored",

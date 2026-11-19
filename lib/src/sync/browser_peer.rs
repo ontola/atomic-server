@@ -19,6 +19,9 @@ pub struct BrowserPeerOutput {
     pub frames: Vec<Vec<u8>>,
     pub changed: Vec<String>,
     pub ephemeral: Option<Vec<u8>>,
+    /// Reported only after Rust verifies the channel-bound AUTH and drive access.
+    #[serde(rename = "peerAgent", skip_serializing_if = "Option::is_none")]
+    pub peer_agent: Option<String>,
 }
 
 impl BrowserPeerSession {
@@ -107,6 +110,42 @@ impl BrowserPeerSession {
                 .is_ok()
     }
 
+    /// Prepare explicit file repair requests on this authenticated connection.
+    pub async fn request_blobs(
+        &mut self,
+        db: &Db,
+        hashes: &[String],
+    ) -> AtomicResult<Vec<Vec<u8>>> {
+        let requested: std::collections::HashSet<_> = hashes
+            .iter()
+            .map(|hash| hash.to_ascii_lowercase())
+            .collect();
+        let mut frames = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        if self.closed || matches!(self.agent, ForAgent::Public) {
+            return Ok(frames);
+        }
+        for subject in super::engine::collect_drive_subjects(db, &self.drive.as_str().into()).await
+        {
+            if !self.can_send(db, &subject).await {
+                continue;
+            }
+            let resource = db.get_resource(&subject.as_str().into()).await?;
+            let Some(hash) = resource.blob_hash() else {
+                continue;
+            };
+            if requested.contains(&hex::encode(hash))
+                && !db.has_blob(&hash).await?
+                && seen.insert(hash)
+            {
+                self.pending_blobs.insert(hash);
+                db.note_pending_blob_request(hash, self.drive.clone());
+                frames.push(protocol::encode_blob_request(&hash));
+            }
+        }
+        Ok(frames)
+    }
+
     pub async fn handle(&mut self, db: &Db, frame: &[u8]) -> AtomicResult<BrowserPeerOutput> {
         if self.closed {
             return Err("Peer session closed".into());
@@ -151,13 +190,56 @@ impl BrowserPeerSession {
             } else if self.expected_peer.is_none() {
                 return Err("An unknown drive requires an explicitly selected peer".into());
             }
-            out.frames.push(protocol::encode_auth_ok());
+            let mut capabilities = protocol::CAPABILITIES.to_vec();
+            match db.kv.replica_identity(&self.drive) {
+                Ok(Some(_)) => {
+                    capabilities.push(protocol::CAP_BROWSER_STORAGE_RECEIPTS_V1);
+                    capabilities.push(protocol::CAP_ATTACHMENT_STORAGE_RECEIPTS_V1);
+                }
+                Ok(None) => {}
+                Err(error) => tracing::warn!(%error, "Peer storage receipts unavailable"),
+            }
+            out.peer_agent = Some(self.agent.to_string());
+            out.frames
+                .push(protocol::encode_auth_ok_with_caps(&capabilities));
             return Ok(out);
         }
         if matches!(self.agent, ForAgent::Public) {
             return Err("Peer AUTH required".into());
         }
         match tag {
+            protocol::tag::ATTACHMENT_RECEIPT_REQUEST => {
+                let request = protocol::AttachmentReceiptRequest::decode(payload)
+                    .ok_or("Invalid attachment receipt request")?;
+                if let Some(receipt) = super::attachment_receipts::produce_receipt(
+                    db,
+                    &self.agent,
+                    &self.drive,
+                    &request,
+                )
+                .await?
+                {
+                    out.frames.push(
+                        receipt
+                            .encode_frame()
+                            .ok_or("Invalid attachment receipt response")?,
+                    );
+                }
+            }
+            protocol::tag::STORAGE_RECEIPT_REQUEST => {
+                let request = protocol::StorageReceiptRequest::decode(payload)
+                    .ok_or("Invalid storage receipt request")?;
+                if let Some(receipt) =
+                    super::storage_receipts::produce_receipt(db, &self.agent, &self.drive, &request)
+                        .await?
+                {
+                    out.frames.push(
+                        receipt
+                            .encode_frame()
+                            .ok_or("Invalid storage receipt response")?,
+                    );
+                }
+            }
             protocol::tag::SYNC => {
                 let sync = protocol::decode_sync(payload).ok_or("Invalid SYNC")?;
                 if sync.drive != self.drive {
@@ -425,7 +507,52 @@ impl BrowserPeerSession {
 #[cfg(all(test, feature = "db"))]
 mod tests {
     use super::*;
+    use crate::db::kv_store::{KvIter, KvStore, ReplicaIdentity};
     use crate::db::trees::Tree;
+
+    struct FailingStorage(std::sync::Arc<dyn KvStore>, bool);
+
+    impl KvStore for FailingStorage {
+        fn replica_identity(&self, scope: &str) -> AtomicResult<Option<ReplicaIdentity>> {
+            if self.1 {
+                return Err("injected identity failure".into());
+            }
+            self.0.replica_identity(scope)
+        }
+        fn get(&self, tree: Tree, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
+            self.0.get(tree, key)
+        }
+        fn insert(&self, tree: Tree, key: &[u8], val: &[u8]) -> AtomicResult<()> {
+            self.0.insert(tree, key, val)
+        }
+        fn remove(&self, tree: Tree, key: &[u8]) -> AtomicResult<()> {
+            self.0.remove(tree, key)
+        }
+        fn contains_key(&self, tree: Tree, key: &[u8]) -> AtomicResult<bool> {
+            self.0.contains_key(tree, key)
+        }
+        fn scan_prefix(&self, tree: Tree, prefix: &[u8]) -> KvIter {
+            self.0.scan_prefix(tree, prefix)
+        }
+        fn range(&self, tree: Tree, start: Vec<u8>, end: Vec<u8>, reverse: bool) -> KvIter {
+            self.0.range(tree, start, end, reverse)
+        }
+        fn iter_tree(&self, tree: Tree) -> KvIter {
+            self.0.iter_tree(tree)
+        }
+        fn clear_tree(&self, tree: Tree) -> AtomicResult<()> {
+            self.0.clear_tree(tree)
+        }
+        fn apply_batch(&self, operations: &[crate::db::trees::Operation]) -> AtomicResult<()> {
+            self.0.apply_batch(operations)
+        }
+        fn flush(&self) -> AtomicResult<()> {
+            Err("injected receipt flush failure".into())
+        }
+        fn len(&self, tree: Tree) -> AtomicResult<usize> {
+            self.0.len(tree)
+        }
+    }
     async fn fixture() -> (Db, crate::agents::Agent, String, BrowserPeerSession) {
         let db = Db::init_temp(&format!(
             "browser-peer-{}-{}",
@@ -449,6 +576,343 @@ mod tests {
         let auth = protocol::encode_auth(agent, &session.proof_subject).unwrap();
         let output = session.handle(db, &auth).await.unwrap();
         assert_eq!(output.frames[0][0], protocol::tag::AUTH_OK);
+    }
+
+    fn receipt_request(db: &Db, drive: &str) -> Vec<u8> {
+        let snapshot = db.get_loro_snapshot_bytes(drive).unwrap();
+        let doc = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+        let version = crate::agents::encode_base64(&doc.doc().state_vv().encode());
+        let mut frame = vec![0x56];
+        frame.extend(
+            serde_json::to_vec(&serde_json::json!({
+                "nonce": "a".repeat(64), "drive": drive, "subject": drive, "version": version,
+            }))
+            .unwrap(),
+        );
+        frame
+    }
+
+    fn receipt_frame(value: serde_json::Value) -> Vec<u8> {
+        let mut frame = vec![protocol::tag::STORAGE_RECEIPT_REQUEST];
+        frame.extend(serde_json::to_vec(&value).unwrap());
+        frame
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_certifies_only_the_requested_stored_frontier() {
+        let (db, agent, drive, mut session) = fixture().await;
+        let auth = protocol::encode_auth(&agent, &session.proof_subject).unwrap();
+        let authenticated = session.handle(&db, &auth).await.unwrap();
+        assert_eq!(authenticated.peer_agent, Some(agent.subject.to_string()));
+        assert!(protocol::decode_auth_ok(&authenticated.frames[0][1..])
+            .contains(&"browser-storage-receipts-v1".to_string()));
+        let request = receipt_request(&db, &drive);
+        let output = session.handle(&db, &request).await.unwrap();
+        assert_eq!(output.frames.len(), 1);
+        assert_eq!(output.frames[0][0], 0x57);
+        let receipt: serde_json::Value = serde_json::from_slice(&output.frames[0][1..]).unwrap();
+        let target: serde_json::Value = serde_json::from_slice(&request[1..]).unwrap();
+        for field in ["nonce", "drive", "subject", "version"] {
+            assert_eq!(receipt[field], target[field]);
+        }
+        assert_eq!(receipt["barrier"], "atomic-redb-flush-v1");
+        assert_eq!(receipt["replica"]["storageId"].as_str().unwrap().len(), 64);
+
+        // A local later edit is not present in the receiver's stored snapshot.
+        let snapshot = db.get_loro_snapshot_bytes(&drive).unwrap();
+        let ahead = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+        ahead
+            .set_property(crate::urls::NAME, &crate::Value::String("Later".into()))
+            .unwrap();
+        let mut later = target;
+        later["version"] = crate::agents::encode_base64(&ahead.doc().state_vv().encode()).into();
+        let mut frame = vec![0x56];
+        frame.extend(serde_json::to_vec(&later).unwrap());
+        assert!(session.handle(&db, &frame).await.unwrap().frames.is_empty());
+        db.kv
+            .insert(
+                Tree::LoroSnapshots,
+                drive.as_bytes(),
+                &ahead.export_snapshot(),
+            )
+            .unwrap();
+        let confirmed = session.handle(&db, &request).await.unwrap();
+        let confirmed: serde_json::Value =
+            serde_json::from_slice(&confirmed.frames[0][1..]).unwrap();
+        let original: serde_json::Value = serde_json::from_slice(&request[1..]).unwrap();
+        assert_eq!(confirmed["version"], original["version"]);
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_requires_authentication() {
+        let (db, _, drive, mut session) = fixture().await;
+        assert!(session
+            .handle(&db, &receipt_request(&db, &drive))
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn shared_receipt_producer_rejects_public_without_a_session() {
+        let (db, _, drive, _) = fixture().await;
+        let frame = receipt_request(&db, &drive);
+        let request = protocol::StorageReceiptRequest::decode(&frame[1..]).unwrap();
+        assert!(super::super::storage_receipts::produce_receipt(
+            &db,
+            &ForAgent::Public,
+            &drive,
+            &request,
+        )
+        .await
+        .is_err());
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_accepts_authorized_http_subjects_in_the_drive() {
+        let (db, agent, drive, mut session) = fixture().await;
+        authenticate(&db, &agent, &mut session).await;
+        let subject = "https://example.com/legacy-resource";
+        let mut resource = db.get_resource(&drive.as_str().into()).await.unwrap();
+        resource.set_subject(subject.into());
+        resource
+            .set_unsafe(
+                crate::urls::DRIVE_PROP.into(),
+                crate::Value::AtomicUrl(drive.clone().into()),
+            )
+            .unwrap();
+        db.add_resource(&resource).await.unwrap();
+        let request = receipt_request(&db, subject);
+        let mut target: serde_json::Value = serde_json::from_slice(&request[1..]).unwrap();
+        target["drive"] = drive.into();
+        assert_eq!(
+            session
+                .handle(&db, &receipt_frame(target))
+                .await
+                .unwrap()
+                .frames
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn peer_identity_failure_does_not_reject_authenticated_sync() {
+        let (mut db, agent, _, mut session) = fixture().await;
+        db.kv = std::sync::Arc::new(FailingStorage(db.kv.clone(), true));
+        let auth = protocol::encode_auth(&agent, &session.proof_subject).unwrap();
+        let output = session.handle(&db, &auth).await.unwrap();
+        assert_eq!(output.frames[0][0], protocol::tag::AUTH_OK);
+        assert!(protocol::decode_auth_ok(&output.frames[0][1..]).is_empty());
+        assert_eq!(output.peer_agent, Some(agent.subject.to_string()));
+        assert!(!session.closed);
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_reads_internal_storage_for_public_http_subjects() {
+        let (db, agent, drive, mut session) = fixture().await;
+        authenticate(&db, &agent, &mut session).await;
+        let subject = "https://localhost/receipt-resource";
+        let mut resource = db.get_resource(&drive.as_str().into()).await.unwrap();
+        resource.set_subject(subject.into());
+        resource
+            .set_unsafe(
+                crate::urls::DRIVE_PROP.into(),
+                crate::Value::AtomicUrl(drive.clone().into()),
+            )
+            .unwrap();
+        db.add_resource(&resource).await.unwrap();
+        let stored = db.get_loro_snapshot(&Subject::from(subject)).unwrap();
+        let doc = AtomicLoroDoc::from_snapshot(&stored).unwrap();
+        let request = receipt_frame(serde_json::json!({
+            "nonce": "a".repeat(64), "drive": drive, "subject": subject,
+            "version": crate::agents::encode_base64(&doc.doc().state_vv().encode()),
+        }));
+        let output = session.handle(&db, &request).await.unwrap();
+        assert_eq!(output.frames.len(), 1);
+        let receipt: serde_json::Value = serde_json::from_slice(&output.frames[0][1..]).unwrap();
+        assert_eq!(receipt["subject"], subject);
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_flush_failure_emits_nothing() {
+        let (mut db, agent, drive, mut session) = fixture().await;
+        authenticate(&db, &agent, &mut session).await;
+        let request = receipt_request(&db, &drive);
+        db.kv = std::sync::Arc::new(FailingStorage(db.kv.clone(), false));
+        let error = session.handle(&db, &request).await.err().unwrap();
+        assert!(error.to_string().contains("injected receipt flush failure"));
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_never_confirms_an_uncommitted_batch() {
+        let (db, agent, drive, mut session) = fixture().await;
+        authenticate(&db, &agent, &mut session).await;
+        let snapshot = db.get_loro_snapshot_bytes(&drive).unwrap();
+        let ahead = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+        ahead
+            .set_property(crate::urls::NAME, &crate::Value::String("Buffered".into()))
+            .unwrap();
+        db.kv.begin_batch();
+        db.kv
+            .insert(
+                Tree::LoroSnapshots,
+                drive.as_bytes(),
+                &ahead.export_snapshot(),
+            )
+            .unwrap();
+        let request = receipt_request(&db, &drive);
+        assert!(session
+            .handle(&db, &request)
+            .await
+            .unwrap()
+            .frames
+            .is_empty());
+        db.kv.commit_batch().unwrap();
+        assert_eq!(session.handle(&db, &request).await.unwrap().frames.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_does_not_count_bytes_with_missing_dependencies() {
+        let (db, agent, drive, mut session) = fixture().await;
+        authenticate(&db, &agent, &mut session).await;
+        let original = receipt_request(&db, &drive);
+        let snapshot = db.get_loro_snapshot_bytes(&drive).unwrap();
+        let ahead = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+        let baseline = ahead.oplog_vv();
+        ahead
+            .set_property(
+                crate::urls::NAME,
+                &crate::Value::String("Pending deps".into()),
+            )
+            .unwrap();
+        let delta = ahead.export_updates_since(&baseline);
+        let requested = AtomicLoroDoc::update_range(&delta).unwrap().1;
+        // The encoded range names the target, but importing these bytes alone
+        // cannot materialize that state. A header/version claim is insufficient.
+        assert!(ahead.doc().state_vv().includes_vv(&requested));
+        let incomplete = AtomicLoroDoc::from_snapshot(&delta).unwrap();
+        assert!(!incomplete.doc().state_vv().includes_vv(&requested));
+        db.kv
+            .insert(Tree::LoroSnapshots, drive.as_bytes(), &delta)
+            .unwrap();
+        let mut target: serde_json::Value = serde_json::from_slice(&original[1..]).unwrap();
+        target["version"] = crate::agents::encode_base64(&requested.encode()).into();
+        assert!(session
+            .handle(&db, &receipt_frame(target))
+            .await
+            .unwrap()
+            .frames
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_is_unsupported_by_actual_memory_storage() {
+        let db = Db::init_redb(None).await.unwrap();
+        db.populate().await.unwrap();
+        let (agent, drive) = db.setup("Memory").await.unwrap();
+        let mut session = BrowserPeerSession::new(drive.clone(), None, "a".repeat(64)).unwrap();
+        let auth = protocol::encode_auth(&agent, &session.proof_subject).unwrap();
+        let output = session.handle(&db, &auth).await.unwrap();
+        assert!(!protocol::decode_auth_ok(&output.frames[0][1..])
+            .contains(&protocol::CAP_BROWSER_STORAGE_RECEIPTS_V1.to_string()));
+        assert!(session
+            .handle(&db, &receipt_request(&db, &drive))
+            .await
+            .unwrap()
+            .frames
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_omits_missing_and_deleted_subjects() {
+        let (db, agent, drive, mut session) = fixture().await;
+        authenticate(&db, &agent, &mut session).await;
+        let request = receipt_request(&db, &drive);
+        let mut target: serde_json::Value = serde_json::from_slice(&request[1..]).unwrap();
+        target["subject"] = "atomic:missing-receipt-subject".into();
+        assert!(session
+            .handle(&db, &receipt_frame(target))
+            .await
+            .unwrap()
+            .frames
+            .is_empty());
+        super::super::tombstones::record_tombstone(&db, &drive);
+        assert!(session
+            .handle(&db, &request)
+            .await
+            .unwrap()
+            .frames
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_does_not_fetch_unknown_http_subjects() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let subject = format!("http://{}/missing", listener.local_addr().unwrap());
+        let accepted = Arc::new(AtomicUsize::new(0));
+        let counter = accepted.clone();
+        let responder = tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                counter.fetch_add(1, Ordering::SeqCst);
+                let mut request = [0u8; 4096];
+                let _ = socket.read(&mut request).await;
+                let _ = socket
+                    .write_all(
+                        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .await;
+            }
+        });
+
+        let (db, agent, drive, mut session) = fixture().await;
+        authenticate(&db, &agent, &mut session).await;
+        let frame = receipt_request(&db, &drive);
+        let mut request: serde_json::Value = serde_json::from_slice(&frame[1..]).unwrap();
+        request["subject"] = subject.clone().into();
+        let output = session.handle(&db, &receipt_frame(request)).await;
+        responder.abort();
+        assert!(output.unwrap().frames.is_empty());
+        assert_eq!(
+            accepted.load(Ordering::SeqCst),
+            0,
+            "receipt probes must inspect local storage without fetching unknown HTTP resources"
+        );
+        assert!(!db.has_stored_resource(&subject.as_str().into()));
+    }
+
+    #[tokio::test]
+    async fn peer_receipt_rejects_wrong_drive_subject_and_malformed_frontiers() {
+        let (db, agent, drive, _) = fixture().await;
+        let foreign = db.create_drive("Other receipt drive").await.unwrap();
+        let request = receipt_request(&db, &drive);
+        let original: serde_json::Value = serde_json::from_slice(&request[1..]).unwrap();
+        for (field, value) in [
+            ("drive", foreign.clone()),
+            ("subject", foreign),
+            ("nonce", "bad".to_owned()),
+            ("version", "not-a-version".to_owned()),
+            (
+                "version",
+                crate::agents::encode_base64(&loro::VersionVector::default().encode()),
+            ),
+            ("version", "a".repeat(16 * 1024 + 1)),
+        ] {
+            let mut session = BrowserPeerSession::new(drive.clone(), None, "a".repeat(64)).unwrap();
+            authenticate(&db, &agent, &mut session).await;
+            let mut changed = original.clone();
+            changed[field] = value.into();
+            assert!(
+                session.handle(&db, &receipt_frame(changed)).await.is_err(),
+                "{field}"
+            );
+        }
     }
     #[tokio::test]
     async fn refuses_pre_auth_and_closes_session() {
@@ -601,6 +1065,10 @@ mod tests {
             .unwrap();
         db.add_resource(&resource).await.unwrap();
         assert!(!session.can_send(&db, &drive).await);
+        assert!(session
+            .handle(&db, &receipt_request(&db, &drive))
+            .await
+            .is_err());
     }
     #[tokio::test]
     async fn delayed_mesh_snapshot_does_not_resurrect_a_tombstone() {
@@ -685,6 +1153,52 @@ mod tests {
         let replay = session.handle(&db, &frame).await.unwrap();
         assert!(replay.changed.is_empty());
         assert!(db.get_resource(&subject).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn explicit_file_repair_registers_its_response_on_the_authenticated_edge() {
+        let (db, agent, drive, mut session) = fixture().await;
+        authenticate(&db, &agent, &mut session).await;
+        let bytes = b"missing bytes with matching file metadata";
+        let hash = blake3::hash(bytes);
+        let file = db
+            .create_resource(
+                crate::urls::FILE,
+                &drive,
+                "missing file",
+                Some(vec![
+                    (
+                        crate::urls::BLOB,
+                        crate::Value::AtomicUrl(
+                            crate::identifiers::blob_subject(&hash.to_hex()).into(),
+                        ),
+                    ),
+                    (
+                        crate::urls::DRIVE_PROP,
+                        crate::Value::AtomicUrl(drive.clone().into()),
+                    ),
+                ]),
+            )
+            .await
+            .unwrap();
+        let before = db.get_loro_snapshot_bytes(&file);
+        let requested = session
+            .request_blobs(&db, &[hash.to_hex().to_string(), "00".repeat(32)])
+            .await
+            .unwrap();
+        assert_eq!(
+            requested,
+            vec![protocol::encode_blob_request(hash.as_bytes())]
+        );
+        session
+            .handle(&db, &protocol::encode_blob_response(hash.as_bytes(), bytes))
+            .await
+            .unwrap();
+        assert_eq!(
+            db.get_blob(hash.as_bytes()).await.unwrap().as_deref(),
+            Some(bytes.as_slice())
+        );
+        assert_eq!(db.get_loro_snapshot_bytes(&file), before);
     }
 
     #[tokio::test]

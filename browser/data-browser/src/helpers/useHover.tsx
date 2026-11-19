@@ -1,5 +1,5 @@
 import { RefObject, useCallback, useMemo, useRef, useState } from 'react';
-import { isTouchPrimary } from './pointer';
+import { isTouchPrimary } from '@tomic/ui/helpers/pointer';
 
 type Listeners = {
   onMouseOver?: React.MouseEventHandler;

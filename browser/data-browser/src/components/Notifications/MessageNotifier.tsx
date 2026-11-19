@@ -10,13 +10,13 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
-import { AgentAvatar } from '../Presence/AgentAvatar';
+import { AgentAvatar } from '@tomic/resource-ui/components/Presence/AgentAvatar';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useFollow } from '../Presence/FollowContext';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../helpers/navigation';
-import { parseEntryId } from '../../helpers/chatLog';
+import { parseEntryId } from '@tomic/resource-ui/helpers/chatLog';
 import {
   bubbleId,
   classifyMessage,
@@ -31,7 +31,7 @@ import {
   showOsNotification,
   turnOnOsNotifications,
 } from '../../helpers/notifications/osNotifications';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { ToastBody, ToastCard, ToastText, ToastTitle } from './toastStyles';
 import {
   markReadAbout,

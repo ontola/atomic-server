@@ -62,7 +62,7 @@ import {
   setCrumbHint,
   type CrumbHint,
 } from '../components/BreadCrumbs';
-import { CalculatedPageHeight } from '../globalCssVars';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
 import { goToFirstEntry } from './resetHistory';
 import { actionPages } from './actionPages';
 import { styled } from 'styled-components';
@@ -87,7 +87,7 @@ import {
   setActionsHost,
   SHOW_SIDEBAR_ICONS_KEY,
 } from './hostActions';
-import { setLocalStorageValue } from '../hooks/useLocalStorage';
+import { setLocalStorageValue } from '@tomic/resource-ui/hooks/useLocalStorage';
 import {
   createPresenceBridge,
   relayLocalPresence,

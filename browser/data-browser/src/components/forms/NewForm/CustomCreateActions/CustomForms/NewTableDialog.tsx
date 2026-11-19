@@ -12,35 +12,35 @@ import React, {
 import { styled } from 'styled-components';
 import { useSettings } from '../../../../../helpers/AppSettings';
 import { BetaBadge } from '../../../../BetaBadge';
-import { Button } from '../../../../Button';
-import { Row } from '../../../../Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
 import {
   useDialog,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-} from '../../../../Dialog';
-import Field from '../../../Field';
+} from '@tomic/resource-ui/components/Dialog/index';
+import Field from '@tomic/resource-ui/components/forms/Field';
 import {
   InputWrapper,
   InputStyled,
   InlineErrMessage,
-} from '../../../InputStyles';
+} from '@tomic/ui/components/forms/InputStyles';
 import type { CustomResourceDialogProps } from '../../useNewResourceUI';
 import { singularize } from '../../../../../helpers/singularize';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
-import { ResourceSelector } from '../../../ResourceSelector';
-import { Checkbox, CheckboxLabel } from '../../../Checkbox';
+import { ResourceSelector } from '@tomic/resource-ui/components/forms/ResourceSelector/index';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
 import { useAddToOntology } from '../../../../../hooks/useAddToOntology';
 import {
   TABLE_TEMPLATES,
   type TableTemplate,
-} from '../../../../../chunks/TablePage/tableTemplates';
+} from '@tomic/table-page/TablePage/tableTemplates';
 import {
   createRowClass,
   resolveOntologyParent,
-} from '../../../../../chunks/TablePage/createTableFromSpec';
+} from '@tomic/table-page/TablePage/createTableFromSpec';
 import { useNavigateWithTransition } from '../../../../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../../../../helpers/navigation';
 

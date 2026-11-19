@@ -8,18 +8,18 @@ import {
 } from '@tomic/react';
 import { FaUser } from 'react-icons/fa6';
 import { useSettings } from '../../helpers/AppSettings';
-import { ResourceGlyph } from '../../components/ResourceGlyph';
-import { useDriveMembers } from '../../chunks/TablePage/EditorCells/useResourceSearch';
+import { ResourceGlyph } from '@tomic/resource-ui/components/ResourceGlyph';
+import { useDriveMembers } from '@tomic/table-page/TablePage/EditorCells/useResourceSearch';
 import { useState } from 'react';
 import { styled } from 'styled-components';
-import { Button } from '../../components/Button';
-import { Dialog } from '../../components/Dialog';
-import { ErrorLook } from '../../components/ErrorLook';
+import { Button } from '@tomic/ui/components/Button';
+import { Dialog } from '@tomic/resource-ui/components/Dialog/index';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 import {
   InputStyled,
   InputWrapper,
   LabelStyled,
-} from '../../components/forms/InputStyles';
+} from '@tomic/ui/components/forms/InputStyles';
 import { useOpenConversation } from '../../helpers/conversations/useConversations';
 import { asError } from '@tomic/react';
 

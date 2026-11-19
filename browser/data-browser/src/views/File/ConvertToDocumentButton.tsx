@@ -2,8 +2,8 @@ import { useStore, type Resource } from '@tomic/react';
 import { useState, type JSX } from 'react';
 import toast from 'react-hot-toast';
 import { FaFileLines } from 'react-icons/fa6';
-import { Button } from '../../components/Button';
-import { Row } from '../../components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
 import {
   convertFileToDocument,
   DocumentConversionSaveError,

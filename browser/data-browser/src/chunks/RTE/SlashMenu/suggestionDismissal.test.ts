@@ -2,7 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import { Node } from '@tiptap/core';
 import { Editor } from '@tiptap/react';
-import { SlashCommands, buildSuggestion } from './CommandsExtension';
+import {
+  SlashCommands,
+  buildSuggestion,
+} from '@tomic/resource-ui/chunks/RTE/SlashMenu/CommandsExtension';
 
 /**
  * Escape has to keep the slash menu closed in a document other people are

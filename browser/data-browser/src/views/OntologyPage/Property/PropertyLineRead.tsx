@@ -1,12 +1,12 @@
 import { urls, useResource, useString, type Core } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import Markdown from '../../../components/datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import { InlineDatatype } from '../InlineDatatype';
-import { ErrorLook } from '../../../components/ErrorLook';
-import { CARD_CONTAINER } from '../../../helpers/containers';
-import { dataTypeIconMap } from '../../../helpers/iconMap';
-import { Row } from '../../../components/Row';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
+import { CARD_CONTAINER } from '@tomic/ui/helpers/containers';
+import { dataTypeIconMap } from '@tomic/resource-ui/helpers/iconMap';
+import { Row } from '@tomic/ui/components/Row';
 import { ClassConstraintSummary } from '../Class/ClassConstraintSummary';
 
 import type { JSX } from 'react';

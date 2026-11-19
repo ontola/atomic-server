@@ -1,7 +1,7 @@
 import type { Resource } from '@tomic/react';
 import { FaLock } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { AgentAvatar } from '../../components/Presence/AgentAvatar';
+import { AgentAvatar } from '@tomic/resource-ui/components/Presence/AgentAvatar';
 import { useOtherMembers } from './ConversationTitle';
 
 interface ConversationIconProps {

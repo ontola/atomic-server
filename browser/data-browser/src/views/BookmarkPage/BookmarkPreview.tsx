@@ -1,7 +1,7 @@
 import { styled } from 'styled-components';
 import { ContainerNarrow } from '../../components/Containers.jsx';
 import Markdown from '../../components/datatypes/Markdown.jsx';
-import { ErrorLook } from '../../components/ErrorLook';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 
 import type { JSX } from 'react';
 

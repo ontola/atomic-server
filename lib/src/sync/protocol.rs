@@ -83,7 +83,230 @@ pub mod tag {
     /// Responder → invitee: `[0x53] [json {"drive": "...", "write": bool}]`,
     /// after the rights were granted to the `AUTH`-ed agent.
     pub const INVITE_OK: u8 = 0x53;
+    /// Iroh only: ask whether the peer durably holds the named drive state.
+    pub const VERIFY_FULL_SYNC: u8 = 0x54;
+    /// Iroh only: echo a matching verification request after checking storage.
+    pub const FULL_SYNC_CONFIRMED: u8 = 0x55;
+    /// Capability-gated peer request for a resource frontier flush receipt.
+    /// 0x54/0x55 belong to the separate Iroh full-drive confirmation proposal.
+    pub const STORAGE_RECEIPT_REQUEST: u8 = 0x56;
+    pub const STORAGE_RECEIPT: u8 = 0x57;
+    pub const ATTACHMENT_RECEIPT_REQUEST: u8 = 0x58;
+    pub const ATTACHMENT_RECEIPT: u8 = 0x59;
 }
+
+/// Advertised only by authenticated browser sessions with persistent storage.
+pub const CAP_BROWSER_STORAGE_RECEIPTS_V1: &str = "browser-storage-receipts-v1";
+/// Native Iroh peers only; never part of the general WebSocket capabilities.
+pub const CAP_IROH_STORAGE_RECEIPTS_V1: &str = "iroh-storage-receipts-v1";
+/// Explicit HTTP/WebSocket server storage receipt adapter support.
+pub const CAP_SERVER_STORAGE_RECEIPTS_V1: &str = "server-storage-receipts-v1";
+pub const STORAGE_RECEIPT_BARRIER: &str = "atomic-redb-flush-v1";
+pub const STORAGE_RECEIPT_MAX_FRAME: usize = 64 * 1024;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StorageReceiptRequest {
+    pub nonce: String,
+    pub drive: String,
+    pub subject: String,
+    /// Requested frontier covered by stored state, not necessarily its latest VV.
+    pub version: String,
+}
+
+fn receipt_hex(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+fn receipt_subject(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 4096
+        && !value.contains(['#', '?'])
+        && crate::Subject::from(value).pure_id() == crate::identifiers::canonicalize_scheme(value)
+}
+
+/// Accept the canonical browser (standard padded) and native (URL-safe unpadded)
+/// spellings. Preserve the requested spelling for exact response correlation.
+fn receipt_frontier(value: &str) -> Option<loro::VersionVector> {
+    use base64::{engine::general_purpose, Engine as _};
+    if value.is_empty() || value.len() > 16 * 1024 {
+        return None;
+    }
+    let bytes = crate::agents::decode_base64(value).ok()?;
+    if general_purpose::STANDARD.encode(&bytes) != value
+        && general_purpose::URL_SAFE_NO_PAD.encode(&bytes) != value
+    {
+        return None;
+    }
+    let vv = loro::VersionVector::decode(&bytes).ok()?;
+    (!vv.is_empty() && vv.iter().all(|(_, counter)| *counter > 0)).then_some(vv)
+}
+
+fn receipt_frame<T: serde::Serialize>(tag: u8, value: &T) -> Option<Vec<u8>> {
+    let payload = serde_json::to_vec(value).ok()?;
+    if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+        return None;
+    }
+    let mut frame = vec![tag];
+    frame.extend(payload);
+    Some(frame)
+}
+
+impl StorageReceiptRequest {
+    pub fn validate(&self) -> bool {
+        receipt_hex(&self.nonce)
+            && receipt_subject(&self.drive)
+            && receipt_subject(&self.subject)
+            && self.frontier().is_some()
+    }
+
+    pub fn frontier(&self) -> Option<loro::VersionVector> {
+        receipt_frontier(&self.version)
+    }
+
+    pub fn decode(payload: &[u8]) -> Option<Self> {
+        if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+            return None;
+        }
+        let request: Self = serde_json::from_slice(payload).ok()?;
+        request.validate().then_some(request)
+    }
+
+    pub fn encode_frame(&self) -> Option<Vec<u8>> {
+        self.validate()
+            .then(|| receipt_frame(tag::STORAGE_RECEIPT_REQUEST, self))
+            .flatten()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StorageReceiptReplica {
+    pub storage_id: String,
+    pub generation: String,
+}
+
+/// One completed historical storage barrier. It does not assert independence,
+/// current retention, reachability, or backup closure.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StorageReceipt {
+    pub nonce: String,
+    pub drive: String,
+    pub subject: String,
+    pub version: String,
+    pub replica: StorageReceiptReplica,
+    pub barrier: String,
+}
+
+impl StorageReceipt {
+    pub fn validate(&self) -> bool {
+        receipt_hex(&self.nonce)
+            && receipt_subject(&self.drive)
+            && receipt_subject(&self.subject)
+            && receipt_frontier(&self.version).is_some()
+            && receipt_hex(&self.replica.storage_id)
+            && receipt_hex(&self.replica.generation)
+            && self.barrier == STORAGE_RECEIPT_BARRIER
+    }
+
+    pub fn decode(payload: &[u8]) -> Option<Self> {
+        if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+            return None;
+        }
+        let receipt: Self = serde_json::from_slice(payload).ok()?;
+        receipt.validate().then_some(receipt)
+    }
+
+    pub fn encode_frame(&self) -> Option<Vec<u8>> {
+        self.validate()
+            .then(|| receipt_frame(tag::STORAGE_RECEIPT, self))
+            .flatten()
+    }
+}
+
+pub const CAP_ATTACHMENT_STORAGE_RECEIPTS_V1: &str = "attachment-storage-receipts-v1";
+pub const ATTACHMENT_RECEIPT_BARRIER: &str = "atomic-attachment-flush-v1";
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AttachmentReceiptRequest {
+    pub nonce: String,
+    pub drive: String,
+    pub subject: String,
+    pub version: String,
+    pub manifest: super::attachment_manifest::AttachmentManifest,
+}
+impl AttachmentReceiptRequest {
+    pub fn metadata(&self) -> StorageReceiptRequest {
+        StorageReceiptRequest {
+            nonce: self.nonce.clone(),
+            drive: self.drive.clone(),
+            subject: self.subject.clone(),
+            version: self.version.clone(),
+        }
+    }
+    pub fn validate(&self) -> bool {
+        self.metadata().validate() && self.manifest.validate()
+    }
+    pub fn decode(payload: &[u8]) -> Option<Self> {
+        if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+            return None;
+        }
+        let request: Self = serde_json::from_slice(payload).ok()?;
+        request.validate().then_some(request)
+    }
+    pub fn encode_frame(&self) -> Option<Vec<u8>> {
+        self.validate()
+            .then(|| receipt_frame(tag::ATTACHMENT_RECEIPT_REQUEST, self))
+            .flatten()
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AttachmentReceipt {
+    pub nonce: String,
+    pub drive: String,
+    pub subject: String,
+    pub version: String,
+    pub manifest: super::attachment_manifest::AttachmentManifest,
+    pub replica: StorageReceiptReplica,
+    pub barrier: String,
+}
+impl AttachmentReceipt {
+    pub fn request(&self) -> AttachmentReceiptRequest {
+        AttachmentReceiptRequest {
+            nonce: self.nonce.clone(),
+            drive: self.drive.clone(),
+            subject: self.subject.clone(),
+            version: self.version.clone(),
+            manifest: self.manifest.clone(),
+        }
+    }
+    pub fn validate(&self) -> bool {
+        self.request().validate()
+            && receipt_hex(&self.replica.storage_id)
+            && receipt_hex(&self.replica.generation)
+            && self.barrier == ATTACHMENT_RECEIPT_BARRIER
+    }
+    pub fn decode(payload: &[u8]) -> Option<Self> {
+        if payload.len() >= STORAGE_RECEIPT_MAX_FRAME {
+            return None;
+        }
+        let receipt: Self = serde_json::from_slice(payload).ok()?;
+        receipt.validate().then_some(receipt)
+    }
+    pub fn encode_frame(&self) -> Option<Vec<u8>> {
+        self.validate()
+            .then(|| receipt_frame(tag::ATTACHMENT_RECEIPT, self))
+            .flatten()
+    }
+}
+
+/// Iroh peers with this capability can check full drive storage after syncing.
+pub const CAP_PEER_FULL_SYNC: &str = "peer-full-sync";
 
 /// Feature names a responder advertises in the `AUTH_OK` payload and both
 /// peers advertise in `HELLO`, so a client can adapt to what the other side
@@ -293,6 +516,8 @@ pub mod error_code {
     /// lacks `canonical-scheme`, so it predates v0.41.0-beta.8 and will stop
     /// working in a coming release. Log it and carry on.
     pub const DEPRECATED_CLIENT: u16 = 14;
+    /// Activating an Installation was refused by the node plugin-route gates.
+    pub const HOST_FEATURE_UNAVAILABLE: u16 = 16;
 }
 
 /// Pull the `retry_after_ms=<n>` hint out of a `BUSY` error message (or an
@@ -306,6 +531,39 @@ pub fn retry_after_ms_from_message(message: &str) -> Option<u64> {
 /// The message text of a `BUSY` refusal for a retry delay in milliseconds.
 pub fn busy_message(retry_after_ms: u64) -> String {
     format!("Server busy; retry_after_ms={retry_after_ms}")
+}
+
+/// Separates an error message from the typed problem (RFC 9457 fields, as
+/// JSON) that may follow it. Commit errors travel as one string on both wire
+/// paths (the `ERROR` frame's message, the `/commit` Error resource's
+/// `description`), so a refusal with structured fields appends them after
+/// this marker rather than changing either format. A client that knows the
+/// marker splits it off; one that doesn't still shows the sentence first.
+pub const PROBLEM_MARKER: &str = "\nproblem+json: ";
+
+/// `message` with `problem` appended after [`PROBLEM_MARKER`].
+pub fn with_problem(message: &str, problem: &serde_json::Value) -> String {
+    format!("{message}{PROBLEM_MARKER}{problem}")
+}
+
+/// The human message and, if one follows [`PROBLEM_MARKER`], the typed
+/// problem. Anything a caller wrapped around the message (a prefix, or text
+/// after the JSON) is tolerated: the message is everything before the marker,
+/// the problem the first JSON value after it.
+pub fn split_problem(message: &str) -> (&str, Option<serde_json::Value>) {
+    let Some(at) = message.find(PROBLEM_MARKER) else {
+        return (message, None);
+    };
+    let rest = &message[at + PROBLEM_MARKER.len()..];
+    let problem = serde_json::Deserializer::from_str(rest)
+        .into_iter::<serde_json::Value>()
+        .next()
+        .and_then(Result::ok)
+        .filter(serde_json::Value::is_object);
+    match problem {
+        Some(problem) => (&message[..at], Some(problem)),
+        None => (message, None),
+    }
 }
 
 /// Decode the payload of an `ERROR` frame (slice *after* the tag byte):
@@ -350,6 +608,12 @@ pub fn classify_commit_error(message: &str) -> u16 {
     // client-side for review/rebase instead of retrying indefinitely.
     if message.contains("Commit's Loro update produced no state changes") {
         return error_code::CAUSALITY_CONFLICT;
+    }
+
+    if let (_, Some(problem)) = split_problem(message) {
+        if problem.get("type").and_then(|t| t.as_str()) == Some("host-feature-unavailable") {
+            return error_code::HOST_FEATURE_UNAVAILABLE;
+        }
     }
 
     // Admission refusals are not transport failures. They can recover after
@@ -432,14 +696,21 @@ pub mod sync_push_flags {
 pub const SYNC_PUSH_MAX_ENTRIES: usize = 100;
 pub const SYNC_PUSH_MAX_BYTES: usize = 1_048_576; // 1 MB
 
+/// Maximum file size accepted by the server's HTTP upload handler.
+pub const SERVER_UPLOAD_MAX_BYTES: usize = 50_242_880;
+
+/// A BLOB_RESPONSE begins with one tag byte and a 32-byte content hash.
+const BLOB_RESPONSE_HEADER_BYTES: usize = 1 + 32;
+
 /// Max length-prefixed frame `peer.rs` will read off an **authenticated**
 /// Iroh QUIC stream before giving up on the connection — bounds the
 /// `vec![0u8; len]` allocation against an attacker-controlled `u32` length
 /// prefix. Shared by the live-sync loop and an initiator's own post-AUTH
 /// `SYNC_*` response reads (cheap inconsistency sweep, planning/unified-sync.md
 /// Phase 0b) — both run only after the peer has already proven its identity,
-/// so a generous cap doesn't expand who can trigger the allocation.
-pub const IROH_FRAME_MAX_BYTES: usize = 50_000_000;
+/// so a generous cap doesn't expand who can trigger the allocation. Allow
+/// the largest accepted upload to fit in a single BLOB_RESPONSE.
+pub const IROH_FRAME_MAX_BYTES: usize = SERVER_UPLOAD_MAX_BYTES + BLOB_RESPONSE_HEADER_BYTES;
 
 /// Same purpose, but for frames read from a peer that has **not yet**
 /// authenticated: the accept-side dispatch loop (`handle_stream`), whose
@@ -1264,7 +1535,7 @@ pub fn encode_blob_request(hash: &[u8; 32]) -> Vec<u8> {
 
 /// Encode a BLOB_RESPONSE message: [0x35] [hash: [u8; 32]] [bytes...]
 pub fn encode_blob_response(hash: &[u8; 32], bytes: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(1 + 32 + bytes.len());
+    let mut buf = Vec::with_capacity(BLOB_RESPONSE_HEADER_BYTES + bytes.len());
     buf.push(tag::BLOB_RESPONSE);
     buf.extend_from_slice(hash);
     buf.extend_from_slice(bytes);
@@ -1828,6 +2099,116 @@ pub fn decode_sync_push(data: &[u8]) -> Option<DecodedSyncPush> {
 mod tests {
     use super::*;
 
+    fn receipt_request_fixture() -> StorageReceiptRequest {
+        let vv: loro::VersionVector = [(1, 2), (2, 1)].into_iter().collect();
+        StorageReceiptRequest {
+            nonce: "a".repeat(64),
+            drive: "atomic:drive".into(),
+            subject: "https://example.com/resource".into(),
+            version: crate::agents::encode_base64(&vv.encode()),
+        }
+    }
+
+    #[test]
+    fn storage_receipt_request_and_response_round_trip() {
+        use base64::{engine::general_purpose, Engine as _};
+        let mut request = receipt_request_fixture();
+        let bytes = crate::agents::decode_base64(&request.version).unwrap();
+        for version in [
+            request.version.clone(),
+            general_purpose::STANDARD.encode(bytes),
+        ] {
+            request.version = version;
+            let frame = request.encode_frame().unwrap();
+            let decoded = StorageReceiptRequest::decode(&frame[1..]).unwrap();
+            assert_eq!(decoded.version, request.version);
+            let receipt = StorageReceipt {
+                nonce: request.nonce.clone(),
+                drive: request.drive.clone(),
+                subject: request.subject.clone(),
+                version: request.version.clone(),
+                replica: StorageReceiptReplica {
+                    storage_id: "b".repeat(64),
+                    generation: "c".repeat(64),
+                },
+                barrier: STORAGE_RECEIPT_BARRIER.into(),
+            };
+            let frame = receipt.encode_frame().unwrap();
+            assert_eq!(frame[0], tag::STORAGE_RECEIPT);
+            assert_eq!(StorageReceipt::decode(&frame[1..]), Some(receipt.clone()));
+            for (field, value) in [
+                ("nonce", "bad"),
+                ("barrier", "ordinary-ack"),
+                ("version", "AQEC==="),
+            ] {
+                let mut invalid = serde_json::to_value(&receipt).unwrap();
+                invalid[field] = value.into();
+                assert!(StorageReceipt::decode(&serde_json::to_vec(&invalid).unwrap()).is_none());
+            }
+            let mut invalid = serde_json::to_value(&receipt).unwrap();
+            invalid["replica"]["storageId"] = serde_json::json!(["b".repeat(64)]);
+            assert!(StorageReceipt::decode(&serde_json::to_vec(&invalid).unwrap()).is_none());
+        }
+        assert!(!CAPABILITIES.contains(&CAP_IROH_STORAGE_RECEIPTS_V1));
+    }
+
+    #[test]
+    fn storage_receipt_rejects_invalid_subjects_sizes_and_frontiers() {
+        let original = receipt_request_fixture();
+        for field in ["drive", "subject"] {
+            for value in [
+                "".to_owned(),
+                "x".repeat(4097),
+                "é".repeat(2049),
+                "atomic:drive?query".into(),
+                "atomic:drive#fragment".into(),
+            ] {
+                let mut invalid = serde_json::to_value(&original).unwrap();
+                invalid[field] = value.into();
+                assert!(
+                    StorageReceiptRequest::decode(&serde_json::to_vec(&invalid).unwrap()).is_none()
+                );
+            }
+        }
+        for vv in [
+            loro::VersionVector::default(),
+            [(1, 0)].into_iter().collect(),
+            [(1, -1)].into_iter().collect(),
+            [(1, 1), (2, 0)].into_iter().collect(),
+        ] {
+            let request = StorageReceiptRequest {
+                version: crate::agents::encode_base64(&vv.encode()),
+                ..original.clone()
+            };
+            assert!(request.encode_frame().is_none());
+        }
+        for version in ["AQEC===".to_owned(), "a".repeat(16 * 1024 + 1)] {
+            let request = StorageReceiptRequest {
+                version,
+                ..original.clone()
+            };
+            assert!(request.encode_frame().is_none());
+        }
+        assert!(StorageReceiptRequest::decode(&vec![b' '; STORAGE_RECEIPT_MAX_FRAME]).is_none());
+        assert!(StorageReceipt::decode(&vec![b' '; STORAGE_RECEIPT_MAX_FRAME]).is_none());
+    }
+
+    #[test]
+    fn candidate_host_refusals_do_not_alias_released_protocol_errors() {
+        // Candidate-only plugin endpoints must not reinterpret invitations or
+        // the released-client deprecation notice when both host lines combine.
+        assert_eq!(error_code::INVITE_REFUSED, 13);
+        assert_eq!(error_code::DEPRECATED_CLIENT, 14);
+        assert_ne!(
+            error_code::HOST_FEATURE_UNAVAILABLE,
+            error_code::INVITE_REFUSED
+        );
+        assert_ne!(
+            error_code::HOST_FEATURE_UNAVAILABLE,
+            error_code::DEPRECATED_CLIENT
+        );
+    }
+
     #[test]
     fn sync_push_envelopes_round_trip_and_stay_invisible_without_the_flag() {
         let entries: [(&str, &[u8]); 2] = [("did:ad:x", &[1, 2]), ("did:ad:y", &[3])];
@@ -2137,6 +2518,32 @@ mod tests {
             classify_commit_error("some other error"),
             error_code::UNKNOWN
         );
+        let refusal = with_problem(
+            "This plugin opens public endpoints on the server (route `GET /x`).",
+            &serde_json::json!({"type": "host-feature-unavailable", "needed": "read-only"}),
+        );
+        assert_eq!(
+            classify_commit_error(&format!("Commit refused: {refusal}")),
+            error_code::HOST_FEATURE_UNAVAILABLE
+        );
+    }
+
+    #[test]
+    fn a_problem_splits_off_its_message() {
+        let problem =
+            serde_json::json!({"type": "host-feature-unavailable", "surfaces": ["a, (b)"]});
+        let message = with_problem("Refused.", &problem);
+        assert_eq!(split_problem(&message), ("Refused.", Some(problem.clone())));
+        // A wrapper's prefix stays with the message, a suffix is dropped.
+        let wrapped = format!("Hook failed: {message}. Try again");
+        assert_eq!(
+            split_problem(&wrapped),
+            ("Hook failed: Refused.", Some(problem))
+        );
+        assert_eq!(split_problem("plain"), ("plain", None));
+        // A marker without JSON after it is just text.
+        let broken = format!("x{PROBLEM_MARKER}not json");
+        assert_eq!(split_problem(&broken), (broken.as_str(), None));
     }
 
     /// The message a table row gets when its class never reached this server.

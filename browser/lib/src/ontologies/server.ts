@@ -20,6 +20,7 @@ export const server = {
     installation: 'https://atomicdata.dev/classes/Installation',
     listing: 'https://atomicdata.dev/classes/Listing',
     externalApp: 'https://atomicdata.dev/classes/ExternalApp',
+    installationRuntime: 'https://atomicdata.dev/classes/InstallationRuntime',
   },
   properties: {
     agent: 'https://atomicdata.dev/properties/invite/agent',
@@ -83,6 +84,12 @@ export const server = {
     homepage: 'https://atomicdata.dev/properties/homepage',
     openUrlTemplate: 'https://atomicdata.dev/properties/openUrlTemplate',
     handlesClasses: 'https://atomicdata.dev/properties/handlesClasses',
+    integrationAppAgent:
+      'https://atomicdata.dev/properties/integrationAppAgent',
+    integrationConnections:
+      'https://atomicdata.dev/properties/integrationConnections',
+    integrationRuntimeAgent:
+      'https://atomicdata.dev/properties/integrationRuntimeAgent',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -169,6 +176,8 @@ export const server = {
       'https://atomicdata.dev/properties/pluginPermissions',
       'https://atomicdata.dev/properties/jsonSchema',
       'https://atomicdata.dev/properties/version',
+      'https://atomicdata.dev/properties/integrationAppAgent',
+      'https://atomicdata.dev/properties/integrationConnections',
     ],
     ['https://atomicdata.dev/classes/Listing']: [
       'https://atomicdata.dev/properties/name',
@@ -189,6 +198,10 @@ export const server = {
       'https://atomicdata.dev/properties/openUrlTemplate',
       'https://atomicdata.dev/properties/handlesClasses',
     ],
+    ['https://atomicdata.dev/classes/InstallationRuntime']: [
+      'https://atomicdata.dev/properties/integrationRuntimeAgent',
+      'https://atomicdata.dev/properties/name',
+    ],
   },
 } as const satisfies OntologyBaseObject;
 
@@ -206,6 +219,7 @@ export namespace Server {
   export type Installation = typeof server.classes.installation;
   export type Listing = typeof server.classes.listing;
   export type ExternalApp = typeof server.classes.externalApp;
+  export type InstallationRuntime = typeof server.classes.installationRuntime;
 }
 
 declare module '../index.js' {
@@ -313,7 +327,9 @@ declare module '../index.js' {
         | typeof server.properties.pluginAgent
         | typeof server.properties.pluginPermissions
         | typeof server.properties.jsonSchema
-        | typeof server.properties.version;
+        | typeof server.properties.version
+        | typeof server.properties.integrationAppAgent
+        | typeof server.properties.integrationConnections;
     };
     [server.classes.listing]: {
       requires:
@@ -339,6 +355,10 @@ declare module '../index.js' {
         | 'https://atomicdata.dev/properties/description'
         | typeof server.properties.openUrlTemplate
         | typeof server.properties.handlesClasses;
+    };
+    [server.classes.installationRuntime]: {
+      requires: BaseProps | typeof server.properties.integrationRuntimeAgent;
+      recommends: 'https://atomicdata.dev/properties/name';
     };
   }
 
@@ -401,6 +421,9 @@ declare module '../index.js' {
     [server.properties.homepage]: string;
     [server.properties.openUrlTemplate]: string;
     [server.properties.handlesClasses]: string[];
+    [server.properties.integrationAppAgent]: string;
+    [server.properties.integrationConnections]: JSONValue;
+    [server.properties.integrationRuntimeAgent]: string;
   }
 
   interface PropSubjectToNameMapping {
@@ -462,5 +485,8 @@ declare module '../index.js' {
     [server.properties.homepage]: 'homepage';
     [server.properties.openUrlTemplate]: 'openUrlTemplate';
     [server.properties.handlesClasses]: 'handlesClasses';
+    [server.properties.integrationAppAgent]: 'integrationAppAgent';
+    [server.properties.integrationConnections]: 'integrationConnections';
+    [server.properties.integrationRuntimeAgent]: 'integrationRuntimeAgent';
   }
 }

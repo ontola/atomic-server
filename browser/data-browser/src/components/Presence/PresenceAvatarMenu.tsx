@@ -12,9 +12,12 @@ import {
   FaStar,
   FaUser,
 } from 'react-icons/fa6';
-import { DropdownMenu, type DropdownItem } from '../Dropdown';
-import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
-import { AgentAvatar } from './AgentAvatar';
+import {
+  DropdownMenu,
+  type DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import type { DropdownTriggerProps } from '@tomic/ui/components/Dropdown/DropdownTrigger';
+import { AgentAvatar } from '@tomic/resource-ui/components/Presence/AgentAvatar';
 import { FollowingIndicator } from './FollowingIndicator';
 import { useFollow } from './FollowContext';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';

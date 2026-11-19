@@ -1,6 +1,6 @@
 import { styled } from 'styled-components';
 import { useResource, useTitle, dataBrowser } from '@tomic/react';
-import { AIIcon } from '../../components/AI/AIIcon';
+import { AIIcon } from '@tomic/resource-ui/components/AI/AIIcon';
 import { ConversationIcon } from '../../views/Conversation/ConversationIcon';
 import { ConversationTitle } from '../../views/Conversation/ConversationTitle';
 import type { ChatMatch } from './chatMatches';

@@ -55,6 +55,19 @@ fn main() -> std::io::Result<()> {
                 PathBuf::from("../browser/data-browser/src"),
                 PathBuf::from("../browser/lib/src"),
                 PathBuf::from("../browser/react/src"),
+                PathBuf::from("../browser/ui/src"),
+                PathBuf::from("../browser/utils/src"),
+                PathBuf::from("../browser/table/src"),
+                PathBuf::from("../browser/resource-ui/src"),
+                PathBuf::from("../browser/table-page/src"),
+                PathBuf::from("../browser/resource-ui/package.json"),
+                PathBuf::from("../browser/resource-ui/tsconfig.json"),
+                PathBuf::from("../browser/resource-ui/wuchale.config.js"),
+                PathBuf::from("../browser/resource-ui/build.mjs"),
+                PathBuf::from("../browser/resource-ui/scripts/build-package.mjs"),
+                PathBuf::from("../browser/table-page/package.json"),
+                PathBuf::from("../browser/table-page/tsconfig.json"),
+                PathBuf::from("../browser/table-page/build.mjs"),
                 // The wasm crate (built via `pnpm run build` -> wasm-pack) and
                 // the atomic_lib crate it depends on. Without these, a
                 // Rust-only change under either is invisible to the mtime
@@ -72,6 +85,7 @@ fn main() -> std::io::Result<()> {
                 // WalkDir yields a plain file as a single entry, so listing
                 // files here works the same as listing directories.
                 PathBuf::from("../browser/data-browser/vite.config.ts"),
+                PathBuf::from("../browser/data-browser/scripts/build-builtin-syncables.mjs"),
                 PathBuf::from("../browser/data-browser/package.json"),
                 PathBuf::from("../browser/pnpm-lock.yaml"),
                 PathBuf::from("../browser/form-renderer/src"),
@@ -662,29 +676,16 @@ fn precompress_assets(root: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Paths under `src/` that the JS build *writes*, so they are output, not
-/// input, even though they live among the sources (and `main.loader.js` is
-/// committed, unlike its two siblings).
-///
-/// wuchale rewrites all three on every `pnpm run build` — same bytes, new
-/// mtime. Counting them as "a source changed" makes this check
-/// self-triggering: one build guarantees the next one rebuilds too, so the
-/// ~35s data-browser build is paid every single time and the mtime comparison
-/// never gets to do its job. CI feels it hardest, where each job starts from
-/// whatever the previous one left behind.
-///
-/// A genuine wuchale change still forces a rebuild: it arrives as a
-/// `pnpm-lock.yaml` bump, which is watched.
+/// Generated catalog artifacts live among the sources, but are build output.
+/// Counting their fresh mtimes makes the frontend build trigger itself forever.
+/// The custom `main.loader.js` is now authored source and must stay watched.
+/// Catalog configuration and dependency changes are watched above.
 fn is_js_build_output(path: &Path) -> bool {
     // Matched on the tail rather than the file name alone: `data.js` is a
     // name plausible enough to exist as real source elsewhere under src/, and
     // silently ignoring *that* would be the opposite bug — a source edit that
     // never triggers a rebuild.
-    const GENERATED: &[&str] = &[
-        "src/locales/main.loader.js",
-        "src/locales/data.js",
-        "src/locales/.wuchale",
-    ];
+    const GENERATED: &[&str] = &["src/locales/data.js", "src/locales/.wuchale"];
 
     // `.wuchale` needs no contents check: WalkDir consults filter_entry on a
     // directory before descending, so rejecting it here prunes the subtree.

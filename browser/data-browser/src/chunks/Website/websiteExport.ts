@@ -96,7 +96,7 @@ export async function buildWebsiteArtifact(
   );
   // Load the editor adapter before synchronously capturing the whole selection.
   const documentReader = config.pages.some(page => page.documents.length)
-    ? await import('../RTE/readDocumentV2TiptapJson')
+    ? await import('@tomic/resource-ui/chunks/RTE/readDocumentV2TiptapJson')
     : undefined;
   const files: Record<string, string> = {};
 

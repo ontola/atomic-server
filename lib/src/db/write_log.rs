@@ -28,6 +28,27 @@ struct LogState {
 #[derive(Default)]
 pub struct WriteLog {
     state: Mutex<LogState>,
+    confirmation: Mutex<ConfirmationEpoch>,
+    blob_generation: AtomicU64,
+    blob_writers: AtomicU64,
+}
+
+#[derive(Default)]
+struct ConfirmationEpoch {
+    epoch: u64,
+    writers: usize,
+}
+
+/// Marks an in-flight KV mutation so a confirmation cannot observe a partial write.
+pub(super) struct MutationGuard<'a>(&'a WriteLog);
+
+impl Drop for MutationGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.0.confirmation.lock() {
+            state.epoch = state.epoch.wrapping_add(1);
+            state.writers -= 1;
+        }
+    }
 }
 
 /// The subject a `Tree::Resources` / `Tree::LoroSnapshots` key names, if a
@@ -45,7 +66,43 @@ pub(super) fn logged_subject(tree: Tree, key: &[u8]) -> Option<String> {
     Some(key.to_string())
 }
 
+/// Marks an in-progress byte mutation, including failed writes and open commits.
+pub struct BlobWrite<'a>(&'a WriteLog);
+impl Drop for BlobWrite<'_> {
+    fn drop(&mut self) {
+        self.0.blob_generation.fetch_add(1, Ordering::SeqCst);
+        self.0.blob_writers.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 impl WriteLog {
+    /// Enter before a KV mutation and leave only after its publication.
+    pub(super) fn mutation(&self) -> Option<MutationGuard<'_>> {
+        let mut state = self.confirmation.lock().ok()?;
+        state.epoch = state.epoch.wrapping_add(1);
+        state.writers += 1;
+        Some(MutationGuard(self))
+    }
+
+    /// An idle epoch suitable for comparing before and after a proof walk.
+    /// A poisoned lock or an active writer is never a valid token.
+    pub fn confirmation_token(&self) -> Option<u64> {
+        let state = self.confirmation.lock().ok()?;
+        (state.writers == 0).then_some(state.epoch)
+    }
+
+    pub fn blob_generation(&self) -> Option<u64> {
+        let generation = self.blob_generation.load(Ordering::SeqCst);
+        (self.blob_writers.load(Ordering::SeqCst) == 0).then_some(generation)
+    }
+    pub fn blob_write(&self, writing: bool) -> Option<BlobWrite<'_>> {
+        if !writing {
+            return None;
+        }
+        self.blob_writers.fetch_add(1, Ordering::SeqCst);
+        self.blob_generation.fetch_add(1, Ordering::SeqCst);
+        Some(BlobWrite(self))
+    }
+
     pub fn generation(&self) -> u64 {
         self.state.lock().map(|s| s.generation).unwrap_or(0)
     }
@@ -386,5 +443,23 @@ mod tests {
         let stranger = ForAgent::AgentSubject(mallory.subject.clone());
         assert!(probe(&db, &drive, &stranger).await.is_err());
         assert_eq!(probe(&db, &drive, &owner).await.unwrap(), as_owner);
+    }
+}
+
+#[cfg(test)]
+mod confirmation_epoch_tests {
+    use super::WriteLog;
+
+    #[test]
+    fn active_and_overlapping_writers_invalidate_receipts() {
+        let log = WriteLog::default();
+        let before = log.confirmation_token().unwrap();
+        let first = log.mutation().unwrap();
+        assert_eq!(log.confirmation_token(), None);
+        let second = log.mutation().unwrap();
+        drop(first);
+        assert_eq!(log.confirmation_token(), None);
+        drop(second);
+        assert_ne!(log.confirmation_token(), Some(before));
     }
 }

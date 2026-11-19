@@ -6,8 +6,8 @@ import {
   type FormDefinition,
 } from '@tomic/form-renderer';
 import '@tomic/form-renderer/style.css';
-import { Dialog, useDialog } from '@components/Dialog';
-import { Button } from '@components/Button';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
 import { buildFormDefinitionClientSide } from './buildFormDefinition';
 
 interface FormPreviewButtonProps {

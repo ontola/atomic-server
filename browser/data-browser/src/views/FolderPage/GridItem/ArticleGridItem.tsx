@@ -1,8 +1,8 @@
 import { dataBrowser, unknownSubject, useSubject } from '@tomic/react';
 
-import { atomicArgu } from '../../../ontologies/atomic-argu';
+import { atomicArgu } from '@tomic/resource-ui/ontologies/atomic-argu';
 import { GridItemViewProps } from './GridItemViewProps';
-import { Thumbnail } from '../../../components/Thumbnail';
+import { Thumbnail } from '@tomic/resource-ui/components/Thumbnail';
 
 import type { JSX } from 'react';
 

@@ -19,6 +19,19 @@ export default defineConfig(env =>
       emptyOutDir: true,
       rollupOptions: {
         input: path.resolve(__dirname, 'embed.html'),
+        output: {
+          // The shared-package cut creates many tiny eager chunks. Coalesce
+          // only the existing static entry closure; lazy features stay lazy
+          // and the size budget remains unchanged.
+          codeSplitting: {
+            groups: [
+              {
+                name: 'embed-initial',
+                tags: ['$initial'],
+              },
+            ],
+          },
+        },
       },
     },
   } satisfies UserConfig),

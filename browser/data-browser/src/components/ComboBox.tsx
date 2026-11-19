@@ -6,11 +6,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import { InputStyled, InputWrapper } from './forms/InputStyles';
-import { IconButton } from './IconButton/IconButton';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { FaChevronDown } from 'react-icons/fa6';
 import { useCombobox } from 'downshift';
-import { Column, Row } from './Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import styled, { css } from 'styled-components';
 import { QuickScore } from 'quick-score';
 

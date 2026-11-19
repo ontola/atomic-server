@@ -1,4 +1,11 @@
 import type { Intent } from '@tomic/lib';
+import type {
+  OpenExternalResult,
+  OpenResourceResult,
+  ProxyDisconnectResult,
+  ImporterRunArgs,
+  ImporterRunResult,
+} from './types';
 import { HostError, toHostErrorCode } from './hostAbi';
 import { viewRequest, type ViewOperation } from './viewProtocol';
 
@@ -68,6 +75,9 @@ const ASKS_THE_PERSON: ReadonlySet<ViewOperation> = new Set([
   'pickFile',
   'form',
   'proxyConnect',
+  'openExternal',
+  'openResourceConfirmed',
+  'runImporter',
 ]);
 
 /** How long the host gets for anything else: its own recovery takes 30s. */
@@ -212,6 +222,14 @@ export class ViewStore {
     };
   }
 
+  /** Start, inspect or cancel the execution selected by the mounting host. */
+  public execution(action: 'start' | 'state' | 'cancel'): Promise<unknown> {
+    if (!['start', 'state', 'cancel'].includes(action))
+      return Promise.reject(new Error('Unknown view execution action'));
+
+    return this.call('execution', { action });
+  }
+
   /**
    * Several writes as one change, in the intent format a plugin's `run()`
    * returns. Refer to a resource created in the same call as
@@ -258,6 +276,32 @@ export class ViewStore {
       }
     };
   }
+
+  /** Ask the person before opening an http(s) link outside the frame. */
+  public openExternal(url: string): Promise<OpenExternalResult> {
+    return this.call('openExternal', { url });
+  }
+
+  /** Ask before leaving this frame for a resource the person can read. */
+  public openResource(subject: string): Promise<OpenResourceResult> {
+    return this.call('openResourceConfirmed', { subject });
+  }
+
+  /** Run the table's importer after host confirmation, then review its proposal. */
+  public readonly importer = {
+    run: (args: ImporterRunArgs = {}): Promise<ImporterRunResult> =>
+      this.call('runImporter', { ...args }),
+  };
+
+  /** Relinquish this app's access without deleting anyone's connection. */
+  public readonly proxy = {
+    disconnect: ({
+      platform,
+    }: {
+      platform: string;
+    }): Promise<ProxyDisconnectResult> =>
+      this.call('proxyDisconnect', { platform }),
+  };
 
   /**
    * Host UI. The page around this frame draws these with Atomic's own

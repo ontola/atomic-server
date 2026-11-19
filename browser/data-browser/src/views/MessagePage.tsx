@@ -6,10 +6,10 @@ import {
 } from '@tomic/react';
 
 import { CommitDetail } from '../components/CommitDetail';
-import { ContainerNarrow } from '../components/Containers';
-import Markdown from '../components/datatypes/Markdown';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import { Details } from '../components/Detail';
-import { ResourceInline } from './ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 import { ResourcePageProps } from './ResourcePage';
 
 /** Full page Message view that should (in the future) render replies */

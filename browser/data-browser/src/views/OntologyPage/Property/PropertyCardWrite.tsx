@@ -2,8 +2,8 @@ import { useCallback, type JSX } from 'react';
 import { core, useCanWrite, useProperty, useResource } from '@tomic/react';
 import { FaHashtag } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Column, Row } from '../../../components/Row';
-import InputSwitcher from '../../../components/forms/InputSwitcher';
+import { Column, Row } from '@tomic/ui/components/Row';
+import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
 import {
   ContextMenuOptions,
   ResourceContextMenu,
@@ -11,7 +11,7 @@ import {
 import { useOntologyContext } from '../OntologyContext';
 import { PropertyFormCommon } from './PropertyFormCommon';
 import { TargetableCard } from '../TargetableCard';
-import { isContentAddressed } from '../../../helpers/propertyIdentity';
+import { isContentAddressed } from '@tomic/resource-ui/helpers/propertyIdentity';
 
 interface PropertyCardWriteProps {
   subject: string;

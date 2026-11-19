@@ -8,9 +8,9 @@ import {
   useResource,
   VirtualizedCollectionList,
 } from '@tomic/react';
-import { Details } from '../Details';
+import { Details } from '@tomic/ui/components/Details';
 import { useState } from 'react';
-import { getIconForClass } from '../../helpers/iconMap';
+import { getIconForClass } from '@tomic/resource-ui/helpers/iconMap';
 import { styled } from 'styled-components';
 
 const defaultShouldBeRendered = (resource: Resource) =>

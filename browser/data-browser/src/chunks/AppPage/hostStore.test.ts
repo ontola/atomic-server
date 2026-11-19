@@ -1,3 +1,13 @@
+import {
+  FOREIGN_IMPORTER,
+  NO_IMPORTER,
+  importerRunSummary,
+  resolveAppImporter,
+  resourceToOpen,
+  ROW_DESTROY_REFUSED,
+} from './hostStore';
+import type { ApplyReport, PluginManifest, RunPlan } from '@tomic/react';
+import { server } from '@tomic/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { core, signRequest } from '@tomic/react';
 import type { Store } from '@tomic/react';
@@ -8,6 +18,10 @@ import {
   MAX_GET_MANY,
 } from './hostStore';
 
+vi.mock('./appAgent', () => ({
+  appAgentOf: vi.fn(async () => 'did:ad:agent:app'),
+}));
+
 vi.mock('@tomic/react', async () => {
   const actual =
     await vi.importActual<typeof import('@tomic/react')>('@tomic/react');
@@ -17,6 +31,26 @@ vi.mock('@tomic/react', async () => {
   return {
     ...actual,
     signRequest: vi.fn(async () => ({})),
+    // Likewise: which plugin's Set up made a table is tested in @tomic/lib.
+    destinationOwnerOf: async (
+      _store: unknown,
+      _drive: string,
+      table: string,
+    ) =>
+      table === 'did:ad:transactions' || table === 'did:ad:statements'
+        ? IMPORTER
+        : undefined,
+    findSchema: async () => ({ properties: PLUGIN_TERMS }),
+    signedRequestInit: async (
+      _url: string,
+      _agent: unknown,
+      request: { method: string; headers?: object; body?: string },
+    ) => ({
+      method: request.method,
+      headers: { ...request.headers },
+      body: request.body,
+    }),
+
     // Reading an importer's stored config is tested in @tomic/lib
     // (plugin-destination.test.ts); here only what `data` passes on.
     destinationTablesFor: async (
@@ -321,6 +355,7 @@ describe('integration-proxy capabilities', () => {
     capability: vi.fn(async () => minted),
     connections: vi.fn(async () => [{ connectionId: 'c1', platform: 'pets' }]),
     origin: 'https://proxy.example',
+    disconnect: vi.fn(async () => ['c1']),
   };
 
   it('mints a capability for the frame key, never touching the server', async () => {
@@ -401,6 +436,48 @@ describe('integration-proxy capabilities', () => {
     ).rejects.toThrow('publicKey is required');
   });
 
+  it('disconnects the current app only, without writing local resources', async () => {
+    const store = fakeStore();
+    expect(
+      await handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: 'pets' }),
+        undefined,
+        proxy,
+      ),
+    ).toEqual({
+      status: 'disconnected',
+      platform: 'pets',
+      connectionIds: ['c1'],
+    });
+    expect(proxy.disconnect).toHaveBeenCalledWith('pets', []);
+  });
+
+  it('refuses disconnect without a proxy or with an invalid platform', async () => {
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: 'pets' }),
+      ),
+    ).rejects.toThrow('cannot reach');
+    proxy.disconnect.mockClear();
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: '../other' }),
+        undefined,
+        proxy,
+      ),
+    ).rejects.toThrow('Invalid platform');
+    expect(proxy.disconnect).not.toHaveBeenCalled();
+  });
+
   it('no longer relays proxy calls through the page', async () => {
     await expect(
       handleRequest(
@@ -420,6 +497,7 @@ describe('proxyFetch', () => {
     capability: vi.fn(),
     connections: vi.fn(),
     origin: 'https://proxy.example',
+    disconnect: vi.fn(async () => ['c1']),
   };
   const call = (extra: Record<string, unknown>) =>
     handleRequest(
@@ -662,4 +740,763 @@ describe('call', () => {
     await expect(call({ interface: '' })).rejects.toThrow('interface');
     await expect(call({ args: 'x' })).rejects.toThrow('object');
   });
+});
+
+const IMPORTER = 'did:ad:importer';
+
+const PLUGIN_TERMS = {
+  'plugin-source': 'did:ad:p:source',
+  'plugin-schemas': 'did:ad:p:schemas',
+  'plugin-connection': 'did:ad:p:connection',
+};
+
+describe('openResource', () => {
+  const readable = (unreadable: string[] = []) =>
+    ({
+      getResource: async (subject: string) => ({
+        subject,
+        error: unreadable.includes(subject)
+          ? new Error('Unauthorized')
+          : undefined,
+      }),
+    }) as unknown as Store;
+
+  it('opens a resource the person can read', async () => {
+    await expect(resourceToOpen(readable(), 'did:ad:row')).resolves.toBe(
+      'did:ad:row',
+    );
+    await expect(resourceToOpen(readable(), 'atomic:row')).resolves.toBe(
+      'atomic:row',
+    );
+    await expect(
+      resourceToOpen(readable(), 'https://atomicdata.dev/classes/Class'),
+    ).resolves.toBe('https://atomicdata.dev/classes/Class');
+  });
+
+  it('refuses one they cannot read', async () => {
+    await expect(
+      resourceToOpen(readable(['did:ad:secret']), 'did:ad:secret'),
+    ).rejects.toThrow(/cannot open did:ad:secret: Unauthorized/);
+  });
+
+  it.each([
+    'did:ad:agent:abc',
+    'did:ad:commit:abc',
+    'atomic:blob:abc',
+    'did:ad:node:abc',
+    'javascript:alert(1)',
+    '/app/dev-drive',
+    'row',
+    '',
+    42,
+    undefined,
+    `did:ad:${'a'.repeat(3000)}`,
+  ])('refuses %s before loading anything', async subject => {
+    const store = {
+      getResource: vi.fn(),
+    } as unknown as Store;
+    await expect(resourceToOpen(store, subject)).rejects.toThrow(
+      'openResource takes a resource subject',
+    );
+    expect(store.getResource).not.toHaveBeenCalled();
+  });
+});
+
+describe('proxy.disconnect', () => {
+  const proxy = () => ({
+    origin: 'https://proxy.example',
+    capability: vi.fn(),
+    connections: vi.fn(),
+    disconnect: vi.fn(
+      async (_platform: string, also: readonly string[] = []) => [
+        'c1',
+        ...also,
+      ],
+    ),
+  });
+
+  /** An app resource that may carry `integrationConnections`, and records saves. */
+  function appStore(recorded?: Record<string, string>) {
+    let props: Record<string, unknown> = recorded
+      ? { [server.properties.integrationConnections]: recorded }
+      : {};
+    const saved: Array<Record<string, unknown>> = [];
+    const resource = {
+      subject: APP,
+      error: undefined,
+      get: (p: string) => props[p],
+      getPropVals: () => props,
+      set: async (p: string, v: unknown) => {
+        props = { ...props, [p]: v };
+      },
+      remove: (p: string) => {
+        const { [p]: _gone, ...rest } = props;
+        props = rest;
+      },
+      save: async () => {
+        saved.push(props);
+      },
+    };
+
+    return {
+      store: {
+        getResource: async () => resource,
+      } as unknown as Store,
+      saved,
+    };
+  }
+
+  it('takes only this app delegation away and never touches the server', async () => {
+    const p = proxy();
+    const { store, saved } = appStore();
+
+    expect(
+      await handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: 'pets' }),
+        undefined,
+        p,
+      ),
+    ).toEqual({
+      status: 'disconnected',
+      platform: 'pets',
+      connectionIds: ['c1'],
+    });
+    expect(p.disconnect).toHaveBeenCalledWith('pets', []);
+    // A `createApp` app records nothing on itself.
+    expect(saved).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
+  it('on an Installation, also forgets integrationConnections[platform]', async () => {
+    const p = proxy();
+    const { store, saved } = appStore({ pets: 'recorded', other: 'c-other' });
+
+    const result = await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('proxyDisconnect', { platform: 'pets' }),
+      undefined,
+      p,
+    );
+
+    // The recorded id is undelegated even when the proxy no longer lists it
+    // as this app's, as the Installation page's Disconnect does.
+    expect(p.disconnect).toHaveBeenCalledWith('pets', ['recorded']);
+    expect(result).toMatchObject({ connectionIds: ['c1', 'recorded'] });
+    expect(saved).toEqual([
+      { [server.properties.integrationConnections]: { other: 'c-other' } },
+    ]);
+  });
+
+  it('refuses without a proxy or with a bad platform', async () => {
+    const { store } = appStore();
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: 'pets' }),
+      ),
+    ).rejects.toThrow('cannot reach the integration proxy');
+    const p = proxy();
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: '../pets' }),
+        undefined,
+        p,
+      ),
+    ).rejects.toThrow('Invalid platform');
+    expect(p.disconnect).not.toHaveBeenCalled();
+  });
+});
+
+describe('route tokens', () => {
+  it('lists and revokes through the host, with the arguments in the signed URL', async () => {
+    const calls: Array<{ url: string; method?: string }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push({ url, method: init.method });
+
+        return {
+          ok: true,
+          text: async () =>
+            url.includes('revoke=')
+              ? '{"revoked":true}'
+              : '{"tokens":[{"id":"tok_1","name":"storage","scopes":["notes:r"]}]}',
+        } as unknown as Response;
+      }),
+    );
+
+    expect(
+      await handleRequest(fakeStore(), APP, DRIVE, req('routeTokens')),
+    ).toEqual({
+      tokens: [{ id: 'tok_1', name: 'storage', scopes: ['notes:r'] }],
+    });
+    expect(
+      await handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('revokeRouteToken', { tokenId: 'tok_1' }),
+      ),
+    ).toEqual({ revoked: true });
+    expect(calls).toEqual([
+      {
+        url: 'https://node.test/plugin-route-tokens?installation=did%3Aad%3Aapp',
+        method: 'GET',
+      },
+      {
+        url: 'https://node.test/plugin-route-tokens?installation=did%3Aad%3Aapp&revoke=tok_1',
+        method: 'POST',
+      },
+    ]);
+    await expect(
+      handleRequest(fakeStore(), APP, DRIVE, req('revokeRouteToken')),
+    ).rejects.toThrow('tokenId is required');
+  });
+});
+
+describe('readRouteStatus', () => {
+  let calls: Array<{ url: string; method?: string }>;
+
+  beforeEach(() => {
+    calls = [];
+  });
+
+  const storeThatCanWrite = (canWrite: boolean) =>
+    ({
+      ...(fakeStore() as unknown as Record<string, unknown>),
+      getResource: async (subject: string) => ({
+        subject,
+        canWrite: async () => [canWrite, undefined],
+      }),
+    }) as unknown as Store;
+
+  const answer = (status: number, text: string) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push({ url, method: init.method });
+
+        return {
+          ok: status < 400,
+          status,
+          text: async () => text,
+        } as unknown as Response;
+      }),
+    );
+
+  it('answers the app’s endpoint health, read through the host', async () => {
+    answer(
+      200,
+      JSON.stringify({
+        installation: APP,
+        state: 'active',
+        level: 'read-write',
+        routes: [
+          {
+            id: 'inbox',
+            url: 'https://node.test/_routes/x/inbox',
+            methods: ['POST'],
+            auth: 'none',
+            requests24h: 3,
+            errors24h: 1,
+            lastError: { at: 1, status: 502, message: 'boom' },
+            queueDepth: 0,
+          },
+        ],
+        deliveries: {
+          queued: 0,
+          dead: 1,
+          sentToday: 2,
+          dailyCap: 10,
+          lastFailures: [],
+        },
+      }),
+    );
+
+    const result = await handleRequest(
+      storeThatCanWrite(true),
+      APP,
+      DRIVE,
+      req('readRouteStatus'),
+    );
+
+    expect(calls).toEqual([
+      {
+        url: 'https://node.test/plugin-route-status?installation=did%3Aad%3Aapp',
+        method: 'GET',
+      },
+    ]);
+    expect(result).toMatchObject({
+      installation: APP,
+      state: 'active',
+      routes: [
+        {
+          id: 'inbox',
+          methods: ['POST'],
+          requests24h: 3,
+          errors24h: 1,
+          lastError: { status: 502, message: 'boom' },
+        },
+      ],
+      deliveries: { dead: 1, sentToday: 2, dailyCap: 10 },
+    });
+  });
+
+  it('answers null on a server without plugin routes', async () => {
+    answer(404, 'Not found');
+
+    expect(
+      await handleRequest(
+        storeThatCanWrite(true),
+        APP,
+        DRIVE,
+        req('readRouteStatus'),
+      ),
+    ).toBeNull();
+  });
+
+  it('refuses someone who may not write the app, before asking the server', async () => {
+    answer(200, '{}');
+
+    await expect(
+      handleRequest(
+        storeThatCanWrite(false),
+        APP,
+        DRIVE,
+        req('readRouteStatus'),
+      ),
+    ).rejects.toThrow('Only people who can edit this app see this');
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('running its own importer', () => {
+  const MANIFEST: PluginManifest = {
+    secrets: [],
+    accepts: [{ extensions: ['.sta'], as: 'text', maxBytes: 10 }],
+    config: { key: 'bank', required: ['table'] },
+  } as unknown as PluginManifest;
+  const describePlugin = async () => MANIFEST;
+
+  /** The importer as Set up leaves it: its source, and its config under its key. */
+  function importerStore(
+    stored: Record<string, unknown> = { table: 'did:ad:transactions' },
+  ) {
+    const values: Record<string, Record<string, unknown>> = {
+      [IMPORTER]: {
+        [PLUGIN_TERMS['plugin-source']]: 'export function run() {}',
+        [PLUGIN_TERMS['plugin-schemas']]: { bank: stored },
+      },
+    };
+
+    return {
+      getResource: async (subject: string) => ({
+        subject,
+        title: subject === IMPORTER ? 'Bank statements' : subject,
+        get: (property: string) => values[subject]?.[property],
+      }),
+    } as unknown as Store;
+  }
+
+  const resolve = (
+    table: string | undefined,
+    request: Record<string, unknown> = {},
+    store = importerStore(),
+  ) => resolveAppImporter(store, DRIVE, table, request, describePlugin);
+
+  it('finds the importer whose table the app shows, from any of its tables', async () => {
+    for (const table of ['did:ad:transactions', 'did:ad:statements'])
+      await expect(resolve(table)).resolves.toMatchObject({
+        importer: IMPORTER,
+        title: 'Bank statements',
+        source: 'export function run() {}',
+        config: { table: 'did:ad:transactions' },
+      });
+  });
+
+  it('checks a file the app hands over, and passes it on as the upload', async () => {
+    await expect(
+      resolve('did:ad:transactions', {
+        file: { name: 'a.sta', mediaType: 'text/plain', text: ':20:X' },
+        importer: IMPORTER,
+      }),
+    ).resolves.toMatchObject({
+      upload: {
+        name: 'a.sta',
+        mediaType: 'text/plain',
+        size: 5,
+        text: ':20:X',
+      },
+    });
+    await expect(
+      resolve('did:ad:transactions', {
+        file: { name: 'big.sta', text: 'x'.repeat(11) },
+      }),
+    ).rejects.toThrow(/accepts at most 10 bytes/);
+    await expect(
+      resolve('did:ad:transactions', { file: { text: 'no name' } }),
+    ).rejects.toThrow('file must be { name, mediaType?, text }');
+  });
+
+  it('takes base64 for an accepts entry read as base64, and only there', async () => {
+    const store = importerStore();
+    const withBase64: PluginManifest = {
+      ...MANIFEST,
+      accepts: [
+        ...MANIFEST.accepts!,
+        { extensions: ['.willow'], as: 'base64', maxBytes: 4 },
+      ],
+    } as PluginManifest;
+    const run = (file: unknown) =>
+      resolveAppImporter(
+        store,
+        DRIVE,
+        'did:ad:transactions',
+        { file },
+        async () => withBase64,
+      );
+
+    // Four bytes, 0x00 0x01 0xfe 0xff.
+    await expect(
+      run({ name: 'a.willow', base64: 'AAH+/w==' }),
+    ).resolves.toMatchObject({
+      upload: { name: 'a.willow', mediaType: '', size: 4, base64: 'AAH+/w==' },
+    });
+    // Bounded by the base64 entry, not the text one.
+    await expect(run({ name: 'a.willow', base64: 'AAAAAAA=' })).rejects.toThrow(
+      /accepts at most 4 bytes/,
+    );
+    await expect(run({ name: 'a.willow', text: 'abc' })).rejects.toThrow(
+      'pass file.base64',
+    );
+    await expect(run({ name: 'a.sta', base64: 'AAAA' })).rejects.toThrow(
+      'pass file.text',
+    );
+    await expect(
+      run({ name: 'a.willow', base64: 'not base64!' }),
+    ).rejects.toThrow('standard, padded base64');
+    await expect(
+      run({ name: 'a.willow', base64: 'AAAA', text: 'x' }),
+    ).rejects.toThrow('file must be');
+  });
+
+  it('has none on its own page or on a table no importer made', async () => {
+    await expect(resolve(undefined)).rejects.toThrow(NO_IMPORTER);
+    await expect(resolve('did:ad:someone-elses-table')).rejects.toThrow(
+      NO_IMPORTER,
+    );
+  });
+
+  it('refuses an importer of another package, even one the person can run', async () => {
+    await expect(
+      resolve('did:ad:transactions', { importer: 'did:ad:other-importer' }),
+    ).rejects.toThrow(FOREIGN_IMPORTER);
+  });
+
+  it('refuses an importer that still needs Set up', async () => {
+    await expect(
+      resolve('did:ad:transactions', {}, importerStore({})),
+    ).rejects.toThrow(/needs Set up/);
+  });
+
+  it('never runs or applies unseen, where the host cannot show the review', async () => {
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('runImporter', { file: { name: 'a.sta', text: 'x' } }),
+        'did:ad:transactions',
+      ),
+    ).rejects.toThrow(/cannot show an import review/);
+    expect(sent).toHaveLength(0);
+  });
+});
+
+describe('the summary the app gets back', () => {
+  const plan = (over: Partial<RunPlan> = {}): RunPlan =>
+    ({
+      changes: [],
+      problems: [],
+      minted: {},
+      blocked: false,
+      ...over,
+    }) as RunPlan;
+
+  it('counts what was applied, by kind, and names what failed', () => {
+    const report = {
+      outcomes: [
+        { op: 'create', planned: 'a', subject: 'r1', status: 'applied' },
+        { op: 'create', planned: 'b', subject: 'r2', status: 'applied' },
+        { op: 'set', planned: 'r3', subject: 'r3', status: 'applied' },
+        { op: 'remove', planned: 'r3', subject: 'r3', status: 'applied' },
+        { op: 'destroy', planned: 'r4', subject: 'r4', status: 'applied' },
+        {
+          op: 'create',
+          planned: 'c',
+          subject: 'c',
+          status: 'failed',
+          error: 'refused',
+        },
+      ],
+      applied: 5,
+      skipped: 0,
+      failed: 1,
+      subjects: {},
+      stoppedEarly: false,
+    } as ApplyReport;
+
+    expect(importerRunSummary(IMPORTER, { report, plan: plan() })).toEqual({
+      status: 'applied',
+      importer: IMPORTER,
+      created: 2,
+      updated: 1,
+      destroyed: 1,
+      failed: 1,
+      errors: ['refused'],
+    });
+  });
+
+  it('tells a closed review apart from a refused file and from nothing new', () => {
+    expect(importerRunSummary(IMPORTER, {})).toEqual({
+      status: 'cancelled',
+      importer: IMPORTER,
+    });
+    expect(
+      importerRunSummary(IMPORTER, {
+        plan: plan({ changes: [{ op: 'create' }] as RunPlan['changes'] }),
+      }),
+    ).toEqual({ status: 'cancelled', importer: IMPORTER });
+    expect(importerRunSummary(IMPORTER, { plan: plan() })).toEqual({
+      status: 'nothing',
+      importer: IMPORTER,
+    });
+    expect(
+      importerRunSummary(IMPORTER, {
+        plan: plan({
+          blocked: true,
+          problems: [
+            { severity: 'error', message: 'does not reconcile' },
+            { severity: 'warning', message: 'just so you know' },
+          ],
+        }),
+      }),
+    ).toEqual({
+      status: 'blocked',
+      importer: IMPORTER,
+      errors: ['does not reconcile'],
+    });
+    expect(
+      importerRunSummary(IMPORTER, { error: 'Not a bank statement' }),
+    ).toEqual({
+      status: 'blocked',
+      importer: IMPORTER,
+      errors: ['Not a bank statement'],
+    });
+  });
+});
+
+describe('the rows of the table an app is a view of (#1740)', () => {
+  const TABLE = 'did:ad:transactions';
+
+  it("sends a row's save to the server, which holds the grant", async () => {
+    const store = fakeStore({ 'did:ad:row': TABLE });
+
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', { subject: 'did:ad:row', propVals: { p: 'v' } }),
+      TABLE,
+    );
+
+    expect(sent).toEqual([
+      {
+        drive: DRIVE,
+        app: APP,
+        op: 'save',
+        subject: 'did:ad:row',
+        propVals: { p: 'v' },
+      },
+    ]);
+  });
+
+  it('sends a new row to the server as well', async () => {
+    await handleRequest(
+      fakeStore(),
+      APP,
+      DRIVE,
+      req('create', { parent: TABLE, isA: ['did:ad:class'] }),
+      TABLE,
+    );
+
+    expect(sent).toMatchObject([{ op: 'create', parent: TABLE }]);
+  });
+
+  it('still refuses rows of other tables before anything leaves', async () => {
+    const store = fakeStore({ 'did:ad:elsewhere': 'did:ad:other-table' });
+
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('save', { subject: 'did:ad:elsewhere', propVals: {} }),
+        TABLE,
+      ),
+    ).rejects.toThrow('may only write its own data');
+    expect(sent).toEqual([]);
+  });
+
+  it('never deletes a row: editing is not deleting', async () => {
+    const store = fakeStore({ 'did:ad:row': TABLE });
+
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('destroy', { subject: 'did:ad:row' }),
+        TABLE,
+      ),
+    ).rejects.toThrow(ROW_DESTROY_REFUSED);
+    expect(sent).toEqual([]);
+  });
+
+  it('tells the app whether it may edit the rows', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        sent.push({ url });
+
+        return {
+          ok: true,
+          json: async () => ({
+            grant: {
+              grantedBy: 'did:ad:agent:me',
+              grantedAt: 1790000000000,
+              via: 'add-view',
+              extras: ['did:ad:google-etag'],
+            },
+            history: [],
+          }),
+          text: async () => '',
+        } as unknown as Response;
+      }),
+    );
+
+    expect(
+      await handleRequest(fakeStore(), APP, DRIVE, req('rowAccess'), TABLE),
+    ).toEqual({
+      status: 'granted',
+      grantedBy: 'did:ad:agent:me',
+      grantedAt: 1790000000000,
+      via: 'add-view',
+      extras: ['did:ad:google-etag'],
+    });
+    expect(String(sent[0].url)).toContain('/app-row-grant?');
+  });
+
+  it('has no rows to give when it is not a table view', async () => {
+    expect(
+      await handleRequest(fakeStore(), APP, DRIVE, req('rowAccess')),
+    ).toEqual({ status: 'unavailable' });
+  });
+
+  it('cannot be granted by a host with no one to ask', async () => {
+    await expect(
+      handleRequest(fakeStore(), APP, DRIVE, req('requestRowAccess'), TABLE),
+    ).rejects.toThrow('cannot ask');
+  });
+});
+
+it('resource context is read-only context and does not become a table row grant', async () => {
+  const store = fakeStore({ 'did:ad:note': 'did:ad:account-folder' });
+  expect(
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('data'),
+      undefined,
+      undefined,
+      undefined,
+      'did:ad:note',
+    ),
+  ).toEqual({ resource: 'did:ad:note' });
+  expect(
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('context'),
+      undefined,
+      undefined,
+      undefined,
+      'did:ad:note',
+    ),
+  ).toMatchObject({ subject: 'did:ad:note' });
+  expect(
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('rowAccess'),
+      undefined,
+      undefined,
+      undefined,
+      'did:ad:note',
+    ),
+  ).toEqual({ status: 'unavailable' });
+  await expect(
+    handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', { subject: 'did:ad:note', propVals: { checked: true } }),
+      undefined,
+      undefined,
+      undefined,
+      'did:ad:note',
+    ),
+  ).rejects.toThrow('own data');
+  expect(sent).toEqual([]);
+});
+
+it('allows external account data only through the actual app key native rights', async () => {
+  const store = fakeStore({
+    'did:ad:note': 'did:ad:account-folder',
+    'did:ad:other': DRIVE,
+  });
+  const read = store.getResource.bind(store);
+
+  store.getResource = async subject => {
+    const resource = await read(subject);
+    resource.canWrite = async agent =>
+      [subject === 'did:ad:note' && agent === 'did:ad:agent:app', ''] as never;
+
+    return resource;
+  };
+
+  await handleRequest(
+    store,
+    APP,
+    DRIVE,
+    req('save', { subject: 'did:ad:note', propVals: { checked: true } }),
+  );
+  expect(sent).toHaveLength(1);
+  await expect(
+    handleRequest(store, APP, DRIVE, req('save', { subject: 'did:ad:other' })),
+  ).rejects.toThrow('own data');
+  expect(sent).toHaveLength(1);
 });

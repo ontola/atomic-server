@@ -19,6 +19,20 @@ more.
   on pushes to `develop`, `v*` tags and `workflow_dispatch` only. To test a PR
   branch, dispatch it: `gh workflow run main.yml --ref <branch>` (or the
   equivalent GitHub API call). A docs-only change needs no dispatch.
+- **One-run hosted CI.** When the self-hosted runner is unavailable, explicitly
+  select the existing full hosted lane with
+  `gh workflow run main.yml --ref <branch> -f github_hosted=true`. This changes
+  no repository variable, keeps all E2E specs, and never retries a failed suite
+  automatically. The private downstream atomic-saas job remains skipped on
+  hosted runs under the existing policy; report that coverage separately.
+  equivalent GitHub API call). Add `-f runner=github-hosted` to run the full
+  server suite on GitHub-hosted runners for that dispatch only. The default
+  still follows repository runner configuration, normally Mancave. Hosted
+  runs skip the private atomic-saas downstream check; they do not verify it.
+  A docs-only change needs no dispatch.
+  equivalent GitHub API call). Add `-f github_hosted=true` to run the full
+  Main and downstream checks on hosted runners for this dispatch, without
+  changing the repository-wide runner setting. A docs-only change needs no dispatch.
 - **Paired atomic-saas branch.** The `Downstream` job in `main.yml` builds
   ontola/atomic-saas against your commit. It uses an atomic-saas branch with
   the *same name* as yours only if that branch has an open PR; otherwise it
@@ -26,8 +40,8 @@ more.
   `Cargo.lock` diff. So a change that moves shared Rust dependencies (or
   breaks an API atomic-saas uses) needs a same-named atomic-saas branch with an
   open PR and an updated `Cargo.lock`. See "Coordinated Rust updates" in
-  `CONTRIBUTING.md` and `scripts/check-rust-alignment.py`. The job only runs
-  on the Mancave runner.
+  `CONTRIBUTING.md` and `scripts/check-rust-alignment.py`. The job runs for trusted pushes and dispatches on the selected runner;
+  PR events never receive the private-repository token.
 
 ## Plugin pin candidates
 
@@ -39,8 +53,9 @@ That branch is moved forward from numbered candidates,
 - Host branches (`claude/plugin-*-host`, based on a candidate) come in with a
   `git merge --no-ff`.
 - `develop`-based PRs come in with `git cherry-pick -x` of **only the PR's own
-  commits**. Never merge `develop` into a candidate: `develop` has many commits
-  the candidates lack.
+  commits**. Candidates through 23 were maintained separately from `develop`. Candidate24
+  merges Candidate23 with develop at the owner's explicit request; future
+  candidates should retain both histories.
 - Note hand edits in the commit message. Put merge-resolution notes in PR
   comments.
 - Once the candidate's CI is green, post its SHA on atomic-plugins#227. The

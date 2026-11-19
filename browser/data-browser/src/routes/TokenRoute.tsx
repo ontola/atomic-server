@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { ContainerNarrow } from '../components/Containers';
-import { CodeBlock } from '../components/CodeBlock';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import { CodeBlock } from '@tomic/resource-ui/components/CodeBlock';
 import { createAuthentication, useServerURL } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { Main } from '../components/Main';

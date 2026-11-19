@@ -9,8 +9,8 @@ import {
   useMemberNames,
 } from '../../views/Conversation/ConversationTitle';
 import { NewMessageDialogBody } from '../../views/Conversation/NewMessageDialog';
-import { Dialog, useDialog } from '../Dialog';
-import { IconButton } from '../IconButton/IconButton';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import {
   SideBarMenuItemLink,
   SideBarMenuRow,

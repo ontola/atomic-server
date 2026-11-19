@@ -15,16 +15,16 @@ import {
 } from '@tomic/react';
 import { useState, type JSX } from 'react';
 import { FaPaperPlane } from 'react-icons/fa6';
-import { AgentAvatar } from '../components/Presence/AgentAvatar';
-import { Button } from '../components/Button';
-import { ContainerNarrow } from '../components/Containers';
-import { Details } from '../components/Details';
-import AllProps from '../components/AllProps';
+import { AgentAvatar } from '@tomic/resource-ui/components/Presence/AgentAvatar';
+import { Button } from '@tomic/ui/components/Button';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import { Details } from '@tomic/ui/components/Details';
+import AllProps from '@tomic/resource-ui/components/AllProps';
 import { ConversationLink } from '../components/SideBar/MessagesPanel';
-import ValueComp from '../components/ValueComp';
-import { ValueForm } from '../components/forms/ValueForm';
+import ValueComp from '@tomic/resource-ui/components/ValueComp';
+import { ValueForm } from '@tomic/resource-ui/components/forms/ValueForm/index';
 import { ValueFormAddButton } from '../components/forms/ValueForm/ValueFormAddButton';
-import { Column, Row } from '../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { useSettings } from '../helpers/AppSettings';
 import { createAgentNote, agentNoteQuery } from '../helpers/agentNotes';
 import { hasMember } from '../helpers/conversations/conversations';
@@ -34,7 +34,7 @@ import {
 } from '../helpers/conversations/useConversations';
 import { usePrivateDrive } from '../hooks/usePrivateDrive';
 import { SectionTitle } from './Drive/DriveHome';
-import ResourceRow from './ResourceRow';
+import ResourceRow from '@tomic/resource-ui/views/ResourceRow';
 import { defaultHiddenProps, EditResourceButton } from './ResourcePageDefault';
 import type { ResourcePageProps } from './ResourcePage';
 

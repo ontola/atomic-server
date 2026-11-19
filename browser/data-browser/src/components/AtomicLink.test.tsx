@@ -8,8 +8,8 @@ import {
 } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { expect, it, vi, afterEach } from 'vitest';
-import { AtomicLink } from './AtomicLink';
-import { ResourceLinkNavigationContext } from './ResourceLinkNavigationContext';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { ResourceLinkNavigationContext } from '@tomic/resource-ui/components/ResourceLinkNavigationContext';
 
 afterEach(cleanup);
 

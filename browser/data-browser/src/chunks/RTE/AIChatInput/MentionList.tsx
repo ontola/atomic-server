@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle } from 'react';
 import styled from 'styled-components';
-import { getIconForClass } from '../../../helpers/iconMap';
-import { useSelectedIndex } from '../../../hooks/useSelectedIndex';
+import { getIconForClass } from '@tomic/resource-ui/helpers/iconMap';
+import { useSelectedIndex } from '@tomic/resource-ui/hooks/useSelectedIndex';
 import {
   FaAtom,
   FaServer,

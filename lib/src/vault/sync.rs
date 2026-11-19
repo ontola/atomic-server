@@ -365,6 +365,9 @@ pub struct BackupSummary {
     /// Checkpoints only — the lanes this object provably subsumes, which is
     /// what the control plane prunes against. Empty for a delta pack.
     pub coverage: BTreeMap<String, u32>,
+    /// Local-only versions of exactly the resource updates sealed by this pass.
+    /// Never uploaded as plaintext and never inferred from unchanged cursors.
+    pub resource_versions: BTreeMap<String, VersionVectorMap>,
 }
 
 /// Outcome of one restore pass.
@@ -532,6 +535,7 @@ pub async fn export_vault_segment(
     let mut cursors: BTreeMap<String, VersionVectorMap> = BTreeMap::new();
     let mut envelope_cursors: BTreeMap<String, i64> = BTreeMap::new();
     let mut unchanged = 0usize;
+    let mut resource_versions = BTreeMap::new();
 
     for subject_str in &subjects {
         match contribution(
@@ -583,6 +587,7 @@ pub async fn export_vault_segment(
                 if let Some(newest) = newest.or(floor) {
                     envelope_cursors.insert(subject_str.clone(), newest);
                 }
+                resource_versions.insert(subject_str.clone(), reached.clone());
                 cursors.insert(subject_str.clone(), reached);
             }
             Contribution::Unchanged => {
@@ -730,6 +735,7 @@ pub async fn export_vault_segment(
         tombstones: tombstone_count,
         sealed_bytes: sealed.len(),
         coverage,
+        resource_versions,
     }))
 }
 
@@ -1061,15 +1067,18 @@ pub struct BlobChunk {
     pub length: u64,
 }
 
-/// How a file of `len` bytes is cut into chunks, or `None` for an empty file
-/// or one too large to store (over `BLOB_MAX_CHUNKS * BLOB_MAX_CHUNK_BYTES`).
+/// How a file of `len` bytes is cut into chunks, or `None` for one too large to store (over `BLOB_MAX_CHUNKS * BLOB_MAX_CHUNK_BYTES`).
 ///
 /// Chunks are [`BLOB_CHUNK_BYTES`] until that would need more than
 /// [`BLOB_MAX_CHUNKS`], then the chunk size grows in whole MiB.
 pub fn blob_chunks(len: u64) -> Option<Vec<BlobChunk>> {
     const MIB: u64 = 1024 * 1024;
     if len == 0 {
-        return None;
+        return Some(vec![BlobChunk {
+            index: 0,
+            offset: 0,
+            length: 0,
+        }]);
     }
     let mut size = BLOB_CHUNK_BYTES as u64;
     if len.div_ceil(size) > BLOB_MAX_CHUNKS as u64 {
@@ -1105,6 +1114,9 @@ pub fn open_blob(
     id_hex: &str,
     sealed_chunks: &[&[u8]],
 ) -> AtomicResult<(Vec<u8>, String)> {
+    if sealed_chunks.is_empty() {
+        return Err("Missing sealed file chunks".into());
+    }
     let mut bytes = Vec::new();
     for sealed in sealed_chunks {
         let (header, plaintext) = envelope::open(key, sealed)?;
@@ -1113,21 +1125,80 @@ pub fn open_blob(
         }
         bytes.extend_from_slice(&plaintext);
     }
-    if bytes.is_empty() || blob_id_hex(key, &bytes) != id_hex.to_ascii_lowercase() {
+    if blob_id_hex(key, &bytes) != id_hex.to_ascii_lowercase() {
         return Err("file bytes do not match their vault id".into());
     }
     let plain = blake3::hash(&bytes).to_hex().to_string();
     Ok((bytes, plain))
 }
 
-/// The local bytes of a File, only if they hash to `hash_hex` and are not
-/// empty. `None` means this device cannot back that file up.
+/// The local bytes of a File, only if they hash to `hash_hex`. `None` means this device cannot back that file up.
 pub async fn read_verified_blob(store: &Db, hash_hex: &str) -> AtomicResult<Option<Vec<u8>>> {
+    use crate::sync::attachment_receipts::{derive_manifest, file_manifest};
     let hash = blake3::Hash::from_hex(hash_hex).map_err(|e| e.to_string())?;
-    Ok(match store.get_blob(hash.as_bytes()).await? {
-        Some(bytes) if !bytes.is_empty() && blake3::hash(&bytes) == hash => Some(bytes),
-        _ => None,
-    })
+    let generation = store.write_log().generation();
+    let blobs = store.write_log().blob_generation();
+    if let Some(size) = store.blob_size(hash.as_bytes()).await? {
+        if size <= 64 * 1024 * 1024 {
+            if let Some(bytes) = store.get_blob(hash.as_bytes()).await? {
+                if blake3::hash(&bytes) == hash && store.write_log().blob_generation() == blobs {
+                    return Ok(Some(bytes));
+                }
+            }
+        }
+    }
+    // This is a trusted local backup API, like the direct blob read above.
+    // Browser caches have no default agent. Chunked Files need not store a
+    // second aggregate blob; derive their exact locally stored manifest.
+    let agent = crate::agents::ForAgent::Sudo;
+    let mut query = crate::storelike::Query::new();
+    query.property = Some(crate::urls::INTERNAL_ID.into());
+    query.value = Some(crate::Value::String(hash_hex.into()));
+    query.limit = Some(128);
+    for resource in store.query(&query).await?.resources {
+        let raw = resource.get_subject().to_string();
+        let Ok((_, manifest)) = derive_manifest(store, &agent, &raw).await else {
+            continue;
+        };
+        let Some(file) = file_manifest(store, &resource, true)? else {
+            continue;
+        };
+        if file.hash != hash_hex || file.chunks.is_empty() || !manifest.files.contains(&file) {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        let mut complete = true;
+        for chunk in file.chunks {
+            let key = hex::decode(&chunk).map_err(|e| e.to_string())?;
+            let Some(size) = store.blob_size(&key).await? else {
+                complete = false;
+                break;
+            };
+            if size > 64 * 1024 * 1024
+                || (bytes.len() as u64).saturating_add(size) > 512 * 1024 * 1024
+            {
+                complete = false;
+                break;
+            }
+            let Some(part) = store.get_blob(&key).await? else {
+                complete = false;
+                break;
+            };
+            if blake3::hash(&part).to_hex().as_str() != chunk {
+                complete = false;
+                break;
+            }
+            bytes.extend_from_slice(&part);
+        }
+        if complete
+            && blake3::hash(&bytes) == hash
+            && store.write_log().generation() == generation
+            && store.write_log().blob_generation() == blobs
+        {
+            return Ok(Some(bytes));
+        }
+    }
+    Ok(None)
 }
 
 /// Outcome of uploading a drive's files.
@@ -1173,7 +1244,7 @@ pub enum BlobGroupOutcome {
 
 /// Open one stored file and, if a wanted File resource references it, put it
 /// in the blob store. `wanted` holds plain BLAKE3 hashes (lower-case hex), the
-/// `File.internalId` values: the match is made by computing the hash of the
+/// current blob references: the match is made by computing the hash of the
 /// decrypted bytes, since the vault id says nothing about it.
 pub async fn restore_blob_group(
     store: &Db,
@@ -1182,11 +1253,39 @@ pub async fn restore_blob_group(
     sealed_chunks: &[&[u8]],
     wanted: &HashSet<String>,
 ) -> AtomicResult<BlobGroupOutcome> {
+    restore_blob_group_inner(store, key, id_hex, sealed_chunks, wanted, None).await
+}
+
+/// Restore missing bytes only while the live drive still references them.
+pub async fn restore_blob_group_for_drive(
+    store: &Db,
+    key: &DriveVaultKey,
+    id_hex: &str,
+    sealed_chunks: &[&[u8]],
+    wanted: &HashSet<String>,
+    drive: &Subject,
+) -> AtomicResult<BlobGroupOutcome> {
+    restore_blob_group_inner(store, key, id_hex, sealed_chunks, wanted, Some(drive)).await
+}
+
+async fn restore_blob_group_inner(
+    store: &Db,
+    key: &DriveVaultKey,
+    id_hex: &str,
+    sealed_chunks: &[&[u8]],
+    wanted: &HashSet<String>,
+    drive: Option<&Subject>,
+) -> AtomicResult<BlobGroupOutcome> {
     let Ok((bytes, plain)) = open_blob(key, id_hex, sealed_chunks) else {
         return Ok(BlobGroupOutcome::Unreadable);
     };
     if !wanted.contains(&plain) {
         return Ok(BlobGroupOutcome::Unreferenced);
+    }
+    if let Some(drive) = drive {
+        if !drive_file_hashes(store, drive).await.contains(&plain) {
+            return Ok(BlobGroupOutcome::Unreferenced);
+        }
     }
     let hash = blake3::Hash::from_hex(&plain).map_err(|e| e.to_string())?;
     store.put_blob(hash.as_bytes(), &bytes).await?;
@@ -1195,21 +1294,65 @@ pub async fn restore_blob_group(
 
 /// Distinct `File.internalId` hashes (lower-case hex BLAKE3) referenced by
 /// File resources under `drive`.
+#[derive(Clone, Debug, Serialize)]
+pub struct VaultAttachmentManifest {
+    pub subject: String,
+    pub manifest: crate::sync::attachment_manifest::AttachmentManifest,
+}
+
+/// Trusted local backup inventory, like the local resource/blob cache reads.
+/// Never expose this API through a remote endpoint without authorization.
+/// Diagnostic metadata is never included in a plaintext vault object.
+pub async fn vault_attachment_manifests(
+    store: &Db,
+    drive: &Subject,
+) -> AtomicResult<Vec<VaultAttachmentManifest>> {
+    let generation = store.write_log().generation();
+    let agent = crate::agents::ForAgent::Sudo;
+    let subjects = crate::sync::engine::collect_drive_subjects(store, drive).await;
+    if subjects.len() > 4096 {
+        return Err("Attachment inventory exceeds limit".into());
+    }
+    let mut result = Vec::new();
+    for subject in subjects {
+        let public = store
+            .normalize_subject(&Subject::from(subject.as_str()))
+            .resolve(&store.get_base_domain().unwrap_or_default());
+        if let Ok((_, manifest)) =
+            crate::sync::attachment_receipts::derive_manifest(store, &agent, &public).await
+        {
+            if !manifest.files.is_empty() {
+                result.push(VaultAttachmentManifest {
+                    subject: public,
+                    manifest,
+                });
+            }
+        }
+    }
+    if generation != store.write_log().generation() {
+        return Err("Attachment inventory changed".into());
+    }
+    result.sort_by(|a, b| a.subject.cmp(&b.subject));
+    Ok(result)
+}
+
 pub async fn drive_file_hashes(store: &Db, drive: &Subject) -> Vec<String> {
     let mut hashes = std::collections::BTreeSet::new();
-    for subject_str in crate::sync::engine::collect_drive_subjects(store, drive).await {
-        let subject = Subject::from_raw(&subject_str, store.get_base_domain().as_deref());
+    for subject in crate::sync::engine::collect_drive_subjects(store, drive).await {
+        let subject = Subject::from_raw(&subject, store.get_base_domain().as_deref());
         let Ok(resource) = store.get_resource(&subject).await else {
             continue;
         };
-        if resource.get(crate::urls::BLOB).is_err() {
-            continue;
+        // Recovery follows the current blob pointer even when legacy metadata
+        // is stale; this inventory does not create attachment confirmation.
+        if let Some(hash) = resource.blob_hash() {
+            hashes.insert(blake3::Hash::from_bytes(hash).to_hex().to_string());
         }
-        if let Ok(id) = resource.get(crate::urls::INTERNAL_ID) {
-            let id = id.to_string().to_ascii_lowercase();
-            if blake3::Hash::from_hex(&id).is_ok() {
-                hashes.insert(id);
-            }
+        if let Ok(Some(file)) =
+            crate::sync::attachment_receipts::file_manifest(store, &resource, false)
+        {
+            hashes.insert(file.hash);
+            hashes.extend(file.chunks);
         }
     }
     hashes.into_iter().collect()
@@ -2239,6 +2382,59 @@ mod tests {
         );
     }
 
+    /// A later edit or overlapping export must not enlarge the earlier object's proof.
+    #[tokio::test]
+    async fn vault_manifest_tracks_sealed_updates_not_later_or_unchanged_resources() {
+        let source = Db::init_temp("vault_exact_manifest").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let changed = source
+            .create_resource(FOLDER, &drive, "changed", None)
+            .await
+            .unwrap();
+        let unchanged = source
+            .create_resource(FOLDER, &drive, "unchanged", None)
+            .await
+            .unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        let anchor = backup(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        assert_eq!(anchor.resource_versions.len(), anchor.resources);
+        rename(&source, &changed, "first edit").await;
+        let delta = backup_delta(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        let changed_key =
+            Subject::from_raw(&changed, source.get_base_domain().as_deref()).pure_id();
+        let unchanged_key =
+            Subject::from_raw(&unchanged, source.get_base_domain().as_deref()).pure_id();
+        assert_eq!(delta.resource_versions.len(), 1);
+        assert!(!delta.resource_versions.contains_key(&unchanged_key));
+        let first_version = delta.resource_versions[&changed_key].clone();
+        assert_eq!(
+            first_version,
+            cheap_version_vector(&source, &changed_key).unwrap()
+        );
+        let (_, plaintext) = envelope::open(&key, &vault.get(&delta.object_key).unwrap()).unwrap();
+        let packed = Pack::decode(&plaintext).unwrap();
+        assert_eq!(
+            packed
+                .entries
+                .iter()
+                .map(|entry| &entry.subject)
+                .collect::<Vec<_>>(),
+            delta.resource_versions.keys().collect::<Vec<_>>()
+        );
+        rename(&source, &changed, "newer edit while upload is in flight").await;
+        let later = backup_delta(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+        assert_ne!(later.resource_versions[&changed_key], first_version);
+        assert_eq!(delta.resource_versions[&changed_key], first_version);
+    }
+
     /// A delta is not self-sufficient, and a chain of them still restores.
     #[tokio::test]
     async fn a_delta_chain_restores_the_drive() {
@@ -3081,9 +3277,192 @@ mod tests {
             .unwrap()
     }
 
+    #[tokio::test]
+    async fn attachment_chunked_file_vault_restores_original_chunks() {
+        use crate::{urls, Value};
+        let source = Db::init_temp("vault_original_chunks_source").await.unwrap();
+        let (_, drive) = source.setup("chunk owner").await.unwrap();
+        let first = b"first original chunk";
+        let second = b"second original chunk";
+        let bytes = [first.as_slice(), second.as_slice()].concat();
+        let hash = blake3::hash(&bytes).to_hex().to_string();
+        let chunk1 = blake3::hash(first);
+        let chunk2 = blake3::hash(second);
+        source.put_blob(chunk1.as_bytes(), first).await.unwrap();
+        source.put_blob(chunk2.as_bytes(), second).await.unwrap();
+        let file = source
+            .create_resource(
+                urls::FILE,
+                &drive,
+                "chunked.txt",
+                Some(vec![
+                    (urls::INTERNAL_ID, Value::String(hash.clone())),
+                    (
+                        urls::CHUNKS,
+                        Value::ResourceArray(vec![
+                            format!("atomic:blob:{chunk1}").as_str().into(),
+                            format!("atomic:blob:{chunk2}").as_str().into(),
+                        ]),
+                    ),
+                ]),
+            )
+            .await
+            .unwrap();
+        let drive = Subject::from(drive.as_str());
+        assert_eq!(drive_file_hashes(&source, &drive).await.len(), 3);
+        assert_eq!(
+            read_verified_blob(&source, &hash).await.unwrap(),
+            Some(bytes)
+        );
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        backup(&source, &drive, &key, &vault, DEVICE).await.unwrap();
+        assert_eq!(
+            export_blobs(&source, &drive, &key, &vault)
+                .await
+                .blobs_uploaded,
+            3
+        );
+        let target = Db::init_temp("vault_original_chunks_target").await.unwrap();
+        restore(&target, &key, &vault).await;
+        assert_eq!(
+            import_blobs(&target, &drive, &key, &vault)
+                .await
+                .blobs_restored,
+            3
+        );
+        assert_eq!(
+            target.get_blob(chunk1.as_bytes()).await.unwrap(),
+            Some(first.to_vec())
+        );
+        assert_eq!(
+            target.get_blob(chunk2.as_bytes()).await.unwrap(),
+            Some(second.to_vec())
+        );
+        let proof = crate::sync::attachment_receipts::resource_attachment_evidence(
+            &target,
+            &crate::agents::ForAgent::Sudo,
+            &[file],
+        )
+        .await
+        .unwrap();
+        assert_eq!(proof[0].state, "confirmed");
+    }
+
+    #[tokio::test]
+    async fn attachment_empty_file_vault_export_restore_is_authenticated() {
+        let source = Db::init_temp("vault_empty_file_source").await.unwrap();
+        let (_, drive) = source.setup("empty owner").await.unwrap();
+        let drive = Subject::from(drive.as_str());
+        add_file(&source, &drive.to_string(), "empty.txt", b"").await;
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        backup(&source, &drive, &key, &vault, DEVICE).await.unwrap();
+        assert_eq!(
+            export_blobs(&source, &drive, &key, &vault)
+                .await
+                .blobs_uploaded,
+            1
+        );
+        let keys = blob_keys(&vault);
+        assert_eq!(keys.len(), 1);
+        assert_eq!(vault.get(&keys[0]).unwrap().len(), BLOB_SEAL_OVERHEAD);
+        assert!(open_blob(&key, &blob_id_hex(&key, b""), &[]).is_err());
+        let target = Db::init_temp("vault_empty_file_target").await.unwrap();
+        restore(&target, &key, &vault).await;
+        assert_eq!(
+            import_blobs(&target, &drive, &key, &vault)
+                .await
+                .blobs_restored,
+            1
+        );
+        assert_eq!(
+            target.get_blob(blake3::hash(b"").as_bytes()).await.unwrap(),
+            Some(vec![])
+        );
+    }
+
+    #[tokio::test]
+    async fn drive_file_hashes_use_blob_references_without_internal_ids() {
+        use crate::{urls, Value};
+        let source = Db::init_temp("vault_blob_reference_hashes").await.unwrap();
+        let (_, drive) = source.setup("alice").await.unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let hash = blake3::hash(b"modern file contents").to_hex().to_string();
+        let other = blake3::hash(b"old internal id").to_hex().to_string();
+        for name in ["blob-only.txt", "stale-internal-id.txt"] {
+            let mut properties = vec![(
+                urls::BLOB,
+                Value::AtomicUrl(crate::identifiers::blob_subject(&hash).as_str().into()),
+            )];
+            if name == "stale-internal-id.txt" {
+                properties.push((urls::INTERNAL_ID, Value::String(other.clone())));
+            }
+            source
+                .create_resource(urls::FILE, &drive, name, Some(properties))
+                .await
+                .unwrap();
+        }
+        assert_eq!(drive_file_hashes(&source, &drive_subject).await, vec![hash]);
+    }
+
+    #[tokio::test]
+    async fn a_late_blob_download_does_not_restore_a_deleted_file() {
+        use crate::{urls, Value};
+        let target = Db::init_temp("vault_deleted_file_download").await.unwrap();
+        let (_, drive) = target.setup("alice").await.unwrap();
+        let drive_subject = Subject::from_raw(&drive, target.get_base_domain().as_deref());
+        let bytes = b"file deleted while its download was in flight";
+        let plain = blake3::hash(bytes).to_hex().to_string();
+        let file = target
+            .create_resource(
+                urls::FILE,
+                &drive,
+                "Deleted file",
+                Some(vec![(
+                    urls::BLOB,
+                    Value::AtomicUrl(crate::identifiers::blob_subject(&plain).into()),
+                )]),
+            )
+            .await
+            .unwrap();
+        let wanted = drive_file_hashes(&target, &drive_subject)
+            .await
+            .into_iter()
+            .collect();
+        target
+            .remove_resource(&Subject::from_raw(&file, None))
+            .await
+            .unwrap();
+        let key = key();
+        let sealed = seal_blob_chunk(&key, bytes).unwrap();
+        let result = restore_blob_group_for_drive(
+            &target,
+            &key,
+            &blob_id_hex(&key, bytes),
+            &[&sealed],
+            &wanted,
+            &drive_subject,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result, BlobGroupOutcome::Unreferenced);
+        assert!(!target
+            .has_blob(blake3::hash(bytes).as_bytes())
+            .await
+            .unwrap());
+    }
+
     #[test]
     fn blob_chunks_are_a_pure_function_of_length() {
-        assert!(blob_chunks(0).is_none());
+        assert_eq!(
+            blob_chunks(0).unwrap(),
+            vec![BlobChunk {
+                index: 0,
+                offset: 0,
+                length: 0
+            }]
+        );
         let one = blob_chunks(5).unwrap();
         assert_eq!(
             one,

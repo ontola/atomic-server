@@ -1,4 +1,9 @@
-import { isLoopbackHost, signRequest, type Agent } from '@tomic/react';
+import {
+  isLoopbackHost,
+  signedRequestInit,
+  signRequest,
+  type Agent,
+} from '@tomic/react';
 import { serverProps, peerProps } from './serverOntology';
 import { rememberManagedPortalUrl, safePortalUrl } from './managed/api';
 import { isRunningInTauri } from './tauri';
@@ -10,7 +15,7 @@ export type ServerPeer = {
   deviceName: string | null;
   /** Whether it holds a connection to the server right now. */
   live: boolean;
-  /** Unix millis of the last successful sync, if it has ever synced. */
+  /** Unix milliseconds of the latest sync activity reported for this link. */
   lastSeen?: number;
   /** Resources moved by that last sync, each way. Not lifetime totals. */
   lastSent?: number;
@@ -309,10 +314,14 @@ export async function forgetServerPeer(
   try {
     // Sign the exact URL being fetched (path + query), same scheme as
     // fetchNodeDriveUsage — the server rebuilds and verifies it.
-    const headers = await signRequest(url.toString(), agent, {
-      Accept: 'application/json',
-    });
-    const res = await fetch(url.toString(), { method: 'POST', headers });
+    // A state-changing route: version 2 only, over the (empty) body.
+    const res = await fetch(
+      url.toString(),
+      await signedRequestInit(url.toString(), agent, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      }),
+    );
 
     return res.ok;
   } catch {
@@ -346,6 +355,67 @@ export type NodeDriveUsage = {
   managedBy?: string;
 };
 
+/** Unix milliseconds of the last full sync, keyed by peer node ID. */
+export type PeerFullSyncs = Partial<Record<string, number>>;
+
+async function fetchDriveUsageData(
+  serverUrl: string,
+  driveSubject: string,
+  agent: Agent,
+  peerFullSyncsOnly = false,
+) {
+  if (!serverUrl || !driveSubject || !agent?.subject) return null;
+
+  try {
+    const url = new URL('/drive-usage', serverUrl);
+    url.searchParams.set('subject', driveSubject);
+    if (peerFullSyncsOnly) url.searchParams.set('peerFullSyncsOnly', 'true');
+
+    // Sign the full URL, including the query the server uses for verification.
+    const headers = await signRequest(url.toString(), agent, {
+      Accept: 'application/json',
+    });
+    const res = await fetch(url.toString(), { headers });
+
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Verified peer dates for the drive, read from the node that connected to them. */
+export async function fetchPeerFullSyncs(
+  serverUrl: string,
+  driveSubject: string,
+  agent: Agent,
+): Promise<PeerFullSyncs | null | undefined> {
+  const data = await fetchDriveUsageData(serverUrl, driveSubject, agent, true);
+
+  if (data === null) return null;
+
+  const dates: unknown = data?.peerFullSyncs;
+  // Older servers return ordinary usage data after ignoring the query flag.
+  if (dates === undefined) return undefined;
+
+  const result: PeerFullSyncs = {};
+
+  if (dates && typeof dates === 'object') {
+    for (const [nodeId, date] of Object.entries(dates)) {
+      if (
+        /^[0-9a-f]{64}$/.test(nodeId) &&
+        typeof date === 'number' &&
+        Number.isSafeInteger(date) &&
+        date > 0 &&
+        date <= 8.64e15
+      ) {
+        result[nodeId] = date;
+      }
+    }
+  }
+
+  return result;
+}
+
 /**
  * Per-drive usage (resource count + bytes) reported by the connected node's
  * `GET /drive-usage`. Generic — works on any atomic-server, self-hosted
@@ -359,25 +429,11 @@ export async function fetchNodeDriveUsage(
   driveSubject: string,
   agent: Agent,
 ): Promise<NodeDriveUsage | null> {
-  if (!serverUrl || !driveSubject || !agent?.subject) return null;
+  const data = await fetchDriveUsageData(serverUrl, driveSubject, agent);
 
-  const url = new URL('/drive-usage', serverUrl);
-  url.searchParams.set('subject', driveSubject);
+  if (data === null) return null;
 
   try {
-    // Sign the URL being fetched, not the drive. The server rebuilds the
-    // signed message from the request it received — query string and all — so
-    // signing anything else fails the auth check before routing, and the
-    // endpoint answers 500 rather than the usage it holds.
-    const headers = await signRequest(url.toString(), agent, {
-      Accept: 'application/json',
-    });
-    const res = await fetch(url.toString(), { headers });
-
-    if (!res.ok) return null;
-
-    const data = await res.json();
-
     return {
       driveName: typeof data?.name === 'string' ? data.name : null,
       resourceCount: Number(data?.resourceCount ?? 0),

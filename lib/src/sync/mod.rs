@@ -8,6 +8,8 @@
 // (always compiled) can reference `sync::policy` in a no-features build.
 #[cfg(all(feature = "iroh", feature = "db"))]
 pub mod call;
+#[cfg(feature = "db")]
+pub mod confirmation;
 #[cfg(feature = "iroh")]
 pub mod dial_gate;
 #[cfg(feature = "iroh")]
@@ -20,12 +22,18 @@ pub mod invite;
 #[cfg(all(test, feature = "iroh", feature = "db"))]
 mod iroh_e2e;
 #[cfg(feature = "iroh")]
+pub mod iroh_receipts;
+#[cfg(feature = "iroh")]
 pub mod local_directory;
 /// The durable dirty-subject queue a device drains to a hub.
 #[cfg(feature = "db")]
 pub mod outbox;
 #[cfg(feature = "iroh")]
 pub mod peer;
+#[cfg(feature = "iroh")]
+mod peer_blob_repair;
+#[cfg(feature = "iroh")]
+mod peer_full_sync;
 pub mod policy;
 pub mod protocol;
 /// Pushing a whole drive to a remote server, as a client. Needs the WS client.
@@ -33,6 +41,8 @@ pub mod protocol;
 pub mod replicate;
 #[cfg(feature = "db")]
 pub mod session;
+#[cfg(feature = "db")]
+pub mod storage_receipts;
 #[cfg(all(test, feature = "iroh"))]
 mod tests;
 #[cfg(feature = "db")]
@@ -46,3 +56,7 @@ pub mod ws_apply;
 pub mod browser_peer;
 #[cfg(feature = "db")]
 pub mod webrtc_link;
+
+pub mod attachment_manifest;
+#[cfg(feature = "db")]
+pub mod attachment_receipts;

@@ -1,13 +1,13 @@
-import { AtomicLink } from '@components/AtomicLink';
-import { HideInPrint } from '@components/HideInPrint';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { HideInPrint } from '@tomic/ui/components/HideInPrint';
 import { useResource, type DataBrowser } from '@tomic/react';
 import { lazy, Suspense } from 'react';
 import { FaArrowUpRightFromSquare } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Spinner } from '@components/Spinner';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 
 const TableResource = lazy(() =>
-  import('@chunks/TablePage/TableResource').then(m => ({
+  import('@tomic/table-page/TablePage/TableResource').then(m => ({
     default: m.TableResource,
   })),
 );

@@ -18,13 +18,13 @@ languages. Resource content has its own [translation mechanisms](../schema/trans
 
 ## Contributing translations
 
-The UI catalogs are `browser/data-browser/src/locales/{en,es,fr,de,nl,id}.po`.
+The UI catalogs are `browser/resource-ui/src/locales/{en,es,fr,de,nl,id}.po`.
 Wuchale extracts messages from frontend code. From `browser/data-browser`, run:
 
 ```sh
 pnpm check:translations
 node scripts/check-translations.mjs --json > translation-report.json
-pnpm exec wuchale check --full
+pnpm --dir ../resource-ui exec wuchale check --full
 ```
 
 The first command checks every configured locale and exits unsuccessfully for

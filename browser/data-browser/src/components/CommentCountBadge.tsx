@@ -1,6 +1,6 @@
 import { styled } from 'styled-components';
 import { FaMessage } from 'react-icons/fa6';
-import { useCommentCount } from '../hooks/useCommentCount';
+import { useCommentCount } from '@tomic/resource-ui/hooks/useCommentCount';
 
 interface CommentCountBadgeProps {
   subject: string;

@@ -1,18 +1,18 @@
 import { useMemo } from 'react';
 import type { HistoryViewProps } from './HistoryViewProps';
 import { styled } from 'styled-components';
-import { Button } from '../../components/Button';
-import { Card } from '../../components/Card';
-import { Column, Row } from '../../components/Row';
-import { Title } from '../../components/Title';
+import { Button } from '@tomic/ui/components/Button';
+import { Card } from '@tomic/ui/components/Card';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Title } from '@tomic/resource-ui/components/Title';
 import { VersionTitle } from './VersionTitle';
 import { VersionScroller } from './VersionScroller';
 import {
   ResourceDiff,
   useResourceDiff,
-} from '@components/ResourceDiff/ResourceDiff';
+} from '@tomic/resource-ui/components/ResourceDiff/ResourceDiff';
 import { Tabs } from '@components/Tabs';
-import { plural } from '@helpers/plural';
+import { plural } from '@tomic/resource-ui/helpers/plural';
 import { ResourceCardDefault } from '@views/Card/ResourceCard';
 import { useStore, Resource, type AtomicValue } from '@tomic/react';
 

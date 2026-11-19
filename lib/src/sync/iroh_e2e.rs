@@ -22,11 +22,19 @@ struct IrohPair {
 }
 
 async fn setup_pair(prefix: &str) -> IrohPair {
+    setup_pair_with_acceptor(prefix, |_| ()).await.0
+}
+
+async fn setup_pair_with_acceptor<T>(
+    prefix: &str,
+    setup_acceptor: impl FnOnce(&mut Db) -> T,
+) -> (IrohPair, T) {
     use crate::sync::peer;
 
-    let db_a = Db::init_temp(&format!("{prefix}_a")).await.unwrap();
+    let mut db_a = Db::init_temp(&format!("{prefix}_a")).await.unwrap();
     let (agent_a, drive) = db_a.setup("Alice").await.unwrap();
     let secret = agent_a.build_secret().unwrap();
+    let acceptor_setup = setup_acceptor(&mut db_a);
 
     let db_b = Db::init_temp(&format!("{prefix}_b")).await.unwrap();
     db_b.load_agent_from_secret(&secret).await.unwrap();
@@ -41,14 +49,17 @@ async fn setup_pair(prefix: &str) -> IrohPair {
     let node_addr_a = router_a.endpoint().node_addr().await.unwrap();
     ep_b.add_node_addr(node_addr_a).unwrap();
 
-    IrohPair {
-        db_a,
-        db_b,
-        drive,
-        node_id_a: node_id_a.to_string(),
-        _router_a: router_a,
-        ep_b,
-    }
+    (
+        IrohPair {
+            db_a,
+            db_b,
+            drive,
+            node_id_a: node_id_a.to_string(),
+            _router_a: router_a,
+            ep_b,
+        },
+        acceptor_setup,
+    )
 }
 
 async fn sync_b_from_a(pair: &IrohPair) -> usize {
@@ -57,6 +68,217 @@ async fn sync_b_from_a(pair: &IrohPair) -> usize {
     peer::sync_drive_with_peer_using(&pair.ep_b, &pair.node_id_a, &pair.drive, &pair.db_b, true)
         .await
         .expect("B→A sync should succeed")
+}
+
+struct InterruptedBlobWrite {
+    store: std::sync::Arc<dyn crate::db::blob_backend::BlobBackend>,
+    hash: [u8; 32],
+    attempted: std::sync::atomic::AtomicBool,
+    started: tokio::sync::Notify,
+    finish: tokio::sync::Notify,
+}
+
+impl InterruptedBlobWrite {
+    fn install(db: &mut Db, bytes: &[u8]) -> std::sync::Arc<Self> {
+        let backend = std::sync::Arc::new(Self {
+            store: db.blob_store(),
+            hash: *blake3::hash(bytes).as_bytes(),
+            attempted: std::sync::atomic::AtomicBool::new(false),
+            started: tokio::sync::Notify::new(),
+            finish: tokio::sync::Notify::new(),
+        });
+        db.blob_backend = Some(backend.clone());
+        backend
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::db::blob_backend::BlobBackend for InterruptedBlobWrite {
+    async fn get(&self, key: &[u8]) -> crate::errors::AtomicResult<Option<Vec<u8>>> {
+        self.store.get(key).await
+    }
+
+    async fn put(&self, key: &[u8], bytes: &[u8]) -> crate::errors::AtomicResult<()> {
+        if key == self.hash
+            && !self
+                .attempted
+                .swap(true, std::sync::atomic::Ordering::Relaxed)
+        {
+            self.started.notify_one();
+            self.finish.notified().await;
+            return Err("test interrupted the file write".into());
+        }
+        self.store.put(key, bytes).await
+    }
+
+    async fn size(&self, key: &[u8]) -> crate::errors::AtomicResult<Option<u64>> {
+        self.store.size(key).await
+    }
+}
+
+async fn add_sync_test_file(db: &Db, drive: &str, name: &str, bytes: &[u8]) -> String {
+    let hash = blake3::hash(bytes);
+    db.put_blob(hash.as_bytes(), bytes).await.unwrap();
+    db.create_resource(
+        crate::urls::FILE,
+        drive,
+        name,
+        Some(vec![(
+            crate::urls::BLOB,
+            crate::Value::AtomicUrl(crate::identifiers::blob_subject(&hash.to_hex()).into()),
+        )]),
+    )
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn e2e_interrupted_file_transfer_keeps_last_confirmed_full_sync() {
+    use crate::sync::peer;
+    use std::time::Duration;
+
+    let mut pair = setup_pair("e2e_interrupted_file_transfer").await;
+    let node_b = pair.ep_b.node_id().to_string();
+    let completed = b"file contents stored by both peers";
+    let interrupted = b"new file contents interrupted during storage";
+    let backend = InterruptedBlobWrite::install(&mut pair.db_b, interrupted);
+
+    add_sync_test_file(&pair.db_a, &pair.drive, "completed.txt", completed).await;
+    sync_b_from_a(&pair).await;
+    assert!(
+        wait_until(Duration::from_secs(10), || async {
+            pair.db_b
+                .get_blob(blake3::hash(completed).as_bytes())
+                .await
+                .unwrap()
+                .as_deref()
+                == Some(completed.as_slice())
+        })
+        .await,
+        "the first uploaded file's bytes should reach the peer"
+    );
+    assert!(
+        wait_until(Duration::from_secs(15), || async {
+            peer::last_confirmed_full_syncs(&pair.db_a, &pair.drive).contains_key(&node_b)
+        })
+        .await,
+        "the peer should confirm a drive with its uploaded file"
+    );
+    peer::remove_live_peer_any(&pair.node_id_a);
+    peer::remove_live_peer_any(&node_b);
+    let previous_date = peer::last_confirmed_full_syncs(&pair.db_a, &pair.drive)[&node_b];
+    let file = add_sync_test_file(&pair.db_a, &pair.drive, "interrupted.txt", interrupted).await;
+    sync_b_from_a(&pair).await;
+    tokio::time::timeout(Duration::from_secs(10), backend.started.notified())
+        .await
+        .expect("the receiving peer should start writing the second file");
+
+    // The file resource reached the peer. Abort the connection while the
+    // content write is still pending, then let that write fail.
+    assert!(pair.db_b.get_resource(&file.as_str().into()).await.is_ok());
+    peer::remove_live_peer_any(&pair.node_id_a);
+    peer::remove_live_peer_any(&node_b);
+    backend.finish.notify_one();
+
+    assert!(pair.db_b.get_blob(&backend.hash).await.unwrap().is_none());
+    assert_eq!(
+        peer::last_confirmed_full_syncs(&pair.db_a, &pair.drive).get(&node_b),
+        Some(&previous_date),
+        "an interrupted file transfer must leave the previous date intact"
+    );
+
+    // Both nodes already agree on the file resource, so recovery must check
+    // the bytes even when there are no resource updates to send.
+    let subject = file.as_str().into();
+    let source_snapshot = pair.db_a.get_loro_snapshot(&subject).unwrap();
+    let peer_snapshot = pair.db_b.get_loro_snapshot(&subject).unwrap();
+    let version = crate::loro::AtomicLoroDoc::vv_map_from_snapshot;
+    assert_eq!(
+        version(&source_snapshot).unwrap(),
+        version(&peer_snapshot).unwrap(),
+        "the file's resource versions should match while its bytes are missing"
+    );
+
+    sync_b_from_a(&pair).await;
+    assert!(
+        wait_until(Duration::from_secs(10), || async {
+            pair.db_b.get_blob(&backend.hash).await.unwrap().as_deref()
+                == Some(interrupted.as_slice())
+        })
+        .await,
+        "reconnecting should fetch the missing bytes without editing the file"
+    );
+    assert!(
+        wait_until(Duration::from_secs(15), || async {
+            peer::last_confirmed_full_syncs(&pair.db_a, &pair.drive)
+                .get(&node_b)
+                .is_some_and(|date| *date > previous_date)
+        })
+        .await,
+        "the full sync date should advance once the peer stores the missing bytes"
+    );
+}
+
+#[tokio::test]
+async fn e2e_acceptor_retries_a_failed_blob_write_on_the_live_link() {
+    use crate::sync::peer;
+    use std::time::Duration;
+
+    let bytes = b"file contents from the dialling peer";
+    let (pair, backend) = setup_pair_with_acceptor("e2e_acceptor_blob_retry", |db| {
+        InterruptedBlobWrite::install(db, bytes)
+    })
+    .await;
+    let node_b = pair.ep_b.node_id().to_string();
+    let file = add_sync_test_file(&pair.db_b, &pair.drive, "from-dialler.txt", bytes).await;
+
+    // B opens the connection once. A does not pair with an unsolicited dialler.
+    sync_b_from_a(&pair).await;
+    tokio::time::timeout(Duration::from_secs(10), backend.started.notified())
+        .await
+        .expect("the accepting peer should attempt to store the file");
+    assert!(pair.db_a.get_resource(&file.as_str().into()).await.is_ok());
+    assert!(pair.db_a.get_blob(&backend.hash).await.unwrap().is_none());
+    assert!(peer::live_peer_ids().contains(&node_b));
+    assert!(!peer::is_paired_peer(&pair.db_a, &node_b));
+
+    backend.finish.notify_one();
+    assert!(
+        wait_until(Duration::from_secs(15), || async {
+            pair.db_a.get_blob(&backend.hash).await.unwrap().as_deref() == Some(bytes.as_slice())
+        })
+        .await,
+        "the accepting peer should fetch the exact bytes again after the first write fails"
+    );
+    let live = peer::live_peer_ids();
+    assert!(live.contains(&pair.node_id_a));
+    assert!(live.contains(&node_b));
+}
+
+#[tokio::test]
+async fn e2e_transfers_file_at_server_upload_limit() {
+    use std::time::Duration;
+
+    let pair = setup_pair("e2e_transfers_file_at_server_upload_limit").await;
+    let bytes: Vec<u8> = (0..crate::sync::protocol::SERVER_UPLOAD_MAX_BYTES)
+        .map(|index| (index % 251) as u8)
+        .collect();
+    let hash = blake3::hash(&bytes);
+    add_sync_test_file(&pair.db_a, &pair.drive, "large.bin", &bytes).await;
+    sync_b_from_a(&pair).await;
+
+    assert!(
+        wait_until(Duration::from_secs(30), || async {
+            pair.db_b
+                .get_blob(hash.as_bytes())
+                .await
+                .unwrap()
+                .as_deref()
+                == Some(bytes.as_slice())
+        })
+        .await,
+        "the peer should store the exact bytes of a file at the server upload limit"
+    );
 }
 
 async fn wait_until<F, Fut>(timeout: std::time::Duration, mut check: F) -> bool

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { signRequest, useStore } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { Card } from '@components/Card';
+import { signedRequestInit, signRequest, useStore } from '@tomic/react';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Card } from '@tomic/ui/components/Card';
+
 interface TriggerInfo {
   queuedEvents: number;
   query: { filters: Array<{ property: string; value: string | null }> };
@@ -59,33 +60,24 @@ export function PluginTrigger({
     setError(undefined);
 
     try {
-      const payload = JSON.stringify({
-        drive,
-        plugin,
-        filters: trigger.query.filters.map(f => ({
-          property: f.property,
-          value: f.value,
-        })),
-        onEnter: trigger.onEnter,
-        onLeave: trigger.onLeave,
-        autoApply: enabled,
-      });
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          ...(await signRequest(
-            endpoint,
-            store.getAgent()!,
-            {},
-            {
-              method: 'POST',
-              body: payload,
-            },
-          )),
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-      });
+      const response = await fetch(
+        endpoint,
+        await signedRequestInit(endpoint, store.getAgent()!, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            drive,
+            plugin,
+            filters: trigger.query.filters.map(f => ({
+              property: f.property,
+              value: f.value,
+            })),
+            onEnter: trigger.onEnter,
+            onLeave: trigger.onLeave,
+            autoApply: enabled,
+          }),
+        }),
+      );
       if (!response.ok) throw new Error(await response.text());
       setTrigger(await response.json());
     } catch (e) {

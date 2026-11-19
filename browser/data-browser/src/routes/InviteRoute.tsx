@@ -15,7 +15,7 @@ import {
   originMayLackNode,
   probeOriginForNode,
 } from '../helpers/originNode';
-import { Spinner } from '../components/Spinner';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 import InvitePage from '../views/InvitePage';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';

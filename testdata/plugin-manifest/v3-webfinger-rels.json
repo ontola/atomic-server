@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "mount": "drive-host",
+    "routes": [
+      {
+        "id": "webfinger",
+        "path": "/webfinger",
+        "methods": [
+          "GET",
+          "HEAD"
+        ],
+        "cors": "any-origin-no-credentials"
+      }
+    ],
+    "wellKnown": [
+      {
+        "name": "webfinger",
+        "kind": "shared",
+        "match": {
+          "resourcePrefix": "acct:",
+          "rels": [
+            "self",
+            "http://webfinger.net/rel/profile-page"
+          ]
+        },
+        "route": "webfinger"
+      }
+    ],
+    "reason": "Answers WebFinger for this drive's actor, next to other claims for the same accounts."
+  }
+}

@@ -44,6 +44,14 @@ change those bytes. Other file formats continue to open as files.
 
 Simply send an HTTP GET request to the File's [`download-url`](https://atomicdata.dev/properties/downloadURL) (make sure to authenticate this request).
 
+### Downloading a Cloud Vault backup
+
+In Cloud Vault, select **Download backup** to save a workspace's encrypted
+backup as an `.atomic-vault` file. Browsers with a Save dialog let you choose
+the destination before the download begins; other browsers use their normal
+download behavior. Keep the suggested extension so the file is easy to select
+with **Restore from file**. Saving the file does not decrypt its contents.
+
 ### Image compression
 
 AtomicServer can automatically generate compressed versions of images in modern image formats (WebP, AVIF).

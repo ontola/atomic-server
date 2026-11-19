@@ -1442,6 +1442,38 @@ mod test {
         loro_value_to_atomic_value_tagged(val, tag)
     }
 
+    #[test]
+    fn json_nulls_survive_snapshots_and_list_edits() {
+        let payload_prop = "https://atomicdata.dev/properties/payload";
+        let list_prop = "https://atomicdata.dev/properties/items";
+        let payload = serde_json::json!({
+            "nickname": null,
+            "nested": ["first", null, {"missing": null}, [null, "last"]]
+        });
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(payload_prop, &Value::Json(payload.clone()))
+            .unwrap();
+        doc.set_property(
+            list_prop,
+            &Value::Json(serde_json::json!(["first", null, "last"])),
+        )
+        .unwrap();
+        let imported = AtomicLoroDoc::from_snapshot(&doc.export_snapshot()).unwrap();
+        assert!(
+            matches!(get_doc_property(&imported, payload_prop), Some(Value::Json(value)) if value == payload)
+        );
+        imported
+            .push_to_loro_list(list_prop, &serde_json::Value::Null)
+            .unwrap();
+        imported
+            .insert_into_loro_list(list_prop, 1, &serde_json::Value::Null)
+            .unwrap();
+        let reopened = AtomicLoroDoc::from_snapshot(&imported.export_snapshot()).unwrap();
+        assert!(
+            matches!(get_doc_property(&reopened, list_prop), Some(Value::Json(value)) if value == serde_json::json!(["first", null, null, "last", null]))
+        );
+    }
+
     /// Documents WHY `content` must be `recommends`, not `requires`, on the
     /// ai-message class (`lib/defaults/ai.json`): an EMPTY Loro array container
     /// is dropped from the genesis snapshot entirely (Loro does not persist an
@@ -1637,6 +1669,42 @@ mod test {
             doc.get_integer_property("https://atomicdata.dev/properties/age"),
             Some(30)
         );
+    }
+
+    #[test]
+    fn lens_endpoint_keys_in_a_resource_array_are_kept_verbatim() {
+        // The split-pieces exploration (#2069) lets an App's `renders` hold
+        // lens endpoint keys besides class subjects: `record:<path>#<resource>`
+        // and `rdf:<IRI>` (atomic-plugins `ontology-kit/LENSES.md`). They are
+        // provisional until the produced-class declaration exists
+        // (atomic-plugins #409; pieces.md I1, O8). The client accepts them in
+        // `renders` only behind the flag (`browser/lib/src/lens-endpoint-key.ts`);
+        // the server stores them as they are, and never reads `renders`
+        // entries as subjects.
+        let keys = [
+            "https://ontola.github.io/atomic-plugins/ontology/classes/issue-v1",
+            "record:APIs/todoist.com/1#task",
+            "rdf:http://www.w3.org/2002/01/bookmark#Bookmark",
+        ];
+        let doc = AtomicLoroDoc::new();
+        let prop = "https://example.com/properties/renders";
+        doc.set_property(
+            prop,
+            &Value::ResourceArray(keys.iter().map(|k| (*k).into()).collect()),
+        )
+        .unwrap();
+
+        let value = get_doc_property(&doc, prop).expect("renders must materialize");
+        assert!(matches!(value, Value::ResourceArray(_)), "got {value:?}");
+        assert_eq!(value.to_subjects(None).unwrap(), keys);
+
+        // The JSON form the server parses from a request takes them too.
+        let parsed = Value::new(
+            &serde_json::to_string(&keys).unwrap(),
+            &crate::datatype::DataType::ResourceArray,
+        )
+        .unwrap();
+        assert_eq!(parsed.to_subjects(None).unwrap(), keys);
     }
 
     #[test]

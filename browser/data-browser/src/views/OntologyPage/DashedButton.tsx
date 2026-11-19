@@ -1,5 +1,5 @@
 import { styled } from 'styled-components';
-import { transition } from '../../helpers/transition';
+import { transition } from '@tomic/ui/helpers/transition';
 
 export const DashedButton = styled.button<{ buttonHeight?: string }>`
   width: 100%;

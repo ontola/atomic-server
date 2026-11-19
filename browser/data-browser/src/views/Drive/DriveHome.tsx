@@ -23,20 +23,23 @@ import {
 } from 'react-icons/fa6';
 import type { IconType } from 'react-icons';
 import { styled } from 'styled-components';
-import { Button } from '@components/Button';
-import { Row } from '@components/Row';
-import { ResourceRow, ResourceRowDescription } from '@views/ResourceRow';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
+import {
+  ResourceRow,
+  ResourceRowDescription,
+} from '@tomic/resource-ui/views/ResourceRow';
 import { PresenceAvatarMenu } from '@components/Presence/PresenceAvatarMenu';
-import { AgentAvatar } from '@components/Presence/AgentAvatar';
+import { AgentAvatar } from '@tomic/resource-ui/components/Presence/AgentAvatar';
 import { useLastEditor } from '@hooks/useLastEditor';
 import { useRightPanel } from '@components/RightPanel/RightPanelContext';
 import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
-import { getRecentResources } from '@helpers/recentResources';
+import { getRecentResources } from '@tomic/resource-ui/helpers/recentResources';
 import { useNewRoute } from '@helpers/useNewRoute';
 import {
   toRelativeDateTime,
   toShortRelativeTime,
-} from '@helpers/dates/relativeDate';
+} from '@tomic/resource-ui/helpers/dates/relativeDate';
 import { isHiddenFromChildLists } from '@helpers/hiddenFromChildLists';
 import { useHiddenDriveSubjects } from '@hooks/useVisibleDriveChildren';
 import { useRecentComments } from '@hooks/useRecentComments';
@@ -142,7 +145,13 @@ function ResourceLines({ items }: { items: ActivityRow[] }): JSX.Element {
             key={subject}
             onClickCapture={
               kind === 'commented'
-                ? () => setPanelOpen('comments', true)
+                ? event => {
+                    if (
+                      (event.target as Element).closest('[data-resource-sync]')
+                    )
+                      return;
+                    setPanelOpen('comments', true);
+                  }
                 : undefined
             }
           >

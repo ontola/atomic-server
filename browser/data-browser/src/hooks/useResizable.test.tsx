@@ -2,7 +2,10 @@
 import { fireEvent, render, screen, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useRef } from 'react';
-import { useResizable, type UseResizableProps } from './useResizable';
+import {
+  useResizable,
+  type UseResizableProps,
+} from '@tomic/ui/hooks/useResizable';
 
 beforeEach(() => {
   // jsdom has no native PointerEvent; retain the coordinates and pointer identity.

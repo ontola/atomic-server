@@ -85,6 +85,13 @@ pub fn should_renew_certs_check(config: &crate::config::Config) -> AtomicServerR
     Ok(expired)
 }
 
+/// Serves the `.well-known` folder holding the ACME challenge. ACME runs on
+/// its own temporary server, so the main app's `/.well-known/` handling
+/// (plugin claims, the `404` for unclaimed names) never sees it.
+fn acme_challenge_files(well_known_folder: std::path::PathBuf) -> actix_files::Files {
+    actix_files::Files::new("/.well-known", well_known_folder).show_files_listing()
+}
+
 /// Starts an HTTP Actix server for HTTPS certificate initialization.
 /// Hosts `.well-known/acme-challenge` folder and the challenge file.
 async fn cert_init_server(
@@ -122,10 +129,7 @@ async fn cert_init_server(
                 &address
             );
             let init_server = HttpServer::new(move || {
-                App::new().service(
-                    actix_files::Files::new("/.well-known", well_known_folder.clone())
-                        .show_files_listing(),
-                )
+                App::new().service(acme_challenge_files(well_known_folder.clone()))
             });
 
             let running_server = init_server.bind(&address)?.run();
@@ -353,4 +357,30 @@ fn write_certs(
     set_certs_created_at_file(config);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod acme_tests {
+    use super::acme_challenge_files;
+    use actix_web::{test, App};
+
+    /// The challenge server still serves the token under
+    /// `/.well-known/acme-challenge/`; the main app's `/.well-known/` `404`
+    /// does not reach it.
+    #[actix_rt::test]
+    async fn the_challenge_server_serves_the_token() {
+        let dir = std::path::PathBuf::from(format!(
+            "./.temp/acme_{}/well-known",
+            atomic_lib::utils::random_string(10)
+        ));
+        std::fs::create_dir_all(dir.join("acme-challenge")).unwrap();
+        std::fs::write(dir.join("acme-challenge/token123"), "key-auth").unwrap();
+        let app = test::init_service(App::new().service(acme_challenge_files(dir))).await;
+        let req = test::TestRequest::get()
+            .uri("/.well-known/acme-challenge/token123")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        assert_eq!(test::read_body(resp).await, "key-auth");
+    }
 }

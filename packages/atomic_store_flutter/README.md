@@ -293,6 +293,44 @@ disk). `connect(origin)`, `disconnect()`, `pushPending()` and
 `verifiedOrigins(drive)` are there too. Which server to use, and remembering
 it, is the app's.
 
+#### Version-specific server storage evidence
+
+Subscribe before connecting or saving:
+
+```dart
+final receipts = node.sync.watchReplicaReceipts().listen((evidence) {
+  print('${evidence.serverOrigin} stored ${evidence.receipt.subject} '
+      'at ${evidence.receipt.version}');
+});
+await node.connect(origin);
+// Later, when the consumer goes away:
+await receipts.cancel();
+```
+
+The node automatically requests evidence for stored resource frontiers in its
+followed workspaces, including reconnect, local changes and outbox delivery.
+Each immutable `ServerReplicaReceipt` retains the exact requested version,
+receiving store identity, barrier and connection/account provenance. An older
+response keeps its older version even if another edit has since been made.
+Native change notifications can coalesce before capture: this does not promise
+a receipt for every intermediate save. Equivalent version vectors can have
+different byte encodings.
+
+Only a capable server whose persistent backend completed its storage barrier
+can provide positive evidence. `source` is absent for a memory-only local store;
+that does not prevent evidence about the remote store. A commit acknowledgement
+or a connected status alone remains acceptance/connectivity information.
+
+This is a bounded stream of historical observations, with no replay or ledger.
+It stays subscribed across reconnects and suppresses stale account/connection
+observations; cancelling releases its native receiver even while idle. Missing
+events mean unknown, and apps choose their own trust and independence policy.
+Different identities do not establish different physical devices, future
+retention, blob/key completeness, or a recoverable backup.
+
+Custom `ServerSync` implementations must add `watchReplicaReceipts()`; return
+`const Stream<ServerReplicaReceipt>.empty()` when evidence is unsupported.
+
 ### Devices (`node.peers`)
 
 Sync between devices over Iroh (QUIC), no server: pair with a QR code and the

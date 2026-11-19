@@ -24,6 +24,8 @@
     "browser/data-browser/src/locales/**",
     "**/*.min.js",
     "**/Website/runtime/search-view.html",
-    "**/*.min.css"
+    "**/*.min.css",
+    "**/chunks/Pieces/fixtures/**",
+    "**/chunks/Pieces/vendor/**"
   ]
 }

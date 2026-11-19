@@ -12,16 +12,19 @@ import {
 import type { JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaCodeBranch, FaPlus, FaTrash } from 'react-icons/fa6';
-import Field from '@components/forms/Field';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   IconButton,
   IconButtonVariant,
-} from '@components/IconButton/IconButton';
-import { Dialog, useDialog } from '@components/Dialog';
+} from '@tomic/ui/components/IconButton/IconButton';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
 import {
   previousQuestions,
   useFormQuestions,

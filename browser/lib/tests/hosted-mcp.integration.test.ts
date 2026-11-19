@@ -91,6 +91,7 @@ describe('hosted MCP against a live server', () => {
    * (`EnvironmentTeardownError: Closing rpc while "onUserConsoleLog" was
    * pending`) with every test green. */
   const stores: Store[] = [];
+
   const openStore = (agent: Agent) => {
     const store = new Store({ serverUrl: SERVER, agent });
     stores.push(store);
@@ -600,6 +601,7 @@ describe('hosted MCP against a live server', () => {
     expect(connection.scope).toBe('read write');
 
     const bridge = new Bridge(SERVER);
+
     const call = async (name: string, args: object) => {
       const answer = (await bridge.handle({
         jsonrpc: '2.0',

@@ -92,7 +92,8 @@ pub async fn replicate_drive_to_remote(
     auth: ReplicateAuth,
 ) -> AtomicResult<ReplicateOutcome> {
     let started = std::time::Instant::now();
-    let client = WsClient::connect(target_ws_url).await?;
+    let agent_generation = store.agent_generation();
+    let client = std::sync::Arc::new(WsClient::connect(target_ws_url).await?);
 
     match auth {
         ReplicateAuth::Agent(agent) => client.authenticate(&agent).await?,
@@ -100,6 +101,30 @@ pub async fn replicate_drive_to_remote(
         ReplicateAuth::Anonymous => {}
     }
 
+    let receipts = if store.agent_generation() == agent_generation {
+        let session = crate::client::ws_receipts::WsReceiptSession::start_with_read_scope(
+            client.clone(),
+            std::sync::Arc::new(store.clone()),
+            export_as.clone(),
+        );
+        if store.agent_generation() == agent_generation {
+            Some(session)
+        } else {
+            session.close();
+            None
+        }
+    } else {
+        None
+    };
+    struct StopReceipts(Option<std::sync::Arc<crate::client::ws_receipts::WsReceiptSession>>);
+    impl Drop for StopReceipts {
+        fn drop(&mut self) {
+            if let Some(session) = &self.0 {
+                session.close();
+            }
+        }
+    }
+    let receipt_guard = StopReceipts(receipts);
     let mut rx = client.subscribe();
     let mut outcome = ReplicateOutcome {
         pushed: 0,
@@ -124,6 +149,10 @@ pub async fn replicate_drive_to_remote(
 
     if sent == 0 && outcome.in_sync {
         // The remote already had everything; no second probe needed.
+        if let Some(session) = &receipt_guard.0 {
+            session.follow_drive(drive);
+            session.finish(std::time::Duration::from_millis(750)).await;
+        }
         return Ok(outcome);
     }
 
@@ -146,6 +175,10 @@ pub async fn replicate_drive_to_remote(
     )
     .await?;
 
+    if let Some(session) = &receipt_guard.0 {
+        session.follow_drive(drive);
+        session.finish(std::time::Duration::from_millis(750)).await;
+    }
     Ok(outcome)
 }
 
@@ -376,6 +409,11 @@ mod tests {
             .unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("ws://{}/ws", listener.local_addr().unwrap());
+        let auth = protocol::encode_auth(
+            &db.get_default_agent().unwrap(),
+            &format!("http://{}", listener.local_addr().unwrap()),
+        )
+        .unwrap();
         let remote_drive = drive.clone();
         let peer = tokio::spawn(async move {
             let peer = accept_peer(listener, caps).await;
@@ -388,7 +426,7 @@ mod tests {
                 &drive,
                 &url,
                 &ForAgent::Sudo,
-                ReplicateAuth::PreSigned(vec![protocol::tag::AUTH]),
+                ReplicateAuth::PreSigned(auth),
             ),
         )
         .await

@@ -18,11 +18,14 @@ import { TableKit } from '@tiptap/extension-table';
 import {
   ResourceNode,
   ResourceNodeInline,
-} from './ResourceExtension/ResourceNode';
+} from '@tomic/resource-ui/chunks/RTE/ResourceExtension/ResourceNode';
 import DragHandle from '@tiptap/extension-drag-handle-react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { TiptapContextProvider } from './TiptapContext';
-import { SlashCommands, buildSuggestion } from './SlashMenu/CommandsExtension';
+import { TiptapContextProvider } from '@tomic/resource-ui/chunks/RTE/TiptapContext';
+import {
+  SlashCommands,
+  buildSuggestion,
+} from '@tomic/resource-ui/chunks/RTE/SlashMenu/CommandsExtension';
 import {
   ResourceCommands,
   buildResourceSuggestion,
@@ -38,28 +41,28 @@ import {
   type Resource,
   type Server,
 } from '@tomic/react';
-import { EditorEvents } from './EditorEvents';
+import { EditorEvents } from '@tomic/resource-ui/chunks/RTE/EditorEvents';
 import { useLoroSync } from './useLoroSync';
-import { colorForAgent } from '@components/Presence/AgentAvatar';
-import { EditorWrapperBase } from './EditorWrapperBase';
+import { colorForAgent } from '@tomic/resource-ui/components/Presence/AgentAvatar';
+import { EditorWrapperBase } from '@tomic/resource-ui/chunks/RTE/EditorWrapperBase';
 import styled, { useTheme } from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
 import { FullBubbleMenu } from './FullBubbleMenu';
 import { FormattingToolbar } from './FormattingToolbar';
-import { IsInRTEContex } from '@hooks/useIsInRTE';
+import { IsInRTEContex } from '@tomic/resource-ui/hooks/useIsInRTE';
 import { FaCircleInfo, FaGripVertical, FaLink, FaTable } from 'react-icons/fa6';
-import { useUpload } from '@hooks/useUpload';
+import { useUpload } from '@tomic/resource-ui/hooks/useUpload';
 import FileHandler from '@tiptap/extension-file-handler';
-import { supportedImageTypes } from '@views/File/fileTypeUtils';
-import type { SuggestionItem } from './types';
+import { supportedImageTypes } from '@tomic/resource-ui/views/File/fileTypeUtils';
+import type { SuggestionItem } from '@tomic/resource-ui/chunks/RTE/types';
 import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
 import toast from 'react-hot-toast';
-import { Row } from '@components/Row';
-import { Button } from '@components/Button';
-import { FloatingHint } from './FloatingHint';
+import { Row } from '@tomic/ui/components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { FloatingHint } from '@tomic/resource-ui/chunks/RTE/FloatingHint';
 import { useCustomBodyColor } from '@hooks/useCustomBodyColor';
-import { getDocumentCollaborationCoreExtensions } from './documentCollaborationExtensions';
-import { useAIChanges } from '@components/AIChangesContext';
+import { getDocumentCollaborationCoreExtensions } from '@tomic/resource-ui/chunks/RTE/documentCollaborationExtensions';
+import { useAIChanges } from '@tomic/resource-ui/components/AIChangesContext';
 import { ComparePlugin } from './comparePlugin';
 import { registerCollaborativeDocumentEditor } from './collaborativeDocumentEditorRegistry';
 import {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BasicSelect } from '@components/forms/BasicSelect';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { useAISettings } from './AISettingsContext';
 
 /**

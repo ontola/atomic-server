@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { dataBrowser, properties, useString } from '@tomic/react';
-import { LoaderInline } from '../components/Loader';
+import { LoaderInline } from '@tomic/ui/components/Loader';
 import { useRightPanel } from '../components/RightPanel/RightPanelContext';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';

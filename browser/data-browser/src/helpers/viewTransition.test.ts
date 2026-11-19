@@ -9,7 +9,7 @@ import {
   PAGE_TITLE_TRANSITION_TAG,
   RESOURCE_PAGE_TRANSITION_TAG,
   transitionName,
-} from './transitionName';
+} from '@tomic/ui/helpers/transitionName';
 
 vi.mock('react-dom', () => ({
   flushSync: (fn: () => void) => fn(),

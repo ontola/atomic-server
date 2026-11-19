@@ -1,10 +1,10 @@
 import { Resource } from '@tomic/react';
 import { useMemo, type JSX } from 'react';
 import { countryOptions } from '@tomic/form-renderer';
-import Field from '@components/forms/Field';
+import Field from '@tomic/resource-ui/components/forms/Field';
 import { ComboBox, type ComboBoxOption } from '@components/ComboBox';
-import { useLocale } from '@components/LocaleContext';
-import { useFieldOptions } from './useFieldOptions';
+import { useLocale } from '@tomic/resource-ui/components/LocaleContext';
+import { useFieldOptions } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
 
 /** The combobox needs a value for "nothing picked"; the options bag stores
  * that as the absence of `defaultCountry`. */

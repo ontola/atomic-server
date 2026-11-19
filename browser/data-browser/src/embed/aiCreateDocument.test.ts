@@ -11,7 +11,7 @@ import {
   shortenSubject,
   type NativeChannel,
 } from '@tomic/react';
-import { hasDocumentContent } from '@chunks/RTE/readDocumentV2TiptapJson';
+import { hasDocumentContent } from '@tomic/resource-ui/chunks/RTE/readDocumentV2TiptapJson';
 import { runDocumentEdit } from '@chunks/AI/documentEditAgent';
 import { createEmbedStore } from './embedStore';
 

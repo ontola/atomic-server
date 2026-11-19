@@ -1,10 +1,12 @@
+import {
+  ResourceAppView,
+  useResourceAppView,
+} from '@chunks/AppPage/ResourceAppView';
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import {
   useResource,
   useStore,
-  Resource,
-  type OptionalClass,
   dataBrowser,
   collections,
   server,
@@ -19,50 +21,97 @@ import {
 import { useNavigate } from '@tanstack/react-router';
 import { paths } from '../routes/paths';
 
-import { ContainerNarrow } from '../components/Containers';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
 import Collection from '../views/CollectionPage';
 import EndpointPage from './EndpointPage';
 import DrivePage from './Drive/DrivePage';
-import InvitePage from './InvitePage';
-import { DocumentPage } from './DocumentPage';
 import ErrorPage, { ErrorBoundary } from './ErrorPage';
-import { ClassPage } from './ClassPage';
 import { FilePage } from './File/FilePage';
-import AgentPage from './AgentPage';
 import { ResourcePageDefault } from './ResourcePageDefault';
-import { Spinner } from '../components/Spinner';
+import { Spinner } from '@tomic/resource-ui/components/Spinner';
 import { ChatRoomPage } from './ChatRoomPage';
-import { ConversationPage } from './Conversation/ConversationPage';
-import { InboxPage } from './InboxPage';
-import { NotificationPage } from './NotificationPage';
 import { MessagePage } from './MessagePage';
 import { ChatLogPage } from './ChatLogPage';
-import { BookmarkPage } from './BookmarkPage/BookmarkPage';
 import { ImporterPage } from './ImporterPage.jsx';
 import { FolderPage } from './FolderPage';
 import { ArticlePage } from './Article';
 import { ForkBar } from '../components/ForkBar';
 import { PendingForks } from '../components/PendingForks';
 import { Main } from '../components/Main';
-import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
-import { AIChatPage } from '@views/AIChat/AIChatPage';
-import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
-import { CanvasPage } from './Canvas/CanvasPage';
 import { canvas } from '@tomic/lib';
-import { InstallationPage } from '@views/Installation/InstallationPage';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { PluginView } from './PluginView/PluginView';
-import { MeetingPage } from './Meeting/MeetingPage';
 import { useIsPlugin } from '@chunks/PluginRuns/PluginSection';
 import { useAppClass } from '@chunks/PluginRuns/useDriveClass';
 
+const CanvasPage = lazy(() =>
+  import('./Canvas/CanvasPage').then(module => ({
+    default: module.CanvasPage,
+  })),
+);
+const InstallationPage = lazy(() =>
+  import('@views/Installation/InstallationPage').then(module => ({
+    default: module.InstallationPage,
+  })),
+);
+const ClassPage = lazy(() =>
+  import('./ClassPage').then(module => ({ default: module.ClassPage })),
+);
+const OntologyPage = lazy(() =>
+  import('./OntologyPage').then(module => ({ default: module.OntologyPage })),
+);
+const AIChatPage = lazy(() =>
+  import('@views/AIChat/AIChatPage').then(module => ({
+    default: module.AIChatPage,
+  })),
+);
+const DocumentV2FullPage = lazy(() =>
+  import('./Document/DocumentV2FullPage').then(module => ({
+    default: module.DocumentV2FullPage,
+  })),
+);
+
+const MeetingPage = lazy(() =>
+  import('./Meeting/MeetingPage').then(module => ({
+    default: module.MeetingPage,
+  })),
+);
+const BookmarkPage = lazy(() =>
+  import('./BookmarkPage/BookmarkPage').then(module => ({
+    default: module.BookmarkPage,
+  })),
+);
+const ConversationPage = lazy(() =>
+  import('./Conversation/ConversationPage').then(module => ({
+    default: module.ConversationPage,
+  })),
+);
+const InvitePage = lazy(() => import('./InvitePage'));
+const AgentPage = lazy(() => import('./AgentPage'));
+
+const DocumentPage = lazy(() =>
+  import('./DocumentPage').then(module => ({ default: module.DocumentPage })),
+);
+const InboxPage = lazy(() =>
+  import('./InboxPage').then(module => ({ default: module.InboxPage })),
+);
+const NotificationPage = lazy(() =>
+  import('./NotificationPage').then(module => ({
+    default: module.NotificationPage,
+  })),
+);
+
 const TablePage = lazy(() =>
-  import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
+  import('@tomic/table-page/TablePage/index').then(m => ({
+    default: m.TablePage,
+  })),
 );
 
 const DashboardPage = lazy(() =>
-  import('../chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
+  import('@tomic/table-page/DashboardPage/index').then(m => ({
+    default: m.DashboardPage,
+  })),
 );
 
 const WebsiteExportPage = lazy(() =>
@@ -87,7 +136,7 @@ const ImportResolutionNotice = lazy(() =>
 );
 
 const AppPage = lazy(() =>
-  import('../chunks/AppPage').then(m => ({ default: m.AppPage })),
+  import('@chunks/AppPage').then(m => ({ default: m.AppPage })),
 );
 
 const FormBuilderPage = lazy(() =>
@@ -95,9 +144,8 @@ const FormBuilderPage = lazy(() =>
 );
 
 /** These properties are passed to every View at Page level */
-export type ResourcePageProps<Subject extends OptionalClass = never> = {
-  resource: Resource<Subject>;
-};
+export type { ResourcePageProps } from '@tomic/resource-ui/ResourceUIHost';
+import type { ResourcePageProps } from '@tomic/resource-ui/ResourceUIHost';
 
 type Props = {
   subject: string;
@@ -117,6 +165,7 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   const isPlugin = useIsPlugin(resource);
   const store = useStore();
   const drive = store.getDrive();
+  const resourceApp = useResourceAppView(resource, drive);
   const appClass = useAppClass(drive);
   // The drive's schema can be unread on a device that has only part of the
   // drive (the embedded app has no server to ask), so an app is also known
@@ -201,6 +250,16 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
     return (
       <Main subject={subject}>
         <ErrorPage resource={resource} />
+      </Main>
+    );
+  }
+
+  if (resourceApp && drive) {
+    return (
+      <Main subject={subject}>
+        <ErrorBoundary>
+          <ResourceAppView app={resourceApp} drive={drive} resource={subject} />
+        </ErrorBoundary>
       </Main>
     );
   }

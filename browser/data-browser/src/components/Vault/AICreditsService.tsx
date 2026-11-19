@@ -8,7 +8,7 @@ import {
   ServiceTitle,
 } from '@tomic/service-ui';
 import { useAISettings } from '../AI/AISettingsContext';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   canPurchaseHostedAICredits,
   getHostedAIStatus,

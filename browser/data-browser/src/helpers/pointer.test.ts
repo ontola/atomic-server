@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isTouchPrimary } from './pointer';
+import { isTouchPrimary } from '@tomic/ui/helpers/pointer';
 
 afterEach(() => vi.unstubAllGlobals());
 

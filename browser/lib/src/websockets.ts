@@ -17,8 +17,17 @@ import {
   emitSubjectForCaps,
 } from './subject.js';
 import { Resource } from './resource.js';
+import { randomUUID } from './uuid.js';
+import {
+  decodeServerReceipt,
+  matchesServerReceipt,
+  SERVER_RECEIPT_CAPABILITY,
+  SERVER_RECEIPT_MAX_FRAME,
+  type ServerReceiptRequest,
+  type ServerReceiptWire,
+} from './server-receipts.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
-import { StoreEvents, type Store } from './store.js';
+import { StoreEvents, type Store, type IncomingChange } from './store.js';
 import type { DriveItem } from './local-drive-copy.js';
 import {
   AtomicError,
@@ -267,6 +276,99 @@ function shortPropName(url: string): string {
  * All messages are binary frames — no JSON-AD parsing on the hot path.
  */
 export class WSClient {
+  private readonly receiptInstance = randomUUID();
+  private receiptEpoch = 0;
+  private receiptAuthGeneration: number | undefined;
+  private receiptAuthPoisoned = false;
+  private receiptAuthAttempt:
+    | {
+        generation: number;
+        signal: AbortSignal;
+        sent: boolean;
+        acknowledged: boolean;
+      }
+    | undefined;
+
+  private poisonReceiptAuthentication(): void {
+    this.receiptAuthPoisoned = true;
+    this.receiptAuthGeneration = undefined;
+    this.rejectStorageReceipts();
+  }
+  private pendingReceipts = new Map<
+    string,
+    {
+      request: ServerReceiptRequest;
+      resolve: (receipt?: ServerReceiptWire) => void;
+      cleanup: () => void;
+    }
+  >();
+
+  private rejectStorageReceipts(): void {
+    this.receiptEpoch++;
+
+    for (const pending of this.pendingReceipts.values()) {
+      pending.cleanup();
+      pending.resolve();
+    }
+
+    this.pendingReceipts.clear();
+  }
+
+  /** @internal Capability and authentication belong to this socket incarnation. */
+  public getStorageReceiptSession(): string | undefined {
+    if (
+      this._closed ||
+      this.receiptAuthPoisoned ||
+      this.receiptAuthGeneration !== this.store.getIdentityGeneration() ||
+      this.isAuthenticating ||
+      this.readyState !== WebSocket.OPEN ||
+      !this.isAuthenticatedAsCurrentAgent() ||
+      !this._serverCaps.includes(SERVER_RECEIPT_CAPABILITY)
+    )
+      return;
+
+    return `${this.serverOrigin}:${this.receiptInstance}:${this.receiptEpoch}`;
+  }
+
+  /** @internal The owning bounded scheduler supplies the abort deadline. */
+  public requestStorageReceipt(
+    request: ServerReceiptRequest,
+    signal: AbortSignal,
+  ): Promise<ServerReceiptWire | undefined> {
+    if (
+      !this.getStorageReceiptSession() ||
+      signal.aborted ||
+      this.pendingReceipts.size >= 4
+    )
+      return Promise.resolve(undefined);
+    const payload = new TextEncoder().encode(JSON.stringify(request));
+    if (payload.length + 1 > SERVER_RECEIPT_MAX_FRAME)
+      return Promise.resolve(undefined);
+
+    return new Promise(resolve => {
+      const abort = () => {
+        this.pendingReceipts.delete(request.nonce);
+        resolve(undefined);
+      };
+
+      signal.addEventListener('abort', abort, { once: true });
+      this.pendingReceipts.set(request.nonce, {
+        request,
+        resolve,
+        cleanup: () => signal.removeEventListener('abort', abort),
+      });
+      const frame = new Uint8Array(payload.length + 1);
+      frame[0] = Tag.STORAGE_RECEIPT_REQUEST;
+      frame.set(payload, 1);
+
+      try {
+        this.sendBinary(frame);
+      } catch {
+        signal.removeEventListener('abort', abort);
+        abort();
+      }
+    });
+  }
   /** Tests set this to 0. */
   public static syncProbeDelayMs = SYNC_PROBE_DELAY_MS;
 
@@ -276,6 +378,7 @@ export class WSClient {
   private openPromise: Promise<void>;
 
   private authenticatedWith: string | undefined;
+  private authenticatedGeneration: number | undefined;
   /** Drives whose `PRESENCE_SUBSCRIBE` is deferred behind `authenticate()` and
    *  not on the wire yet, with the presence updates produced meanwhile. The
    *  server only relays updates from current subscribers, so an update sent
@@ -305,6 +408,13 @@ export class WSClient {
       state: Awaited<ReturnType<Store['computeDriveSyncState']>>;
       current: () => boolean;
     }
+  >();
+  /** Both server acknowledgement and final inbound chunk are needed. */
+  private activeReconciles = new Set<string>();
+  private confirmationProbes = new Set<string>();
+  private pendingReconcile = new Map<
+    string,
+    { waitingForAcks: number; waitingForPull: boolean }
   >();
   /** Pending `RBSR_ITEMS` inventory responses, answered in order. */
   private _inventoryQueue: Array<(items: DriveItem[]) => void> = [];
@@ -395,6 +505,7 @@ export class WSClient {
    *  hang for REQUEST_TIMEOUT (10 s) when the socket dies mid-flight
    *  — the next reconnect will fetch fresh state anyway. */
   private rejectAllPending(reason: string, cancellation = false): void {
+    this.rejectStorageReceipts();
     const err = cancellation
       ? new RequestCancelledError(reason)
       : new AtomicError(reason, ErrorType.Server);
@@ -451,6 +562,9 @@ export class WSClient {
     // only inside the connect handshake misses it. Idempotent server-side.
     this._driveUnsub = store.on(StoreEvents.DriveChanged, () => {
       this._pendingSyncState.clear();
+      this.pendingReconcile.clear();
+      this.activeReconciles.clear();
+      this.confirmationProbes.clear();
       this.subscribeToDrive();
       void this.reconcileSubscribedDrive();
     });
@@ -482,9 +596,15 @@ export class WSClient {
     this.authPromise = Promise.resolve();
 
     const createSocket = () => {
+      this.pendingReconcile.clear();
+      this.activeReconciles.clear();
+      this.confirmationProbes.clear();
       this.connection.abort(new RequestCancelledError('WebSocket replaced'));
       this.rejectAllPending('WebSocket replaced', true);
       this.connection = new AbortController();
+      this.receiptAuthPoisoned = false;
+      this.receiptAuthGeneration = undefined;
+      this.receiptAuthAttempt = undefined;
       const { signal } = this.connection;
       const ws = new WebSocket(wsURL.toString(), [WS_PROTOCOL]);
       ws.binaryType = 'arraybuffer';
@@ -509,6 +629,9 @@ export class WSClient {
         // Explicit close already tears down this client synchronously. Its
         // later event must not overwrite a replacement socket's live state.
         if (this._closed || ws !== this.ws) return;
+        this.pendingReconcile.clear();
+        this.activeReconciles.clear();
+        this.confirmationProbes.clear();
         this.connection.abort(new RequestCancelledError('WebSocket closed'));
 
         if (!opened) {
@@ -654,6 +777,9 @@ export class WSClient {
 
   public close(): void {
     this._closed = true;
+    this.pendingReconcile.clear();
+    this.activeReconciles.clear();
+    this.confirmationProbes.clear();
     this.connection.abort(
       new RequestCancelledError('WebSocket closed by client'),
     );
@@ -701,9 +827,25 @@ export class WSClient {
     if (this._closed)
       throw new RequestCancelledError('WebSocket closed by client');
     const agent = this.store.getAgent();
+    const generation = this.store.getIdentityGeneration();
+
+    const checkIdentity = () => {
+      if (
+        this.store.getIdentityGeneration() !== generation ||
+        this.store.getAgent() !== agent
+      )
+        throw new RequestCancelledError(
+          'Account identity changed during authentication',
+        );
+    };
 
     if (!agent?.subject) return;
-    if (this.authenticatedWith === agent.subject && !fetchAll) return;
+    const alreadyAuthenticated = () =>
+      !this.isAuthenticating &&
+      this.authenticatedWith === agent.subject &&
+      this.authenticatedGeneration === generation &&
+      !fetchAll;
+    if (alreadyAuthenticated()) return;
 
     // An in-flight auth might be for a DIFFERENT (e.g. now-stale) agent. Wait
     // for it to settle, then check whether we still need to authenticate as
@@ -712,22 +854,30 @@ export class WSClient {
     // created one) silently keeps the WS bound to the old agent, and the next
     // `ws.fetch(newAgent.subject)` returns 401 because the old agent has no
     // read rights on the new agent's resource.
-    if (this.isAuthenticating) {
+    while (this.isAuthenticating) {
       try {
         await this.authPromise;
       } catch {}
 
-      if (this.authenticatedWith === agent.subject && !fetchAll) return;
+      checkIdentity();
+      if (alreadyAuthenticated()) return;
     }
 
     const { signal } = this.connection;
     signal.throwIfAborted();
     this.isAuthenticating = true;
+    this.authenticatedWith = undefined;
+    this.authenticatedGeneration = undefined;
+    this.rejectStorageReceipts();
+    this.receiptAuthGeneration = undefined;
+    const attempt = { generation, signal, sent: false, acknowledged: false };
+    this.receiptAuthAttempt = attempt;
 
     this.authPromise = (async () => {
       try {
         await waitForConnection(this.openPromise, signal);
         signal.throwIfAborted();
+        checkIdentity();
         // The server's CHALLENGE is its first frame; on a current server it
         // has arrived by the time anyone calls `authenticate`. The short wait
         // covers the race, and costs its full length only against a server
@@ -735,6 +885,7 @@ export class WSClient {
         // it expects.
         const nonce = await waitForConnection(this.awaitChallenge(), signal);
         signal.throwIfAborted();
+        checkIdentity();
         const subject = nonce
           ? `${this.serverOrigin}#${nonce}`
           : this.serverOrigin;
@@ -743,6 +894,7 @@ export class WSClient {
           signal,
         );
         signal.throwIfAborted();
+        checkIdentity();
         // Challenge waiting/signing can finish after disconnect(). Never send
         // on that socket or install a new AUTH_OK waiter after close drained it.
         if (this._closed || this.readyState !== WebSocket.OPEN)
@@ -751,41 +903,56 @@ export class WSClient {
           );
 
         const authenticated = this.waitForTag(Tag.AUTH_OK);
-        this.sendBinary(encodeAuth(JSON.stringify(json)));
+        attempt.sent = true;
+        this.sendBinary(encodeAuth(JSON.stringify(json)), true);
 
         // Wait for AUTH_OK — rejected by the close handler if the socket
         // dies mid-handshake, otherwise waits as long as needed.
         await waitForConnection(authenticated, signal);
         signal.throwIfAborted();
+        checkIdentity();
 
         this.authenticatedWith = agent.subject;
+        this.authenticatedGeneration = generation;
+        if (attempt.acknowledged && !this.receiptAuthPoisoned)
+          this.receiptAuthGeneration = generation;
         recordServerVersionFromWsProtocol(
           this.ws.protocol || WS_PROTOCOL,
           this.serverOrigin,
         );
+      } catch (error) {
+        // AUTH_OK has no request id. Once an attempt was sent but failed,
+        // a later ACK cannot safely certify another identity on this socket.
+        if (attempt.sent && !signal.aborted) this.poisonReceiptAuthentication();
+        throw error;
+      } finally {
+        if (this.receiptAuthAttempt === attempt)
+          this.receiptAuthAttempt = undefined;
+        this.isAuthenticating = false;
+      }
 
-        // Re-subscribe to the drive + active Loro sync and ephemeral channels.
-        // `reSubscribeAll` now owns the drive SUB (for both authenticated and
-        // anonymous sessions), so there's no separate `encodeSub` here.
-        this.reSubscribeAll();
+      // Authentication has completed before subscription callbacks re-enter it.
+      // No pending contender can start another exchange until this synchronous
+      // continuation returns, and a callback cannot clear a later attempt's lock.
+      // Re-subscribe to the drive + active Loro sync and ephemeral channels.
+      // `reSubscribeAll` now owns the drive SUB (for both authenticated and
+      // anonymous sessions), so there's no separate `encodeSub` here.
+      this.reSubscribeAll();
 
-        // Refetch resources that had 401 errors
-        if (fetchAll) {
-          // Not awaited: computing the drive's sync state takes seconds on a
-          // large drive, and `authenticate` resolving is what tells the store
-          // the server is connected, so every read waited for it.
-          void this.reconcileSubscribedDrive().catch(() => undefined);
-          // Anything a previous session left without search entries.
-          this.scheduleBackgroundImport();
+      // Refetch resources that had 401 errors
+      if (fetchAll) {
+        // Not awaited: computing the drive's sync state takes seconds on a
+        // large drive, and `authenticate` resolving is what tells the store
+        // the server is connected, so every read waited for it.
+        void this.reconcileSubscribedDrive().catch(() => undefined);
+        // Anything a previous session left without search entries.
+        this.scheduleBackgroundImport();
 
-          for (const resource of this.store.resources.values()) {
-            if (resource.isUnauthorized()) {
-              this.fetch(resource.subject).catch(() => {});
-            }
+        for (const resource of this.store.resources.values()) {
+          if (resource.isUnauthorized()) {
+            this.fetch(resource.subject).catch(() => {});
           }
         }
-      } finally {
-        this.isAuthenticating = false;
       }
     })();
 
@@ -950,6 +1117,26 @@ export class WSClient {
     this.sendEphemeral(EphemeralKind.PRESENCE, drive, update);
   }
 
+  /** Server UPDATE/SYNC bytes describe applied server state. Peer traffic never
+   * enters here. Do not use the merged document: it may contain newer local edits.
+   */
+  private applyServerUpdate(change: IncomingChange): void {
+    const acknowledge =
+      change.loroBytes &&
+      !this._closed &&
+      !this.connection.signal.aborted &&
+      this.readyState === WebSocket.OPEN &&
+      this.isAuthenticatedAsCurrentAgent()
+        ? this.store.captureServerResourceReceipt(
+            this,
+            change.subject,
+            change.loroBytes,
+          )
+        : undefined;
+    const result = this.store.applyIncoming(change);
+    if (result !== 'invalid') acknowledge?.();
+  }
+
   private isAuthenticatedAsCurrentAgent(): boolean {
     return (
       !!this.authenticatedWith &&
@@ -970,7 +1157,10 @@ export class WSClient {
   }
 
   /** Sends a GET message for some resource over websockets. */
-  public async fetch(subject: string): Promise<Resource> {
+  public async fetch(
+    subject: string,
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<Resource> {
     // Ensure auth has been kicked off before sending the GET. `authPromise`
     // starts as a resolved promise (not undefined), so `await this.authPromise`
     // alone is a no-op when nobody has called `authenticate()` yet — that
@@ -982,7 +1172,11 @@ export class WSClient {
     // refetch on the next `setAgent`. `authenticate()` is idempotent: it
     // returns immediately if there's no agent or we've already authenticated
     // as the current one, and reuses the in-flight promise otherwise.
-    await this.authenticate();
+    if (opts.signal) {
+      await waitForConnection(this.authenticate(), opts.signal);
+    } else {
+      await this.authenticate();
+    }
 
     if (this.readyState !== WebSocket.OPEN) {
       throw new AtomicError(
@@ -999,10 +1193,13 @@ export class WSClient {
 
     return new Promise((resolve, reject) => {
       const close = perfSpan('ws.GET', { subject: subject.slice(0, 200) });
+      const abort = () =>
+        this.takePending(requestId)?.reject(
+          opts.signal?.reason ??
+            new RequestCancelledError('WebSocket GET cancelled'),
+        );
       const timer = setTimeout(() => {
-        this.pendingGets.delete(requestId);
-        close({ err: 'timeout' });
-        reject(
+        this.takePending(requestId)?.reject(
           new Error(`GET "${subject}" timed out after ${REQUEST_TIMEOUT}ms.`),
         );
       }, REQUEST_TIMEOUT);
@@ -1010,15 +1207,25 @@ export class WSClient {
       this.pendingGets.set(requestId, {
         subject,
         resolve: (r: Resource) => {
+          opts.signal?.removeEventListener('abort', abort);
           close('ok');
           resolve(r);
         },
         reject: (e: unknown) => {
+          opts.signal?.removeEventListener('abort', abort);
           close({ err: e instanceof Error ? e.message : String(e) });
           reject(e);
         },
         timer,
       });
+      opts.signal?.addEventListener('abort', abort, { once: true });
+
+      if (opts.signal?.aborted) {
+        abort();
+
+        return;
+      }
+
       this.sendBinary(encodeGet(requestId, this.wireSubject(subject)));
     });
   }
@@ -1189,7 +1396,10 @@ export class WSClient {
   }
 
   /** Send a binary frame, logging it in debug mode. */
-  private sendBinary(frame: Uint8Array) {
+  private sendBinary(frame: Uint8Array, managedAuthentication = false) {
+    if (frame[0] === Tag.AUTH && !managedAuthentication)
+      this.poisonReceiptAuthentication();
+
     if (this.debug) {
       logFrame(frame, '→', '#9bf');
     }
@@ -1263,10 +1473,40 @@ export class WSClient {
     profilerTick(`ws.in.${tagName(tag)}`, data.length);
 
     switch (tag) {
+      case Tag.STORAGE_RECEIPT_RESPONSE: {
+        if (data.length > SERVER_RECEIPT_MAX_FRAME) break;
+        let receipt: ServerReceiptWire | undefined;
+
+        try {
+          receipt = decodeServerReceipt(
+            new TextDecoder('utf-8', { fatal: true }).decode(payload),
+          );
+        } catch {
+          break;
+        }
+
+        if (!receipt) break;
+        const pending = this.pendingReceipts.get(receipt.nonce);
+        if (!pending || !matchesServerReceipt(pending.request, receipt)) break;
+        this.pendingReceipts.delete(receipt.nonce);
+        pending.cleanup();
+        pending.resolve(receipt);
+        break;
+      }
+
       case Tag.AUTH_OK:
         // Resolved by waitForTag. The payload is the server's capability
         // list; remember it so features negotiate instead of guessing.
         this._serverCaps = decodeAuthOk(payload);
+        if (
+          this.receiptAuthAttempt?.sent &&
+          !this.receiptAuthAttempt.acknowledged &&
+          !this.receiptAuthAttempt.signal.aborted &&
+          this.receiptAuthAttempt.generation ===
+            this.store.getIdentityGeneration()
+        )
+          this.receiptAuthAttempt.acknowledged = true;
+        else this.poisonReceiptAuthentication();
 
         break;
 
@@ -1278,6 +1518,16 @@ export class WSClient {
       case Tag.ERROR: {
         const msg = decodeError(payload);
         if (!msg) break;
+
+        // A missing file on one server leaves other peers and Vault available.
+        // This frame does not refuse unrelated GETs, commits or authentication.
+        if (
+          msg.requestId === 0 &&
+          msg.code === ErrorCode.UNKNOWN &&
+          msg.message === 'Blob not found'
+        ) {
+          break;
+        }
 
         // A clock that runs ahead is refused on every AUTH and COMMIT; adopt
         // the server's time so the reconnect and the outbox's retry pass.
@@ -1312,16 +1562,28 @@ export class WSClient {
         } else if (msg.code === ErrorCode.SYNC_REJECTED) {
           // Our SYNC_PUSH was refused as a whole (no write right on the
           // drive, quota, not enrolled). Nothing we sent landed and no
-          // SYNC_OK will follow for it. `handleSyncDiff` may already have
-          // reported the drive as synced (it does so as soon as the
-          // server has nothing left to push), so correct that: the drive
-          // is NOT in sync and the local edits stay where they are, to be
-          // offered again on the next handshake.
+          // SYNC_OK will follow for it. Keep the local edits and permit a
+          // later reconcile to retry.
           console.error('[WS] SYNC_PUSH rejected:', msg.message);
-          this.store.failDriveSync(
-            this.driveFromRejection(msg.message),
-            msg.message,
-          );
+          const drive = this.driveFromRejection(msg.message);
+          this.abandonReconcile(drive, msg.message);
+        } else if (
+          msg.code === ErrorCode.UNAUTHORIZED_READ &&
+          /^SYNC refused for (\S+): .+$/su.test(msg.message)
+        ) {
+          // Probe errors have no request id. Match only the server's SYNC
+          // refusal shape and the still-current probe, so subscription errors
+          // and responses from an earlier identity or drive cannot fail sync.
+          const drive = /^SYNC refused for (\S+): /u.exec(msg.message)![1];
+          const pendingKey = this._pendingSyncState.has(drive)
+            ? drive
+            : canonicalizeScheme(drive);
+          const pending = this._pendingSyncState.get(pendingKey);
+          this._pendingSyncState.delete(pendingKey);
+
+          if (pending?.current()) {
+            this.store.failDriveSync(pendingKey, msg.message);
+          }
         } else if (
           msg.code === ErrorCode.AUTH_REQUIRED ||
           msg.code === ErrorCode.UNAUTHORIZED_READ
@@ -1333,6 +1595,14 @@ export class WSClient {
           // anonymous viewer of a shared page would see one on every
           // navigation. Logged so it is diagnosable.
           console.warn('[WS] refused:', msg.message);
+          const drive = this.store.getDrive();
+
+          if (
+            drive &&
+            this.activeReconciles.has(this.store.normalizeSubject(drive))
+          ) {
+            this.abandonReconcile(drive, msg.message);
+          }
         } else {
           this.rejectAllPending(msg.message);
           this.store.notifyError(msg.message);
@@ -1429,7 +1699,7 @@ export class WSClient {
           : undefined;
 
         if (pending) {
-          this.store.applyIncoming({
+          this.applyServerUpdate({
             subject: msg.subject,
             loroBytes: msg.loroBytes,
             commitId: msg.commitId,
@@ -1447,6 +1717,11 @@ export class WSClient {
           break;
         }
 
+        // A cancelled/timed-out GET is no longer an ingress source. In
+        // particular, an older query page must not replace the HTTP answer
+        // that recovered it. Real subscription pushes have request id zero.
+        if (msg.requestId && !(msg.flags & Flags.PUSH)) break;
+
         // Subscription push: same call, different `source`. The
         // commit-id dedup inside `applyIncoming` replaces the
         // hand-rolled `isExisting + prevCommit` echo check that
@@ -1455,7 +1730,7 @@ export class WSClient {
         // pre-import lastCommit equals the post-import (e.g. a
         // properties-only push) — applyIncoming sets it
         // unconditionally, so the gate runs once at the top.
-        this.store.applyIncoming({
+        this.applyServerUpdate({
           subject: msg.subject,
           loroBytes: msg.loroBytes,
           commitId: msg.commitId,
@@ -1501,7 +1776,7 @@ export class WSClient {
               );
             }
 
-            this.store.applyIncoming({
+            this.applyServerUpdate({
               subject: update.subject,
               loroBytes: update.loroBytes,
               commitId: update.commitId,
@@ -1544,11 +1819,22 @@ export class WSClient {
         const msg = decodeSyncOk(payload);
 
         if (msg) {
-          this.store.finishDriveSync(
+          const drive = this.store.normalizeSubject(
             canonicalizeScheme(msg.drive),
-            0,
-            Date.now(),
           );
+          const pending = this.pendingReconcile.get(drive);
+          if (!pending && !this.activeReconciles.has(drive)) break;
+
+          if (pending) {
+            if (pending.waitingForAcks < 0) break;
+            if (pending.waitingForAcks > 0) pending.waitingForAcks--;
+            if (pending.waitingForAcks > 0 || pending.waitingForPull) break;
+            this.pendingReconcile.delete(drive);
+          }
+
+          this.activeReconciles.delete(drive);
+          this.confirmationProbes.delete(drive);
+          this.store.finishDriveSync(drive, 0, Date.now());
         }
 
         break;
@@ -1572,7 +1858,17 @@ export class WSClient {
         const msg = decodeSyncPush(payload);
 
         if (msg) {
-          if (msg.entries.length > 0) this.store.startDriveSyncPull();
+          const driveKey = this.store.normalizeSubject(
+            canonicalizeScheme(msg.drive),
+          );
+
+          if (
+            msg.entries.length > 0 &&
+            (this.pendingReconcile.has(driveKey) ||
+              this.activeReconciles.has(driveKey))
+          ) {
+            this.store.startDriveSyncPull();
+          }
 
           // Per-entry `getResourceLoading + importLoroUpdate +
           // setSource + addResources({skipCommitCompare:true})`
@@ -1610,6 +1906,7 @@ export class WSClient {
                   direct.map(e => e.subject),
                   direct.map(e => e.loroBytes),
                 )
+                .then(() => this.store.refreshServerReceiptTargets())
                 .catch(e =>
                   console.warn('[WS] applying pulled states failed:', e),
                 );
@@ -1617,7 +1914,7 @@ export class WSClient {
           }
 
           for (const { subject, loroBytes } of entries) {
-            this.store.applyIncoming({
+            this.applyServerUpdate({
               subject,
               loroBytes,
               source: 'ws-sync-push',
@@ -1646,13 +1943,29 @@ export class WSClient {
             const drive = canonicalizeScheme(msg.drive);
             const count = msg.entries.length;
 
+            const current = this.connectionGuard();
+
             const finish = () => {
-              this.store.finishDriveSync(drive, count, Date.now());
+              if (!current()) return;
 
               if (this.pulledInBulk) {
                 this.pulledInBulk = false;
                 this.store.notifyBulkApplied();
               }
+
+              const key = this.store.normalizeSubject(drive);
+              const pending = this.pendingReconcile.get(key);
+              if (!pending && !this.activeReconciles.has(key)) return;
+
+              if (pending) {
+                pending.waitingForPull = false;
+                if (pending.waitingForAcks !== 0) return;
+                this.pendingReconcile.delete(key);
+              }
+
+              this.activeReconciles.delete(key);
+              this.confirmationProbes.delete(key);
+              this.store.finishDriveSync(drive, count, Date.now());
             };
 
             const clientDb = this.store.getClientDb();
@@ -1695,7 +2008,28 @@ export class WSClient {
         const resp = decodeBlobResponse(payload);
 
         if (resp) {
-          this.store.getClientDb()?.putBlob(resp.hash, resp.bytes);
+          const db = this.store.getClientDb();
+          const current = this.connectionGuard();
+
+          if (db) {
+            void db
+              .blake3Hash(resp.bytes)
+              .then(async hash => {
+                if (
+                  current() &&
+                  this.store.getClientDb() === db &&
+                  hash.length === resp.hash.length &&
+                  hash.every((byte, index) => byte === resp.hash[index])
+                ) {
+                  await db.putBlob(resp.hash, resp.bytes);
+                  if (current() && this.store.getClientDb() === db)
+                    this.store.retryFileContentRecovery();
+                }
+              })
+              .catch(error =>
+                console.warn('[WS] file contents were not stored', error),
+              );
+          }
         }
 
         break;
@@ -1786,6 +2120,29 @@ export class WSClient {
     if (drive && this.store.isLiveSyncedDrive(drive)) {
       this.sendBinary(encodeSub(this.wireSubject(drive)));
       this._subscribedDrive = drive;
+      this.followSubscribedDriveReceipts();
+    }
+  }
+
+  private followSubscribedDriveReceipts(): void {
+    const drive = this._subscribedDrive;
+    const session = this.getStorageReceiptSession();
+    if (!drive || !session) return;
+    const current = () =>
+      this.getStorageReceiptSession() === session &&
+      this._subscribedDrive === drive &&
+      this.store.getDrive() === drive &&
+      this.canAutomaticallySyncDrive(drive);
+
+    try {
+      if (current())
+        this.store.followServerReceiptDrive(
+          `${this.serverOrigin}/commit`,
+          drive,
+          current,
+        );
+    } catch {
+      // Optional collection must not change authentication or subscription success.
     }
   }
 
@@ -2089,6 +2446,8 @@ export class WSClient {
   private _vvSyncRuns = new Map<string, Promise<void>>();
 
   private startVVSync(drive: string, explicit = false): Promise<void> {
+    if (this.activeReconciles.has(this.store.normalizeSubject(drive)))
+      return Promise.resolve();
     const running = this._vvSyncRuns.get(drive);
 
     if (running) return running;
@@ -2255,6 +2614,10 @@ export class WSClient {
       });
       if (!current() || (!explicit && !this.canAutomaticallySyncDrive(drive)))
         return;
+      this.activeReconciles.add(this.store.normalizeSubject(drive));
+
+      this.followSubscribedDriveReceipts();
+
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
@@ -2272,7 +2635,11 @@ export class WSClient {
       perfMark('ws.SYNC.probe.sent');
     } catch (e) {
       close({ err: String(e) });
-      if (current()) console.warn('[WS] VV sync failed:', e);
+
+      if (current()) {
+        console.warn('[WS] VV sync failed:', e);
+        this.abandonReconcile(drive, 'Sync not confirmed');
+      }
     }
   }
 
@@ -2381,6 +2748,11 @@ export class WSClient {
     const current = this.connectionGuard();
     if (!current()) return;
     const clientDb = this.store.getClientDb();
+    const driveKey = this.store.normalizeSubject(diff.drive);
+    this.pendingReconcile.set(driveKey, {
+      waitingForAcks: diff.pull.length > 0 ? -1 : 0,
+      waitingForPull: diff.push.length > 0,
+    });
 
     for (const subject of diff.remove ?? []) {
       const envelope = diff.removeCommits?.[subject];
@@ -2464,31 +2836,61 @@ export class WSClient {
       }
 
       try {
-        for (const frame of encodeSyncPushChunks(
+        const frames = encodeSyncPushChunks(
           this.wireSubject(diff.drive),
           entries.map(entry => ({
             ...entry,
             subject: this.wireSubject(entry.subject),
           })),
           this.wireSubjectMap(envelopes),
-        )) {
+        );
+        this.pendingReconcile.get(driveKey)!.waitingForAcks = frames.length;
+
+        for (const frame of frames) {
           this.sendBinary(frame);
         }
       } catch (e) {
         console.warn('[WS] SYNC_PUSH send failed:', e);
+        this.abandonReconcile(driveKey, 'Sync not confirmed');
 
         return;
       }
     }
 
-    // If server has nothing to push, sync is done
-    if (diff.push.length === 0) {
-      this.store.finishDriveSync(
-        this.store.normalizeSubject(diff.drive),
-        entries.length,
-        Date.now(),
-      );
+    if (entries.length === 0 && diff.push.length === 0) {
+      // A diff with only removals (or no transferable snapshots) has no
+      // follow-up chunk or acknowledgement. Re-probe after local writes
+      // settle, once; a repeated mismatch is unknown, not a receipt.
+      if (this.confirmationProbes.has(driveKey)) {
+        this.abandonReconcile(driveKey, 'Sync not confirmed');
+
+        return;
+      }
+
+      this.confirmationProbes.add(driveKey);
+
+      try {
+        await clientDb?.flush?.();
+      } catch {
+        if (current()) this.abandonReconcile(driveKey, 'Sync not confirmed');
+
+        return;
+      }
+
+      if (!current() || !this.store.isLiveSyncedDrive(driveKey)) return;
+      this.pendingReconcile.delete(driveKey);
+      await this.runVVSync(driveKey, true);
     }
+  }
+
+  private abandonReconcile(drive: string, message: string): void {
+    const key = this.store.normalizeSubject(drive);
+    this.pendingReconcile.delete(key);
+    this.activeReconciles.delete(key);
+    this.confirmationProbes.delete(key);
+    this._pendingSyncState.delete(drive);
+    this._pendingSyncState.delete(key);
+    this.store.failDriveSync(drive, message);
   }
 
   // ---- Private: helpers ----
@@ -2539,6 +2941,11 @@ export class WSClient {
         this.sendBinary(encodeBlobRequest(hash));
       }
     }
+  }
+
+  /** Send a drive-scoped request prepared by the local database. */
+  public requestFileContents(frame: Uint8Array): void {
+    if (this.readyState === WebSocket.OPEN) this.sendBinary(frame);
   }
 
   private tagListeners = new Map<number, () => void>();

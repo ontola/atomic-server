@@ -85,6 +85,7 @@ ring = "0.17.14"
 wasmtime = { version = "47.0.4", optional = true, features = [
   "component-model",
 ] }
+wasmtime-wasi-http = { version = "47.0.4", optional = true }
 wasmtime-wasi = { version = "47.0.4", optional = true, features = ["p2"] }
 ulid = "1.2.1"
 url = "2.5.8"
@@ -107,6 +108,14 @@ libc = "0.2"
 anyhow = "1"
 actix-web-static-files = { version = "4.1.1", features = ["static-files-03"] }
 rand = "0.8.6"
+# Host crypto for plugin routes (#1718): installation keys, HTTP signatures
+# and hashed tokens. Only with the `plugin-routes` feature. `rsa` is for the
+# fediverse's `rsa-sha256`; Ed25519 is the same `ed25519-dalek` 2 atomic_lib
+# signs with.
+rsa = { version = "0.9", optional = true, features = ["sha2"] }
+ed25519-dalek = { version = "2", optional = true, features = ["rand_core"] }
+sha2 = { version = "0.10", optional = true }
+httpdate = { version = "1", optional = true }
 fastembed = { version = "5", optional = true, default-features = false, features = [
   "ort-download-binaries-rustls-tls",
   "hf-hub-rustls-tls",
@@ -195,7 +204,7 @@ features = ["derive"]
 version = "1"
 
 [dependencies.tokio]
-features = ["rt", "sync", "time"]
+features = ["rt", "sync", "time", "rt-multi-thread"]
 version = "1.52.3"
 
 [dependencies.image]
@@ -233,6 +242,8 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 futures-util = "0.3.32"
 # Parses atomic-host/wit in a unit test; already in the tree through wasmtime.
 wit-parser = "0.244"
+# Checks the sidecar request signatures the host makes (plugins::sidecar_auth).
+ed25519-dalek = "2"
 
 [features]
 # Embedded builds: cargo build -p atomic-server --no-default-features --features <needed>
@@ -268,7 +279,20 @@ telemetry = [
 ]
 img = ["webp", "image"]
 https = ["rustls", "instant-acme", "rcgen", "rustls-pemfile"]
-wasm-plugins = ["wasmtime", "wasmtime-wasi", "zip"]
+wasm-plugins = ["wasmtime", "wasmtime-wasi", "wasmtime-wasi-http", "zip"]
+# Lets installed plugins open public endpoints (routes, `/.well-known/`
+# claims, listeners, sidecars), once the operator also passes
+# `--plugin-routes read-only|read-write`. Deliberately NOT in `default`,
+# `light` or any release feature set: atomic.place builds must never contain
+# it. `plugin_routes::tests::release_feature_sets_exclude_plugin_routes`
+# fails if one does.
+plugin-routes = [
+  "wasm-plugins",
+  "dep:rsa",
+  "dep:ed25519-dalek",
+  "dep:sha2",
+  "dep:httpdate",
+]
 image = ["dep:image"]
 tonic = ["dep:tonic"]
 tracing-opentelemetry = ["dep:tracing-opentelemetry"]

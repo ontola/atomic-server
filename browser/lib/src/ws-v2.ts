@@ -52,6 +52,11 @@ export const Tag = {
    *  good on this connection only; a client that ignores it still
    *  authenticates on its timestamp. */
   CHALLENGE: 0x42,
+  /** Negotiated browser peer resource storage barriers. */
+  STORAGE_RECEIPT_REQUEST: 0x56,
+  STORAGE_RECEIPT_RESPONSE: 0x57,
+  ATTACHMENT_RECEIPT_REQUEST: 0x58,
+  ATTACHMENT_RECEIPT_RESPONSE: 0x59,
   /** Server → client, the negative answer to a `SYNC` probe: `[0x38]
    *  [drive_utf8]`. The drive hashes differ; send the full version-vector
    *  `SYNC`. The positive answer is `SYNC_OK`. */
@@ -142,6 +147,12 @@ export const ErrorCode = {
    *  a client that predates `canonical-scheme`: the connection keeps working
    *  but will stop being supported. Log it; never fail a request over it. */
   DEPRECATED_CLIENT: 14,
+  /** A commit activating a plugin Installation (install, upgrade, resume)
+   *  was refused because the release opens public endpoints this node's
+   *  plugin-routes gates don't allow. The message carries the typed problem
+   *  (`AtomicError.problem`). Blocking, not terminal: the operator can open
+   *  the gates. */
+  HOST_FEATURE_UNAVAILABLE: 16,
 } as const;
 
 /** The `retry_after_ms=<n>` hint of a BUSY error message (or an HTTP error
@@ -201,6 +212,7 @@ export const CLIENT_CAPABILITIES: readonly string[] = [
   'commit-ok-slim',
   'canonical-scheme',
   'commit-pace',
+  'server-storage-receipts-v1',
 ];
 
 /** What this client calls itself in its `HELLO`. Display only. */
@@ -299,6 +311,8 @@ export function encodeGet(requestId: number, subject: string): Uint8Array {
 
 /** The AUTH_OK capability that says the server answers GET_MANY. */
 export const CAP_GET_MANY = 'get-many';
+export const CAP_BROWSER_STORAGE_RECEIPTS = 'browser-storage-receipts-v1';
+export const PEER_STORAGE_BARRIER = 'atomic-redb-flush-v1';
 
 /** The server reads a `SYNC` whose hash is version 2 and whose version
  *  vectors are sent per resource (`vvs`), instead of as a matrix with one
@@ -963,6 +977,8 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.AUTH_OK]: 'AUTH_OK',
   [Tag.ERROR]: 'ERROR',
   [Tag.GET]: 'GET',
+  [Tag.STORAGE_RECEIPT_REQUEST]: 'STORAGE_RECEIPT_REQUEST',
+  [Tag.STORAGE_RECEIPT_RESPONSE]: 'STORAGE_RECEIPT_RESPONSE',
   [Tag.UPDATE]: 'UPDATE',
   [Tag.DESTROY]: 'DESTROY',
   [Tag.COMMIT]: 'COMMIT',
@@ -1198,3 +1214,6 @@ export function debugFrameInfo(
       };
   }
 }
+
+export const CAP_ATTACHMENT_STORAGE_RECEIPTS = 'attachment-storage-receipts-v1';
+export const ATTACHMENT_STORAGE_BARRIER = 'atomic-attachment-flush-v1';

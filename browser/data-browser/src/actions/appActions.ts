@@ -2,8 +2,8 @@ import { paths } from '../routes/paths';
 import {
   openSearchOverlay,
   openShortcutsOverlay,
-} from '../components/overlayState';
-import { shortcuts } from './shortcuts';
+} from '@tomic/resource-ui/components/overlayState';
+import { shortcuts } from '@tomic/ui/actions/shortcuts';
 import type { ActionDefinition } from './types';
 
 /**

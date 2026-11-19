@@ -9,18 +9,18 @@ import {
   type Resource,
 } from '@tomic/react';
 import { styled } from 'styled-components';
-import AllProps from '../components/AllProps';
+import AllProps from '@tomic/resource-ui/components/AllProps';
 import { ClassDetail } from '../components/ClassDetail';
-import { ContainerNarrow } from '../components/Containers';
-import { ValueForm } from '../components/forms/ValueForm/ValueForm';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import { ValueForm } from '@tomic/resource-ui/components/forms/ValueForm/ValueForm';
 import { ResourcePageProps } from './ResourcePage';
 import { CommitDetail } from '../components/CommitDetail';
 import { Details } from '../components/Detail';
-import { EditableTitle } from '../components/EditableTitle';
-import { ResourceCoverImage } from '../components/ResourceDecorations';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
+import { ResourceCoverImage } from '@tomic/resource-ui/components/ResourceDecorations';
 import { FaPencil } from 'react-icons/fa6';
-import { Button } from '../components/Button';
-import { Column, Row } from '../components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { editURL } from '../helpers/navigation';
 

@@ -1,10 +1,10 @@
-import { constructOpenURL } from '@helpers/navigation';
-import { AtomicLink } from '@components/AtomicLink';
-import { ResourceInline } from '@views/ResourceInline/ResourceInline';
-import { Checkbox } from '@components/forms/Checkbox';
-import { compatibleFieldTypes } from './tableColumns';
+import { constructOpenURL } from '../../helpers/navigation';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
+import { compatibleFieldTypes } from '@tomic/resource-ui/chunks/FormBuilder/tableColumns';
 import { useFieldConstraint } from './formDataClass';
-import { useTableFormColumns } from './useTableFormColumns';
+import { useTableFormColumns } from '@tomic/resource-ui/chunks/FormBuilder/useTableFormColumns';
 import {
   core,
   forms,
@@ -18,17 +18,20 @@ import {
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaPencil } from 'react-icons/fa6';
-import Field, { FieldLabel } from '@components/forms/Field';
-import { IconButton } from '@components/IconButton/IconButton';
-import InputSwitcher from '@components/forms/InputSwitcher';
+import Field, { FieldLabel } from '@tomic/resource-ui/components/forms/Field';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
 import {
   ErrMessage,
   InputStyled,
   InputWrapper,
-} from '@components/forms/InputStyles';
-import { Column } from '@components/Row';
-import { useDebounce } from '@helpers/useDebounce';
-import { slugWhileTyping, stringToSlug } from '@helpers/stringToSlug';
+} from '@tomic/ui/components/forms/InputStyles';
+import { Column } from '@tomic/ui/components/Row';
+import { useDebounce } from '@tomic/resource-ui/helpers/useDebounce';
+import {
+  slugWhileTyping,
+  stringToSlug,
+} from '@tomic/resource-ui/helpers/stringToSlug';
 import { TextOptions } from './FieldOptions/TextOptions';
 import { CountryDefaultField } from './FieldOptions/CountryDefaultField';
 import { Divider } from './FieldOptions/Divider';
@@ -43,7 +46,7 @@ import {
   FIELD_TYPE_META,
   type AddableFieldType,
   type FormFieldType,
-} from './fieldTypes';
+} from '@tomic/resource-ui/chunks/FormBuilder/fieldTypes';
 import { InfoBoxOptions } from './FieldOptions/InfoBoxOptions';
 import { useFormFieldPropertySync } from './useFormFieldPropertySync';
 import { ConditionsEditor } from './ConditionsEditor';

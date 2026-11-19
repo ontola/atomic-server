@@ -4,7 +4,7 @@ import { del, get, set } from 'idb-keyval';
 import { blobHashHex, isBlobSubject } from '@tomic/react';
 import type { VaultCapableDb } from './vault';
 import { sameAgent } from './recovery';
-import { randomBytes } from '../bytes';
+import { randomBytes } from '@tomic/resource-ui/helpers/bytes';
 
 /**
  * Carrying local-only drives from a replaced identity into the account's.

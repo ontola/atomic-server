@@ -1,8 +1,8 @@
 import { urls, useResourceSnapshot } from '@tomic/react';
 import { FaGlobe } from 'react-icons/fa6';
 import styled from 'styled-components';
-import { CardRow } from '../../components/Card';
-import { ResourceInline } from '../../views/ResourceInline';
+import { CardRow } from '@tomic/ui/components/Card';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 import type { MergedRight } from './useRights';
 import { PermissionRow } from './PermissionRow';
 

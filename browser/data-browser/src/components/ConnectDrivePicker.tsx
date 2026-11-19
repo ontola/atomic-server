@@ -1,8 +1,8 @@
 import { useId } from 'react';
 import { useResource } from '@tomic/react';
 import { styled } from 'styled-components';
-import { Card } from './Card';
-import { Checkbox } from './forms/Checkbox';
+import { Card } from '@tomic/ui/components/Card';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
 
 /** The person's drives, each with a checkbox. Used when they let an app in. */
 export function ConnectDrivePicker({

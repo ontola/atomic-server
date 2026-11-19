@@ -1,5 +1,5 @@
 import { NewInstanceButton } from '../../components/NewInstanceButton';
-import { Card } from '../../components/Card';
+import { Card } from '@tomic/ui/components/Card';
 import { server } from '@tomic/react';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';

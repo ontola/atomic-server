@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "proxy": [
+    "clockify"
+  ],
+  "operations": [
+    {
+      "id": "entries",
+      "method": "GET",
+      "url": "atomic-proxy:/clockify/api/v1/workspaces/{number}/time-entries",
+      "effect": "read"
+    }
+  ]
+}

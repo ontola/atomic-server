@@ -5,7 +5,7 @@ import { IconType } from 'react-icons';
 import { FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { paths } from '../../routes/paths';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
 export interface InstanceButtonBaseProps {

@@ -58,7 +58,7 @@ const state = vi.hoisted(() => ({
   >(async () => 'plain'),
   applyBroughtAlong: vi.fn(async () => true),
 }));
-vi.mock('../ResourceRow', () => ({
+vi.mock('@tomic/resource-ui/views/ResourceRow', () => ({
   ResourceRow: ({ subject }: { subject: string }) => <span>{subject}</span>,
 }));
 vi.mock('@tomic/react', async original => ({
@@ -127,6 +127,7 @@ vi.mock('../../helpers/managed/recovery', () => ({
 vi.mock('../../helpers/managed/vaultAutoBackup', () => ({
   ensureVaultBackup: vi.fn(),
   restoreFromVault: state.restoreVault,
+  startFirstVaultBackup: vi.fn(),
 }));
 vi.mock('../../helpers/managed/reconcile', () => ({
   connectHostedDrive: async () => true,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { useSettings } from '../../helpers/AppSettings';
-import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useMediaQuery } from '@tomic/resource-ui/hooks/useMediaQuery';
 import { useRightPanel } from './RightPanelContext';
 import { RIGHT_PANEL_OVERLAY_BREAKPOINT } from './layout';
 

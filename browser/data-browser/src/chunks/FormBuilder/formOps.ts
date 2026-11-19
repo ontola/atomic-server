@@ -23,14 +23,14 @@ import {
   classColumns,
   columnLabel,
   compatibleFieldTypes,
-} from './tableColumns';
-import { parseFieldOptions } from './FieldOptions/useFieldOptions';
+} from '@tomic/resource-ui/chunks/FormBuilder/tableColumns';
+import { parseFieldOptions } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
 import {
   columnConstraint,
   narrowedConstraintKeywords,
   normalizeFieldOptions,
-} from './formConstraints';
-import { optionSubjects } from '@helpers/withConstraint';
+} from '@tomic/resource-ui/chunks/FormBuilder/formConstraints';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 import {
   FIELD_TYPE_DEFAULT_OPTIONS,
   FIELD_TYPE_TO_DATATYPE,
@@ -39,8 +39,8 @@ import {
   isChoiceFieldType,
   isLayoutType,
   type AddableFieldType,
-} from './fieldTypes';
-import { stringToSlug } from '@helpers/stringToSlug';
+} from '@tomic/resource-ui/chunks/FormBuilder/fieldTypes';
+import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
 
 const nameSchema = z.string().trim().min(1);
 const patchSchema = z

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { encodeB64 } from '@tomic/lib';
-import { base64ToBytes, randomBytes } from './bytes';
+import { base64ToBytes, randomBytes } from '@tomic/resource-ui/helpers/bytes';
 
 /** The encoder both modules carried before they used `encodeB64`. */
 function legacyBytesToBase64(bytes: Uint8Array): string {

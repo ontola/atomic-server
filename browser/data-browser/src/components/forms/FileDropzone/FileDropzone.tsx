@@ -9,8 +9,8 @@ import {
 import { useDropzone } from 'react-dropzone';
 import { FaUpload } from 'react-icons/fa6';
 import { styled, keyframes } from 'styled-components';
-import { ErrMessage } from '../InputStyles';
-import { useUpload } from '../../../hooks/useUpload';
+import { ErrMessage } from '@tomic/ui/components/forms/InputStyles';
+import { useUpload } from '@tomic/resource-ui/hooks/useUpload';
 
 export interface FileDropZoneProps {
   parentResource: Resource;

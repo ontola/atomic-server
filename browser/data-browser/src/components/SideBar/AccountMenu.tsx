@@ -36,15 +36,18 @@ import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
 import { getOrCreateTrashFolder } from '../../helpers/standardLocations';
 import { paths } from '../../routes/paths';
-import { shortcuts } from '../../actions/shortcuts';
+import { shortcuts } from '@tomic/ui/actions/shortcuts';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useInbox } from '../../hooks/useInbox';
 import { useHasManagedAccount } from '../../hooks/useHasManagedAccount';
-import { DropdownMenu, type DropdownItem } from '../Dropdown';
-import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
-import { IconButton } from '../IconButton/IconButton';
-import { ResourceGlyph } from '../ResourceGlyph';
-import { useCombineRefs } from '../../hooks/useCombineRefs';
+import {
+  DropdownMenu,
+  type DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import type { DropdownTriggerProps } from '@tomic/ui/components/Dropdown/DropdownTrigger';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { ResourceGlyph } from '@tomic/resource-ui/components/ResourceGlyph';
+import { useCombineRefs } from '@tomic/ui/hooks/useCombineRefs';
 import { useFeedbackDialog } from './FeedbackButton';
 import { OPEN_FEEDBACK_EVENT } from '../../actions/appMenuItems';
 import {

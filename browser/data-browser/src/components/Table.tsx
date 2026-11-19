@@ -6,11 +6,11 @@ import {
   Resource,
   urls,
 } from '@tomic/react';
-import { ResourceInline } from '../views/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 import { useSubjectParam } from '../helpers/useCurrentSubject';
 import { FaSort, FaSortDown, FaSortUp } from 'react-icons/fa6';
-import { Button } from './Button';
-import { ValueForm } from './forms/ValueForm';
+import { Button } from '@tomic/ui/components/Button';
+import { ValueForm } from '@tomic/resource-ui/components/forms/ValueForm/index';
 import { memo, type JSX } from 'react';
 
 type TableProps = {

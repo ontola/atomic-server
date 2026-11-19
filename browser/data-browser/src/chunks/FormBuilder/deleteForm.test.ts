@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { forms, type Resource, type Store } from '@tomic/react';
-import { deleteForm } from './deleteForm';
+import { deleteForm } from '@tomic/resource-ui/chunks/FormBuilder/deleteForm';
 
 it('deletes form presentation, leaving shared columns and tags intact', async () => {
   const resource = (subjects: Record<string, string[]> = {}) => ({

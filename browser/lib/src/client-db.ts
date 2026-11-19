@@ -1,3 +1,9 @@
+import {
+  parseResourceAttachmentEvidence,
+  type AttachmentManifest,
+  type ResourceAttachmentEvidence,
+  type SerializedVaultAttachmentReceipt,
+} from './resource-attachment-evidence.js';
 /**
  * ClientDbWorker: typed async wrapper around the WASM ClientDb.
  *
@@ -25,7 +31,18 @@
  * ```
  */
 
+import type {
+  ResourceVaultEvidence,
+  VaultSyncScope,
+  SerializedVaultReceipt,
+} from './resource-vault-evidence.js';
+import type {
+  ResourceSyncEvidence,
+  ResourceSyncScope,
+  SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 import { randomUUID } from './uuid.js';
+import type { ReplicaIdentity } from './replica-evidence.js';
 import {
   publishIndexMigration,
   type IndexMigrationProgress,
@@ -239,6 +256,10 @@ const POINT_READ_TYPES = new Set([
 /** Operations whose result remains valid when repeated by a new DB owner. */
 const REPEATABLE_RPC_TYPES = new Set([
   'blake3Hash',
+  'vaultAttachmentManifests',
+  'getResourceAttachmentEvidence',
+  'getResourceVaultAttachmentReceipts',
+  'putResourceVaultAttachmentReceipts',
   'getBlob',
   'putBlob', // Content-addressed write of the same bytes.
   'getResource',
@@ -247,6 +268,13 @@ const REPEATABLE_RPC_TYPES = new Set([
   'query',
   'search',
   'allSubjects',
+  // Stored proof reads and monotonic receipt merges are safe after handoff.
+  'getResourceSyncEvidence',
+  'putResourceSyncReceipts',
+  'getResourceVaultEvidence',
+  'getResourceVaultGeneration',
+  'putResourceVaultReceipts',
+  'clearResourceVaultReceipts',
   'flush',
   'exportAllResources',
   'getLoroSnapshot',
@@ -257,6 +285,7 @@ const REPEATABLE_RPC_TYPES = new Set([
   'getDriveSubjects',
   'indexPendingSearch',
   'getVersionVectorsForSubjects',
+  'getReplicaIdentity',
   'outboxEntries',
 ]);
 
@@ -362,6 +391,8 @@ type BroadcastMessage =
     };
 
 export class ClientDbWorker {
+  /** Whether completed writes include a reload-durable storage flush. */
+  readonly supportsDurablePersistence: boolean = true;
   private worker: Worker | null = null;
   private bc: BroadcastChannel | null = null;
   private role: Role = 'initializing';
@@ -1030,6 +1061,15 @@ export class ClientDbWorker {
     await this.call('putResources', { jsonAds });
   }
 
+  /** Persistent drive-scoped identity shared by all tabs of this database.
+   * Memory backends and older WASM builds return undefined. This does not
+   * establish physical independence from any other store. */
+  async getReplicaIdentity(
+    drive: string,
+  ): Promise<ReplicaIdentity | undefined> {
+    return (await this.call('getReplicaIdentity', { drive })) ?? undefined;
+  }
+
   createPeerSession(
     drive: string,
     expectedPeer: string | undefined,
@@ -1056,6 +1096,49 @@ export class ClientDbWorker {
 
   applyCommit(commitJsonAd: string): Promise<void> {
     return this.call('applyCommit', { commitJsonAd });
+  }
+
+  async getResourceSyncEvidence(
+    subjects: string[],
+    scope?: ResourceSyncScope,
+  ): Promise<ResourceSyncEvidence[] | undefined> {
+    return this.call('getResourceSyncEvidence', { subjects, scope });
+  }
+
+  async putResourceSyncReceipts(
+    scope: ResourceSyncScope,
+    receipts: SerializedServerReceipt[],
+  ): Promise<void> {
+    return this.call('putResourceSyncReceipts', { scope, receipts });
+  }
+
+  async getResourceVaultEvidence(
+    subjects: string[],
+    scope: VaultSyncScope,
+  ): Promise<ResourceVaultEvidence[] | undefined> {
+    return this.call('getResourceVaultEvidence', { subjects, scope });
+  }
+
+  async getResourceVaultGeneration(
+    scope: VaultSyncScope,
+  ): Promise<number | undefined> {
+    return this.call('getResourceVaultGeneration', { scope });
+  }
+
+  async clearResourceVaultReceipts(scope: VaultSyncScope): Promise<void> {
+    return this.call('clearResourceVaultReceipts', { scope });
+  }
+
+  async putResourceVaultReceipts(
+    scope: VaultSyncScope,
+    receipts: SerializedVaultReceipt[],
+    generation: number,
+  ): Promise<boolean> {
+    return this.call('putResourceVaultReceipts', {
+      scope,
+      receipts,
+      generation,
+    });
   }
 
   removeResource(subject: string): Promise<void> {
@@ -1151,6 +1234,39 @@ export class ClientDbWorker {
     }
   }
 
+  vaultAttachmentManifests(
+    drive: string,
+  ): Promise<{ subject: string; manifest: AttachmentManifest }[] | undefined> {
+    return this.call('vaultAttachmentManifests', { drive });
+  }
+
+  async getResourceAttachmentEvidence(
+    subjects: string[],
+  ): Promise<ResourceAttachmentEvidence[] | undefined> {
+    return parseResourceAttachmentEvidence(
+      await this.call('getResourceAttachmentEvidence', { subjects }),
+    );
+  }
+
+  getResourceVaultAttachmentReceipts(
+    subjects: string[],
+    scope: VaultSyncScope,
+  ): Promise<SerializedVaultAttachmentReceipt[] | undefined> {
+    return this.call('getResourceVaultAttachmentReceipts', { subjects, scope });
+  }
+
+  putResourceVaultAttachmentReceipts(
+    scope: VaultSyncScope,
+    receipts: SerializedVaultAttachmentReceipt[],
+    generation: number,
+  ): Promise<boolean> {
+    return this.call('putResourceVaultAttachmentReceipts', {
+      scope,
+      receipts,
+      generation,
+    });
+  }
+
   putBlob(hash: Uint8Array, data: Uint8Array): Promise<void> {
     return this.call('putBlob', { hash, data });
   }
@@ -1214,9 +1330,9 @@ export class ClientDbWorker {
    * host agrees, but the caller must read it: a checkpoint uploads under a
    * different object kind and has to be published afterwards.
    *
-   * The bytes come back already encrypted — the caller uploads ciphertext and
-   * never sees drive contents. See `helpers/managed/vault.ts` for the
-   * control-plane half.
+   * The bytes come back already encrypted. The caller uploads ciphertext;
+   * the accompanying resource-version manifest stays local for confirmation
+   * tracking. See `helpers/managed/vault.ts` for the control-plane half.
    */
   async vaultExport(
     driveSubject: string,
@@ -1297,6 +1413,17 @@ export class ClientDbWorker {
     return this.call('vaultFileHashes', { driveSubject });
   }
 
+  requestDriveBlobs(
+    driveSubject: string,
+    hashes: string[],
+  ): Promise<number[][]> {
+    return this.call('requestDriveBlobs', { driveSubject, hashes });
+  }
+
+  requestPeerBlobs(session: number, hashes: string[]): Promise<number[][]> {
+    return this.call('requestPeerBlobs', { session, hashes });
+  }
+
   /** Whether this device holds the bytes for a file hash. */
   vaultBlobPresent(hash: string): Promise<boolean> {
     return this.call('vaultBlobPresent', { hash });
@@ -1339,6 +1466,7 @@ export class ClientDbWorker {
     blobId: string,
     chunks: Uint8Array[],
     wanted: string[],
+    driveSubject?: string,
   ): Promise<VaultBlobRestoreResult> {
     return this.call('vaultBlobRestore', {
       key,
@@ -1346,6 +1474,7 @@ export class ClientDbWorker {
       blobId,
       chunks,
       wanted,
+      driveSubject,
     });
   }
 

@@ -3,7 +3,7 @@ import { styled } from 'styled-components';
 import { FaGithub, FaDiscord, FaBook, FaGlobe } from 'react-icons/fa6';
 
 import { createRoute } from '@tanstack/react-router';
-import { ContainerNarrow } from '../components/Containers';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
 import { Main } from '../components/Main';
 import { Logo } from '../components/Logo';
 import { pathNames } from './paths';

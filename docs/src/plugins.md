@@ -14,7 +14,7 @@ For more information on how to create a plugin, see [Creating Plugins](plugins/c
 Three classes describe a plugin's life on a server:
 
 - A **Release** is an immutable, content-addressed package: JS source (`atomic-js/1`) or a WASM zip (`wasip2/1`), its manifest, and a `releaseId` (`blake3:…` over every field). It lives at `<server>/releases/<id>` on the server it was published to, and can be fetched from any other server.
-- A **Listing** is a marketplace entry pointing at a Release: name, emoji, description, domains, standards. Every Listing the public can read on a server is part of that server's Store; `GET /plugin-catalog` returns them. Any drive of Listings is a marketplace.
+- A **Listing** is a marketplace entry pointing at a Release: name, emoji, description, domains, standards. Every Listing the public can read on a server is part of that server's Store; `GET /plugin-catalog` returns them as `{ "entries": [...], "hostFeatures": {...} }`, where `hostFeatures.pluginRoutes` says whether this server lets plugins open public endpoints (see [Plugin public endpoints](atomicserver/installation.md#plugin-public-endpoints-opt-in)). Any drive of Listings is a marketplace.
 - An **Installation** is one installed Release on one Drive. It pins the `release` URL and its `releaseId`, holds the `grants` you approved, your `config`, and an `installationStatus` (`draft`, `active`, `paused`, `revoked`). Committing it as `active` is the single install trigger for both runtimes; `paused` stops the plugin without uninstalling it, keeping its files, its config and the agent it signs as; `revoked` or destroying the resource uninstalls it and retires that agent. Updating a plugin means pointing the same Installation at a newer Release, which keeps everything the plugin already owns.
 
 ## Apps that use a drive
@@ -22,6 +22,56 @@ Three classes describe a plugin's life on a server:
 A native app that has its own repository and writes its own classes into a drive (a Flutter council app, say) is not a plugin and is never run by the server, so it leaves no trace in the drive by itself. It records itself as an **ExternalApp** (`https://atomicdata.dev/classes/ExternalApp`), a child of the drive. Required: `name` and `homepage`. Recommended: `emoji`, `description`, `openUrlTemplate` (a URL containing `{subject}`, replaced by the URL-encoded subject of a resource) and `handlesClasses` (the class URLs the app can open).
 
 The web app lists the ExternalApps under 'Apps in this drive' in the drive settings, and adds 'Open in <app>' to the menu of a resource whose class is in `handlesClasses`. Nothing is activated or granted: it is a label, not an Installation. In Dart, `store.registerApp(...)` from `atomic_store` creates or updates it, and is safe to call on every start.
+
+The Apps page accepts both a JSON array of Listings from `GET /plugin-catalog`
+and an object with that array in `entries`. Additional response metadata, such
+as `hostFeatures`, does not change the listings. A response without a listings
+array shows a catalog error while the rest of the page stays available.
+## Built-in Sync apps
+
+Built-in service apps use the shared Data Browser iframe bridge. Their Sync
+code imports `syncables/browser` from the pinned `syncables` npm dependency.
+The browser build bundles that reader with the Atomic app into one
+`builtin-syncables.js` module, which Atomic Server embeds and serves inside
+an opaque iframe. No executable module is downloaded from the integration
+proxy at runtime.
+
+Installing a provider creates an ordinary App resource with an Accounts Table
+as its child. Its name and icon come from the proxy's public OpenAPI metadata;
+the `info.x-logo.url` image is resized and uploaded as an Atomic File beneath
+the App. An existing icon is preserved. Opening an older installation explicitly
+from Apps upgrades its root resource in place, retaining the App subject and
+stable source identities rather than creating another installation.
+
+When the user requests a refresh, the host loads the configured proxy's
+composed OpenAPI document and catalog query defaults. Standard OpenAPI
+Overlays, CRUD Causality and Pagination Schemes describe the available
+collections and their reads. The app uses `describePlatform` and named
+`readCollections` calls; the shared library handles collection selection,
+pagination links, read budgets and partial snapshots.
+
+Atomic-specific code maps those snapshots into stable drive resources and
+typed rows, provides the UI, and enforces permissions through the existing
+bridge. Writes stay within the selected table and its children, using the
+person's existing rights. Provider credentials remain at the proxy, and
+browser connection keys stay outside the iframe. Catalog metadata does not
+expand host permissions.
+
+**Syncable Collection** is a generic native table view, installed with **+**.
+During explicit discovery, the Sync app saves a versioned collection descriptor
+with its real row-class subject, column property bindings, labels, value formats
+and an optional property holding each row's saved child-table target. Titles
+and enum labels come from ordinary OpenAPI schema fields; the Atomic storage
+adapter supplies the bindings to stored Atomic properties. The descriptor is
+declarative data, not executable UI code or a separate provider view registry.
+
+The native view renders these saved values and offers **Open**. It never mounts
+an iframe, refreshes a provider or creates missing collections. Navigation
+rechecks the row, direct child target and selected drive. Missing or invalid
+values remain unknown. Legacy GitHub Organizations and Repositories view kinds
+resolve to this generic view. GitHub's provider-specific projection and sync
+controls remain in the sandboxed Sync app; this renderer does not replace that
+adapter. See [Apps](app/apps.md#import-github-issues) for the user flow.
 
 ## Installing a plugin
 

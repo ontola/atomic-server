@@ -1,18 +1,25 @@
 import { Resource, useStore } from '@tomic/react';
 import { useNavigate } from '@tanstack/react-router';
-import { constructOpenURL } from '@helpers/navigation';
-import { compatibleColumnTypes, columnLabel } from './tableColumns';
+import { constructOpenURL } from '../../helpers/navigation';
+import {
+  compatibleColumnTypes,
+  columnLabel,
+} from '@tomic/resource-ui/chunks/FormBuilder/tableColumns';
 import { FormDataClassContext } from './formDataClass';
 import { useContext, useMemo, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
-import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
-import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
+import {
+  DIVIDER,
+  DropdownMenu,
+  DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
 import {
   FIELD_TYPE_GROUPS,
   FORM_LAYOUT_TYPES,
   FIELD_TYPE_META,
   type AddableFieldType,
-} from './fieldTypes';
+} from '@tomic/resource-ui/chunks/FormBuilder/fieldTypes';
 
 const AddFieldTrigger = buildDefaultTrigger(<FaPlus />, () => 'Add field');
 

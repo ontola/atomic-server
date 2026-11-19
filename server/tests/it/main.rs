@@ -17,10 +17,15 @@ mod history_attribution;
 mod iroh_pairing;
 mod loro_ephemeral_sync;
 mod multi_client_sync;
+mod native_ws_receipts;
+mod plugin_proxy;
+#[cfg(feature = "plugin-routes")]
+mod plugin_routes;
 mod put_blob;
 mod rate_limit;
 mod replicate;
 mod server_cli;
+mod storage_receipts;
 mod sync;
 mod ws_auth_gate;
 mod ws_commit;

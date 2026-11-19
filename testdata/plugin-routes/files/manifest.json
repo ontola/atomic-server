@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 3,
+  "name": "files",
+  "namespace": "fixtures",
+  "capabilities": [
+    {
+      "name": "storage",
+      "reason": "Keeps nothing; a JS extension declares at least one capability in these fixtures."
+    }
+  ],
+  "http": {
+    "mount": "drive-prefix",
+    "routes": [
+      {
+        "id": "put",
+        "path": "/files/{*path}",
+        "methods": ["PUT"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "blob",
+        "writes": ["files"]
+      },
+      {
+        "id": "get",
+        "path": "/files/{*path}",
+        "methods": ["GET", "HEAD"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "small",
+        "path": "/small/{*path}",
+        "methods": ["PUT"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "blob",
+        "maxBodyBytes": 1024,
+        "writes": ["files"]
+      },
+      {
+        "id": "raw",
+        "path": "/raw/{hash}",
+        "methods": ["GET", "HEAD"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "link",
+        "path": "/link/{*path}",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json",
+        "writes": ["files"]
+      }
+    ],
+    "writeTargets": [
+      {
+        "id": "files",
+        "parent": "config:folder",
+        "classes": ["https://atomicdata.dev/classes/File"]
+      }
+    ],
+    "reason": "Stores what is PUT to /_routes/<slug>/files/<path> as a File under the configured folder, and serves it back. A remoteStorage-like fixture for blob request and response bodies."
+  }
+}

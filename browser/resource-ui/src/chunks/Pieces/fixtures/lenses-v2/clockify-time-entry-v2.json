@@ -1,0 +1,181 @@
+{
+  "@id": "https://ontola.github.io/atomic-plugins/ontology/lenses/clockify-time-entry-v2",
+  "lensFormat": 1,
+  "release": "https://ontola.github.io/atomic-plugins/ontology/lenses/v2",
+  "name": "Clockify time entry ↔ Time entry",
+  "description": "A completed Clockify time entry, as syncables reads it through the Clockify overlays, and the shared time-entry-v1 class: description, start, end and billable. Guards keep running timers and non-REGULAR entries out.",
+  "source": {
+    "record": {
+      "provider": "clockify.me",
+      "resource": "timeEntry",
+      "openapi": "APIs/clockify.me/1.0.0-readonly"
+    }
+  },
+  "target": {
+    "class": "https://ontola.github.io/atomic-plugins/ontology/classes/time-entry-v1"
+  },
+  "mapping": {
+    "version": 3,
+    "fields": [
+      {
+        "source": "/description",
+        "target": "https://atomicdata.dev/properties/name"
+      },
+      {
+        "source": "/timeInterval/start",
+        "target": "https://ontola.github.io/atomic-plugins/ontology/properties/work-start",
+        "convert": "iso-seconds-to-ms"
+      },
+      {
+        "source": "/timeInterval/end",
+        "target": "https://ontola.github.io/atomic-plugins/ontology/properties/work-end",
+        "convert": "iso-seconds-to-ms"
+      },
+      {
+        "source": "/billable",
+        "target": "https://ontola.github.io/atomic-plugins/ontology/properties/work-billable"
+      }
+    ],
+    "guards": [
+      {
+        "at": "/type",
+        "in": [
+          "REGULAR"
+        ],
+        "orAbsent": true
+      },
+      {
+        "at": "/timeInterval/start",
+        "is": "present"
+      },
+      {
+        "at": "/timeInterval/end",
+        "is": "present"
+      }
+    ]
+  },
+  "limits": [
+    "The guards refuse non-REGULAR entries (breaks, time off) and running timers (no start or end), as the code lens does. They do not check that the end is after the start, and they do not apply the code lens's write restrictions (locked entries, custom fields, project rules).",
+    "The description is copied as is: the code lens trims it and shows an empty one as \"Time entry\", and writes \"Time entry\" back as an empty description.",
+    "projectId is not mapped: work-project links to a work-project-v1 row, which needs an identity map from provider ids to rows, not a value converter. The code lens also drops taskId when the project changes.",
+    "Clockify needs every mapped field, so a description, start or end missing from the table leaves the provider value unchanged (absent: keep).",
+    "Moving the start or end leaves timeInterval.duration as it was; the provider recomputes it, and the code lens does not update it either."
+  ],
+  "implementation": "integrations/timesheets/devonian/clockify/lens/algebra.ts",
+  "examples": [
+    {
+      "source": {
+        "id": "entry-1",
+        "description": "Write the report",
+        "billable": true,
+        "projectId": "project-1",
+        "taskId": "task-1",
+        "tagIds": [
+          "tag-1"
+        ],
+        "type": "REGULAR",
+        "timeInterval": {
+          "start": "2026-10-05T09:00:00Z",
+          "end": "2026-10-05T10:30:00Z",
+          "duration": "PT1H30M"
+        }
+      },
+      "target": {
+        "https://atomicdata.dev/properties/name": "Write the report",
+        "https://ontola.github.io/atomic-plugins/ontology/properties/work-start": 1791190800000,
+        "https://ontola.github.io/atomic-plugins/ontology/properties/work-end": 1791196200000,
+        "https://ontola.github.io/atomic-plugins/ontology/properties/work-billable": true
+      },
+      "edits": [
+        {
+          "target": {
+            "https://atomicdata.dev/properties/name": "Write the report",
+            "https://ontola.github.io/atomic-plugins/ontology/properties/work-start": 1791190800000,
+            "https://ontola.github.io/atomic-plugins/ontology/properties/work-end": 1791198000000,
+            "https://ontola.github.io/atomic-plugins/ontology/properties/work-billable": false
+          },
+          "source": {
+            "id": "entry-1",
+            "description": "Write the report",
+            "billable": false,
+            "projectId": "project-1",
+            "taskId": "task-1",
+            "tagIds": [
+              "tag-1"
+            ],
+            "type": "REGULAR",
+            "timeInterval": {
+              "start": "2026-10-05T09:00:00Z",
+              "end": "2026-10-05T11:00:00Z",
+              "duration": "PT1H30M"
+            }
+          }
+        },
+        {
+          "target": {
+            "https://ontola.github.io/atomic-plugins/ontology/properties/work-end": 1791198000500
+          },
+          "error": "precision"
+        },
+        {
+          "direction": "backward",
+          "source": {
+            "id": "entry-2",
+            "description": "Write the report",
+            "billable": true,
+            "projectId": "project-1",
+            "taskId": "task-1",
+            "tagIds": [
+              "tag-1"
+            ],
+            "type": "REGULAR",
+            "timeInterval": {
+              "start": "2026-10-05T11:00:00Z",
+              "end": null,
+              "duration": null
+            }
+          },
+          "error": "out-of-domain"
+        }
+      ]
+    },
+    {
+      "source": {
+        "id": "entry-2",
+        "description": "Write the report",
+        "billable": true,
+        "projectId": "project-1",
+        "taskId": "task-1",
+        "tagIds": [
+          "tag-1"
+        ],
+        "type": "REGULAR",
+        "timeInterval": {
+          "start": "2026-10-05T11:00:00Z",
+          "end": null,
+          "duration": null
+        }
+      },
+      "error": "out-of-domain"
+    },
+    {
+      "source": {
+        "id": "entry-3",
+        "description": "Write the report",
+        "billable": true,
+        "projectId": "project-1",
+        "taskId": "task-1",
+        "tagIds": [
+          "tag-1"
+        ],
+        "type": "BREAK",
+        "timeInterval": {
+          "start": "2026-10-05T09:00:00Z",
+          "end": "2026-10-05T10:30:00Z",
+          "duration": "PT1H30M"
+        }
+      },
+      "error": "out-of-domain"
+    }
+  ]
+}
