@@ -17,9 +17,8 @@ async function peerStatus(page: Page, subject: string) {
   return page.evaluate(resourceSubject => {
     const store = window.store;
 
-    return store.getResourcePeerSyncStatus(
-      store.getResourceLoading(resourceSubject),
-    );
+    return store.getResourceCopies(store.getResourceLoading(resourceSubject))
+      .peers;
   }, subject);
 }
 
@@ -30,7 +29,7 @@ async function capturePeerState(page: Page, subject: string, label: string) {
     const doc = resource.getLoroDoc();
 
     return {
-      status: store.getResourcePeerSyncStatus(resource),
+      status: store.getResourceCopies(resource).peers,
       version: [...(doc?.oplogVersion().toJSON() ?? [])],
       pendingTransactions: doc?.getPendingTxnLength(),
     };
@@ -157,7 +156,7 @@ test('only distinct live browser copies confirm the exact local-only resource ve
           .driveInventory(args.drive, '');
 
         return {
-          status: store.getResourceSyncStatus(
+          status: store.getResourceCopies(
             store.getResourceLoading(args.subject),
           ),
           serverSubjects: inventory.map(item => item.subject),

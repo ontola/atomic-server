@@ -148,8 +148,9 @@ test('native WebRTC confirms resource details and exact attachment bytes through
             const resource = window.store.getResourceLoading(subject);
 
             return window.store
-              .getResourceAttachmentSyncStatus(resource)
-              .peers.filter(peer => peer.state === 'confirmed').length;
+              .getResourceCopies(resource)
+              .peers.peers.filter(peer => peer.contents.state === 'confirmed')
+              .length;
           }, target.subject),
         { timeout: 30_000 },
       )

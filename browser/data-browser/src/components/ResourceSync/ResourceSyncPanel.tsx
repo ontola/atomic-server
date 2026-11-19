@@ -2,9 +2,9 @@ import type { JSX, ReactNode } from 'react';
 import {
   useTitle,
   type Resource,
+  type Copy,
+  type ResourceCopies,
   type ResourceSaveState,
-  type ResourceSyncStatus,
-  type ResourcePeerSyncStatus,
 } from '@tomic/react';
 import {
   FaCheck,
@@ -26,9 +26,6 @@ import {
   attachmentCopyLabel,
   completePeerCopyCount,
   peerHasConfirmedContents,
-  type AttachmentCopyPresentationStatus,
-  type ResourceAttachmentPresentationStatus,
-  type ResourceVaultPresentationStatus,
 } from './resourceSyncPresentation';
 import {
   localCopyLabel,
@@ -43,45 +40,34 @@ import {
 
 export function ResourceSyncPanel({
   resource,
-  status,
-  vault,
-  peers,
-  contents,
+  copies,
   save,
   headingId,
   onClose,
 }: {
   resource: Resource;
-  status: ResourceSyncStatus;
-  vault: ResourceVaultPresentationStatus;
-  peers: ResourcePeerSyncStatus;
-  contents: ResourceAttachmentPresentationStatus;
+  copies: ResourceCopies;
   save: ResourceSaveState;
   headingId: string;
   onClose: () => void;
 }): JSX.Element {
   const [title] = useTitle(resource);
   const context = useResourceCopyContext(resource);
-  const presentation = resourceSyncPresentation(
-    status,
-    save,
-    vault,
-    peers,
-    contents,
-  );
+  const { local, server, vault, peers, required } = copies;
+  const presentation = resourceSyncPresentation(copies, save);
   const confirmedTime =
     vault.confirmedAt === undefined
       ? null
       : new Date(vault.confirmedAt).toLocaleString();
-  const destination = destinationLabel(status.server.url);
+  const destination = destinationLabel(server.url);
   const localConfirmed =
-    status.local.state === 'confirmed' &&
-    (!contents.required || contents.local.state === 'confirmed');
+    local.state === 'confirmed' &&
+    (!required || local.contents.state === 'confirmed');
   const serverConfirmed =
-    status.server.state === 'confirmed' &&
+    server.state === 'confirmed' &&
     save.kind === 'idle' &&
-    (!contents.required || contents.server.state === 'confirmed');
-  const completePeers = completePeerCopyCount(peers, contents);
+    (!required || server.contents.state === 'confirmed');
+  const completePeers = completePeerCopyCount(copies);
 
   return (
     <Panel
@@ -111,25 +97,25 @@ export function ResourceSyncPanel({
           icon={<FaDesktop aria-hidden />}
           name='This device'
           confirmed={localConfirmed}
-          description={localCopyLabel(status.local)}
-          hasContents={contents.required}
+          description={localCopyLabel(local)}
+          hasContents={required}
         >
-          {contents.required && (
-            <AttachmentStatus status={contents.local} destination='local' />
+          {required && (
+            <AttachmentStatus status={local.contents} destination='local' />
           )}
-          {status.local.error && <Note>{status.local.error}</Note>}
+          {local.error && <Note>{local.error}</Note>}
         </CopyRow>
         <CopyRow
           icon={<FaServer aria-hidden />}
           name={destination}
           confirmed={serverConfirmed}
-          description={serverCopyLabel(status.server, save)}
-          hasContents={contents.required}
+          description={serverCopyLabel(server, save)}
+          hasContents={required}
         >
-          {contents.required && (
-            <AttachmentStatus status={contents.server} destination='server' />
+          {required && (
+            <AttachmentStatus status={server.contents} destination='server' />
           )}
-          {status.server.state !== 'not-configured' && (
+          {server.state !== 'not-configured' && (
             <Note>
               {context.serverConnected
                 ? 'Currently connected'
@@ -143,13 +129,13 @@ export function ResourceSyncPanel({
           name='Cloud Vault'
           confirmed={
             vault.state === 'confirmed' &&
-            (!contents.required || contents.vault.state === 'confirmed')
+            (!required || vault.contents.state === 'confirmed')
           }
           description={vaultCopyLabel(vault)}
-          hasContents={contents.required}
+          hasContents={required}
         >
-          {contents.required && (
-            <AttachmentStatus status={contents.vault} destination='vault' />
+          {required && (
+            <AttachmentStatus status={vault.contents} destination='vault' />
           )}
           {confirmedTime !== null && (
             <Note>Last confirmed backup: {confirmedTime}</Note>
@@ -170,7 +156,7 @@ export function ResourceSyncPanel({
           name='Peers'
           description={peerCopyLabel(peers)}
           confirmed={completePeers > 0}
-          hasContents={contents.required}
+          hasContents={required}
           peer
         >
           <div
@@ -179,7 +165,7 @@ export function ResourceSyncPanel({
             data-confirmed-count={completePeers}
           >
             <Note>Confirmed peer copies: {completePeers}</Note>
-            {contents.required && (
+            {required && (
               <Note>Resource-details copies: {peers.confirmedCount}</Note>
             )}
             {peers.peers.length > 0 && (
@@ -190,23 +176,16 @@ export function ResourceSyncPanel({
                     <CopyDescription
                       $confirmed={
                         copy.state === 'confirmed' &&
-                        peerHasConfirmedContents(copy, contents)
+                        peerHasConfirmedContents(copy, required)
                       }
                       $peer
                     >
                       {peerCopyLabel(copy)}
                     </CopyDescription>
-                    {contents.required && (
+                    {required && (
                       <AttachmentStatus
                         destination='peer'
-                        status={
-                          contents.peers.find(
-                            content =>
-                              content.connectionId === copy.connectionId &&
-                              content.storageId === copy.storageId &&
-                              content.generation === copy.generation,
-                          ) ?? { state: 'unknown' }
-                        }
+                        status={copy.contents}
                         peer
                       />
                     )}
@@ -224,7 +203,7 @@ export function ResourceSyncPanel({
         </CopyRow>
       </CopyList>
 
-      {contents.required && (
+      {required && (
         <Note>
           A complete copy needs both resource details and file contents at the
           same destination.
@@ -284,7 +263,7 @@ function AttachmentStatus({
   destination,
   peer = false,
 }: {
-  status: AttachmentCopyPresentationStatus;
+  status: Copy;
   destination: string;
   peer?: boolean;
 }) {

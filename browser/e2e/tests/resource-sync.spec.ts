@@ -56,13 +56,10 @@ test('resource copies distinguish an acknowledged save from a later offline edit
       return JSON.stringify(
         {
           subject: resource.subject,
-          status: store.getResourceSyncStatus(resource),
+          status: store.getResourceCopies(resource),
           save: store.getSaveState(resource),
           version: doc?.oplogVersion().toJSON(),
           pendingTxnLength: doc?.getPendingTxnLength(),
-          evidence: Reflect.get(store, 'resourceSyncStatus').evidence.get(
-            resource.subject,
-          ),
         },
         (_key, value) => (value instanceof Map ? [...value] : value),
         2,
@@ -219,7 +216,7 @@ test('resource confirmations survive offline reloads without confirming a newer 
   const serverConfirmedAt = await page.evaluate(resourceSubject => {
     const resource = window.store.getResourceLoading(resourceSubject);
 
-    return window.store.getResourceSyncStatus(resource).server.confirmedAt;
+    return window.store.getResourceCopies(resource).server.confirmedAt;
   }, subject);
   expect(serverConfirmedAt).toEqual(expect.any(Number));
 
@@ -245,7 +242,7 @@ test('resource confirmations survive offline reloads without confirming a newer 
     await page.evaluate(resourceSubject => {
       const resource = window.store.getResourceLoading(resourceSubject);
 
-      return window.store.getResourceSyncStatus(resource).server.confirmedAt;
+      return window.store.getResourceCopies(resource).server.confirmedAt;
     }, subject),
   ).toBe(serverConfirmedAt);
   await page.screenshot({
@@ -286,7 +283,7 @@ test('resource confirmations survive offline reloads without confirming a newer 
     await page.evaluate(resourceSubject => {
       const resource = window.store.getResourceLoading(resourceSubject);
 
-      return window.store.getResourceSyncStatus(resource);
+      return window.store.getResourceCopies(resource);
     }, subject),
   ).toMatchObject({
     local: { state: 'confirmed' },

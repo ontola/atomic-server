@@ -16,10 +16,7 @@ import { setLightness } from 'polished';
 import { presetColors } from '../../styling';
 import { IconButton } from '../IconButton/IconButton';
 import { Popover } from '../Popover';
-import { useResourceSyncStatus } from './useResourceSyncStatus';
-import { useResourceVaultSyncStatus } from './useResourceVaultSyncStatus';
-import { useResourcePeerSyncStatus } from './useResourcePeerSyncStatus';
-import { useResourceAttachmentSyncStatus } from './useResourceAttachmentSyncStatus';
+import { useResourceCopies } from './useResourceCopies';
 import {
   resourceSyncPresentation,
   type SyncSymbol,
@@ -63,18 +60,9 @@ export function ResourceSyncIndicator({
     };
   }, [open, panelModule]);
   const [title] = useTitle(resource);
-  const status = useResourceSyncStatus(resource);
-  const vault = useResourceVaultSyncStatus(resource);
-  const peers = useResourcePeerSyncStatus(resource);
-  const contents = useResourceAttachmentSyncStatus(resource);
+  const copies = useResourceCopies(resource);
   const save = useSaveState(resource);
-  const presentation = resourceSyncPresentation(
-    status,
-    save,
-    vault,
-    peers,
-    contents,
-  );
+  const presentation = resourceSyncPresentation(copies, save);
   const headingId = useId();
   if (loadError) throw loadError;
 
@@ -96,13 +84,13 @@ export function ResourceSyncIndicator({
               }}
               aria-label={`Copies and sync for ${title}: ${presentation.label}`}
               data-testid='resource-sync-indicator'
-              data-sync-state={status.server.state}
-              data-vault-sync-state={vault.state}
-              data-peer-sync-state={peers.state}
-              data-content-required={contents.required}
-              data-content-local-state={contents.local.state}
-              data-content-server-state={contents.server.state}
-              data-content-vault-state={contents.vault.state}
+              data-sync-state={copies.server.state}
+              data-vault-sync-state={copies.vault.state}
+              data-peer-sync-state={copies.peers.state}
+              data-content-required={copies.required}
+              data-content-local-state={copies.local.contents.state}
+              data-content-server-state={copies.server.contents.state}
+              data-content-vault-state={copies.vault.contents.state}
               $tone={presentation.tone}
             >
               <StatusSymbol symbol={presentation.symbol} />
@@ -119,10 +107,7 @@ export function ResourceSyncIndicator({
         {open && ResourceSyncPanel && (
           <ResourceSyncPanel
             resource={resource}
-            status={status}
-            vault={vault}
-            peers={peers}
-            contents={contents}
+            copies={copies}
             save={save}
             headingId={headingId}
             onClose={() => setOpen(false)}

@@ -8,18 +8,13 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import type {
-  Resource,
-  ResourceSaveState,
-  ResourcePeerSyncStatus,
-  ResourceSyncStatus,
-} from '@tomic/react';
+import type { Resource, ResourceSaveState } from '@tomic/react';
 import isPropValid from '@emotion/is-prop-valid';
 import { StyleSheetManager, ThemeProvider } from 'styled-components';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { buildTheme } from '../../styling';
 import { ResourceSyncIndicator } from './ResourceSyncIndicator';
-import type { ResourceAttachmentPresentationStatus } from './resourceSyncPresentation';
+import { copiesOf, type CopiesParts } from './copiesFixture';
 
 const panelLoad = vi.hoisted(() => {
   let resolve!: () => void;
@@ -35,14 +30,11 @@ vi.mock('./ResourceSyncPanel', async importOriginal => {
   return importOriginal();
 });
 
-let status: ResourceSyncStatus;
+let status: Required<Pick<CopiesParts, 'local' | 'server'>>;
 let save: ResourceSaveState;
-let vaultStatus: {
-  state: 'unknown' | 'pending' | 'confirmed';
-  confirmedAt?: number;
-};
-let peerStatus: ResourcePeerSyncStatus;
-let contents: ResourceAttachmentPresentationStatus;
+let vaultStatus: NonNullable<CopiesParts['vault']>;
+let peerStatus: Required<NonNullable<CopiesParts['peers']>>;
+let contents: Required<NonNullable<CopiesParts['contents']>>;
 let isFile = false;
 let propagationBoundary: HTMLDivElement | undefined;
 const context = {
@@ -62,17 +54,9 @@ vi.mock('@tomic/react', async importOriginal => ({
   useTitle: () => ['Project notes'],
   useSaveState: () => save,
 }));
-vi.mock('./useResourceSyncStatus', () => ({
-  useResourceSyncStatus: () => status,
-}));
-vi.mock('./useResourceVaultSyncStatus', () => ({
-  useResourceVaultSyncStatus: () => vaultStatus,
-}));
-vi.mock('./useResourcePeerSyncStatus', () => ({
-  useResourcePeerSyncStatus: () => peerStatus,
-}));
-vi.mock('./useResourceAttachmentSyncStatus', () => ({
-  useResourceAttachmentSyncStatus: () => contents,
+vi.mock('./useResourceCopies', () => ({
+  useResourceCopies: () =>
+    copiesOf({ ...status, vault: vaultStatus, peers: peerStatus, contents }),
 }));
 vi.mock('./useResourceCopyContext', () => ({
   useResourceCopyContext: () => context,
