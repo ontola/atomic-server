@@ -3,7 +3,9 @@
  * These aliases describe saved identities, never provider operations or responses. */
 import {
   core,
-  CollectionBuilder,
+  collections as collectionTerms,
+  isCommitSubject,
+  type Collections,
   isAtomicIdentifier,
   subjectsReferToSameResource,
   type Store,
@@ -230,25 +232,60 @@ export async function collectSyncableLegacySources(
   ) {
     if (!pending.length) {
       driveQueried = true;
+
       // The normal signed, drive-scoped query finds moved legacy sources even
       // when an earlier implementation never populated its optional index.
-      const query = new CollectionBuilder(store)
-        .setDrive(drive)
-        .setProperty(sourceProperty)
-        .setPageSize(100)
-        .setPreferServer(true)
-        .build();
-      await query.waitForReady();
-      if (
-        query.totalMembers > maximum ||
-        query.totalPages > Math.ceil(maximum / 100)
-      )
-        throw new Error('Legacy source migration exceeds its resource limit');
+      // CollectionBuilder deliberately treats an absent value as a disabled
+      // query. Property-presence discovery must use the Store's existing
+      // signed server query path rather than silently accepting that empty set.
+      const pageOfSources = async (page: number) => {
+        const url = new URL('/query', store.getServerUrl());
+        for (const [name, value] of Object.entries({
+          drive,
+          property: sourceProperty,
+          page_size: '100',
+          current_page: String(page),
+          include_nested: 'false',
+        }))
+          url.searchParams.set(name, value);
+        const response =
+          await store.fetchResourceFromServer<Collections.Collection>(
+            url.href,
+            { noWebSocket: true },
+          );
+        if (response.error) throw response.error;
+        // App setup has already initialized Loro. Materialize a buffered query
+        // response before reading its count and subject-only members.
+        response.getLoroDoc();
+        const total = response.get(collectionTerms.properties.totalMembers);
+        if (
+          typeof total !== 'number' ||
+          !Number.isSafeInteger(total) ||
+          total < 0
+        )
+          throw new Error('Legacy source discovery returned an invalid count');
+        if (total > maximum)
+          throw new Error('Legacy source migration exceeds its resource limit');
 
+        return {
+          total,
+          members: response
+            .getSubjects(collectionTerms.properties.members)
+            .filter(subject => !isCommitSubject(subject)),
+        };
+      };
+
+      const first = await pageOfSources(0);
       const observed = new Set<string>();
 
-      for (let page = 0; page < query.totalPages; page++) {
-        for (const subject of await query.getMembersOnPage(page)) {
+      for (let page = 0; page < Math.ceil(first.total / 100); page++) {
+        const result = page === 0 ? first : await pageOfSources(page);
+        if (result.total !== first.total)
+          throw new Error(
+            'Legacy source discovery changed; retry after drive synchronization',
+          );
+
+        for (const subject of result.members) {
           if (!local(subject)) continue;
           observed.add(store.normalizeSubject(subject));
           if (!visited.has(subject)) pending.push(subject);

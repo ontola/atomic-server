@@ -1,43 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { core, type Store } from '@tomic/lib';
+import { core, collections as collectionTerms, type Store } from '@tomic/lib';
 import type { CollectionDescription } from 'syncables/browser';
 import { collectSyncableLegacySources } from './syncableLegacy';
 import { sourceKey, sourceConfigFingerprint } from './builtinSyncIdentity.js';
 
-vi.mock('@tomic/lib', async importActual => ({
-  ...(await importActual<typeof import('@tomic/lib')>()),
-  CollectionBuilder: class {
-    private params: Record<string, unknown> = {};
-    constructor(
-      private store: {
-        legacySources: (params: Record<string, unknown>) => unknown;
-      },
-    ) {}
-    setDrive(drive: string) {
-      this.params.drive = drive;
-
-      return this;
-    }
-    setProperty(property: string) {
-      this.params.property = property;
-
-      return this;
-    }
-    setPageSize(pageSize: number) {
-      this.params.pageSize = pageSize;
-
-      return this;
-    }
-    setPreferServer(preferServer: boolean) {
-      this.params.preferServer = preferServer;
-
-      return this;
-    }
-    build() {
-      return this.store.legacySources(this.params);
-    }
-  },
-}));
+type SourceQuery = (params: Record<string, unknown>) => {
+  totalMembers: number;
+  getMembersOnPage(page: number): string[];
+};
 
 const p = Object.fromEntries(
   [
@@ -122,6 +92,38 @@ function fixture() {
   });
   const store = {
     getResource,
+    getServerUrl: () => 'https://node.example',
+    fetchResourceFromServer: vi.fn(
+      async (subject: string, options: unknown) => {
+        const url = new URL(subject);
+        expect(url.origin + url.pathname).toBe('https://node.example/query');
+        expect(url.searchParams.get('include_nested')).toBe('false');
+        expect(url.searchParams.has('value')).toBe(false);
+        expect(options).toEqual({ noWebSocket: true });
+        const answer = (
+          store as unknown as {
+            legacySources: ReturnType<typeof vi.fn<SourceQuery>>;
+          }
+        ).legacySources({
+          drive: url.searchParams.get('drive'),
+          property: url.searchParams.get('property'),
+          pageSize: Number(url.searchParams.get('page_size')),
+          preferServer: true,
+        });
+
+        return {
+          getLoroDoc: () => undefined,
+          get: (property: string) =>
+            property === collectionTerms.properties.totalMembers
+              ? answer.totalMembers
+              : undefined,
+          getSubjects: () =>
+            answer.getMembersOnPage(
+              Number(url.searchParams.get('current_page')),
+            ),
+        };
+      },
+    ),
     normalizeSubject: (subject: string) => subject,
     isForeignOriginSubject: (subject: string) => subject.startsWith('https://'),
     legacySources: vi.fn((params: Record<string, unknown>) => {
@@ -139,7 +141,7 @@ function fixture() {
         waitForReady: async () => undefined,
         totalMembers: members.length,
         totalPages: Math.ceil(members.length / 100),
-        getMembersOnPage: async (page: number) =>
+        getMembersOnPage: (page: number) =>
           members.slice(page * 100, (page + 1) * 100),
       };
     }),
@@ -227,8 +229,11 @@ function fixture() {
     add,
     collect,
     authenticatedTree,
-    query: (store as unknown as { legacySources: ReturnType<typeof vi.fn> })
-      .legacySources,
+    query: (
+      store as unknown as {
+        legacySources: ReturnType<typeof vi.fn<SourceQuery>>;
+      }
+    ).legacySources,
   };
 }
 
@@ -424,10 +429,8 @@ describe('historical source collection', () => {
     const f = fixture();
     f.authenticatedTree();
     f.query.mockReturnValue({
-      waitForReady: async () => undefined,
       totalMembers: 0,
-      totalPages: 0,
-      getMembersOnPage: async () => [],
+      getMembersOnPage: () => [],
     });
     await expect(f.collect()).rejects.toThrow('discovery is incomplete');
   });

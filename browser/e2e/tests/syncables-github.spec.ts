@@ -16,6 +16,8 @@ import {
   currentDriveTitle,
   FRONTEND_URL,
   getCurrentSubject,
+  waitForDriveSettled,
+  waitForSynced,
 } from './test-utils';
 
 const PROXY = 'https://syncables-test.example';
@@ -431,7 +433,7 @@ async function mockIntegrationProxy(
     state.providerRequests.push(providerPath);
 
     if (providerPath === '/user') {
-      await send({ id: 321, login: 'michiel', type: 'User' });
+      await send({ id: 321, login: 'michiel', name: 'michiel', type: 'User' });
 
       return;
     }
@@ -533,12 +535,15 @@ async function sourceState(page: Page, subject: string) {
     };
 
     const source = property('syncable-source-key');
+    const nodeKind = property('syncable-node-kind');
     const config = property('syncable-source-config');
     const table = await store.getResource(tableSubject);
     const rowClass = table.get(base + 'classtype');
     const rows = [...store.resources.values()].filter(
       resource =>
         resource.get(base + 'parent') === tableSubject &&
+        resource.get(nodeKind) === 'record' &&
+        typeof resource.get(source) === 'string' &&
         typeof rowClass === 'string' &&
         resource.getSubjects(base + 'isA').includes(rowClass),
     );
@@ -620,7 +625,7 @@ async function sourceSubject(page: Page, kind: string, collection?: string) {
 async function browse(page: Page) {
   const tab = page.getByRole('tab', { name: 'Browse', exact: true });
   await expect(tab).toBeVisible({ timeout: 30_000 });
-  await tab.click();
+  if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
   await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
 
   return page.getByRole('main').getByRole('table');
@@ -782,6 +787,31 @@ test.describe('catalog-driven built-in Syncables', () => {
     await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
     const principalSubject = await getCurrentSubject(page);
     expect(principalSubject).not.toBe(appSubject);
+    // Migration preserves this old localId; it must still form a navigable principal Table.
+    await page.evaluate(
+      async ({ subject, proxy, connection }) => {
+        const principal = await window.store.getResource(subject);
+        await principal.set(
+          'https://atomicdata.dev/properties/localId',
+          'syncables:node:' +
+            encodeURIComponent(
+              JSON.stringify([
+                proxy,
+                'github-issues',
+                'account',
+                connection,
+                '',
+              ]),
+            ),
+        );
+        await principal.save();
+      },
+      {
+        subject: principalSubject,
+        proxy: PROXY,
+        connection: requests.redeemed[0],
+      },
+    );
     const principalUrl = page.url();
     const principalTable = await browse(page);
     await expect(
@@ -1136,6 +1166,8 @@ test.describe('catalog-driven built-in Syncables', () => {
     const publicSubject = await getCurrentSubject(page);
     const publicUrl = page.url();
     const legacy = await legacyPublicMirror(page, publicSubject);
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
     const form = await publicForm(page);
     await form
       .getByLabel('Source', { exact: true })
@@ -1407,6 +1439,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     await form
       .getByRole('button', { name: 'Open collection', exact: true })
       .click();
+    await expect(
+      page.getByRole('heading', { name: 'Entries', exact: true }),
+    ).toBeVisible();
     const subject = await getCurrentSubject(page);
     await browse(page);
     expect(reads).toEqual([upstream + '/by-name/research']);
