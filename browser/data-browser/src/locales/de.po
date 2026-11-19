@@ -13558,4 +13558,4 @@ msgstr "{0} alte Verlaufsdaten können entfernt werden. Sichtbare Inhalte bleibe
 
 #: src/helpers/verifyAgentSecret.ts
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
-msgstr ""
+msgstr "Dieses Secret gehört zu einem anderen Agenten. Füge das Secret ein, das du gerade für dieses Konto gespeichert hast."

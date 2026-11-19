@@ -13555,4 +13555,4 @@ msgstr "{0} d’ancien historique peuvent être supprimés. Aucun contenu visibl
 
 #: src/helpers/verifyAgentSecret.ts
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
-msgstr ""
+msgstr "Ce secret appartient à un autre agent. Collez le secret que vous venez d’enregistrer pour ce compte."

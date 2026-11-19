@@ -13561,4 +13561,4 @@ msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien 
 
 #: src/helpers/verifyAgentSecret.ts
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
-msgstr ""
+msgstr "Deze geheime sleutel hoort bij een andere agent. Plak de sleutel die je net voor dit account hebt bewaard."
