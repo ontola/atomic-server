@@ -198,6 +198,12 @@ void main() {
       await AppThemeMode.load();
       expect(AppThemeMode.mode.value, ThemeMode.dark);
 
+      // The drive's value is now this device's cache too.
+      expect((await SharedPreferences.getInstance()).get(AppThemeMode.key),
+          'dark');
+
+      // A device that chose before preferences synced: only the old key.
+      SharedPreferences.setMockInitialValues({AppThemeMode.key: 'light'});
       drive.values.clear();
       AppThemeMode.mode.value = ThemeMode.system;
       await AppThemeMode.load();
