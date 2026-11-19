@@ -8,6 +8,7 @@ import {
   Datatype,
   forms,
   server,
+  websiteSchema,
 } from '@tomic/react';
 import { IconType } from 'react-icons';
 import {
@@ -73,6 +74,7 @@ const iconMap = new Map<string, IconType>([
   [ai.classes.aiChat, AIIcon],
   [canvas.classes.canvas, FaPaintbrush],
   [forms.classes.form, FaWpforms],
+  [websiteSchema.classes.project, FaGlobe],
 ]);
 
 /**
@@ -81,6 +83,7 @@ const iconMap = new Map<string, IconType>([
  */
 const classShortnameIconMap = new Map<string, IconType>([
   ['plugin-script', FaPlug],
+  // Websites made before website/v1 have a per-drive class.
   ['website-project', FaGlobe],
   // The launcher grid rather than the puzzle piece a new app gets as its
   // placeholder emoji: that one already belongs to plugins and installations
