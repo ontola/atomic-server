@@ -8,7 +8,7 @@ import type { ReplicaIdentity } from './peer-receipts.js';
 import {
   parseSerializedReceipt,
   type Receipt,
-  type ResourceSyncEvidence,
+  type ResourceReceipts,
 } from './resource-receipts.js';
 
 export type CopyState =
@@ -408,9 +408,7 @@ export class ResourceCopiesTracker {
    * The database provides proof only after its flush barrier. Reading an old
    * snapshot must not replace a newer completed local write or its error.
    */
-  restore(
-    subject: string,
-  ): (row?: ResourceSyncEvidence, error?: unknown) => void {
+  restore(subject: string): (row?: ResourceReceipts, error?: unknown) => void {
     const fences = () => [
       this.fence('local', subject),
       this.fence('server', subject),
@@ -436,11 +434,12 @@ export class ResourceCopiesTracker {
         }
       }
 
-      const server = version
-        ? parseSerializedReceipt(row?.serverReceipt)
-        : undefined;
-      if (server?.subject === subject)
-        this.acknowledge({ ...server, destination: 'server' });
+      for (const stored of version ? (row?.receipts ?? []) : []) {
+        const receipt = parseSerializedReceipt(stored);
+        if (receipt?.subject === subject)
+          this.acknowledge({ ...receipt, destination: 'server' });
+      }
+
       this.changed(subject);
     };
   }

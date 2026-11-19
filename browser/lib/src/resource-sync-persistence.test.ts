@@ -7,7 +7,8 @@ import { core } from './ontologies/core.js';
 import { testStore } from './test-store.js';
 import type { ClientDbWorker } from './client-db.js';
 import type {
-  ResourceSyncEvidence,
+  ReceiptScope,
+  ResourceReceipts,
   ResourceSyncScope,
   SerializedReceipt,
 } from './resource-receipts.js';
@@ -68,23 +69,34 @@ function memoryDb() {
   const receipts = new Map<string, SerializedReceipt>();
   const key = (scope: ResourceSyncScope, subject: string) =>
     JSON.stringify([scope.agent, scope.serverUrl, subject]);
-  const getResourceSyncEvidence = vi.fn(
+  const serverOf = (scope?: ReceiptScope) =>
+    scope && 'server' in scope ? scope.server : undefined;
+  const getResourceReceipts = vi.fn(
     async (
       subjects: string[],
-      scope?: ResourceSyncScope,
-    ): Promise<ResourceSyncEvidence[]> =>
-      subjects.map(subject => ({
-        subject,
-        snapshot: snapshots.get(subject) ?? null,
-        serverReceipt: scope ? receipts.get(key(scope, subject)) : undefined,
-      })),
+      scope?: ReceiptScope,
+    ): Promise<ResourceReceipts[]> =>
+      subjects.map(subject => {
+        const server = serverOf(scope);
+        const stored = server && receipts.get(key(server, subject));
+
+        return {
+          subject,
+          snapshot: snapshots.get(subject) ?? null,
+          receipts: stored ? [stored] : [],
+        };
+      }),
   );
-  const putResourceSyncReceipts = vi.fn(
-    async (scope: ResourceSyncScope, values: SerializedReceipt[]) => {
+  const putResourceReceipts = vi.fn(
+    async (scope: ReceiptScope, values: SerializedReceipt[]) => {
+      const server = serverOf(scope)!;
+
       for (const value of values) {
         if (snapshots.has(value.subject))
-          receipts.set(key(scope, value.subject), structuredClone(value));
+          receipts.set(key(server, value.subject), structuredClone(value));
       }
+
+      return true;
     },
   );
   const putResourceWithSnapshot = vi.fn(
@@ -97,8 +109,8 @@ function memoryDb() {
     isInitialized: true,
     waitForInit: async () => true,
     putResourceWithSnapshot,
-    getResourceSyncEvidence,
-    putResourceSyncReceipts,
+    getResourceReceipts,
+    putResourceReceipts,
   } as unknown as ClientDbWorker;
 
   return {
@@ -106,8 +118,8 @@ function memoryDb() {
     snapshots,
     receipts,
     key,
-    getResourceSyncEvidence,
-    putResourceSyncReceipts,
+    getResourceReceipts,
+    putResourceReceipts,
     putResourceWithSnapshot,
   };
 }
@@ -139,7 +151,7 @@ describe('resource sync proof recovery', () => {
     memory.snapshots.set(two.subject, snapshot(two));
     store.getResourceCopies(one);
     store.getResourceCopies(two);
-    expect(memory.getResourceSyncEvidence).not.toHaveBeenCalled();
+    expect(memory.getResourceReceipts).not.toHaveBeenCalled();
     const unsubscribe = [one, two].map(resource =>
       store.subscribeResourceCopies(resource, vi.fn()),
     );
@@ -147,7 +159,7 @@ describe('resource sync proof recovery', () => {
       expect(store.getResourceCopies(one).local.state).toBe('confirmed'),
     );
     expect(store.getResourceCopies(two).local.state).toBe('confirmed');
-    expect(memory.getResourceSyncEvidence).toHaveBeenCalledTimes(1);
+    expect(memory.getResourceReceipts).toHaveBeenCalledTimes(1);
     expect(store.getResourceCopies(one).local.confirmedAt).toBeUndefined();
     expect(store.getResourceCopies(one).server.state).toBe('unknown');
     unsubscribe.forEach(stop => stop());
@@ -202,11 +214,11 @@ describe('resource sync proof recovery', () => {
       noParent: true,
     });
     const flush = deferred<void>();
-    memory.putResourceSyncReceipts.mockImplementation(() => flush.promise);
+    memory.putResourceReceipts.mockImplementation(() => flush.promise);
     store.setServerConnected(true);
     await resource.save();
     await vi.waitFor(() =>
-      expect(memory.putResourceSyncReceipts).toHaveBeenCalled(),
+      expect(memory.putResourceReceipts).toHaveBeenCalled(),
     );
     expect(store.getSyncStatus().pendingDirtyCount).toBeGreaterThan(0);
     flush.reject(new Error('Receipt storage failed'));
@@ -214,8 +226,8 @@ describe('resource sync proof recovery', () => {
       expect(store.getSyncStatus().pendingDirtyCount).toBe(0),
     );
     expect(store.getResourceCopies(resource).server.state).toBe('confirmed');
-    memory.putResourceSyncReceipts.mockClear();
-    memory.putResourceSyncReceipts.mockResolvedValue(undefined);
+    memory.putResourceReceipts.mockClear();
+    memory.putResourceReceipts.mockResolvedValue(true);
     await store.persistState(
       memory.db,
       resource.subject,
@@ -224,7 +236,7 @@ describe('resource sync proof recovery', () => {
       { exact: true },
     );
     await vi.waitFor(() =>
-      expect(memory.putResourceSyncReceipts).toHaveBeenCalled(),
+      expect(memory.putResourceReceipts).toHaveBeenCalled(),
     );
   });
 
@@ -236,13 +248,13 @@ describe('resource sync proof recovery', () => {
     const previous = {
       subject: resource.subject,
       snapshot: snapshot(resource),
-      serverReceipt: receipt(resource),
+      receipts: [receipt(resource)],
     };
-    const read = deferred<ResourceSyncEvidence[]>();
-    memory.getResourceSyncEvidence.mockReturnValue(read.promise);
+    const read = deferred<ResourceReceipts[]>();
+    memory.getResourceReceipts.mockReturnValue(read.promise);
     const stop = store.subscribeResourceCopies(resource, vi.fn());
     await vi.waitFor(() =>
-      expect(memory.getResourceSyncEvidence).toHaveBeenCalled(),
+      expect(memory.getResourceReceipts).toHaveBeenCalled(),
     );
     await resource.set(core.properties.name, 'Newer', false);
     await persist(store, memory.db, resource);
@@ -300,7 +312,7 @@ describe('resource sync proof recovery', () => {
           'confirmed',
         ),
       );
-      memory.getResourceSyncEvidence.mockClear();
+      memory.getResourceReceipts.mockClear();
       const other = await scopedStore();
       const expectedAgent =
         boundary === 'identity' ? other.getAgent()! : store.getAgent()!;
@@ -312,14 +324,16 @@ describe('resource sync proof recovery', () => {
       if (boundary === 'identity') store.setAgent(expectedAgent);
       else store.setServerUrl(expectedUrl, { connect: false });
       await vi.waitFor(() =>
-        expect(memory.getResourceSyncEvidence).toHaveBeenCalled(),
+        expect(memory.getResourceReceipts).toHaveBeenCalled(),
       );
       await Promise.resolve();
 
-      for (const [, scope] of memory.getResourceSyncEvidence.mock.calls) {
+      for (const [, scope] of memory.getResourceReceipts.mock.calls) {
         expect(scope).toEqual({
-          agent: expectedAgent.subject.replace(/^did:ad:/, 'atomic:'),
-          serverUrl: expectedUrl,
+          server: {
+            agent: expectedAgent.subject.replace(/^did:ad:/, 'atomic:'),
+            serverUrl: expectedUrl,
+          },
         });
       }
 
@@ -347,16 +361,16 @@ describe('resource sync proof recovery', () => {
       const memory = memoryDb();
       store.setClientDb(memory.db);
       const resource = loadedResource(store);
-      const read = deferred<ResourceSyncEvidence[]>();
-      memory.getResourceSyncEvidence.mockReturnValueOnce(read.promise);
+      const read = deferred<ResourceReceipts[]>();
+      memory.getResourceReceipts.mockReturnValueOnce(read.promise);
       const stop = store.subscribeResourceCopies(resource, vi.fn());
       await vi.waitFor(() =>
-        expect(memory.getResourceSyncEvidence).toHaveBeenCalled(),
+        expect(memory.getResourceReceipts).toHaveBeenCalled(),
       );
       const row = {
         subject: resource.subject,
         snapshot: snapshot(resource),
-        serverReceipt: receipt(resource),
+        receipts: [receipt(resource)],
       };
       stop();
       if (boundary === 'database') store.setClientDb(memoryDb().db);
@@ -399,7 +413,7 @@ describe('resource sync proof recovery', () => {
       await vi.waitFor(() =>
         expect(store.getSyncStatus().pendingDirtyCount).toBe(0),
       );
-      expect(memory.putResourceSyncReceipts).not.toHaveBeenCalled();
+      expect(memory.putResourceReceipts).not.toHaveBeenCalled();
     },
   );
 
@@ -413,16 +427,16 @@ describe('resource sync proof recovery', () => {
     oldStop();
     const memory = memoryDb();
     store.setClientDb(memory.db);
-    memory.getResourceSyncEvidence.mockResolvedValue([
+    memory.getResourceReceipts.mockResolvedValue([
       {
         subject: resource.subject,
         snapshot: new Uint8Array([1, 2, 3]),
-        serverReceipt: receipt(resource),
+        receipts: [receipt(resource)],
       },
     ]);
     const stop = store.subscribeResourceCopies(resource, vi.fn());
     await vi.waitFor(() =>
-      expect(memory.getResourceSyncEvidence).toHaveBeenCalled(),
+      expect(memory.getResourceReceipts).toHaveBeenCalled(),
     );
     await Promise.resolve();
     expect(store.getResourceCopies(resource).local.state).toBe('unknown');
@@ -436,11 +450,11 @@ describe('resource sync proof recovery', () => {
     store.setClientDb(memory.db);
     const resource = loadedResource(store);
     const bytes = snapshot(resource);
-    memory.getResourceSyncEvidence.mockResolvedValue([
+    memory.getResourceReceipts.mockResolvedValue([
       {
         subject: resource.subject,
         snapshot: bytes,
-        serverReceipt: receipt(resource),
+        receipts: [receipt(resource)],
       },
     ]);
     const stop = store.subscribeResourceCopies(resource, vi.fn());
@@ -455,7 +469,7 @@ describe('resource sync proof recovery', () => {
     await vi.waitFor(() =>
       expect(store.getResourceCopies(restored).server.state).toBe('confirmed'),
     );
-    expect(memory.getResourceSyncEvidence).toHaveBeenCalledTimes(2);
+    expect(memory.getResourceReceipts).toHaveBeenCalledTimes(2);
     stopAgain();
   });
 
@@ -464,7 +478,7 @@ describe('resource sync proof recovery', () => {
     const memory = memoryDb();
     store.setClientDb(memory.db);
     const resource = loadedResource(store);
-    memory.getResourceSyncEvidence.mockRejectedValue(new Error('Flush failed'));
+    memory.getResourceReceipts.mockRejectedValue(new Error('Flush failed'));
     const stop = store.subscribeResourceCopies(resource, vi.fn());
     await vi.waitFor(() =>
       expect(store.getResourceCopies(resource).local.state).toBe('error'),
@@ -481,16 +495,16 @@ describe('resource sync proof recovery', () => {
     store.setClientDb(memory.db);
     const one = loadedResource(store);
     const two = loadedResource(store, 'https://example.com/two');
-    memory.getResourceSyncEvidence.mockResolvedValue([
+    memory.getResourceReceipts.mockResolvedValue([
       {
         subject: one.subject,
         snapshot: snapshot(one),
-        serverReceipt: { ...receipt(one), version: { broken: NaN } },
+        receipts: [{ ...receipt(one), version: { broken: NaN } }],
       },
       {
         subject: two.subject,
         snapshot: snapshot(two),
-        serverReceipt: receipt(one),
+        receipts: [receipt(one)],
       },
     ]);
     const stop = [one, two].map(resource =>
@@ -501,8 +515,8 @@ describe('resource sync proof recovery', () => {
     );
     expect(store.getResourceCopies(one).server.state).toBe('unknown');
     expect(store.getResourceCopies(two).server.state).toBe('unknown');
-    const scope = memory.getResourceSyncEvidence.mock.calls[0][1];
-    expect(scope?.agent).toBe(
+    const scope = memory.getResourceReceipts.mock.calls[0][1];
+    expect(scope && 'server' in scope && scope.server.agent).toBe(
       store.getAgent()?.subject.replace(/^did:ad:/, 'atomic:'),
     );
     stop.forEach(unsubscribe => unsubscribe());

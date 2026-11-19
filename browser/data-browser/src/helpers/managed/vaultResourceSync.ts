@@ -3,7 +3,6 @@ import {
   StoreEvents,
   parseAttachmentManifest,
   resourceAttachmentDescriptor,
-  type SerializedVaultAttachmentReceipt,
   type AttachmentManifest,
   LoroLoader,
   canonicalizeScheme,
@@ -14,7 +13,7 @@ import {
   type Store,
   type VaultSyncScope,
   type SerializedReceipt,
-  type ResourceVaultEvidence,
+  type ResourceReceipts,
 } from '@tomic/lib';
 import { getManagedApiBase } from './api';
 import {
@@ -33,24 +32,15 @@ export type VaultReceiptDb = {
   vaultAttachmentManifests?: (
     drive: string,
   ) => Promise<{ subject: string; manifest: AttachmentManifest }[] | undefined>;
-  getResourceVaultAttachmentReceipts?: (
-    subjects: string[],
-    scope: VaultSyncScope,
-  ) => Promise<SerializedVaultAttachmentReceipt[] | undefined>;
-  putResourceVaultAttachmentReceipts?: (
-    scope: VaultSyncScope,
-    receipts: SerializedVaultAttachmentReceipt[],
-    generation: number,
-  ) => Promise<boolean>;
   getResourceVaultGeneration?: (
     scope: VaultSyncScope,
   ) => Promise<number | undefined>;
-  getResourceVaultEvidence?: (
+  getResourceReceipts?: (
     subjects: string[],
-    scope: VaultSyncScope,
-  ) => Promise<ResourceVaultEvidence[] | undefined>;
-  putResourceVaultReceipts?: (
-    scope: VaultSyncScope,
+    scope: { vault: VaultSyncScope },
+  ) => Promise<ResourceReceipts[] | undefined>;
+  putResourceReceipts?: (
+    scope: { vault: VaultSyncScope },
     receipts: SerializedReceipt[],
     generation: number,
   ) => Promise<boolean>;
@@ -276,7 +266,7 @@ function ensureEvidence(
   const subject = store.normalizeSubject(resource.subject);
   if (
     !context ||
-    !context.db.getResourceVaultEvidence ||
+    !context.db.getResourceReceipts ||
     context.reads.has(subject) ||
     store.isDestroyed(subject) ||
     store.hasPendingDestroy(subject)
@@ -293,7 +283,7 @@ function ensureEvidence(
     context.queued.clear();
     if (!contextCurrent(store, ledger, context, epoch) || !subjects.length)
       return;
-    void context.db.getResourceVaultEvidence!(subjects, context.scope)
+    void context.db.getResourceReceipts!(subjects, { vault: context.scope })
       .then(async rows => {
         const generation = await context.ready;
         const now =
@@ -308,7 +298,9 @@ function ensureEvidence(
           return;
 
         for (const row of rows ?? []) {
-          const receipt = parseSerializedReceipt(row.vaultReceipt);
+          const receipt = row.receipts
+            .map(stored => parseSerializedReceipt(stored))
+            .find(parsed => parsed && !parsed.manifest);
           const rowSubject = store.normalizeSubject(row.subject);
           if (
             !validSnapshot(row.snapshot) ||
@@ -365,7 +357,7 @@ function ensureAttachmentEvidence(
   const context = contextFor(store, ledger, resource);
   const requestedSubject = store.normalizeSubject(resource.subject);
   if (
-    !context?.db.getResourceVaultAttachmentReceipts ||
+    !context?.db.getResourceReceipts ||
     context.attachmentReads.has(requestedSubject) ||
     store.isDestroyed(requestedSubject) ||
     store.hasPendingDestroy(requestedSubject)
@@ -384,15 +376,18 @@ function ensureAttachmentEvidence(
     const subjects = [...queued.keys()];
 
     const read = async () => {
-      const receipts: SerializedVaultAttachmentReceipt[] = [];
+      const receipts: SerializedReceipt[] = [];
 
       for (let offset = 0; offset < subjects.length; offset += 128) {
         if (!contextCurrent(store, ledger, context, epoch)) return [];
+        const rows = await context.db.getResourceReceipts!(
+          subjects.slice(offset, offset + 128),
+          { vault: context.scope },
+        );
         receipts.push(
-          ...((await context.db.getResourceVaultAttachmentReceipts!(
-            subjects.slice(offset, offset + 128),
-            context.scope,
-          )) ?? []),
+          ...(rows ?? []).flatMap(row =>
+            row.receipts.filter(receipt => receipt.manifest),
+          ),
         );
       }
 
@@ -620,7 +615,7 @@ export function captureResourceVaultBackup(
         !proofAvailable ||
         !current() ||
         ledger.attachmentEpoch !== attachmentEpoch ||
-        !context?.db.putResourceVaultAttachmentReceipts
+        !context?.db.putResourceReceipts
       )
         return;
       const generation = await context.ready;
@@ -631,7 +626,7 @@ export function captureResourceVaultBackup(
       )
         return;
       const verified = new Set(hashes);
-      const receipts: SerializedVaultAttachmentReceipt[] = attachmentCandidates
+      const receipts: SerializedReceipt[] = attachmentCandidates
         .filter(
           row =>
             row.manifest.files.every(
@@ -642,19 +637,18 @@ export function captureResourceVaultBackup(
             !store.isDestroyed(row.subject) &&
             !store.hasPendingDestroy(row.subject),
         )
-        .map(row => ({ ...row, confirmedAt: Date.now() }));
+        .map(row => ({ ...row, version: {}, confirmedAt: Date.now() }));
       if (!receipts.length) return;
       store.startScheduledSave();
 
       try {
         for (let offset = 0; offset < receipts.length; offset += 128) {
           if (!current() || ledger.attachmentEpoch !== attachmentEpoch) return;
-          const attachmentAccepted =
-            await context.db.putResourceVaultAttachmentReceipts(
-              context.scope,
-              receipts.slice(offset, offset + 128),
-              generation,
-            );
+          const attachmentAccepted = await context.db.putResourceReceipts(
+            { vault: context.scope },
+            receipts.slice(offset, offset + 128),
+            generation,
+          );
 
           if (!current() || ledger.attachmentEpoch !== attachmentEpoch) return;
 
@@ -668,7 +662,6 @@ export function captureResourceVaultBackup(
         for (const receipt of receipts)
           store.acknowledgeReceipt({
             destination: destination(context.scope.drive),
-            version: {},
             ...receipt,
           });
       } catch {
@@ -682,7 +675,7 @@ export function captureResourceVaultBackup(
         !proofAvailable ||
         !current() ||
         !context ||
-        !context.db.putResourceVaultReceipts
+        !context.db.putResourceReceipts
       )
         return;
       const generation = await context.ready;
@@ -711,8 +704,8 @@ export function captureResourceVaultBackup(
       store.startScheduledSave();
 
       try {
-        const persisted = await context.db.putResourceVaultReceipts(
-          context.scope,
+        const persisted = await context.db.putResourceReceipts(
+          { vault: context.scope },
           receipts,
           generation,
         );

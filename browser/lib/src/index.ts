@@ -96,9 +96,9 @@ export * from './forks.js';
 export * from './copy.js';
 export * from './store.js';
 export type {
+  ReceiptScope,
   ResourceSyncScope,
-  ResourceSyncEvidence,
-  ResourceVaultEvidence,
+  ResourceReceipts,
   SerializedReceipt,
   VaultSyncScope,
 } from './resource-receipts.js';
@@ -470,5 +470,4 @@ export type {
   ResourceAttachmentEvidenceProvider,
   ResourcePeerEvidence,
   ResourcePeerEvidenceProvider,
-  SerializedVaultAttachmentReceipt,
 } from './resource-receipts.js';

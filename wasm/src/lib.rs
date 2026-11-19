@@ -295,39 +295,40 @@ impl ClientDb {
         }
     }
 
-    /// Durable resource bytes and scoped acknowledgement metadata. No network IO.
-    #[wasm_bindgen(js_name = "getResourceSyncEvidence")]
-    pub fn get_resource_sync_evidence(
+    /// Durable resource bytes and the receipts a destination scope holds for
+    /// them, as `{ subject, snapshot, receipts }` rows. No network IO. Without
+    /// a scope only the snapshot is reported.
+    #[wasm_bindgen(js_name = "getResourceReceipts")]
+    pub fn get_resource_receipts(
         &self,
         subjects: &str,
         scope: Option<String>,
     ) -> Result<JsValue, JsError> {
         let subjects: Vec<String> = serde_json::from_str(subjects)?;
-        let scope = scope
-            .map(|value| {
-                serde_json::from_str::<atomic_lib::db::sync_receipts::ResourceSyncScope>(&value)
-            })
+        let scope: Option<atomic_lib::db::sync_receipts::ReceiptScope> = scope
+            .map(|value| serde_json::from_str(&value))
             .transpose()?;
-        let rows = self
-            .db()
-            .get_resource_sync_evidence(&subjects, scope.as_ref())?;
+        let rows = self.db().get_resource_receipts(&subjects, scope.as_ref())?;
         let array = js_sys::Array::new();
         for evidence in rows {
             let row = js_sys::Object::new();
-            js_sys::Reflect::set(&row, &"subject".into(), &evidence.subject.into())
-                .map_err(|_| JsError::new("could not build evidence"))?;
-            let snapshot = evidence
-                .snapshot
-                .map(|bytes| js_sys::Uint8Array::from(bytes.as_slice()).into())
-                .unwrap_or(JsValue::NULL);
-            js_sys::Reflect::set(&row, &"snapshot".into(), &snapshot)
-                .map_err(|_| JsError::new("could not build evidence"))?;
-            if let Some(receipt) = evidence.server_receipt {
-                let receipt = js_sys::JSON::parse(&serde_json::to_string(&receipt)?)
-                    .map_err(|_| JsError::new("could not encode receipt"))?;
-                js_sys::Reflect::set(&row, &"serverReceipt".into(), &receipt)
-                    .map_err(|_| JsError::new("could not build evidence"))?;
-            }
+            let set = |key: &str, value: JsValue| {
+                js_sys::Reflect::set(&row, &key.into(), &value)
+                    .map_err(|_| JsError::new("could not build evidence"))
+            };
+            set("subject", evidence.subject.into())?;
+            set(
+                "snapshot",
+                evidence
+                    .snapshot
+                    .map(|bytes| js_sys::Uint8Array::from(bytes.as_slice()).into())
+                    .unwrap_or(JsValue::NULL),
+            )?;
+            set(
+                "receipts",
+                js_sys::JSON::parse(&serde_json::to_string(&evidence.receipts)?)
+                    .map_err(|_| JsError::new("could not encode receipt"))?,
+            )?;
             array.push(&row);
         }
         Ok(array.into())
@@ -350,83 +351,32 @@ impl ClientDb {
         js_sys::JSON::parse(&serde_json::to_string(&rows)?)
             .map_err(|_| JsError::new("Could not encode attachment evidence"))
     }
-    #[wasm_bindgen(js_name = "getResourceVaultAttachmentReceipts")]
-    pub fn get_resource_vault_attachment_receipts(
-        &self,
-        subjects: &str,
-        scope: &str,
-    ) -> Result<JsValue, JsError> {
-        let subjects: Vec<String> = serde_json::from_str(subjects)?;
-        let scope = serde_json::from_str(scope)?;
-        let rows = self
-            .db()
-            .get_resource_vault_attachment_receipts(&subjects, &scope)?;
-        js_sys::JSON::parse(&serde_json::to_string(&rows)?)
-            .map_err(|_| JsError::new("Could not encode attachment receipts"))
-    }
-    #[wasm_bindgen(js_name = "putResourceVaultAttachmentReceipts")]
-    pub fn put_resource_vault_attachment_receipts(
+
+    /// Merge receipts into a destination scope's store. A Vault scope also
+    /// needs the generation captured before the export; false means a clear
+    /// rotated it since, and nothing was written.
+    #[wasm_bindgen(js_name = "putResourceReceipts")]
+    pub fn put_resource_receipts(
         &self,
         scope: &str,
         receipts: &str,
-        generation: f64,
+        generation: Option<f64>,
     ) -> Result<bool, JsError> {
-        if !generation.is_finite()
-            || generation < 0.0
-            || generation.fract() != 0.0
-            || generation > 9_007_199_254_740_991.0
-        {
+        if generation.is_some_and(|generation| {
+            !generation.is_finite()
+                || generation < 0.0
+                || generation.fract() != 0.0
+                || generation > 9_007_199_254_740_991.0
+        }) {
             return Err(JsError::new("Invalid vault receipt generation"));
         }
-        let scope = serde_json::from_str(scope)?;
-        let receipts: Vec<atomic_lib::db::sync_receipts::SerializedVaultAttachmentReceipt> =
+        let scope: atomic_lib::db::sync_receipts::ReceiptScope = serde_json::from_str(scope)?;
+        let receipts: Vec<atomic_lib::db::sync_receipts::SerializedReceipt> =
             serde_json::from_str(receipts)?;
-        Ok(self.db().put_resource_vault_attachment_receipts(
-            &scope,
-            &receipts,
-            generation as u64,
-        )?)
-    }
 
-    #[wasm_bindgen(js_name = "putResourceSyncReceipts")]
-    pub fn put_resource_sync_receipts(&self, scope: &str, receipts: &str) -> Result<(), JsError> {
-        let scope = serde_json::from_str(scope)?;
-        let receipts: Vec<atomic_lib::db::sync_receipts::SerializedServerReceipt> =
-            serde_json::from_str(receipts)?;
-        self.db().put_resource_sync_receipts(&scope, &receipts)?;
-        Ok(())
-    }
-
-    /// Durable resource bytes and scoped acknowledgement metadata. No network IO.
-    #[wasm_bindgen(js_name = "getResourceVaultEvidence")]
-    pub fn get_resource_vault_evidence(
-        &self,
-        subjects: &str,
-        scope: &str,
-    ) -> Result<JsValue, JsError> {
-        let subjects: Vec<String> = serde_json::from_str(subjects)?;
-        let scope: atomic_lib::db::sync_receipts::VaultSyncScope = serde_json::from_str(scope)?;
-        let rows = self.db().get_resource_vault_evidence(&subjects, &scope)?;
-        let array = js_sys::Array::new();
-        for evidence in rows {
-            let row = js_sys::Object::new();
-            js_sys::Reflect::set(&row, &"subject".into(), &evidence.subject.into())
-                .map_err(|_| JsError::new("could not build evidence"))?;
-            let snapshot = evidence
-                .snapshot
-                .map(|bytes| js_sys::Uint8Array::from(bytes.as_slice()).into())
-                .unwrap_or(JsValue::NULL);
-            js_sys::Reflect::set(&row, &"snapshot".into(), &snapshot)
-                .map_err(|_| JsError::new("could not build evidence"))?;
-            if let Some(receipt) = evidence.vault_receipt {
-                let receipt = js_sys::JSON::parse(&serde_json::to_string(&receipt)?)
-                    .map_err(|_| JsError::new("could not encode receipt"))?;
-                js_sys::Reflect::set(&row, &"vaultReceipt".into(), &receipt)
-                    .map_err(|_| JsError::new("could not build evidence"))?;
-            }
-            array.push(&row);
-        }
-        Ok(array.into())
+        Ok(self
+            .db()
+            .put_resource_receipts(&scope, &receipts, generation.map(|g| g as u64))?)
     }
 
     #[wasm_bindgen(js_name = "getResourceVaultGeneration")]
@@ -440,28 +390,6 @@ impl ClientDb {
         let scope = serde_json::from_str(scope)?;
         self.db().clear_resource_vault_receipts(&scope)?;
         Ok(())
-    }
-
-    #[wasm_bindgen(js_name = "putResourceVaultReceipts")]
-    pub fn put_resource_vault_receipts(
-        &self,
-        scope: &str,
-        receipts: &str,
-        generation: f64,
-    ) -> Result<bool, JsError> {
-        if !generation.is_finite()
-            || generation < 0.0
-            || generation.fract() != 0.0
-            || generation > 9_007_199_254_740_991.0
-        {
-            return Err(JsError::new("Invalid vault receipt generation"));
-        }
-        let scope = serde_json::from_str(scope)?;
-        let receipts: Vec<atomic_lib::db::sync_receipts::SerializedVaultReceipt> =
-            serde_json::from_str(receipts)?;
-        Ok(self
-            .db()
-            .put_resource_vault_receipts(&scope, &receipts, generation as u64)?)
     }
 
     /// A resource's stored row as JSON-AD plus its Loro snapshot, as

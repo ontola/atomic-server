@@ -6368,7 +6368,7 @@ export class Store {
     const subject = this.normalizeSubject(subjectRaw);
     if (
       !db ||
-      typeof db.getResourceSyncEvidence !== 'function' ||
+      typeof db.getResourceReceipts !== 'function' ||
       this.resourceSyncReads.has(subject) ||
       this.isDestroyed(subject) ||
       this.hasPendingDestroy(subject)
@@ -6415,9 +6415,9 @@ export class Store {
       )
         return;
       if (!current()) return;
-      const rows = await batch.db.getResourceSyncEvidence(
+      const rows = await batch.db.getResourceReceipts(
         subjects,
-        batch.scope,
+        batch.scope && { server: batch.scope },
       );
       if (!current() || !rows) return;
       const bySubject = new Map(
@@ -6436,15 +6436,13 @@ export class Store {
         entry.restore({
           ...row,
           subject,
-          serverReceipt:
-            batch.scope &&
-            !this.isLocalOnlySubject(subject) &&
-            row.serverReceipt
-              ? {
-                  ...row.serverReceipt,
-                  subject: this.normalizeSubject(row.serverReceipt.subject),
-                }
-              : undefined,
+          receipts:
+            batch.scope && !this.isLocalOnlySubject(subject)
+              ? row.receipts.map(receipt => ({
+                  ...receipt,
+                  subject: this.normalizeSubject(receipt.subject),
+                }))
+              : [],
         });
       }
     } catch (error) {
@@ -6472,7 +6470,7 @@ export class Store {
       !db ||
       !scope ||
       !receipt ||
-      typeof db.putResourceSyncReceipts !== 'function' ||
+      typeof db.putResourceReceipts !== 'function' ||
       this.isLocalOnlySubject(subject) ||
       this.isDestroyed(subject) ||
       this.hasPendingDestroy(subject)
@@ -6508,7 +6506,7 @@ export class Store {
           !this.hasPendingDestroy(receipt.subject),
       );
       if (receipts.length)
-        await batch.db.putResourceSyncReceipts(batch.scope, receipts);
+        await batch.db.putResourceReceipts({ server: batch.scope }, receipts);
     } catch {
       // The remote acknowledgement remains valid in this session. A failed
       // diagnostic write only means recovery must stay unknown after reload.

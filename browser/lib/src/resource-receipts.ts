@@ -26,23 +26,27 @@ export interface ResourceSyncScope {
   serverUrl: string;
 }
 
-/** A destination's proof that it holds a resource at an exact version. */
+/** The destination a stored receipt is addressed to. */
+export type ReceiptScope =
+  | { server: ResourceSyncScope }
+  | { vault: VaultSyncScope };
+
+/** A destination's stored proof that it holds a resource at an exact version.
+ * With a `manifest` it proves the file contents (`version` is then empty),
+ * without one the resource's own document.
+ */
 export interface SerializedReceipt {
   subject: string;
   version: Record<string, number>;
+  manifest?: AttachmentManifest;
   confirmedAt: number;
 }
 
-export interface ResourceSyncEvidence {
+/** Stored bytes of one resource and the receipts a destination holds for them. */
+export interface ResourceReceipts {
   subject: string;
   snapshot: Uint8Array | null;
-  serverReceipt?: SerializedReceipt;
-}
-
-export interface ResourceVaultEvidence {
-  subject: string;
-  snapshot: Uint8Array | null;
-  vaultReceipt?: SerializedReceipt;
+  receipts: SerializedReceipt[];
 }
 
 export function normalizeResourceSyncScope(
@@ -97,9 +101,16 @@ export function parseSerializedReceipt(
     version[peer] = counter;
   }
 
+  const manifest =
+    row.manifest === undefined
+      ? undefined
+      : parseAttachmentManifest(row.manifest);
+  if (row.manifest !== undefined && !manifest) return undefined;
+
   return {
     subject: canonicalizeScheme(row.subject),
     version,
+    ...(manifest && { manifest }),
     confirmedAt: row.confirmedAt!,
   };
 }
@@ -143,11 +154,6 @@ export interface ResourceAttachmentEvidence {
   readonly manifest?: AttachmentManifest;
   readonly state: 'confirmed' | 'unknown';
   readonly confirmedAt?: number;
-}
-export interface SerializedVaultAttachmentReceipt {
-  readonly subject: string;
-  readonly manifest: AttachmentManifest;
-  readonly confirmedAt: number;
 }
 export interface ResourceAttachmentEvidenceProvider {
   getResourceAttachmentEvidence(
@@ -288,54 +294,55 @@ export function parseResourcePeerEvidence(
       return undefined;
     ids.add(connection.connectionId);
     const receipts: Receipt[] = [];
+    // One list of receipts; a row with a manifest proves file contents. Hosts
+    // from before the lists merged send those under `attachmentReceipts`.
+    const rows: unknown[] = [
+      ...connection.receipts,
+      ...(connection.attachmentReceipts ?? []),
+    ];
+    const seen = new Set<string>();
 
-    for (const [rows, contents] of [
-      [connection.receipts, false],
-      [connection.attachmentReceipts ?? [], true],
-    ] as const) {
-      const seen = new Set<string>();
-
-      for (const row of rows) {
-        const manifest = contents
-          ? parseAttachmentManifest(row?.manifest)
+    for (const row of rows) {
+      const contents = record(row) && row.manifest !== undefined;
+      const manifest = contents
+        ? parseAttachmentManifest(record(row) ? row.manifest : undefined)
+        : undefined;
+      const version =
+        record(row) &&
+        typeof row.version === 'string' &&
+        row.version.length <= 16384 &&
+        /^[A-Za-z0-9+/_-]+={0,2}$/.test(row.version)
+          ? decodeVersion(row.version)
           : undefined;
-        const version =
-          record(row) &&
-          typeof row.version === 'string' &&
-          row.version.length <= 16384 &&
-          /^[A-Za-z0-9+/_-]+={0,2}$/.test(row.version)
-            ? decodeVersion(row.version)
-            : undefined;
 
-        if (
-          !record(row) ||
-          !text(row.subject) ||
-          seen.has(row.subject) ||
-          !version ||
-          (contents && !manifest) ||
-          !Number.isSafeInteger(row.confirmedAt) ||
-          (row.confirmedAt as number) < 0 ||
-          !identity(row.source) ||
-          !identity(row.replica)
-        )
-          return undefined;
-        seen.add(row.subject);
-        receipts.push(
-          Object.freeze({
-            destination: `native:${connection.connectionId}`,
-            subject: row.subject,
-            version,
-            manifest,
-            confirmedAt: row.confirmedAt as number,
-            session: Object.freeze({
-              drive: connection.drive,
-              peerAgent: connection.peerAgent,
-              source: Object.freeze({ ...row.source }),
-              replica: Object.freeze({ ...row.replica }),
-            }),
+      if (
+        !record(row) ||
+        !text(row.subject) ||
+        seen.has(`${contents}:${row.subject}`) ||
+        !version ||
+        (contents && !manifest) ||
+        !Number.isSafeInteger(row.confirmedAt) ||
+        (row.confirmedAt as number) < 0 ||
+        !identity(row.source) ||
+        !identity(row.replica)
+      )
+        return undefined;
+      seen.add(`${contents}:${row.subject}`);
+      receipts.push(
+        Object.freeze({
+          destination: `native:${connection.connectionId}`,
+          subject: row.subject,
+          version,
+          manifest,
+          confirmedAt: row.confirmedAt as number,
+          session: Object.freeze({
+            drive: connection.drive,
+            peerAgent: connection.peerAgent,
+            source: Object.freeze({ ...row.source }),
+            replica: Object.freeze({ ...row.replica }),
           }),
-        );
-      }
+        }),
+      );
     }
 
     connections.push(

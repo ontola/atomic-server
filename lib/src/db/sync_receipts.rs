@@ -1,11 +1,15 @@
-//! Local evidence of server acknowledgements. Private metadata, never resources
-//! or vault export data. Scope is both signing identity and destination origin.
+//! Local evidence of destination acknowledgements (server or Cloud Vault),
+//! one store keyed by (destination scope, subject). Private metadata, never
+//! resources or vault export data. Scope is both signing identity and
+//! destination origin.
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
 use super::trees::{Method, Operation, Tree};
-use crate::{errors::AtomicResult, Db, Storelike, Subject};
+use crate::{
+    errors::AtomicResult, sync::attachment_manifest::AttachmentManifest, Db, Storelike, Subject,
+};
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
@@ -14,20 +18,6 @@ const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 pub struct ResourceSyncScope {
     pub agent: String,
     pub server_url: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SerializedServerReceipt {
-    pub subject: String,
-    pub version: BTreeMap<String, u64>,
-    pub confirmed_at: u64,
-}
-
-pub struct ResourceSyncEvidence {
-    pub subject: String,
-    pub snapshot: Option<Vec<u8>>,
-    pub server_receipt: Option<SerializedServerReceipt>,
 }
 
 /// Cloud Vault identity. Paths distinguish separately hosted API endpoints.
@@ -42,12 +32,88 @@ pub struct VaultSyncScope {
     pub key_epoch: u32,
 }
 
-pub type SerializedVaultReceipt = SerializedServerReceipt;
+/// The destination a receipt is addressed to.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReceiptScope {
+    Server(ResourceSyncScope),
+    Vault(VaultSyncScope),
+}
 
-pub struct ResourceVaultEvidence {
+/// One stored receipt. With a `manifest` it proves file contents, without one
+/// it proves the resource's own document.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SerializedReceipt {
+    pub subject: String,
+    #[serde(default)]
+    pub version: BTreeMap<String, u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<AttachmentManifest>,
+    pub confirmed_at: u64,
+}
+
+pub struct ResourceReceipts {
     pub subject: String,
     pub snapshot: Option<Vec<u8>>,
-    pub vault_receipt: Option<SerializedVaultReceipt>,
+    pub receipts: Vec<SerializedReceipt>,
+}
+
+impl SerializedReceipt {
+    fn valid(&self) -> bool {
+        !self.subject.is_empty()
+            && !self.subject.contains('\0')
+            && self.confirmed_at <= MAX_SAFE_INTEGER
+            && self.version.iter().all(|(peer, counter)| {
+                peer.parse::<u64>().is_ok_and(|id| id.to_string() == *peer)
+                    && *counter <= i32::MAX as u64
+            })
+            && self.manifest.as_ref().is_none_or(|m| m.validate())
+    }
+}
+
+impl ReceiptScope {
+    fn canonical(&self) -> AtomicResult<Self> {
+        Ok(match self {
+            Self::Server(scope) => {
+                let url = url::Url::parse(&scope.server_url)?;
+                if !matches!(url.scheme(), "http" | "https")
+                    || scope.agent.is_empty()
+                    || scope.agent.contains('\0')
+                {
+                    return Err("Invalid resource sync scope".into());
+                }
+                Self::Server(ResourceSyncScope {
+                    agent: Subject::from(scope.agent.as_str()).pure_id(),
+                    server_url: url.origin().ascii_serialization(),
+                })
+            }
+            Self::Vault(scope) => Self::Vault(scope.canonical()?),
+        })
+    }
+
+    /// Storage key of a subject's row. A server's document rows keep the
+    /// original `subject\0agent\0origin` layout and every other row a tagged
+    /// scope, so rows stored before the stores merged stay readable.
+    fn key(&self, subject: &str, contents: bool) -> Vec<u8> {
+        let mut key = subject_prefix(subject);
+        let (tag, json) = match (self, contents) {
+            (Self::Server(scope), false) => {
+                key.extend_from_slice(scope.agent.as_bytes());
+                key.push(0);
+                key.extend_from_slice(scope.server_url.as_bytes());
+                return key;
+            }
+            // A leading NUL cannot collide with the nonempty server-scope agent.
+            (Self::Server(scope), true) => ("server-attachments-v1", serde_json::to_vec(scope)),
+            (Self::Vault(scope), false) => ("vault-v1", serde_json::to_vec(scope)),
+            (Self::Vault(scope), true) => ("vault-attachments-v1", serde_json::to_vec(scope)),
+        };
+        key.extend_from_slice(format!("\0{tag}\0").as_bytes());
+        // Struct field order is fixed; the scope is canonical before serialization.
+        key.extend_from_slice(&json.expect("string scope serializes"));
+        key
+    }
 }
 
 impl VaultSyncScope {
@@ -80,76 +146,9 @@ impl VaultSyncScope {
     }
 }
 
-fn vault_key(subject: &str, scope: &VaultSyncScope) -> Vec<u8> {
-    let mut key = subject_prefix(subject);
-    // A leading NUL cannot collide with the nonempty server-scope agent.
-    key.extend_from_slice(b"\0vault-v1\0");
-    // Struct field order is fixed; the scope is canonical before serialization.
-    key.extend_from_slice(&serde_json::to_vec(scope).expect("string scope serializes"));
-    key
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SerializedVaultAttachmentReceipt {
-    pub subject: String,
-    pub manifest: crate::sync::attachment_manifest::AttachmentManifest,
-    pub confirmed_at: u64,
-}
-impl SerializedVaultAttachmentReceipt {
-    fn valid(&self) -> bool {
-        !self.subject.is_empty()
-            && !self.subject.contains('\0')
-            && self.confirmed_at <= MAX_SAFE_INTEGER
-            && self.manifest.validate()
-    }
-}
-fn vault_attachment_key(subject: &str, scope: &VaultSyncScope) -> Vec<u8> {
-    let mut key = subject_prefix(subject);
-    key.extend_from_slice(b"\0vault-attachments-v1\0");
-    key.extend_from_slice(&serde_json::to_vec(scope).expect("string scope serializes"));
-    key
-}
-
-impl ResourceSyncScope {
-    fn canonical(&self) -> AtomicResult<Self> {
-        let url = url::Url::parse(&self.server_url)?;
-        if !matches!(url.scheme(), "http" | "https")
-            || self.agent.is_empty()
-            || self.agent.contains('\0')
-        {
-            return Err("Invalid resource sync scope".into());
-        }
-        Ok(Self {
-            agent: Subject::from(self.agent.as_str()).pure_id(),
-            server_url: url.origin().ascii_serialization(),
-        })
-    }
-}
-
-impl SerializedServerReceipt {
-    fn valid(&self) -> bool {
-        !self.subject.is_empty()
-            && !self.subject.contains('\0')
-            && self.confirmed_at <= MAX_SAFE_INTEGER
-            && self.version.iter().all(|(peer, counter)| {
-                peer.parse::<u64>().is_ok_and(|id| id.to_string() == *peer)
-                    && *counter <= i32::MAX as u64
-            })
-    }
-}
-
 fn subject_prefix(subject: &str) -> Vec<u8> {
     let mut key = subject.as_bytes().to_vec();
     key.push(0);
-    key
-}
-
-fn key(subject: &str, scope: &ResourceSyncScope) -> Vec<u8> {
-    let mut key = subject_prefix(subject);
-    key.extend_from_slice(scope.agent.as_bytes());
-    key.push(0);
-    key.extend_from_slice(scope.server_url.as_bytes());
     key
 }
 
@@ -191,67 +190,96 @@ pub(super) fn remove_ops(db: &Db, subject: &str) -> AtomicResult<Vec<Operation>>
 }
 
 impl Db {
-    pub fn get_resource_vault_attachment_receipts(
-        &self,
-        subjects: &[String],
-        scope: &VaultSyncScope,
-    ) -> AtomicResult<Vec<SerializedVaultAttachmentReceipt>> {
-        if subjects.len() > 128 {
-            return Err("Too many attachment receipt subjects".into());
-        }
-        let scope = scope.canonical()?;
-        let _guard = self
+    fn receipt_gate(&self) -> AtomicResult<std::sync::MutexGuard<'_, ()>> {
+        Ok(self
             .sync_receipts_gate
             .lock()
-            .map_err(|_| "sync receipt lock poisoned")?;
-        let mut result = Vec::new();
-        for requested in subjects {
-            let subject = self
+            .map_err(|_| "sync receipt lock poisoned")?)
+    }
+
+    fn stored_receipt(&self, key: &[u8], subject: &str) -> AtomicResult<Option<SerializedReceipt>> {
+        Ok(self
+            .kv
+            .get(Tree::SyncReceipts, key)?
+            .and_then(|bytes| serde_json::from_slice::<SerializedReceipt>(&bytes).ok())
+            .filter(|row| row.valid() && row.subject == subject))
+    }
+
+    /// Reads actual stored bytes, then crosses the durability barrier before
+    /// exposing them as evidence. A normal cached resource read is no proof.
+    /// Without a scope only the stored snapshot is reported.
+    pub fn get_resource_receipts(
+        &self,
+        subjects: &[String],
+        scope: Option<&ReceiptScope>,
+    ) -> AtomicResult<Vec<ResourceReceipts>> {
+        let scope = scope.map(ReceiptScope::canonical).transpose()?;
+        let _guard = self.receipt_gate()?;
+        let mut evidence = Vec::with_capacity(subjects.len());
+        for subject in subjects {
+            let canonical = self
                 .normalize_subject(&Subject::from_raw(
-                    requested,
+                    subject,
                     self.get_base_domain().as_deref(),
                 ))
                 .pure_id();
-            if !self.kv.contains_key(Tree::Resources, subject.as_bytes())?
-                || !self
-                    .kv
-                    .contains_key(Tree::LoroSnapshots, subject.as_bytes())?
-            {
-                continue;
-            }
-            if let Some(mut receipt) = self
+            let snapshot = if self
                 .kv
-                .get(Tree::SyncReceipts, &vault_attachment_key(&subject, &scope))?
-                .and_then(|bytes| {
-                    serde_json::from_slice::<SerializedVaultAttachmentReceipt>(&bytes).ok()
-                })
-                .filter(|row| row.valid() && row.subject == subject)
+                .contains_key(Tree::Resources, canonical.as_bytes())?
             {
-                receipt.subject = requested.clone();
-                result.push(receipt);
+                self.kv.get(Tree::LoroSnapshots, canonical.as_bytes())?
+            } else {
+                None
+            };
+            let mut receipts = Vec::new();
+            if let (Some(scope), Some(_)) = (&scope, &snapshot) {
+                for contents in [false, true] {
+                    // Internal storage IDs (e.g. internal:/item) are not public IDs.
+                    // Return the requested spelling for correlation, only after
+                    // checking the receipt against its canonical storage key.
+                    receipts.extend(
+                        self.stored_receipt(&scope.key(&canonical, contents), &canonical)?
+                            .filter(|row| row.manifest.is_some() == contents)
+                            .map(|row| SerializedReceipt {
+                                subject: subject.clone(),
+                                ..row
+                            }),
+                    );
+                }
             }
+            evidence.push(ResourceReceipts {
+                subject: subject.clone(),
+                snapshot,
+                receipts,
+            });
         }
         self.flush()?;
-        Ok(result)
+        Ok(evidence)
     }
-    pub fn put_resource_vault_attachment_receipts(
+
+    /// Merge acknowledgements while exclusively owning the database receipt
+    /// gate. Browser tabs route through the one elected Db owner; Db clones
+    /// share this gate. Concurrent smaller vectors can never erase coverage.
+    /// A Vault write carries the generation captured before its export and
+    /// returns false when a clear has rotated it since.
+    pub fn put_resource_receipts(
         &self,
-        scope: &VaultSyncScope,
-        receipts: &[SerializedVaultAttachmentReceipt],
-        generation: u64,
+        scope: &ReceiptScope,
+        receipts: &[SerializedReceipt],
+        generation: Option<u64>,
     ) -> AtomicResult<bool> {
         let scope = scope.canonical()?;
-        if receipts.len() > 128 || receipts.iter().any(|row| !row.valid()) {
-            return Err("Invalid vault attachment receipts".into());
+        if receipts.iter().any(|row| !row.valid()) {
+            return Err("Invalid resource sync receipt".into());
         }
-        let _guard = self
-            .sync_receipts_gate
-            .lock()
-            .map_err(|_| "sync receipt lock poisoned")?;
-        if generation > MAX_SAFE_INTEGER || generation != vault_generation(self, &scope)? {
-            return Ok(false);
+        let _guard = self.receipt_gate()?;
+        if let ReceiptScope::Vault(vault) = &scope {
+            let generation = generation.ok_or("Vault receipts need a generation")?;
+            if generation > MAX_SAFE_INTEGER || generation != vault_generation(self, vault)? {
+                return Ok(false);
+            }
         }
-        let mut ops = Vec::new();
+        let mut merged = BTreeMap::<Vec<u8>, SerializedReceipt>::new();
         for receipt in receipts {
             let subject = self
                 .normalize_subject(&Subject::from_raw(
@@ -259,6 +287,7 @@ impl Db {
                     self.get_base_domain().as_deref(),
                 ))
                 .pure_id();
+            // A delayed server response must not resurrect evidence after delete.
             if !self.kv.contains_key(Tree::Resources, subject.as_bytes())?
                 || !self
                     .kv
@@ -266,26 +295,40 @@ impl Db {
             {
                 continue;
             }
-            let key = vault_attachment_key(&subject, &scope);
-            if self
-                .kv
-                .get(Tree::SyncReceipts, &key)?
-                .and_then(|bytes| {
-                    serde_json::from_slice::<SerializedVaultAttachmentReceipt>(&bytes).ok()
-                })
-                .is_some_and(|old| old.valid() && old.confirmed_at > receipt.confirmed_at)
-            {
-                continue;
+            let key = scope.key(&subject, receipt.manifest.is_some());
+            let mut incoming = receipt.clone();
+            incoming.subject = subject.clone();
+            let previous = match merged.remove(&key) {
+                Some(row) => Some(row),
+                None => self.stored_receipt(&key, &subject)?,
+            };
+            if let Some(previous) = previous {
+                if incoming.manifest.is_some() {
+                    // Contents proof is replaced, never merged, unless older.
+                    if previous.confirmed_at > incoming.confirmed_at {
+                        incoming = previous;
+                    }
+                } else {
+                    incoming.confirmed_at = incoming.confirmed_at.max(previous.confirmed_at);
+                    for (peer, counter) in previous.version {
+                        let current = incoming.version.entry(peer).or_default();
+                        *current = (*current).max(counter);
+                    }
+                }
             }
-            let mut receipt = receipt.clone();
-            receipt.subject = subject;
-            ops.push(Operation {
-                tree: Tree::SyncReceipts,
-                method: Method::Insert,
-                key,
-                val: Some(serde_json::to_vec(&receipt)?),
-            });
+            merged.insert(key, incoming);
         }
+        let ops = merged
+            .into_iter()
+            .map(|(key, receipt)| {
+                Ok(Operation {
+                    tree: Tree::SyncReceipts,
+                    method: Method::Insert,
+                    key,
+                    val: Some(serde_json::to_vec(&receipt)?),
+                })
+            })
+            .collect::<AtomicResult<Vec<_>>>()?;
         self.kv.apply_batch(&ops)?;
         self.flush()?;
         Ok(true)
@@ -295,10 +338,7 @@ impl Db {
     /// rotate it so delayed writes from another tab cannot resurrect proof.
     pub fn get_resource_vault_generation(&self, scope: &VaultSyncScope) -> AtomicResult<u64> {
         let scope = scope.canonical()?;
-        let _guard = self
-            .sync_receipts_gate
-            .lock()
-            .map_err(|_| "sync receipt lock poisoned")?;
+        let _guard = self.receipt_gate()?;
         let generation = vault_generation(self, &scope)?;
         self.flush()?;
         Ok(generation)
@@ -308,15 +348,13 @@ impl Db {
     /// portals, drives and key epochs retain their independent evidence.
     pub fn clear_resource_vault_receipts(&self, scope: &VaultSyncScope) -> AtomicResult<()> {
         let scope = scope.canonical()?;
-        let suffix = vault_key("", &scope);
-        let _guard = self
-            .sync_receipts_gate
-            .lock()
-            .map_err(|_| "sync receipt lock poisoned")?;
+        let destination = ReceiptScope::Vault(scope.clone());
+        let suffixes = [destination.key("", false), destination.key("", true)];
+        let _guard = self.receipt_gate()?;
         let mut ops = Vec::new();
         for row in self.kv.iter_tree(Tree::SyncReceipts) {
             let (key, _) = row?;
-            if key.ends_with(&suffix) || key.ends_with(&vault_attachment_key("", &scope)) {
+            if suffixes.iter().any(|suffix| key.ends_with(suffix)) {
                 ops.push(Operation {
                     tree: Tree::SyncReceipts,
                     method: Method::Delete,
@@ -338,310 +376,12 @@ impl Db {
         self.kv.apply_batch(&ops)?;
         self.flush()
     }
-
-    /// Reads actual stored bytes, then crosses the durability barrier before
-    /// exposing them as evidence. A normal cached resource read is no proof.
-    pub fn get_resource_sync_evidence(
-        &self,
-        subjects: &[String],
-        scope: Option<&ResourceSyncScope>,
-    ) -> AtomicResult<Vec<ResourceSyncEvidence>> {
-        let scope = scope.map(ResourceSyncScope::canonical).transpose()?;
-        let _guard = self
-            .sync_receipts_gate
-            .lock()
-            .map_err(|_| "sync receipt lock poisoned")?;
-        let mut evidence = Vec::with_capacity(subjects.len());
-        for subject in subjects {
-            let canonical = self
-                .normalize_subject(&Subject::from_raw(
-                    subject,
-                    self.get_base_domain().as_deref(),
-                ))
-                .pure_id();
-            let snapshot = if self
-                .kv
-                .contains_key(Tree::Resources, canonical.as_bytes())?
-            {
-                self.kv.get(Tree::LoroSnapshots, canonical.as_bytes())?
-            } else {
-                None
-            };
-            let server_receipt = if snapshot.is_some() {
-                if let Some(scope) = &scope {
-                    self.kv
-                        .get(Tree::SyncReceipts, &key(&canonical, scope))?
-                        .and_then(|bytes| {
-                            serde_json::from_slice::<SerializedServerReceipt>(&bytes).ok()
-                        })
-                        .filter(|row| row.valid() && row.subject == canonical)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-            // Internal storage IDs (e.g. internal:/item) are not public IDs.
-            // Return the requested spelling for correlation, only after checking
-            // the receipt against its canonical storage key above.
-            let server_receipt = server_receipt.map(|mut row| {
-                row.subject = subject.clone();
-                row
-            });
-            evidence.push(ResourceSyncEvidence {
-                subject: subject.clone(),
-                snapshot,
-                server_receipt,
-            });
-        }
-        self.flush()?;
-        Ok(evidence)
-    }
-
-    /// Merge acknowledgements while exclusively owning the database receipt
-    /// gate. Browser tabs route through the one elected Db owner; Db clones
-    /// share this gate. Concurrent smaller vectors can never erase coverage.
-    pub fn put_resource_sync_receipts(
-        &self,
-        scope: &ResourceSyncScope,
-        receipts: &[SerializedServerReceipt],
-    ) -> AtomicResult<()> {
-        let scope = scope.canonical()?;
-        if receipts.iter().any(|row| !row.valid()) {
-            return Err("Invalid resource sync receipt".into());
-        }
-        let _guard = self
-            .sync_receipts_gate
-            .lock()
-            .map_err(|_| "sync receipt lock poisoned")?;
-        let mut merged = BTreeMap::<Vec<u8>, SerializedServerReceipt>::new();
-        for receipt in receipts {
-            let subject = self
-                .normalize_subject(&Subject::from_raw(
-                    &receipt.subject,
-                    self.get_base_domain().as_deref(),
-                ))
-                .pure_id();
-            // A delayed server response must not resurrect evidence after delete.
-            if !self.kv.contains_key(Tree::Resources, subject.as_bytes())?
-                || !self
-                    .kv
-                    .contains_key(Tree::LoroSnapshots, subject.as_bytes())?
-            {
-                continue;
-            }
-            let key = key(&subject, &scope);
-            let mut incoming = receipt.clone();
-            incoming.subject = subject.clone();
-            let previous = merged.remove(&key).or(self
-                .kv
-                .get(Tree::SyncReceipts, &key)?
-                .and_then(|bytes| serde_json::from_slice::<SerializedServerReceipt>(&bytes).ok())
-                .filter(|row| row.valid() && row.subject == subject));
-            if let Some(previous) = previous {
-                incoming.confirmed_at = incoming.confirmed_at.max(previous.confirmed_at);
-                for (peer, counter) in previous.version {
-                    let current = incoming.version.entry(peer).or_default();
-                    *current = (*current).max(counter);
-                }
-            }
-            merged.insert(key, incoming);
-        }
-        let ops = merged
-            .into_iter()
-            .map(|(key, receipt)| {
-                Ok(Operation {
-                    tree: Tree::SyncReceipts,
-                    method: Method::Insert,
-                    key,
-                    val: Some(serde_json::to_vec(&receipt)?),
-                })
-            })
-            .collect::<AtomicResult<Vec<_>>>()?;
-        self.kv.apply_batch(&ops)?;
-        self.flush()
-    }
-    /// Reads actual stored bytes, then crosses the durability barrier before
-    /// exposing them as evidence. A normal cached resource read is no proof.
-    pub fn get_resource_vault_evidence(
-        &self,
-        subjects: &[String],
-        scope: &VaultSyncScope,
-    ) -> AtomicResult<Vec<ResourceVaultEvidence>> {
-        let scope = scope.canonical()?;
-        let _guard = self
-            .sync_receipts_gate
-            .lock()
-            .map_err(|_| "sync receipt lock poisoned")?;
-        let mut evidence = Vec::with_capacity(subjects.len());
-        for subject in subjects {
-            let canonical = self
-                .normalize_subject(&Subject::from_raw(
-                    subject,
-                    self.get_base_domain().as_deref(),
-                ))
-                .pure_id();
-            let snapshot = if self
-                .kv
-                .contains_key(Tree::Resources, canonical.as_bytes())?
-            {
-                self.kv.get(Tree::LoroSnapshots, canonical.as_bytes())?
-            } else {
-                None
-            };
-            let vault_receipt = if snapshot.is_some() {
-                self.kv
-                    .get(Tree::SyncReceipts, &vault_key(&canonical, &scope))?
-                    .and_then(|bytes| serde_json::from_slice::<SerializedVaultReceipt>(&bytes).ok())
-                    .filter(|row| row.valid() && row.subject == canonical)
-            } else {
-                None
-            };
-            // Internal storage IDs (e.g. internal:/item) are not public IDs.
-            // Return the requested spelling for correlation, only after checking
-            // the receipt against its canonical storage key above.
-            let vault_receipt = vault_receipt.map(|mut row| {
-                row.subject = subject.clone();
-                row
-            });
-            evidence.push(ResourceVaultEvidence {
-                subject: subject.clone(),
-                snapshot,
-                vault_receipt,
-            });
-        }
-        self.flush()?;
-        Ok(evidence)
-    }
-
-    /// Merge acknowledgements while exclusively owning the database receipt
-    /// gate. Browser tabs route through the one elected Db owner; Db clones
-    /// share this gate. Concurrent smaller vectors can never erase coverage.
-    pub fn put_resource_vault_receipts(
-        &self,
-        scope: &VaultSyncScope,
-        receipts: &[SerializedVaultReceipt],
-        generation: u64,
-    ) -> AtomicResult<bool> {
-        let scope = scope.canonical()?;
-        if receipts.iter().any(|row| !row.valid()) {
-            return Err("Invalid resource sync receipt".into());
-        }
-        let _guard = self
-            .sync_receipts_gate
-            .lock()
-            .map_err(|_| "sync receipt lock poisoned")?;
-        if generation > MAX_SAFE_INTEGER || generation != vault_generation(self, &scope)? {
-            return Ok(false);
-        }
-        let mut merged = BTreeMap::<Vec<u8>, SerializedVaultReceipt>::new();
-        for receipt in receipts {
-            let subject = self
-                .normalize_subject(&Subject::from_raw(
-                    &receipt.subject,
-                    self.get_base_domain().as_deref(),
-                ))
-                .pure_id();
-            // A delayed server response must not resurrect evidence after delete.
-            if !self.kv.contains_key(Tree::Resources, subject.as_bytes())?
-                || !self
-                    .kv
-                    .contains_key(Tree::LoroSnapshots, subject.as_bytes())?
-            {
-                continue;
-            }
-            let key = vault_key(&subject, &scope);
-            let mut incoming = receipt.clone();
-            incoming.subject = subject.clone();
-            let previous = merged.remove(&key).or(self
-                .kv
-                .get(Tree::SyncReceipts, &key)?
-                .and_then(|bytes| serde_json::from_slice::<SerializedVaultReceipt>(&bytes).ok())
-                .filter(|row| row.valid() && row.subject == subject));
-            if let Some(previous) = previous {
-                incoming.confirmed_at = incoming.confirmed_at.max(previous.confirmed_at);
-                for (peer, counter) in previous.version {
-                    let current = incoming.version.entry(peer).or_default();
-                    *current = (*current).max(counter);
-                }
-            }
-            merged.insert(key, incoming);
-        }
-        let ops = merged
-            .into_iter()
-            .map(|(key, receipt)| {
-                Ok(Operation {
-                    tree: Tree::SyncReceipts,
-                    method: Method::Insert,
-                    key,
-                    val: Some(serde_json::to_vec(&receipt)?),
-                })
-            })
-            .collect::<AtomicResult<Vec<_>>>()?;
-        self.kv.apply_batch(&ops)?;
-        self.flush()?;
-        Ok(true)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Arc;
-
-    #[test]
-    fn vault_attachment_receipts_scope_generation_and_delete() {
-        let db = store();
-        let scope = vault_scope();
-        seed(&db, "atomic:resource");
-        let receipt = SerializedVaultAttachmentReceipt {
-            subject: "atomic:resource".into(),
-            manifest: crate::sync::attachment_manifest::AttachmentManifest {
-                files: vec![crate::sync::attachment_manifest::AttachmentFile {
-                    subject: "atomic:file".into(),
-                    hash: "a".repeat(64),
-                    chunks: vec![],
-                }],
-            },
-            confirmed_at: 42,
-        };
-        assert!(db
-            .put_resource_vault_attachment_receipts(&scope, std::slice::from_ref(&receipt), 0)
-            .unwrap());
-        assert_eq!(
-            db.get_resource_vault_attachment_receipts(
-                std::slice::from_ref(&receipt.subject),
-                &scope
-            )
-            .unwrap()
-            .len(),
-            1
-        );
-        let mut other = scope.clone();
-        other.key_epoch += 1;
-        assert!(db
-            .get_resource_vault_attachment_receipts(std::slice::from_ref(&receipt.subject), &other)
-            .unwrap()
-            .is_empty());
-        db.clear_resource_vault_receipts(&scope).unwrap();
-        assert!(!db
-            .put_resource_vault_attachment_receipts(&scope, std::slice::from_ref(&receipt), 0)
-            .unwrap());
-        assert!(db
-            .get_resource_vault_attachment_receipts(std::slice::from_ref(&receipt.subject), &scope)
-            .unwrap()
-            .is_empty());
-        assert!(db
-            .put_resource_vault_attachment_receipts(&scope, std::slice::from_ref(&receipt), 1)
-            .unwrap());
-        db.kv
-            .apply_batch(&remove_ops(&db, &receipt.subject).unwrap())
-            .unwrap();
-        assert!(db
-            .get_resource_vault_attachment_receipts(&[receipt.subject], &scope)
-            .unwrap()
-            .is_empty());
-    }
 
     fn store() -> Db {
         Db::from_kv(
@@ -650,11 +390,37 @@ mod tests {
             None,
         )
     }
+    fn open_file(path: &std::path::Path, url: Option<&str>) -> Db {
+        Db::from_kv(
+            Default::default(),
+            Arc::new(super::super::redb_store::RedbStore::new_file(path).unwrap()),
+            url.map(Into::into),
+        )
+    }
+    fn temp(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("atomic-{name}-{}.redb", ulid::Ulid::new()))
+    }
     fn scope() -> ResourceSyncScope {
         ResourceSyncScope {
             agent: "did:ad:alice".into(),
             server_url: "https://example.com/path".into(),
         }
+    }
+    fn server() -> ReceiptScope {
+        ReceiptScope::Server(scope())
+    }
+    fn vault_scope() -> VaultSyncScope {
+        VaultSyncScope {
+            managed_account: "alice@example.test".into(),
+            agent: "atomic:alice".into(),
+            portal_url: "https://portal.example/api/".into(),
+            drive: "did:ad:drive".into(),
+            drive_pseudonym: "pseudonym".into(),
+            key_epoch: 1,
+        }
+    }
+    fn vault(scope: &VaultSyncScope) -> ReceiptScope {
+        ReceiptScope::Vault(scope.clone())
     }
     fn seed(db: &Db, subject: &str) {
         db.kv
@@ -668,23 +434,110 @@ mod tests {
             )
             .unwrap();
     }
-    fn receipt(peer: &str, counter: u64, time: u64) -> SerializedServerReceipt {
-        SerializedServerReceipt {
+    fn receipt(peer: &str, counter: u64, time: u64) -> SerializedReceipt {
+        SerializedReceipt {
             subject: "did:ad:resource".into(),
             version: BTreeMap::from([(peer.into(), counter)]),
+            manifest: None,
             confirmed_at: time,
         }
     }
-
-    fn vault_scope() -> VaultSyncScope {
-        VaultSyncScope {
-            managed_account: "alice@example.test".into(),
-            agent: "atomic:alice".into(),
-            portal_url: "https://portal.example/api/".into(),
-            drive: "did:ad:drive".into(),
-            drive_pseudonym: "pseudonym".into(),
-            key_epoch: 1,
+    fn contents(time: u64) -> SerializedReceipt {
+        SerializedReceipt {
+            subject: "atomic:resource".into(),
+            version: BTreeMap::new(),
+            manifest: Some(AttachmentManifest {
+                files: vec![crate::sync::attachment_manifest::AttachmentFile {
+                    subject: "atomic:file".into(),
+                    hash: "a".repeat(64),
+                    chunks: vec![],
+                }],
+            }),
+            confirmed_at: time,
         }
+    }
+    fn put(db: &Db, scope: &ReceiptScope, rows: &[SerializedReceipt], generation: u64) -> bool {
+        let generation = matches!(scope, ReceiptScope::Vault(_)).then_some(generation);
+        db.put_resource_receipts(scope, rows, generation).unwrap()
+    }
+    fn read(db: &Db, subject: &str, scope: &ReceiptScope) -> ResourceReceipts {
+        db.get_resource_receipts(&[subject.into()], Some(scope))
+            .unwrap()
+            .remove(0)
+    }
+    /// Every receipt kind the destination holds for the seeded resource.
+    fn held(db: &Db, scope: &ReceiptScope) -> Vec<SerializedReceipt> {
+        read(db, "atomic:resource", scope).receipts
+    }
+
+    #[test]
+    fn contents_receipts_scope_generation_and_delete() {
+        let db = store();
+        let scope = vault_scope();
+        seed(&db, "atomic:resource");
+        let proof = contents(42);
+        assert!(put(&db, &vault(&scope), std::slice::from_ref(&proof), 0));
+        // A contents receipt is stored next to, not over, the document one.
+        assert!(put(&db, &vault(&scope), &[receipt("1", 7, 10)], 0));
+        assert_eq!(held(&db, &vault(&scope)).len(), 2);
+        let mut other = scope.clone();
+        other.key_epoch += 1;
+        assert!(held(&db, &vault(&other)).is_empty());
+        // Older contents proof never replaces newer.
+        assert!(put(&db, &vault(&scope), &[contents(7)], 0));
+        let stored: Vec<_> = held(&db, &vault(&scope))
+            .into_iter()
+            .filter(|row| row.manifest.is_some())
+            .collect();
+        assert_eq!(stored[0].confirmed_at, 42);
+        db.clear_resource_vault_receipts(&scope).unwrap();
+        assert!(!put(&db, &vault(&scope), std::slice::from_ref(&proof), 0));
+        assert!(held(&db, &vault(&scope)).is_empty());
+        assert!(put(&db, &vault(&scope), std::slice::from_ref(&proof), 1));
+        db.kv
+            .apply_batch(&remove_ops(&db, "atomic:resource").unwrap())
+            .unwrap();
+        assert!(held(&db, &vault(&scope)).is_empty());
+    }
+
+    #[test]
+    fn rows_stored_before_the_stores_merged_stay_readable() {
+        let db = store();
+        seed(&db, "atomic:resource");
+        let scope = vault_scope();
+        let canonical = vault(&scope).canonical().unwrap();
+        let ReceiptScope::Vault(canonical_vault) = &canonical else {
+            unreachable!()
+        };
+        let json = serde_json::to_vec(canonical_vault).unwrap();
+        // The three layouts the separate stores wrote, byte for byte.
+        let server_key = b"atomic:resource\0atomic:alice\0https://example.com".to_vec();
+        assert_eq!(
+            server_key,
+            server().canonical().unwrap().key("atomic:resource", false)
+        );
+        let mut vault_key = b"atomic:resource\0\0vault-v1\0".to_vec();
+        let mut files_key = b"atomic:resource\0\0vault-attachments-v1\0".to_vec();
+        vault_key.extend_from_slice(&json);
+        files_key.extend_from_slice(&json);
+        let doc = br#"{"subject":"atomic:resource","version":{"1":7},"confirmedAt":10}"#;
+        let files = format!(
+            r#"{{"subject":"atomic:resource","manifest":{},"confirmedAt":11}}"#,
+            serde_json::to_string(&contents(0).manifest).unwrap()
+        );
+        for (key, value) in [
+            (&server_key, doc.as_slice()),
+            (&vault_key, doc.as_slice()),
+            (&files_key, files.as_bytes()),
+        ] {
+            db.kv.insert(Tree::SyncReceipts, key, value).unwrap();
+        }
+        assert_eq!(held(&db, &server())[0].version["1"], 7);
+        let rows = held(&db, &vault(&scope));
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].version["1"], 7);
+        assert_eq!(rows[1].confirmed_at, 11);
+        assert!(rows[1].manifest.is_some());
     }
 
     #[test]
@@ -692,24 +545,21 @@ mod tests {
         let db = store();
         seed(&db, "atomic:resource");
         let scope = vault_scope();
-        db.put_resource_vault_receipts(&scope, &[receipt("1", 7, 10)], 0)
-            .unwrap();
-        db.put_resource_vault_receipts(&scope, &[receipt("1", 2, 8), receipt("2", 4, 12)], 0)
-            .unwrap();
-        let subjects = vec!["atomic:resource".into()];
-        let evidence = db.get_resource_vault_evidence(&subjects, &scope).unwrap();
+        put(&db, &vault(&scope), &[receipt("1", 7, 10)], 0);
+        put(
+            &db,
+            &vault(&scope),
+            &[receipt("1", 2, 8), receipt("2", 4, 12)],
+            0,
+        );
         assert_eq!(
-            evidence[0].vault_receipt.as_ref().unwrap().version,
+            held(&db, &vault(&scope))[0].version,
             BTreeMap::from([("1".into(), 7), ("2".into(), 4)])
         );
         let mut normalized = scope.clone();
         normalized.portal_url.pop();
         normalized.drive = "atomic:drive".into();
-        assert!(db
-            .get_resource_vault_evidence(&subjects, &normalized)
-            .unwrap()[0]
-            .vault_receipt
-            .is_some());
+        assert_eq!(held(&db, &vault(&normalized)).len(), 1);
         for field in 0..6 {
             let mut different = scope.clone();
             match field {
@@ -720,122 +570,71 @@ mod tests {
                 4 => different.drive_pseudonym = "other".into(),
                 _ => different.key_epoch += 1,
             }
-            assert!(db
-                .get_resource_vault_evidence(&subjects, &different)
-                .unwrap()[0]
-                .vault_receipt
-                .is_none());
+            assert!(held(&db, &vault(&different)).is_empty());
         }
-        assert!(db
-            .get_resource_sync_evidence(&subjects, Some(&super::tests::scope()))
-            .unwrap()[0]
-            .server_receipt
-            .is_none());
+        assert!(held(&db, &server()).is_empty());
     }
 
     #[test]
     fn vault_receipts_survive_reopen_and_delete_with_server_receipts() {
-        let path =
-            std::env::temp_dir().join(format!("atomic-vault-receipts-{}.redb", ulid::Ulid::new()));
-        let open = || {
-            Db::from_kv(
-                Default::default(),
-                Arc::new(super::super::redb_store::RedbStore::new_file(&path).unwrap()),
-                Some("https://self.example".into()),
-            )
-        };
+        let path = temp("vault-receipts");
         let subject = "https://self.example/item";
+        let row = SerializedReceipt {
+            subject: subject.into(),
+            version: BTreeMap::from([("1".into(), 7)]),
+            manifest: None,
+            confirmed_at: 10,
+        };
         {
-            let db = open();
+            let db = open_file(&path, Some("https://self.example"));
             seed(&db, "internal:/item");
-            let row = SerializedServerReceipt {
-                subject: subject.into(),
-                version: BTreeMap::from([("1".into(), 7)]),
-                confirmed_at: 10,
-            };
-            db.put_resource_vault_receipts(&vault_scope(), std::slice::from_ref(&row), 0)
-                .unwrap();
-            db.put_resource_sync_receipts(&scope(), &[row]).unwrap();
+            put(&db, &vault(&vault_scope()), std::slice::from_ref(&row), 0);
+            put(&db, &server(), std::slice::from_ref(&row), 0);
         }
         {
-            let db = open();
-            let rows = db
-                .get_resource_vault_evidence(&[subject.into()], &vault_scope())
-                .unwrap();
-            assert_eq!(rows[0].vault_receipt.as_ref().unwrap().subject, subject);
-            assert!(rows[0].snapshot.is_some());
+            let db = open_file(&path, Some("https://self.example"));
+            let rows = read(&db, subject, &vault(&vault_scope()));
+            assert_eq!(rows.receipts[0].subject, subject);
+            assert!(rows.snapshot.is_some());
             let mut ops = vec![
                 Operation::remove_resource("internal:/item"),
                 Operation::remove_loro_snapshot("internal:/item"),
             ];
             db.apply_transaction(&mut ops).unwrap();
             db.flush().unwrap();
-            db.put_resource_vault_receipts(
-                &vault_scope(),
-                &[SerializedServerReceipt {
-                    subject: subject.into(),
-                    version: BTreeMap::from([("1".into(), 9)]),
-                    confirmed_at: 12,
-                }],
-                0,
-            )
-            .unwrap();
+            put(&db, &vault(&vault_scope()), &[row], 0);
             assert_eq!(db.kv.len(Tree::SyncReceipts).unwrap(), 0);
         }
         {
-            let db = open();
-            assert!(db
-                .get_resource_vault_evidence(&[subject.into()], &vault_scope())
-                .unwrap()[0]
-                .vault_receipt
-                .is_none());
+            let db = open_file(&path, Some("https://self.example"));
+            assert!(read(&db, subject, &vault(&vault_scope()))
+                .receipts
+                .is_empty());
         }
         std::fs::remove_file(path).unwrap();
     }
 
     #[test]
     fn vault_generation_fences_late_writes_across_reopen_and_repeated_clear() {
-        let path = std::env::temp_dir().join(format!(
-            "atomic-vault-generation-{}.redb",
-            ulid::Ulid::new()
-        ));
-        let open = || {
-            Db::from_kv(
-                Default::default(),
-                Arc::new(super::super::redb_store::RedbStore::new_file(&path).unwrap()),
-                None,
-            )
-        };
+        let path = temp("vault-generation");
         let scope = vault_scope();
         {
-            let db = open();
+            let db = open_file(&path, None);
             seed(&db, "atomic:resource");
             assert_eq!(db.get_resource_vault_generation(&scope).unwrap(), 0);
-            assert!(db
-                .put_resource_vault_receipts(&scope, &[receipt("1", 7, 10)], 0)
-                .unwrap());
+            assert!(put(&db, &vault(&scope), &[receipt("1", 7, 10)], 0));
             db.clear_resource_vault_receipts(&scope).unwrap();
         }
         {
-            let db = open();
+            let db = open_file(&path, None);
             assert_eq!(db.get_resource_vault_generation(&scope).unwrap(), 1);
-            assert!(!db
-                .put_resource_vault_receipts(&scope, &[receipt("1", 8, 11)], 0)
-                .unwrap());
-            assert!(db
-                .get_resource_vault_evidence(&["atomic:resource".into()], &scope)
-                .unwrap()[0]
-                .vault_receipt
-                .is_none());
+            assert!(!put(&db, &vault(&scope), &[receipt("1", 8, 11)], 0));
+            assert!(held(&db, &vault(&scope)).is_empty());
             // A handoff may replay clear. Extra invalidation is conservative:
             // a newly captured generation can become stale, never vice versa.
             db.clear_resource_vault_receipts(&scope).unwrap();
-            assert!(!db
-                .put_resource_vault_receipts(&scope, &[receipt("1", 8, 11)], 1)
-                .unwrap());
-            assert!(db
-                .put_resource_vault_receipts(&scope, &[receipt("1", 9, 12)], 2)
-                .unwrap());
+            assert!(!put(&db, &vault(&scope), &[receipt("1", 8, 11)], 1));
+            assert!(put(&db, &vault(&scope), &[receipt("1", 9, 12)], 2));
             let mut other = scope.clone();
             other.key_epoch += 1;
             assert_eq!(db.get_resource_vault_generation(&other).unwrap(), 0);
@@ -857,9 +656,13 @@ mod tests {
             .unwrap();
         assert!(db.get_resource_vault_generation(&scope).is_err());
         assert!(db
-            .put_resource_vault_receipts(&scope, &[receipt("1", 7, 10)], 0)
+            .put_resource_receipts(&vault(&scope), &[receipt("1", 7, 10)], Some(0))
             .is_err());
         assert!(db.clear_resource_vault_receipts(&scope).is_err());
+        // A vault write cannot be made without a captured generation.
+        assert!(db
+            .put_resource_receipts(&vault(&vault_scope()), &[], None)
+            .is_err());
     }
 
     #[test]
@@ -869,29 +672,14 @@ mod tests {
         let scope = vault_scope();
         let mut other = scope.clone();
         other.key_epoch += 1;
-        db.put_resource_vault_receipts(&scope, &[receipt("1", 7, 10)], 0)
-            .unwrap();
-        db.put_resource_vault_receipts(&other, &[receipt("1", 7, 10)], 0)
-            .unwrap();
-        db.put_resource_sync_receipts(&super::tests::scope(), &[receipt("1", 7, 10)])
-            .unwrap();
+        for destination in [vault(&scope), vault(&other), server()] {
+            put(&db, &destination, &[receipt("1", 7, 10)], 0);
+        }
+        put(&db, &vault(&scope), &[contents(11)], 0);
         db.clear_resource_vault_receipts(&scope).unwrap();
-        let subjects = vec!["atomic:resource".into()];
-        assert!(
-            db.get_resource_vault_evidence(&subjects, &scope).unwrap()[0]
-                .vault_receipt
-                .is_none()
-        );
-        assert!(
-            db.get_resource_vault_evidence(&subjects, &other).unwrap()[0]
-                .vault_receipt
-                .is_some()
-        );
-        assert!(db
-            .get_resource_sync_evidence(&subjects, Some(&super::tests::scope()))
-            .unwrap()[0]
-            .server_receipt
-            .is_some());
+        assert!(held(&db, &vault(&scope)).is_empty());
+        assert!(!held(&db, &vault(&other)).is_empty());
+        assert!(!held(&db, &server()).is_empty());
     }
 
     #[test]
@@ -902,22 +690,21 @@ mod tests {
         db.kv
             .insert(
                 Tree::SyncReceipts,
-                &vault_key("atomic:resource", &scope.canonical().unwrap()),
+                &vault(&scope)
+                    .canonical()
+                    .unwrap()
+                    .key("atomic:resource", false),
                 br#"{"subject":"atomic:resource","version":{"x":1},"confirmedAt":10}"#,
             )
             .unwrap();
-        assert!(db
-            .get_resource_vault_evidence(&["atomic:resource".into()], &scope)
-            .unwrap()[0]
-            .vault_receipt
-            .is_none());
+        assert!(held(&db, &vault(&scope)).is_empty());
         let mut bad = scope;
         bad.portal_url = "file:///private".into();
         assert!(db
-            .get_resource_vault_evidence(&["atomic:resource".into()], &bad)
+            .get_resource_receipts(&["atomic:resource".into()], Some(&vault(&bad)))
             .is_err());
         assert!(db
-            .put_resource_vault_receipts(&vault_scope(), &[receipt("bad", 1, 10)], 0)
+            .put_resource_receipts(&vault(&vault_scope()), &[receipt("bad", 1, 10)], Some(0))
             .is_err());
     }
 
@@ -930,47 +717,33 @@ mod tests {
             .pure_id();
         assert_eq!(canonical, "internal:/item");
         seed(&db, &canonical);
-        let receipt = SerializedServerReceipt {
+        let receipt = SerializedReceipt {
             subject: subject.into(),
-            version: BTreeMap::from([("1".into(), 7)]),
-            confirmed_at: 10,
+            ..receipt("1", 7, 10)
         };
-        db.put_resource_sync_receipts(&scope(), &[receipt]).unwrap();
-        let rows = db
-            .get_resource_sync_evidence(&[subject.into()], Some(&scope()))
-            .unwrap();
-        assert_eq!(rows[0].subject, subject);
-        assert_eq!(rows[0].server_receipt.as_ref().unwrap().subject, subject);
-        assert!(rows[0].snapshot.is_some());
+        put(&db, &server(), &[receipt], 0);
+        let rows = read(&db, subject, &server());
+        assert_eq!(rows.subject, subject);
+        assert_eq!(rows.receipts[0].subject, subject);
+        assert!(rows.snapshot.is_some());
     }
 
     #[test]
     fn receipts_and_snapshot_survive_database_reopen() {
-        let path =
-            std::env::temp_dir().join(format!("atomic-sync-receipts-{}.redb", ulid::Ulid::new()));
-        let open = || {
-            Db::from_kv(
-                Default::default(),
-                Arc::new(super::super::redb_store::RedbStore::new_file(&path).unwrap()),
-                None,
-            )
-        };
+        let path = temp("sync-receipts");
         {
-            let db = open();
+            let db = open_file(&path, None);
             seed(&db, "atomic:resource");
-            db.put_resource_sync_receipts(&scope(), &[receipt("1", 7, 10)])
-                .unwrap();
+            put(&db, &server(), &[receipt("1", 7, 10)], 0);
         }
         {
-            let db = open();
-            let rows = db
-                .get_resource_sync_evidence(&["atomic:resource".into()], Some(&scope()))
-                .unwrap();
+            let db = open_file(&path, None);
+            let rows = read(&db, "atomic:resource", &server());
             assert_eq!(
-                rows[0].snapshot.as_deref(),
+                rows.snapshot.as_deref(),
                 Some(b"actual stored snapshot".as_slice())
             );
-            assert_eq!(rows[0].server_receipt.as_ref().unwrap().version["1"], 7);
+            assert_eq!(rows.receipts[0].version["1"], 7);
             let mut ops = vec![
                 Operation::remove_resource("atomic:resource"),
                 Operation::remove_loro_snapshot("atomic:resource"),
@@ -979,7 +752,7 @@ mod tests {
             db.flush().unwrap();
         }
         {
-            let db = open();
+            let db = open_file(&path, None);
             assert_eq!(db.kv.len(Tree::SyncReceipts).unwrap(), 0);
         }
         std::fs::remove_file(path).unwrap();
@@ -989,43 +762,36 @@ mod tests {
     fn merges_coverage_and_isolates_scopes() {
         let db = store();
         seed(&db, "atomic:resource");
-        db.put_resource_sync_receipts(&scope(), &[receipt("1", 7, 10)])
-            .unwrap();
-        let clone = db.clone();
-        clone
-            .put_resource_sync_receipts(&scope(), &[receipt("1", 2, 8), receipt("2", 4, 12)])
-            .unwrap();
+        put(&db, &server(), &[receipt("1", 7, 10)], 0);
+        put(
+            &db.clone(),
+            &server(),
+            &[receipt("1", 2, 8), receipt("2", 4, 12)],
+            0,
+        );
         let subjects = vec!["did:ad:resource".into()];
         let result = db
-            .get_resource_sync_evidence(&subjects, Some(&scope()))
+            .get_resource_receipts(&subjects, Some(&server()))
             .unwrap();
         assert_eq!(
             result[0].snapshot.as_deref(),
             Some(b"actual stored snapshot".as_slice())
         );
-        let row = result[0].server_receipt.as_ref().unwrap();
+        let row = &result[0].receipts[0];
         assert_eq!(
             row.version,
             BTreeMap::from([("1".into(), 7), ("2".into(), 4)])
         );
         assert_eq!(row.confirmed_at, 12);
-        assert!(db.get_resource_sync_evidence(&subjects, None).unwrap()[0]
-            .server_receipt
-            .is_none());
+        assert!(db.get_resource_receipts(&subjects, None).unwrap()[0]
+            .receipts
+            .is_empty());
         let mut different = scope();
         different.agent = "atomic:bob".into();
-        assert!(db
-            .get_resource_sync_evidence(&subjects, Some(&different))
-            .unwrap()[0]
-            .server_receipt
-            .is_none());
+        assert!(held(&db, &ReceiptScope::Server(different)).is_empty());
         different = scope();
         different.server_url = "https://other.example".into();
-        assert!(db
-            .get_resource_sync_evidence(&subjects, Some(&different))
-            .unwrap()[0]
-            .server_receipt
-            .is_none());
+        assert!(held(&db, &ReceiptScope::Server(different)).is_empty());
     }
 
     #[test]
@@ -1035,9 +801,8 @@ mod tests {
         seed(&db, "atomic:resource-other");
         let mut other = scope();
         other.agent = "atomic:bob".into();
-        for scope in [scope(), other] {
-            db.put_resource_sync_receipts(&scope, &[receipt("1", 7, 10)])
-                .unwrap();
+        for scope in [server(), ReceiptScope::Server(other)] {
+            put(&db, &scope, &[receipt("1", 7, 10)], 0);
         }
         let mut ops = vec![
             Operation::remove_resource("atomic:resource"),
@@ -1045,14 +810,9 @@ mod tests {
         ];
         db.apply_transaction(&mut ops).unwrap();
         assert_eq!(db.kv.len(Tree::SyncReceipts).unwrap(), 0);
-        db.put_resource_sync_receipts(&scope(), &[receipt("1", 9, 11)])
-            .unwrap();
+        put(&db, &server(), &[receipt("1", 9, 11)], 0);
         assert_eq!(db.kv.len(Tree::SyncReceipts).unwrap(), 0);
-        assert!(db
-            .get_resource_sync_evidence(&["atomic:resource".into()], Some(&scope()))
-            .unwrap()[0]
-            .snapshot
-            .is_none());
+        assert!(read(&db, "atomic:resource", &server()).snapshot.is_none());
         assert!(db
             .kv
             .contains_key(Tree::Resources, b"atomic:resource-other")
@@ -1063,56 +823,32 @@ mod tests {
     fn rejects_malformed_rows_and_missing_snapshots() {
         let db = store();
         seed(&db, "atomic:resource");
+        let mut bad_manifest = contents(1);
+        bad_manifest.manifest.as_mut().unwrap().files[0].hash = "short".into();
         for bad in [
             receipt("no-peer", 1, 10),
             receipt("01", 1, 10),
             receipt("1", i32::MAX as u64 + 1, 10),
             receipt("1", 1, MAX_SAFE_INTEGER + 1),
+            bad_manifest,
         ] {
-            assert!(db.put_resource_sync_receipts(&scope(), &[bad]).is_err());
+            assert!(db.put_resource_receipts(&server(), &[bad], None).is_err());
         }
-        let canonical_scope = scope().canonical().unwrap();
+        let key = server().canonical().unwrap().key("atomic:resource", false);
         for malformed in [
             b"not JSON".as_slice(),
             br#"{"subject":"atomic:resource","version":{"1":7},"confirmedAt":10,"schema":2}"#
                 .as_slice(),
+            br#"{"subject":"atomic:resource","version":{"1":-1},"confirmedAt":10}"#.as_slice(),
         ] {
-            db.kv
-                .insert(
-                    Tree::SyncReceipts,
-                    &key("atomic:resource", &canonical_scope),
-                    malformed,
-                )
-                .unwrap();
-            assert!(db
-                .get_resource_sync_evidence(&["atomic:resource".into()], Some(&scope()))
-                .unwrap()[0]
-                .server_receipt
-                .is_none());
+            db.kv.insert(Tree::SyncReceipts, &key, malformed).unwrap();
+            assert!(held(&db, &server()).is_empty());
         }
-
-        db.kv
-            .insert(
-                Tree::SyncReceipts,
-                &key("atomic:resource", &canonical_scope),
-                br#"{"subject":"atomic:resource","version":{"1":-1},"confirmedAt":10}"#,
-            )
-            .unwrap();
-        assert!(db
-            .get_resource_sync_evidence(&["atomic:resource".into()], Some(&scope()))
-            .unwrap()[0]
-            .server_receipt
-            .is_none());
         db.kv
             .remove(Tree::LoroSnapshots, b"atomic:resource")
             .unwrap();
-        db.put_resource_sync_receipts(&scope(), &[receipt("1", 9, 10)])
-            .unwrap();
-        assert!(db
-            .get_resource_sync_evidence(&["atomic:resource".into()], Some(&scope()))
-            .unwrap()[0]
-            .snapshot
-            .is_none());
+        put(&db, &server(), &[receipt("1", 9, 10)], 0);
+        assert!(read(&db, "atomic:resource", &server()).snapshot.is_none());
     }
 
     #[tokio::test]
@@ -1125,8 +861,7 @@ mod tests {
         db.kv
             .insert(Tree::LoroSnapshots, b"atomic:resource", b"snapshot")
             .unwrap();
-        db.put_resource_sync_receipts(&scope(), &[receipt("1", 7, 10)])
-            .unwrap();
+        put(&db, &server(), &[receipt("1", 7, 10)], 0);
         db.remove_resource(resource.get_subject()).await.unwrap();
         assert_eq!(db.kv.len(Tree::SyncReceipts).unwrap(), 0);
         assert!(!db
@@ -1143,17 +878,10 @@ mod tests {
             for peer in 1..=12 {
                 let db = db.clone();
                 threads.spawn(move || {
-                    db.put_resource_sync_receipts(
-                        &scope(),
-                        &[receipt(&peer.to_string(), peer, peer)],
-                    )
-                    .unwrap();
+                    put(&db, &server(), &[receipt(&peer.to_string(), peer, peer)], 0);
                 });
             }
         });
-        let rows = db
-            .get_resource_sync_evidence(&["atomic:resource".into()], Some(&scope()))
-            .unwrap();
-        assert_eq!(rows[0].server_receipt.as_ref().unwrap().version.len(), 12);
+        assert_eq!(held(&db, &server())[0].version.len(), 12);
     }
 }

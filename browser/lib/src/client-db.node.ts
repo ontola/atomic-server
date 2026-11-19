@@ -2,7 +2,6 @@ import type { AttachmentManifest } from './attachment-manifest.js';
 import {
   parseResourceAttachmentEvidence,
   type ResourceAttachmentEvidence,
-  type SerializedVaultAttachmentReceipt,
 } from './resource-receipts.js';
 /**
  * Node-side ClientDb: same public surface as `ClientDbWorker`, but runs the
@@ -14,9 +13,8 @@ import {
  */
 
 import type {
-  ResourceSyncEvidence,
-  ResourceSyncScope,
-  ResourceVaultEvidence,
+  ReceiptScope,
+  ResourceReceipts,
   SerializedReceipt,
   VaultSyncScope,
 } from './resource-receipts.js';
@@ -244,29 +242,37 @@ export class NodeClientDb {
     await this.requireDb().applyCommit(commitJsonAd);
   }
 
-  async getResourceSyncEvidence(
+  async getResourceReceipts(
     subjects: string[],
-    scope?: ResourceSyncScope,
-  ): Promise<ResourceSyncEvidence[] | undefined> {
+    scope?: ReceiptScope,
+  ): Promise<ResourceReceipts[] | undefined> {
     const db = this.requireDb();
-    if (typeof db.getResourceSyncEvidence !== 'function') return undefined;
-    const evidence = db.getResourceSyncEvidence(
+    if (typeof db.getResourceReceipts !== 'function') return undefined;
+    const evidence = db.getResourceReceipts(
       JSON.stringify(subjects),
       scope ? JSON.stringify(scope) : undefined,
-    ) as ResourceSyncEvidence[];
+    ) as ResourceReceipts[];
     db.flush();
 
     return evidence;
   }
 
-  async putResourceSyncReceipts(
-    scope: ResourceSyncScope,
+  async putResourceReceipts(
+    scope: ReceiptScope,
     receipts: SerializedReceipt[],
-  ): Promise<void> {
+    generation?: number,
+  ): Promise<boolean> {
     const db = this.requireDb();
-    if (typeof db.putResourceSyncReceipts !== 'function') return;
-    db.putResourceSyncReceipts(JSON.stringify(scope), JSON.stringify(receipts));
+    if (typeof db.putResourceReceipts !== 'function') return false;
+    const accepted =
+      db.putResourceReceipts(
+        JSON.stringify(scope),
+        JSON.stringify(receipts),
+        generation,
+      ) === true;
     db.flush();
+
+    return accepted;
   }
 
   async vaultAttachmentManifests(
@@ -290,53 +296,6 @@ export class NodeClientDb {
     );
   }
 
-  async getResourceVaultAttachmentReceipts(
-    subjects: string[],
-    scope: VaultSyncScope,
-  ): Promise<SerializedVaultAttachmentReceipt[] | undefined> {
-    const db = this.requireDb();
-    if (typeof db.getResourceVaultAttachmentReceipts !== 'function')
-      return undefined;
-
-    return db.getResourceVaultAttachmentReceipts(
-      JSON.stringify(subjects),
-      JSON.stringify(scope),
-    );
-  }
-
-  async putResourceVaultAttachmentReceipts(
-    scope: VaultSyncScope,
-    receipts: SerializedVaultAttachmentReceipt[],
-    generation: number,
-  ): Promise<boolean> {
-    const db = this.requireDb();
-    if (typeof db.putResourceVaultAttachmentReceipts !== 'function')
-      return false;
-
-    return (
-      db.putResourceVaultAttachmentReceipts(
-        JSON.stringify(scope),
-        JSON.stringify(receipts),
-        generation,
-      ) === true
-    );
-  }
-
-  async getResourceVaultEvidence(
-    subjects: string[],
-    scope: VaultSyncScope,
-  ): Promise<ResourceVaultEvidence[] | undefined> {
-    const db = this.requireDb();
-    if (typeof db.getResourceVaultEvidence !== 'function') return undefined;
-    const evidence = db.getResourceVaultEvidence(
-      JSON.stringify(subjects),
-      JSON.stringify(scope),
-    ) as ResourceVaultEvidence[];
-    db.flush();
-
-    return evidence;
-  }
-
   async getResourceVaultGeneration(
     scope: VaultSyncScope,
   ): Promise<number | undefined> {
@@ -355,24 +314,6 @@ export class NodeClientDb {
     if (typeof db.clearResourceVaultReceipts !== 'function') return;
     db.clearResourceVaultReceipts(JSON.stringify(scope));
     db.flush();
-  }
-
-  async putResourceVaultReceipts(
-    scope: VaultSyncScope,
-    receipts: SerializedReceipt[],
-    generation: number,
-  ): Promise<boolean> {
-    const db = this.requireDb();
-    if (typeof db.putResourceVaultReceipts !== 'function') return false;
-    const accepted =
-      db.putResourceVaultReceipts(
-        JSON.stringify(scope),
-        JSON.stringify(receipts),
-        generation,
-      ) === true;
-    db.flush();
-
-    return accepted;
   }
 
   async removeResource(subject: string): Promise<void> {
