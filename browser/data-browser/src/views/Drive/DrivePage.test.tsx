@@ -1,7 +1,8 @@
 // @wc-ignore-file
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ThemeProvider, type DefaultTheme } from 'styled-components';
+import type { DefaultTheme } from 'styled-components';
+import { ThemeProvider } from '../../../../resource-ui/test/providers.js';
 import DrivePage from './DrivePage';
 
 const state = vi.hoisted(() => ({
@@ -27,12 +28,12 @@ vi.mock('react-dropzone', () => ({
   },
 }));
 
-vi.mock('@components/Containers', () => ({
+vi.mock('@tomic/ui/components/Containers', () => ({
   ContainerNarrow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
 }));
-vi.mock('@components/Button', () => ({
+vi.mock('@tomic/ui/components/Button', () => ({
   Button: ({ children }: { children: React.ReactNode }) => (
     <button>{children}</button>
   ),
@@ -44,7 +45,7 @@ vi.mock('@components/SideBar/DriveSwitcher', () => ({
   DriveSwitcher: () => <button>Switch Drive</button>,
   DriveSwitcherChevronTrigger: () => <button />,
 }));
-vi.mock('@components/EditableTitle', () => ({
+vi.mock('@tomic/resource-ui/components/EditableTitle', () => ({
   EditableTitle: () => <h1>Drive title</h1>,
 }));
 vi.mock('@hooks/useVisibleDriveChildren', () => ({
@@ -65,10 +66,10 @@ vi.mock('@hooks/useIsPrivateDrive', () => ({ useIsPrivateDrive: () => false }));
 vi.mock('@components/Drives/PrivateDriveBadge', () => ({
   PrivateDriveBadge: () => <span />,
 }));
-vi.mock('@components/ResourceDecorations', () => ({
+vi.mock('@tomic/resource-ui/components/ResourceDecorations', () => ({
   ResourceCoverImage: () => <div />,
 }));
-vi.mock('@components/Row', () => ({
+vi.mock('@tomic/ui/components/Row', () => ({
   Column: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -77,7 +78,7 @@ vi.mock('@components/Row', () => ({
 vi.mock('react-icons/fa6', () => ({
   FaGear: () => <svg />,
 }));
-vi.mock('@components/Dialog/useDialog', () => ({
+vi.mock('@tomic/ui/components/Dialog/useDialog', () => ({
   useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
 vi.mock('./GettingStartedCard', () => ({ GettingStartedCard: () => null }));

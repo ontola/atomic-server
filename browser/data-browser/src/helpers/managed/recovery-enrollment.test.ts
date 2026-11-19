@@ -23,7 +23,8 @@ vi.mock('./api', () => ({
   getManagedApiBase: () => 'https://portal.example/api',
 }));
 vi.mock('../wasmUrls', () => ({
-  wasmJsUrl: () => './test-fixtures/recovery-wasm.ts',
+  wasmJsUrl: () =>
+    new URL('./test-fixtures/recovery-wasm.ts', import.meta.url).href,
   wasmBinaryUrl: () => '',
   atomicWasmSource: async () => '',
 }));

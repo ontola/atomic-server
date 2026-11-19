@@ -51,13 +51,19 @@ export function ThemeProvider({
   children,
   theme,
   settings,
+  hostOverrides,
 }: PropsWithChildren<{
   theme: object;
   settings?: Partial<ResourceUIHost['settings']>;
+  hostOverrides?: Omit<Partial<ResourceUIHost>, 'settings'>;
 }>) {
   return (
     <ResourceUIHostProvider
-      value={{ ...host, settings: { ...host.settings, ...settings } }}
+      value={{
+        ...host,
+        ...hostOverrides,
+        settings: { ...host.settings, ...settings },
+      }}
     >
       <StyledThemeProvider theme={theme as DefaultTheme}>
         {children}

@@ -41,12 +41,12 @@ vi.mock('@components/AI/AISidebarContext', () => ({
 vi.mock('@components/Share/shareDialogState', () => ({
   openShareDialog: () => {},
 }));
-vi.mock('@components/Card', () => ({
+vi.mock('@tomic/ui/components/Card', () => ({
   Card: ({ children }: { children: React.ReactNode }) => (
     <section>{children}</section>
   ),
 }));
-vi.mock('@components/Button', () => ({
+vi.mock('@tomic/ui/components/Button', () => ({
   Button: ({
     children,
     disabled,
@@ -55,7 +55,7 @@ vi.mock('@components/Button', () => ({
     disabled?: boolean;
   }) => <button disabled={disabled}>{children}</button>,
 }));
-vi.mock('@components/Row', () => ({
+vi.mock('@tomic/ui/components/Row', () => ({
   Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Column: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>

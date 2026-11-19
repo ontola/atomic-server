@@ -15,15 +15,15 @@ vi.mock('@tomic/react', () => ({
   }),
   useTitle: () => ['Title', vi.fn()],
 }));
-vi.mock('../hooks/useInlineTitleAffordances', () => ({
+vi.mock('@tomic/resource-ui/hooks/useInlineTitleAffordances', () => ({
   useInlineTitleAffordances: () => true,
 }));
 // Referred to by selector in EditableTitle's styles, so it must be styled.
-vi.mock('./Row', async () => ({
+vi.mock('@tomic/ui/components/Row', async () => ({
   Flex: (await import('styled-components')).styled.div``,
 }));
 // The picker is mounted by EditableTitle, outside the title it is opened from.
-vi.mock('./ResourceDecorations', async () => ({
+vi.mock('@tomic/resource-ui/components/ResourceDecorations', async () => ({
   AffordanceRow: (await import('styled-components')).styled.div``,
   TitleIcon: ({ onPickIcon }: { onPickIcon: () => void }) => (
     <button

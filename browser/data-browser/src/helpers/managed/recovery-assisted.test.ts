@@ -18,7 +18,8 @@ vi.mock('./api', () => ({
 }));
 // The recovery code's Argon2id runs in WASM; the fixture stands in for it.
 vi.mock('../wasmUrls', () => ({
-  wasmJsUrl: () => './test-fixtures/recovery-wasm.ts',
+  wasmJsUrl: () =>
+    new URL('./test-fixtures/recovery-wasm.ts', import.meta.url).href,
   wasmBinaryUrl: () => '',
   atomicWasmSource: async () => '',
 }));
