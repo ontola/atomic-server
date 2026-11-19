@@ -1,10 +1,10 @@
 import { LoroLoader } from './loro-loader.js';
 import type { Resource } from './resource.js';
 import {
-  parseSerializedServerReceipt,
+  parseSerializedReceipt,
   type ResourceSyncEvidence,
-  type SerializedServerReceipt,
-} from './resource-sync-evidence.js';
+  type SerializedReceipt,
+} from './resource-receipts.js';
 
 /** Evidence for this resource's current CRDT state, not a drive-wide guess.
  * Receipts cover observed CRDT versions, not attachment bytes or other resources.
@@ -122,7 +122,7 @@ export class ResourceSyncStatusTracker {
   serverWrite(
     subject: string,
     bytes: Uint8Array | undefined,
-  ): () => SerializedServerReceipt | undefined {
+  ): () => SerializedReceipt | undefined {
     const epoch = this.epoch;
     const version = carriedVersion(bytes);
     const entry = this.entry(subject);
@@ -149,7 +149,7 @@ export class ResourceSyncStatusTracker {
   }
 
   /** A copy of proven server coverage, never the live resource's version. */
-  serverReceipt(subject: string): SerializedServerReceipt | undefined {
+  serverReceipt(subject: string): SerializedReceipt | undefined {
     const receipt = this.evidence.get(subject)?.server;
     if (!receipt || receipt.confirmedAt === undefined) return undefined;
 
@@ -189,7 +189,7 @@ export class ResourceSyncStatusTracker {
       }
 
       const server = restoredVersion
-        ? parseSerializedServerReceipt(row?.serverReceipt)
+        ? parseSerializedReceipt(row?.serverReceipt)
         : undefined;
 
       if (server && server.subject === subject) {

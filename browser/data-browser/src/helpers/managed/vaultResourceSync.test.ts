@@ -9,7 +9,7 @@ import {
   type ClientDbWorker,
   type VaultSyncScope,
   type ResourceVaultEvidence,
-  type SerializedVaultReceipt,
+  type SerializedReceipt,
   type SerializedVaultAttachmentReceipt,
 } from '@tomic/lib';
 import {
@@ -101,7 +101,7 @@ async function fixture(existingDb?: ReturnType<typeof database>) {
 
 function database() {
   let generation = 0;
-  const receipts = new Map<string, SerializedVaultReceipt>();
+  const receipts = new Map<string, SerializedReceipt>();
   const db = {
     isReady: true,
     getResourceVaultGeneration: vi.fn(async () => generation),
@@ -111,7 +111,7 @@ function database() {
     putResourceVaultReceipts: vi.fn(
       async (
         _scope: VaultSyncScope,
-        rows: SerializedVaultReceipt[],
+        rows: SerializedReceipt[],
         expected: number,
       ) => {
         if (expected !== generation) return false;

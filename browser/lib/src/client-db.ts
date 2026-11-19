@@ -32,15 +32,12 @@ import {
  */
 
 import type {
-  ResourceVaultEvidence,
-  VaultSyncScope,
-  SerializedVaultReceipt,
-} from './resource-vault-evidence.js';
-import type {
   ResourceSyncEvidence,
   ResourceSyncScope,
-  SerializedServerReceipt,
-} from './resource-sync-evidence.js';
+  ResourceVaultEvidence,
+  SerializedReceipt,
+  VaultSyncScope,
+} from './resource-receipts.js';
 import { randomUUID } from './uuid.js';
 import type { ReplicaIdentity } from './peer-receipts.js';
 import {
@@ -1105,7 +1102,7 @@ export class ClientDbWorker {
 
   async putResourceSyncReceipts(
     scope: ResourceSyncScope,
-    receipts: SerializedServerReceipt[],
+    receipts: SerializedReceipt[],
   ): Promise<void> {
     return this.call('putResourceSyncReceipts', { scope, receipts });
   }
@@ -1129,7 +1126,7 @@ export class ClientDbWorker {
 
   async putResourceVaultReceipts(
     scope: VaultSyncScope,
-    receipts: SerializedVaultReceipt[],
+    receipts: SerializedReceipt[],
     generation: number,
   ): Promise<boolean> {
     return this.call('putResourceVaultReceipts', {

@@ -14,15 +14,12 @@ import {
  */
 
 import type {
-  ResourceVaultEvidence,
-  VaultSyncScope,
-  SerializedVaultReceipt,
-} from './resource-vault-evidence.js';
-import type {
   ResourceSyncEvidence,
   ResourceSyncScope,
-  SerializedServerReceipt,
-} from './resource-sync-evidence.js';
+  ResourceVaultEvidence,
+  SerializedReceipt,
+  VaultSyncScope,
+} from './resource-receipts.js';
 import { versionVectorRecords } from './version-vector-records.js';
 import {
   parseHistoryAttribution,
@@ -264,7 +261,7 @@ export class NodeClientDb {
 
   async putResourceSyncReceipts(
     scope: ResourceSyncScope,
-    receipts: SerializedServerReceipt[],
+    receipts: SerializedReceipt[],
   ): Promise<void> {
     const db = this.requireDb();
     if (typeof db.putResourceSyncReceipts !== 'function') return;
@@ -362,7 +359,7 @@ export class NodeClientDb {
 
   async putResourceVaultReceipts(
     scope: VaultSyncScope,
-    receipts: SerializedVaultReceipt[],
+    receipts: SerializedReceipt[],
     generation: number,
   ): Promise<boolean> {
     const db = this.requireDb();

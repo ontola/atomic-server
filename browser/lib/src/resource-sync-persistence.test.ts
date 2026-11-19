@@ -9,8 +9,8 @@ import type { ClientDbWorker } from './client-db.js';
 import type {
   ResourceSyncEvidence,
   ResourceSyncScope,
-  SerializedServerReceipt,
-} from './resource-sync-evidence.js';
+  SerializedReceipt,
+} from './resource-receipts.js';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -55,10 +55,7 @@ function snapshot(resource: Resource) {
   return resource.getLoroDoc()!.export({ mode: 'snapshot' });
 }
 
-function receipt(
-  resource: Resource,
-  confirmedAt = 123,
-): SerializedServerReceipt {
+function receipt(resource: Resource, confirmedAt = 123): SerializedReceipt {
   return {
     subject: resource.subject,
     version: Object.fromEntries(resource.getLoroDoc()!.oplogVersion().toJSON()),
@@ -68,7 +65,7 @@ function receipt(
 
 function memoryDb() {
   const snapshots = new Map<string, Uint8Array>();
-  const receipts = new Map<string, SerializedServerReceipt>();
+  const receipts = new Map<string, SerializedReceipt>();
   const key = (scope: ResourceSyncScope, subject: string) =>
     JSON.stringify([scope.agent, scope.serverUrl, subject]);
   const getResourceSyncEvidence = vi.fn(
@@ -83,7 +80,7 @@ function memoryDb() {
       })),
   );
   const putResourceSyncReceipts = vi.fn(
-    async (scope: ResourceSyncScope, values: SerializedServerReceipt[]) => {
+    async (scope: ResourceSyncScope, values: SerializedReceipt[]) => {
       for (const value of values) {
         if (snapshots.has(value.subject))
           receipts.set(key(scope, value.subject), structuredClone(value));

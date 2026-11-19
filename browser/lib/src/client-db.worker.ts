@@ -11,15 +11,12 @@ import type {
  */
 
 import type {
-  ResourceVaultEvidence,
-  VaultSyncScope,
-  SerializedVaultReceipt,
-} from './resource-vault-evidence.js';
-import type {
   ResourceSyncEvidence,
   ResourceSyncScope,
-  SerializedServerReceipt,
-} from './resource-sync-evidence.js';
+  ResourceVaultEvidence,
+  SerializedReceipt,
+  VaultSyncScope,
+} from './resource-receipts.js';
 import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
 import { wasmBinaryUrl } from './wasm-url.js';
 import type { ReplicaIdentity } from './peer-receipts.js';
@@ -116,7 +113,7 @@ export interface ClientDbRpc {
     ResourceSyncEvidence[] | undefined,
   ];
   putResourceSyncReceipts: [
-    { scope: ResourceSyncScope; receipts: SerializedServerReceipt[] },
+    { scope: ResourceSyncScope; receipts: SerializedReceipt[] },
     void,
   ];
   vaultAttachmentManifests: [
@@ -148,7 +145,7 @@ export interface ClientDbRpc {
   putResourceVaultReceipts: [
     {
       scope: VaultSyncScope;
-      receipts: SerializedVaultReceipt[];
+      receipts: SerializedReceipt[];
       generation: number;
     },
     boolean,

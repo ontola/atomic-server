@@ -10,11 +10,11 @@ import {
   canonicalizeScheme,
   core,
   normalizeVaultSyncScope,
-  parseSerializedVaultReceipt,
+  parseSerializedReceipt,
   type Resource,
   type Store,
   type VaultSyncScope,
-  type SerializedVaultReceipt,
+  type SerializedReceipt,
   type ResourceVaultEvidence,
 } from '@tomic/lib';
 import { getManagedApiBase } from './api';
@@ -59,7 +59,7 @@ export type VaultReceiptDb = {
   ) => Promise<ResourceVaultEvidence[] | undefined>;
   putResourceVaultReceipts?: (
     scope: VaultSyncScope,
-    receipts: SerializedVaultReceipt[],
+    receipts: SerializedReceipt[],
     generation: number,
   ) => Promise<boolean>;
   clearResourceVaultReceipts?: (scope: VaultSyncScope) => Promise<void>;
@@ -68,7 +68,7 @@ type Context = {
   scope: VaultSyncScope;
   db: VaultReceiptDb;
   storeDb: ReturnType<Store['getClientDb']>;
-  receipts: Map<string, SerializedVaultReceipt>;
+  receipts: Map<string, SerializedReceipt>;
   attachmentReceipts: Map<string, SerializedVaultAttachmentReceipt>;
   attachmentReads: Map<string, object>;
   attachmentQueued: Map<string, object>;
@@ -278,10 +278,7 @@ function contextCurrent(
   );
 }
 
-function mergeReceipt(
-  context: Context,
-  incoming: SerializedVaultReceipt,
-): void {
+function mergeReceipt(context: Context, incoming: SerializedReceipt): void {
   const previous = context.receipts.get(incoming.subject);
   const version = { ...previous?.version };
   for (const [peer, count] of Object.entries(incoming.version))
@@ -350,7 +347,7 @@ function ensureEvidence(
           return;
 
         for (const row of rows ?? []) {
-          const receipt = parseSerializedVaultReceipt(row.vaultReceipt);
+          const receipt = parseSerializedReceipt(row.vaultReceipt);
           const rowSubject = store.normalizeSubject(row.subject);
           if (
             !validSnapshot(row.snapshot) ||
@@ -821,13 +818,13 @@ export function captureResourceVaultBackup(
         return;
       const generation = await context.ready;
       if (!current() || generation === undefined) return;
-      const receipts: SerializedVaultReceipt[] = [];
+      const receipts: SerializedReceipt[] = [];
 
       for (const [rawSubject, version] of Object.entries(
         proof.resourceVersions,
       )) {
         const subject = store.normalizeSubject(rawSubject);
-        const receipt = parseSerializedVaultReceipt({
+        const receipt = parseSerializedReceipt({
           subject,
           version,
           confirmedAt: proof.confirmedAt,

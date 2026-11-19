@@ -1,12 +1,23 @@
 import { canonicalizeScheme } from './subject.js';
 
+/** Private local proof scope. Managed account IDs must never be displayed. */
+export interface VaultSyncScope {
+  managedAccount: string;
+  agent: string;
+  portalUrl: string;
+  drive: string;
+  drivePseudonym: string;
+  keyEpoch: number;
+}
+
 /** Scope of a server acknowledgement; never shared between accounts or hubs. */
 export interface ResourceSyncScope {
   agent: string;
   serverUrl: string;
 }
 
-export interface SerializedServerReceipt {
+/** A destination's proof that it holds a resource at an exact version. */
+export interface SerializedReceipt {
   subject: string;
   version: Record<string, number>;
   confirmedAt: number;
@@ -15,7 +26,13 @@ export interface SerializedServerReceipt {
 export interface ResourceSyncEvidence {
   subject: string;
   snapshot: Uint8Array | null;
-  serverReceipt?: SerializedServerReceipt;
+  serverReceipt?: SerializedReceipt;
+}
+
+export interface ResourceVaultEvidence {
+  subject: string;
+  snapshot: Uint8Array | null;
+  vaultReceipt?: SerializedReceipt;
 }
 
 export function normalizeResourceSyncScope(
@@ -38,11 +55,11 @@ export function normalizeResourceSyncScope(
 }
 
 /** Fail closed for malformed persisted data, including unsafe JS integers. */
-export function parseSerializedServerReceipt(
+export function parseSerializedReceipt(
   value: unknown,
-): SerializedServerReceipt | undefined {
+): SerializedReceipt | undefined {
   if (!value || typeof value !== 'object') return undefined;
-  const row = value as Partial<SerializedServerReceipt>;
+  const row = value as Partial<SerializedReceipt>;
 
   if (
     typeof row.subject !== 'string' ||
@@ -75,4 +92,37 @@ export function parseSerializedServerReceipt(
     version,
     confirmedAt: row.confirmedAt!,
   };
+}
+
+export function normalizeVaultSyncScope(
+  scope: VaultSyncScope,
+): VaultSyncScope | undefined {
+  try {
+    const portal = new URL(scope.portalUrl);
+    if (
+      !['http:', 'https:'].includes(portal.protocol) ||
+      [
+        scope.managedAccount,
+        scope.agent,
+        scope.drive,
+        scope.drivePseudonym,
+      ].some(
+        value =>
+          typeof value !== 'string' || !value.trim() || value.includes('\0'),
+      ) ||
+      !Number.isSafeInteger(scope.keyEpoch) ||
+      scope.keyEpoch < 0 ||
+      scope.keyEpoch > 4294967295
+    )
+      return undefined;
+
+    return {
+      ...scope,
+      agent: canonicalizeScheme(scope.agent),
+      drive: canonicalizeScheme(scope.drive),
+      portalUrl: portal.origin + portal.pathname.replace(/\/+$/, ''),
+    };
+  } catch {
+    return undefined;
+  }
 }

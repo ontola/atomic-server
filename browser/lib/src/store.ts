@@ -22,8 +22,8 @@ import {
 import {
   normalizeResourceSyncScope,
   type ResourceSyncScope,
-  type SerializedServerReceipt,
-} from './resource-sync-evidence.js';
+  type SerializedReceipt,
+} from './resource-receipts.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
 import {
   encodeCommit as encodePeerCommit,
@@ -6439,7 +6439,7 @@ export class Store {
         epoch: number;
         db: ClientDbWorker;
         scope: ResourceSyncScope;
-        receipts: Map<string, SerializedServerReceipt>;
+        receipts: Map<string, SerializedReceipt>;
       }
     | undefined;
 
