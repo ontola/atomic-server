@@ -123,6 +123,18 @@ A client looks up peers for the Drive through [peer discovery](#3-peer-discovery
 
 The HTTP form `<origin>/download/files/{blake3}` is a deployment-specific alias for `atomic:blob:{blake3}` and remains supported for browsers and existing tooling.
 
+### Schema identifiers
+
+Schema terms are content-addressed: their identifier is a hash of the fields that make up their identity, so anyone can recompute it from the resource itself.
+
+| Identifier | Names | Hashed fields | Spec |
+|---|---|---|---|
+| `atomic:prop:{blake3-hex}` | A Property | ontology, shortname, datatype | [Property identity](schema/property-identity.md) |
+| `atomic:class:{blake3-hex}` | A Class | ontology, shortname, `requires` | [Class identity](schema/class-identity.md) |
+| `atomic:lens:{blake3-hex}` | A Lens | `lensFrom`, `lensTo`, `lensTransform` | [Lenses](schema/lenses.md) |
+
+Each hash is 64 lowercase hex characters, computed with BLAKE3 in derive-key mode under its own context string. They are Resources (with a parent, rights and Loro history), not raw bytes like blobs, and a commit that creates one is rejected when the subject does not match the hash of its fields. `atomic:prop:` and `atomic:lens:` also parse as `did:ad:prop:` and `did:ad:lens:`; `atomic:class:` has no `did:ad:` spelling.
+
 ### Resource identifiers
 
 Resources live inside [Drives](hierarchy.md).
@@ -250,7 +262,7 @@ The three variants map to different resolution strategies:
 | `Subject` variant | Format | Use case |
 |---|---|---|
 | `Internal` | `internal:/path` | Local resources on this server. Resolved to an absolute URL using the server's origin for serialization. |
-| `Did` | `atomic:...` | Agents (by public key), Commits (by signature), Blobs (by BLAKE3 hash), Nodes (as routing identities), and Resources in Drives (by genesis commit signature). Routing hints (`?drive=atomic:...`) are used for peer discovery through the pkarr relay. |
+| `Did` | `atomic:...` | Agents (by public key), Commits (by signature), Blobs (by BLAKE3 hash), Properties, Classes and Lenses (by hash of their identity fields), Nodes (as routing identities), and Resources in Drives (by genesis commit signature). Routing hints (`?drive=atomic:...`) are used for peer discovery through the pkarr relay. |
 | `External` | `https://...` | Resources on other servers. Resolved via HTTP. Used for backward compatibility and external linked data. |
 
 When serializing to [JSON-AD](core/json-ad.md), `Internal` subjects are resolved to absolute URLs using the server's configured origin.

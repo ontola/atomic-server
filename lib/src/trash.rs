@@ -13,6 +13,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
+    class_identity::is_class_id,
     errors::{AtomicErrorType, AtomicResult},
     property_identity::is_property_id,
     storelike::Query,
@@ -116,10 +117,14 @@ pub fn apply_restore(resource: &mut Resource, target: &str) -> AtomicResult<()> 
 /// remembers where it came from so [`restore`] can put it back. Nothing is
 /// destroyed. Returns false when there was nothing to do (the Trash folder
 /// itself, the drive itself, or an item already directly in the Trash).
-/// A content-addressed property cannot be trashed: its parent is part of its ID.
+/// A content-addressed property or class cannot be trashed: its parent is part
+/// of its ID.
 pub async fn trash(store: &Db, subject: &str, drive: &str) -> AtomicResult<bool> {
     if is_property_id(subject) {
         return Err("A property can't be moved to the trash.".into());
+    }
+    if is_class_id(subject) {
+        return Err("A class with a content-addressed ID can't be moved to the trash.".into());
     }
     // The drive has no parent to leave and must not end up below itself.
     if pure(subject) == pure(drive) {
