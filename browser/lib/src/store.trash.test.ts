@@ -90,6 +90,16 @@ describe('Store.trash', () => {
     ).rejects.toThrow("A property can't be moved to the trash.");
   });
 
+  it('refuses a content-addressed class', async () => {
+    const { store } = setup({});
+
+    await expect(
+      store.trash('atomic:class:' + 'a'.repeat(64), DRIVE),
+    ).rejects.toThrow(
+      "A class with a content-addressed ID can't be moved to the trash.",
+    );
+  });
+
   it('reparents into the Trash and remembers the old parent', async () => {
     const { store, all, saved } = setup({
       a: { [core.properties.parent]: 'folder' },

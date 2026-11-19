@@ -8,7 +8,7 @@ In this section, we define some of these concepts.
 - A **Closed Graph** contains no unfetched outgoing links
 - A **Verified Graph** contains only Atoms from verified Authors
 - A **Schema Complete Graph** contains all used linked Properties
-- A **Frozen Graph** contains content-addressing identifiers (e.g. IPFS), all the way down
+- A **Frozen Graph** contains content-addressing identifiers, all the way down
 
 These concepts are important when creating an implementation of a Store.
 
@@ -86,13 +86,15 @@ sent in all Schema Complete Atomic Graphs.
 ## Frozen Graphs
 
 A Frozen Graph consists only of resources with content-addressing identifiers as Subjects.
-A [content-addressable](https://flyingzumwalt.gitbooks.io/decentralized-web-primer/avenues-for-access/lessons/power-of-content-addressing.html) URL (such as an IPFS URL) refers to specific immutable content, that is absolutely certain not to change over time.
-Due to its static nature, we call it _Frozen_.
+A [content-addressable](https://flyingzumwalt.gitbooks.io/decentralized-web-primer/avenues-for-access/lessons/power-of-content-addressing.html) identifier refers to specific immutable content, that is absolutely certain not to change over time.
 As long as a graph contains links to HTTP Resources, it is not Frozen, since responses from that HTTP address might change over time.
 
-Freezing a Graph, therefore, entails converting all resources to IFPS (or another content-addressable schema) Resources, and using only IPFS URLs.
+Atomic Data does not freeze whole resources. Schema terms are pinned by name instead: a Property is identified by `atomic:prop:{hash}` (a hash of its ontology, shortname and datatype, see [Property identity](../schema/property-identity.md)) and a Class by `atomic:class:{hash}` (a hash of its ontology, shortname and required Properties, see [Class identity](../schema/class-identity.md)).
+Such an identifier can be recomputed from the resource's own fields, so a client can check it offline, and it never changes when a description or label is edited.
+This is "pinned names", not frozen content: descriptions and value constraints stay editable, and a term that links to an HTTP resource (for example a core Property) is only as stable as that link.
 
-Freezing a Graph has performance benefits for clients, since clients can easily verify if they already have (part of) the Graph locally, simply by comparing the URLs or Resources.
-It also helps to make sure the content can be shared peer to peer
+Pinning has performance benefits for clients, since clients can easily verify if they already have (part of) the Graph locally, simply by comparing the identifiers.
+It also helps to make sure the content can be shared peer to peer.
 
-Note that **Graphs with cyclical relations cannot be frozen**, since every iteration that you'd try to freeze will change its references and therefore also its contents, and therefore also its content hash.
+Because the hash covers names and required Properties and not the full content, **cyclical relations are not a problem for these identifiers**: a Class that constrains a Property to link back to itself does not change its own hash.
+A scheme that hashed whole resources would fail here, since every iteration that you'd try to freeze would change its references, and therefore also its contents, and therefore also its content hash.

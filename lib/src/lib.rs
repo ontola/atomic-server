@@ -65,6 +65,8 @@ pub mod plugins;
 /// **Internal:** website helpers; outside the application API contract.
 pub mod website;
 
+/// **Internal:** class identity helpers; outside the application API contract.
+pub mod class_identity;
 /// **Internal:** lens implementation; outside the application API contract.
 pub mod lens;
 /// **Internal:** built-in data population; outside the application API contract.
