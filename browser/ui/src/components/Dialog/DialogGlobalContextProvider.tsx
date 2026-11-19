@@ -105,7 +105,11 @@ export function useDialogGlobalContext(open: boolean) {
 
   useEffect(() => {
     setDialogOpen(id, open);
-  }, [open, id]);
+
+    // Page-owned dialogs can unmount while still open. Remove their identity
+    // from both stacks so the dialog below can handle dismissal again.
+    return () => setDialogOpen(id, false);
+  }, [open, id, setDialogOpen]);
 
   return {
     isTopLevel,

@@ -1,3 +1,4 @@
+import { ghostButtonStyles } from '@tomic/ui/components/Button';
 import {
   forwardRef,
   useRef,
@@ -139,30 +140,10 @@ export const ViewTabActions = styled.div`
 `;
 
 const Tab = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5ch;
-  border: none;
-  background-color: transparent;
-  padding: 0.3rem 0.5rem;
-  border-radius: ${p => tableTheme(p.theme).radius};
-  color: ${p => tableTheme(p.theme).colors.textLight};
+  ${ghostButtonStyles}
   height: 1.85rem;
   white-space: nowrap;
   font-size: inherit;
-  cursor: pointer;
-  transition:
-    background-color 0.1s,
-    color 0.1s;
-  &:hover:not([disabled]),
-  &:focus-visible:not([disabled]) {
-    background-color: ${p => tableTheme(p.theme).colors.bg1};
-    color: ${p => tableTheme(p.theme).colors.text};
-  }
-  &:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
   ${p =>
     p.$active &&
     css`
@@ -173,14 +154,7 @@ const Tab = styled.button<{ $active: boolean }>`
 `;
 
 const TabInput = styled(InputStyled)`
-  box-sizing: border-box;
   height: 1.85rem;
   width: 10rem;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid ${p => tableTheme(p.theme).colors.main};
-  border-radius: ${p => tableTheme(p.theme).radius};
-  color: ${p => tableTheme(p.theme).colors.text};
-  background-color: ${p => tableTheme(p.theme).colors.bg};
-  font: inherit;
   font-weight: bold;
 `;

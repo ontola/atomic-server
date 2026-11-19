@@ -63,8 +63,10 @@ it('blocks duplicate submit, Escape, cancel and checkbox edits while pending', a
       onClose={close}
     />,
   );
+  expect(screen.getByRole('dialog').getAttribute('aria-busy')).toBe('false');
   const button = screen.getByRole('button', { name: 'Remove' });
   fireEvent.click(button);
+  expect(screen.getByRole('dialog').getAttribute('aria-busy')).toBe('true');
   fireEvent.click(button);
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   fireEvent(

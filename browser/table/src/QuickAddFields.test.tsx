@@ -140,3 +140,52 @@ it('retains raw input and resets target and literal when changing the preset ver
   });
   expect(screen.queryByRole('alert')).toBeNull();
 });
+
+it('keeps new versus existing no-field defaults and retains additional presets', () => {
+  expect(quickAddDraftFromSpec(undefined, 'name')).toMatchObject({
+    withField: true,
+    field: 'name',
+  });
+  const draft = quickAddDraftFromSpec(
+    {
+      label: '  Create  ',
+      presets: [
+        { kind: 'increment', property: 'count', value: 2 },
+        { kind: 'toggle', property: 'done' },
+      ],
+    },
+    'name',
+  );
+  expect(draft).toMatchObject({ withField: false, presetValue: '2' });
+  expect(quickAddSpecFromDraft(draft, kinds)).toEqual({
+    label: 'Create',
+    presets: [
+      { kind: 'increment', property: 'count', value: 2 },
+      { kind: 'toggle', property: 'done' },
+    ],
+  });
+});
+
+it('keeps the numeric preset input mounted when unrelated text changes', () => {
+  function Editor() {
+    const [draft, setDraft] = useState(valid);
+
+    return (
+      <TableQuickAddFields
+        draft={draft}
+        onChange={setDraft}
+        kinds={kinds}
+        fields={fields}
+      />
+    );
+  }
+
+  render(<Editor />);
+  const number = screen.getByRole('textbox', { name: 'By' });
+  number.focus();
+  fireEvent.change(screen.getByLabelText('Button says'), {
+    target: { value: 'Other' },
+  });
+  expect(screen.getByRole('textbox', { name: 'By' })).toBe(number);
+  expect(document.activeElement).toBe(number);
+});

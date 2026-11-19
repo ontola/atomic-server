@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
-import { afterEach, beforeAll, afterAll, it, expect, vi } from 'vitest';
-import { cleanup, render, fireEvent, screen } from '@testing-library/react';
-import { TableFilterChip } from './FilterChip.js';
-beforeAll(() =>
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { TableFilterChip, type TableFilterChipProps } from './FilterChip.js';
+
+beforeAll(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -10,10 +19,110 @@ beforeAll(() =>
       unobserve() {}
       disconnect() {}
     },
-  ),
-);
-afterAll(() => vi.unstubAllGlobals());
+  );
+});
 afterEach(cleanup);
+afterAll(() => vi.unstubAllGlobals());
+const props: TableFilterChipProps = {
+  filter: { property: 'amount', operator: 'gte', value: '' },
+  label: 'Amount',
+  operatorLabel: 'at least',
+  operators: [
+    { value: 'eq', label: 'is' },
+    { value: 'gte', label: 'at least' },
+  ],
+  onValueChange: () => {},
+  onOperatorChange: () => {},
+  onRemove: () => {},
+  renderValueInput: state => (
+    <input
+      aria-label='Host value'
+      value={state.value}
+      onChange={event => state.onChange(event.target.value)}
+    />
+  ),
+  renderValueSummary: value => value,
+};
+
+describe('existing filter-chip interactions', () => {
+  it('opens an empty filter and delegates stored-value editing to the host', () => {
+    const onValueChange = vi.fn();
+    const onOperatorChange = vi.fn();
+    const onRemove = vi.fn();
+    render(
+      <TableFilterChip
+        {...props}
+        onValueChange={onValueChange}
+        onOperatorChange={onOperatorChange}
+        onRemove={onRemove}
+        messages={{ remove: 'Verwijder filter' }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Host value'), {
+      target: { value: '12' },
+    });
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith('12');
+    fireEvent.change(
+      screen.getByRole('combobox', { name: 'Filter operator' }),
+      { target: { value: 'eq' } },
+    );
+    expect(onOperatorChange).toHaveBeenCalledExactlyOnceWith('eq');
+    fireEvent.click(screen.getByRole('button', { name: 'Verwijder filter' }));
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it('retains the existing numeric browser-input policy for derived filters', () => {
+    const onValueChange = vi.fn();
+    render(
+      <TableFilterChip
+        {...props}
+        filter={{ derived: 'duration', operator: 'gte', value: '' }}
+        derivedUnit={{ suffix: 'hours', allowsNow: false }}
+        onValueChange={onValueChange}
+      />,
+    );
+    const input = screen.getByTestId(
+      'derived-filter-value',
+    ) as HTMLInputElement;
+    expect(input.type).toBe('number');
+    expect(input.step).toBe('any');
+    fireEvent.change(input, { target: { value: '1.5' } });
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith('1.5');
+    expect(screen.queryByLabelText('Host value')).toBeNull();
+  });
+
+  it('retains now/date transitions without converting the host value', () => {
+    const onValueChange = vi.fn();
+    const filter = { derived: 'due', operator: 'gte' as const, value: 'now' };
+    const view = render(
+      <TableFilterChip
+        {...props}
+        filter={filter}
+        derivedUnit={{ suffix: '', allowsNow: true }}
+        onValueChange={onValueChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('filter-chip'));
+    expect(screen.queryByTestId('derived-filter-value')).toBeNull();
+    fireEvent.change(
+      screen.getByRole('combobox', { name: 'Compare against' }),
+      { target: { value: 'date' } },
+    );
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith('');
+    view.rerender(
+      <TableFilterChip
+        {...props}
+        filter={{ ...filter, value: '' }}
+        derivedUnit={{ suffix: '', allowsNow: true }}
+        onValueChange={onValueChange}
+      />,
+    );
+    expect(
+      (screen.getByTestId('derived-filter-value') as HTMLInputElement).type,
+    ).toBe('date');
+  });
+});
+
 const base = {
   label: 'Amount',
   operatorLabel: 'at least',
@@ -125,19 +234,19 @@ it('allows repairing a stored unsupported operator even when the backend support
 it('locks an already-open popup during a backend operation', async () => {
   const remove = vi.fn(),
     change = vi.fn();
-  const props = {
+  const lockedProps = {
     ...base,
     filter: { property: 'amount', operator: 'eq' as const, value: '' },
     onRemove: remove,
     onValueChange: change,
   };
   const view = render(
-    <TableFilterChip {...props} valueInputProps={{ kind: 'number' }} />,
+    <TableFilterChip {...lockedProps} valueInputProps={{ kind: 'number' }} />,
   );
   await screen.findByRole('dialog');
   view.rerender(
     <TableFilterChip
-      {...props}
+      {...lockedProps}
       disabled
       valueInputProps={{ kind: 'number' }}
     />,

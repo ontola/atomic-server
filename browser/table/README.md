@@ -272,7 +272,10 @@ computed numeric/date modes and removal action. Its default popup uses Radix;
 Atomic supplies its existing popup/style primitives for dialog/control-lock
 integration. Unsupported stored operators stay visible until explicitly changed,
 and numeric `now` text stays editable when it is invalid for that unit. Popup
-content is labelled by its column header.
+content is labelled by its column header. Default controls use the canonical UI
+layout, select and input primitives. Valid computed numeric values use a native
+number input with `step="any"`; malformed stored values retain a text input so
+users can repair them without losing the original literal.
 
 Unavailable targets retain a removable chip instead of disappearing. Atomic's
 filter bar uses this recovery path, so removing a missing computed constraint
@@ -368,6 +371,15 @@ draft to the shared property form; `Frame` adapts modal primitives. A backend ca
 report a checkpointed identity with `isDraftLocked`, retaining read-only fields
 while explicit retry remains available. Persistence, authorization, immutable
 identity and retry/idempotence guarantees remain backend responsibilities.
+
+The default frame uses the canonical UI dialog, portal and buttons; column
+removal shares that frame and the canonical checkbox. Supply a host-wide
+`DialogGlobalContextProvider` when other dialogs are present so the whole host
+shares one stack. A standalone table dialog supplies a fallback provider. Both
+frames expose `aria-busy`, retain errors for retry and prevent dismissal while a
+write is pending. Unmounting an open frame unregisters it from the shared stack,
+restoring the underlying dialog's dismissal controls. Custom `Frame` overrides
+retain their existing contract.
 
 
 `TablePropertyDialog` also supports new-column creation. A backend draft may
