@@ -72,6 +72,10 @@ class Preference<T> extends ValueNotifier<T> {
   /// whether the drive is behind.
   T? _onDrive;
 
+  /// The drive [_onDrive] was read from or written to: another drive (a
+  /// different person signed in) may not hold it yet.
+  PreferenceDrive? _onDriveOf;
+
   /// What the device saved for [legacyKey]: a bool or a string.
   Object _cached(T value) => value is bool ? value : encode(value);
 
@@ -101,6 +105,7 @@ class Preference<T> extends ValueNotifier<T> {
       debugPrint('Reading preference $property failed: $e');
     }
     _onDrive = onDrive;
+    _onDriveOf = drive;
 
     final chosen = onDrive ?? old ?? defaultValue;
     if (value != chosen) value = chosen;
@@ -136,10 +141,11 @@ class Preference<T> extends ValueNotifier<T> {
     final target = drive;
     if (target == null) return Future.value();
     return _writes = _writes.then((_) async {
-      if (_onDrive == next) return;
+      if (identical(_onDriveOf, target) && _onDrive == next) return;
       try {
         await target.write(property, encode(next));
         _onDrive = next;
+        _onDriveOf = target;
       } catch (e) {
         debugPrint('Saving preference $property failed: $e');
       }
