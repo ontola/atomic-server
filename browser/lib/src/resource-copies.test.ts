@@ -39,6 +39,7 @@ function snapshot(resource: Resource) {
 function database(put = vi.fn(async () => {})) {
   return {
     isReady: true,
+    waitForInit: async () => true,
     putResourceWithSnapshot: put,
   } as unknown as ClientDbWorker;
 }
