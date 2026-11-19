@@ -604,7 +604,7 @@ Two things worth knowing about the runners:
 
 ### Per-resource copies and sync
 
-`browser/lib/src/resource-sync-status.test.ts` covers evidence from actual sent
+`browser/lib/src/resource-copies.test.ts` covers evidence from actual sent
 and persisted Loro versions: connected/drive-synced is not a receipt, newer edits
 remain unconfirmed, successful server saves remain confirmed while offline,
 local writes wait for persistence and expose failures, and identity/server/DB

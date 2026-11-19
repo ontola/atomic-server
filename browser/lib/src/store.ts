@@ -6089,7 +6089,7 @@ export class Store {
     )
       return;
     // A single microtask collects rows mounted in the same render. Rendering
-    // getResourcePeerSyncStatus itself never performs I/O or starts a timer.
+    // getResourceCopies itself never performs I/O or starts a timer.
     const token = {};
     this.nativePeerPoll = token;
     queueMicrotask(() => void this.readNativePeerEvidence(db, token));
