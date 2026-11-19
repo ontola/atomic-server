@@ -166,16 +166,10 @@ export async function appProfile(
       worker,
     },
     access: { root: table, signal, assertCurrent },
-    proxy: syncProxyTransport(
-      proxy,
-      context,
-      () => {
-        assertCurrent();
-        if (status().paused === true)
-          throw new Error('Resume this collection before syncing');
-      },
-      trusted,
-    ),
+    proxy: syncProxyTransport(proxy, context, assertCurrent, trusted, () => {
+      if (status().paused === true)
+        throw new Error('Resume this collection before syncing');
+    }),
     execution: async action => {
       assertCurrent();
 

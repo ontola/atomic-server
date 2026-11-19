@@ -54,8 +54,10 @@ creating the table. This branch uses GitHub's public API without a GitHub accoun
 
 Sync starts from **Sync now** and continues while you browse other views or
 resources in the app. Closing the app stops the run. **Pause** retains stored rows
-and blocks refreshes until you resume. The **Sync** tab contains controls and
-status; the **Table** tab follows the schema derived from the API description.
+and blocks refreshes until you resume. Paused status survives a reload; open the
+**Sync** tab and choose **Resume** to enable syncing again. The **Sync** tab
+contains controls and status; the **Table** tab follows the schema derived from
+the API description.
 **Syncable Collection** reads saved Atomic data and remains available during an
 import or a provider outage. Changes you make in Atomic stay in your drive.
 An interrupted import retains accepted rows. Moving a table within the same

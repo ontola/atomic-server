@@ -442,6 +442,7 @@ export function syncProxyTransport(
   originalContext: SyncAppContext,
   assertSessionCurrent: () => void,
   trusted: TrustedSyncableCatalog,
+  assertProviderReadAllowed: () => void = () => undefined,
 ): ProxyHost {
   const assertCurrent = () => {
     assertSessionCurrent();
@@ -449,6 +450,12 @@ export function syncProxyTransport(
   };
 
   assertCurrent();
+
+  const assertReadCurrent = () => {
+    assertCurrent();
+    assertProviderReadAllowed();
+  };
+
   const context = canonicalSyncAppContext(originalContext, trusted);
   const { document } = trusted;
   const servers = document.servers as { url?: unknown }[] | undefined;
@@ -478,7 +485,7 @@ export function syncProxyTransport(
     signal?: AbortSignal,
     expectedActive?: string,
   ): Promise<TransportResponse> => {
-    assertCurrent();
+    assertReadCurrent();
     signal?.throwIfAborted();
     if (++providerReads > 64)
       throw new Error('The integration read budget was exceeded');
@@ -510,7 +517,7 @@ export function syncProxyTransport(
         if (value !== null) headers[name] = value;
       }
 
-      assertCurrent();
+      assertReadCurrent();
       signal?.throwIfAborted();
 
       return { status: response.status, headers, body };
@@ -518,7 +525,7 @@ export function syncProxyTransport(
 
     if (!slot) throw new Error('Wrong integration account');
     const active = await proxy.activeKeyedConnection(context.platform, slot);
-    assertCurrent();
+    assertReadCurrent();
     signal?.throwIfAborted();
     if (expectedActive !== undefined && active !== expectedActive)
       throw new Error(
@@ -541,7 +548,7 @@ export function syncProxyTransport(
       throw new Error(
         'The integration connection changed during the provider read',
       );
-    assertCurrent();
+    assertReadCurrent();
     signal?.throwIfAborted();
 
     return { ...response, body: JSON.stringify(response.body) };
@@ -572,19 +579,19 @@ export function syncProxyTransport(
       throw new Error(
         'This connection belongs to a different authenticated principal',
       );
-    assertCurrent();
+    assertReadCurrent();
     await proxy.rememberKeyedPrincipal(
       context.platform,
       slot,
       principal as ConnectionPrincipal,
       operationId,
     );
-    assertCurrent();
+    assertReadCurrent();
   };
 
   const verify = async (slot: string, signal?: AbortSignal) => {
     const active = await proxy.activeKeyedConnection(context.platform, slot);
-    assertCurrent();
+    assertReadCurrent();
     const existing = verifications.get(slot);
     if (existing && (await existing).active === active) return active;
     const pending = (async () => {
@@ -647,7 +654,7 @@ export function syncProxyTransport(
         .map(row => ({ connectionId: row.connection_id, platform }));
     },
     request: async (input, signal) => {
-      assertCurrent();
+      assertReadCurrent();
       signal?.throwIfAborted();
       if (context.kind === 'legacy')
         throw new Error('Open the provider App to upgrade this legacy source');
@@ -718,7 +725,7 @@ export function syncProxyTransport(
       if (descriptor) {
         if (context.kind === 'platform') {
           const known = await proxy.listKeyed(context.platform);
-          assertCurrent();
+          assertReadCurrent();
           if (!known.some(row => row.connection_id === slot))
             throw new Error('Unknown keyed integration connection');
         }
@@ -726,7 +733,7 @@ export function syncProxyTransport(
         const response = await relay(request, slot, signal);
         if (response.status >= 200 && response.status < 300)
           await remember(slot!, descriptor.operationId, response, request);
-        assertCurrent();
+        assertReadCurrent();
         signal?.throwIfAborted();
 
         return {
@@ -745,10 +752,10 @@ export function syncProxyTransport(
         const verifiedActive = !publicSource
           ? await verify(slot!, signal)
           : undefined;
-        assertCurrent();
+        assertReadCurrent();
         signal?.throwIfAborted();
         const response = await relay(request, slot, signal, verifiedActive);
-        assertCurrent();
+        assertReadCurrent();
         signal?.throwIfAborted();
 
         return {
@@ -792,7 +799,7 @@ export function syncProxyTransport(
       const verifiedActive = !publicSource
         ? await verify(slot!, signal)
         : undefined;
-      assertCurrent();
+      assertReadCurrent();
       signal?.throwIfAborted();
       const response = await relay(request, slot, signal, verifiedActive);
 
@@ -819,7 +826,7 @@ export function syncProxyTransport(
         });
       }
 
-      assertCurrent();
+      assertReadCurrent();
       signal?.throwIfAborted();
 
       return {

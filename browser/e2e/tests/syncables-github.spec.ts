@@ -647,6 +647,26 @@ async function openRow(page: Page, text: string) {
   await expect.poll(() => getCurrentSubject(page)).not.toBe(previous);
 }
 
+async function expandSidebarNode(page: Page, name: string) {
+  const header = page
+    .getByTestId('sidebar')
+    .locator('[data-sidebar-id]')
+    .filter({
+      has: page.getByRole('button', { name, exact: true }),
+    });
+  const expand = header.getByRole('button', {
+    name: 'Expand folder',
+    exact: true,
+  });
+  await expect(
+    header.getByRole('button', { name: /^(Expand|Collapse) folder$/ }),
+  ).toHaveCount(1);
+  if (await expand.count()) await expand.click();
+  await expect(
+    header.getByRole('button', { name: 'Collapse folder', exact: true }),
+  ).toBeVisible();
+}
+
 async function sync(page: Page) {
   await selectView(page, 'Sync');
   const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
@@ -934,15 +954,22 @@ test.describe('catalog-driven built-in Syncables', () => {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
+    // Navigating to Organizations collapses deeper ancestors. Reopen the real
+    // tree with its carets before selecting the still-running mirror.
+    const backgroundReads = requests.providerRequests.length;
+    const backgroundDocuments = requests.documentRequests.length;
+    await expandSidebarNode(page, 'ontola');
+    await expandSidebarNode(page, 'Repositories');
+    await expandSidebarNode(page, 'atomic-server');
     await sidebar
-      .locator(
-        `a[href="${mirrorSubject}"],a[href*="${encodeURIComponent(mirrorSubject)}"]`,
-      )
+      .getByRole('button', { name: 'Issues and pull requests', exact: true })
       .click();
     await expect(page.getByRole('main')).toHaveAttribute(
       'about',
       mirrorSubject,
     );
+    expect(requests.providerRequests).toHaveLength(backgroundReads);
+    expect(requests.documentRequests).toHaveLength(backgroundDocuments);
     await selectView(page, 'Sync');
     await expect(
       iframe.getByRole('button', { name: 'Syncing', exact: true }),
@@ -954,6 +981,16 @@ test.describe('catalog-driven built-in Syncables', () => {
     ).toBeVisible({ timeout: 45_000 });
     await expect(syncNow).toBeEnabled();
     await browse(page);
+    await expect(
+      sidebar.getByRole('button', {
+        name: 'Issues and pull requests',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await testInfo.attach('github-expanded-principal-collections-desktop', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
     const initial = await sourceState(page, mirrorSubject);
     expect(initial.rows).toHaveLength(3);
     // The API collection also declares PR-shaped records; the generic engine mirrors them faithfully.

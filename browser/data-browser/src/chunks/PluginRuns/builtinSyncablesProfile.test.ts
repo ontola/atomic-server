@@ -525,6 +525,62 @@ it('resolves moved child provenance by source identity and revokes it when its s
 });
 
 describe('catalog-derived host relay', () => {
+  it('constructs while paused and blocks provider requests until resumed', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed } = setupProxy();
+    let paused = true;
+    const transport = syncProxyTransport(
+      proxy,
+      selected(doc),
+      () => undefined,
+      { document: doc },
+      () => {
+        if (paused) throw new Error('Resume before provider reads');
+      },
+    );
+    await expect(transport.request!(request())).rejects.toThrow(
+      'Resume before provider reads',
+    );
+    expect(readKeyed).not.toHaveBeenCalled();
+    paused = false;
+    await expect(transport.request!(request())).resolves.toMatchObject({
+      status: 200,
+    });
+    expect(readKeyed).toHaveBeenCalledTimes(2);
+  });
+
+  it('rechecks pause after a pending principal response before forwarding collection data', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed, rememberKeyedPrincipal } = setupProxy();
+    let paused = false;
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const respond = readKeyed.getMockImplementation()!;
+    readKeyed.mockImplementation(async (...args) => {
+      await pending;
+
+      return respond(...args);
+    });
+    const transport = syncProxyTransport(
+      proxy,
+      selected(doc),
+      () => undefined,
+      { document: doc },
+      () => {
+        if (paused) throw new Error('Resume before provider reads');
+      },
+    );
+    const read = transport.request!(request());
+    await vi.waitFor(() => expect(readKeyed).toHaveBeenCalledOnce());
+    paused = true;
+    release?.();
+    await expect(read).rejects.toThrow('Resume before provider reads');
+    expect(readKeyed).toHaveBeenCalledOnce();
+    expect(rememberKeyedPrincipal).not.toHaveBeenCalled();
+  });
+
   it('allows only the selected bound read and paging, after fresh typed principal verification', async () => {
     const doc = apiDocument();
     const { proxy, readKeyed, rememberKeyedPrincipal } = setupProxy();

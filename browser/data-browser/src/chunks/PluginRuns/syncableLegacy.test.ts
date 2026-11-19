@@ -683,6 +683,97 @@ describe('historical source collection', () => {
       'A current source configuration does not match its saved identity.',
     );
   });
+  it('refuses a short final page even when every known tree source was observed', async () => {
+    const f = fixture();
+    const known = Array.from({ length: 100 }, (_, index) => {
+      const subject = 'known-account-' + index;
+      const connectionId = 's'.repeat(40) + String(index).padStart(3, '0');
+      f.add(subject, 'app', 'account', connectionId, { connectionId });
+
+      return subject;
+    });
+    f.rows.set('moved-folder', { [core.properties.parent]: 'drive' });
+    const movedSlot = 'm'.repeat(43);
+    f.add('unknown-moved-account', 'moved-folder', 'account', movedSlot, {
+      connectionId: movedSlot,
+    });
+    f.query.mockReturnValue({
+      totalMembers: 101,
+      getMembersOnPage: page => (page === 0 ? known : []),
+    });
+    await expect(f.collect()).rejects.toThrow('discovery is incomplete');
+    expect(
+      f.getResource.mock.calls.some(
+        ([subject]) => subject === 'unknown-moved-account',
+      ),
+    ).toBe(false);
+  });
+  it.each([
+    { total: 101, first: 100, last: 0 },
+    { total: 201, first: 99, last: 1 },
+    { total: 101, first: 101, last: 1 },
+    { total: 0, first: 1, last: 0 },
+  ])(
+    'rejects incomplete raw page coverage with a stable total: %j',
+    async ({ total, first, last }) => {
+      const f = fixture();
+      f.query.mockReturnValue({
+        totalMembers: total,
+        getMembersOnPage: page =>
+          Array.from(
+            { length: page === 0 ? first : last },
+            (_, index) => `page-${page}-${index}`,
+          ),
+      });
+      await expect(f.collect({ currentSourceIsLegacy: true })).rejects.toThrow(
+        'discovery is incomplete',
+      );
+    },
+  );
+  it.each(['local-', 'atomic:commit:', 'https://foreign.example/'])(
+    'rejects duplicate raw subjects across pages before filtering %s',
+    async prefix => {
+      const f = fixture();
+      const first = Array.from({ length: 100 }, (_, index) => prefix + index);
+      f.query.mockReturnValue({
+        totalMembers: 101,
+        getMembersOnPage: page => (page === 0 ? first : [first[0]]),
+      });
+      await expect(f.collect({ currentSourceIsLegacy: true })).rejects.toThrow(
+        'repeated a resource',
+      );
+    },
+  );
+  it('counts complete raw pages before excluding commit and foreign subjects', async () => {
+    const f = fixture();
+    f.rows.set('folder', { [core.properties.parent]: 'drive' });
+    f.add('moved-account', 'folder', 'account', slot);
+    const first = [
+      ...Array.from({ length: 98 }, (_, index) => 'atomic:commit:' + index),
+      'https://foreign.example/first',
+      'https://foreign.example/second',
+    ];
+    f.query.mockReturnValue({
+      totalMembers: 102,
+      getMembersOnPage: page =>
+        page === 0 ? first : ['moved-account', 'https://foreign.example/last'],
+    });
+    const result = await f.collect({ currentSourceIsLegacy: true });
+    expect(result.sources).toContainEqual(
+      expect.objectContaining({
+        subject: 'moved-account',
+        kind: 'principal',
+        connectionId: slot,
+      }),
+    );
+    expect(
+      f.getResource.mock.calls.some(
+        ([subject]) =>
+          subject.startsWith('https://foreign.example/') ||
+          subject.startsWith('atomic:commit:'),
+      ),
+    ).toBe(false);
+  });
   it('fails closed at the resource bound and rejects cyclic ancestry', async () => {
     const f = fixture();
     f.authenticatedTree();

@@ -1051,6 +1051,20 @@ describe('catalog-driven Sync through the shared app bridge', () => {
     expect(set.request).not.toHaveBeenCalled();
   });
 
+  it('opens paused saved controls with Resume available and Sync disabled', async () => {
+    const set = setup();
+    set.data.get(root)![prop('mirror-status')] = { paused: true };
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    const buttons = [...element.querySelectorAll('button')];
+    expect(buttons.some(button => button.textContent === 'Resume')).toBe(true);
+    expect(
+      buttons.find(button => button.textContent === 'Sync now')?.disabled,
+    ).toBe(true);
+    expect(set.request).not.toHaveBeenCalled();
+    expect(set.store.execution).not.toHaveBeenCalledWith('start');
+  });
+
   it.each([{ id: null }, { id: 1.5 }, { id: '' }])(
     'rejects an invalid remote identity before storing records %j',
     async invalid => {

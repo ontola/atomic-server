@@ -269,24 +269,43 @@ export async function collectSyncableLegacySources(
 
         return {
           total,
-          members: response
-            .getSubjects(collectionTerms.properties.members)
-            .filter(subject => !isCommitSubject(subject)),
+          members: response.getSubjects(collectionTerms.properties.members),
         };
       };
 
       const first = await pageOfSources(0);
       const observed = new Set<string>();
+      const rawObserved = new Set<string>();
 
-      for (let page = 0; page < Math.ceil(first.total / 100); page++) {
+      // The query endpoint uses offset=page_size*current_page, so every
+      // nonfinal page must be full. Check the zero-count first page as well.
+      for (
+        let page = 0;
+        page < Math.max(1, Math.ceil(first.total / 100));
+        page++
+      ) {
         const result = page === 0 ? first : await pageOfSources(page);
         if (result.total !== first.total)
           throw new Error(
             'Legacy source discovery changed; retry after drive synchronization',
           );
 
+        const expected = Math.min(100, first.total - page * 100);
+        if (result.members.length !== expected)
+          throw new Error(
+            'Legacy source discovery is incomplete; retry after drive synchronization',
+          );
+
+        // Validate raw membership before discarding commits or foreign subjects:
+        // otherwise filtered duplicates can conceal a missing moved resource.
         for (const subject of result.members) {
-          if (!local(subject)) continue;
+          const normalized = store.normalizeSubject(subject);
+          if (rawObserved.has(normalized))
+            throw new Error(
+              'Legacy source discovery repeated a resource; retry after drive synchronization',
+            );
+          rawObserved.add(normalized);
+          if (isCommitSubject(subject) || !local(subject)) continue;
           observed.add(store.normalizeSubject(subject));
           if (!visited.has(subject)) pending.push(subject);
         }
@@ -294,6 +313,11 @@ export async function collectSyncableLegacySources(
         if (pending.length + visited.size > maximum)
           throw new Error('Legacy source migration exceeds its resource limit');
       }
+
+      if (rawObserved.size !== first.total)
+        throw new Error(
+          'Legacy source discovery is incomplete; retry after drive synchronization',
+        );
 
       for (const old of historical.values())
         if (!observed.has(store.normalizeSubject(old.row.subject)))

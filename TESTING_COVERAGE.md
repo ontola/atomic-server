@@ -1297,7 +1297,8 @@ This does not yet prove restoration of the user's private staging workspace.
   mounting, idempotent installation, preserved icons, verified legacy Accounts
   relocation and hiding, interrupted migration and user-moved resources.
 - `syncableLegacy.test.ts` checks bounded, read-only historical identity discovery,
-  signed drive queries for moved sources, proxy/platform/ancestry checks, unique
+  signed drive queries for moved sources, complete unique page coverage,
+  proxy/platform/ancestry checks, unique
   personal-repository aliases, ambiguity reporting and unchanged manual locations.
 - `builtinSyncApp.test.ts`, `builtinSyncIdentity.test.ts` and
   `syncableSource.test.ts` use the actual `syncables/browser` library and composed
@@ -1309,6 +1310,8 @@ This does not yet prove restoration of the user's private staging workspace.
   catalog authority, exact selected-instance/pagination routes, replayed response
   Links, principal verification, anonymous-only Public reads, unchanged fixed
   queries/bodies, reconnect identity checks and cancellation/source-change guards.
+  A paused Sync view can mount its Resume controls while provider reads and
+  execution starts remain blocked; pause is rechecked after pending reads.
   Host-held connection keys and user signing reuse the existing AppFrame bridge.
 - `syncableApiSchema.test.ts` covers catalog-derived Atomic class/property
   provisioning, stable schema identities across branding changes, safe immutable

@@ -9,9 +9,15 @@ import { syncProxyTransport } from './builtinSyncablesProfile';
 const state = vi.hoisted(() => ({
   actor: { subject: 'atomic:agent:person' },
   installation: 'atomic:installation' as string | undefined,
-  kind: 'platform' as 'platform' | 'legacy',
+  kind: 'platform' as 'platform' | 'legacy' | 'collection',
+  paused: false,
   legacy: { sources: [] as unknown[], warnings: [] as string[] },
-  resource: { get: vi.fn(() => undefined), set: vi.fn(), save: vi.fn() },
+  resource: {
+    get: vi.fn((_property: string): unknown => undefined),
+    set: vi.fn(),
+    save: vi.fn(),
+    canWrite: vi.fn(async () => [true]),
+  },
   document: {
     openapi: '3.0.3',
     info: { title: 'Fixture', version: '1' },
@@ -66,18 +72,45 @@ vi.mock('./builtinSyncablesProfile', () => ({
       properties: {
         'syncable-source-key': 'atomic:source-key',
         'syncable-source-config': 'atomic:source-config',
+        'syncable-mirror-status': 'atomic:status',
       },
     },
   })),
   canonicalSyncAppContext: vi.fn(context => context),
-  syncProxyTransport: vi.fn(() => ({ origin: 'https://proxy.example' })),
+  // Session validation is required during construction, before any provider call.
+  syncProxyTransport: vi.fn(
+    (
+      _proxy,
+      _context,
+      assertSession: () => void,
+      _trusted,
+      assertRead: () => void = () => undefined,
+    ) => {
+      assertSession();
+
+      return {
+        origin: 'https://proxy.example',
+        request: vi.fn(async () => {
+          assertSession();
+          assertRead();
+
+          return { status: 200, headers: {}, text: '[]' };
+        }),
+      };
+    },
+  ),
 }));
 const store = {
   getAgent: () => state.actor,
   getServerUrl: () => 'https://node.example',
   getResource: vi.fn(async () => state.resource),
 } as unknown as Store;
-const registry = {} as AppExecutionRegistry;
+const registry = {
+  isRunning: vi.fn(() => false),
+  start: vi.fn(async () => undefined),
+  cancel: vi.fn(),
+  ready: vi.fn(),
+} as unknown as AppExecutionRegistry;
 const open = () =>
   appProfile(
     store,
@@ -90,6 +123,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.installation = 'atomic:installation';
   state.kind = 'platform';
+  state.paused = false;
+  state.resource.get.mockImplementation(property =>
+    property === 'atomic:status' ? { paused: state.paused } : undefined,
+  );
   state.legacy = { sources: [], warnings: [] };
 });
 it('passes validated installation aliases and blocking warnings into the existing scoped host', async () => {
@@ -126,6 +163,7 @@ it('passes validated installation aliases and blocking warnings into the existin
     expect.objectContaining({ subject: 'atomic:source' }),
     expect.any(Function),
     expect.objectContaining({ document: state.document }),
+    expect.any(Function),
   );
 });
 it('rejects unresolved legacy sources before schema installation or frame mounting and retains a validated installation link', async () => {
@@ -146,4 +184,34 @@ it('does not create a replacement when its installation cannot be validated', as
   await expect(open()).rejects.toThrow('installation is unavailable');
   expect(collectSyncableLegacySources).not.toHaveBeenCalled();
   expect(syncableApiSchema).not.toHaveBeenCalled();
+});
+
+it('mounts a paused interactive profile while rejecting provider reads and worker starts until resumed', async () => {
+  state.kind = 'collection';
+  state.paused = true;
+  const spec = await open();
+  expect(spec.profile.context).toMatchObject({
+    kind: 'collection',
+    worker: false,
+  });
+  const request = {
+    platform: 'calendar-service',
+    path: 'v2/items',
+    method: 'GET',
+  };
+  await expect(spec.profile.proxy!.request!(request)).rejects.toThrow(
+    'Resume this collection',
+  );
+  await expect(spec.profile.execution!('start')).rejects.toThrow(
+    'Resume this collection',
+  );
+  expect(registry.start).not.toHaveBeenCalled();
+  state.paused = false;
+  await expect(spec.profile.proxy!.request!(request)).resolves.toMatchObject({
+    status: 200,
+  });
+  await expect(spec.profile.execution!('start')).resolves.toEqual({
+    running: false,
+  });
+  expect(registry.start).toHaveBeenCalledOnce();
 });
