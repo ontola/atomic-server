@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   core,
   dataBrowser,
   findSchema,
   subjectsReferToSameResource,
   useResource,
+  useResourceSnapshot,
   useValue,
   useStore,
   type Collection,
@@ -245,26 +246,30 @@ function CollectionRow({
   logicalOwnerProperty?: string;
 }) {
   const store = useStore();
-  const resource = useResource(subject);
+  const snapshot = useResourceSnapshot(subject);
+  const resource = snapshot.resource;
   const navigate = useNavigateWithTransition();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const stampedDrive = resource.get(driveProperty);
-  if (
-    !(
-      isSyncableCollectionRow(resource, table, descriptor) ||
-      (logicalOwnerProperty &&
-        subjectsReferToSameResource(
-          resource.get(logicalOwnerProperty),
-          table,
-        ) &&
-        resource.hasClasses(descriptor.rowClass))
-    ) ||
-    (stampedDrive !== undefined &&
-      (typeof stampedDrive !== 'string' ||
-        !subjectsReferToSameResource(stampedDrive, drive)))
-  )
-    return null;
+  const current = useMemo(() => {
+    if (!snapshot.ready || snapshot.error) return false;
+    const row = snapshot.resource;
+    const stampedDrive = row.get(driveProperty);
+    const logicalOwner = logicalOwnerProperty
+      ? row.get(logicalOwnerProperty)
+      : undefined;
+
+    return (
+      (isSyncableCollectionRow(row, table, descriptor) ||
+        (typeof logicalOwner === 'string' &&
+          subjectsReferToSameResource(logicalOwner, table) &&
+          row.hasClasses(descriptor.rowClass))) &&
+      (stampedDrive === undefined ||
+        (typeof stampedDrive === 'string' &&
+          subjectsReferToSameResource(stampedDrive, drive)))
+    );
+  }, [snapshot, table, drive, descriptor, logicalOwnerProperty]);
+  if (!current) return null;
 
   const open = () => {
     setBusy(true);

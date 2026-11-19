@@ -33,6 +33,30 @@ vi.mock('@tomic/react', async original => {
     ...(await original<typeof import('@tomic/react')>()),
     useStore: () => state.store,
     useResource: (subject: string) => state.resources.get(subject),
+    useResourceSnapshot: (subject: string) => {
+      const stored = state.resources.get(subject)!;
+      const stamp = React.useSyncExternalStore(
+        callback => {
+          state.propertyListeners.add(callback);
+
+          return () => {
+            state.propertyListeners.delete(callback);
+          };
+        },
+        () => JSON.stringify(stored.props),
+        () => JSON.stringify(stored.props),
+      );
+
+      return React.useMemo(
+        () => ({
+          resource: stored,
+          ready: stored.props.loading !== true,
+          error: stored.error,
+          revision: stamp,
+        }),
+        [stored, stamp],
+      );
+    },
     useValue: (stored: ReturnType<typeof resource>, property: string) => {
       const value = React.useSyncExternalStore(
         callback => {
@@ -100,6 +124,14 @@ function resource(subject: string, props: Record<string, unknown>) {
     props,
     get: (p: string) => props[p],
     getSubjects: (p: string) => (Array.isArray(props[p]) ? props[p] : []),
+    hasClasses: (...classes: string[]) => {
+      const assigned = props[core.properties.isA];
+
+      return (
+        Array.isArray(assigned) &&
+        classes.every(type => assigned.includes(type))
+      );
+    },
   };
 }
 
@@ -122,7 +154,7 @@ function collection(subjects: string[]) {
   } as unknown as Collection;
 }
 
-function view(data: Collection) {
+function view(data: Collection, logicalOwnerProperty?: string) {
   return (
     <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
       <SyncableCollectionView
@@ -130,6 +162,7 @@ function view(data: Collection) {
         drive='drive'
         collection={data}
         ready
+        logicalOwnerProperty={logicalOwnerProperty}
       />
     </ThemeProvider>
   );
@@ -376,5 +409,68 @@ it('updates visible stored fields during background sync without opening a provi
   });
   await screen.findByText('8');
   expect(screen.queryByText('3')).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it.each([table, 'elsewhere'])(
+  'waits for a cached row subject under %s to hydrate before checking its logical owner',
+  async parent => {
+    const ownerProperty = 'https://drive.example/entity-table';
+    const pending = resource('pending', { loading: true });
+    state.resources.set('pending', pending);
+    render(view(collection(['pending']), ownerProperty));
+    await screen.findByRole('columnheader', { name: 'Workspace' });
+    expect(screen.queryByRole('link')).toBeNull();
+    await act(async () => {
+      Object.assign(pending.props, {
+        loading: false,
+        [core.properties.parent]: parent,
+        [ownerProperty]: table,
+        [core.properties.isA]: [rowClass],
+        [nameProperty]: 'Hydrated workspace',
+      });
+      state.propertyListeners.forEach(notify => notify());
+    });
+    await screen.findByRole('link', { name: 'Hydrated workspace' });
+
+    if (parent === 'elsewhere') {
+      await act(async () => {
+        pending.props[ownerProperty] = 'another-table';
+        state.propertyListeners.forEach(notify => notify());
+      });
+      await waitFor(() => expect(screen.queryByRole('link')).toBeNull());
+      await act(async () => {
+        pending.props[ownerProperty] = table;
+        state.propertyListeners.forEach(notify => notify());
+      });
+      await screen.findByRole('link', { name: 'Hydrated workspace' });
+    }
+
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);
+
+it('shows a moved row with a matching logical owner and rejects absent or malformed owner values', async () => {
+  const ownerProperty = 'https://drive.example/entity-table';
+  for (const [subject, owner] of [
+    ['moved', table],
+    ['absent', undefined],
+    ['number', 7],
+    ['object', {}],
+  ] as const)
+    state.resources.set(
+      subject,
+      row(subject, {
+        [core.properties.parent]: 'elsewhere',
+        [ownerProperty]: owner,
+      }),
+    );
+  render(
+    view(collection(['moved', 'absent', 'number', 'object']), ownerProperty),
+  );
+  await screen.findByRole('link', { name: 'moved' });
+  expect(screen.getAllByRole('link').map(link => link.textContent)).toEqual([
+    'moved',
+  ]);
   expect(fetch).not.toHaveBeenCalled();
 });

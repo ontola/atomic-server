@@ -1300,6 +1300,8 @@ This does not yet prove restoration of the user's private staging workspace.
   partial/cancelled read retention, immutable observation replay, constrained
   relationship fanout and invalid saved filters failing closed. Native Open saves
   a View under an existing sibling entity table without a provider request.
+  Cold row placeholders hydrate in place before ownership comparisons; moved-row
+  owners are type checked and eligibility follows immutable resource snapshots.
   Stored-cell subscriptions update visible values during background synchronization,
   and cold entry observes immutable View readiness rather than caching a mutable
   resource handle. Worker queue tests cover independent cancellation and serial whole-table
