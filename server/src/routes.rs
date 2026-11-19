@@ -40,6 +40,7 @@ fn precompressed_index() -> &'static HashMap<&'static str, (&'static [u8], &'sta
 }
 
 /// Read an already embedded bundle without constructing another resource map.
+#[cfg(feature = "wasm-plugins")]
 pub(crate) fn embedded_asset(path: &str) -> Option<&'static [u8]> {
     precompressed_index().get(path).map(|(data, _)| *data)
 }

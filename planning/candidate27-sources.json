@@ -1132,10 +1132,11 @@
     "Retain unchanged1000000-byte first-use gzip and16777216-byte delivered embed budgets. Executable app frames, specialized resource pages and account-setup UI now load on actual use through existing Suspense boundaries; folder/default/drive startup remains eager. No SDK save/query/durability API changed for size.",
     "Preserve the established SDK root isLoopbackHost export from urls.ts (reserved *.localhost and127/8 behavior). The newer receipt-specific strict helper remains included and directly used by its private modules; its explicit barrel re-export cannot shadow the existing public API.",
     "Two identical browser-peer regression function bodies arrived through overlapping receipt branches. Retain each full assertion body once, removing duplicate definitions that prevented all-target Rust compilation.",
-    "The later-edit/earlier-ACK sidebar fixture disables the unrelated real WebSocket via public connect:false while preserving explicit online state, both versions, both controlled ACKs and every original warning assertion."
+    "The later-edit/earlier-ACK sidebar fixture disables the unrelated real WebSocket via public connect:false while preserving explicit online state, both versions, both controlled ACKs and every original warning assertion.",
+    "Main CI minimal-light Clippy exposed an unguarded plugin_runtime handler module. Match its existing wasm-plugins route/dependency gate and gate embedded_asset with its sole plugin-UI caller. Enabled runtime behavior and minimal route availability remain unchanged; no feature or test gate is disabled."
   ],
   "validation": {
-    "status": "All local gates passed. Full hosted Main/downstream and dedicated package workflows must validate the final published commit before any shared alias or immutable candidate tag advances.",
+    "status": "Local minimal-light regression check passes; normal hook validates the compatibility follow-up. All four required remote workflows must validate the new exact head before a checkpoint tag.",
     "package_boundaries": {
       "production_modules": 513,
       "host_imports_missing_sources_cycles": 0
@@ -1188,9 +1189,18 @@
       "status": "pass",
       "commit": "5581cf0cebcd09faa74736171c2746bce69c6b3c",
       "command": "cargo clippy --workspace --exclude atomic-server-tauri --no-deps --all-targets --no-default-features --features light,wasm-plugins -- -D warnings",
-      "note": "Mandatory normal hook checked the actual staged snapshot; no subsequent Rust changes."
+      "note": "Initial aggregate passed the mandatory hook at5581cf0ce. This feature-gating compatibility follow-up is checked by the same mandatory enabled-plugin hook; the minimal configuration is also checked explicitly."
     },
-    "hosted_ci": "pending",
+    "hosted_ci": {
+      "previous_sha": "3fbe54825bc10c947751504567530117b9db6e14",
+      "Main": "Failed minimal Clippy on the plugin runtime module gate; compatibility fix included in this follow-up. Other concurrent work was cancelled, not declared green.",
+      "paired_saas": "success",
+      "Table": "success",
+      "SharedUI": "success",
+      "Flutter": "success",
+      "failure_url": "https://github.com/ontola/atomic-server/actions/runs/44485485910/job/135427818381",
+      "new_exact_head": "All required workflows pending redispatch."
+    },
     "embed_first_use": {
       "gzip_bytes": 966900,
       "budget": 1000000,
@@ -1244,6 +1254,11 @@
       "commit": "5581cf0cebcd09faa74736171c2746bce69c6b3c",
       "url": "https://github.com/ontola/atomic-server/actions/runs/44482847264",
       "note": "Final frontend follow-up requires its own fresh remote workflow result."
+    },
+    "minimal_light_clippy": {
+      "status": "pass",
+      "command": "cargo clippy --locked -p atomic-server --no-deps --all-targets --no-default-features --features light -- -D warnings",
+      "coverage": "No-default plugin-free build and all targets; two matching feature gates preserve default plugin functionality."
     }
   },
   "selection": {
