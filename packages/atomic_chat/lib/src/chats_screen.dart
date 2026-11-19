@@ -30,7 +30,7 @@ import 'native_views.dart';
 import 'new_document_sheet.dart';
 
 /// Items per section on the home; the rest is behind its "Show all" row.
-const _homeItems = 4;
+const _homeItems = 3;
 
 /// Most entries the activity feed holds.
 const _maxActivity = 100;
@@ -833,6 +833,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         height: 14,
                         child: RowLeading(
                             size: 14,
+                            iconSize: 12,
                             fallbackIcon: driveIcon,
                             fallbackLabel: driveName,
                             image: ImageSource.of(a.drivePicture))),
@@ -922,7 +923,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
           fold: fold,
           future: _notifications,
           empty: 'No notifications',
-          hideEmpty: true,
           badge: (list) => list.where((n) => !n.read).length,
           rows: (list) => [for (final n in list) _notificationRow(n)],
           onShowAll: (list) =>
@@ -998,10 +998,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }
   }
 
-  /// Whether the panel is on screen: these three are left out while empty.
+  /// Whether the panel is on screen: these two are left out while empty.
   bool _takesRoom(HomeSection id) =>
       !const {
-        HomeSection.notifications,
         HomeSection.favorites,
         HomeSection.messages
       }.contains(id) ||
@@ -1010,9 +1009,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   /// The sections the home lists, a hairline above each but the first.
   List<HomeSection> _panelIds(bool split) => [
         for (final id in _layout.visible)
-          if (id != HomeSection.drives &&
-              !(split && id == HomeSection.activity))
-            id
+          if (!(split && id == HomeSection.activity)) id
       ];
 
   List<Widget> _shownSections(bool split) {
@@ -1021,6 +1018,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
     return [
       for (var i = 0; i < ids.length; i++)
         _sectionFor(ids[i], c, divider: i > 0),
+      // Nothing to hold when every panel is off (or empty): this row opens
+      // the sections menu instead.
+      if (!ids.any(_takesRoom))
+        SidebarRow(
+          key: const Key('home-sections-row'),
+          title: 'Home sections',
+          icon: const Icon(Icons.tune),
+          onTap: _customize,
+        ),
     ];
   }
 
@@ -1143,9 +1149,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
         fill: true,
         drives: _driveList,
         current: _drive,
+        // On a phone only the sidebar changes: the drive page would cover
+        // the drive's tree just picked. Next to a detail pane the drive
+        // also opens there.
         onSelect: (d) => closing(() async {
           await _selectDrive(d);
-          if (mounted) _openDrivePage(d);
+          if (mounted &&
+              ShellScope.layoutOf(context) == ShellLayout.split) {
+            _openDrivePage(d);
+          }
         }),
         onManage: () => closing(() => _openSectionPage(HomeSection.drives)),
         onNew: shell == null
@@ -1230,8 +1242,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         final natural = rowH * _homeItems + showAllH;
                         final headers =
                             headerH * shown.where(_takesRoom).length;
-                        // The panels come first; the tree keeps at least three rows.
-                        final minTree = (m.compact ? m.rowHeight : 56.0) * 3;
+                        // The panels come first, so they never scroll on a
+                        // phone; the tree keeps one row and scrolls itself.
+                        final minTree = m.compact ? m.rowHeight : 56.0;
                         final bottomPad = MediaQuery.paddingOf(context).bottom;
                         final cap = math.max(0.0, room - minTree);
                         final avail = math.max(0.0, cap - headers - bottomPad);
@@ -1601,8 +1614,10 @@ class _SectionState<T> extends State<_Section<T>>
                       child: _body(context, list, error),
                     )
                   : ClipRect(
+                      // Top start: an empty section's one short line would
+                      // sit centred while folding and jump left when open.
                       child: Align(
-                        alignment: Alignment.topCenter,
+                        alignment: AlignmentDirectional.topStart,
                         heightFactor: _shape.value,
                         child: FadeTransition(
                           opacity: _shape,
@@ -2197,21 +2212,16 @@ class _Empty extends StatelessWidget {
 
   const _Empty(this.text, this.c, {super.key});
 
-  /// One quiet line under the heading, where the first row would start: a
-  /// centred block with 32 px around it made an empty section taller than a
-  /// full one.
+  /// One quiet line under the heading, in the first row's place: as tall as
+  /// a row and with its text where a row's text starts. A centred block with
+  /// 32 px around it made an empty section taller than a full one.
   @override
   Widget build(BuildContext context) {
     final m = SidebarMetrics.of(context);
-    if (m.compact) {
-      return Padding(
-        padding: EdgeInsets.fromLTRB(m.hPad, 4, m.hPad, 8),
-        child: Text(text, style: SidebarRow.text(c.textSecondary, m.textSize)),
-      );
-    }
-    return Padding(
-      padding: EdgeInsets.fromLTRB(m.hPad, 4, m.hPad, 16),
-      child: Text(text, style: TextStyle(color: c.textSecondary)),
+    return SidebarRow(
+      title: text,
+      slot: SidebarIconsScope.of(context),
+      titleStyle: SidebarRow.text(c.textSecondary, m.textSize),
     );
   }
 }

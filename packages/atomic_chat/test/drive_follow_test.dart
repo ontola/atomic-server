@@ -178,4 +178,20 @@ void main() {
     expect(find.byKey(const Key('drive-switcher')), findsOneWidget);
     expect(api.activeSet, isEmpty);
   });
+
+  testWidgets('on a phone, picking a drive in the switcher only changes the sidebar',
+      (tester) async {
+    final api = _Api({});
+    await tester.pumpWidget(_shell(api));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('current-drive-switch')));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('drive-switcher-open-did:ad:work')));
+    await tester.pumpAndSettle();
+    expect(api.activeSet, ['did:ad:work']);
+    expect(_header(tester), 'Work');
+    expect(find.byType(ResourceView), findsNothing,
+        reason: 'the drive page would cover the tree just picked');
+  });
 }
