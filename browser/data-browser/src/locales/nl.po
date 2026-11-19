@@ -13597,3 +13597,7 @@ msgstr "Proxy, catalogus en experimentele plugins."
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Schijfinstellingen"
+
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Edit profile"
+msgstr "Profiel bewerken"
