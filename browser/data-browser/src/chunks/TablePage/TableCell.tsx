@@ -7,20 +7,10 @@ import {
   useResource,
   useValue,
 } from '@tomic/react';
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type JSX,
-} from 'react';
-import { Cell } from '@chunks/TableEditor';
+import { useCallback, useContext, useMemo, type JSX } from 'react';
+import { ValueCell, type CellEditStart } from '@tomic/table';
 import { CellAlign } from '@chunks/TableEditor/Cell';
-import {
-  CursorMode,
-  useTableEditorContext,
-} from '@chunks/TableEditor/TableEditorContext';
+
 import {
   appendStringToType,
   dataTypeAlignmentMap,
@@ -73,17 +63,6 @@ const textSeededDatatypes = new Map<string, RegExp>([
  */
 const unseededDatatypes = new Set<string>([Datatype.TIMESTAMP]);
 
-function useIsEditing(row: number, column: number) {
-  const { cursorMode, selectedColumn, selectedRow } = useTableEditorContext();
-
-  const isEditing =
-    cursorMode === CursorMode.Edit &&
-    selectedColumn === column &&
-    selectedRow === row;
-
-  return isEditing;
-}
-
 const valueOpts = {
   commitDebounce: 0,
   commit: false,
@@ -102,7 +81,6 @@ export function TableCell({
 }: TableCellProps): JSX.Element {
   const resource = useResource(subject);
   const { contentLanguage } = useSettings();
-  const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
   const calendarRow = useContext(TableCalendarRowContext);
   const { openResourceMenu } = useResourceContextMenu();
@@ -124,7 +102,6 @@ export function TableCell({
     .map(p => p.agent);
 
   const dataType = property.datatype;
-  const isEditing = useIsEditing(rowIndex, columnIndex);
   // Announced to screen readers with every cell, so it should be the label
   // the column heading shows rather than the property's identifier.
   const propertyLabel = useColumnLabel(property);
@@ -174,164 +151,75 @@ export function TableCell({
     ],
   );
 
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      // While editing, keep the native menu (copy/paste in the input). A
-      // draft row isn't saved yet, so the menu no-ops there.
-      if (isEditing) {
-        return;
-      }
+  const editStart = useMemo<CellEditStart>(() => {
+    const accepts = textSeededDatatypes.get(dataType);
+    if (accepts) return { kind: 'text', accepts: key => accepts.test(key) };
+    if (unseededDatatypes.has(dataType)) return { kind: 'picker' };
 
-      openResourceMenu(subject, e);
-    },
-    [isEditing, openResourceMenu, subject],
-  );
+    return {
+      kind: 'value',
+      fromCharacter: (key, current) => {
+        if (dataType === Datatype.LOCALIZEDTEXT) {
+          const map =
+            current && typeof current === 'object' && !Array.isArray(current)
+              ? (current as Record<string, string>)
+              : {};
 
-  // The character that opened edit mode, held until the resource catches up.
-  //
-  // Typing in Visual mode emits the character AND flips to Edit mode in the
-  // same handler, but writing the character is async (`setValue` awaits
-  // `resource.set`). The editor therefore mounted on the next render with the
-  // value as it was BEFORE the keystroke — empty — and the rest of what you
-  // typed replaced it, silently eating the first character. Seeding the editor
-  // from this synchronous state closes that window; under load (where the write
-  // is slower) it was losing the character most of the time.
-  const [pendingValue, setPendingValue] = useState<JSONValue | undefined>();
-  // The same character for an editor that takes it as text (see
-  // `textSeededDatatypes`): only the editor stores anything, on commit.
-  const [seed, setSeed] = useState<string | undefined>();
-
-  const handleEnterEditModeWithCharacter = useCallback(
-    (key: string) => {
-      // A LocalizedText cell replaces only its own language — spreading the
-      // existing map keeps the other languages. `appendStringToType` starts
-      // from `undefined` (spreadsheet type-over semantics), which for a map
-      // value would wipe every language, not just the edited one.
-      if (dataType === Datatype.LOCALIZEDTEXT) {
-        const map =
-          value && typeof value === 'object' && !Array.isArray(value)
-            ? (value as Record<string, string>)
-            : {};
-        const next = { ...map, [languageTag ?? contentLanguage]: key };
-        setPendingValue(next);
-        onChange(next);
-
-        return;
-      }
-
-      // A date is typed as text (`2/10/2026`), a number as `-2.5`, so the
-      // first character is not a value yet. Hand it to the editor to start
-      // from, and store nothing until the editor commits a whole value.
-      const seedAccepts = textSeededDatatypes.get(dataType);
-
-      if (seedAccepts) {
-        if (seedAccepts.test(key)) {
-          setSeed(key);
+          return { ...map, [languageTag ?? contentLanguage]: key };
         }
 
-        return;
-      }
-
-      if (unseededDatatypes.has(dataType)) {
-        return;
-      }
-
-      const next = appendStringToType(undefined, key, dataType);
-
-      // The character is not a value of this type. Writing `undefined` would
-      // clear the cell, so just open the editor on what is stored.
-      if (next === undefined) {
-        return;
-      }
-
-      setPendingValue(next);
-      onChange(next);
-    },
-    [onChange, dataType, value, languageTag, contentLanguage],
-  );
-
-  // The editor's own edits hand control straight back to the resource —
-  // waiting for `value` to equal the seed would never fire, since the next
-  // keystroke makes it "ro" while the seed is still "r", freezing the editor
-  // on the first character.
-  const handleEditorChange = useCallback(
-    (v: JSONValue) => {
-      setPendingValue(undefined);
-
-      return onChange(v);
-    },
-    [onChange],
-  );
-
-  // Leaving edit mode drops both seeds regardless.
-  useEffect(() => {
-    if (!isEditing && pendingValue !== undefined) {
-      setPendingValue(undefined);
-    }
-
-    if (!isEditing && seed !== undefined) {
-      setSeed(undefined);
-    }
-  }, [isEditing, pendingValue, seed]);
-
-  const handleEditNextRow = useCallback(() => {
-    // Advance to the next row. The trailing empty row to move into already
-    // exists — a virtual row spawns its successor via `onFirstContent` the
-    // moment it gains content — so this is pure navigation, no spawning here.
-    //
-    // Only advance if this row has real content (a fresh row has only what
-    // creating it wrote) — avoids hopping off an empty row on a stray Enter. Read the
-    // count FRESH from the resource, not a render-time snapshot: the keystroke
-    // just typed updates the resource synchronously, but the cell's rerender
-    // lags under load, so a stale closure would skip the advance — piling the
-    // next value onto the same cell.
-    if (hasUserContent(resource)) {
-      setActiveCell(rowIndex + 1, columnIndex);
-    }
-  }, [setActiveCell, rowIndex, columnIndex, resource]);
-
-  const display = (
-    <Editor.Display
-      value={value}
-      onChange={onChange}
-      property={property.subject}
-      languageTag={languageTag}
-    />
-  );
+        return appendStringToType(undefined, key, dataType);
+      },
+    };
+  }, [dataType, languageTag, contentLanguage]);
 
   return (
-    <Cell
+    <ValueCell
+      identity={JSON.stringify([
+        resource.subject,
+        property.subject,
+        languageTag ?? contentLanguage,
+      ])}
       rowIndex={rowIndex}
       columnIndex={columnIndex}
       align={alignment}
-      ariaDescription={`${propertyLabel}, row ${rowIndex + 1}`}
-      onEnterEditModeWithCharacter={handleEnterEditModeWithCharacter}
-      onEditNextRow={handleEditNextRow}
-      onContextMenu={handleContextMenu}
-    >
-      {isEditing ? (
+      label={propertyLabel}
+      value={value}
+      onChange={onChange}
+      editStart={editStart}
+      canAdvance={() => hasUserContent(resource)}
+      onContextMenu={event => openResourceMenu(subject, event)}
+      renderEditor={state => (
         <Editor.Edit
-          value={pendingValue ?? value}
-          onChange={handleEditorChange}
+          {...state}
           property={property.subject}
           resource={resource}
           languageTag={languageTag}
-          seed={seed}
         />
-      ) : calendarRow?.recurrenceProp?.subject === property.subject ? (
-        // The recurrence column reads as the Repeat field's summary, not as
-        // JSON. Editing it still opens the JSON editor.
-        <RepeatSummaryCell
-          resource={resource}
-          calendar={calendarRow}
-          fallback={display}
-        />
-      ) : (
-        display
       )}
+      renderDisplay={state => {
+        const display = (
+          <Editor.Display
+            {...state}
+            property={property.subject}
+            languageTag={languageTag}
+          />
+        );
+
+        return calendarRow?.recurrenceProp?.subject === property.subject ? (
+          <RepeatSummaryCell
+            resource={resource}
+            calendar={calendarRow}
+            fallback={display}
+          />
+        ) : (
+          display
+        );
+      }}
+    >
       {remoteAgents && remoteAgents.length > 0 && (
         <RemoteCellPresence agents={remoteAgents} />
       )}
-    </Cell>
+    </ValueCell>
   );
 }

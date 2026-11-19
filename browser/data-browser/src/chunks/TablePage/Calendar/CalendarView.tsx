@@ -1,3 +1,5 @@
+import { useAllMembers } from '../helpers/useAllMembers';
+import type { IndexedTableRows } from '@tomic/table';
 import { type CalendarRecord } from '@tomic/lib';
 import {
   calendarOccurrenceBuckets,
@@ -6,7 +8,6 @@ import {
 } from './calendarOccurrences';
 import { WarningBlock } from '@components/WarningBlock';
 import {
-  Collection,
   Datatype,
   JSONValue,
   Resource,
@@ -17,7 +18,7 @@ import {
   useResources,
   useStore,
 } from '@tomic/react';
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
+import { useCallback, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 import { LoaderBlock } from '@components/Loader';
@@ -48,7 +49,7 @@ interface CalendarViewProps {
   tableClass: Resource;
   /** Every property of the class (used to find/adopt a date property). */
   allColumns: Property[];
-  collection: Collection;
+  collection: IndexedTableRows;
   ready: boolean;
   viewGroupBy: string | undefined;
   setViewGroupBy: (property: string) => void;
@@ -125,25 +126,7 @@ export function CalendarView({
   // All rows of the table, loaded up front so they can be bucketed by their
   // date value (the query index can't express a per-day filter). Re-fetched
   // when the collection identity or size changes (new/removed rows).
-  const [memberSubjects, setMemberSubjects] = useState<string[]>([]);
-  const totalMembers = collection.totalMembers;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void collection
-      .getAllMembers()
-      .then(members => {
-        if (!cancelled) {
-          setMemberSubjects(members);
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [collection, totalMembers]);
+  const memberSubjects = useAllMembers(collection);
 
   const rows = useResources(memberSubjects);
 

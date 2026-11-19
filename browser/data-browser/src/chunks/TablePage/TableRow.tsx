@@ -1,3 +1,5 @@
+import { useTableRowResource } from './useTableRowResource';
+import type { IndexedTableRows } from '@tomic/table';
 import {
   memo,
   useCallback,
@@ -7,12 +9,10 @@ import {
   type JSX,
 } from 'react';
 import {
-  Collection,
   dataBrowser,
   DataBrowser,
   Resource,
   unknownSubject,
-  useMemberFromCollection,
   useResource,
 } from '@tomic/react';
 import { Cell } from '@chunks/TableEditor';
@@ -26,7 +26,7 @@ import { useMaterializeWhenDeselected } from './useMaterializeWhenDeselected';
 import { withRowDefaults } from './rowDefaults';
 
 interface TableRowProps {
-  collection: Collection;
+  collection: IndexedTableRows;
   index: number;
   columns: TableColumn[];
   /**
@@ -85,7 +85,7 @@ export function TableRow({
   columns,
   subject,
 }: TableRowProps): JSX.Element {
-  const resource = useMemberFromCollection(collection, index);
+  const resource = useTableRowResource(collection, index);
 
   useMarkings(resource, index);
 

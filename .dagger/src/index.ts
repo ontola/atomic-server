@@ -682,25 +682,11 @@ export class AtomicServer {
         // 2. Packages reached through node_modules need a `dist`. Building
         //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
         //    `@tomic/edit-mode/react` unresolvable, and `@tomic/form-app`
-        //    needs `@tomic/form-renderer`. All six build from TypeScript
+        //    needs `@tomic/form-renderer`. Build the complete dependency graph,
+        //    including the shared UI/table/pure-helper packages, from TypeScript
         //    alone, so this stays in the cheap static tier beside lint and
         //    `cargo fmt`: no WASM, no Rust.
-        .withExec([
-          'pnpm',
-          '--filter',
-          '@tomic/form-renderer',
-          '--filter',
-          '@tomic/lib',
-          '--filter',
-          '@tomic/react',
-          '--filter',
-          '@tomic/plugin',
-          '--filter',
-          '@tomic/service-ui',
-          '--filter',
-          '@tomic/edit-mode',
-          'build',
-        ])
+        .withExec(['pnpm', '--filter', '@tomic/data-browser^...', 'build'])
         .withExec([
           'pnpm',
           '--filter=!@tomic/data-browser',
@@ -1093,6 +1079,9 @@ export class AtomicServer {
         '/repo/browser/data-browser/package.json',
         browser.file('data-browser/package.json'),
       )
+      .withFile('/repo/browser/ui/package.json', browser.file('ui/package.json'))
+      .withFile('/repo/browser/utils/package.json', browser.file('utils/package.json'))
+      .withFile('/repo/browser/table/package.json', browser.file('table/package.json'))
       .withFile(
         '/repo/browser/lib/package.json',
         browser.file('lib/package.json'),
@@ -1153,6 +1142,7 @@ export class AtomicServer {
     // integration tests, except @tomic/mcp: hosted-mcp.integration.test.ts
     // imports its bridge from `../../mcp/src`.
     const withSource = installed
+      .withDirectory('/repo/browser/utils', browser.directory('utils'))
       .withDirectory('/repo/browser/lib', browser.directory('lib'))
       .withDirectory('/repo/browser/mcp', browser.directory('mcp'));
 
@@ -1161,6 +1151,8 @@ export class AtomicServer {
         permissions: 0o755,
       })
       .withDirectory('/repo/wasm/pkg', wasmPkg)
+      .withWorkdir('/repo/browser/utils')
+      .withExec(['pnpm', 'run', 'build'])
       .withWorkdir('/repo/browser/lib')
       .withExec(['pnpm', 'run', 'test:integration'])
       .stdout();
@@ -1356,6 +1348,9 @@ export class AtomicServer {
         '/app/data-browser/package.json',
         browser.file('data-browser/package.json'),
       )
+      .withFile('/app/ui/package.json', browser.file('ui/package.json'))
+      .withFile('/app/utils/package.json', browser.file('utils/package.json'))
+      .withFile('/app/table/package.json', browser.file('table/package.json'))
       .withFile('/app/lib/package.json', browser.file('lib/package.json'))
       .withFile('/app/react/package.json', browser.file('react/package.json'))
       .withFile('/app/svelte/package.json', browser.file('svelte/package.json'))

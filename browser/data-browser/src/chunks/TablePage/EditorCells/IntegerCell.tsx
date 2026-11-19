@@ -1,34 +1,14 @@
+import { IntegerCell as SharedCell } from '@tomic/table';
 import { JSONValue, urls, useResource, useString } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import { InputBase } from './InputBase';
 import { ProgressBar } from './ProgressBar';
-import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
-import { useCommittedText } from './useCommittedText';
-import { formatNumberInput, parseInteger } from './numberInput';
+import { CellContainer, DisplayCellProps } from './Type';
 import { formatNumber } from '../helpers/formatNumber';
 
 import type { JSX } from 'react';
 
 const { numberFormats } = urls.instances;
-
-function IntegerCellEdit({
-  value,
-  onChange,
-  seed,
-}: EditCellProps<JSONValue>): JSX.Element {
-  // Text, not `type='number'`: that one reads a lone `-` or `.` as empty, so
-  // a number could not start with one.
-  const input = useCommittedText({
-    value,
-    onChange,
-    seed,
-    format: formatNumberInput,
-    parse: parseInteger,
-  });
-
-  return <InputBase type='text' inputMode='numeric' autoFocus {...input} />;
-}
 
 function IntegerCellDisplay({
   value,
@@ -53,7 +33,7 @@ function IntegerCellDisplay({
 }
 
 export const IntegerCell: CellContainer<JSONValue> = {
-  Edit: IntegerCellEdit,
+  Edit: SharedCell.Edit,
   Display: IntegerCellDisplay,
 };
 

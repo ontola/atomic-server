@@ -15,6 +15,8 @@ import {
 import { ThemeProvider } from 'styled-components';
 import {
   Datatype,
+  commits,
+  core,
   type JSONValue,
   LoroLoader,
   Store,
@@ -87,12 +89,24 @@ async function renderCell(
   stored: JSONValue,
 ): Promise<Resource> {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
+  // First edits set createdAt. Seed its definition so this local fixture never
+  // fetches timestamp metadata over HTTP before reaching its value assertion.
+  const timestamp = await store.newResource({
+    subject: commits.properties.createdAt,
+    noParent: true,
+  });
+  await timestamp.set(core.properties.datatype, Datatype.TIMESTAMP, false);
+  await timestamp.set(core.properties.shortname, 'createdAt', false);
+  await timestamp.set(core.properties.description, 'Creation timestamp', false);
   // A `_new:` row stays local, so nothing here reaches for a server.
   const row = await store.newResource({
     subject: '_new:day-row',
     noParent: true,
   });
   await row.set(property.subject, stored, false);
+  // Existing-row edits already have a creation timestamp. Seed it locally so
+  // this editor fixture does not wait for remote commit-property metadata.
+  await row.set(commits.properties.createdAt, Date.now(), false);
 
   // StrictMode as the app runs it: an editor that stores on unmount must not
   // store when React only re-runs its effects.

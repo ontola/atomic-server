@@ -1,8 +1,8 @@
+import type { IndexedTableRows } from '@tomic/table';
 import {
   unknownSubject,
   type AggregateFunction,
   type AggregateOutcome,
-  type Collection,
   type Property,
 } from '@tomic/react';
 import { createContext } from 'react';
@@ -41,6 +41,12 @@ export interface TablePageContextType {
   setFilterOperator: (key: string, operator: FilterOperator) => void;
   removeFilter: (key: string) => void;
   hideColumn: (property: string) => void;
+  /** Removal is owned above headers so optimistic schema changes cannot close it. */
+  requestColumnRemoval: (property: string) => void;
+  requestColumnEdit: (property: string) => void;
+  requestColumnCreation: (category: string) => void;
+  requestRowActionEdit: (spec?: RowActionSpec) => void;
+  requestDerivedColumnEdit: (spec?: DerivedColumnSpec) => void;
   /**
    * Adds a property to the active view's visible columns. Needed after creating
    * one: `view-columns` treats anything it doesn't list as hidden, so a brand
@@ -117,7 +123,7 @@ export interface TablePageContextType {
 }
 
 export type RowSource =
-  | { kind: 'member'; collection: Collection; index: number }
+  | { kind: 'member'; collection: IndexedTableRows; index: number }
   | { kind: 'session'; key: string };
 
 export const TablePageContext = createContext<TablePageContextType>({
@@ -138,6 +144,11 @@ export const TablePageContext = createContext<TablePageContextType>({
   setFilterOperator: () => undefined,
   removeFilter: () => undefined,
   hideColumn: () => undefined,
+  requestColumnRemoval: () => undefined,
+  requestColumnEdit: () => undefined,
+  requestColumnCreation: () => undefined,
+  requestRowActionEdit: () => undefined,
+  requestDerivedColumnEdit: () => undefined,
   showColumn: () => undefined,
   splitLanguageSubjects: [],
   toggleSplitLanguages: () => undefined,

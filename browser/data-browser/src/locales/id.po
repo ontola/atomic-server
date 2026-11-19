@@ -117,12 +117,15 @@ msgstr "Agen AI"
 #: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/Website/WebsitePage.tsx
@@ -266,10 +269,10 @@ msgstr "Ringkas percakapan secara otomatis saat token input melebihi persentase 
 #: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/DashboardPage/DashboardBlock.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 #: src/chunks/TablePage/ColumnSpecHeading.tsx
 #: src/chunks/TablePage/ColumnSpecHeading.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
@@ -698,10 +701,6 @@ msgstr "Ontologi"
 msgid "App"
 msgstr "Aplikasi"
 
-#: src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
-
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
 msgstr "Tidak ada `subject`, `path`, atau `href` yang diteruskan ke AtomicLink ini."
@@ -933,6 +932,14 @@ msgstr "Buat akun dan terima"
 msgid "I already have an account"
 msgstr "Saya sudah memiliki akun"
 
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/File/ConvertToDocumentButton.tsx
@@ -3137,6 +3144,7 @@ msgstr "Tampilan"
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Filter"
 msgstr "Filter"
 
@@ -3145,21 +3153,17 @@ msgid "Hide in this view"
 msgstr "Sembunyikan di tampilan ini"
 
 #. 0: ' '
-#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Remove <0/> from{0} <1/>"
 msgstr "Hapus <0/> dari{0} <1/>"
 
-#: src/chunks/TablePage/TableHeadingMenu.tsx
-msgid "<0/> Delete property and its children"
-msgstr "<0/> Hapus properti dan turunannya"
-
-#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Delete property"
 msgstr "Hapus properti"
 
 #: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Remove column"
 msgstr "Hapus kolom"
 
@@ -3171,10 +3175,6 @@ msgstr "Ekspor ke CSV"
 msgid "Untitled view"
 msgstr "Tampilan tanpa judul"
 
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Any"
-msgstr "Apa pun"
-
 #: src/chunks/PluginRuns/IntegrationActions.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "True"
@@ -3185,10 +3185,7 @@ msgstr "Benar"
 msgid "False"
 msgstr "Salah"
 
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Value…"
-msgstr "Nilai…"
-
+#: src/chunks/TablePage/TableFilterBar.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Remove filter"
 msgstr "Hapus filter"
@@ -3207,10 +3204,6 @@ msgstr "Tampilan bawaan"
 msgid "Row is incomplete or has invalid data"
 msgstr "Baris tidak lengkap atau berisi data tidak valid"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Open resource"
-msgstr "Buka sumber daya"
-
 #: src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
 msgstr "Hak akses tidak cukup untuk melihat sumber daya"
@@ -3224,21 +3217,13 @@ msgstr "Cari"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/connectableDrives.ts
+#: src/helpers/driveData.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
 #: src/helpers/managed/refusedDrive.ts
 msgid "Disabled"
 msgstr "Dinonaktifkan"
-
-#: src/components/forms/MinMaxInput.tsx
-#: src/components/forms/MinMaxInput.tsx
-msgid "Value should be a round number."
-msgstr "Nilai harus berupa bilangan bulat."
-
-#: src/components/forms/MinMaxInput.tsx
-msgid "Min must be a less than max"
-msgstr "Nilai minimum harus lebih kecil dari maksimum"
 
 #: src/routes/History/VersionContent.tsx
 msgid "Document body"
@@ -3323,11 +3308,6 @@ msgstr "Mata uang"
 msgid "Range"
 msgstr "Rentang"
 
-#. 0: ' '; 1: selectedCategory ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1) \\: ''; 2: ' '
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
-msgid "New{0} {1}{2} Column"
-msgstr "Kolom{0} {1}{2} baru"
-
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Invalid Name"
 msgstr "Nama tidak valid"
@@ -3339,10 +3319,6 @@ msgstr "Kolom baru"
 #: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "Resource type:"
 msgstr "Jenis sumber daya:"
-
-#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
-msgid "<0/> Allow multiple values"
-msgstr "<0/> Izinkan beberapa nilai"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
@@ -3401,10 +3377,6 @@ msgstr "Panjang"
 #: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Relative"
 msgstr "Relatif"
-
-#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
-msgid "Value must be between 0 and 20."
-msgstr "Nilai harus antara 0 dan 20."
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Decimal Places"
@@ -3720,11 +3692,6 @@ msgstr ""
 msgid "There was an error in the editor, please refresh the page to continue.{0} <0>Refresh</0>"
 msgstr "Terjadi kesalahan pada editor, muat ulang halaman untuk melanjutkan.{0} <0>Muat ulang</0>"
 
-#. 0: propertyLabel; 1: rowIndex + 1
-#: src/chunks/TablePage/TableCell.tsx
-msgid "{0}, row {1}"
-msgstr "{0}, baris {1}"
-
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Are you sure you want to delete the <0/> view? This only removes the view, not the rows."
 msgstr "Yakin ingin menghapus tampilan <0/>? Ini hanya menghapus tampilannya, bukan barisnya."
@@ -3733,11 +3700,6 @@ msgstr "Yakin ingin menghapus tampilan <0/>? Ini hanya menghapus tampilannya, bu
 #: src/chunks/TablePage/useTableView.ts
 msgid "{0} copy"
 msgstr "Salinan {0}"
-
-#. 0: p; 1: theme.animation.duration
-#: src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
 
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
@@ -3803,11 +3765,6 @@ msgstr "Coba muat ulang halaman. Jika terus terjadi, tab lain dari aplikasi ini 
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0}/M input tokens"
 msgstr "{0}/juta token input"
-
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
 
 #. 0: subject
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
@@ -4098,7 +4055,10 @@ msgstr "Buka ruang kerja"
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
@@ -4877,12 +4837,13 @@ msgstr "Satu per satu"
 msgid "Stop the running entry when another starts"
 msgstr "Hentikan entri yang berjalan saat entri lain dimulai"
 
+#: src/chunks/DashboardPage/useBlockQuery.ts
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Timer/useTimerColumns.tsx
+#: src/chunks/TablePage/useTableData.ts
 msgid "Duration"
 msgstr "Durasi"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Toggle properties"
@@ -4940,6 +4901,7 @@ msgstr "Kolom terhitung baru"
 
 #: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Add column"
 msgstr "Tambahkan kolom"
@@ -5150,6 +5112,7 @@ msgstr "Belum ada data"
 
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 #: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
@@ -5376,9 +5339,6 @@ msgstr "Mendapatkan kode…"
 msgid "Android"
 msgstr "Android"
 
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
 #: src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -6495,6 +6455,7 @@ msgstr "Mulai dari kosong"
 msgid "Use {0} template"
 msgstr "Gunakan templat {0}"
 
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
@@ -6531,10 +6492,6 @@ msgstr "Tidak ada yang cocok. Coba pencarian lain atau minta AI membuatnya."
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "Tanya AI"
-
-#: src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Memuat"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -8979,10 +8936,14 @@ msgid "Find a column…"
 msgstr "Cari kolom…"
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Find a column to filter by"
 msgstr "Cari kolom untuk memfilter"
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "No column matches"
 msgstr "Tidak ada kolom yang cocok"
 
@@ -11695,15 +11656,17 @@ msgstr "Properti tidak dapat dipindahkan ke induk lain."
 msgid "Could not change datatype: {0}"
 msgstr "Tidak dapat mengubah tipe data: {0}"
 
-#. 0: (err as Error).message
+#. 0: error.message
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Failed to save column: {0}"
 msgstr "Gagal menyimpan kolom: {0}"
 
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Minimum"
 msgstr "Minimum"
 
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Maximum"
 msgstr "Maksimum"
@@ -11892,7 +11855,6 @@ msgstr "Kode atau alamat server"
 msgid "Add a device"
 msgstr "Tambahkan perangkat"
 
-#: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Memuat"
@@ -12847,10 +12809,6 @@ msgstr "Tambahkan komentar"
 msgid "Open the comments for this resource"
 msgstr "Buka komentar untuk sumber daya ini"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Row menu"
-msgstr "Menu baris"
-
 #: src/views/Drive/DriveHome.tsx
 msgid "Commented"
 msgstr "Dikomentari"
@@ -12892,7 +12850,7 @@ msgstr "Tidak ada kolom \"{0}\".{1}"
 msgid "Formula"
 msgstr "Rumus"
 
-#. 0: Object.keys(slugs).join(', ') || 'none yet'
+#. 0: identifiers.join(', ') || 'none yet'
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 msgid "Combine columns with + - * / and functions: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Dates are milliseconds, a missing value leaves the cell empty, and 1/2 is 0 (write 1.0/2). Columns you can use: {0}."
 msgstr "Gabungkan kolom dengan + - * / dan fungsi: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Tanggal dalam milidetik, nilai yang hilang membuat sel kosong, dan 1/2 adalah 0 (tulis 1.0/2). Kolom yang dapat Anda gunakan: {0}."
@@ -13419,12 +13377,9 @@ msgid "Add filter"
 msgstr "Tambahkan filter"
 
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Edit column"
 msgstr "Sunting kolom"
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Tambahkan tampilan"
 
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
@@ -13546,3 +13501,199 @@ msgstr "Berkas disertakan. Berkas dienkripsi di perangkat ini seperti yang lainn
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Menu baris"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Buka sumber daya"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Tambahkan tampilan"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Rename view"
+msgstr "Ganti nama tampilan"
+
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr "Nama kolom"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Enter whole numbers or leave the bounds empty."
+msgstr "Masukkan bilangan bulat atau biarkan batas kosong."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Enter finite numbers or leave the bounds empty."
+msgstr "Masukkan bilangan berhingga atau biarkan batas kosong."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Bounds cannot be negative."
+msgstr "Batas tidak boleh negatif."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Minimum must not exceed maximum."
+msgstr "Nilai minimum tidak boleh melebihi nilai maksimum."
+
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+msgid "Text format"
+msgstr "Format teks"
+
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
+msgid "Number format"
+msgstr "Format angka"
+
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Column definition saved. Retry to finish adding it to the table."
+msgstr "Definisi kolom telah disimpan. Coba lagi untuk menyelesaikan penambahannya ke tabel."
+
+#: src/chunks/DashboardPage/useBlockQuery.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Saved view is unavailable in this table."
+msgstr "Tampilan tersimpan tidak tersedia di tabel ini."
+
+#. 0: message
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Could not save view changes: {0}"
+msgstr "Tidak dapat menyimpan perubahan tampilan: {0}"
+
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Retry view save"
+msgstr "Coba simpan tampilan lagi"
+
+#: src/chunks/DashboardPage/useBlockQuery.ts
+#: src/chunks/TablePage/useTableData.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Saved view configuration is invalid."
+msgstr "Konfigurasi tampilan tersimpan tidak valid."
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+#: src/chunks/DashboardPage/blocks/StatBlock.tsx
+msgid "The configured measurement is unavailable."
+msgstr "Pengukuran yang dikonfigurasi tidak tersedia."
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Filter value"
+msgstr "Nilai filter"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Any"
+msgstr "Apa pun"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Value…"
+msgstr "Nilai…"
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+msgid "Unavailable column"
+msgstr "Kolom tidak tersedia"
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "This column is unavailable."
+msgstr "Kolom ini tidak tersedia."
+
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
+msgid "Delete property and its children"
+msgstr "Hapus properti beserta sumber daya turunannya"
+
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
+msgid "Removing column…"
+msgstr "Menghapus kolom…"
+
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
+msgid "Column removal is unavailable. Check access and the selected table."
+msgstr "Kolom tidak dapat dihapus. Periksa akses dan tabel yang dipilih."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Date format"
+msgstr "Format tanggal"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
+msgid "Enter a whole number between 0 and 20, or leave empty."
+msgstr "Masukkan bilangan bulat antara 0 dan 20, atau biarkan kosong."
+
+#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
+msgid "Allow multiple values"
+msgstr "Izinkan beberapa nilai"
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Preparing column…"
+msgstr "Menyiapkan kolom…"
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "Column editing is unavailable. Check access and the selected table."
+msgstr "Kolom tidak dapat diedit. Periksa akses dan tabel yang dipilih."
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "This draft is locked after a partial save. Retry to finish saving."
+msgstr "Draf ini dikunci setelah tersimpan sebagian. Coba lagi untuk menyelesaikan penyimpanan."
+
+#. 0: kind
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "New {0} Column"
+msgstr "Kolom {0} baru"
+
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Column creation is unavailable. Check access and the selected table."
+msgstr "Kolom tidak dapat dibuat. Periksa akses dan tabel yang dipilih."
+
+#~ msgid "Property attachment is unavailable. Check access and the selected table."
+#~ msgstr ""
+
+#~ msgid "Attachment started. Retry to finish adding this property to the table."
+#~ msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Enter a finite number."
+msgstr "Masukkan bilangan berhingga."
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "The view or column definitions changed. Close this editor and reopen it."
+msgstr "Tampilan atau definisi kolom telah berubah. Tutup editor ini lalu buka kembali."
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Retry to finish saving this change. Closing leaves any partially applied save pending."
+msgstr "Coba lagi untuk menyelesaikan penyimpanan perubahan ini. Jika ditutup, penyimpanan yang baru diterapkan sebagian akan tetap tertunda."
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Choose a compatible column and a valid preset value."
+msgstr "Pilih kolom yang kompatibel dan nilai prasetel yang valid."
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Additional stored presets are retained. This form edits the first preset."
+msgstr "Prasetel tersimpan lainnya tetap dipertahankan. Formulir ini mengedit prasetel pertama."
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "This table is read-only."
+msgstr "Tabel ini hanya dapat dibaca."
+
+#~ msgid "{0}, row {1}"
+#~ msgstr "{0}, baris {1}"
+
+#~ msgid "<0/> Delete property and its children"
+#~ msgstr "<0/> Hapus properti dan turunannya"
+
+#~ msgid "Value should be a round number."
+#~ msgstr "Nilai harus berupa bilangan bulat."
+
+#~ msgid "Min must be a less than max"
+#~ msgstr "Nilai minimum harus lebih kecil dari maksimum"
+
+#~ msgid "New{0} {1}{2} Column"
+#~ msgstr "Kolom{0} {1}{2} baru"
+
+#~ msgid "<0/> Allow multiple values"
+#~ msgstr "<0/> Izinkan beberapa nilai"
+
+#~ msgid "Value must be between 0 and 20."
+#~ msgstr "Nilai harus antara 0 dan 20."

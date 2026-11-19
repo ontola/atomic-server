@@ -1,0 +1,124 @@
+name: Table package
+
+on:
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'lib/**'
+      - 'wasm/**'
+      - 'tools/cargo-bin/**'
+      - 'browser/table/**'
+      - 'browser/ui/**'
+      - 'browser/utils/**'
+      - 'browser/data-browser/**'
+      - 'browser/form-renderer/**'
+      - 'browser/edit-mode/**'
+      - 'browser/plugin/**'
+      - 'browser/service-ui/**'
+      - 'browser/lib/**'
+      - 'browser/react/**'
+      - 'browser/pnpm-lock.yaml'
+      - 'browser/pnpm-workspace.yaml'
+      - 'browser/package.json'
+      - 'browser/.ox*'
+      - '.github/workflows/table-package.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'lib/**'
+      - 'wasm/**'
+      - 'tools/cargo-bin/**'
+      - 'browser/table/**'
+      - 'browser/ui/**'
+      - 'browser/utils/**'
+      - 'browser/data-browser/**'
+      - 'browser/form-renderer/**'
+      - 'browser/edit-mode/**'
+      - 'browser/plugin/**'
+      - 'browser/service-ui/**'
+      - 'browser/lib/**'
+      - 'browser/react/**'
+      - 'browser/pnpm-lock.yaml'
+      - 'browser/pnpm-workspace.yaml'
+      - 'browser/package.json'
+      - 'browser/.ox*'
+      - '.github/workflows/table-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: table-package-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  atomic-adapter:
+    name: Atomic TablePage adapter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+      - name: Build JavaScript host dependencies
+        run: pnpm --filter @tomic/lib --filter @tomic/react --filter @tomic/form-renderer --filter @tomic/edit-mode --filter @tomic/plugin --filter @tomic/service-ui -r build
+      - uses: dtolnay/rust-toolchain@1.98.1
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build real formula evaluator for adapter tests
+        run: pnpm --filter @tomic/data-browser build:wasm
+      - name: Check Atomic host types
+        run: pnpm --filter @tomic/data-browser typecheck
+      - name: Test table host adapters and saved-view tabs
+        working-directory: browser/data-browser
+        run: pnpm exec vitest run src/chunks/DashboardPage/useBlockQuery.test.tsx src/chunks/DashboardPage/useBlockAggregate.test.ts src/chunks/TablePage/AtomicTableNavigation.test.tsx src/chunks/TablePage/TableViewTabs.test.tsx src/chunks/TablePage/TableFilterBar.test.tsx src/chunks/TablePage/TableHeading.test.tsx src/chunks/TablePage/TableHeadingMenu.test.tsx src/chunks/TablePage/rowActions.test.ts src/chunks/TablePage/derivedColumns.test.ts src/chunks/TablePage/configuredColumnDraft.test.ts src/chunks/TablePage/tableFiltering.test.ts src/chunks/TablePage/columnOrder.test.ts src/chunks/TablePage/atomicTableQuery.test.ts src/chunks/TablePage/useAtomicTableQuery.test.tsx src/chunks/TablePage/useTableViewScope.test.tsx src/chunks/TablePage/QuickFilterField.test.tsx src/chunks/TablePage/TableCell.test.tsx src/chunks/TablePage/atomicClearMutation.test.ts src/chunks/TablePage/atomicCreateRow.test.ts src/chunks/TablePage/quickAdd.test.ts src/chunks/TablePage/helpers/useTableHistory.test.ts src/chunks/TablePage/PropertyForm/PropertyDialogCommit.test.tsx src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.test.tsx src/chunks/TablePage/PropertyForm/atomicPropertyDraft.test.ts src/chunks/TablePage/PropertyForm/TextPropertyForm.test.tsx src/chunks/TablePage/PropertyForm/NumberPropertyForm.test.tsx src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.test.tsx src/chunks/TablePage/PropertyForm/Inputs/PropertyFormatAdapters.test.tsx
+  package:
+    name: Build, test and install packed table
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - name: Install table dependencies
+        working-directory: browser
+        run: pnpm --filter @tomic/table... install --frozen-lockfile
+      - name: Build shared UI
+        working-directory: browser
+        run: pnpm --filter @tomic/ui... build
+      - name: Lint, typecheck and test
+        working-directory: browser
+        run: |
+          pnpm --filter @tomic/table lint
+          pnpm --filter @tomic/table typecheck
+          pnpm --filter @tomic/table test
+      - name: Build and pack
+        working-directory: browser
+        run: |
+          pnpm --filter @tomic/table pack --out "$RUNNER_TEMP/tomic-table.tgz"
+          pnpm --filter @tomic/ui pack --out "$RUNNER_TEMP/tomic-ui.tgz"
+      - name: Install and typecheck a clean external consumer
+        run: node browser/table/scripts/check-package.mjs "$RUNNER_TEMP/tomic-table.tgz" "$RUNNER_TEMP/tomic-ui.tgz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tomic-table-preview
+          path: |
+            ${{ runner.temp }}/tomic-table.tgz
+            ${{ runner.temp }}/tomic-ui.tgz

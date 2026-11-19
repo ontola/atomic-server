@@ -1,9 +1,9 @@
 import { Datatype, core, useString } from '@tomic/react';
 import { useEffect, type JSX } from 'react';
-import { styled } from 'styled-components';
+import { TablePropertyFields } from '@tomic/table';
 import { ResourceSelector } from '@components/forms/ResourceSelector';
 import { PropertyCategoryFormProps } from './PropertyCategoryFormProps';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
+import { Checkbox } from '@components/forms/Checkbox';
 
 const valueOpts = { commit: false };
 
@@ -38,31 +38,24 @@ export function RelationPropertyForm({
   }, [setDatatype]);
 
   return (
-    <>
-      <Label as='label'>
-        <strong>Resource type:</strong>
-        <ResourceSelector
-          isA={core.classes.class}
-          value={classType}
-          setSubject={setClassType}
-        />
-      </Label>
-      <CheckboxLabel>
-        <Checkbox
-          onChange={handleAllowMultiple}
-          checked={datatype === Datatype.RESOURCEARRAY}
-        />
-        Allow multiple values
-      </CheckboxLabel>
-    </>
+    <TablePropertyFields
+      messages={{
+        resourceType: 'Resource type:',
+        multiple: 'Allow multiple values',
+      }}
+      model={{
+        kind: 'relation',
+        multiple: datatype === Datatype.RESOURCEARRAY,
+        onMultipleChange: handleAllowMultiple,
+        Checkbox,
+        selector: (
+          <ResourceSelector
+            isA={core.classes.class}
+            value={classType}
+            setSubject={setClassType}
+          />
+        ),
+      }}
+    />
   );
 }
-
-const Label = styled.label`
-  display: flex;
-  /* align-items: center; */
-
-  flex-direction: column;
-  gap: 0.5rem;
-  cursor: pointer;
-`;

@@ -117,12 +117,15 @@ msgstr "KI-Agenten"
 #: src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/Website/WebsitePage.tsx
@@ -266,10 +269,10 @@ msgstr "Komprimiere die Unterhaltung automatisch, wenn die Eingabe-Tokens diesen
 #: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/DashboardPage/DashboardBlock.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 #: src/chunks/TablePage/ColumnSpecHeading.tsx
 #: src/chunks/TablePage/ColumnSpecHeading.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
@@ -698,10 +701,6 @@ msgstr "Ontologien"
 msgid "App"
 msgstr "App"
 
-#: src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
-
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
 msgstr "Dieser AtomicLink hat weder `subject` noch `path` oder `href` erhalten."
@@ -933,6 +932,14 @@ msgstr "Konto erstellen und annehmen"
 msgid "I already have an account"
 msgstr "Ich habe bereits ein Konto"
 
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/File/ConvertToDocumentButton.tsx
@@ -3138,6 +3145,7 @@ msgstr "Ansicht"
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Filter"
 msgstr "Filter"
 
@@ -3146,21 +3154,17 @@ msgid "Hide in this view"
 msgstr "In dieser Ansicht ausblenden"
 
 #. 0: ' '
-#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Remove <0/> from{0} <1/>"
 msgstr "<0/> aus{0} <1/> entfernen"
 
-#: src/chunks/TablePage/TableHeadingMenu.tsx
-msgid "<0/> Delete property and its children"
-msgstr "<0/> Eigenschaft und untergeordnete Ressourcen löschen"
-
-#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Delete property"
 msgstr "Eigenschaft löschen"
 
 #: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
 msgid "Remove column"
 msgstr "Spalte entfernen"
 
@@ -3172,10 +3176,6 @@ msgstr "Als CSV exportieren"
 msgid "Untitled view"
 msgstr "Unbenannte Ansicht"
 
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Any"
-msgstr "Beliebig"
-
 #: src/chunks/PluginRuns/IntegrationActions.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "True"
@@ -3186,10 +3186,7 @@ msgstr "Wahr"
 msgid "False"
 msgstr "Falsch"
 
-#: src/chunks/TablePage/TableFilterValueInput.tsx
-msgid "Value…"
-msgstr "Wert …"
-
+#: src/chunks/TablePage/TableFilterBar.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Remove filter"
 msgstr "Filter entfernen"
@@ -3208,10 +3205,6 @@ msgstr "Standardansicht"
 msgid "Row is incomplete or has invalid data"
 msgstr "Zeile ist unvollständig oder enthält ungültige Daten"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Open resource"
-msgstr "Ressource öffnen"
-
 #: src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
 msgstr "Unzureichende Rechte zum Anzeigen der Ressource"
@@ -3225,21 +3218,13 @@ msgstr "Suchen"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/connectableDrives.ts
+#: src/helpers/driveData.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
 #: src/helpers/managed/refusedDrive.ts
 msgid "Disabled"
 msgstr "Deaktiviert"
-
-#: src/components/forms/MinMaxInput.tsx
-#: src/components/forms/MinMaxInput.tsx
-msgid "Value should be a round number."
-msgstr "Der Wert muss eine ganze Zahl sein."
-
-#: src/components/forms/MinMaxInput.tsx
-msgid "Min must be a less than max"
-msgstr "Minimum muss kleiner als Maximum sein"
 
 #: src/routes/History/VersionContent.tsx
 msgid "Document body"
@@ -3325,11 +3310,6 @@ msgstr "Währung"
 msgid "Range"
 msgstr "Bereich"
 
-#. 0: ' '; 1: selectedCategory ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1) \\: ''; 2: ' '
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
-msgid "New{0} {1}{2} Column"
-msgstr "Neue{0} {1}{2}-Spalte"
-
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Invalid Name"
 msgstr "Ungültiger Name"
@@ -3341,10 +3321,6 @@ msgstr "Neue Spalte"
 #: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "Resource type:"
 msgstr "Ressourcentyp:"
-
-#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
-msgid "<0/> Allow multiple values"
-msgstr "<0/> Mehrere Werte erlauben"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
@@ -3403,10 +3379,6 @@ msgstr "Lang"
 #: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Relative"
 msgstr "Relativ"
-
-#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
-msgid "Value must be between 0 and 20."
-msgstr "Der Wert muss zwischen 0 und 20 liegen."
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Decimal Places"
@@ -3719,11 +3691,6 @@ msgstr "Zusätzlicher Kontext. Verweise im Hauptinhalt darauf, um weitere Anweis
 msgid "There was an error in the editor, please refresh the page to continue.{0} <0>Refresh</0>"
 msgstr "Im Editor ist ein Fehler aufgetreten. Lade die Seite neu, um fortzufahren.{0} <0>Neu laden</0>"
 
-#. 0: propertyLabel; 1: rowIndex + 1
-#: src/chunks/TablePage/TableCell.tsx
-msgid "{0}, row {1}"
-msgstr "{0}, Zeile {1}"
-
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Are you sure you want to delete the <0/> view? This only removes the view, not the rows."
 msgstr "Möchtest du die Ansicht <0/> wirklich löschen? Dadurch wird nur die Ansicht entfernt, nicht die Zeilen."
@@ -3732,11 +3699,6 @@ msgstr "Möchtest du die Ansicht <0/> wirklich löschen? Dadurch wird nur die An
 #: src/chunks/TablePage/useTableView.ts
 msgid "{0} copy"
 msgstr "{0} Kopie"
-
-#. 0: p; 1: theme.animation.duration
-#: src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
 
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
@@ -3802,11 +3764,6 @@ msgstr "Versuche, die Seite neu zu laden. Falls das Problem bleibt, blockiert m�
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0}/M input tokens"
 msgstr "{0}/M Eingabe-Tokens"
-
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
 
 #. 0: subject
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
@@ -4097,7 +4054,10 @@ msgstr "Arbeitsbereich öffnen"
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/SideBar/FeedbackButton.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
@@ -4876,12 +4836,13 @@ msgstr "Einer nach dem anderen"
 msgid "Stop the running entry when another starts"
 msgstr "Laufenden Eintrag stoppen, wenn ein anderer startet"
 
+#: src/chunks/DashboardPage/useBlockQuery.ts
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Timer/useTimerColumns.tsx
+#: src/chunks/TablePage/useTableData.ts
 msgid "Duration"
 msgstr "Dauer"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Toggle properties"
@@ -4939,6 +4900,7 @@ msgstr "Neue berechnete Spalte"
 
 #: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Add column"
 msgstr "Spalte hinzufügen"
@@ -5149,6 +5111,7 @@ msgstr "Noch keine Daten"
 
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 #: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
@@ -5375,9 +5338,6 @@ msgstr "Code wird angefordert …"
 msgid "Android"
 msgstr "Android"
 
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
 #: src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -6494,6 +6454,7 @@ msgstr "Leer beginnen"
 msgid "Use {0} template"
 msgstr "Vorlage {0} verwenden"
 
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
@@ -6530,10 +6491,6 @@ msgstr "Keine Treffer. Versuche eine andere Suche oder bitte die KI, es zu erste
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "KI fragen"
-
-#: src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Wird geladen"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -8979,10 +8936,14 @@ msgid "Find a column…"
 msgstr "Spalte suchen …"
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Find a column to filter by"
 msgstr "Spalte zum Filtern suchen"
 
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
+#: src/chunks/TablePage/TableFilterBar.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "No column matches"
 msgstr "Keine passende Spalte"
 
@@ -11695,15 +11656,17 @@ msgstr "Eine Eigenschaft kann nicht unter eine andere übergeordnete Ressource v
 msgid "Could not change datatype: {0}"
 msgstr "Datentyp konnte nicht geändert werden: {0}"
 
-#. 0: (err as Error).message
+#. 0: error.message
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Failed to save column: {0}"
 msgstr "Spalte konnte nicht gespeichert werden: {0}"
 
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Minimum"
 msgstr "Minimum"
 
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Maximum"
 msgstr "Maximum"
@@ -11892,7 +11855,6 @@ msgstr "Code oder Serveradresse"
 msgid "Add a device"
 msgstr "Gerät hinzufügen"
 
-#: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Wird geladen"
@@ -12847,10 +12809,6 @@ msgstr "Kommentar hinzufügen"
 msgid "Open the comments for this resource"
 msgstr "Kommentare zu dieser Ressource öffnen"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Row menu"
-msgstr "Zeilenmenü"
-
 #: src/views/Drive/DriveHome.tsx
 msgid "Commented"
 msgstr "Kommentiert"
@@ -12892,7 +12850,7 @@ msgstr "Es gibt keine Spalte „{0}“.{1}"
 msgid "Formula"
 msgstr "Formel"
 
-#. 0: Object.keys(slugs).join(', ') || 'none yet'
+#. 0: identifiers.join(', ') || 'none yet'
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 msgid "Combine columns with + - * / and functions: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Dates are milliseconds, a missing value leaves the cell empty, and 1/2 is 0 (write 1.0/2). Columns you can use: {0}."
 msgstr "Kombiniere Spalten mit + - * / und Funktionen: now(), coalesce(a, b), days(ms), addDays(date, n), daysUntilAnniversary(date), min, max, if(test, a, b). Datumswerte sind Millisekunden, bei fehlenden Werten bleibt die Zelle leer, und 1/2 ergibt 0 (schreibe 1.0/2). Verfügbare Spalten: {0}."
@@ -13424,12 +13382,9 @@ msgid "Add filter"
 msgstr "Filter hinzufügen"
 
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Edit column"
 msgstr "Spalte bearbeiten"
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Ansicht hinzufügen"
 
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
@@ -13554,3 +13509,199 @@ msgstr "Dateien sind enthalten. Sie werden auf diesem Gerät verschlüsselt wie 
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} alte Verlaufsdaten können entfernt werden. Sichtbare Inhalte bleiben erhalten."
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Zeilenmenü"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Ressource öffnen"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Ansicht hinzufügen"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Rename view"
+msgstr "Ansicht umbenennen"
+
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr "Spaltenname"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Enter whole numbers or leave the bounds empty."
+msgstr "Ganze Zahlen eingeben oder die Grenzen leer lassen."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Enter finite numbers or leave the bounds empty."
+msgstr "Endliche Zahlen eingeben oder die Grenzen leer lassen."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Bounds cannot be negative."
+msgstr "Grenzen dürfen nicht negativ sein."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/TableRangeInput.tsx
+msgid "Minimum must not exceed maximum."
+msgstr "Das Minimum darf das Maximum nicht überschreiten."
+
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+msgid "Text format"
+msgstr "Textformat"
+
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
+msgid "Number format"
+msgstr "Zahlenformat"
+
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Column definition saved. Retry to finish adding it to the table."
+msgstr "Spaltendefinition gespeichert. Erneut versuchen, um sie vollständig zur Tabelle hinzuzufügen."
+
+#: src/chunks/DashboardPage/useBlockQuery.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Saved view is unavailable in this table."
+msgstr "Die gespeicherte Ansicht ist in dieser Tabelle nicht verfügbar."
+
+#. 0: message
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Could not save view changes: {0}"
+msgstr "Änderungen an der Ansicht konnten nicht gespeichert werden: {0}"
+
+#: src/chunks/TablePage/ViewSaveError.tsx
+msgid "Retry view save"
+msgstr "Speichern der Ansicht erneut versuchen"
+
+#: src/chunks/DashboardPage/useBlockQuery.ts
+#: src/chunks/TablePage/useTableData.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Saved view configuration is invalid."
+msgstr "Die Konfiguration der gespeicherten Ansicht ist ungültig."
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+#: src/chunks/DashboardPage/blocks/StatBlock.tsx
+msgid "The configured measurement is unavailable."
+msgstr "Die konfigurierte Messgröße ist nicht verfügbar."
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Filter value"
+msgstr "Filterwert"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Any"
+msgstr "Beliebig"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Value…"
+msgstr "Wert …"
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+msgid "Unavailable column"
+msgstr "Nicht verfügbare Spalte"
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "This column is unavailable."
+msgstr "Diese Spalte ist nicht verfügbar."
+
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
+msgid "Delete property and its children"
+msgstr "Eigenschaft und ihre untergeordneten Ressourcen löschen"
+
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
+msgid "Removing column…"
+msgstr "Spalte wird entfernt…"
+
+#: src/chunks/TablePage/AtomicColumnRemovalDialog.tsx
+msgid "Column removal is unavailable. Check access and the selected table."
+msgstr "Die Spalte kann nicht entfernt werden. Zugriffsrechte und ausgewählte Tabelle prüfen."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Date format"
+msgstr "Datumsformat"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
+msgid "Enter a whole number between 0 and 20, or leave empty."
+msgstr "Eine ganze Zahl zwischen 0 und 20 eingeben oder das Feld leer lassen."
+
+#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
+msgid "Allow multiple values"
+msgstr "Mehrere Werte zulassen"
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Preparing column…"
+msgstr "Spalte wird vorbereitet…"
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "Column editing is unavailable. Check access and the selected table."
+msgstr "Die Spalte kann nicht bearbeitet werden. Zugriffsrechte und ausgewählte Tabelle prüfen."
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "This draft is locked after a partial save. Retry to finish saving."
+msgstr "Dieser Entwurf ist nach einem unvollständigen Speichervorgang gesperrt. Erneut versuchen, um das Speichern abzuschließen."
+
+#. 0: kind
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "New {0} Column"
+msgstr "Neue Spalte ({0})"
+
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "Column creation is unavailable. Check access and the selected table."
+msgstr "Die Spalte kann nicht erstellt werden. Zugriffsrechte und ausgewählte Tabelle prüfen."
+
+#~ msgid "Property attachment is unavailable. Check access and the selected table."
+#~ msgstr ""
+
+#~ msgid "Attachment started. Retry to finish adding this property to the table."
+#~ msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Enter a finite number."
+msgstr "Eine endliche Zahl eingeben."
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "The view or column definitions changed. Close this editor and reopen it."
+msgstr "Die Ansicht oder die Spaltendefinitionen wurden geändert. Diesen Editor schließen und erneut öffnen."
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Retry to finish saving this change. Closing leaves any partially applied save pending."
+msgstr "Erneut versuchen, um diese Änderung vollständig zu speichern. Beim Schließen bleibt ein teilweise ausgeführter Speichervorgang unvollständig."
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Choose a compatible column and a valid preset value."
+msgstr "Eine kompatible Spalte und einen gültigen voreingestellten Wert auswählen."
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Additional stored presets are retained. This form edits the first preset."
+msgstr "Weitere gespeicherte Voreinstellungen bleiben erhalten. Dieses Formular bearbeitet die erste Voreinstellung."
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "This table is read-only."
+msgstr "Diese Tabelle ist schreibgeschützt."
+
+#~ msgid "{0}, row {1}"
+#~ msgstr "{0}, Zeile {1}"
+
+#~ msgid "<0/> Delete property and its children"
+#~ msgstr "<0/> Eigenschaft und untergeordnete Ressourcen löschen"
+
+#~ msgid "Value should be a round number."
+#~ msgstr "Der Wert muss eine ganze Zahl sein."
+
+#~ msgid "Min must be a less than max"
+#~ msgstr "Minimum muss kleiner als Maximum sein"
+
+#~ msgid "New{0} {1}{2} Column"
+#~ msgstr "Neue{0} {1}{2}-Spalte"
+
+#~ msgid "<0/> Allow multiple values"
+#~ msgstr "<0/> Mehrere Werte erlauben"
+
+#~ msgid "Value must be between 0 and 20."
+#~ msgstr "Der Wert muss zwischen 0 und 20 liegen."

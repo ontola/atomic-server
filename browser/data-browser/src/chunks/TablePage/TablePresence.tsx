@@ -1,11 +1,7 @@
+import type { IndexedTableRows } from '@tomic/table';
 import { createContext, useCallback, useMemo, useRef } from 'react';
 import { css, keyframes, styled } from 'styled-components';
-import {
-  useResourcePresence,
-  useStore,
-  type Collection,
-  type Property,
-} from '@tomic/react';
+import { useResourcePresence, useStore, type Property } from '@tomic/react';
 import { colorForAgent } from '@components/Presence/AgentAvatar';
 import { PresenceUserTag } from '@components/Presence/PresenceUserTag';
 import { isUnsavedDraft } from './draftRow';
@@ -47,7 +43,7 @@ export const TablePresenceContext = createContext<TablePresenceValue>({
 });
 
 interface UseTablePresenceOptions {
-  collection: Collection;
+  collection: IndexedTableRows;
   columns: Property[];
   /** Rows below this index are session rows from `newRowSubjects`. */
   memberCount: number;

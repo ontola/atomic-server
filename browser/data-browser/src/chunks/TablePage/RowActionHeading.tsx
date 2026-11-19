@@ -4,7 +4,6 @@ import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import type { DraggableAttributes } from '@dnd-kit/core';
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { TablePageContext } from './tablePageContext';
-import { RowActionDialog } from './RowActionDialog';
 import { ROW_ACTION_GENERATORS, type RowActionSpec } from './rowActions';
 import { ColumnSpecHeading } from './ColumnSpecHeading';
 
@@ -29,7 +28,7 @@ export function RowActionHeading({
   dragListeners?: SyntheticListenerMap;
   dragAttributes?: DraggableAttributes;
 }): JSX.Element {
-  const { classProperties, updateRowAction, removeRowAction } =
+  const { requestRowActionEdit, removeRowAction } =
     useContext(TablePageContext);
 
   return (
@@ -48,15 +47,7 @@ export function RowActionHeading({
         </p>
       }
       onRemove={() => removeRowAction(spec.id)}
-      renderEditDialog={({ bindShow }) => (
-        <RowActionDialog
-          open
-          bindShow={bindShow}
-          classProperties={classProperties}
-          editing={spec}
-          onSave={updateRowAction}
-        />
-      )}
+      onEdit={() => requestRowActionEdit(spec)}
     />
   );
 }

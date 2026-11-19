@@ -1,3 +1,4 @@
+import { TableRowSelectionActions } from '@tomic/table';
 import {
   dataBrowser,
   Property,
@@ -7,7 +8,17 @@ import {
   useTitle,
 } from '@tomic/react';
 import { useContext, useMemo, useState, type JSX } from 'react';
-import { css, styled } from 'styled-components';
+import { styled } from 'styled-components';
+import {
+  ViewTab as SharedViewTab,
+  ViewTabsBar as Bar,
+  ViewTabList as Tabs,
+  ViewTabActions as Actions,
+  TableFilterMenu as SharedFilterMenu,
+  TableColumnsMenu as SharedColumnsMenu,
+  type TableColumnsMenuPresentation,
+  type TableFilterAddMenuProps,
+} from '@tomic/table';
 import { ghostButtonStyles } from '@components/Button';
 import {
   DndContext,
@@ -27,7 +38,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  FaCheck,
   FaCopy,
   FaFilter,
   FaPencil,
@@ -35,7 +45,6 @@ import {
   FaTableColumns,
   FaWindowMaximize,
   FaTrash,
-  FaXmark,
 } from 'react-icons/fa6';
 import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
@@ -44,7 +53,6 @@ import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
 } from '@components/ConfirmationDialog';
-import { InputStyled } from '@components/forms/InputStyles';
 import { useStore } from '@tomic/react';
 import { TablePageContext } from './tablePageContext';
 import {
@@ -53,7 +61,7 @@ import {
   type DriveApp,
 } from '@chunks/AppPage/useDriveApps';
 import type { DerivedColumnSpec } from './derivedColumns';
-import { derivedFilterKey, filterKey } from './tableFiltering';
+import { derivedFilterKey } from './tableFiltering';
 import { usePropertyTitles } from './helpers/usePropertyTitles';
 import { ColumnFilterDropdown } from './ColumnFilterDropdown';
 import {
@@ -68,7 +76,6 @@ import {
   canDeleteView,
   viewTypeKey,
 } from './viewTypeChoice';
-import { QuickAddDialog } from './QuickAddDialog';
 import type { QuickAddSpec } from './quickAdd';
 import { QuickFilterField } from './QuickFilterField';
 
@@ -110,8 +117,8 @@ interface TableViewTabsProps {
   canWrite: boolean;
   /** The active view's create button, if it has one. */
   quickAdd: QuickAddSpec | undefined;
-  /** Persist the active view's create button (undefined removes it). */
-  setQuickAdd: (spec: QuickAddSpec | undefined) => void;
+  /** Open the page-owned editor for the active view's create button. */
+  requestQuickAddEdit: () => void;
   /**
    * The quick filter over the rows the view shows. Absent for views that show
    * no rows (a dashboard, an app).
@@ -145,7 +152,7 @@ export function TableViewTabs({
   lockedReason,
   canWrite,
   quickAdd,
-  setQuickAdd,
+  requestQuickAddEdit,
   quickFilter,
 }: TableViewTabsProps): JSX.Element {
   // A table with no saved views yet still shows one implicit "Default View" tab.
@@ -204,9 +211,8 @@ export function TableViewTabs({
                 refreshApps={driveApps.refresh}
                 duplicateView={duplicateView}
                 deleteView={deleteView}
-                classProperties={allColumns}
                 quickAdd={quickAdd}
-                setQuickAdd={setQuickAdd}
+                requestQuickAddEdit={requestQuickAddEdit}
               />
             ))}
             {canWrite && (
@@ -319,52 +325,69 @@ function AddViewMenu({
  * them. Sits next to the filter button, where the other table actions live.
  */
 function RowSelectionActions(): JSX.Element | null {
-  const { selectedRows, clearRowSelection, deleteSelectedRows } =
+  const { selectedRows, clearRowSelection, deleteSelectedRows, canWriteTable } =
     useContext(TablePageContext);
 
-  if (selectedRows.size === 0) {
-    return null;
-  }
-
   return (
-    <SelectionBar role='toolbar' aria-label='Selected rows'>
-      <SelectionCount>{selectedRows.size} selected</SelectionCount>
-      <IconBtn
-        type='button'
-        title='Delete selected rows'
-        onClick={() => void deleteSelectedRows()}
-      >
-        <FaTrash />
-      </IconBtn>
-      <IconBtn
-        type='button'
-        title='Clear selection'
-        onClick={clearRowSelection}
-      >
-        <FaXmark />
-      </IconBtn>
-    </SelectionBar>
+    <TableRowSelectionActions
+      count={selectedRows.size}
+      Button={IconBtn}
+      onDelete={
+        canWriteTable
+          ? () => {
+              void deleteSelectedRows();
+            }
+          : undefined
+      }
+      deleteUnavailable={
+        !canWriteTable ? 'This table is read-only.' : undefined
+      }
+      onClear={clearRowSelection}
+      messages={{
+        label: 'Selected rows',
+        count: <>{selectedRows.size} selected</>,
+        delete: 'Delete selected rows',
+        clear: 'Clear selection',
+      }}
+    />
   );
 }
 
-const SelectionBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding-right: 0.5rem;
-  margin-right: 0.25rem;
-  border-right: 1px solid ${p => p.theme.colors.bg2};
-`;
-
-const SelectionCount = styled.span`
-  white-space: nowrap;
-  font-size: 0.9em;
-  color: ${p => p.theme.colors.textLight};
-`;
-
 const FilterTrigger = buildDefaultTrigger(<FaFilter />, () => 'Filter');
 
-/** Dropdown that adds a filter for one of the table's columns. */
+function AtomicFilterMenu({
+  items,
+  disabled,
+  description,
+}: TableFilterAddMenuProps): JSX.Element {
+  if (disabled)
+    return (
+      <IconBtn disabled title='Filter' type='button'>
+        <FaFilter />
+      </IconBtn>
+    );
+
+  return (
+    <ColumnFilterDropdown
+      Trigger={FilterTrigger}
+      items={[
+        {
+          id: 'filter-header',
+          label: description ?? '',
+          header: true,
+          onClick: () => undefined,
+        },
+        ...items.map(item => ({
+          id: item.key,
+          label: item.label,
+          onClick: item.onSelect,
+        })),
+      ]}
+    />
+  );
+}
+
+/** Atomic labels and dropdown primitive for the shared filter selector. */
 function FilterMenu({
   columns,
   derivedColumns,
@@ -374,52 +397,31 @@ function FilterMenu({
 }): JSX.Element {
   const { filters, addFilter } = useContext(TablePageContext);
   const titles = usePropertyTitles(columns);
+  const targets = [
+    ...columns.map(column => ({
+      key: column.subject,
+      label: titles.get(column.subject)!,
+    })),
+    ...derivedColumns.map(spec => ({
+      key: derivedFilterKey(spec.id),
+      label: spec.label,
+    })),
+  ];
 
-  const items = useMemo((): DropdownItem[] => {
-    const taken = new Set(filters.map(filterKey));
-    const available = columns.filter(c => !taken.has(c.subject));
-    // A computed column narrows rows too — the store evaluates it per row, so
-    // "logged more than an hour" or "due" is a filter like any other.
-    const availableDerived = derivedColumns.filter(
-      spec => !taken.has(derivedFilterKey(spec.id)),
-    );
-
-    if (available.length === 0 && availableDerived.length === 0) {
-      return [];
-    }
-
-    return [
-      {
-        id: 'filter-header',
-        label: 'Filter rows by a column',
-        header: true,
-        onClick: () => undefined,
-      },
-      ...available.map(c => ({
-        id: c.subject,
-        label: titles.get(c.subject)!,
-        onClick: () => addFilter(c.subject),
-      })),
-      ...availableDerived.map(spec => ({
-        id: derivedFilterKey(spec.id),
-        label: spec.label,
-        onClick: () => addFilter(derivedFilterKey(spec.id)),
-      })),
-    ];
-  }, [columns, derivedColumns, filters, addFilter, titles]);
-
-  // `DropdownMenu` with an empty item list recurses forever in its
-  // index-finder, so render a disabled button when there's nothing to filter
-  // (columns still loading, or every column already filtered).
-  if (items.length === 0) {
-    return (
-      <IconBtn disabled title='Filter' type='button'>
-        <FaFilter />
-      </IconBtn>
-    );
-  }
-
-  return <ColumnFilterDropdown Trigger={FilterTrigger} items={items} />;
+  return (
+    <SharedFilterMenu
+      filters={filters}
+      targets={targets}
+      onAdd={addFilter}
+      Menu={AtomicFilterMenu}
+      messages={{
+        label: 'Filter',
+        search: 'Find a column to filter by',
+        noMatch: 'No column matches',
+        description: 'Filter rows by a column',
+      }}
+    />
+  );
 }
 
 function ViewTab({
@@ -437,9 +439,8 @@ function ViewTab({
   refreshApps,
   duplicateView,
   deleteView,
-  classProperties,
   quickAdd,
-  setQuickAdd,
+  requestQuickAddEdit,
 }: {
   subject: string | undefined;
   active: boolean;
@@ -463,9 +464,8 @@ function ViewTab({
   refreshApps: () => void;
   duplicateView: (subject: string) => void;
   deleteView: (subject: string) => void;
-  classProperties: Property[];
   quickAdd: QuickAddSpec | undefined;
-  setQuickAdd: (spec: QuickAddSpec | undefined) => void;
+  requestQuickAddEdit: () => void;
 }): JSX.Element {
   const resource = useResource(subject ?? 'unknown-subject');
   const [title] = useTitle(resource);
@@ -476,7 +476,6 @@ function ViewTab({
   const ViewKindIcon = VIEW_KIND_ICONS[currentKind];
 
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
   // The implicit tab of a table with no saved views has nothing to reorder.
   const sortable = useSortable({
     id: subject ?? 'implicit',
@@ -486,10 +485,8 @@ function ViewTab({
   // already-active tab). `undefined` = closed.
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
   const [showDelete, setShowDelete] = useState(false);
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   const startRename = () => {
-    setDraft(name);
     setEditing(true);
   };
 
@@ -529,7 +526,7 @@ function ViewTab({
             : 'The last table view stays, so the rows can always be seen as a table.',
           onClick: () => setShowDelete(true),
         },
-        // Only on the active tab: `setQuickAdd` writes to the active view, so
+        // Only on the active tab: the page captures its current view, so
         // offering it elsewhere would edit a view the user is not looking at.
         ...(active
           ? [
@@ -540,7 +537,7 @@ function ViewTab({
                 helper:
                   'A button above the rows that creates one — "Log a feed", "Add item".',
                 icon: <FaPlus />,
-                onClick: () => setShowQuickAdd(true),
+                onClick: requestQuickAddEdit,
               },
             ]
           : []),
@@ -604,36 +601,16 @@ function ViewTab({
       ]
     : [];
 
-  if (editing) {
-    return (
-      <TabInput
-        autoFocus
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => {
-          const trimmed = draft.trim();
-
-          if (trimmed && trimmed !== name) {
-            onRename(trimmed);
-          }
-
-          setEditing(false);
-        }}
-        onKeyDown={e => {
-          if (e.key === 'Enter') {
-            (e.target as HTMLInputElement).blur();
-          } else if (e.key === 'Escape') {
-            setDraft(name);
-            setEditing(false);
-          }
-        }}
-      />
-    );
-  }
-
   return (
     <>
-      <Tab
+      <SharedViewTab
+        name={name}
+        icon={<ViewKindIcon />}
+        active={active}
+        editing={editing}
+        renameLabel='Rename view'
+        onRename={onRename}
+        onEditingChange={setEditing}
         ref={sortable.setNodeRef}
         style={{
           transform: CSS.Translate.toString(sortable.transform),
@@ -642,9 +619,6 @@ function ViewTab({
         }}
         {...sortable.attributes}
         {...sortable.listeners}
-        role='tab'
-        aria-selected={active}
-        $active={active}
         onClick={e => {
           // Clicking the already-active tab opens its menu; otherwise select.
           if (active && hasMenu) {
@@ -654,26 +628,13 @@ function ViewTab({
           }
         }}
         onContextMenu={openMenuAt}
-        type='button'
-      >
-        <ViewKindIcon />
-        {name}
-      </Tab>
+      />
       {menuPoint && (
         <DropdownMenu
           items={menuItems}
           Trigger={AutoOpenTrigger}
           anchorPoint={menuPoint}
           bindActive={a => (a ? refreshApps() : setMenuPoint(undefined))}
-        />
-      )}
-      {showQuickAdd && (
-        <QuickAddDialog
-          open
-          bindShow={setShowQuickAdd}
-          classProperties={classProperties}
-          editing={quickAdd}
-          onSave={setQuickAdd}
         />
       )}
       {subject && (
@@ -700,12 +661,38 @@ const ColumnsTrigger = buildDefaultTrigger(
   () => 'Toggle properties',
 );
 
-/**
- * Dropdown that shows/hides the table's properties. A `DropdownMenu` rather
- * than its own popover so it matches every other menu here: whole-row targets,
- * a header saying what it does, and keyboard navigation for free. Rows keep the
- * menu open, since toggling several columns is the normal case.
- */
+function AtomicColumnsMenu({
+  label,
+  items,
+  disabled,
+}: TableColumnsMenuPresentation): JSX.Element {
+  if (disabled)
+    return (
+      <IconBtn disabled title={label} type='button'>
+        <FaTableColumns />
+      </IconBtn>
+    );
+
+  return (
+    <DropdownMenu
+      Trigger={ColumnsTrigger}
+      items={[
+        { id: 'columns-header', label, header: true, onClick: () => undefined },
+        ...items.map(item => ({
+          id: item.key,
+          label: item.label,
+          icon: item.icon,
+          helper: item.helper,
+          disabled: item.disabled,
+          keepOpen: true,
+          onClick: item.toggle,
+        })),
+      ]}
+    />
+  );
+}
+
+/** Atomic titles and menu primitive for shared visibility/lock behavior. */
 function ColumnsMenu({
   allColumns,
   columns,
@@ -724,104 +711,28 @@ function ColumnsMenu({
   canWrite: boolean;
 }): JSX.Element {
   const titles = usePropertyTitles(allColumns);
-  const visible = useMemo(
-    () => new Set(columns.map(c => c.subject)),
-    [columns],
-  );
-
-  const items = useMemo((): DropdownItem[] => {
-    if (allColumns.length === 0) {
-      return [];
-    }
-
-    return [
-      {
-        id: 'columns-header',
-        label: 'Toggle properties',
-        header: true,
-        onClick: () => undefined,
-      },
-      ...allColumns.map(column => {
-        const locked = lockedColumns.has(column.subject);
-        // A locked property is rendered by the view whatever the config says,
-        // so it reads as shown regardless.
-        const shown = locked || visible.has(column.subject);
-
-        return {
-          id: column.subject,
-          label: titles.get(column.subject)!,
-          // A check on the shown ones, matching how the view-type section of
-          // the tab menu marks its current choice.
-          icon: shown ? <FaCheck /> : <CheckPlaceholder />,
-          helper: locked
-            ? lockedReason
-            : shown
-              ? 'Hide this property'
-              : 'Show this property',
-          disabled: locked,
-          keepOpen: true,
-          onClick: () =>
-            shown ? hideColumn(column.subject) : showColumn(column.subject),
-        };
-      }),
-    ];
-  }, [
-    allColumns,
-    visible,
-    showColumn,
-    hideColumn,
-    titles,
-    lockedColumns,
-    lockedReason,
-  ]);
-
-  if (!canWrite || items.length === 0) {
-    return (
-      <IconBtn disabled title='Toggle properties' type='button'>
-        <FaTableColumns />
-      </IconBtn>
-    );
-  }
+  const visible = new Set(columns.map(column => column.subject));
 
   return (
-    <DropdownMenu
-      Trigger={ColumnsTrigger}
-      items={items}
-      // Only worth a filter box once scanning the list stops being instant.
+    <SharedColumnsMenu
+      disabled={!canWrite}
+      Menu={AtomicColumnsMenu}
+      columns={allColumns.map(column => ({
+        key: column.subject,
+        label: titles.get(column.subject)!,
+        shown: visible.has(column.subject),
+        locked: lockedColumns.has(column.subject),
+        lockReason: lockedReason,
+      }))}
+      onChange={(key, shown) => (shown ? showColumn(key) : hideColumn(key))}
+      messages={{
+        label: 'Toggle properties',
+        show: 'Show this property',
+        hide: 'Hide this property',
+      }}
     />
   );
 }
-
-const Bar = styled.div`
-  min-width: 0;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding-block: 0.25rem;
-`;
-
-const Tabs = styled.div`
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
-  > * {
-    flex-shrink: 0;
-  }
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-`;
-
-const Actions = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-`;
 
 const IconBtn = styled.button`
   ${ghostButtonStyles}
@@ -829,30 +740,4 @@ const IconBtn = styled.button`
   height: 1.85rem;
   width: 1.85rem;
   padding: 0;
-`;
-
-const Tab = styled.button<{ $active: boolean }>`
-  ${ghostButtonStyles}
-  height: 1.85rem;
-  white-space: nowrap;
-  font-size: inherit;
-  ${p =>
-    p.$active &&
-    css`
-      background-color: ${p.theme.colors.bg1};
-      color: ${p.theme.colors.text};
-      font-weight: bold;
-    `}
-`;
-
-const TabInput = styled(InputStyled)`
-  height: 1.85rem;
-  width: 10rem;
-  font-weight: bold;
-`;
-
-/** Keeps unchecked rows aligned with the checked ones. */
-const CheckPlaceholder = styled.span`
-  display: inline-block;
-  width: 1em;
 `;

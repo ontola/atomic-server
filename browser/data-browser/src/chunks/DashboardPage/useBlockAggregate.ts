@@ -1,21 +1,19 @@
 import {
   useStore,
-  type Aggregate,
   type AggregateOutcome,
   type Aggregation,
 } from '@tomic/react';
 import { useMemo } from 'react';
-import { localOffsetMinutes } from '../TablePage/formulaEngine';
 import { useTableAggregates } from '../TablePage/useTableAggregates';
-import { dependsOnNow, toExpression } from '../TablePage/derivedColumns';
+import {
+  compileTableViewQuery,
+  readTableViewConfiguration,
+} from '@tomic/table';
 import type { BlockAggregateSpec } from './dashboardBlocks';
 import type { BlockQuery } from './useBlockQuery';
 
 /** The id every block aggregate is asked for under. One per block, so one id. */
 const BLOCK_AGGREGATE_ID = 'block';
-
-/** How coarsely `now` reaches the query — see `toAggregation` in the table. */
-const NOW_QUANTUM_MS = 60_000;
 
 /**
  * The `aggregation` clause for one block, or undefined when there is nothing to
@@ -30,59 +28,37 @@ export function toBlockAggregation(
     return undefined;
   }
 
-  let aggregate: Aggregate | undefined;
+  const config = readTableViewConfiguration({
+    derivedColumns: query.derivedColumns,
+    aggregates: [
+      {
+        id: BLOCK_AGGREGATE_ID,
+        function: spec.function,
+        derived: spec.derived,
+        property: spec.function === 'count' ? undefined : spec.property,
+      },
+    ],
+    groupByColumn: groupBy?.property,
+    groupGranularity: groupBy?.granularity,
+  });
+  const compiled = compileTableViewQuery(config.config, {
+    scope: { table: query.value },
+    pageSize: 30,
+    now: query.now,
+  });
+  if (config.issues.length || compiled.issues.length) return undefined;
+  const aggregation = compiled.query.aggregation;
 
-  if (spec.derived !== undefined) {
-    const column = query.derivedColumns.find(c => c.id === spec.derived);
-    const expression = column && toExpression(column);
-
-    // The computed column it names is gone or still incomplete. Asking anyway
-    // returns an empty number, which reads as a broken statistic.
-    if (!expression) {
-      return undefined;
+  // A chart needs its configured measure, not TablePage's extra row-count
+  // statistic for the breakdown footer.
+  return (
+    aggregation && {
+      ...aggregation,
+      aggregates: aggregation.aggregates.filter(
+        aggregate => aggregate.id === BLOCK_AGGREGATE_ID,
+      ),
     }
-
-    aggregate = {
-      id: BLOCK_AGGREGATE_ID,
-      expression,
-      function: spec.function,
-    };
-  } else if (spec.function === 'count') {
-    aggregate = { id: BLOCK_AGGREGATE_ID, function: spec.function };
-  } else if (spec.property) {
-    aggregate = {
-      id: BLOCK_AGGREGATE_ID,
-      property: spec.property,
-      function: spec.function,
-    };
-  }
-
-  if (!aggregate) {
-    return undefined;
-  }
-
-  const measuresNow =
-    spec.derived !== undefined &&
-    query.derivedColumns.some(c => c.id === spec.derived && dependsOnNow(c));
-
-  return {
-    aggregates: [aggregate],
-    group_by: groupBy
-      ? {
-          property: groupBy.property,
-          granularity: groupBy.granularity,
-          tz_offset_minutes: -new Date().getTimezoneOffset(),
-        }
-      : undefined,
-    ...(measuresNow
-      ? {
-          now_ms: Math.floor(Date.now() / NOW_QUANTUM_MS) * NOW_QUANTUM_MS,
-        }
-      : {}),
-    ...(aggregate.expression
-      ? { tz_offset_minutes: localOffsetMinutes() }
-      : {}),
-  };
+  );
 }
 
 /**
