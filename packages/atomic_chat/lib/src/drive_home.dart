@@ -130,7 +130,10 @@ class CurrentDriveHeader extends StatelessWidget {
         for (final d in drives)
           HoldFanItem(driveTitle(d), d,
               emoji: d.emoji,
-              icon: d.emoji == null ? driveIcon : null),
+              icon: d.emoji == null ? driveIcon : null,
+              // A picture as in the switcher list.
+              leading:
+                  d.picture == null ? null : DriveAvatar(drive: d, size: 24)),
         if (create != null)
           const HoldFanItem('New drive', null, icon: Icons.add),
       ],
