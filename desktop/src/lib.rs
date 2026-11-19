@@ -1,5 +1,7 @@
 mod blob_events;
 mod menu;
+#[cfg(all(feature = "native-recovery-tests", target_os = "linux"))]
+mod recovery_fixture;
 mod system_tray;
 mod vault_blob_export;
 // The NFS virtual drive is unix-only: `nfsserve` does not build for windows
@@ -566,6 +568,8 @@ async fn vault_blob_restore(
       .into_iter()
       .map(|hash| hash.to_ascii_lowercase())
       .collect();
+    #[cfg(all(feature = "native-recovery-tests", target_os = "linux"))]
+    recovery_fixture::before_restore(drive_subject.as_deref(), &wanted)?;
     let result = if let Some(drive) = drive_subject {
       let drive = atomic_lib::Subject::from_raw(&drive, store.get_base_domain().as_deref());
       vault_ipc::block_on(restore_blob_group_for_drive(
@@ -589,6 +593,21 @@ async fn vault_blob_restore(
         hash: None,
       },
     })
+  })
+  .await
+}
+
+#[cfg(all(feature = "native-recovery-tests", target_os = "linux"))]
+#[tauri::command]
+async fn native_recovery_fixture(
+  operation: String,
+  drive: String,
+  hash: String,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<serde_json::Value, String> {
+  let store = vault_ipc::store_of(&node)?;
+  vault_ipc::on_worker_thread(move || {
+    vault_ipc::block_on(recovery_fixture::operate(&store, &operation, &drive, &hash))?
   })
   .await
 }
@@ -689,6 +708,8 @@ pub fn run() {
       vault_blob_close,
       vault_blob_restore,
       vault_request_missing_files,
+      #[cfg(all(feature = "native-recovery-tests", target_os = "linux"))]
+      native_recovery_fixture,
       virtual_drive_start,
       virtual_drive_stop,
       virtual_drive_status,

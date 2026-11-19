@@ -1,5 +1,9 @@
 # Late file arrival in the native app
 
+For unattended Linux CI coverage of this case and real Vault recovery, see
+[`NATIVE_RECOVERY_CI.md`](NATIVE_RECOVERY_CI.md). The macOS procedure and recorded
+runs below remain separate platform acceptance evidence.
+
 This is an operator-driven acceptance harness for the actual macOS Tauri
 app and a second, real Iroh peer process. It exercises normal authenticated
 sync, native blob persistence, the stored-file notification and the WebView's

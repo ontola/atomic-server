@@ -15,11 +15,17 @@
 //! preserving every resource row, raw CRDT snapshot, and retained signed envelope.
 
 #[cfg(all(feature = "db", feature = "anyhow", not(target_arch = "wasm32")))]
-mod fixture {
-    use std::{collections::BTreeMap, collections::HashSet, path::Path};
+#[path = "support/native_recovery_fingerprints.rs"]
+mod fingerprints;
 
-    use atomic_lib::{db::compaction::CompactionPolicy, db::trees::Tree, Db, Subject};
-    use serde::{Deserialize, Serialize};
+#[cfg(all(feature = "db", feature = "anyhow", not(target_arch = "wasm32")))]
+mod fixture {
+    use std::path::Path;
+
+    use atomic_lib::{db::compaction::CompactionPolicy, Db, Subject};
+    use serde::Deserialize;
+
+    use super::fingerprints::fingerprints;
 
     #[derive(Deserialize)]
     struct Marker {
@@ -29,19 +35,6 @@ mod fixture {
         file: String,
     }
 
-    #[derive(Debug, PartialEq, Eq, Serialize)]
-    struct Fingerprint {
-        entries: u64,
-        bytes: u64,
-        blake3: String,
-    }
-
-    #[derive(Debug, PartialEq, Eq, Serialize)]
-    struct Fingerprints {
-        all: BTreeMap<String, Fingerprint>,
-        drive: BTreeMap<String, Fingerprint>,
-    }
-
     fn regular_file(path: &Path) -> anyhow::Result<()> {
         anyhow::ensure!(
             std::fs::symlink_metadata(path)?.file_type().is_file(),
@@ -49,56 +42,6 @@ mod fixture {
             path.display()
         );
         Ok(())
-    }
-
-    fn fingerprint(
-        db: &Db,
-        tree: Tree,
-        subjects: Option<&HashSet<String>>,
-    ) -> anyhow::Result<Fingerprint> {
-        let mut digest = blake3::Hasher::new();
-        let mut entries = 0;
-        let mut bytes = 0;
-        // KvStore iter_tree is ordered by key. Length prefixes prevent field
-        // boundaries from creating ambiguous concatenations.
-        for entry in db.kv.iter_tree(tree) {
-            let (key, value) = entry?;
-            if let Some(subjects) = subjects {
-                let subject_key = if tree == Tree::Envelopes {
-                    key.split(|byte| *byte == 0).next().unwrap_or_default()
-                } else {
-                    &key
-                };
-                if !subjects.contains(std::str::from_utf8(subject_key)?) {
-                    continue;
-                }
-            }
-            digest.update(&(key.len() as u64).to_be_bytes());
-            digest.update(&key);
-            digest.update(&(value.len() as u64).to_be_bytes());
-            digest.update(&value);
-            entries += 1;
-            bytes += (key.len() + value.len()) as u64;
-        }
-        Ok(Fingerprint {
-            entries,
-            bytes,
-            blake3: digest.finalize().to_hex().to_string(),
-        })
-    }
-
-    fn fingerprints(db: &Db, subjects: &HashSet<String>) -> anyhow::Result<Fingerprints> {
-        let mut all = BTreeMap::new();
-        let mut drive = BTreeMap::new();
-        for (name, tree) in [
-            ("resources", Tree::Resources),
-            ("loroSnapshots", Tree::LoroSnapshots),
-            ("signedEnvelopes", Tree::Envelopes),
-        ] {
-            all.insert(name.into(), fingerprint(db, tree, None)?);
-            drive.insert(name.into(), fingerprint(db, tree, Some(subjects))?);
-        }
-        Ok(Fingerprints { all, drive })
     }
 
     pub async fn run() -> anyhow::Result<()> {

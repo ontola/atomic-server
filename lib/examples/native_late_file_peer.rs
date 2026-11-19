@@ -19,7 +19,7 @@ mod fixture {
     use std::{
         fs::{File, OpenOptions},
         io::Write,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc, Mutex,
@@ -104,11 +104,97 @@ mod fixture {
         Ok(parsed.origin().ascii_serialization())
     }
 
+    // Only address hints are written, with the recipient stopped. Authentication,
+    // resource sync and file delivery still use the real Iroh connection. Local
+    // hints keep CI independent of public discovery services and multicast.
+    async fn seed_peer(recipient: &str, source: &str) -> anyhow::Result<()> {
+        let recipient = Path::new(recipient).canonicalize()?;
+        let source = Path::new(source).canonicalize()?;
+        let regular = |path: &Path| -> anyhow::Result<()> {
+            anyhow::ensure!(
+                std::fs::symlink_metadata(path)?.file_type().is_file(),
+                "fixture file must be regular and not a symlink"
+            );
+            Ok(())
+        };
+        let ready_path = source.join("ready.json");
+        let marker_path = recipient.join("NATIVE_PEER_ACCEPTANCE_ONLY");
+        regular(&ready_path)?;
+        regular(&marker_path)?;
+        let ready: serde_json::Value = serde_json::from_slice(&std::fs::read(ready_path)?)?;
+        let marker: serde_json::Value = serde_json::from_slice(&std::fs::read(marker_path)?)?;
+        anyhow::ensure!(
+            marker["purpose"] == "native-peer-acceptance"
+                && marker["nodeId"] == ready["nodeId"]
+                && marker["drive"] == ready["drive"]
+                && ready["releaseFile"].as_str() == source.join("release").to_str()
+                && !source.join("release").exists(),
+            "marker must name this exact unreleased source fixture"
+        );
+        let node_id = ready["nodeId"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("fixture has no node id"))?;
+        let _: iroh::NodeId = node_id.parse()?;
+        let direct = ready["directAddresses"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("fixture has no direct addresses"))?
+            .iter()
+            .map(|raw| -> anyhow::Result<String> {
+                let address: std::net::SocketAddr = raw
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("invalid source address"))?
+                    .parse()?;
+                anyhow::ensure!(address.port() > 0, "source address has no port");
+                // Both processes are in the same CI container. Use the actual
+                // source endpoint's UDP port over loopback, never a public relay.
+                let ip = if address.is_ipv4() {
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
+                } else {
+                    std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST)
+                };
+                Ok(std::net::SocketAddr::new(ip, address.port()).to_string())
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        anyhow::ensure!(!direct.is_empty(), "source has no local UDP address");
+        let store = recipient.join("store");
+        anyhow::ensure!(
+            store.canonicalize()? == store,
+            "store must not be a symlink"
+        );
+        regular(&store.join("atomic.redb"))?;
+        let db = Db::init_redb_file_with_policy(
+            &store,
+            None,
+            &recipient.join("uploads"),
+            &atomic_lib::db::compaction::CompactionPolicy::disabled(),
+        )
+        .await?;
+        anyhow::ensure!(
+            db.blob_store().list().await?.is_empty(),
+            "only an empty acceptance recipient may receive fixture hints"
+        );
+        atomic_lib::sync::peer::remember_peer_addr(&db, node_id, None, direct);
+        db.flush()?;
+        println!("{{\"seededLocalPeerAddress\":true}}");
+        Ok(())
+    }
+
     pub async fn run() -> anyhow::Result<()> {
         let mut args = std::env::args().skip(1);
-        let directory = PathBuf::from(args.next().ok_or_else(|| {
+        let first = args.next().ok_or_else(|| {
             anyhow::anyhow!("usage: native_late_file_peer <fresh-fixture-dir> <native-http-origin>")
-        })?);
+        })?;
+        if first == "seed-peer" {
+            let recipient = args
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("missing recipient"))?;
+            let source = args
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("missing source"))?;
+            anyhow::ensure!(args.next().is_none(), "unexpected argument");
+            return seed_peer(&recipient, &source).await;
+        }
+        let directory = PathBuf::from(first);
         let raw_origin = args
             .next()
             .ok_or_else(|| anyhow::anyhow!("supply the native embedded node's HTTP origin"))?;
@@ -137,6 +223,7 @@ mod fixture {
         root.save_locally(&db).await?;
         let hash = blake3::hash(IMAGE.as_bytes());
         let hash_hex = hash.to_hex().to_string();
+        std::fs::write(directory.join("expected.svg"), IMAGE.as_bytes())?;
         db.put_blob(hash.as_bytes(), IMAGE.as_bytes()).await?;
         let file = db
             .create_resource(
@@ -177,6 +264,7 @@ mod fixture {
             "drive": drive,
             "file": file,
             "hash": hash_hex,
+            "imageFile": directory.join("expected.svg"),
             "releaseFile": release,
             "eventsFile": directory.join("events.jsonl"),
         });

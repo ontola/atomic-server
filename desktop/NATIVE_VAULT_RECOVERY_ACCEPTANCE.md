@@ -1,5 +1,9 @@
 # Automatic native file recovery from real Vault storage
 
+For unattended Linux CI coverage using the actual native app and real local
+Cloud Vault/S3 storage, see [`NATIVE_RECOVERY_CI.md`](NATIVE_RECOVERY_CI.md).
+The macOS procedure and recorded runs below remain platform-specific evidence.
+
 This acceptance uses the actual macOS Tauri app, the real Cloud Vault API
 and a real S3-compatible object store. The API and storage run locally in
 isolated processes; neither is intercepted or replaced by a mock. It is a
