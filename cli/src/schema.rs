@@ -185,6 +185,8 @@ pub async fn diff(
                 "No lockfile to say which ontology on the server to compare with. \
                  Run `schema push` first, or pass --against <old schema file>",
             )?;
+            // Sets the server and the agent the store reads the ontology with.
+            context.read_config();
             let old = server_plan(context, &lock.ontology, &new.shortname).await?;
             compat::diff(&old, &new, &lock.ontology)?
         }
