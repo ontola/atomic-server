@@ -106,13 +106,41 @@ class AtomicAccountClient {
         });
     // Only 204 makes a session; 200 with signed_in:false means no account.
     if (response.statusCode != 204) return false;
-    final cookie = RegExp(r'(?:^|[\s,])session_token=([^;,\s]+)')
-        .firstMatch(response.headers['set-cookie'] ?? '')
-        ?.group(1);
-    if (cookie == null || cookie.isEmpty) return false;
+    final cookie = _sessionCookieOf(response);
+    if (cookie == null) return false;
     _token = null;
     _cookie = cookie;
     return true;
+  }
+
+  /// The `session_token` of a response's `set-cookie`, if it has one.
+  static String? _sessionCookieOf(http.Response response) {
+    final cookie = RegExp(r'(?:^|[\s,])session_token=([^;,\s]+)')
+        .firstMatch(response.headers['set-cookie'] ?? '')
+        ?.group(1);
+    return cookie == null || cookie.isEmpty ? null : cookie;
+  }
+
+  /// Spends the single-use token of the mailed sign-in link (`/signin?token=`)
+  /// at the portal, the way the portal's own page does, and keeps the session
+  /// cookie it answers with. Throws a [StateError] with a sentence fit to
+  /// show when the portal refuses (expired or already used) or cannot be
+  /// reached; nothing is changed then.
+  Future<void> loginWithLinkToken(String token) async {
+    final response = await _request('POST', 'login',
+        authenticated: false, body: {'token': token});
+    if (response.statusCode == 401) {
+      throw StateError('This sign-in link has expired or was already used');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorOf(response) ?? 'Could not sign in with the link');
+    }
+    final cookie = _sessionCookieOf(response);
+    if (cookie == null) {
+      throw StateError('The portal did not start a session');
+    }
+    _token = null;
+    _cookie = cookie;
   }
 
   /// Asks the portal to create an account for [email] whose identity is the
