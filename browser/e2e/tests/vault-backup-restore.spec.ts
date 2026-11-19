@@ -226,7 +226,7 @@ async function confirmedObjects(page: Page): Promise<number> {
 }
 
 async function openSync(page: Page) {
-  await page.goto(`${FRONTEND_URL}/app/sync`);
+  await page.goto(`${FRONTEND_URL}/app/settings?section=sync`);
   // The panel renders nothing at all while the control plane has not answered
   // yet ("cannot say" is not "off"), so waiting on the heading would pass on a
   // page that never reached the portal.

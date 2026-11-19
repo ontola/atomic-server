@@ -23,9 +23,16 @@ import {
 const PAIRING_CODE = /^atomic:node:[0-9a-f]{64}\?/i;
 
 async function gotoSync(page: Page) {
-  await page.goto(`${FRONTEND_URL}/app/sync`);
+  await page.goto(`${FRONTEND_URL}/app/settings?section=sync`);
+  await expect(page.getByText('Sync & devices', { exact: true })).toBeVisible();
+}
+
+// The atomic.place provider card (account, recovery, plan, Cloud Vault, Cloud
+// Server, AI credits) is portaled into the Account & security section.
+async function gotoAccount(page: Page) {
+  await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
   await expect(
-    page.getByRole('heading', { name: 'Sync', exact: true }),
+    page.getByText('Account & security', { exact: true }),
   ).toBeVisible();
 }
 
@@ -90,6 +97,11 @@ test.describe('sync page devices', () => {
         });
       }
 
+      // Nothing stored yet: what the portal answers before a backup exists.
+      if (path === '/api/recovery-secret') {
+        return route.fulfill({ status: 204, headers });
+      }
+
       return route.fulfill({
         headers,
         json: path.startsWith('/api/device-link/')
@@ -99,7 +111,7 @@ test.describe('sync page devices', () => {
           : [],
       });
     });
-    await gotoSync(page);
+    await gotoAccount(page);
     const provider = page.getByTestId('provider-card');
     await expect(provider.getByTestId('provider-account')).toContainText(
       'Not signed in',
@@ -191,7 +203,7 @@ test.describe('sync page devices', () => {
           : route.fulfill({ status: 204 })
         : route.fulfill({ json: [] });
     });
-    await gotoSync(page);
+    await gotoAccount(page);
     await expect.poll(() => managedInfoRequests).toBeGreaterThan(0);
     await page.evaluate(() => {
       window.store.finishDriveSync('did:ad:other-work-drive', 28, Date.now());
@@ -284,9 +296,7 @@ test.describe('sync page devices', () => {
     await gotoSync(page);
 
     // One section, always there: no button to reveal it first.
-    await expect(
-      page.getByRole('heading', { name: 'Connect a device', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByTestId('connect-device')).toBeVisible();
 
     const address = page.getByPlaceholder('Code or server address');
     await expect(address).toBeVisible();

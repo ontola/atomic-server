@@ -233,7 +233,7 @@ export function IdentityReconcileGate({
           to: paths.welcome,
           search: {
             step: 'signin',
-            return_to: pathname === paths.agentSettings ? 'agent' : undefined,
+            return_to: pathname === paths.appSettings ? 'agent' : undefined,
           },
           replace: true,
         });
@@ -306,7 +306,7 @@ export function IdentityReconcileGate({
       to: paths.welcome,
       search: {
         step: 'signin',
-        return_to: pathname === paths.agentSettings ? 'agent' : undefined,
+        return_to: pathname === paths.appSettings ? 'agent' : undefined,
       },
       replace: true,
     });
