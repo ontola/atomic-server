@@ -40,6 +40,13 @@ jobs:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check Docker runner health
+        timeout-minutes: 2
+        env:
+          CI_DOCKER_BINARY: ${{ runner.environment == 'self-hosted' && vars.CI_DOCKER_BINARY || '' }}
+        run: python3 scripts/ci-docker-preflight.py
+      - name: Select this runner's Dagger engine
+        run: python3 scripts/ci-dagger-engine.py
       - name: Isolate Docker credentials for this job
         shell: bash
         run: |
@@ -79,16 +86,19 @@ jobs:
         run: pnpm --dir .dagger install --frozen-lockfile
       - name: Dagger regression tests
         run: pnpm --dir .dagger test
+      - name: CI routing and infrastructure regressions
+        run: python3 scripts/ci-infrastructure-test.py
       # Self-hosted checkouts are reused; a previous run's traces must not be
       # uploaded as this run's.
       - name: Clear e2e traces from a previous run
         run: rm -rf e2e-test-results
       - name: Dagger CI (test, lint, build, e2e ${{ inputs.e2e-mode }})
+        id: dagger-ci
         uses: dagger/dagger-for-github@8.0.0
         with:
-          version: "latest"
-          # Keep the shared engine up: Mancave runs several jobs at once, and the
-          # default stop would kill the engine under a job still using it.
+          version: "0.21.11"
+          # Our engine has a private named volume. The action's stop scans ALL
+          # default dagger-engine-* containers, so never let it stop other jobs.
           engine-stop: "false"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
@@ -109,17 +119,19 @@ jobs:
       # Open a trace with `pnpm exec playwright show-trace <trace.zip>` or at
       # trace.playwright.dev.
       - name: Collect e2e traces of failed tests
-        if: failure()
+        if: failure() && steps.dagger-ci.outcome == 'failure'
+        timeout-minutes: 3
         continue-on-error: true
         uses: dagger/dagger-for-github@8.0.0
         with:
-          version: "latest"
+          # Uses the same job-wide engine URL and state volume as the failed call.
+          version: "0.21.11"
           engine-stop: "false"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
           args: failed-test-results --results-key ${{ github.run_id }}-${{ github.run_attempt }} export --path e2e-test-results
       - name: Upload e2e traces of failed tests
-        if: failure()
+        if: failure() && steps.dagger-ci.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-test-results-${{ github.run_attempt }}
@@ -152,6 +164,13 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+      - name: Check Docker runner health
+        timeout-minutes: 2
+        env:
+          CI_DOCKER_BINARY: ${{ runner.environment == 'self-hosted' && vars.CI_DOCKER_BINARY || '' }}
+        run: python3 scripts/ci-docker-preflight.py
+      - name: Select this runner's Dagger engine
+        run: python3 scripts/ci-dagger-engine.py
       - name: Isolate Docker credentials for this job
         shell: bash
         run: |
@@ -188,9 +207,8 @@ jobs:
       - name: Dagger docker images (build images & publish)
         uses: dagger/dagger-for-github@8.0.0
         with:
-          version: "latest"
-          # Keep the shared engine up: Mancave runs several jobs at once, and the
-          # default stop would kill the engine under a job still using it.
+          version: "0.21.11"
+          # Never stop other jobs' default engines; this runner owns its engine.
           engine-stop: "false"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call

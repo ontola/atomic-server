@@ -15,10 +15,23 @@ more.
 - **Never merge into `develop` yourself.** Only the trekmeester merges (see
   `CONTRIBUTING.md`), in squash batches. It also rebases stale PRs itself, so
   don't rebase or merge `develop` into your PR just to keep it fresh (#1869).
-- **PR branches get no CI by themselves.** `.github/workflows/main.yml` runs
-  on pushes to `develop`, `v*` tags and `workflow_dispatch` only. To test a PR
-  branch, dispatch it: `gh workflow run main.yml --ref <branch>` (or the
-  equivalent GitHub API call). A docs-only change needs no dispatch.
+- **Only trekmeester starts shared CI by default**, on Mancave or hosted runners.
+  Workers run relevant tests/lint locally, open or update a PR and hand over the
+  tested commit and validation evidence. Do not dispatch or rerun shared CI
+  unless the user explicitly requests an exception for that work. General
+  permission to implement, test or open a PR is not such an exception.
+- **Authorized worker exceptions use hosted runners only.** For a branch carrying
+  the hosted option, use `gh workflow run main.yml --ref <branch>` with
+  `-f github_hosted=true`. Verify both Main and downstream select hosted runners.
+  Reruns retain their original routing: workers must not rerun a Mancave job.
+  Do not dispatch an older workflow that would queue on Mancave; prepare the
+  routing change or hand validation to trekmeester. Do not change the global
+  runner override to obtain a lane.
+- **Trekmeester batch routing uses `trekmeester/*` branches.** This namespace is
+  reserved for trekmeester, not a worker escape hatch. Other manual branch/tag
+  dispatches are forced hosted. GitHub's actor name alone cannot identify the
+  chat that triggered a run. Automatic develop/tag validation is unchanged.
+  Docs-only changes need no manual dispatch.
 - **Paired atomic-saas branch.** The `Downstream` job in `main.yml` builds
   ontola/atomic-saas against your commit. It uses an atomic-saas branch with
   the *same name* as yours only if that branch has an open PR; otherwise it
@@ -26,8 +39,8 @@ more.
   `Cargo.lock` diff. So a change that moves shared Rust dependencies (or
   breaks an API atomic-saas uses) needs a same-named atomic-saas branch with an
   open PR and an updated `Cargo.lock`. See "Coordinated Rust updates" in
-  `CONTRIBUTING.md` and `scripts/check-rust-alignment.py`. The job only runs
-  on the Mancave runner.
+  `CONTRIBUTING.md` and `scripts/check-rust-alignment.py`. The job runs for trusted pushes and dispatches on the selected runner;
+  PR events never receive the private-repository token.
 
 ## Plugin pin candidates
 
