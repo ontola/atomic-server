@@ -3225,6 +3225,7 @@ msgstr "Rechercher"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/connectableDrives.ts
+#: src/helpers/driveData.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
@@ -11092,10 +11093,6 @@ msgstr "Sauvegardé {0}"
 msgid "Backed up to {0}"
 msgstr "Sauvegardé auprès de {0}"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup of your data. Only you can read it."
-msgstr "Sauvegarde chiffrée de vos données. Vous seul pouvez la lire."
-
 #: src/routes/SyncRoute.tsx
 msgid "Manage plan"
 msgstr "Gérer l’offre"
@@ -11593,11 +11590,6 @@ msgstr "Des colonnes obligatoires de la table manquent dans ce formulaire :{0} {
 #: src/components/Vault/VaultStorage.tsx
 msgid "Reading what is stored…"
 msgstr "Lecture du contenu stocké…"
-
-#. 0: formatBytes(usage.reclaimable_bytes)
-#: src/components/Vault/VaultStorage.tsx
-msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
-msgstr "{0} d’ancien historique et de fichiers inutilisés peuvent être supprimés. Aucun contenu visible ne sera perdu."
 
 #. 0: formatBytes(usage.undo_window_bytes)
 #: src/components/Vault/VaultStorage.tsx
@@ -13525,6 +13517,43 @@ msgstr "Appuyer sur Envoyer le rapport transmet le texte de discussion vérifié
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Signalez un bug ou suggérez une amélioration. Votre message et votre e-mail facultatif sont transmis à l’équipe Atomic via Sentry, avec des détails techniques sur votre configuration (version de l’application, adresse et état du serveur). Veuillez ne pas inclure de contenu privé de votre espace de travail."
 
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup object could not be read"
+msgid_plural "# backup objects could not be read"
+msgstr[0] "# objet de sauvegarde n’a pas pu être lu"
+msgstr[1] "# objets de sauvegarde n’ont pas pu être lus"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is not in the backup"
+msgid_plural "# files are not in the backup"
+msgstr[0] "# fichier n’est pas dans la sauvegarde"
+msgstr[1] "# fichiers ne sont pas dans la sauvegarde"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file could not be read"
+msgid_plural "# files could not be read"
+msgstr[0] "# fichier n’a pas pu être lu"
+msgstr[1] "# fichiers n’ont pas pu être lus"
+
+#. 0: parts.join(', ')
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restored, but not everything: {0}. Reload the page to see what was restored."
+msgstr "Restauré, mais pas tout : {0}. Rechargez la page pour voir ce qui a été restauré."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data and files. Only you can read it."
+msgstr "Sauvegarde chiffrée de vos données et de vos fichiers. Vous seul pouvez la lire."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Files are included. They are encrypted on this device like everything else, and count toward this backup's Cloud Vault storage."
+msgstr "Les fichiers sont inclus. Ils sont chiffrés sur cet appareil comme tout le reste et comptent dans le stockage Cloud Vault de cette sauvegarde."
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history can be removed. Nothing you can see is lost."
+msgstr "{0} d’ancien historique peuvent être supprimés. Aucun contenu visible ne sera perdu."
+
 #: src/helpers/verifyAgentSecret.ts
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Ce secret appartient à un autre agent. Collez le secret que vous venez d’enregistrer pour ce compte."
+
