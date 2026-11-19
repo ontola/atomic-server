@@ -270,10 +270,10 @@ msgstr "Ringkas percakapan secara otomatis saat token input melebihi persentase 
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
 msgstr "Hapus"
@@ -533,12 +533,12 @@ msgstr "Belum dikonfigurasi"
 
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/AI/ProviderStatus.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SideBar/syncStatus.tsx
 #: src/components/SideBar/syncStatus.tsx
 #: src/routes/ConnectAgentRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr "Terhubung"
 
@@ -573,17 +573,17 @@ msgstr "Hapus properti ini"
 msgid "Required field."
 msgstr "Kolom wajib diisi."
 
-#. 0: JSON.stringify(error)
-#. 0: searchError.message
 #. 0: e instanceof PairingEnvelopeError ? e.message \\: e
 #. 0: data.error
 #. 0: e
+#. 0: JSON.stringify(error)
+#. 0: searchError.message
 #. 0: resource.error.message
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/ResourceRow.tsx
 msgid "Error: {0}"
 msgstr "Kesalahan: {0}"
@@ -1280,17 +1280,15 @@ msgstr "Dokumen"
 
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/components/SideBar/AccountMenu.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr "Sinkronisasi"
 
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SideBar/syncStatus.tsx
 #: src/components/SideBar/syncStatus.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr "Offline"
 
@@ -1298,8 +1296,8 @@ msgstr "Offline"
 msgid "Changes could not sync"
 msgstr "Perubahan tidak dapat disinkronkan"
 
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SideBar/syncStatus.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Changes pending"
 msgstr "Perubahan tertunda"
 
@@ -1490,11 +1488,11 @@ msgstr "Turtle / N-triples / N3"
 msgid "Create account"
 msgstr "Buat akun"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Warning:"
 msgstr "Peringatan:"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "Anda menggunakan agen lokal yang tidak dapat melakukan autentikasi di domain lain karena URL-nya tidak dapat diakses."
 
@@ -1502,17 +1500,17 @@ msgstr "Anda menggunakan agen lokal yang tidak dapat melakukan autentikasi di do
 msgid "Global"
 msgstr "Global"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "In sync"
 msgstr "Tersinkron"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Kesalahan: Diharapkan atomic:node:<node-id>"
 
+#: src/components/Settings/AccountSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/helpers/managed/deviceLink.ts
-#: src/routes/SettingsAgent.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/DriveUnavailable.tsx
 msgid "This device"
 msgstr "Perangkat ini"
@@ -1528,47 +1526,47 @@ msgstr "Tambahkan"
 msgid "Copy"
 msgstr "Salin"
 
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/helpers/sentry.ts
 #: src/routes/LinkOpenRouter.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Error"
 msgstr "Kesalahan"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Logging to console"
 msgstr "Mencatat ke konsol"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Off"
 msgstr "Nonaktif"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "destroy"
 msgstr "hancurkan"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "No activity recorded in this session yet."
 msgstr "Belum ada aktivitas yang tercatat dalam sesi ini."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Disabled (server-only)"
 msgstr "Dinonaktifkan (hanya server)"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Initializing..."
 msgstr "Menginisialisasi..."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Ready — WASM + OPFS"
 msgstr "Siap — WASM + OPFS"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Enable local WASM DB"
 msgstr "Aktifkan DB WASM lokal"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Enter a Drive DID or URL"
 msgstr "Masukkan DID atau URL drive"
 
@@ -1855,9 +1853,9 @@ msgstr "Atur apakah sumber daya ini muncul di Favorit Anda."
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
+#: src/components/Settings/DriveSettings.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/routes/IntegrationStore.tsx
-#: src/routes/SettingsAgent.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Open"
 msgstr "Buka"
 
@@ -2157,8 +2155,8 @@ msgstr "<0/> Catatan"
 
 #: src/actions/appMenuItems.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/components/Settings/DriveSettings.tsx
 #: src/routes/IntegrationStore.tsx
-#: src/routes/SettingsAgent.tsx
 #: src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Baru"
@@ -3950,32 +3948,28 @@ msgstr "Drive pribadi"
 msgid "View and organize all your drives."
 msgstr "Lihat dan atur semua drive Anda."
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "My drives"
 msgstr "Drive saya"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Only stored on this device. Star a drive to keep it in My drives."
-msgstr "Hanya disimpan di perangkat ini. Beri bintang pada drive untuk menyimpannya di Drive saya."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Recently visited"
 msgstr "Baru dikunjungi"
 
 #. 0: status.lastDriveSync.count.toLocaleString()
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} resources · stored locally"
 msgstr "{0} sumber daya · disimpan secara lokal"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Embedded server · stored locally"
 msgstr "Server tersemat · disimpan secara lokal"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cached locally · works offline"
 msgstr "Di-cache secara lokal · dapat digunakan offline"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Server-only · no local cache"
 msgstr "Hanya server · tidak ada cache lokal"
 
@@ -3984,13 +3978,13 @@ msgstr "Hanya server · tidak ada cache lokal"
 msgid "{0}% used"
 msgstr "{0}% terpakai"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Syncing…"
 msgstr "Menyinkronkan…"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sync now"
 msgstr "Sinkronkan sekarang"
 
@@ -3998,31 +3992,31 @@ msgstr "Sinkronkan sekarang"
 msgid "Embedded (this device)"
 msgstr "Tersemat (perangkat ini)"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Node ID"
 msgstr "ID node"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Local database"
 msgstr "Basis data lokal"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "WebSocket debug"
 msgstr "Debug WebSocket"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Developer"
 msgstr "Pengembang"
 
 #: src/chunks/Conference/ConferenceRoom.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/views/PeerInvitePage.tsx
 msgid "Connecting…"
 msgstr "Menghubungkan…"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Only on this device"
 msgstr "Hanya di perangkat ini"
 
@@ -4056,10 +4050,10 @@ msgstr "Memasangkan perangkat"
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Coba lagi"
 
@@ -4102,10 +4096,10 @@ msgstr "Ruang kerja Anda sudah di sini"
 msgid "Bring your workspace over"
 msgstr "Pindahkan ruang kerja Anda ke sini"
 
-#. 0: device
 #. 0: serverLabel(status.serverUrl ?? '')
+#. 0: device
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Paired with {0}"
 msgstr "Dipasangkan dengan {0}"
 
@@ -4128,8 +4122,8 @@ msgstr "Ruang kerja Anda belum terbuka di sini. Proses mungkin masih berlangsung
 
 #. 0: PRODUCT_NAME
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "No {0} portal is configured for this server."
 msgstr "Portal {0} belum dikonfigurasi untuk server ini."
 
@@ -4252,12 +4246,12 @@ msgstr "<0/> Buka"
 msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
 msgstr "Pasang drive Atomic Anda sebagai folder di komputer ini. File, folder, dan dokumen Anda muncul di pengelola file, dan perubahan yang Anda buat di sana disinkronkan kembali."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Node ID copied"
 msgstr "ID node disalin"
 
 #. 0: nodeId
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Copy {0}"
 msgstr "Salin {0}"
 
@@ -4265,30 +4259,29 @@ msgstr "Salin {0}"
 msgid "Your data lives on the device you’re connected to."
 msgstr "Data Anda berada di perangkat yang terhubung dengan Anda."
 
-#: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Connect a device"
 msgstr "Hubungkan perangkat"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Connect a device below first."
 msgstr "Hubungkan perangkat di bawah terlebih dahulu."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Pair another device to sync directly, or connect an always-on one to reach your data from anywhere."
 msgstr "Pasangkan perangkat lain untuk menyinkronkan secara langsung, atau hubungkan perangkat yang selalu aktif untuk mengakses data dari mana saja."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Connect an always-on device to back up your data and reach it from anywhere."
 msgstr "Hubungkan perangkat yang selalu aktif untuk mencadangkan data Anda dan mengaksesnya dari mana saja."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Always-on · in use"
 msgstr "Selalu aktif · digunakan"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Always-on device"
 msgstr "Perangkat yang selalu aktif"
 
@@ -4296,7 +4289,7 @@ msgstr "Perangkat yang selalu aktif"
 msgid "Scan this from that device"
 msgstr "Pindai ini dari perangkat tersebut"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Error: could not disconnect that device"
 msgstr "Kesalahan: tidak dapat memutuskan perangkat tersebut"
 
@@ -4388,7 +4381,7 @@ msgstr "Bahasa yang digunakan drive ini untuk menerbitkan konten (tag BCP 47, mi
 msgid "This property is server-managed and cannot be edited."
 msgstr "Properti ini dikelola oleh server dan tidak dapat disunting."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Penyimpanan lokal nonaktif, jadi server ini adalah satu-satunya sumber data. Aktifkan penyimpanan lokal di bawah untuk bekerja tanpa koneksi."
 
@@ -4635,11 +4628,7 @@ msgstr "Gunakan kunci sandi Anda sebagai gantinya"
 msgid "Could not add a recovery code."
 msgstr "Tidak dapat menambahkan kode pemulihan."
 
-#: src/routes/SettingsAgent.tsx
-msgid "How you get back in on a new device — and where to find your agent secret."
-msgstr "Cara masuk kembali di perangkat baru — dan tempat menemukan kunci rahasia agen Anda."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Account recovery"
 msgstr "Pemulihan akun"
 
@@ -4722,11 +4711,11 @@ msgstr "Buka {0} dengan sidik jari, wajah, atau kunci layar Anda."
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "Kami telah mengganti kata sandi pemulihan lama Anda dengan kode yang dibuat lebih kuat. Simpan di tempat aman — Anda memerlukannya, beserta email Anda, untuk masuk kembali. Kami tidak dapat menampilkannya lagi, tetapi Anda dapat membuat kode baru dari Pengaturan kapan saja."
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "More profile fields"
 msgstr "Kolom profil lainnya"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 #: src/routes/SignOutRoute.tsx
 #: src/routes/SignOutRoute.tsx
 msgid "Sign out"
@@ -4761,11 +4750,11 @@ msgstr "Gunakan sidik jari, wajah, atau kunci layar Anda."
 msgid "or sign in another way"
 msgstr "atau masuk dengan cara lain"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
 msgstr "Keluar dan hapus salinan cadangan terenkripsi Anda dari perangkat ini"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out & forget this device"
 msgstr "Keluar & lupakan perangkat ini"
 
@@ -4789,10 +4778,6 @@ msgstr "Tempel kunci rahasia agen Anda"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
 msgstr "Itu sepertinya bukan kunci rahasia agen yang valid."
-
-#: src/routes/SettingsAgent.tsx
-msgid "Whether this browser stays signed in as you when anyone opens it."
-msgstr "Apakah browser ini tetap masuk sebagai Anda saat siapa pun membukanya."
 
 #: src/components/DeviceLockCard.tsx
 msgid "Lock now"
@@ -5296,8 +5281,8 @@ msgstr "Dokumen, tabel, file, obrolan, dan aplikasi kustom di satu tempat. Atomi
 msgid "Bearer {0}"
 msgstr "Bearer {0}"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server"
 msgstr "Cloud Server"
 
@@ -5419,32 +5404,32 @@ msgstr "Aktifkan Cloud Vault"
 msgid "Cloud Vault is not available here: {0}."
 msgstr "Cloud Vault tidak tersedia di sini: {0}."
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Disconnect"
 msgstr "Putuskan"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Reconnect"
 msgstr "Hubungkan kembali"
 
+#: src/components/Settings/SyncSettings.tsx
 #: src/helpers/browserPeerSync.ts
-#: src/routes/SyncRoute.tsx
 msgid "Not connected"
 msgstr "Tidak terhubung"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Switch"
 msgstr "Beralih"
 
-#. 0: accountAddress(phase.account)
 #. 0: managedAccount.email
+#. 0: accountAddress(phase.account)
+#: src/components/Settings/SyncSettings.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
 msgstr "Masuk sebagai {0}."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Email recovery"
 msgstr "Pemulihan melalui email"
 
@@ -5453,7 +5438,7 @@ msgstr "Pemulihan melalui email"
 #. 0: nodeUsage.resourceCount.toLocaleString()
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 #: src/components/Cloud/CloudServerDetails.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} resources"
 msgstr "{0} sumber daya"
 
@@ -5463,7 +5448,7 @@ msgstr "{0} sumber daya"
 #. 0: doneCount; 1: steps.length
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 #: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} dari {1}"
@@ -5471,22 +5456,22 @@ msgstr "{0} dari {1}"
 #. 0: syncedAgo
 #. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
 #. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Synced {0}"
 msgstr "Disinkronkan {0}"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Synced just now"
 msgstr "Baru saja disinkronkan"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This server"
 msgstr "Server ini"
 
 #. 0: serverHostname ?? 'This server'
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} doesn’t offer hosting, so it can’t be switched on from here."
 msgstr "{0} tidak menawarkan hosting, sehingga tidak dapat diaktifkan dari sini."
 
@@ -5495,25 +5480,25 @@ msgid "Checking this workspace’s backup…"
 msgstr "Memeriksa cadangan ruang kerja ini…"
 
 #. 0: withWhom
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Already up to date{0}"
 msgstr "Sudah terbaru{0}"
 
 #. 0: withWhom; 1: sent; 2: received
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Synced{0} — sent {1}, received {2}"
 msgstr "Disinkronkan{0} — {1} dikirim, {2} diterima"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Paired"
 msgstr "Dipasangkan"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Paired device"
 msgstr "Perangkat yang dipasangkan"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Not synced yet"
 msgstr "Belum disinkronkan"
 
@@ -5528,11 +5513,11 @@ msgid "Sign in →"
 msgstr "Masuk →"
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, sehingga email ini memungkinkan Anda masuk kembali di perangkat baru."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Set up email recovery"
 msgstr "Siapkan pemulihan melalui email"
 
@@ -5578,7 +5563,7 @@ msgstr "Kunci rahasia agen Anda"
 msgid "Set up account recovery"
 msgstr "Siapkan pemulihan akun"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Store it with "
 msgstr "Simpan dengan "
 
@@ -5599,7 +5584,7 @@ msgid "Store it with {0}"
 msgstr "Simpan dengan {0}"
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Cadangan Anda tersegel hanya di browser ini, sehingga dapat dibuka di sini tetapi tidak dapat membantu Anda masuk kembali di perangkat baru."
 
@@ -5632,20 +5617,18 @@ msgstr "Membuat drive pribadi Anda…"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Tidak dapat memperbarui daftar Anda: drive pribadi belum disiapkan untuk akun ini."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr "Drive pribadi Anda selalu berada di urutan pertama. Hapus bintang dari drive lain untuk memindahkannya kembali ke daftar baru dikunjungi."
-
+#: src/actions/appActions.ts
 #: src/components/Drives/DrivesCard.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Drives"
 msgstr "Drive"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL"
 msgstr "Buka drive berdasarkan URL"
 
-#: src/routes/SettingsAgent.tsx
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/DriveSettings.tsx
+#: src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL or DID"
 msgstr "Buka drive berdasarkan URL atau DID"
 
@@ -5658,12 +5641,12 @@ msgid "Only your passkey opens this account. If it isn't on this device, unlock 
 msgstr "Hanya kunci sandi Anda yang dapat membuka akun ini. Jika tidak ada di perangkat ini, buka di perangkat tempat Anda menyiapkannya dan tambahkan kode pemulihan di Pengaturan — kode itu memungkinkan Anda masuk di mana saja."
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, tetapi hanya kunci sandi Anda yang dapat membukanya. Browser yang belum menerima sinkronisasi kunci sandi tidak dapat membantu Anda masuk kembali — kode pemulihan dapat melakukannya."
 
 #: src/components/AccountRecoveryCard.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Add a recovery code"
 msgstr "Tambahkan kode pemulihan"
 
@@ -5847,23 +5830,23 @@ msgstr "Amplop tersedia, tetapi tanda tangannya tidak lolos verifikasi"
 msgid "No signed envelope covers this change on this node"
 msgstr "Tidak ada amplop bertanda tangan yang mencakup perubahan ini pada node ini"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive uses a legacy server address. Cloud Server requires a portable DID drive."
 msgstr "Drive ini menggunakan alamat server lama. Cloud Server memerlukan drive DID portabel."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sign-in wasn’t completed — hosting setup was cancelled."
 msgstr "Proses masuk belum selesai — penyiapan hosting dibatalkan."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Could not set up Cloud Server."
 msgstr "Tidak dapat menyiapkan Cloud Server."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Use Cloud Server"
 msgstr "Gunakan Cloud Server"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "See plans"
 msgstr "Lihat paket"
 
@@ -6100,7 +6083,7 @@ msgstr "Perbarui"
 msgid "Context compacted"
 msgstr "Konteks diringkas"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Recent activity"
 msgstr "Aktivitas terbaru"
 
@@ -6257,7 +6240,7 @@ msgstr "<0>Simpan kode pemulihan ini.</0> Kode ini memungkinkan Anda masuk kemba
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Tidak dapat membuka dengan kunci sandi. Gunakan kode pemulihan Anda sebagai gantinya."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Error: Sign in before syncing with another device"
 msgstr "Kesalahan: Masuk sebelum menyinkronkan dengan perangkat lain"
 
@@ -6419,7 +6402,7 @@ msgstr "Data Anda berada di perangkat ini dan disinkronkan dengan server."
 msgid "Your data lives on this device. Browser sync connects when another browser is available."
 msgstr "Data Anda berada di perangkat ini. Sinkronisasi browser terhubung saat browser lain tersedia."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Checking local copy…"
 msgstr "Memeriksa salinan lokal…"
 
@@ -8083,6 +8066,7 @@ msgstr "Gunakan model bawaan paket"
 msgid "Agent"
 msgstr "Agen"
 
+#: src/actions/appActions.ts
 #: src/chunks/AI/RealAIChat.tsx
 msgid "AI settings"
 msgstr "Pengaturan AI"
@@ -8304,7 +8288,6 @@ msgid "AI settings…"
 msgstr "Pengaturan AI…"
 
 #: src/actions/appActions.ts
-#: src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr "Pengguna"
 
@@ -8330,7 +8313,7 @@ msgstr "Tidak ada plugin untuk ditampilkan di sini."
 msgid "Your home is ready. Have data elsewhere?{0} <0>Connect another device or restore a backup</0>."
 msgstr "Beranda Anda siap. Punya data di tempat lain?{0} <0>Hubungkan perangkat lain atau pulihkan cadangan</0>."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Local copy unavailable"
 msgstr "Salinan lokal tidak tersedia"
 
@@ -8402,7 +8385,7 @@ msgstr "Tinjau transkrip obrolan sebelum membagikannya kepada tim Atomic"
 msgid "Buy AI credits"
 msgstr "Beli kredit AI"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Starting server sync…"
 msgstr "Memulai sinkronisasi server…"
 
@@ -8757,10 +8740,6 @@ msgstr "Temukan integrasi dari catalog.json ini. Pengaturan ini disimpan di brow
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Masukkan URL HTTPS atau URL HTTP localhost yang mengarah ke file catalog.json."
 
-#: src/components/SignInButton.tsx
-msgid "Go to the User page"
-msgstr "Buka halaman Pengguna"
-
 #. 0: title || 'Untitled Chat'; 1: messages.length
 #: src/chunks/AI/formatAIChatReport.ts
 msgid ""
@@ -8943,7 +8922,7 @@ msgstr "Pilih templat"
 msgid "Name your drive"
 msgstr "Beri nama drive Anda"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Not hosted here"
 msgstr "Tidak dihosting di sini"
 
@@ -9134,10 +9113,6 @@ msgstr "Buka pengaturan"
 #: src/actions/appMenuItems.tsx
 msgid "Switch drive"
 msgstr "Ganti drive"
-
-#: src/actions/appMenuItems.tsx
-msgid "Open user settings"
-msgstr "Buka pengaturan pengguna"
 
 #: src/actions/appMenuItems.tsx
 msgid "Give feedback"
@@ -10042,6 +10017,7 @@ msgstr "{0} lainnya, buka untuk melihat semua"
 msgid "Show older messages ({0})"
 msgstr "Tampilkan pesan sebelumnya ({0})"
 
+#: src/components/Settings/AccountSettings.tsx
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Profile"
 msgstr "Profil"
@@ -10070,7 +10046,7 @@ msgstr "Pilih gambar"
 msgid "Textual Description"
 msgstr "Deskripsi teks"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Sign out of this device."
 msgstr "Keluar dari perangkat ini."
 
@@ -10755,11 +10731,11 @@ msgstr "Mulai ulang aplikasi"
 msgid "Reload the whole app, as if you opened it again."
 msgstr "Muat ulang seluruh aplikasi, seolah Anda membukanya kembali."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
 msgstr "Hentikan pengunggahan perubahan ini? Perubahan tetap di perangkat ini tetapi tidak akan sampai ke server."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Discard upload"
 msgstr "Buang unggahan"
 
@@ -10821,10 +10797,6 @@ msgstr "Akun dibuat"
 #: src/components/MetaSetter.tsx
 msgid "Welcome"
 msgstr "Selamat datang"
-
-#: src/components/MetaSetter.tsx
-msgid "Account"
-msgstr "Akun"
 
 #: src/components/MetaSetter.tsx
 msgid "Server settings"
@@ -10923,7 +10895,7 @@ msgstr "Drive"
 msgid "Back to sync settings"
 msgstr "Kembali ke pengaturan sinkronisasi"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "(see where space goes)"
 msgstr "(lihat penggunaan ruang)"
 
@@ -11011,15 +10983,15 @@ msgid "See how much space this resource and what is in it take up."
 msgstr "Lihat berapa banyak ruang yang digunakan sumber daya ini beserta isinya."
 
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to start Cloud Server."
 msgstr "Masuk ke akun {0} Anda untuk memulai Cloud Server."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan does not include Cloud Server yet."
 msgstr "Paket drive ini belum mencakup Cloud Server."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Could not start Cloud Server."
 msgstr "Tidak dapat memulai Cloud Server."
 
@@ -11028,12 +11000,12 @@ msgstr "Tidak dapat memulai Cloud Server."
 msgid "{0} · Email recovery on"
 msgstr "{0} · Pemulihan melalui email aktif"
 
+#: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Trying again…"
 msgstr "Mencoba lagi…"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Your plan"
 msgstr "Paket Anda"
 
@@ -11041,15 +11013,15 @@ msgstr "Paket Anda"
 msgid "Current"
 msgstr "Saat ini"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Shareable links and API access"
 msgstr "Tautan yang dapat dibagikan dan akses API"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Search across everything"
 msgstr "Cari di semua konten"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "No need for another device to be awake"
 msgstr "Tidak perlu perangkat lain tetap aktif"
 
@@ -11068,15 +11040,15 @@ msgstr "Dicadangkan {0}"
 msgid "Backed up to {0}"
 msgstr "Dicadangkan ke {0}"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Manage plan"
 msgstr "Kelola paket"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Turn on Cloud Server"
 msgstr "Aktifkan Cloud Server"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Upgrade to Cloud Server"
 msgstr "Tingkatkan ke Cloud Server"
 
@@ -11192,16 +11164,16 @@ msgstr "Memuat integrasi…"
 msgid "<0/> Show experimental plugins"
 msgstr "<0/> Tampilkan plugin eksperimental"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."
 msgstr "Belum ada perangkat lain — data Anda aman di perangkat ini."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Devices"
 msgstr "Perangkat"
 
 #. 0: status.pendingDirtyCount
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} unsynced"
 msgstr "{0} belum disinkronkan"
 
@@ -11297,11 +11269,6 @@ msgstr "{0} peristiwa dalam antrean. Peristiwa tetap tersimpan sambil menunggu p
 #: src/components/AI/AISettings.tsx
 msgid "<0/> or"
 msgstr "<0/> atau"
-
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: src/components/AI/AISettings.tsx
-msgid "Credits used: {0}{1} / {2}"
-msgstr "Kredit terpakai: {0}{1} / {2}"
 
 #. 0: index + 1; 1: id === status.state?.active ? ' (live)' \\: ''
 #: src/chunks/Website/WebsiteHosting.tsx
@@ -11603,7 +11570,7 @@ msgstr "{0} poin"
 msgid "Showing first {0} answers"
 msgstr "Menampilkan {0} jawaban pertama"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Add your passkey here. A passkey added in the app also unlocks your encrypted backup, which only the app can do."
 msgstr "Tambahkan kunci sandi Anda di sini. Kunci sandi yang ditambahkan di aplikasi juga membuka cadangan terenkripsi Anda, yang hanya dapat dilakukan oleh aplikasi."
 
@@ -11624,11 +11591,11 @@ msgid "Confirm with your code"
 msgstr "Konfirmasi dengan kode Anda"
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, tetapi masuk belum membukanya. Konfirmasi sekali dengan kunci sandi atau kode pemulihan untuk mengaktifkannya."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Turn it on"
 msgstr "Aktifkan"
 
@@ -12004,23 +11971,19 @@ msgstr "Pengaturan akun"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> meminta untuk menggunakan data Atomic Anda. Aplikasi memiliki kunci sendiri, sehingga kunci rahasia tetap pada Anda, dan Anda dapat mencabut aksesnya kapan saja."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
-msgstr "Aplikasi yang Anda izinkan menggunakan data, seperti asisten AI. Masing-masing memiliki kunci sendiri; cabut aksesnya untuk memutuskan hubungan."
-
-#: src/routes/SettingsAgent.tsx
+#: src/components/Settings/AccountSettings.tsx
 msgid "Connected apps"
 msgstr "Aplikasi terhubung"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup: no portal configured"
 msgstr "Penyiapan Cloud Server: portal belum dikonfigurasi"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed after sign-in"
 msgstr "Penyiapan Cloud Server gagal setelah masuk"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed on its own"
 msgstr "Penyiapan Cloud Server gagal dengan sendirinya"
 
@@ -12615,107 +12578,107 @@ msgstr "Obrolan"
 msgid "Show technical details"
 msgstr "Tampilkan detail teknis"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Could not change drive sync."
 msgstr "Tidak dapat mengubah sinkronisasi drive."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This server doesn’t host this drive, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
 msgstr "Server ini tidak menghosting drive ini, sehingga menolak perubahannya. Siapkan Cloud Server untuk menyinkronkannya di sini, atau nonaktifkan sinkronisasi agar drive hanya tersimpan di perangkat ini."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive with this server"
 msgstr "Sinkronkan drive ini dengan server ini"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Off stops server sync for this drive on this browser. The server’s existing copy and other devices are unchanged; browser sync can still connect open browsers."
 msgstr "Menonaktifkan akan menghentikan sinkronisasi server untuk drive ini di browser ini. Salinan server yang ada dan perangkat lain tidak berubah; sinkronisasi browser tetap dapat menghubungkan browser yang terbuka."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Drive sync off"
 msgstr "Sinkronisasi drive nonaktif"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Open a drive to see whether it can be hosted."
 msgstr "Buka drive untuk melihat apakah drive dapat dihosting."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This device doesn’t have this drive yet. Pair the device that does, and you can host it from here."
 msgstr "Perangkat ini belum memiliki drive ini. Pasangkan perangkat yang memilikinya, lalu Anda dapat menghostingnya dari sini."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Checking whether this drive is hosted…"
 msgstr "Memeriksa apakah drive ini dihosting…"
 
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sign in to {0} to see whether this drive is hosted."
 msgstr "Masuk ke {0} untuk melihat apakah drive ini dihosting."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server received this drive. Your source server is still connected."
 msgstr "Cloud Server menerima drive ini. Server sumber Anda masih terhubung."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Connected to Cloud Server. Syncing this drive…"
 msgstr "Terhubung ke Cloud Server. Menyinkronkan drive ini…"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive is on Cloud Server. This device still syncs with its old server."
 msgstr "Drive ini berada di Cloud Server. Perangkat ini masih menyinkronkan dengan server lamanya."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Moving this drive to Cloud Server. It switches on by itself; you can keep working."
 msgstr "Memindahkan drive ini ke Cloud Server. Fitur akan aktif sendiri; Anda dapat terus bekerja."
 
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0} added Cloud Server to this drive. It waits for your consent."
 msgstr "{0} menambahkan Cloud Server ke drive ini. Persetujuan Anda ditunggu."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan includes Cloud Server. It waits for your consent."
 msgstr "Paket drive ini mencakup Cloud Server. Persetujuan Anda ditunggu."
 
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Masuk ke akun {0} Anda untuk memeriksa pemulihan melalui email. Masuk ke drive ini dengan kunci sandi atau kunci rahasia tidak dengan sendirinya menghubungkan akun cloud Anda."
 
 #. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Cadangan pemulihan tidak tersimpan, sehingga kehilangan semua perangkat berarti kehilangan drive ini."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Everything in Cloud Vault, plus a hosted drive on atomic.place, always online. Our servers process what you put here."
 msgstr "Semua yang ada di Cloud Vault, ditambah drive yang dihosting di atomic.place dan selalu online. Server kami memproses apa yang Anda tempatkan di sini."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "<0>Before you turn it on:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this drive on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
 msgstr "<0>Sebelum Anda mengaktifkannya:</0> berbeda dengan Cloud Vault, Cloud Server menyimpan salinan drive ini yang dapat dibaca dan tidak terenkripsi di server kami, agar kami dapat menjalankan pencarian, tautan berbagi, dan API-nya. Izin berbagi Anda tetap mengontrol siapa lagi yang dapat melihatnya, dan Anda dapat menonaktifkannya kapan saja."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, scan the code below to connect it."
 msgstr "Jika perangkat lain memiliki drive ini, pindai kode di bawah untuk menghubungkannya."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, you can connect it."
 msgstr "Jika perangkat lain memiliki drive ini, Anda dapat menghubungkannya."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive could not be read on this device"
 msgstr "Drive ini tidak dapat dibaca di perangkat ini"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive"
 msgstr "Sinkronkan drive ini"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "This drive hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
 msgstr "Drive ini belum disinkronkan. Drive aman di sini, tetapi belum dicadangkan dan belum ada di perangkat Anda yang lain."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "These sync your other drives — not this drive."
 msgstr "Ini menyinkronkan drive Anda yang lain — bukan drive ini."
 
@@ -12965,11 +12928,11 @@ msgstr "<0/> Tinggalkan pengalihan di lokasi lama"
 msgid "All drives"
 msgstr "Semua drive"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server isn’t on for this drive. This server only accepts it for a short while; after that it stops syncing. Set up Cloud Server to keep it here, or turn off sync to keep it on this device only."
 msgstr "Cloud Server belum aktif untuk drive ini. Server ini hanya menerimanya untuk waktu singkat; setelah itu sinkronisasi berhenti. Siapkan Cloud Server untuk menyimpannya di sini, atau nonaktifkan sinkronisasi agar drive hanya tersimpan di perangkat ini."
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Settings/SyncSettings.tsx
 msgid "Not hosted yet"
 msgstr "Belum dihosting"
 
@@ -13148,10 +13111,6 @@ msgstr "Sumber daya di dalam folder"
 #: src/embed/mockHost.ts
 msgid "Rendered by ResourcePage, with nothing around it."
 msgstr "Dirender oleh ResourcePage, tanpa elemen di sekitarnya."
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar <0>Show icons and pictures next to items in the sidebar</0>"
-msgstr "Tampilkan ikon di bilah samping <0>Tampilkan ikon dan gambar di samping item dalam bilah samping</0>"
 
 #: src/routes/SendIdentityRoute.tsx
 msgid "This link has no code. Start again from your device."
@@ -13518,3 +13477,87 @@ msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang h
 #: src/helpers/verifyAgentSecret.ts
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Secret ini milik agen lain. Tempel secret yang baru saja kamu simpan untuk akun ini."
+
+#: src/actions/appActions.ts
+msgid "Profile settings"
+msgstr "Pengaturan profil"
+
+#: src/actions/appActions.ts
+msgid "Your name, avatar and signing out."
+msgstr "Nama, avatar, dan keluar."
+
+#: src/actions/appActions.ts
+#: src/components/Settings/AccountSettings.tsx
+#: src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Akun dan keamanan"
+
+#: src/actions/appActions.ts
+msgid "Sign in, recovery, your plan and this device."
+msgstr "Masuk, pemulihan, paket Anda, dan perangkat ini."
+
+#: src/actions/appActions.ts
+msgid "Your drives and recently visited ones."
+msgstr "Drive Anda dan yang baru dikunjungi."
+
+#: src/actions/appActions.ts
+#: src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Sinkronisasi dan perangkat"
+
+#: src/actions/appActions.ts
+msgid "Where this drive syncs, and connecting a device."
+msgstr "Tempat drive ini disinkronkan, dan menghubungkan perangkat."
+
+#: src/actions/appActions.ts
+msgid "Appearance settings"
+msgstr "Pengaturan tampilan"
+
+#: src/actions/appActions.ts
+msgid "Theme, colors, language and sidebar."
+msgstr "Tema, warna, bahasa, dan bilah samping."
+
+#: src/actions/appActions.ts
+msgid "Accessibility settings"
+msgstr "Pengaturan aksesibilitas"
+
+#: src/actions/appActions.ts
+msgid "Animations and motion."
+msgstr "Animasi dan gerakan."
+
+#: src/actions/appActions.ts
+msgid "Notification settings"
+msgstr "Pengaturan notifikasi"
+
+#: src/actions/appActions.ts
+msgid "What you get notified about."
+msgstr "Hal yang diberitahukan kepada Anda."
+
+#: src/actions/appActions.ts
+msgid "Models, providers and voice."
+msgstr "Model, penyedia, dan suara."
+
+#: src/actions/appActions.ts
+msgid "Integration settings"
+msgstr "Pengaturan integrasi"
+
+#: src/actions/appActions.ts
+msgid "Proxy, catalog and experimental plugins."
+msgstr "Proksi, katalog, dan plugin eksperimental."
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Tampilkan ikon di bilah samping"
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Tampilkan ikon dan gambar di samping item dalam bilah samping"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Kredit terpakai: {0} /{1} {2}"
+
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Edit profile"
+msgstr "Edit profil"

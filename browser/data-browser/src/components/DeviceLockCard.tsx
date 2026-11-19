@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { Button } from './Button';
 import { Column, Row } from './Row';
+import { RadioGroup, RadioInput } from './forms/RadioInput';
 import {
   getLockPolicy,
   LOCK_POLICY_LABELS,
@@ -73,24 +74,20 @@ export function DeviceLockCard({
           : `You’ll unlock with ${hasPasskey ? 'your passkey' : 'your agent secret'}.`}
       </Explanation>
 
-      <Options role='radiogroup' aria-label='When to lock this device'>
+      <RadioGroup role='radiogroup' aria-label='When to lock this device'>
         {POLICIES.map(option => (
-          <OptionRow key={option}>
-            <input
-              type='radio'
-              id={`lock-${option}`}
-              name='device-lock-policy'
-              value={option}
-              checked={policy === option}
-              onChange={() => choose(option)}
-              data-test={`lock-policy-${option}`}
-            />
-            <label htmlFor={`lock-${option}`}>
-              {LOCK_POLICY_LABELS[option]}
-            </label>
-          </OptionRow>
+          <RadioInput
+            key={option}
+            name='device-lock-policy'
+            value={option}
+            checked={policy === option}
+            onChange={() => choose(option)}
+            data-test={`lock-policy-${option}`}
+          >
+            {LOCK_POLICY_LABELS[option]}
+          </RadioInput>
         ))}
-      </Options>
+      </RadioGroup>
 
       {policy !== 'never' ? (
         <Row gap='1rem' wrapItems>
@@ -106,24 +103,4 @@ export function DeviceLockCard({
 const Explanation = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.textLight};
-`;
-
-const Options = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-`;
-
-const OptionRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-
-  label {
-    cursor: pointer;
-  }
-
-  input {
-    cursor: pointer;
-  }
 `;

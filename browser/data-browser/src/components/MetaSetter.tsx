@@ -23,16 +23,12 @@ function useRouteTitle(): string | undefined {
   switch (route) {
     case pathNames.welcome:
       return 'Welcome';
-    case pathNames.agentSettings:
-      return 'Account';
     case pathNames.appSettings:
       return 'Settings';
     case pathNames.apps:
       return 'Apps';
     case pathNames.notifications:
       return 'Notifications';
-    case pathNames.sync:
-      return 'Sync';
     case pathNames.serverSettings:
       return 'Server settings';
     case pathNames.new:

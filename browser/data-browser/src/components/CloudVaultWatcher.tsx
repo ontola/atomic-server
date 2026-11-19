@@ -53,7 +53,7 @@ export function CloudVaultWatcher() {
                 onClick={() => {
                   toast.dismiss(t.id);
                   void navigate(
-                    `${paths.sync}?${new URLSearchParams({ drive })}`,
+                    `${paths.sync}&${new URLSearchParams({ drive })}`,
                   );
                 }}
               >
