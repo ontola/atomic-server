@@ -16,7 +16,6 @@ const buttons = [
   dataBrowser.classes.documentV2,
   dataBrowser.classes.meeting,
   dataBrowser.classes.chatroom,
-  dataBrowser.classes.bookmark,
   canvas.classes.canvas,
   core.classes.ontology,
 ];
