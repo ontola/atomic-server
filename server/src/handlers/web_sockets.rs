@@ -173,42 +173,56 @@ pub struct IndexStatusPush {
 }
 
 /// Fan-out for `INDEX_STATUS` websocket messages (per subscribed drive).
-pub struct IndexStatusBroadcast {
-    inner: Arc<Mutex<std::collections::HashMap<String, Vec<Addr<WebSocketConnection>>>>>,
+/// Generic over the subscriber so the bookkeeping can be tested without a
+/// running socket; the server only uses the default.
+pub struct IndexStatusBroadcast<A = Addr<WebSocketConnection>> {
+    inner: Arc<Mutex<std::collections::HashMap<String, Vec<A>>>>,
 }
 
-impl IndexStatusBroadcast {
+impl<A: Clone + PartialEq> IndexStatusBroadcast<A> {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(std::collections::HashMap::new())),
         }
     }
 
-    pub fn subscribe(&self, drive: String, addr: Addr<WebSocketConnection>) {
+    /// Subscribing the same address to the same drive twice keeps one entry.
+    pub fn subscribe(&self, drive: String, addr: A) {
         let mut g = self.inner.lock().expect("index status broadcast mutex");
-        g.entry(drive).or_default().push(addr);
+        let subscribers = g.entry(drive).or_default();
+        if !subscribers.contains(&addr) {
+            subscribers.push(addr);
+        }
     }
 
-    pub fn unsubscribe_drive(&self, drive: &str, addr: &Addr<WebSocketConnection>) {
+    /// A drive left with no subscribers is dropped from the map.
+    pub fn unsubscribe_drive(&self, drive: &str, addr: &A) {
         let mut g = self.inner.lock().expect("index status broadcast mutex");
         if let Some(v) = g.get_mut(drive) {
-            v.retain(|a: &Addr<WebSocketConnection>| a != addr);
+            v.retain(|a| a != addr);
+            if v.is_empty() {
+                g.remove(drive);
+            }
         }
     }
 
-    pub fn unsubscribe_all_for_addr(&self, addr: &Addr<WebSocketConnection>) {
+    pub fn unsubscribe_all_for_addr(&self, addr: &A) {
         let mut g = self.inner.lock().expect("index status broadcast mutex");
-        for v in g.values_mut() {
-            v.retain(|a: &Addr<WebSocketConnection>| a != addr);
-        }
+        g.retain(|_, v| {
+            v.retain(|a| a != addr);
+            !v.is_empty()
+        });
     }
 
+    fn subscribers(&self, drive: &str) -> Vec<A> {
+        let g = self.inner.lock().expect("index status broadcast mutex");
+        g.get(drive).cloned().unwrap_or_default()
+    }
+}
+
+impl IndexStatusBroadcast {
     pub fn notify(&self, drive: &str, indexing: bool) {
-        let addrs: Vec<Addr<WebSocketConnection>> = {
-            let g = self.inner.lock().expect("index status broadcast mutex");
-            g.get(drive).cloned().unwrap_or_default()
-        };
-        for addr in addrs {
+        for addr in self.subscribers(drive) {
             addr.do_send(IndexStatusPush {
                 drive: drive.to_string(),
                 indexing,
@@ -720,15 +734,40 @@ impl WebSocketConnection {
         if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
                 if let Some(drive) = v.get("drive").and_then(|d| d.as_str()) {
-                    let addr = ctx.address();
-                    self.index_status_broadcast
-                        .subscribe(drive.to_string(), addr.clone());
-                    self.index_status_subscribed.insert(drive.to_string());
-                    let indexing = self.vector_search_state.is_drive_indexing(drive);
-                    let payload = serde_json::json!({ "drive": drive, "indexing": indexing });
-                    if let Ok(s) = serde_json::to_string(&payload) {
-                        ctx.text(format!("INDEX_STATUS {s}"));
-                    }
+                    // Same read gate as `SUB`: the drive must exist and this
+                    // session's agent (anonymous included) may read it. A
+                    // session that fails it is answered "not indexing" and is
+                    // not registered, instead of with an error: the app asks
+                    // for every drive it shows, also one this server does not
+                    // hold, and the answer tells it nothing about the drive.
+                    let drive = drive.to_string();
+                    let checked = drive.clone();
+                    let store = self.store.clone();
+                    let agent = self.agent.clone();
+                    ctx.spawn(
+                        async move {
+                            atomic_lib::sync::engine::readable_subject(&store, &checked, &agent)
+                                .await
+                                .map(|_| ())
+                        }
+                        .into_actor(self)
+                        .map(move |res, actor, ctx| {
+                            let readable = res.is_ok();
+                            if readable {
+                                actor
+                                    .index_status_broadcast
+                                    .subscribe(drive.clone(), ctx.address());
+                                actor.index_status_subscribed.insert(drive.clone());
+                            }
+                            let indexing =
+                                readable && actor.vector_search_state.is_drive_indexing(&drive);
+                            let payload =
+                                serde_json::json!({ "drive": drive, "indexing": indexing });
+                            if let Ok(s) = serde_json::to_string(&payload) {
+                                ctx.text(format!("INDEX_STATUS {s}"));
+                            }
+                        }),
+                    );
                 }
             }
         } else if let Some(json) = text.strip_prefix("UNSUBSCRIBE_INDEX_STATUS ") {
@@ -982,5 +1021,35 @@ where
                 ..Default::default()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn index_status_subscribe_is_idempotent_per_drive() {
+        let broadcast = IndexStatusBroadcast::<u32>::new();
+        broadcast.subscribe("drive".into(), 1);
+        broadcast.subscribe("drive".into(), 1);
+        broadcast.subscribe("drive".into(), 2);
+        assert_eq!(broadcast.subscribers("drive"), vec![1, 2]);
+    }
+
+    #[test]
+    fn index_status_empty_drives_are_removed() {
+        let broadcast = IndexStatusBroadcast::<u32>::new();
+        broadcast.subscribe("a".into(), 1);
+        broadcast.subscribe("a".into(), 2);
+        broadcast.subscribe("b".into(), 1);
+
+        broadcast.unsubscribe_drive("a", &1);
+        assert_eq!(broadcast.subscribers("a"), vec![2]);
+        broadcast.unsubscribe_drive("a", &2);
+        assert!(!broadcast.inner.lock().unwrap().contains_key("a"));
+
+        broadcast.unsubscribe_all_for_addr(&1);
+        assert!(broadcast.inner.lock().unwrap().is_empty());
     }
 }

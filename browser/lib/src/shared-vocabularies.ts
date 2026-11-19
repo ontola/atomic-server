@@ -16,6 +16,7 @@ const work = 'https://atomicdata.dev/work/v1/';
 const contact = 'https://atomicdata.dev/contact/v1/';
 const pipeline = 'https://atomicdata.dev/pipeline/v1/';
 const money = 'https://atomicdata.dev/money/v1/';
+const preferences = 'https://atomicdata.dev/preferences/v1/';
 
 export const workSchema = {
   properties: {
@@ -47,12 +48,21 @@ export const moneySchema = {
   },
 } as const;
 
+/** A person's own settings, written on their private drive. */
+export const preferencesSchema = {
+  properties: {
+    showApiPlugins: `${preferences}show-api-plugins`,
+    showExperimentalPlugins: `${preferences}show-experimental-plugins`,
+  },
+} as const;
+
 /** Ontology subjects of the shared vocabularies. */
 export const sharedVocabularyOntologies = [
   'https://atomicdata.dev/work/v1',
   'https://atomicdata.dev/contact/v1',
   'https://atomicdata.dev/pipeline/v1',
   'https://atomicdata.dev/money/v1',
+  'https://atomicdata.dev/preferences/v1',
 ] as const;
 
 /** Every property of the shared vocabularies. */
@@ -61,4 +71,5 @@ export const sharedVocabularyProperties: readonly string[] = [
   ...Object.values(contactSchema.properties),
   ...Object.values(pipelineSchema.properties),
   ...Object.values(moneySchema.properties),
+  ...Object.values(preferencesSchema.properties),
 ];

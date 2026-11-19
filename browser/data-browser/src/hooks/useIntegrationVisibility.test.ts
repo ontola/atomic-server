@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Store } from '@tomic/react';
 import {
   dropSaved,
-  resolveVisibilitySchema,
+  carryOver,
+  retryDriveRead,
   stillUnconfirmed,
 } from './useIntegrationVisibility';
 
@@ -52,73 +53,56 @@ describe('stillUnconfirmed', () => {
   });
 });
 
-describe('resolveVisibilitySchema', () => {
-  const DRIVE = 'atomic:drive';
+describe('carryOver', () => {
+  it('queues an opt-in that only the cache holds', () => {
+    expect(
+      carryOver(
+        {},
+        { 'show-api-plugins': true, 'show-experimental-plugins': true },
+      ),
+    ).toEqual({ 'show-api-plugins': true, 'show-experimental-plugins': true });
+  });
 
-  /** Only the two reads `resolveVisibilitySchema` makes, standing in for a store. */
-  const fakeStore = (
-    states: Array<{ error?: Error; reject?: Error; ontology?: string }>,
-  ) => {
-    let pass = 0;
-    const current = () => states[Math.min(pass, states.length - 1)];
+  it('leaves alone what the drive already answers, and the default', () => {
+    expect(
+      carryOver(
+        { 'show-api-plugins': false },
+        { 'show-api-plugins': true, 'show-experimental-plugins': false },
+      ),
+    ).toEqual({});
+  });
+});
 
-    const resource = () => {
-      const state = current();
+describe('retryDriveRead', () => {
+  afterEach(() => vi.useRealTimers());
 
-      if (state.reject) return Promise.reject(state.reject);
-
-      return Promise.resolve({
-        error: state.error,
-        get: () => state.ontology,
-      });
-    };
-
-    return {
-      fetchedFromServer: 0,
-      getResource: () => resource(),
-      fetchResourceFromServer() {
-        this.fetchedFromServer += 1;
-        pass += 1;
-
-        return resource();
-      },
-    };
-  };
-
-  it('reports a timed-out read as a failure rather than an empty schema', async () => {
-    const store = fakeStore([
-      { reject: new Error('Async Request for subject atomic:drive timed out') },
-    ]);
-
-    const result = await resolveVisibilitySchema(
-      store as unknown as Store,
-      DRIVE,
-      false,
+  it('asks the server again until the drive reads without an error', async () => {
+    vi.useFakeTimers();
+    const fetchResourceFromServer = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('timed out'))
+      .mockResolvedValueOnce({ error: new Error('could not be read') })
+      .mockResolvedValue({});
+    const stop = retryDriveRead(
+      { fetchResourceFromServer } as unknown as Store,
+      'atomic:drive',
     );
 
-    expect(result.ok).toBe(false);
-    expect(store.fetchedFromServer).toBe(0);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchResourceFromServer).toHaveBeenCalledTimes(3);
+    expect(fetchResourceFromServer).toHaveBeenCalledWith('atomic:drive');
+    stop();
   });
 
-  it('does not read an errored drive resource as a drive without a schema', async () => {
-    // The panel's `ready` gate reads this same resource, so calling this an
-    // empty schema would leave it unready with nothing asking again.
-    const store = fakeStore([{ error: new Error('could not be read') }]);
+  it('stops asking when cancelled', async () => {
+    vi.useFakeTimers();
+    const fetchResourceFromServer = vi.fn();
 
-    expect(
-      await resolveVisibilitySchema(store as unknown as Store, DRIVE, false),
-    ).toEqual({ ok: false, error: 'Error: could not be read' });
-  });
-
-  it('asks the server on a retry, which is the only way the answer can change', async () => {
-    const store = fakeStore([
-      { reject: new Error('timed out') },
-      { ontology: undefined },
-    ]);
-
-    expect(
-      await resolveVisibilitySchema(store as unknown as Store, DRIVE, true),
-    ).toEqual({ ok: true, properties: {} });
-    expect(store.fetchedFromServer).toBe(1);
+    retryDriveRead(
+      { fetchResourceFromServer } as unknown as Store,
+      'atomic:drive',
+    )();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchResourceFromServer).not.toHaveBeenCalled();
   });
 });

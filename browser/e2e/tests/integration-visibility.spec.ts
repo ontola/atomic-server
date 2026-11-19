@@ -82,25 +82,10 @@ test('experimental plugins default off, behind an unlock, and the preference sur
         const drive = await store.fetchResourceFromServer(subject, {
           noWebSocket: true,
         });
-        const ontology = await store.getResource(
-          drive.get(
-            'https://atomicdata.dev/ontology/server/property/default-ontology',
-          ) as string,
+
+        return drive.get(
+          'https://atomicdata.dev/preferences/v1/show-experimental-plugins',
         );
-        const terms = ontology.get(
-          'https://atomicdata.dev/properties/properties',
-        ) as string[];
-
-        for (const term of terms) {
-          const property = await store.getResource(term);
-          if (
-            property.get('https://atomicdata.dev/properties/shortname') ===
-            'show-experimental-plugins'
-          )
-            return drive.get(term);
-        }
-
-        return undefined;
       }),
     )
     .toBe(true);
