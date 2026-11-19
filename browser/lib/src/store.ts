@@ -13,6 +13,7 @@ import { taskSchema } from './task-schema.js';
 import {
   sharedVocabularyOntologies,
   sharedVocabularyProperties,
+  sharedVocabularyClasses,
 } from './shared-vocabularies.js';
 import {
   mergeHistoryAttributions,
@@ -594,6 +595,7 @@ const embeddedVocabulary = new Set<string>([
   ...Object.values(taskSchema.properties),
   ...Object.values(taskSchema.tags),
   ...sharedVocabularyProperties,
+  ...sharedVocabularyClasses,
   // These classes ship in lib/defaults/plugins.json on every host. Their
   // public atomicdata.dev URLs are not published on the catalog yet.
   server.classes.plugin,
