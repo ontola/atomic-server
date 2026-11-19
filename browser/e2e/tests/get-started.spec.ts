@@ -53,7 +53,7 @@ test('Get started opens a workspace of your own, without an account', async ({
     page.getByRole('link', { name: 'Start here' }).first(),
   ).toBeVisible();
   const items = page.locator('[data-sidebar-id]');
-  await expect(items).toHaveText(['Start here', 'Notes', 'Tasks', 'Sketch']);
+  await expect(items).toHaveText(['Start here', 'Tasks', 'Sketch']);
 
   // Not a disposable guest: the agent has a personal drive of its own.
   await expect
