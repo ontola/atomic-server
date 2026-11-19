@@ -51,8 +51,10 @@ class PreferenceRow<T> extends StatelessWidget {
             ),
           );
         }
+        // A value that is none of the choices (a custom colour set on the
+        // web) shows as itself.
         final current = options.firstWhere((o) => o.value == value,
-            orElse: () => options.first);
+            orElse: () => PreferenceChoice<T>(value, '$value'));
         return PopupMenuButton<T>(
           key: ValueKey('preference-${preference.property}'),
           initialValue: value,

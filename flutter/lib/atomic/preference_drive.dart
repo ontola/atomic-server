@@ -2,7 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:atomic_chat/atomic_chat.dart'
-    show AppSidebarIcons, AppThemeMode, Preference, PreferenceDrive;
+    show
+        AppSidebarIcons,
+        AppThemeMode,
+        Preference,
+        PreferenceDrive,
+        WebPreferences;
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import 'atomic_client.dart';
@@ -46,7 +51,11 @@ void usePrivateDrivePreferences() {
 /// after a sync, because another device (the web app) may have changed them.
 Future<void> reloadPreferences() async {
   try {
-    await Future.wait([AppThemeMode.load(), AppSidebarIcons.load()]);
+    await Future.wait([
+      AppThemeMode.load(),
+      AppSidebarIcons.load(),
+      WebPreferences.load(),
+    ]);
   } catch (e) {
     debugPrint('Reloading preferences failed: $e');
   }

@@ -41,6 +41,26 @@ Preference<bool> _flag() => Preference<bool>(
 const _flagProperty = 'https://atomicdata.dev/preferences/v1/test-flag';
 
 void main() {
+  group('WebPreferences', () {
+    test('properties, defaults and encoding match the web app', () {
+      const base = 'https://atomicdata.dev/preferences/v1/';
+      expect(WebPreferences.mainColor.property, '${base}main-color');
+      expect(WebPreferences.interfaceLanguage.property,
+          '${base}interface-language');
+      expect(WebPreferences.hideTemplates.property, '${base}hide-templates');
+      expect(WebPreferences.mainColor.defaultValue, '#1b50d8');
+      expect(WebPreferences.interfaceLanguage.defaultValue, 'en');
+      expect(WebPreferences.hideTemplates.defaultValue, isFalse);
+      expect(WebPreferences.hideTemplates.encode(true), 'true');
+      expect(WebPreferences.hideTemplates.encode(false), 'false');
+      expect(WebPreferences.hideTemplates.decode('true'), isTrue);
+      expect(WebPreferences.hideTemplates.decode('false'), isFalse);
+      expect(WebPreferences.hideTemplates.decode('x'), isNull);
+      expect(WebPreferences.mainColor.decode('#4C6FA5'), '#4C6FA5');
+      expect(WebPreferences.interfaceLanguage.encode('nl'), 'nl');
+    });
+  });
+
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => Preference.drive = null);
 

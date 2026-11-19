@@ -150,6 +150,11 @@ Each step ships on its own and has a test that fails without it.
 
 ## Settings in the embed
 
+The app no longer opens the web settings page: its Settings is one native screen
+(`SyncScreen`) with all five synced preferences (Theme, Main color, Language,
+sidebar icons, hide templates), stored in the same `preferences/v1` properties
+the web app uses. The text below describes the web page's own embed mode.
+
 The app's bottom bar opens the web settings page (`?path=/app/settings`). It
 persists in the page's own `localStorage` (same keys as the web app: `darkMode`,
 `mainColor`, `atomic.locale`, `hideTemplates`; the host keeps one stable origin so

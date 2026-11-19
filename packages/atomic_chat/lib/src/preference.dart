@@ -10,6 +10,9 @@ abstract final class PreferenceProperty {
   static const _base = 'https://atomicdata.dev/preferences/v1/';
   static const theme = '${_base}theme';
   static const showSidebarIcons = '${_base}show-sidebar-icons';
+  static const mainColor = '${_base}main-color';
+  static const interfaceLanguage = '${_base}interface-language';
+  static const hideTemplates = '${_base}hide-templates';
 }
 
 /// Where preferences are kept: the person's private drive, reached through the
