@@ -1,4 +1,5 @@
-import { type Store, urls } from '@tomic/react';
+import { type Store } from '@tomic/react';
+import { preferencesSchema } from '@tomic/lib';
 import { TEMPLATE_CATALOG } from '../chunks/Templates/catalog';
 import { planTemplate } from '../chunks/Templates/model';
 import { onboardingKeys } from '../hooks/useOnboardingProgress';
@@ -40,7 +41,7 @@ export async function startWelcomeDrive(
   try {
     const home = await store.getResource(personalDrive);
 
-    await home.set(urls.properties.welcomeDrive, drive.subject);
+    await home.set(preferencesSchema.properties.welcomeDrive, drive.subject);
     await home.save();
   } catch {
     /* The local copy below is then moved onto the drive by the next load. */

@@ -53,6 +53,10 @@ export const preferencesSchema = {
   properties: {
     showApiPlugins: `${preferences}show-api-plugins`,
     showExperimentalPlugins: `${preferences}show-experimental-plugins`,
+    /** Is the Getting started panel unfolded. */
+    onboardingPanelOpen: `${preferences}onboarding-panel-open`,
+    /** The drive the app made at first start. */
+    welcomeDrive: `${preferences}welcome-drive`,
   },
 } as const;
 

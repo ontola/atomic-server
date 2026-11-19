@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
 import { act, cleanup, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Store } from '@tomic/react';
 
 const mocks = vi.hoisted(() => ({
   drive: { isReady: () => true } as { isReady: () => boolean },
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@tomic/react', () => ({
-  urls: { properties: { onboardingPanelOpen: 'p:open', welcomeDrive: 'p:wd' } },
+  useStore: () => ({}),
   useResource: () => mocks.drive,
   useCanWrite: () => mocks.canWrite,
   useValue: () => [mocks.remote, mocks.setRemote],
@@ -21,7 +22,7 @@ vi.mock('./usePrivateDrive', () => ({
   usePrivateDrive: () => ({ privateDrive: mocks.privateDrive }),
 }));
 
-const { useUserSetting } = await import('./useUserSetting');
+const { useUserSetting, retryDriveRead } = await import('./useUserSetting');
 
 beforeEach(() => {
   mocks.drive = { isReady: () => true };
@@ -88,4 +89,38 @@ it('does not migrate over a value the drive already has', () => {
   render();
 
   expect(mocks.setRemote).not.toHaveBeenCalled();
+});
+
+describe('retryDriveRead', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('asks the server again until the drive reads without an error', async () => {
+    vi.useFakeTimers();
+    const fetchResourceFromServer = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('timed out'))
+      .mockResolvedValueOnce({ error: new Error('could not be read') })
+      .mockResolvedValue({});
+    const stop = retryDriveRead(
+      { fetchResourceFromServer } as unknown as Store,
+      'atomic:drive',
+    );
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchResourceFromServer).toHaveBeenCalledTimes(3);
+    expect(fetchResourceFromServer).toHaveBeenCalledWith('atomic:drive');
+    stop();
+  });
+
+  it('stops asking when cancelled', async () => {
+    vi.useFakeTimers();
+    const fetchResourceFromServer = vi.fn();
+
+    retryDriveRead(
+      { fetchResourceFromServer } as unknown as Store,
+      'atomic:drive',
+    )();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchResourceFromServer).not.toHaveBeenCalled();
+  });
 });
