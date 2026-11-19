@@ -5,6 +5,8 @@ import {
   collectionIdentity,
   principalIdentity,
   sourceKey,
+  sourceConfigFingerprint,
+  type CanonicalEntityIdentity,
   type SyncablePrincipal,
 } from './builtinSyncIdentity.js';
 
@@ -16,7 +18,7 @@ const stringMap = (value: unknown): value is Record<string, string> =>
   record(value) &&
   Object.values(value).every(entry => typeof entry === 'string');
 
-export interface SyncableSourceConfig {
+export interface SyncableSourceConfigV2 {
   version: 2;
   proxyOrigin: string;
   platform: string;
@@ -29,8 +31,31 @@ export interface SyncableSourceConfig {
   resource?: string;
   context?: Record<string, string>;
   managedProperties?: string[];
+  kind?: never;
+  entityIdentity?: never;
+  read?: never;
 }
-export interface SyncableSourceKey {
+export interface SyncableSourceConfigV3 {
+  version: 3;
+  kind: 'collection' | 'record';
+  proxyOrigin: string;
+  platform: string;
+  principal: SyncablePrincipal;
+  connectionId?: string;
+  resource: string;
+  entityIdentity?: CanonicalEntityIdentity;
+  record?: Record<string, unknown>;
+  context?: Record<string, string | number>;
+  managedProperties?: string[];
+  read?: BoundCollection;
+  collection?: never;
+  navigation?: never;
+  parentSourceKey?: never;
+}
+export type SyncableSourceConfig =
+  | SyncableSourceConfigV2
+  | SyncableSourceConfigV3;
+export interface SyncableSourceKeyV2 {
   version: 2;
   proxyOrigin: string;
   platform: string;
@@ -39,7 +64,22 @@ export interface SyncableSourceKey {
   collection?: Record<string, unknown>;
   parentSourceKeyHash?: string;
   remoteId?: string | number;
+  resource?: never;
+  entityIdentityHash?: never;
 }
+export interface SyncableSourceKeyV3 {
+  version: 3;
+  proxyOrigin: string;
+  platform: string;
+  kind: 'collection' | 'record';
+  principal: SyncablePrincipal;
+  resource: string;
+  entityIdentityHash?: string;
+  collection?: never;
+  parentSourceKeyHash?: never;
+  remoteId?: never;
+}
+export type SyncableSourceKey = SyncableSourceKeyV2 | SyncableSourceKeyV3;
 export interface LegacySyncableSourceKey {
   version: 1;
   proxyOrigin: string;
@@ -147,16 +187,70 @@ function navigation(value: unknown): CollectionNavigation {
 }
 
 export function parseSyncableSourceConfig(raw: unknown): SyncableSourceConfig {
-  if (!record(raw) || raw.version !== 2)
+  if (!record(raw) || (raw.version !== 2 && raw.version !== 3))
     throw new Error('Invalid Sync source configuration');
   const identity = principal(raw.principal);
   if (
     identity.kind === 'public'
       ? raw.connectionId !== undefined
-      : typeof raw.connectionId !== 'string' ||
-        !/^[A-Za-z0-9_-]{43}$/.test(raw.connectionId)
+      : (raw.version === 2 ||
+          raw.kind === 'collection' ||
+          raw.connectionId !== undefined) &&
+        (typeof raw.connectionId !== 'string' ||
+          !/^[A-Za-z0-9_-]{43}$/.test(raw.connectionId))
   )
     throw new Error('Invalid Sync connection binding');
+
+  if (raw.version === 3) {
+    const allowed = new Set([
+      'version',
+      'kind',
+      'proxyOrigin',
+      'platform',
+      'principal',
+      'connectionId',
+      'resource',
+      ...(raw.kind === 'record'
+        ? ['entityIdentity', 'record', 'context', 'managedProperties', 'read']
+        : []),
+    ]);
+    if (
+      !['collection', 'record'].includes(String(raw.kind)) ||
+      !text(raw.resource) ||
+      Object.keys(raw).some(key => !allowed.has(key)) ||
+      (raw.kind === 'record' &&
+        (!record(raw.record) || !record(raw.entityIdentity))) ||
+      (raw.context !== undefined &&
+        (!record(raw.context) ||
+          !Object.values(raw.context).every(
+            value =>
+              typeof value === 'string' ||
+              (typeof value === 'number' && Number.isFinite(value)),
+          ))) ||
+      (raw.managedProperties !== undefined &&
+        (!Array.isArray(raw.managedProperties) ||
+          !raw.managedProperties.every(text)))
+    )
+      throw new Error('Invalid flat Sync source configuration');
+    const entityIdentity =
+      raw.kind === 'record'
+        ? parseSyncableEntityIdentity(raw.entityIdentity)
+        : undefined;
+    if (entityIdentity && entityIdentity.resource !== raw.resource)
+      throw new Error('The entity identity has a different resource type');
+
+    return {
+      ...structuredClone(raw),
+      version: 3,
+      kind: raw.kind,
+      proxyOrigin: origin(raw.proxyOrigin),
+      platform: platform(raw.platform),
+      principal: identity,
+      ...(entityIdentity ? { entityIdentity } : {}),
+      ...(raw.read === undefined ? {} : { read: bound(raw.read) }),
+    } as SyncableSourceConfigV3;
+  }
+
   if (
     (raw.collection !== undefined && raw.navigation !== undefined) ||
     (raw.parentSourceKey !== undefined && !text(raw.parentSourceKey)) ||
@@ -199,6 +293,37 @@ export function parseSyncableSourceConfig(raw: unknown): SyncableSourceConfig {
   };
 }
 
+export function parseSyncableEntityIdentity(
+  raw: unknown,
+): CanonicalEntityIdentity {
+  if (
+    !record(raw) ||
+    Object.keys(raw).some(
+      key => !['resource', 'template', 'values', 'path', 'key'].includes(key),
+    ) ||
+    !text(raw.resource) ||
+    !text(raw.template) ||
+    !text(raw.path) ||
+    !raw.path.startsWith('/') ||
+    !text(raw.key) ||
+    !Array.isArray(raw.values) ||
+    raw.values.length === 0 ||
+    raw.values.length > 64 ||
+    !raw.values.every(
+      pair =>
+        Array.isArray(pair) &&
+        pair.length === 2 &&
+        text(pair[0]) &&
+        (text(pair[1]) ||
+          (typeof pair[1] === 'number' && Number.isSafeInteger(pair[1]))),
+    ) ||
+    new Set(raw.values.map(pair => pair[0])).size !== raw.values.length
+  )
+    throw new Error('Invalid canonical Sync entity identity');
+
+  return structuredClone(raw) as unknown as CanonicalEntityIdentity;
+}
+
 export function parseSyncableSourceKey(
   raw: unknown,
 ): SyncableSourceKey | LegacySyncableSourceKey {
@@ -223,6 +348,31 @@ export function parseSyncableSourceKey(
       collection: value[4],
       ...(value[5] ? { connectionId: value[5] } : {}),
     };
+  }
+
+  if (record(value) && value.version === 3) {
+    const hash = value.entityIdentityHash;
+    if (
+      !['collection', 'record'].includes(String(value.kind)) ||
+      !text(value.resource) ||
+      (value.kind === 'record'
+        ? typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash)
+        : hash !== undefined)
+    )
+      throw new Error('Invalid flat Sync source binding');
+    const result = {
+      version: 3 as const,
+      proxyOrigin: origin(value.proxyOrigin),
+      platform: platform(value.platform),
+      principal: principal(value.principal),
+      kind: value.kind,
+      resource: value.resource,
+      ...(hash === undefined ? {} : { entityIdentityHash: hash }),
+    } as SyncableSourceKeyV3;
+    if (sourceKey(result) !== raw)
+      throw new Error('Invalid canonical flat Sync source binding');
+
+    return result;
   }
 
   if (
@@ -259,6 +409,32 @@ export function sourceConfigMatchesKey(
   key: SyncableSourceKey,
   raw: string,
 ): boolean {
+  if (config.version !== key.version) return false;
+
+  if (config.version === 3 && key.version === 3) {
+    if (config.kind !== key.kind || config.resource !== key.resource)
+      return false;
+
+    return (
+      sourceKey({
+        version: 3,
+        proxyOrigin: config.proxyOrigin,
+        platform: config.platform,
+        principal: config.principal,
+        kind: config.kind,
+        resource: config.resource,
+        ...(config.kind === 'record' && config.entityIdentity
+          ? {
+              entityIdentityHash: sourceConfigFingerprint(
+                config.entityIdentity.key,
+              ),
+            }
+          : {}),
+      }) === raw
+    );
+  }
+
+  if (config.version !== 2 || key.version !== 2) return false;
   if (key.kind === 'record' && config.resource !== key.collection?.resource)
     return false;
 

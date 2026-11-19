@@ -33,6 +33,8 @@ export type ShowRouteSearch = {
   editColumn?: string;
   /** Explicit row selected by a stored-data view for the Sync app. */
   syncRow?: string;
+  /** Saved provider scope, preserved when switching Collection/Table/Sync. */
+  syncFilter?: string;
 };
 
 export const ShowRoute = createRoute({
@@ -47,6 +49,11 @@ export const ShowRoute = createRoute({
         : undefined,
     view: (search.view as string) || undefined,
     editColumn: (search.editColumn as string) || undefined,
+    syncFilter:
+      typeof search.syncFilter === 'string' &&
+      Client.isValidSubject(search.syncFilter)
+        ? search.syncFilter
+        : undefined,
     syncRow:
       typeof search.syncRow === 'string' &&
       Client.isValidSubject(search.syncRow)
@@ -123,10 +130,16 @@ export const ShowComponent: React.FunctionComponent = () => {
 
     navigate({
       to: paths.show,
-      search: { subject: viewParent, view: subject },
+      search: {
+        subject: viewParent,
+        view: subject,
+        syncFilter: isSavedSyncRuleView(resource.get(core.properties.localId))
+          ? subject
+          : undefined,
+      },
       replace: true,
     });
-  }, [isTableView, viewParent, view, subject, navigate]);
+  }, [isTableView, viewParent, view, subject, navigate, resource]);
 
   React.useEffect(() => {
     if (
@@ -206,3 +219,19 @@ export const ShowComponent: React.FunctionComponent = () => {
     return <Search />;
   }
 };
+
+/** Rule Views are selected scopes rather than extra renderer tabs. */
+function isSavedSyncRuleView(localId: unknown): boolean {
+  if (typeof localId !== 'string' || !localId.startsWith('syncables:node:'))
+    return false;
+
+  try {
+    const value = JSON.parse(
+      decodeURIComponent(localId.slice('syncables:node:'.length)),
+    );
+
+    return value?.version === 3 && value?.kind === 'rule';
+  } catch {
+    return false;
+  }
+}

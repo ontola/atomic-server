@@ -6,6 +6,41 @@ import { syncableNameProperty } from './syncablePlatform';
 export const syncableHierarchySchema = (): SchemaSpec => ({
   properties: [
     syncableNameProperty,
+    {
+      shortname: 'syncable-entity-table',
+      name: 'Canonical entity collection',
+      description:
+        'Logical collection ownership, retained when a row is moved.',
+      datatype: Datatype.ATOMIC_URL,
+    },
+    {
+      shortname: 'syncable-rule-memberships',
+      name: 'Sync rule memberships',
+      description:
+        'Saved filters whose observations include this canonical row.',
+      datatype: Datatype.RESOURCEARRAY,
+    },
+    {
+      shortname: 'syncable-navigation-intents',
+      name: 'Syncable relationship navigation',
+      description:
+        'Declared relationship selections for native filtered navigation.',
+      datatype: Datatype.JSON,
+    },
+    {
+      shortname: 'syncable-observation',
+      name: 'Syncable observation',
+      description:
+        'Typed field evidence and provenance retained for one rule run and entity.',
+      datatype: Datatype.JSON,
+    },
+    {
+      shortname: 'syncable-sync-run',
+      name: 'Sync rule run',
+      description:
+        'Run generation, completeness and observed entity membership for one saved filter.',
+      datatype: Datatype.JSON,
+    },
     ...(
       [
         ['syncable-repository-count', 'Visible repositories', Datatype.INTEGER],
@@ -108,6 +143,18 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
     },
   ],
   classes: [
+    {
+      shortname: 'syncable-observation',
+      name: 'Syncable observation',
+      description: 'Retained provider evidence from one saved filter and run.',
+      requires: ['syncable-observation'],
+    },
+    {
+      shortname: 'syncable-sync-run',
+      name: 'Sync rule run',
+      description: 'A retained synchronization attempt for one saved filter.',
+      requires: ['syncable-sync-run'],
+    },
     {
       shortname: 'syncable-principal',
       name: 'Syncable principal',

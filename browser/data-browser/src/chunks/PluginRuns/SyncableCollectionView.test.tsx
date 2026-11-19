@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   cleanup,
+  act,
   fireEvent,
   render,
   screen,
@@ -16,19 +17,40 @@ import { SyncableCollectionView } from './SyncableCollectionView';
 const state = vi.hoisted(() => ({
   store: {} as object,
   navigate: vi.fn(),
+  propertyListeners: new Set<() => void>(),
   resources: new Map<string, ReturnType<typeof resource>>(),
   terms: {
     properties: {
       'syncable-collection-view': 'https://drive.example/view-descriptor',
+      'syncable-source-config': 'https://drive.example/source-config',
     },
   },
 }));
-vi.mock('@tomic/react', async original => ({
-  ...(await original<typeof import('@tomic/react')>()),
-  useStore: () => state.store,
-  useResource: (subject: string) => state.resources.get(subject),
-  findSchema: async () => state.terms,
-}));
+vi.mock('@tomic/react', async original => {
+  const React = await import('react');
+
+  return {
+    ...(await original<typeof import('@tomic/react')>()),
+    useStore: () => state.store,
+    useResource: (subject: string) => state.resources.get(subject),
+    useValue: (stored: ReturnType<typeof resource>, property: string) => {
+      const value = React.useSyncExternalStore(
+        callback => {
+          state.propertyListeners.add(callback);
+
+          return () => {
+            state.propertyListeners.delete(callback);
+          };
+        },
+        () => stored.get(property),
+        () => stored.get(property),
+      );
+
+      return [value];
+    },
+    findSchema: async () => state.terms,
+  };
+});
 vi.mock('@tomic/lib', async original => ({
   ...(await original<typeof import('@tomic/lib')>()),
   findSchema: async () => state.terms,
@@ -115,12 +137,15 @@ function view(data: Collection) {
 
 beforeEach(() => {
   state.store = {
+    getAgent: () => ({ subject: 'atomic:agent:viewer' }),
+    getServerUrl: () => location.origin,
     getResource: async (subject: string) => state.resources.get(subject),
     isForeignOriginSubject: (subject: string) =>
       subject.startsWith('http') && new URL(subject).origin !== location.origin,
   };
   state.navigate.mockReset();
   state.resources.clear();
+  state.propertyListeners.clear();
   state.resources.set(
     table,
     resource(table, {
@@ -207,7 +232,12 @@ describe('native stored collections', () => {
       resource(child, {
         [core.properties.parent]: 'research',
         [core.properties.isA]: [dataBrowser.classes.table],
-        [dataBrowser.properties.tableViews]: ['native-view'],
+        [dataBrowser.properties.tableViews]: [
+          'native-view',
+          'custom-view',
+          'saved-rule',
+        ],
+        [dataBrowser.properties.tableDefaultView]: 'native-view',
       }),
     );
     state.resources.set(
@@ -218,6 +248,23 @@ describe('native stored collections', () => {
         [dataBrowser.properties.viewKind]: 'syncable-collection',
       }),
     );
+    for (const subject of ['custom-view', 'saved-rule'])
+      state.resources.set(
+        subject,
+        resource(subject, {
+          [core.properties.parent]: child,
+          [core.properties.isA]: [dataBrowser.classes.view],
+          [dataBrowser.properties.viewKind]: 'syncable-collection',
+          ...(subject === 'saved-rule'
+            ? {
+                'https://drive.example/source-config': {
+                  version: 3,
+                  kind: 'rule',
+                },
+              }
+            : {}),
+        }),
+      );
     render(view(collection(['research'])));
     fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
     await waitFor(() =>
@@ -317,4 +364,17 @@ describe('native stored collections', () => {
     expect(screen.queryByRole('link')).toBeNull();
     expect(await screen.findByRole('alert')).toBeTruthy();
   });
+});
+
+it('updates visible stored fields during background sync without opening a provider', async () => {
+  state.resources.set('research', row('research', { [countProperty]: 3 }));
+  render(view(collection(['research'])));
+  await screen.findByText('3');
+  await act(async () => {
+    state.resources.get('research')!.props[countProperty] = 8;
+    state.propertyListeners.forEach(notify => notify());
+  });
+  await screen.findByText('8');
+  expect(screen.queryByText('3')).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
 });

@@ -62,7 +62,45 @@ export function sourceKey({
   parentSourceKey,
   parentSourceKeyHash,
   remoteId,
+  version = 2,
+  resource,
+  entityIdentityHash,
 }) {
+  if (version === 3) {
+    if (
+      !['collection', 'record'].includes(kind) ||
+      typeof resource !== 'string' ||
+      !resource ||
+      collection !== undefined ||
+      parentSourceKey !== undefined ||
+      parentSourceKeyHash !== undefined ||
+      remoteId !== undefined ||
+      (kind === 'collection' && entityIdentityHash !== undefined) ||
+      (kind === 'record' &&
+        (typeof entityIdentityHash !== 'string' ||
+          !/^[a-f0-9]{64}$/.test(entityIdentityHash)))
+    )
+      throw new Error('Invalid canonical entity source identity');
+    const serialized = JSON.stringify(
+      canonicalValue({
+        version: 3,
+        proxyOrigin,
+        platform,
+        kind,
+        principal: principalIdentity(principal),
+        resource,
+        ...(entityIdentityHash ? { entityIdentityHash } : {}),
+      }),
+    );
+    if (serialized.length > 2000)
+      throw new Error(
+        'The source identity exceeds the 2000 character query limit',
+      );
+
+    return serialized;
+  }
+
+  if (version !== 2) throw new Error('Unknown source identity version');
   if (parentSourceKey !== undefined && parentSourceKeyHash !== undefined)
     throw new Error('Supply a parent source key or its hash, not both');
   if (
@@ -116,4 +154,62 @@ export function collectionIdentity(bound, navigation) {
     resource: bound.resource,
     context: bound.pathParams,
   };
+}
+
+/** The library key contains only declared canonical identity context and preserves JSON types. */
+export function entitySourceKey({
+  entityIdentity,
+  proxyOrigin,
+  platform,
+  principal,
+}) {
+  if (
+    !entityIdentity ||
+    typeof entityIdentity.key !== 'string' ||
+    !entityIdentity.key ||
+    typeof entityIdentity.resource !== 'string' ||
+    !entityIdentity.resource
+  )
+    throw new Error('The record has no canonical entity identity');
+
+  return sourceKey({
+    proxyOrigin,
+    platform,
+    principal,
+    version: 3,
+    kind: 'record',
+    resource: entityIdentity.resource,
+    entityIdentityHash: sourceConfigFingerprint(entityIdentity.key),
+  });
+}
+
+export function entityTableKey({ resource, proxyOrigin, platform, principal }) {
+  return sourceKey({
+    proxyOrigin,
+    platform,
+    principal,
+    version: 3,
+    kind: 'collection',
+    resource,
+  });
+}
+
+/** A saved View's identity remains bounded even for a deep fanout definition. */
+export function ruleSourceKey(tableKey, ruleKey) {
+  if (
+    typeof tableKey !== 'string' ||
+    !tableKey ||
+    typeof ruleKey !== 'string' ||
+    !ruleKey
+  )
+    throw new Error('The saved filter has no durable source identity');
+
+  return JSON.stringify(
+    canonicalValue({
+      version: 3,
+      kind: 'rule',
+      tableKeyHash: sourceConfigFingerprint(tableKey),
+      ruleKeyHash: sourceConfigFingerprint(ruleKey),
+    }),
+  );
 }

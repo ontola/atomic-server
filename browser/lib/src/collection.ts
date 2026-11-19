@@ -1685,7 +1685,15 @@ export class Collection {
       return this.fetchLegacyPage(page);
     const subject = this.buildSubject(page);
     const resource =
-      await this.store.fetchResourceFromServer<Collections.Collection>(subject);
+      await this.store.fetchResourceFromServer<Collections.Collection>(
+        subject,
+        {
+          // Query pages are independently generated snapshots, not edits of one
+          // persistent document. Merging can retain an old members container
+          // alongside a newer total, or resurrect removed matches on refresh.
+          forceOverride: true,
+        },
+      );
 
     if (!resource) {
       throw new Error('Invalid collection: resource does not exist');

@@ -3140,6 +3140,7 @@ msgstr "Arrastrar columna"
 msgid "View"
 msgstr "Ver"
 
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
@@ -8757,8 +8758,10 @@ msgstr "Instalar {0}"
 
 #. 0: app.name
 #. 0: name
+#. 0: relationship.title
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
 msgid "Open {0}"
 msgstr "Abrir {0}"
 
@@ -13645,8 +13648,6 @@ msgstr "Cuenta sincronizable"
 msgid "A connected account through which remote collection instances can be discovered."
 msgstr "Una cuenta conectada que permite descubrir instancias de colecciones remotas."
 
-#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
-#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
@@ -13921,9 +13922,8 @@ msgstr "Contenedor Accounts anterior"
 msgid "Installation-owned compatibility data retained after moving source roots directly under the App."
 msgstr "Datos de compatibilidad de esta instalación conservados tras mover los recursos de origen directamente bajo la aplicación."
 
-#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
-msgid "This saved source needs migration from its integration App. Moved resources are retained and no replacement will be created from this view."
-msgstr "Este origen guardado debe migrarse desde su aplicación de integración. Los recursos movidos se conservan y esta vista no creará un reemplazo."
+#~ msgid "This saved source needs migration from its integration App. Moved resources are retained and no replacement will be created from this view."
+#~ msgstr "Este origen guardado debe migrarse desde su aplicación de integración. Los recursos movidos se conservan y esta vista no creará un reemplazo."
 
 #: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
 msgid "Open integration App"
@@ -13936,3 +13936,78 @@ msgstr "Desde el proxy de integración configurado en <0/>. Añade un servicio p
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Collection"
 msgstr "Colección"
+
+#: src/chunks/AppPage/AppExecutionRuntime.tsx
+msgid "The app did not start. Try again."
+msgstr "La aplicación no se inició. Inténtalo de nuevo."
+
+#: src/chunks/AppPage/AppExecutionRuntime.tsx
+msgid "The app could not be prepared"
+msgstr "No se pudo preparar la aplicación"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Saved filter"
+msgstr "Filtro guardado"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Paused"
+msgstr "En pausa"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Queued"
+msgstr "En cola"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Syncing"
+msgstr "Sincronizando"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Needs attention"
+msgstr "Requiere atención"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Partially synced"
+msgstr "Sincronizado parcialmente"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Synced"
+msgstr "Sincronizado"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Ready to sync"
+msgstr "Listo para sincronizar"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Rename filter"
+msgstr "Renombrar filtro"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Filter name"
+msgstr "Nombre del filtro"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Save name"
+msgstr "Guardar nombre"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Sync settings"
+msgstr "Ajustes de sincronización"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Manage sync filters"
+msgstr "Gestionar filtros de sincronización"
+
+#~ msgid "Filter{0} <0><0>All cached rows</0> {0}</0>"
+#~ msgstr ""
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Saved collection filters"
+msgstr "Filtros de colección guardados"
+
+#: src/chunks/PluginRuns/useSyncableFilters.ts
+msgid "This saved filter is unavailable or no longer belongs to this collection."
+msgstr "Este filtro guardado no está disponible o ya no pertenece a esta colección."
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "All cached rows"
+msgstr "Todas las filas en caché"

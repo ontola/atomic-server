@@ -11,6 +11,9 @@ import {
   relatedCollectionReads,
   prepareDocument,
   type OpenApiDocument,
+  readSelectionKey,
+  resolveEntityIdentity,
+  type ReadSelection,
 } from 'syncables/browser';
 import { fakeSchemaStore } from '../../../../lib/src/test-schema-store';
 import { defaultIntegrationProxy } from '@helpers/integrationProxy';
@@ -372,7 +375,7 @@ describe('generic saved source context', () => {
     await ensureSchema(store, 'drive', syncablePlatformSchema());
     const collection = selected().collection!;
     const config = {
-      version: 2,
+      version: 2 as const,
       proxyOrigin: context.proxyOrigin,
       platform: context.platform,
       principal,
@@ -528,6 +531,124 @@ it('resolves moved child provenance by source identity and revokes it when its s
 });
 
 describe('catalog-derived host relay', () => {
+  it('scopes a flat shared table to its exact saved filter and keeps unselected tables read-free', async () => {
+    const doc = apiDocument();
+    const definition: ReadSelection = {
+      version: 1,
+      resource: 'task',
+      source: { kind: 'bound', bound: selected(doc).collection! },
+    };
+    const flat: SyncAppContext = {
+      ...context,
+      resource: 'task',
+      rule: {
+        subject: 'atomic:rule',
+        resource: 'task',
+        key: readSelectionKey(definition),
+        definition,
+      },
+    };
+    const { proxy, readKeyed } = setupProxy();
+    const transport = syncProxyTransport(proxy, flat, () => undefined, {
+      document: doc,
+    });
+    await expect(
+      transport.request!(request('v2/workspaces/14/tasks')),
+    ).rejects.toThrow('filter');
+    expect(readKeyed).not.toHaveBeenCalled();
+    await expect(transport.request!(request())).resolves.toMatchObject({
+      status: 200,
+    });
+    expect(readKeyed.mock.calls.map(([url]) => url.pathname)).toEqual([
+      expect.stringMatching(/\/calendar-service\/v2\/session$/),
+      expect.stringMatching(/\/calendar-service\/v2\/workspaces\/13\/tasks$/),
+    ]);
+    const count = readKeyed.mock.calls.length;
+    const unselected = syncProxyTransport(
+      proxy,
+      { ...context, resource: 'task' },
+      () => undefined,
+      { document: doc },
+    );
+    await expect(unselected.request!(request())).rejects.toThrow('filter');
+    expect(readKeyed).toHaveBeenCalledTimes(count);
+    expect(() =>
+      syncProxyTransport(
+        proxy,
+        { ...flat, rule: { ...flat.rule!, key: 'forged' } },
+        () => undefined,
+        { document: doc },
+      ),
+    ).toThrow('filter');
+  });
+
+  it('unlocks only actual-response related partitions and rejects forged sibling targets', async () => {
+    const doc = apiDocument();
+    const record = { id: 7, name: 'Team', handle: 'old-handle' };
+    const definition: ReadSelection = {
+      version: 1,
+      resource: 'workspace',
+      source: {
+        kind: 'related',
+        origin: {
+          entity: resolveEntityIdentity(doc, { resource: 'team', record }),
+          record,
+          context: {},
+          read: bindCollection(doc, { collection: 'myTeams' }),
+        },
+        via: {
+          collection: 'teamWorkspaces',
+          kind: 'responseLink',
+          reference: 'address',
+          link: 'workspaces',
+        },
+      },
+    };
+    const { proxy, readKeyed } = setupProxy();
+    readKeyed.mockImplementation(async url => ({
+      status: 200,
+      headers: {},
+      body: url.pathname.endsWith('/session')
+        ? { id: 7 }
+        : url.pathname.endsWith('/names/old-handle')
+          ? { id: 7, handle: 'current-handle' }
+          : [],
+    }));
+    const transport = syncProxyTransport(
+      proxy,
+      {
+        ...context,
+        resource: 'workspace',
+        rule: {
+          subject: 'atomic:related-rule',
+          resource: 'workspace',
+          key: readSelectionKey(definition),
+          definition,
+        },
+      },
+      () => undefined,
+      { document: doc },
+    );
+    await expect(
+      transport.request!(request('v2/names/forged/workspaces', { query: {} })),
+    ).rejects.toThrow('filter');
+    await expect(
+      transport.request!(
+        request('v2/names/current-handle/workspaces', { query: {} }),
+      ),
+    ).rejects.toThrow('filter');
+    expect(readKeyed).not.toHaveBeenCalled();
+    await transport.request!(request('v2/names/old-handle', { query: {} }));
+    await transport.request!(
+      request('v2/names/current-handle/workspaces', { query: {} }),
+    );
+    const count = readKeyed.mock.calls.length;
+    await expect(
+      transport.request!(request('v2/names/forged/workspaces', { query: {} })),
+    ).rejects.toThrow('filter');
+    expect(readKeyed).toHaveBeenCalledTimes(count);
+  });
+
   it('exposes only sanitized connection metadata and native reconnect eligibility', async () => {
     const doc = apiDocument();
     const { proxy, readKeyed } = setupProxy();

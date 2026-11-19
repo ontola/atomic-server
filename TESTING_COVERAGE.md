@@ -1289,6 +1289,21 @@ This does not yet prove restoration of the user's private staging workspace.
   native views without provider reads, and desktop/mobile layouts. A third
   journey imports an unrelated Notebook provider through the same runtime.
   This does not exercise live GitHub OAuth or deploy the live proxy.
+- `browser/lib/src/collection-snapshot-refresh.test.ts` uses real Store HTTP
+  responses and independent Loro documents to verify query pages refresh from
+  empty to additions to removals and back to empty. Generated query snapshots
+  replace previous pages; ordinary user documents still merge their CRDT fields.
+- Flat collection regressions in `builtinSyncFlatState.test.ts`,
+  `syncableRules.test.ts`, `syncableFlatNavigation.test.ts` and
+  `useSyncableFilters.test.tsx` cover typed canonical identities, shared rows,
+  independent saved-rule membership, latest explicit value/null evidence,
+  partial/cancelled read retention, immutable observation replay, constrained
+  relationship fanout and invalid saved filters failing closed. Native Open saves
+  a View under an existing sibling entity table without a provider request.
+  Stored-cell subscriptions update visible values during background synchronization,
+  and cold entry observes immutable View readiness rather than caching a mutable
+  resource handle. Worker queue tests cover independent cancellation and serial whole-table
+  materialization, with parallel execution for unrelated tables.
 - `syncableCollection.test.ts` and `SyncableCollectionView.test.tsx` verify native
   stored-data rendering with unrelated schema subjects, typed/enum values,
   cache isolation and navigation checks. The view never creates child collections

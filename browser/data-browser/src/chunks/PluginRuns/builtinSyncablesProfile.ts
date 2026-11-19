@@ -10,6 +10,9 @@ import {
   validateCollectionEntryRead,
   validateCollectionNavigationRead,
   validatePrincipalRead,
+  compileReadSelection,
+  describeEntityTypes,
+  type CompiledReadSelection,
   type OpenApiDocument,
   type BoundCollection,
   type CollectionNavigation,
@@ -52,6 +55,11 @@ import {
   platformLocalId,
 } from './syncablePlatform';
 import { syncableHierarchySchema } from './syncableHierarchy';
+import {
+  resolveSyncableRule,
+  type ResolvedSyncableRule,
+  type SyncableRuleContext,
+} from './syncableRules';
 
 export interface TrustedSyncableCatalog {
   document: OpenApiDocument;
@@ -63,6 +71,8 @@ export interface SyncAppContext {
   platform: string;
   proxyOrigin: string;
   kind: 'platform' | 'principal' | 'collection' | 'legacy';
+  resource?: string;
+  rule?: SyncableRuleContext;
   mode?: 'public';
   principal?: SyncablePrincipal;
   connectionId?: string;
@@ -93,6 +103,8 @@ export interface SyncAppContext {
 }
 
 const provenanceGuards = new WeakMap<SyncAppContext, () => void>();
+const resolvedRules = new WeakMap<SyncAppContext, ResolvedSyncableRule>();
+const compiledRules = new WeakMap<SyncAppContext, CompiledReadSelection>();
 
 /** Host-only dependency guard, including delayed Atomic writes after a provider reply. */
 export function assertSyncAppContext(context: SyncAppContext): void {
@@ -158,6 +170,7 @@ export async function syncAppContext(
   table: string,
   initialize = false,
   selection?: string,
+  ruleSubject?: string,
 ): Promise<SyncAppContext> {
   if (!(await isSyncableResourceInDrive(store, drive, table)))
     throw new Error('This Sync table is outside the selected drive');
@@ -184,6 +197,8 @@ export async function syncAppContext(
   } as const;
 
   if (typeof platform === 'string' && typeof proxyOrigin === 'string') {
+    if (ruleSubject)
+      throw new Error('Select a filter from an entity collection');
     platformLocalId(proxyOrigin, platform);
     if (proxyOrigin !== getIntegrationProxy())
       throw new Error(
@@ -216,7 +231,12 @@ export async function syncAppContext(
     );
   if (key.kind === 'record')
     throw new Error('Open a collection to sync its records');
-  if (key.kind === 'collection' && !config.collection && !config.navigation)
+  if (
+    key.version === 2 &&
+    key.kind === 'collection' &&
+    !config.collection &&
+    !config.navigation
+  )
     throw new Error('The collection has no saved binding');
   const result: SyncAppContext = {
     ...context,
@@ -228,6 +248,7 @@ export async function syncAppContext(
     collection: config.collection,
     navigation: config.navigation,
     sourceKey: raw,
+    ...(config.version === 3 ? { resource: config.resource } : {}),
     ...(config.principal.kind === 'public' ? { mode: 'public' } : {}),
     ...(config.principal.kind === 'authenticated' &&
     config.principal.clientContext
@@ -235,7 +256,56 @@ export async function syncAppContext(
       : {}),
   };
 
-  if (config.navigation) {
+  if (key.version === 3) {
+    if (config.version !== 3 || config.kind !== 'collection')
+      throw new Error('Open a canonical entity collection');
+
+    if (ruleSubject) {
+      const tableStamp = JSON.stringify([
+        resource.get(sourceProperty!),
+        resource.get(configProperty!),
+      ]);
+
+      const assertTable = () => {
+        assertSyncAppDrive(store, drive, table);
+        if (
+          JSON.stringify([
+            resource.get(sourceProperty!),
+            resource.get(configProperty!),
+          ]) !== tableStamp
+        )
+          throw new Error('The entity collection source changed');
+      };
+
+      const resolved = await resolveSyncableRule(store, {
+        drive,
+        table,
+        subject: ruleSubject,
+        proxyOrigin: config.proxyOrigin,
+        platform: config.platform,
+        principal: config.principal,
+        resource: config.resource,
+        properties: context.schema.properties,
+        assertCurrent: assertTable,
+        assertDrive: subject => assertSyncAppDrive(store, drive, subject),
+      });
+      result.rule = {
+        subject: resolved.subject,
+        key: resolved.key,
+        resource: resolved.resource,
+        definition: resolved.definition,
+      };
+      resolvedRules.set(result, resolved);
+      provenanceGuards.set(result, resolved.assertCurrent);
+    }
+
+    return result;
+  }
+
+  if (ruleSubject)
+    throw new Error('This source does not own the selected Sync filter');
+
+  if (config.version === 2 && config.navigation) {
     if (!config.parentSourceKey || !sourceProperty)
       throw new Error('The collection has no source record identity');
     const row = await findSourceRecord(
@@ -253,6 +323,7 @@ export async function syncAppContext(
     );
     if (
       rowKey.version !== 2 ||
+      rowConfig.version !== 2 ||
       rowKey.kind !== 'record' ||
       typeof rowKeyRaw !== 'string' ||
       config.parentSourceKey !== rowKeyRaw ||
@@ -377,11 +448,43 @@ export function canonicalSyncAppContext(
     const result = { ...context, ...updates };
     const guard = provenanceGuards.get(context);
     if (guard) provenanceGuards.set(result, guard);
+    const rule = resolvedRules.get(context);
+    if (rule) resolvedRules.set(result, rule);
 
     return result;
   };
 
   const { document, querySelection } = trusted;
+
+  if (context.resource) {
+    const definitions = describeEntityTypes(document).filter(
+      item => item.resource === context.resource,
+    );
+    if (definitions.length !== 1)
+      throw new Error('Unknown or ambiguous canonical entity resource');
+    if (!context.rule) return context;
+    const resolved = resolvedRules.get(context);
+    const compiled = compileReadSelection(document, context.rule.definition, {
+      origins: resolved?.origins,
+      querySelection,
+      maxPartitions: 32,
+      publicOnly: context.principal?.kind === 'public',
+    });
+    if (
+      compiled.resource !== context.resource ||
+      compiled.key !== context.rule.key
+    )
+      throw new Error(
+        'The selected Sync filter does not match this entity collection',
+      );
+    const result = scoped({
+      rule: { ...context.rule, definition: compiled.selection },
+    });
+    compiledRules.set(result, compiled);
+
+    return result;
+  }
+
   const saved = context.collection ?? context.navigation;
   if (!saved) throw new Error('The collection has no saved binding');
   const definitions = describeCollections(document).filter(
@@ -787,6 +890,30 @@ export function syncProxyTransport(
 
       if (context.kind !== 'collection')
         throw new Error('This source cannot read that endpoint');
+
+      if (context.resource) {
+        const plan = compiledRules.get(context);
+        if (!context.rule || !plan || !plan.allows(request))
+          throw new Error('This filter cannot read that endpoint');
+        const verifiedActive = !publicSource
+          ? await verify(slot!, signal)
+          : undefined;
+        assertReadCurrent();
+        signal?.throwIfAborted();
+        const response = await relay(request, slot, signal, verifiedActive);
+        assertReadCurrent();
+        signal?.throwIfAborted();
+        await plan.observe(request, response);
+        assertReadCurrent();
+        signal?.throwIfAborted();
+
+        return {
+          status: response.status,
+          headers: response.headers,
+          text: response.body,
+        };
+      }
+
       const navigationRead =
         context.navigation &&
         validateCollectionNavigationRead(document, context.navigation, request);

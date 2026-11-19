@@ -32,6 +32,18 @@ export interface AppExecutionRun {
   ready?: boolean;
   timer?: ReturnType<typeof setTimeout>;
   unsubscribe?: () => void;
+  group?: string;
+  queued?: boolean;
+  prepare?: (signal: AbortSignal) => Promise<AppExecutionSpec>;
+  failed?: AppExecutionSpec['failed'];
+}
+
+export interface AppExecutionStartOptions {
+  /** Serialize complete workers that reconcile the same storage destination. */
+  group?: string;
+  /** Revoke a queued job if its captured source changes before it can start. */
+  subscribe?: AppExecutionSpec['subscribe'];
+  failed?: AppExecutionSpec['failed'];
 }
 
 /** App execution belongs to the app shell, independent of its visible route. */
@@ -40,6 +52,7 @@ export class AppExecutionRegistry {
   private listeners = new Set<() => void>();
   private snapshot: AppExecutionRun[] = [];
   private sequence = 0;
+  private clearing = false;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
 
@@ -55,23 +68,75 @@ export class AppExecutionRegistry {
     for (const listener of this.listeners) listener();
   }
   isRunning = (key: string) => this.runs.has(key);
+  isQueued = (key: string) => this.runs.get(key)?.queued === true;
   start = async (
     key: string,
     prepare: (signal: AbortSignal) => Promise<AppExecutionSpec>,
+    options: AppExecutionStartOptions = {},
   ) => {
     if (this.runs.has(key)) return;
     const run: AppExecutionRun = {
       id: ++this.sequence,
       key,
       controller: new AbortController(),
+      group: options.group,
+      queued: true,
+      prepare,
+      failed: options.failed,
     };
     this.runs.set(key, run);
 
     try {
-      const spec = await prepare(run.controller.signal);
+      const unsubscribe = options.subscribe?.(() => this.finish(run));
+
+      if (this.runs.get(key) !== run) {
+        unsubscribe?.();
+
+        return;
+      }
+
+      run.unsubscribe = unsubscribe;
+
+      if (
+        run.group !== undefined &&
+        [...this.runs.values()].some(
+          other => other !== run && other.group === run.group && !other.queued,
+        )
+      ) {
+        this.publish();
+
+        return;
+      }
+
+      await this.begin(run, true);
+    } catch (error) {
+      this.finish(run);
+      throw error;
+    }
+  };
+
+  private async begin(run: AppExecutionRun, propagate = false) {
+    if (this.runs.get(run.key) !== run || run.controller.signal.aborted) return;
+    run.queued = false;
+
+    try {
+      const spec = await run.prepare!(run.controller.signal);
       run.controller.signal.throwIfAborted();
       run.spec = spec;
-      run.unsubscribe = spec.subscribe?.(() => this.finish(run));
+      const queuedUnsubscribe = run.unsubscribe;
+      const activeUnsubscribe = spec.subscribe?.(() => this.finish(run));
+
+      if (this.runs.get(run.key) !== run) {
+        activeUnsubscribe?.();
+
+        return;
+      }
+
+      run.unsubscribe = () => {
+        queuedUnsubscribe?.();
+        activeUnsubscribe?.();
+      };
+
       run.timer = setTimeout(
         () =>
           this.settle(run, {
@@ -83,10 +148,31 @@ export class AppExecutionRegistry {
       );
       this.publish();
     } catch (error) {
-      this.finish(run);
-      throw error;
+      if (propagate) {
+        this.finish(run);
+        throw error;
+      }
+
+      if (this.runs.get(run.key) !== run || run.controller.signal.aborted)
+        return;
+      this.settle(run, {
+        ok: false,
+        phase: 'load',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'The app could not be prepared',
+      });
     }
-  };
+  }
+
+  private drain(group: string) {
+    if (this.clearing) return;
+    const runs = [...this.runs.values()].filter(run => run.group === group);
+    if (runs.some(run => !run.queued)) return;
+    const next = runs.find(run => run.queued);
+    if (next) void this.begin(next);
+  }
   ready = (key: string, signal: AbortSignal) => {
     const run = this.runs.get(key);
     signal.throwIfAborted();
@@ -104,12 +190,15 @@ export class AppExecutionRegistry {
     run.failureController?.abort();
     run.controller.abort();
     this.publish();
+    if (run.group !== undefined) this.drain(run.group);
   }
   settle = (run: AppExecutionRun, outcome: AppOutcome) => {
     if (this.runs.get(run.key) !== run) return;
     if (run.failureController) return;
 
-    if (outcome.ok || !run.spec?.failed) {
+    const failed = run.spec?.failed ?? run.failed;
+
+    if (outcome.ok || !failed) {
       this.finish(run);
 
       return;
@@ -123,7 +212,7 @@ export class AppExecutionRegistry {
     this.publish();
     run.timer = setTimeout(() => this.finish(run), 10_000);
     void Promise.resolve()
-      .then(() => run.spec!.failed!(outcome.message, reporting.signal))
+      .then(() => failed(outcome.message, reporting.signal))
       .catch(() => undefined)
       .finally(() => this.finish(run));
   };
@@ -132,7 +221,13 @@ export class AppExecutionRegistry {
     if (run) this.finish(run);
   };
   clear = () => {
-    for (const run of [...this.runs.values()]) this.finish(run);
+    this.clearing = true;
+
+    try {
+      for (const run of [...this.runs.values()]) this.finish(run);
+    } finally {
+      this.clearing = false;
+    }
   };
 }
 

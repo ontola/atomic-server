@@ -139,15 +139,41 @@ children. The frame cannot choose a wider destination or receive connection keys
 The host limits proxy reads to the selected service, account and collection.
 
 For hosts that provide execution control, `store.execution('start' | 'state' |
-'cancel')` manages the current collection's run. A run continues across navigation
+'cancel')` manages the selected saved filter's run. A run continues across navigation
 inside the app and stops on pause, source or identity changes, or closing the app.
 Hosts without this capability reject execution requests. Account connection still
 requires the native confirmation dialog.
 
 The built-in Syncable Collection view is a native view of stored Atomic data.
-It uses no frame or provider connection. Its schema labels, fields and child
-targets are saved by the separate Sync app during explicit synchronization.
-Refreshing a provider belongs to that Sync app.
+It uses no frame or provider connection. The separate Sync app saves its schema
+labels, fields and declared relationship navigation. Refreshing a provider belongs
+to that Sync app; stored fields remain browsable and update during a background run.
+
+Built-in Syncables store one entity table per drive, proxy, platform, typed
+principal and exact catalog CRUD resource. Rows use the catalog's typed canonical
+identity, independently of discovery paths or physical location. A saved filter is
+a View under that table, with a validated `ReadSelection` from `syncables/browser`
+(`bound`, `related` or constrained `fanout`). Following a relationship saves a scope
+under an existing sibling table. The native Open action does this local write;
+the source frame only saves navigation intent inside its own root. It receives no
+sibling-table or Drive-root write grant.
+
+The native Collection and raw Table renderers share `syncFilter` selection in the
+resource URL. The raw Table keeps the API-derived row schema. Relationship scope
+is recorded as `syncable-rule-memberships`, rather than invented provider fields.
+Each filter has separate status, pause state and run generation. Complete reads
+replace membership only for that filter; incomplete reads retain previous members
+and accepted observations. Canonical rows and user fields are retained. Immutable
+observations record explicit values, nulls and absent fields; absent fields do not
+erase richer data. Runs sharing a destination table queue locally for reconciliation.
+
+The host compiles requests from the current trusted catalog and saved source
+identities. Only actual matching provider responses unlock dependent reads.
+Public mode remains credential-free. The actual npm Syncables library owns API
+reading, paging and typed projection; Atomic owns permissions, storage and views.
+Migration preserves proven historical subjects and local IDs. Ambiguous or
+unprovable sources are reported before competing destinations can be allocated;
+rows moved outside the worker's root are retained and protected from refresh.
 
 ### Host UI
 

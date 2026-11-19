@@ -21,6 +21,7 @@ import {
   type SyncablePrincipal,
   type LegacySourceAlias,
 } from './builtinSyncIdentity.js';
+import { parseSyncableRuleConfig } from './syncableRules';
 import {
   parseSyncableSourceConfig,
   sourceConfigMatchesKey,
@@ -263,7 +264,9 @@ export async function collectSyncableLegacySources(
         const response =
           await store.fetchResourceFromServer<Collections.Collection>(
             url.href,
-            { noWebSocket: true },
+            // A synthetic query response is authoritative for this page, not
+            // another concurrent edit of the preceding result snapshot.
+            { noWebSocket: true, forceOverride: true },
           );
         if (response.error) throw response.error;
         // App setup has already initialized Loro. Materialize a buffered query
@@ -359,9 +362,22 @@ export async function collectSyncableLegacySources(
 
     if (typeof raw === 'string') {
       try {
+        const savedConfig = row.get(p['syncable-source-config']);
+
+        if (
+          record(savedConfig) &&
+          savedConfig.version === 3 &&
+          savedConfig.kind === 'rule'
+        ) {
+          parseSyncableRuleConfig(savedConfig);
+          continue;
+        }
+
         const key = parseSyncableSourceKey(raw);
         if (key.proxyOrigin !== proxyOrigin || key.platform !== platform)
           continue;
+
+        if (key.version === 3) continue;
 
         if (key.version === 2) {
           const value = parseSyncableSourceConfig(

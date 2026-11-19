@@ -58,6 +58,7 @@ async function setup() {
   });
 
   const store = Object.assign(fake, {
+    getServerUrl: () => new URL(table).origin,
     isForeignOriginSubject: (subject: string) =>
       subject.startsWith('http') &&
       new URL(subject).origin !== new URL(table).origin,

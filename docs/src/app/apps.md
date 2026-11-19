@@ -33,35 +33,41 @@ Connect your GitHub account from the App. Your authenticated identity appears
 directly beneath GitHub, alongside **Public**. There is no Accounts folder.
 The identity comes from the catalog's Authenticated Principal declaration.
 
-Open your account and choose a collection, such as **Organizations** or
-**Repositories**. These are separate collections described by the API catalog;
-Organizations contains organizations returned by GitHub, without synthetic
-personal-owner rows. Choose **Open collection**, then **Sync now** in its
-**Sync** tab to import its rows. The Repositories collection imports repositories
-available to the connected account.
+Each account has one table per catalog resource type, such as **Organizations**,
+**Repositories** and **Issues and pull requests**. Navigation stays at
+Drive → GitHub → account (or Public) → item type. An organization and a
+repository are rows, rather than folders containing another copy of each table.
 
-Use **+** to add **Collection** to a table. This native view shows saved
-fields and **Open** actions. An organization opens its saved Repositories table;
-a repository opens its saved **Issues and pull requests** table. Choose **Sync
-now** there to fetch that selected collection. Opening or returning to a native
-view makes no provider request. GitHub's Issues endpoint includes pull requests,
-which remain visible with the API's optional Pull request field.
+Choose a saved **Filter** to browse the rows observed through a particular
+catalog source. **All cached rows** shows the shared table across its filters.
+For example, sync Organizations, then choose **Open** on an organization. This
+opens the account's Repositories table with a saved organization filter. Open a
+repository to reach the same account's Issues table with that organization and
+repository scope retained. Related collection buttons can follow the selected
+filter across all its rows. Filters can be renamed and bookmarked.
 
-To link a public repository, open **Public** beneath GitHub. Select **Issues and
-pull requests**, choose the repository source, and enter its owner and repository
-name. **Open collection** resolves that source to its stable repository ID before
-creating the table. This branch uses GitHub's public API without a GitHub account.
+Use **Sync settings** for the selected filter, then **Sync now**. Each filter has
+its own sync state and **Pause**/**Resume** controls. Pausing one filter retains
+its rows and does not pause another. Runs continue while you browse other views
+or resources in the app; closing the app stops them. Paused status survives a
+reload. The Sync view also offers source setup for new saved filters; catalog
+inputs and relationships determine the available sources.
 
-Sync starts from **Sync now** and continues while you browse other views or
-resources in the app. Closing the app stops the run. **Pause** retains stored rows
-and blocks refreshes until you resume. Paused status survives a reload; open the
-**Sync** tab and choose **Resume** to enable syncing again. The **Sync** tab
-contains controls and status; the **Table** tab follows the schema derived from
-the API description.
-**Collection** reads saved Atomic data and remains available during an
-import or a provider outage. Changes you make in Atomic stay in your drive.
-An interrupted import retains accepted rows. Moving a table within the same
-drive retains its source identity.
+To link a public repository, open **Public** beneath GitHub. In its Sync view,
+select the Issues collection and the catalog's repository source, enter its
+owner/name, give the filter a name and choose **Save filter**. The source resolves
+to the repository's canonical identity. This branch uses GitHub's public API
+without a GitHub account. GitHub's Issues endpoint includes pull requests.
+
+**Table** follows the schema derived from the API description. **Collection** is
+a native view of stored fields and navigation actions; use **+** to add it when
+needed. Opening, filtering or returning to these views makes no provider request.
+They remain available during a sync or a provider outage. Overlapping saved
+filters share one canonical row. Complete reads replace membership only for their
+own filter; partial or interrupted reads retain prior membership and accepted
+rows. Missing fields do not erase richer stored values. User fields are retained.
+Moving a row within the same drive retains its identity; rows moved outside the
+worker's collection are protected from refresh rather than duplicated.
 
 The canonical catalog identifier is now `github`. Installations and other clients
 using the historical `github-issues` identifier need reinstalling or reconnecting.
@@ -76,8 +82,8 @@ remain available.
 
 Your integration proxy must support client-held connection keys and have
 GitHub OAuth configured. The
-[collection-navigation IAP catalog](https://github.com/ontola/atomic-plugins/blob/main/overlays/catalog/2026-11-19-collection-navigation.json)
-provides authenticated identity, collection schemas, public access and nested
+[IAP catalog](https://github.com/ontola/atomic-plugins/blob/main/overlays/catalog/2026-11-19-github.json)
+provides authenticated identity, collection schemas, public access and relationship
 navigation through CRUD references and standard OpenAPI response Links. Other
 providers can use the same runtime when their catalog supplies those definitions.
 

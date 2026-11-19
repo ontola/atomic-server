@@ -7,9 +7,12 @@ export type SyncablePrincipal =
       clientContext?: string;
     };
 export interface SourceKeyInput {
+  version?: 2 | 3;
   proxyOrigin: string;
   platform: string;
   kind: string;
+  resource?: string;
+  entityIdentityHash?: string;
   principal: SyncablePrincipal;
   collection?: Record<string, unknown>;
   parentSourceKey?: string;
@@ -50,3 +53,39 @@ export function collectionIdentity(
     link?: string;
   },
 ): Record<string, unknown>;
+
+export interface CanonicalEntityIdentity {
+  resource: string;
+  template: string;
+  values: [string, string | number][];
+  path: string;
+  key: string;
+}
+export function entitySourceKey(
+  input: Pick<SourceKeyInput, 'proxyOrigin' | 'platform' | 'principal'> & {
+    entityIdentity: CanonicalEntityIdentity;
+  },
+): string;
+export function entityTableKey(
+  input: Pick<SourceKeyInput, 'proxyOrigin' | 'platform' | 'principal'> & {
+    resource: string;
+  },
+): string;
+
+export function ruleSourceKey(tableKey: string, ruleKey: string): string;
+export interface FlatIdentityAlias {
+  canonicalSourceKey: string;
+  canonicalConfig?: Record<string, unknown>;
+  entityTableSourceKey?: string;
+  subject: string;
+  previousSourceKey?: string;
+  localId?: string;
+  sourceConfigFingerprint?: string;
+  previousParent?: string;
+  reparentToLogicalParent?: boolean;
+}
+export interface FlatMigrationBlock {
+  principal: SyncablePrincipal;
+  resource: string;
+  message: string;
+}

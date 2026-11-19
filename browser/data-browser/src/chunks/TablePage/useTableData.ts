@@ -15,10 +15,13 @@ import { toAggregation } from './tableAggregates';
 import { getTableDrive } from './tableDrive';
 import { quantizedNow, splitFilters } from './tableFiltering';
 
+import { useSyncableFilters } from '../PluginRuns/useSyncableFilters';
+
 const PAGE_SIZE = 30;
 
 type UseTableDataResult = {
   tableClass: Resource;
+  syncableFilters: ReturnType<typeof useSyncableFilters>;
   /**
    * The constraints the grid queries with (class + the view's filters). Shared
    * so the totals can be computed over exactly the rows the grid shows.
@@ -38,6 +41,7 @@ export function useTableData(
 ): UseTableDataResult {
   const tableView = useTableView(resource, viewOverride, embedded);
   const { filters, sorting } = tableView;
+  const syncableFilters = useSyncableFilters(resource, embedded);
   const store = useStore();
 
   const [classSubject] = useSubject(resource, core.properties.classtype);
@@ -73,11 +77,25 @@ export function useTableData(
   );
 
   const queryFilter = {
-    property: core.properties.parent,
+    property: syncableFilters.flat
+      ? syncableFilters.properties!['syncable-entity-table']
+      : core.properties.parent,
     // `Collection.fetchPage` no-ops when value is undefined. Hold the
     // query until classtype is known so views don't flash as rows.
-    value: classReady ? resource.subject : undefined,
-    filters: [...classFilter, ...userFilters],
+    value: classReady && syncableFilters.ready ? resource.subject : undefined,
+    filters: [
+      ...classFilter,
+      ...userFilters,
+      ...(syncableFilters.flat && syncableFilters.selected
+        ? [
+            {
+              property:
+                syncableFilters.properties!['syncable-rule-memberships'],
+              value: syncableFilters.selected.resource.subject,
+            },
+          ]
+        : []),
+    ],
     expression_filters: expressionFilters,
     sort_by: sorting.prop,
     sort_desc: sorting.sortDesc,
@@ -99,11 +117,12 @@ export function useTableData(
 
   return {
     ...tableView,
+    syncableFilters,
     tableClass,
     queryFilters: queryFilter.filters,
     queryExpressionFilters: expressionFilters,
     collection,
-    ready: classReady && ready,
+    ready: classReady && syncableFilters.ready && ready,
     invalidateCollection,
     mapAll,
   };

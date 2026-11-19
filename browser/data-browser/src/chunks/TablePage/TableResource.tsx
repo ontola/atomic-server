@@ -1,3 +1,4 @@
+import { SyncableFilterBar } from '../PluginRuns/SyncableFilterBar';
 import {
   core,
   dataBrowser,
@@ -194,7 +195,17 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewQuickAdd,
     queryFilters,
     queryExpressionFilters,
+    syncableFilters,
   } = useTableData(resource, viewSubject, embedded);
+  const ruleSubjects = new Set(
+    syncableFilters.rules.map(rule => rule.resource.subject),
+  );
+  const visibleViews = views.filter(subject => !ruleSubjects.has(subject));
+  const collectionTab = visibleViews.find(
+    subject =>
+      store.getResourceLoading(subject).get(dataBrowser.properties.viewKind) ===
+      'syncable-collection',
+  );
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
     tableClass,
@@ -1527,14 +1538,23 @@ export const TableResource: React.FC<TableResourceProps> = ({
               table={resource.subject}
               rowClass={tableClass.subject}
               drive={getTableDrive(store, resource) ?? store.getDrive()}
-              views={views}
-              activeView={activeView}
+              views={visibleViews}
+              activeView={
+                activeView && ruleSubjects.has(activeView)
+                  ? collectionTab
+                  : activeView
+              }
               setActiveView={setActiveView}
               createView={createView}
               setViewKind={setViewKind}
               duplicateView={duplicateView}
               deleteView={deleteView}
-              reorderViews={reorderViews}
+              reorderViews={next =>
+                reorderViews([
+                  ...next,
+                  ...views.filter(subject => ruleSubjects.has(subject)),
+                ])
+              }
               viewName={viewName}
               renameView={renameView}
               allColumns={allColumns}
@@ -1553,6 +1573,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
                   : undefined
               }
             />
+          )}
+          {!embedded && (
+            <SyncableFilterBar table={resource} state={syncableFilters} />
           )}
           {/* Above the view switch, not inside the table branch: the filter
            * dropdown in the tab bar is offered for every view kind, so a kanban /
@@ -1584,7 +1607,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
               onRowCreated={notifyEntryCreated}
             />
           )}
-          {appView !== undefined ? (
+          {syncableFilters.error ? (
+            <p role='alert'>{syncableFilters.error}</p>
+          ) : appView !== undefined ? (
             // An app rendering this table's rows. It sits beside the Table tab
             // rather than in place of it: adding a way to look at rows never
             // takes one away, and the table is always one tab over.
@@ -1599,6 +1624,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
             <AppViewWrapper>
               <BuiltinSyncablesApp
                 table={resource.subject}
+                ruleSubject={syncableFilters.selected?.resource.subject}
                 drive={(getTableDrive(store, resource) ?? store.getDrive())!}
               />
             </AppViewWrapper>
@@ -1607,6 +1633,12 @@ export const TableResource: React.FC<TableResourceProps> = ({
               table={resource.subject}
               drive={(getTableDrive(store, resource) ?? store.getDrive())!}
               collection={rowCollection}
+              activeRule={syncableFilters.selected?.resource.subject}
+              logicalOwnerProperty={
+                syncableFilters.flat
+                  ? syncableFilters.properties?.['syncable-entity-table']
+                  : undefined
+              }
               ready={ready}
             />
           ) : viewKind === 'dashboard' && embedded ? (

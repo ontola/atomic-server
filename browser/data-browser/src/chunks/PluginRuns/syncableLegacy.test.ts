@@ -102,7 +102,7 @@ function fixture() {
         expect(url.origin + url.pathname).toBe('https://node.example/query');
         expect(url.searchParams.get('include_nested')).toBe('false');
         expect(url.searchParams.has('value')).toBe(false);
-        expect(options).toEqual({ noWebSocket: true });
+        expect(options).toEqual({ noWebSocket: true, forceOverride: true });
         const answer = (
           store as unknown as {
             legacySources: ReturnType<typeof vi.fn<SourceQuery>>;

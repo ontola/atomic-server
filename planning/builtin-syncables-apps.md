@@ -17,8 +17,9 @@
 - Collection replaces the generated Browse label, with a distinct icon. Historical
   default labels are presented consistently without rewriting stored/custom names.
   All six translation catalogs were settled through Vite and reviewed.
-- The proposed [flat collection/filter model](flat-syncable-collections.md) is
-  documented separately. Its storage and per-filter sync behavior are not built.
+- The [flat collection/filter implementation](flat-syncable-collections.md) now
+  provides canonical entity tables and independent saved rules. Unit/type checks
+  pass; matching browser and localhost acceptance are in progress.
 
 ## Remaining work
 

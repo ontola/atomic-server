@@ -5,8 +5,12 @@ import { appProfile } from './BuiltinSyncablesApp';
 import { collectSyncableLegacySources } from './syncableLegacy';
 import { syncableApiSchema } from './syncableApiSchema';
 import { syncProxyTransport } from './builtinSyncablesProfile';
-import { sourceConfigFingerprint } from './builtinSyncIdentity.js';
-import { core } from '@tomic/lib';
+import {
+  ruleSourceKey,
+  sourceConfigFingerprint,
+} from './builtinSyncIdentity.js';
+import { CollectionBuilder, core, dataBrowser } from '@tomic/lib';
+import { readSelectionKey } from 'syncables/browser';
 
 const state = vi.hoisted(() => ({
   actor: { subject: 'atomic:agent:person' },
@@ -14,6 +18,17 @@ const state = vi.hoisted(() => ({
   kind: 'platform' as 'platform' | 'legacy' | 'collection',
   paused: false,
   boundSlot: undefined as string | undefined,
+  flat: false,
+  runSchema: false,
+  ruleSubject: undefined as string | undefined,
+  ruleStatus: {} as Record<string, unknown>,
+  ruleResource: {
+    get: vi.fn((_property: string): unknown => undefined),
+    getSubjects: vi.fn((_property: string): string[] => []),
+    set: vi.fn(async (..._args: unknown[]) => undefined),
+    save: vi.fn(async () => undefined),
+    canWrite: vi.fn(async () => [true]),
+  },
   proxy: {
     listKeyed: vi.fn(async () => [
       { connection_id: 's'.repeat(43), platform: 'calendar-service' },
@@ -29,6 +44,7 @@ const state = vi.hoisted(() => ({
   legacy: { sources: [] as unknown[], warnings: [] as string[] },
   resource: {
     get: vi.fn((_property: string): unknown => undefined),
+    getSubjects: vi.fn((_property: string): string[] => []),
     set: vi.fn(),
     save: vi.fn(),
     canWrite: vi.fn(async () => [true]),
@@ -75,6 +91,14 @@ vi.mock('./syncablePlatform', () => ({
 vi.mock('./syncableLegacy', () => ({
   collectSyncableLegacySources: vi.fn(async () => state.legacy),
 }));
+vi.mock('./syncableFlatAdoption', async importActual => ({
+  ...(await importActual<typeof import('./syncableFlatAdoption')>()),
+  collectSyncableFlatAdoption: vi.fn(async () => ({
+    aliases: [],
+    blocks: [],
+    warnings: [],
+  })),
+}));
 vi.mock('./syncableApiSchema', () => ({
   syncableApiSchema: vi.fn(async () => ({ classes: {}, properties: {} })),
 }));
@@ -88,13 +112,33 @@ vi.mock('./builtinSyncablesProfile', () => ({
     proxyOrigin: 'https://proxy.example',
     kind: state.kind,
     connectionId: state.boundSlot,
+    ...(state.flat
+      ? { resource: 'event', sourceKey: 'canonical-table-key' }
+      : {}),
+    ...(state.ruleSubject
+      ? {
+          rule: {
+            subject: state.ruleSubject,
+            key: 'rule-key',
+            resource: 'event',
+            definition: {
+              version: 1,
+              resource: 'event',
+              source: { kind: 'bound', bound: {} },
+            },
+          },
+        }
+      : {}),
     proxyTransport: 'host',
     schema: {
-      classes: {},
+      classes: state.runSchema
+        ? { 'syncable-sync-run': 'atomic:run-class' }
+        : {},
       properties: {
         'syncable-source-key': 'atomic:source-key',
         'syncable-source-config': 'atomic:source-config',
         'syncable-mirror-status': 'atomic:status',
+        ...(state.runSchema ? { 'syncable-sync-run': 'atomic:run' } : {}),
       },
     },
   })),
@@ -126,27 +170,54 @@ vi.mock('./builtinSyncablesProfile', () => ({
 const store = {
   getAgent: () => state.actor,
   getServerUrl: () => 'https://node.example',
+  getDrive: () => 'drive',
+  resources: new Map(),
   getResource: vi.fn(async () => state.resource),
+  subscribe: vi.fn(() => () => undefined),
 } as unknown as Store;
 const registry = {
   isRunning: vi.fn(() => false),
+  isQueued: vi.fn(() => false),
   start: vi.fn(async () => undefined),
   cancel: vi.fn(),
   ready: vi.fn(),
 } as unknown as AppExecutionRegistry;
-const open = () =>
+const open = (
+  worker = false,
+  ruleSubject?: string,
+  signal = new AbortController().signal,
+) =>
   appProfile(
     store,
     'drive',
     'atomic:source',
     registry,
-    new AbortController().signal,
+    signal,
+    worker,
+    undefined,
+    ruleSubject,
   );
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('location', { href: 'https://node.example/current' });
   state.actor = { subject: 'atomic:agent:person' };
   state.boundSlot = undefined;
+  state.flat = false;
+  state.runSchema = false;
+  state.ruleSubject = undefined;
+  state.ruleStatus = {};
+  state.resource.getSubjects.mockReturnValue([]);
+  state.ruleResource.getSubjects.mockReturnValue([dataBrowser.classes.view]);
+  state.ruleResource.get.mockImplementation(property =>
+    property === 'atomic:status' ? state.ruleStatus : undefined,
+  );
+  state.ruleResource.set.mockImplementation(
+    async (property, value, _save, _options, guard) => {
+      (guard as (() => void) | undefined)?.();
+      if (property === 'atomic:status')
+        state.ruleStatus = value as Record<string, unknown>;
+    },
+  );
   state.proxy.listKeyed.mockResolvedValue([
     { connection_id: 's'.repeat(43), platform: 'calendar-service' },
   ]);
@@ -166,9 +237,17 @@ beforeEach(() => {
     property === 'atomic:status' ? { paused: state.paused } : undefined,
   );
   state.legacy = { sources: [], warnings: [] };
-  vi.mocked(store.getResource).mockResolvedValue(state.resource as never);
+  vi.mocked(store.getResource).mockImplementation(
+    async subject =>
+      (subject === state.ruleSubject
+        ? state.ruleResource
+        : state.resource) as never,
+  );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 it('reconnects only the explicitly requested owned verified connection from the platform root', async () => {
   const spec = await open();
@@ -273,6 +352,39 @@ it('passes validated installation aliases and blocking warnings into the existin
     expect.any(Function),
     expect.any(Function),
   );
+});
+
+it('passes an exact Public item-type block for an unsupported v1 cache even when no legacy warnings exist', async () => {
+  state.legacy = {
+    warnings: [],
+    sources: [
+      {
+        subject: 'atomic:old-public-table',
+        kind: 'collection',
+        principal: { kind: 'public' },
+        collection: { name: 'projectIssues', resource: 'issue' },
+        sourceKey: JSON.stringify([
+          'https://proxy.example',
+          'calendar-service',
+          'public-mirror',
+          'project',
+          'issues',
+        ]),
+      },
+    ],
+  };
+  const spec = await open();
+  expect(spec.profile.context).toMatchObject({
+    legacyMigrationBlocked: false,
+    flatMigrationBlocks: [
+      {
+        principal: { kind: 'public' },
+        resource: 'issue',
+        message: expect.stringContaining('historical identity review'),
+      },
+    ],
+  });
+  expect(state.resource.set).not.toHaveBeenCalled();
 });
 
 it('prepares a legacy slot only on explicit reconnect and rechecks its saved source before marker mutation', async () => {
@@ -385,6 +497,167 @@ it('mounts a paused interactive profile while rejecting provider reads and worke
   });
   await expect(spec.profile.execution!('start')).resolves.toEqual({
     running: false,
+    queued: false,
   });
   expect(registry.start).toHaveBeenCalledOnce();
+});
+
+it('uses filter-scoped pause and execution while keeping writes rooted at the canonical table', async () => {
+  state.kind = 'collection';
+  state.flat = true;
+  state.ruleSubject = 'atomic:rule-one';
+  state.ruleStatus = { paused: true };
+  const spec = await open(false, state.ruleSubject);
+  expect(spec.profile.access.root).toBe('atomic:source');
+  await expect(spec.profile.execution!('start')).rejects.toThrow('Resume');
+  state.ruleStatus = { paused: false, enabled: true };
+  await spec.profile.execution!('start');
+  expect(registry.start).toHaveBeenCalledWith(
+    JSON.stringify(['drive', 'atomic:source', 'atomic:rule-one']),
+    expect.any(Function),
+    expect.objectContaining({
+      group: JSON.stringify(['drive', 'atomic:source']),
+      subscribe: expect.any(Function),
+      failed: expect.any(Function),
+    }),
+  );
+  await spec.profile.execution!('cancel');
+  expect(registry.cancel).toHaveBeenCalledWith(
+    JSON.stringify(['drive', 'atomic:source', 'atomic:rule-one']),
+  );
+});
+
+it('creates the generation only when the queued worker is prepared and rejects stale worker writes', async () => {
+  state.kind = 'collection';
+  state.flat = true;
+  state.ruleSubject = 'atomic:rule-one';
+  const controller = new AbortController();
+  const interactive = await open(false, state.ruleSubject, controller.signal);
+  await interactive.profile.execution!('start');
+  expect(state.ruleResource.set).not.toHaveBeenCalled();
+  const prepare = vi.mocked(registry.start).mock.calls.at(-1)![1];
+  controller.abort();
+  const worker = await prepare(new AbortController().signal);
+  expect(worker.profile.context?.rule).toMatchObject({
+    run: {
+      generation: expect.any(String),
+      runId: expect.any(String),
+      startOrder: expect.any(Number),
+    },
+  });
+  expect(state.resource.set).not.toHaveBeenCalled();
+  worker.profile.access.assertCurrent();
+  state.ruleStatus = {
+    ...state.ruleStatus,
+    run: { generation: 'new', runId: 'other', startOrder: Date.now() + 1 },
+  };
+  expect(() => worker.profile.access.assertCurrent()).toThrow(
+    'no longer current',
+  );
+});
+
+it('rejects a queued scope changed before activation and requires a rule for flat collection execution', async () => {
+  state.kind = 'collection';
+  state.flat = true;
+  const noRule = await open();
+  await expect(noRule.profile.execution!('start')).rejects.toThrow(
+    'saved filter',
+  );
+  state.ruleSubject = 'atomic:rule-one';
+  const spec = await open(false, state.ruleSubject);
+  await spec.profile.execution!('start');
+  const prepare = vi.mocked(registry.start).mock.calls.at(-1)![1];
+  state.resource.get.mockImplementation(property =>
+    property === 'atomic:source-config' ? { changed: true } : undefined,
+  );
+  await expect(prepare(new AbortController().signal)).rejects.toThrow(
+    'source, account or server changed',
+  );
+  expect(state.ruleResource.set).not.toHaveBeenCalled();
+});
+
+it('advances beyond durable orders across filters and run ledgers after a clock rollback', async () => {
+  state.kind = 'collection';
+  state.flat = true;
+  state.runSchema = true;
+  state.ruleSubject = 'atomic:rule-one';
+  state.ruleStatus = {
+    run: { generation: 'previous', runId: 'previous', startOrder: 100 },
+  };
+  const definition = {
+    version: 1 as const,
+    resource: 'event',
+    source: {
+      kind: 'bound' as const,
+      bound: {
+        collection: 'events',
+        resource: 'event',
+        method: 'GET' as const,
+        path: '/events',
+        pathParams: {},
+        query: {},
+        body: {},
+      },
+    },
+  };
+  const key = readSelectionKey(definition);
+  const futureView = {
+    get: (property: string) =>
+      property === core.properties.parent
+        ? 'atomic:source'
+        : property === 'atomic:source-config'
+          ? {
+              version: 3,
+              kind: 'rule',
+              resource: 'event',
+              definition,
+              ruleKey: key,
+            }
+          : property === 'atomic:source-key'
+            ? ruleSourceKey('canonical-table-key', key)
+            : property === 'atomic:status'
+              ? {
+                  run: {
+                    generation: 'future',
+                    runId: 'future',
+                    startOrder: 7_000_000_000_000_000,
+                  },
+                }
+              : undefined,
+    getSubjects: () => [dataBrowser.classes.view],
+  };
+  const ledger = {
+    get: (property: string) =>
+      property === core.properties.parent
+        ? 'atomic:future-rule'
+        : property === 'atomic:run'
+          ? {
+              ruleSubject: 'atomic:future-rule',
+              ruleKey: key + ':historical-definition',
+              startOrder: 8_000_000_000_000_000,
+            }
+          : undefined,
+  };
+  state.resource.getSubjects.mockReturnValue(['atomic:future-rule']);
+  vi.mocked(store.getResource).mockImplementation(
+    async subject =>
+      (subject === 'atomic:future-rule'
+        ? futureView
+        : subject === 'atomic:future-ledger'
+          ? ledger
+          : subject === state.ruleSubject
+            ? state.ruleResource
+            : state.resource) as never,
+  );
+  vi.spyOn(CollectionBuilder.prototype, 'build').mockReturnValue({
+    waitForReady: async () => undefined,
+    totalMembers: 1,
+    getAllMembers: async () => ['atomic:future-ledger'],
+  } as never);
+  vi.spyOn(Date, 'now').mockReturnValue(10);
+  const worker = await open(true, state.ruleSubject);
+  expect(
+    (worker.profile.context!.rule as { run: { startOrder: number } }).run
+      .startOrder,
+  ).toBeGreaterThan(8_000_000_000_000_000);
 });

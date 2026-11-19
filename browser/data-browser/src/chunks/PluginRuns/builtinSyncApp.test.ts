@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { URL as NodeURL } from 'node:url';
 import {
   bindCollection,
   deriveOntology,
+  readSelectionKey,
   prepareDocument,
   type OpenApiDocument,
 } from 'syncables/browser';
@@ -12,7 +15,7 @@ import {
   // @ts-expect-error The server-delivered JavaScript module has no declarations.
 } from './builtinSyncApp.js';
 import {
-  collectionIdentity,
+  entityTableKey,
   sourceKey,
   sourceConfigFingerprint,
 } from './builtinSyncIdentity.js';
@@ -34,11 +37,18 @@ const properties = Object.fromEntries(
     'collection-view',
     'open-target',
     'mirror-status',
+    'rule-memberships',
+    'navigation-intents',
+    'observation',
+    'sync-run',
+    'entity-table',
   ].map(name => ['syncable-' + name, 'atomic:' + name]),
 );
 const classes = {
   'syncable-principal': 'atomic:principal',
   'syncable-record': 'atomic:record',
+  'syncable-observation': 'atomic:observation-class',
+  'syncable-sync-run': 'atomic:run-class',
 };
 const prop = (name: string) => properties['syncable-' + name];
 
@@ -118,6 +128,7 @@ function apiDocument(): OpenApiDocument {
               updated_at: { type: 'string', format: 'date-time' },
               active: {
                 type: 'boolean',
+                nullable: true,
                 oneOf: [
                   { enum: [true], title: 'Active' },
                   { enum: [false], title: 'Inactive' },
@@ -283,7 +294,8 @@ function withPublicEntrypoint() {
 }
 
 function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
-  const document = apiDocument();
+  const document =
+    (extra.document as OpenApiDocument | undefined) ?? apiDocument();
   const apiSchema = {
     classes: Object.fromEntries(
       deriveOntology(document)
@@ -298,6 +310,7 @@ function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
   };
   const data = new Map<string, Stored>([[root, { [P + 'isA']: [tableClass] }]]);
   let sequence = 0;
+  const saves: Array<{ subject: string; props: Stored | undefined }> = [];
   const resource = (subject: string) => ({
     subject,
     get: (property: string) => data.get(subject)?.[property],
@@ -315,7 +328,9 @@ function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
 
       return this;
     },
-    save: vi.fn(async () => undefined),
+    save: vi.fn(async () => {
+      saves.push({ subject, props: structuredClone(data.get(subject)) });
+    }),
   });
   const context = {
     subject: root,
@@ -323,12 +338,16 @@ function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
     proxyOrigin: origin,
     platform: 'example-service',
     kind,
-    principal,
+    principal: (extra.principal ?? principal) as
+      | typeof principal
+      | { kind: 'public' },
     connectionId: 'slot',
     document,
     schema: { properties, classes },
     apiSchema,
-    collection: bindCollection(document, { collection: 'myTeams' }),
+    collection:
+      (extra.collection as ReturnType<typeof bindCollection> | undefined) ??
+      bindCollection(document, { collection: 'myTeams' }),
     ...extra,
   };
   const request = vi.fn(async ({ path }: Request) => ({
@@ -339,7 +358,7 @@ function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
       : path === 'v2/me/teams'
         ? [team]
         : path === 'v2/names/old-handle'
-          ? { handle: 'new-handle' }
+          ? { id: 100, handle: 'new-handle' }
           : path.endsWith('/workspaces')
             ? [workspace]
             : [{ id: 'task-1', name: 'A task' }]) as unknown,
@@ -400,10 +419,67 @@ function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
       connect: vi.fn(),
     },
     ui: { openResource: vi.fn() },
-    execution: vi.fn(async () => ({ running: false })),
+    execution: vi.fn(
+      async (): Promise<{ running: boolean; queued?: boolean }> => ({
+        running: false,
+      }),
+    ),
   };
 
-  return { data, store, context, request, app: createSyncApp(store, context) };
+  if (kind === 'collection') {
+    const bound = context.collection;
+    const definition = {
+      version: 1 as const,
+      resource: bound.resource,
+      source: { kind: 'bound' as const, bound },
+    };
+    const key = readSelectionKey(definition);
+    const run = { generation: 'generation-1', runId: 'run-1', startOrder: 1 };
+    const rule = 'atomic:initial-rule';
+    data.get(root)![prop('source-config')] = {
+      version: 3,
+      kind: 'collection',
+      proxyOrigin: origin,
+      platform: context.platform,
+      principal: context.principal,
+      ...(context.principal.kind !== 'public'
+        ? { connectionId: context.connectionId }
+        : {}),
+      resource: bound.resource,
+    };
+    data.get(root)![prop('source-key')] = entityTableKey({
+      ...context,
+      resource: bound.resource,
+    });
+    data.get(root)![P + 'table-views'] = [rule];
+    data.set(rule, {
+      [P + 'parent']: root,
+      [P + 'isA']: ['https://atomicdata.dev/classes/View'],
+      [P + 'name']: 'My saved filter',
+      [prop('source-config')]: {
+        version: 3,
+        kind: 'rule',
+        resource: bound.resource,
+        definition,
+        ruleKey: key,
+      },
+      [prop('mirror-status')]: { run },
+    });
+    Object.assign(context, {
+      resource: bound.resource,
+      sourceKey: data.get(root)![prop('source-key')],
+      rule: { subject: rule, key, resource: bound.resource, definition, run },
+    });
+  }
+
+  return {
+    data,
+    saves,
+    store,
+    context,
+    request,
+    app: createSyncApp(store, context),
+  };
 }
 
 const nodes = (data: Map<string, Stored>, kind: string) =>
@@ -411,16 +487,73 @@ const nodes = (data: Map<string, Stored>, kind: string) =>
 const config = (row: Stored) =>
   row[prop('source-config')] as Record<string, unknown>;
 
-function childApp(set: ReturnType<typeof setup>, subject: string) {
-  const saved = set.data.get(subject)!;
+function tableFor(set: ReturnType<typeof setup>, resource: string) {
+  const found = nodes(set.data, 'collection').find(
+    ([, props]) => config(props).resource === resource,
+  );
+  if (!found) throw new Error('Missing entity table ' + resource);
+
+  return found[0];
+}
+
+function ruleFor(
+  set: ReturnType<typeof setup>,
+  table: string,
+  collection?: string,
+) {
+  const found = [...set.data].find(
+    ([, row]) =>
+      row[P + 'parent'] === table &&
+      config(row)?.kind === 'rule' &&
+      (!collection ||
+        (
+          config(row).definition as {
+            source: { bound?: { collection: string } };
+          }
+        ).source.bound?.collection === collection),
+  );
+  if (!found) throw new Error('Missing saved rule');
+
+  return found[0];
+}
+
+let order = 10;
+
+function worker(set: ReturnType<typeof setup>, table: string, rule: string) {
+  const saved = set.data.get(table)!;
+  const ruleConfig = config(set.data.get(rule)!);
+  const run = {
+    generation: 'generation-' + ++order,
+    runId: 'run-' + order,
+    startOrder: order,
+  };
+  const previous = set.data.get(rule)![prop('mirror-status')] as
+    | Record<string, unknown>
+    | undefined;
+  set.data.get(rule)![prop('mirror-status')] = { ...previous, run };
 
   return createSyncApp(set.store, {
     ...set.context,
     ...config(saved),
-    subject,
-    kind: saved[prop('node-kind')],
+    subject: table,
+    kind: 'collection',
     sourceKey: saved[prop('source-key')],
+    rule: {
+      subject: rule,
+      key: ruleConfig.ruleKey,
+      resource: ruleConfig.resource,
+      definition: ruleConfig.definition,
+      run,
+    },
   });
+}
+
+async function ready() {
+  const set = setup('platform');
+  await set.app.openPrincipal('slot');
+  set.request.mockClear();
+
+  return set;
 }
 
 describe('catalog-driven Sync through the shared app bridge', () => {
@@ -638,298 +771,799 @@ describe('catalog-driven Sync through the shared app bridge', () => {
       expect(element.textContent).not.toContain('No accounts connected');
     },
   );
+});
 
-  it('resolves a real principal and provisions only catalog root collections without eager reads', async () => {
-    const set = setup('platform');
-    const first = await set.app.openPrincipal('slot');
-    expect(set.request.mock.calls.map(([call]) => call.path)).toEqual([
-      'v2/session',
-    ]);
-    expect(nodes(set.data, 'principal')).toHaveLength(1);
-    expect(set.data.get(first.subject)?.[P + 'name']).toBe('Ada');
+describe('shared entity tables and independent saved filters', () => {
+  it('provisions every collection-backed entity type and only root rules without reading collection data', async () => {
+    const set = await ready();
     expect(
-      nodes(set.data, 'collection').map(
-        ([, row]) =>
-          (config(row).collection as { collection: string }).collection,
-      ),
-    ).toEqual(['myTeams', 'myWorkspaces']);
+      nodes(set.data, 'collection')
+        .map(([, props]) => config(props).resource)
+        .sort(),
+    ).toEqual(['task', 'team', 'workspace']);
+    expect(nodes(set.data, 'rule')).toHaveLength(2);
     expect(nodes(set.data, 'record')).toHaveLength(0);
-    const count = set.data.size;
-    await set.app.openPrincipal('another-connection');
-    expect(set.data.size).toBe(count);
-    expect(config(set.data.get(first.subject)!).connectionId).toBe(
-      'another-connection',
-    );
-  });
+    expect(set.request).not.toHaveBeenCalled();
 
-  it('preserves typed principals and keeps Public separate from authenticated namespaces', async () => {
-    const set = setup('platform');
-    await set.app.openPrincipal('slot');
-    set.request.mockResolvedValueOnce({
-      status: 200,
-      headers: {},
-      body: { id: '7', label: 'Ada' },
-    });
-    await set.app.openPrincipal('slot');
-    const calls = set.request.mock.calls.length;
-    await set.app.openPublic();
-    expect(set.request).toHaveBeenCalledTimes(calls);
-    expect(nodes(set.data, 'principal')).toHaveLength(3);
-    expect(
-      new Set(
-        nodes(set.data, 'principal').map(([, row]) => row[prop('source-key')]),
-      ).size,
-    ).toBe(3);
+    for (const [subject, row] of nodes(set.data, 'collection')) {
+      expect(JSON.parse(row[prop('source-key')] as string)).toMatchObject({
+        version: 3,
+        kind: 'collection',
+        resource: config(row).resource,
+      });
+      expect(JSON.parse(row[prop('source-key')] as string)).not.toHaveProperty(
+        'parentSourceKeyHash',
+      );
 
-    for (const [, row] of nodes(set.data, 'collection')) {
-      if ((config(row).principal as { kind: string }).kind === 'public')
-        expect(config(row).connectionId).toBeUndefined();
+      for (const [rule, props] of set.data) {
+        if (props[P + 'parent'] === subject && config(props)?.kind === 'rule')
+          expect(row[P + 'table-views']).toContain(rule);
+      }
     }
   });
-
-  it('creates saved child navigation during explicit Sync and reads only the selected root collection', async () => {
-    const set = setup();
-    expect(await set.app.refresh()).toMatchObject({
-      added: 1,
-      rows: 1,
-      incomplete: false,
-    });
-    expect(set.request.mock.calls.map(([call]) => call.path)).toEqual([
-      'v2/me/teams',
-    ]);
-    const [rowSubject, row] = nodes(set.data, 'record')[0];
-    const [childSubject, child] = nodes(set.data, 'collection')[0];
-    expect(child[P + 'parent']).toBe(rowSubject);
-    expect(row[prop('open-target')]).toBe(childSubject);
-    expect(config(child).navigation).toMatchObject({
-      kind: 'responseLink',
-      collection: 'teamWorkspaces',
-    });
-    expect(set.data.get(root)![prop('collection-view')]).toMatchObject({
-      rowClass: set.context.apiSchema.classes.team,
-      title: 'Teams',
-      columns: expect.arrayContaining([
-        { property: set.context.apiSchema.properties.name, label: 'name' },
-      ]),
-    });
-  });
-
-  it('executes a catalog-declared POST list read through the same shared bridge', async () => {
-    const document = apiDocument();
-    const definition = (
-      document.components!.crudResources as Record<
-        string,
-        { collections: Record<string, unknown> }
-      >
-    ).team;
-    definition.collections.myTeams = {
-      urlTemplate: '/me/teams',
-      listMethod: 'POST',
-      listBody: { filter: 'all' },
-    };
-    const path = document.paths['/me/teams'];
-    path.post = path.get;
-    delete path.get;
-    const set = setup('collection', {
-      document,
-      collection: bindCollection(document, { collection: 'myTeams' }),
-    });
-    expect(await set.app.refresh()).toMatchObject({ added: 1 });
-    expect(set.request).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'POST',
-        path: 'v2/me/teams',
-        body: JSON.stringify({ filter: 'all' }),
-      }),
+  it('shares one row between root and related reads and saves intents without creating child tables', async () => {
+    const set = await ready();
+    const teamTable = tableFor(set, 'team'),
+      workspaceTable = tableFor(set, 'workspace');
+    await worker(set, workspaceTable, ruleFor(set, workspaceTable)).refresh();
+    const initial = nodes(set.data, 'record').find(
+      ([, props]) => config(props).resource === 'workspace',
+    )!;
+    const initialLocalId = initial[1][P + 'localId'];
+    const tableCount = nodes(set.data, 'collection').length;
+    await worker(set, teamTable, ruleFor(set, teamTable)).refresh();
+    const teamRow = nodes(set.data, 'record').find(
+      ([, props]) => config(props).resource === 'team',
+    )!;
+    const intent = (
+      teamRow[1][prop('navigation-intents')] as Array<{
+        resource: string;
+        definition: unknown;
+        label: string;
+      }>
+    ).find(item => item.resource === 'workspace')!;
+    expect(intent).toBeTruthy();
+    expect(nodes(set.data, 'collection')).toHaveLength(tableCount);
+    expect(
+      nodes(set.data, 'collection').every(
+        ([, row]) => row[P + 'parent'] !== teamRow[0],
+      ),
+    ).toBe(true);
+    // Simulate the native explicit Open materializing the already stored intent.
+    const related = await set.app.ensureRule(
+      await set.store.getResource(workspaceTable),
+      intent.definition,
+      intent.label,
     );
-  });
-
-  it('resolves the source detail Link only during child Sync and never reads sibling collections', async () => {
-    const set = setup();
-    await set.app.refresh();
-    const [childSubject] = nodes(set.data, 'collection')[0];
     set.request.mockClear();
-    const child = childApp(set, childSubject);
-    expect(await child.refresh()).toMatchObject({ added: 1 });
-    expect(set.request.mock.calls.map(([call]) => call.path)).toEqual([
+    expect(
+      await worker(set, workspaceTable, related.subject).refresh(),
+    ).toMatchObject({ added: 0, rows: 1, incomplete: false });
+    expect(set.request.mock.calls.map(([request]) => request.path)).toEqual([
       'v2/names/old-handle',
       'v2/names/new-handle/workspaces',
     ]);
-    expect(nodes(set.data, 'collection')).toHaveLength(2);
-    const tasks = nodes(set.data, 'collection').find(
-      ([, row]) =>
-        (config(row).navigation as { collection: string }).collection ===
-        'tasks',
-    )![1];
-    expect(config(tasks).navigation).toMatchObject({
-      kind: 'direct',
-      bound: { path: '/workspaces/200/tasks' },
-    });
-    expect(set.data.get(childSubject)![prop('collection-view')]).toMatchObject({
-      columns: expect.arrayContaining([
-        {
-          property: set.context.apiSchema.properties.active,
-          label: 'active',
-          format: 'enum',
-          labels: { true: 'Active', false: 'Inactive' },
-        },
-        {
-          property: set.context.apiSchema.properties['updated-at'],
-          label: 'updated_at',
-        },
+    const workspaces = nodes(set.data, 'record').filter(
+      ([, props]) => config(props).resource === 'workspace',
+    );
+    expect(workspaces).toHaveLength(1);
+    expect(workspaces[0][0]).toBe(initial[0]);
+    expect(workspaces[0][1][P + 'localId']).toBe(initialLocalId);
+    expect(workspaces[0][1][prop('rule-memberships')]).toEqual(
+      expect.arrayContaining([
+        ruleFor(set, workspaceTable, 'myWorkspaces'),
+        related.subject,
       ]),
+    );
+    expect(workspaces[0][1][prop('entity-table')]).toBe(workspaceTable);
+  });
+  it('completes a fanout only after every selected partition and retains old membership on partial refresh', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'task');
+    const from = {
+      version: 1,
+      resource: 'workspace',
+      source: {
+        kind: 'bound',
+        bound: bindCollection(set.context.document, {
+          collection: 'myWorkspaces',
+        }),
+      },
+    };
+    const rule = await set.app.ensureRule(
+      await set.store.getResource(table),
+      {
+        version: 1,
+        resource: 'task',
+        source: {
+          kind: 'fanout',
+          from,
+          via: { collection: 'tasks', kind: 'identity' },
+        },
+      },
+      'Tasks in my workspaces',
+    );
+    let fail = false;
+    set.request.mockImplementation(async request => {
+      if (request.path === 'v2/me/workspaces')
+        return {
+          status: 200,
+          headers: {},
+          body: [workspace, { ...workspace, id: 201 }],
+        };
+      if (fail && request.path.includes('/201/'))
+        return { status: 503, headers: {}, body: {} };
+
+      return {
+        status: 200,
+        headers: {},
+        body: [{ id: fail ? 'new-task' : 'same-local-id', name: 'Task' }],
+      };
     });
+    expect(await worker(set, table, rule.subject).refresh()).toMatchObject({
+      incomplete: false,
+      rows: 2,
+    });
+    fail = true;
+    expect(await worker(set, table, rule.subject).refresh()).toMatchObject({
+      incomplete: true,
+      rows: 1,
+    });
+    const rows = nodes(set.data, 'record').filter(
+      ([, props]) => config(props).resource === 'task',
+    );
+    expect(rows).toHaveLength(3);
+    expect(
+      rows.every(([, props]) =>
+        (props[prop('rule-memberships')] as string[]).includes(rule.subject),
+      ),
+    ).toBe(true);
   });
 
-  it('keeps every nested storage lookup within the existing bridge query limit', async () => {
-    const set = setup();
-    const query = set.store.query.getMockImplementation()!;
-    set.store.query.mockImplementation(async args => {
-      if (typeof args.value === 'string' && args.value.length > 2000)
-        throw new Error('value must be text of at most 2000 characters');
-
-      return query(args);
-    });
-    await set.app.refresh();
-    const [workspaces] = nodes(set.data, 'collection')[0];
-    await childApp(set, workspaces).refresh();
-    const [tasks] = nodes(set.data, 'collection').find(
-      ([, row]) =>
-        (config(row).navigation as { collection: string }).collection ===
-        'tasks',
+  it('adopts a uniquely proven old row without changing its subject, local ID or user fields', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'workspace'),
+      rule = ruleFor(set, table);
+    await worker(set, table, rule).refresh();
+    const [subject, row] = nodes(set.data, 'record').find(
+      ([, props]) => config(props).resource === 'workspace',
     )!;
-    await childApp(set, tasks).refresh();
-    expect(nodes(set.data, 'record')).toHaveLength(3);
+    const canonicalSourceKey = row[prop('source-key')] as string,
+      localId = row[P + 'localId'];
+    row[prop('source-key')] = 'old-row-key';
+    row[prop('source-config')] = {
+      version: 2,
+      principal,
+      record: workspace,
+      resource: 'workspace',
+    };
+    row[P + 'description'] = 'Retain user note';
+    Object.assign(set.context, {
+      flatIdentityAliases: [
+        {
+          canonicalSourceKey,
+          subject,
+          previousSourceKey: 'old-row-key',
+          localId,
+          sourceConfigFingerprint: sourceConfigFingerprint(
+            row[prop('source-config')],
+          ),
+        },
+      ],
+    });
+    await worker(set, table, rule).refresh();
+    expect(nodes(set.data, 'record')).toHaveLength(1);
+    expect(row[prop('source-key')]).toBe(canonicalSourceKey);
+    expect(row[P + 'localId']).toBe(localId);
+    expect(row[P + 'description']).toBe('Retain user note');
+    expect(config(row).version).toBe(3);
+    expect(set.data.has(subject)).toBe(true);
+  });
 
-    for (const [, row] of nodes(set.data, 'record')) {
-      const key = row[prop('source-key')] as string;
-      expect(key.length).toBeLessThanOrEqual(2000);
-      expect(JSON.parse(key).parentSourceKeyHash).toBe(
-        sourceConfigFingerprint(config(row).parentSourceKey),
+  it('uses string transport context for composed GitHub Issue navigation while preserving typed scoped identity', async () => {
+    const document = prepareDocument(
+      JSON.parse(
+        readFileSync(
+          new NodeURL(
+            './fixtures/github-syncables-catalog.json',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      ),
+    );
+    const bound = bindCollection(document, {
+      collection: 'repositoryIssues',
+      context: { repository_id: '456' },
+    });
+    const set = setup('collection', {
+      document,
+      collection: bound,
+      principal: { kind: 'public' },
+      connectionId: undefined,
+    });
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [
+        {
+          id: 9001,
+          number: 15,
+          title: 'Scoped issue',
+          state: 'open',
+          body: 'Body',
+          updated_at: '2026-11-19T10:00:00Z',
+          html_url: 'https://github.com/ontola/atomic-server/issues/15',
+        },
+      ],
+    });
+    expect(await set.app.refresh()).toMatchObject({
+      rows: 1,
+      incomplete: false,
+    });
+    const row = nodes(set.data, 'record')[0][1];
+    expect(config(row).context).toMatchObject({ repository_id: 456 });
+    expect(config(row).entityIdentity).toMatchObject({
+      values: [
+        ['repository_id', 456],
+        ['issue_number', 15],
+      ],
+    });
+    expect(row[prop('navigation-intents')]).toMatchObject([
+      {
+        resource: 'issueComment',
+        definition: {
+          source: {
+            kind: 'related',
+            origin: {
+              context: { repository_id: 456 },
+              read: { pathParams: { repository_id: '456' } },
+            },
+          },
+        },
+      },
+    ]);
+  });
+
+  it('preserves absent relationship binding fields across narrower overlapping observations', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'team'),
+      rule = ruleFor(set, table);
+    await worker(set, table, rule).refresh();
+    const row = nodes(set.data, 'record').find(
+      ([, props]) => config(props).resource === 'team',
+    )![1];
+    expect(row[prop('navigation-intents')]).toHaveLength(1);
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ id: 100 }],
+    });
+    await worker(set, table, rule).refresh();
+    expect(config(row).record).toMatchObject({ id: 100, handle: 'old-handle' });
+    expect(row[prop('navigation-intents')]).toHaveLength(1);
+  });
+
+  it('keeps identical remote IDs distinct when required canonical identity context differs', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'task');
+
+    for (const workspaceId of ['200', '201']) {
+      const bound = bindCollection(set.context.document, {
+        collection: 'tasks',
+        context: { workspace_id: workspaceId },
+      });
+      const rule = await set.app.ensureRule(
+        await set.store.getResource(table),
+        { version: 1, resource: 'task', source: { kind: 'bound', bound } },
+        'Workspace ' + workspaceId,
       );
-      expect(typeof config(row).parentSourceKey).toBe('string');
+      await worker(set, table, rule.subject).refresh();
+    }
+
+    const tasks = nodes(set.data, 'record').filter(
+      ([, props]) => config(props).resource === 'task',
+    );
+    expect(tasks).toHaveLength(2);
+    expect(new Set(tasks.map(([, row]) => row[prop('source-key')])).size).toBe(
+      2,
+    );
+    expect(tasks.every(([, row]) => row[P + 'parent'] === table)).toBe(true);
+  });
+  it('replays durable evidence idempotently and preserves user fields across absent and explicit-null updates', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'workspace'),
+      rule = ruleFor(set, table);
+    await worker(set, table, rule).refresh();
+    const [subject, row] = nodes(set.data, 'record').find(
+      ([, props]) => config(props).resource === 'workspace',
+    )!;
+    const key = row[prop('source-key')],
+      localId = row[P + 'localId'];
+    row[P + 'description'] = 'A user note';
+    const initialCount = nodes(set.data, 'record').length;
+    expect(await worker(set, table, rule).refresh()).toMatchObject({
+      added: 0,
+      changed: 0,
+      unchanged: 1,
+    });
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ id: 200, name: 'A newer name' }],
+    });
+    await worker(set, table, rule).refresh();
+    expect(row[set.context.apiSchema.properties.active]).toBe(true);
+    expect(row[P + 'name']).toBe('A newer name');
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ id: 200, name: 'A newer name', active: null }],
+    });
+    await worker(set, table, rule).refresh();
+    expect(row[set.context.apiSchema.properties.active]).toBeUndefined();
+    expect(row[P + 'description']).toBe('A user note');
+    expect(row[prop('source-key')]).toBe(key);
+    expect(row[P + 'localId']).toBe(localId);
+    expect(set.data.has(subject)).toBe(true);
+    expect(nodes(set.data, 'record')).toHaveLength(initialCount);
+    expect(nodes(set.data, 'syncable-observation').length).toBeGreaterThan(3);
+    expect(nodes(set.data, 'syncable-sync-run').length).toBeGreaterThan(3);
+  });
+  it('replaces only a complete selected filter membership without deleting retained rows', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'workspace'),
+      rootRule = ruleFor(set, table);
+    const alternateBound = bindCollection(set.context.document, {
+      collection: 'teamWorkspaces',
+      context: { handle: 'old-handle' },
+    });
+    const other = await set.app.ensureRule(
+      await set.store.getResource(table),
+      {
+        version: 1,
+        resource: 'workspace',
+        source: { kind: 'bound', bound: alternateBound },
+      },
+      'Another scope',
+    );
+    await worker(set, table, rootRule).refresh();
+    await worker(set, table, other.subject).refresh();
+    const [subject, row] = nodes(set.data, 'record').find(
+      ([, props]) => config(props).resource === 'workspace',
+    )!;
+    set.request.mockResolvedValue({ status: 200, headers: {}, body: [] });
+    await worker(set, table, rootRule).refresh();
+    expect(set.data.has(subject)).toBe(true);
+    expect(row[prop('rule-memberships')]).toEqual([other.subject]);
+    expect(row[set.context.apiSchema.properties.name]).toBe('A workspace');
+  });
+  it('retains old memberships and accepted partial observations when a later page fails', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'workspace'),
+      rule = ruleFor(set, table);
+    await worker(set, table, rule).refresh();
+    set.request.mockImplementation(async request =>
+      request.query?.page === '2'
+        ? { status: 503, headers: {} as Record<string, string>, body: {} }
+        : {
+            status: 200,
+            headers: {
+              link: '<https://api.example/v2/me/workspaces?page=2>; rel="next"',
+            },
+            body: [{ ...workspace, id: 201, name: 'Accepted prefix' }],
+          },
+    );
+    expect(await worker(set, table, rule).refresh()).toMatchObject({
+      incomplete: true,
+    });
+    const rows = nodes(set.data, 'record').filter(
+      ([, props]) => config(props).resource === 'workspace',
+    );
+    expect(rows).toHaveLength(2);
+    expect(
+      rows.every(([, row]) =>
+        (row[prop('rule-memberships')] as string[]).includes(rule),
+      ),
+    ).toBe(true);
+  });
+  it('retains cached rows and membership after unauthorized reads', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'workspace'),
+      rule = ruleFor(set, table);
+    await worker(set, table, rule).refresh();
+    const before = structuredClone(nodes(set.data, 'record'));
+    set.request.mockResolvedValue({
+      status: 401,
+      headers: {},
+      body: { error: 'credential_refresh_failed' },
+    });
+    const app = worker(set, table, rule);
+
+    try {
+      await app.refresh();
+    } catch {
+      /* A provider failure may be surfaced as an error or incomplete snapshot. */
+    }
+
+    expect(nodes(set.data, 'record')).toEqual(before);
+    expect((await app.status()).error).toContain('401');
+  });
+  it('rejects stale responses and leaves accepted data unchanged after pausing while a read is pending', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'workspace'),
+      rule = ruleFor(set, table);
+    await worker(set, table, rule).refresh();
+    const before = structuredClone(nodes(set.data, 'record'));
+    let release!: (value: {
+      status: number;
+      headers: Record<string, string>;
+      body: unknown;
+    }) => void;
+    set.request.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          release = resolve;
+        }),
+    );
+    const pending = worker(set, table, rule).refresh();
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    const status = set.data.get(rule)![prop('mirror-status')] as Record<
+      string,
+      unknown
+    >;
+    status.paused = true;
+    release({
+      status: 200,
+      headers: {},
+      body: [{ ...workspace, name: 'Must not be applied' }],
+    });
+    await expect(pending).rejects.toThrow('no longer current');
+    expect(nodes(set.data, 'record')).toEqual(before);
+  });
+  it('pauses one rule while another rule updates their shared entity', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'workspace'),
+      first = ruleFor(set, table);
+    const bound = bindCollection(set.context.document, {
+      collection: 'teamWorkspaces',
+      context: { handle: 'another' },
+    });
+    const second = await set.app.ensureRule(
+      await set.store.getResource(table),
+      { version: 1, resource: 'workspace', source: { kind: 'bound', bound } },
+      'Other filter',
+    );
+    await worker(set, table, first).refresh();
+    set.data.get(first)![prop('mirror-status')] = { paused: true };
+    await expect(worker(set, table, first).refresh()).rejects.toThrow(
+      'no longer current',
+    );
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ ...workspace, name: 'Changed by active filter' }],
+    });
+    await worker(set, table, second.subject).refresh();
+    const row = nodes(set.data, 'record').find(
+      ([, props]) => config(props).resource === 'workspace',
+    )![1];
+    expect(row[P + 'name']).toBe('Changed by active filter');
+    expect(row[prop('rule-memberships')]).toEqual(
+      expect.arrayContaining([first, second.subject]),
+    );
+    expect(
+      (set.data.get(first)![prop('mirror-status')] as { paused: boolean })
+        .paused,
+    ).toBe(true);
+  });
+  it('keeps a manually moved canonical entity instead of creating a duplicate', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'workspace'),
+      rule = ruleFor(set, table);
+    await worker(set, table, rule).refresh();
+    const [subject, row] = nodes(set.data, 'record').find(
+      ([, props]) => config(props).resource === 'workspace',
+    )!;
+    row[P + 'parent'] = 'atomic:outside-table';
+    set.data.set('atomic:outside-table', { [P + 'parent']: root });
+    const result = await worker(set, table, rule).refresh();
+    expect(result.protected).toBe(1);
+    expect(result.error).toContain('Moved cached rows');
+    expect(
+      nodes(set.data, 'record').filter(
+        ([, props]) => config(props).resource === 'workspace',
+      ),
+    ).toHaveLength(1);
+    expect(set.data.get(subject)![P + 'parent']).toBe('atomic:outside-table');
+  });
+  it('preserves the old saved read rule before table rekey and adopts row identity metadata without provider reads', async () => {
+    const set = await ready();
+    const table = tableFor(set, 'workspace'),
+      rule = ruleFor(set, table);
+    await worker(set, table, rule).refresh();
+    const [subject, row] = nodes(set.data, 'record').find(
+      ([, props]) => config(props).resource === 'workspace',
+    )!;
+    const original = structuredClone(config(row));
+    const canonicalSourceKey = row[prop('source-key')] as string;
+    const canonicalTableKey = set.data.get(table)![
+      prop('source-key')
+    ] as string;
+    const bound = bindCollection(set.context.document, {
+      collection: 'teamWorkspaces',
+      context: { handle: 'old-handle' },
+    });
+    const oldTableKey = sourceKey({
+      ...set.context,
+      kind: 'collection',
+      collection: {
+        name: bound.collection,
+        resource: bound.resource,
+        context: bound.pathParams,
+      },
+    });
+    const oldRowKey = sourceKey({
+      ...set.context,
+      kind: 'record',
+      collection: { name: bound.collection, resource: bound.resource },
+      parentSourceKey: oldTableKey,
+      remoteId: 200,
+    });
+    const tableProps = set.data.get(table)!;
+    tableProps[prop('source-key')] = oldTableKey;
+    tableProps[P + 'localId'] =
+      'syncables:node:' + encodeURIComponent(oldTableKey);
+    tableProps[prop('source-config')] = {
+      version: 2,
+      proxyOrigin: origin,
+      platform: set.context.platform,
+      principal,
+      connectionId: 'slot',
+      collection: bound,
+    };
+    row[prop('source-key')] = oldRowKey;
+    row[P + 'localId'] = 'syncables:node:' + encodeURIComponent(oldRowKey);
+    row[prop('source-config')] = {
+      version: 2,
+      proxyOrigin: origin,
+      platform: set.context.platform,
+      principal,
+      connectionId: 'slot',
+      parentSourceKey: oldTableKey,
+      resource: 'workspace',
+      record: workspace,
+      context: bound.pathParams,
+      managedProperties: original.managedProperties,
+    };
+    row[P + 'description'] = 'Keep user field';
+    const oldLocalId = row[P + 'localId'];
+    Object.assign(set.context, {
+      flatIdentityAliases: [
+        {
+          canonicalSourceKey: canonicalTableKey,
+          subject: table,
+          previousSourceKey: oldTableKey,
+          localId: tableProps[P + 'localId'],
+          sourceConfigFingerprint: sourceConfigFingerprint(config(tableProps)),
+        },
+        {
+          canonicalSourceKey,
+          subject,
+          previousSourceKey: oldRowKey,
+          localId: oldLocalId,
+          sourceConfigFingerprint: sourceConfigFingerprint(config(row)),
+          entityTableSourceKey: canonicalTableKey,
+          canonicalConfig: {
+            ...original,
+            context: bound.pathParams,
+            read: bound,
+          },
+        },
+      ],
+      flatAdoptionRules: [
+        {
+          tableSourceKey: canonicalTableKey,
+          definition: {
+            version: 1,
+            resource: 'workspace',
+            source: { kind: 'bound', bound },
+          },
+          label: 'Previously synced collection',
+        },
+      ],
+    });
+    set.saves.length = 0;
+    set.request.mockClear();
+    const result = await set.app.discoverPrincipals();
+    expect(result.errors).toEqual([]);
+    expect(set.request).not.toHaveBeenCalled();
+    const adoptedRule = ruleFor(set, table, 'teamWorkspaces');
+    const tableWrites = set.saves.filter(save => save.subject === table);
+    const firstRuleWrite = tableWrites.findIndex(save =>
+      (save.props?.[P + 'table-views'] as string[] | undefined)?.includes(
+        adoptedRule,
+      ),
+    );
+    const firstRekey = tableWrites.findIndex(
+      save =>
+        (save.props?.[prop('source-config')] as { version?: number })
+          ?.version === 3,
+    );
+    expect(firstRuleWrite).toBeGreaterThanOrEqual(0);
+    expect(firstRuleWrite).toBeLessThan(firstRekey);
+    expect(row[prop('source-key')]).toBe(canonicalSourceKey);
+    expect(row[P + 'localId']).toBe(oldLocalId);
+    expect(config(row).version).toBe(3);
+    expect(config(row).read).toEqual(bound);
+    expect(row[P + 'description']).toBe('Keep user field');
+    expect(row[prop('entity-table')]).toBe(table);
+  });
+
+  it('blocks fresh shared-table allocation while older same-principal collections remain unresolved', async () => {
+    const set = setup('platform');
+    set.data.set('atomic:older-table', {
+      [P + 'parent']: root,
+      [P + 'isA']: [tableClass],
+      [prop('node-kind')]: 'collection',
+      [prop('source-config')]: {
+        version: 2,
+        principal,
+        collection: { resource: 'team', collection: 'myTeams', pathParams: {} },
+      },
+    });
+    await expect(set.app.openPrincipal('slot')).rejects.toThrow(
+      'need adoption',
+    );
+    expect(
+      nodes(set.data, 'collection').filter(
+        ([, props]) =>
+          config(props).resource === 'team' && config(props).version === 3,
+      ),
+    ).toHaveLength(0);
+    expect(
+      nodes(set.data, 'collection').some(
+        ([, props]) => config(props).resource === 'workspace',
+      ),
+    ).toBe(true);
+    expect(
+      nodes(set.data, 'collection').some(
+        ([, props]) => config(props).resource === 'task',
+      ),
+    ).toBe(true);
+  });
+  it('retains unsupported historical Public data and refuses a competing destination when native blocks that exact resource', async () => {
+    const old = 'atomic:v1-public-cache';
+    const publicPrincipal = { kind: 'public' };
+    const set = setup('principal', {
+      principal: publicPrincipal,
+      connectionId: undefined,
+      legacySources: [
+        {
+          subject: old,
+          kind: 'collection',
+          principal: publicPrincipal,
+          collection: {
+            name: 'tasks',
+            resource: 'task',
+            context: { workspace_id: '200' },
+          },
+        },
+      ],
+      flatMigrationBlocks: [
+        {
+          principal: publicPrincipal,
+          resource: 'task',
+          message: 'Historical collection requires migration review',
+        },
+      ],
+    });
+    const saved = {
+      [P + 'parent']: root,
+      [P + 'localId']: 'historical-public-local-id',
+      [P + 'description']: 'Keep saved public values',
+      [prop('source-key')]: 'old-v1-public-source',
+      [prop('node-kind')]: 'public-mirror',
+    };
+    set.data.set(old, saved);
+    await expect(
+      set.app.createCollection('tasks', { workspace_id: '200' }),
+    ).rejects.toThrow('migration review');
+    expect(set.store.newResource).not.toHaveBeenCalled();
+    expect(set.data.get(old)).toEqual(saved);
+    expect(set.request).not.toHaveBeenCalled();
+  });
+
+  it('creates a named Public saved filter from generic catalog entrypoint inputs and canonical binding', async () => {
+    const document = withPublicEntrypoint();
+    const set = setup('principal', {
+      document,
+      principal: { kind: 'public' },
+      connectionId: undefined,
+    });
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: { id: 200 },
+    });
+    const rule = await set.app.createCollection(
+      'tasks',
+      { team: 'one', space: 'two' },
+      '/public/{team}/{space}',
+      'Public tasks',
+    );
+    expect(set.request.mock.calls.map(([request]) => request.path)).toEqual([
+      'v2/public/one/two',
+    ]);
+    expect(set.request.mock.calls[0][0].connectionId).toBeUndefined();
+    const saved = set.data.get(rule.subject)!;
+    expect(saved[P + 'name']).toBe('Public tasks');
+    expect(config(saved)).toMatchObject({
+      version: 3,
+      kind: 'rule',
+      resource: 'task',
+      definition: {
+        source: {
+          kind: 'bound',
+          bound: { pathParams: { workspace_id: '200' } },
+        },
+      },
+    });
+    const tables = nodes(set.data, 'collection');
+    expect(tables).toHaveLength(1);
+    expect(config(tables[0][1]).principal).toEqual({ kind: 'public' });
+    expect(config(tables[0][1]).connectionId).toBeUndefined();
+  });
+  it('shows queued state without allowing a duplicate start and preserves selected-filter navigation', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const set = setup();
+      set.store.execution.mockResolvedValue({ running: false, queued: true });
+      const element = document.createElement('div');
+      await view({ root: element, store: set.store });
+      const queued = [...element.querySelectorAll('button')].find(
+        button => button.textContent === 'Queued',
+      )!;
+      expect(queued.disabled).toBe(true);
+      expect(set.request).not.toHaveBeenCalled();
+      const browse = [...element.querySelectorAll('button')].find(
+        button => button.textContent === 'Browse stored data',
+      )!;
+      browse.click();
+      await Promise.resolve();
+      expect(set.store.ui.openResource).toHaveBeenCalledWith(
+        'atomic:initial-rule',
+      );
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
     }
   });
 
-  it('refreshes mutable navigation addresses without changing child table identity', async () => {
+  it('opens saved-filter controls without provider reads and pauses only the selected rule', async () => {
     const set = setup();
-    await set.app.refresh();
-    const [childSubject, child] = nodes(set.data, 'collection')[0];
-    const key = child[prop('source-key')];
-    const localId = child[P + 'localId'];
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {},
-      body: [{ ...team, handle: 'renamed' }],
-    });
-    await set.app.refresh();
-    expect(nodes(set.data, 'collection')).toHaveLength(1);
-    expect(child[prop('source-key')]).toBe(key);
-    expect(child[P + 'localId']).toBe(localId);
-    expect(config(set.data.get(childSubject)!).navigation).toMatchObject({
-      source: { path: '/names/renamed' },
-    });
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(set.request).not.toHaveBeenCalled();
+    const pauseButton = [...element.querySelectorAll('button')].find(
+      button => button.textContent === 'Pause',
+    )!;
+    pauseButton.click();
+    await vi.waitFor(() => expect(element.textContent).toContain('Resume'));
+    expect(set.store.execution).toHaveBeenCalledWith('cancel');
+    expect(
+      (
+        set.data.get('atomic:initial-rule')![prop('mirror-status')] as {
+          paused: boolean;
+        }
+      ).paused,
+    ).toBe(true);
+    expect(set.data.get(root)![prop('mirror-status')]).toBeUndefined();
   });
+});
 
-  it('upserts typed fields idempotently and preserves user values and subjects', async () => {
-    const set = setup();
-    await set.app.refresh();
-    const [rowSubject, row] = nodes(set.data, 'record')[0];
-    row['atomic:user-note'] = 'Keep this';
-    const localId = row[P + 'localId'];
-    const before = set.data.size;
-    expect(await set.app.refresh()).toMatchObject({
-      unchanged: 1,
-      added: 0,
-      changed: 0,
-    });
-    expect(set.data.size).toBe(before);
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {},
-      body: [{ ...team, name: 'Renamed' }],
-    });
-    expect(await set.app.refresh()).toMatchObject({ changed: 1 });
-    expect(set.data.get(rowSubject)).toMatchObject({
-      [P + 'name']: 'Renamed',
-      'atomic:user-note': 'Keep this',
-      [P + 'localId']: localId,
-    });
-  });
-
-  it('uses a declared string column label when the library falls back to an ID', async () => {
-    const set = setup();
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {},
-      body: [{ id: 100, handle: 'catalog-label' }],
-    });
-    await set.app.refresh();
-    expect(nodes(set.data, 'record')[0][1][P + 'name']).toBe('catalog-label');
-  });
-
-  it('blocks new destinations while historical sources need review', async () => {
-    const set = setup('principal', { legacyMigrationBlocked: true });
-    await expect(set.app.createCollection('myTeams')).rejects.toThrow(
-      'historical source warnings',
-    );
-    expect(set.store.newResource).not.toHaveBeenCalled();
-  });
-
-  it('clears null or absent previously managed fields while preserving user properties', async () => {
-    const set = setup('collection', {
-      collection: bindCollection(apiDocument(), { collection: 'myWorkspaces' }),
-    });
-    await set.app.refresh();
-    const [, row] = nodes(set.data, 'record')[0];
-    row['atomic:user-note'] = 'Keep this';
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {},
-      body: [{ id: 200, name: 'A workspace', active: null }],
-    });
-    expect(await set.app.refresh()).toMatchObject({ changed: 1 });
-    expect(row[set.context.apiSchema.properties.active]).toBeUndefined();
-    expect(row[set.context.apiSchema.properties['updated-at']]).toBeUndefined();
-    expect(row['atomic:user-note']).toBe('Keep this');
-    expect(await set.app.refresh()).toMatchObject({ unchanged: 1 });
-  });
-
-  it('retains stable rows after same-drive moves without writing outside the selected root', async () => {
-    const set = setup();
-    await set.app.refresh();
-    const [, row] = nodes(set.data, 'record')[0];
-    row[P + 'parent'] = 'atomic:another-parent';
-    const before = set.data.size;
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {},
-      body: [{ ...team, name: 'Remote update' }],
-    });
-    expect(await set.app.refresh()).toMatchObject({ added: 0 });
-    expect(set.data.size).toBe(before);
-    expect(row[P + 'name']).toBe(team.name);
-    expect(row[P + 'parent']).toBe('atomic:another-parent');
-  });
-
-  it('adopts canonical source format through explicit aliases while preserving subject and local ID', async () => {
-    const set = setup();
-    await set.app.refresh();
-    const [subject, row] = nodes(set.data, 'record')[0];
-    const current = row[prop('source-key')] as string;
-    row[prop('source-key')] = 'legacy-source-key';
-    row[P + 'localId'] = 'legacy-local-id';
-    const migrated = createSyncApp(set.store, {
-      ...set.context,
-      identityAliases: { [current]: ['legacy-source-key'] },
-    });
-    const count = set.data.size;
-    expect(await migrated.refresh()).toMatchObject({ added: 0, changed: 1 });
-    expect(set.data.size).toBe(count);
-    expect(set.data.get(subject)![P + 'localId']).toBe('legacy-local-id');
-    expect(row[prop('source-key')]).toBe(current);
-  });
-
+describe('verified principal migration compatibility', () => {
   it.each([false, true])(
     'migrates a host-validated principal alias with cross-slot identity proof (%s)',
     async crossSlot => {
@@ -1085,458 +1719,4 @@ describe('catalog-driven Sync through the shared app bridge', () => {
       expect(set.data.get(first.subject)![P + 'name']).toBe('Ada');
     },
   );
-
-  it('reuses host-described flat legacy rows without interpreting provider IDs or fields', async () => {
-    const set = setup();
-    await set.app.refresh();
-    const [subject, row] = nodes(set.data, 'record')[0];
-    const canonical = row[prop('source-key')] as string;
-    const parentSourceKey = config(row).parentSourceKey;
-    delete row[prop('source-key')];
-    row[P + 'localId'] = 'opaque-legacy-local-id';
-    row[P + 'isA'] = ['atomic:legacy-class'];
-    row[prop('node-kind')] = 'old-row';
-    const app = createSyncApp(set.store, {
-      ...set.context,
-      legacySources: [
-        {
-          subject,
-          localId: 'opaque-legacy-local-id',
-          kind: 'record',
-          connectionId: 'slot',
-          collection: { name: 'myTeams', resource: 'team' },
-          parentSourceKey,
-          remoteId: 100,
-        },
-      ],
-    });
-    expect(await app.refresh()).toMatchObject({ added: 0, changed: 1 });
-    expect(row[prop('source-key')]).toBe(canonical);
-    expect(row[P + 'localId']).toBe('opaque-legacy-local-id');
-    expect(row[P + 'isA']).toEqual(
-      expect.arrayContaining([
-        'atomic:legacy-class',
-        set.context.apiSchema.classes.team,
-      ]),
-    );
-    expect(nodes(set.data, 'record')).toHaveLength(1);
-  });
-
-  it('refuses to duplicate a matching historical destination whose saved identity changed', async () => {
-    const set = setup();
-    const subject = 'atomic:changed-legacy';
-    set.data.set(subject, {
-      [P + 'parent']: root,
-      [P + 'localId']: 'changed-local-id',
-      [prop('source-key')]: 'old-key',
-    });
-    const parentSourceKey = sourceKey({
-      proxyOrigin: origin,
-      platform: set.context.platform,
-      principal,
-      kind: 'collection',
-      collection: collectionIdentity(set.context.collection),
-    });
-    const app = createSyncApp(set.store, {
-      ...set.context,
-      legacySources: [
-        {
-          subject,
-          sourceKey: 'old-key',
-          localId: 'expected-old-local-id',
-          kind: 'record',
-          connectionId: 'slot',
-          collection: { name: 'myTeams', resource: 'team' },
-          parentSourceKey,
-          remoteId: 100,
-        },
-      ],
-    });
-    await expect(app.refresh()).rejects.toThrow('no duplicate was created');
-    expect(set.store.newResource).not.toHaveBeenCalled();
-  });
-
-  it.each(['configuration', 'identity'])(
-    'rechecks a legacy alias %s immediately before adoption',
-    async changed => {
-      const set = setup();
-      const subject = 'atomic:legacy';
-      const raw = { slot: 'a' };
-      set.data.set(subject, {
-        [P + 'parent']: root,
-        [P + 'localId']: 'legacy',
-        [prop('source-key')]: 'old-key',
-        [prop('source-config')]:
-          changed === 'configuration' ? { slot: 'b' } : raw,
-        'atomic:legacy-identity': changed === 'identity' ? 200 : 100,
-      });
-      const parentSourceKey = sourceKey({
-        proxyOrigin: origin,
-        platform: set.context.platform,
-        principal,
-        kind: 'collection',
-        collection: collectionIdentity(set.context.collection),
-      });
-      const app = createSyncApp(set.store, {
-        ...set.context,
-        legacySources: [
-          {
-            subject,
-            sourceKey: 'old-key',
-            localId: 'legacy',
-            kind: 'record',
-            connectionId: 'slot',
-            collection: { name: 'myTeams', resource: 'team' },
-            parentSourceKey,
-            remoteId: 100,
-            sourceConfigFingerprint: sourceConfigFingerprint(raw),
-            remoteIdProperty: 'atomic:legacy-identity',
-          },
-        ],
-      });
-      await expect(app.refresh()).rejects.toThrow('no duplicate was created');
-      expect(set.store.newResource).not.toHaveBeenCalled();
-    },
-  );
-
-  it('displays native compatibility warnings without any provider read', async () => {
-    const set = setup('principal', {
-      legacyWarnings: ['A historical source needs review.'],
-    });
-    const element = document.createElement('div');
-    await view({ root: element, store: set.store });
-    expect(element.querySelector('[role="status"]')?.textContent).toBe(
-      'A historical source needs review.',
-    );
-    expect(set.request).not.toHaveBeenCalled();
-  });
-
-  it.each([false, true])(
-    'relocates only an unchanged native-described legacy parent (user moved: %s)',
-    async moved => {
-      const set = setup('principal');
-      const owner = 'atomic:old-owner';
-      const userParent = 'atomic:user-parent';
-      set.data.set(owner, { [P + 'parent']: root });
-      set.data.set(userParent, { [P + 'parent']: root });
-      const subject = 'atomic:old-table';
-      set.data.set(subject, {
-        [P + 'parent']: moved ? userParent : owner,
-        [P + 'isA']: [tableClass],
-        [P + 'localId']: 'legacy-table',
-        [prop('source-key')]: 'old-key',
-      });
-      const app = createSyncApp(set.store, {
-        ...set.context,
-        legacySources: [
-          {
-            subject,
-            sourceKey: 'old-key',
-            localId: 'legacy-table',
-            kind: 'collection',
-            connectionId: 'slot',
-            collection: { name: 'myTeams', resource: 'team', context: {} },
-            previousParent: owner,
-            reparentToLogicalParent: true,
-          },
-        ],
-      });
-      expect(
-        (await app.ensureCollection({ bound: set.context.collection })).subject,
-      ).toBe(subject);
-      expect(set.data.get(subject)![P + 'parent']).toBe(
-        moved ? userParent : root,
-      );
-      expect(set.data.get(subject)![P + 'localId']).toBe('legacy-table');
-    },
-  );
-
-  it('uses principal and collection-instance identity to isolate identical remote IDs', async () => {
-    const set = setup();
-    await set.app.refresh();
-    const separate = createSyncApp(set.store, {
-      ...set.context,
-      principal: { ...principal, subject: '7' },
-    });
-    expect(await separate.refresh()).toMatchObject({ added: 1 });
-    expect(nodes(set.data, 'record')).toHaveLength(2);
-  });
-
-  it('rejects conflicting resource classes occupying a source identity', async () => {
-    const set = setup();
-    await set.app.refresh();
-    const [, row] = nodes(set.data, 'record')[0];
-    row[P + 'isA'] = ['atomic:unrelated'];
-    set.store.newResource.mockClear();
-    await expect(set.app.refresh()).rejects.toThrow('identity does not match');
-    expect(set.store.newResource).not.toHaveBeenCalled();
-  });
-
-  it('keeps accepted prefix rows and earlier success when a later page fails', async () => {
-    const set = setup();
-    set.data.get(root)![prop('mirror-status')] = {
-      lastSuccess: 'earlier complete read',
-    };
-    set.request.mockResolvedValueOnce({
-      status: 200,
-      headers: {
-        Link: '<https://api.example/v2/me/teams?page=2>; rel="next"',
-      },
-      body: [team],
-    });
-    set.request.mockResolvedValueOnce({ status: 503, headers: {}, body: null });
-    expect(await set.app.refresh()).toMatchObject({
-      added: 1,
-      rows: 1,
-      incomplete: true,
-    });
-    expect(await set.app.status()).toMatchObject({
-      lastSuccess: 'earlier complete read',
-      error: expect.stringContaining('503'),
-    });
-    expect(nodes(set.data, 'record')).toHaveLength(1);
-  });
-
-  it('retains previously stored rows on complete empty reads and provider errors', async () => {
-    const set = setup();
-    await set.app.refresh();
-    set.request.mockResolvedValue({ status: 200, headers: {}, body: [] });
-    expect(await set.app.refresh()).toMatchObject({ rows: 0 });
-    expect(nodes(set.data, 'record')).toHaveLength(1);
-    set.request.mockResolvedValue({ status: 500, headers: {}, body: null });
-    await expect(set.app.refresh()).rejects.toThrow('500');
-    expect(nodes(set.data, 'record')).toHaveLength(1);
-  });
-
-  it('lets the library refuse a foreign next-link without issuing that request', async () => {
-    const set = setup();
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {
-        Link: '<https://foreign.example/v2/me/teams?page=2>; rel="next"',
-      },
-      body: [team],
-    });
-    expect(await set.app.refresh()).toMatchObject({
-      added: 1,
-      incomplete: true,
-    });
-    expect(set.request).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens saved controls without metadata and refuses a refresh before network access', async () => {
-    const set = setup('collection', { document: undefined });
-    const element = document.createElement('div');
-    await view({ root: element, store: set.store });
-    expect(element.textContent).toContain('Sync now');
-    await expect(set.app.refresh()).rejects.toThrow(
-      'API description is unavailable',
-    );
-    expect(set.request).not.toHaveBeenCalled();
-  });
-
-  it('refuses paused work before contacting the provider', async () => {
-    const set = setup();
-    set.data.get(root)![prop('mirror-status')] = { paused: true };
-    await expect(set.app.refresh()).rejects.toThrow('Resume');
-    expect(set.request).not.toHaveBeenCalled();
-  });
-
-  it('opens paused saved controls with Resume available and Sync disabled', async () => {
-    const set = setup();
-    set.data.get(root)![prop('mirror-status')] = { paused: true };
-    const element = document.createElement('div');
-    await view({ root: element, store: set.store });
-    const buttons = [...element.querySelectorAll('button')];
-    expect(buttons.some(button => button.textContent === 'Resume')).toBe(true);
-    expect(
-      buttons.find(button => button.textContent === 'Sync now')?.disabled,
-    ).toBe(true);
-    expect(set.request).not.toHaveBeenCalled();
-    expect(set.store.execution).not.toHaveBeenCalledWith('start');
-  });
-
-  it.each([{ id: null }, { id: 1.5 }, { id: '' }])(
-    'rejects an invalid remote identity before storing records %j',
-    async invalid => {
-      const set = setup();
-      set.request.mockResolvedValue({
-        status: 200,
-        headers: {},
-        body: [{ ...team, ...invalid }],
-      });
-      await expect(set.app.refresh()).rejects.toThrow();
-      expect(nodes(set.data, 'record')).toHaveLength(0);
-    },
-  );
-
-  it('stores timestamp projection as an integer and rejects invalid scalar fields', async () => {
-    const doc = apiDocument();
-    const set = setup('collection', {
-      collection: bindCollection(doc, { collection: 'myWorkspaces' }),
-    });
-    await set.app.refresh();
-    const [, row] = nodes(set.data, 'record')[0];
-    expect(row[set.context.apiSchema.properties['updated-at']]).toBe(
-      Date.parse(workspace.updated_at),
-    );
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {},
-      body: [{ ...workspace, active: 'true' }],
-    });
-    await expect(set.app.refresh()).rejects.toThrow();
-    expect(row[set.context.apiSchema.properties.active]).toBe(true);
-  });
-
-  it('validates the accepted snapshot before clearing any previously managed fields', async () => {
-    const set = setup('collection', {
-      collection: bindCollection(apiDocument(), { collection: 'myWorkspaces' }),
-    });
-    await set.app.refresh();
-    const [, row] = nodes(set.data, 'record')[0];
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {},
-      body: [
-        { ...workspace, active: null },
-        { ...workspace, id: 201, active: 'invalid' },
-      ],
-    });
-    await expect(set.app.refresh()).rejects.toThrow();
-    expect(row[set.context.apiSchema.properties.active]).toBe(true);
-    expect((config(row).record as { active: boolean }).active).toBe(true);
-    expect(nodes(set.data, 'record')).toHaveLength(1);
-  });
-
-  it('loads saved principals from Atomic without resolving connections on reentry', async () => {
-    const set = setup('platform');
-    const saved = await set.app.openPrincipal('slot');
-    set.request.mockClear();
-    const element = document.createElement('div');
-    await view({ root: element, store: set.store });
-    expect(element.textContent).toContain('Ada');
-    expect(set.request).not.toHaveBeenCalled();
-    expect(
-      (await set.app.storedPrincipals()).map(
-        (row: { subject: string }) => row.subject,
-      ),
-    ).toContain(saved.subject);
-  });
-
-  it('renders catalog inputs for parameterized public reads and saves a concrete instance without fetching', async () => {
-    const set = setup('principal', {
-      principal: { kind: 'public' },
-      connectionId: undefined,
-    });
-    const element = document.createElement('div');
-    await view({ root: element, store: set.store });
-    const select = element.querySelector('select')!;
-    select.value = 'tasks';
-    select.dispatchEvent(new Event('change'));
-    expect(element.querySelector('input')?.getAttribute('aria-label')).toBe(
-      'Workspace ID',
-    );
-    const saved = await set.app.createCollection('tasks', {
-      workspace_id: '42',
-    });
-    expect(config(set.data.get(saved.subject)!).collection).toMatchObject({
-      path: '/workspaces/42/tasks',
-      query: { status: 'all' },
-    });
-    expect(set.request).not.toHaveBeenCalled();
-  });
-
-  it('resolves a catalog public entrypoint on submit and persists only canonical collection identity', async () => {
-    const document = withPublicEntrypoint();
-    const set = setup('principal', {
-      document,
-      principal: { kind: 'public' },
-      connectionId: undefined,
-    });
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {},
-      body: { id: 42 },
-    });
-    const element = globalThis.document.createElement('div');
-    await view({ root: element, store: set.store });
-    const select = element.querySelector(
-      'select[aria-label="Collection"]',
-    ) as HTMLSelectElement;
-    select.value = 'tasks';
-    select.dispatchEvent(new Event('change'));
-    expect(element.querySelector('input')?.getAttribute('aria-label')).toBe(
-      'Team reference',
-    );
-    expect(set.request).not.toHaveBeenCalled();
-    const first = await set.app.createCollection(
-      'tasks',
-      { team: 'one', space: 'first-name' },
-      '/public/{team}/{space}',
-    );
-    const second = await set.app.createCollection(
-      'tasks',
-      { team: 'one', space: 'renamed' },
-      '/public/{team}/{space}',
-    );
-    expect(first.subject).toBe(second.subject);
-    const row = set.data.get(first.subject)!;
-    expect(config(row).collection).toMatchObject({
-      path: '/workspaces/42/tasks',
-      pathParams: { workspace_id: '42' },
-    });
-    expect(config(row).navigation).toBeUndefined();
-    expect(JSON.parse(row[prop('source-key')] as string).collection).toEqual({
-      name: 'tasks',
-      resource: 'task',
-      context: { workspace_id: '42' },
-    });
-    expect(set.request.mock.calls.map(([request]) => request.path)).toEqual([
-      'v2/public/one/first-name',
-      'v2/public/one/renamed',
-    ]);
-    expect(
-      set.request.mock.calls.every(
-        ([request]) => request.connectionId === undefined,
-      ),
-    ).toBe(true);
-    set.request.mockResolvedValue({
-      status: 200,
-      headers: {},
-      body: { id: 43 },
-    });
-    const third = await set.app.createCollection(
-      'tasks',
-      { team: 'two', space: 'different' },
-      '/public/{team}/{space}',
-    );
-    expect(third.subject).not.toBe(first.subject);
-  });
-
-  it('handshakes the shared worker before reading the selected collection', async () => {
-    const set = setup('collection', { worker: true });
-    await view({ root: undefined, store: set.store });
-    expect(set.store.execution).toHaveBeenCalledWith('state');
-    expect(set.request).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps durable row keys independent of the Atomic parent and display title', () => {
-    const bound = bindCollection(apiDocument(), { collection: 'myTeams' });
-    expect(
-      JSON.parse(
-        sourceKey({
-          proxyOrigin: origin,
-          platform: 'example-service',
-          principal,
-          kind: 'collection',
-          collection: collectionIdentity(bound),
-        }),
-      ),
-    ).toMatchObject({
-      version: 2,
-      principal: { subject: 7 },
-      collection: { resource: 'team', name: 'myTeams' },
-    });
-  });
 });

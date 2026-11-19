@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   canonicalValue,
+  entitySourceKey,
+  entityTableKey,
+  ruleSourceKey,
   collectionIdentity,
   sourceKey,
   sourceConfigFingerprint,
@@ -184,5 +187,75 @@ describe('durable catalog source identities', () => {
     expect(() =>
       sourceKey({ ...base, principal: principal as typeof base.principal }),
     ).toThrow('durable principal');
+  });
+});
+
+describe('flat canonical entity identities', () => {
+  const identity = {
+    resource: 'repository',
+    template: '/repositories/{id}',
+    values: [['id', 7]] as [string, string | number][],
+    path: '/repositories/7',
+    key: '["repository",[["id",7]]]',
+  };
+  it('shares a resource table and entity across collection roots and navigation paths', () => {
+    const table = entityTableKey({ ...base, resource: 'repository' });
+    expect(sourceKey(JSON.parse(table))).toBe(table);
+    const key = entitySourceKey({ ...base, entityIdentity: identity });
+    expect(sourceKey(JSON.parse(key))).toBe(key);
+    expect(
+      entitySourceKey({
+        ...base,
+        entityIdentity: { ...identity, path: '/renamed-address/7' },
+      }),
+    ).toBe(key);
+    expect(JSON.parse(key)).not.toHaveProperty('parentSourceKeyHash');
+    expect(JSON.parse(key)).not.toHaveProperty('collection');
+  });
+  it('retains required context, typed identities and principal isolation in bounded keys', () => {
+    const key = entitySourceKey({ ...base, entityIdentity: identity });
+    for (const change of [
+      { entityIdentity: { ...identity, key: '["repository",[["id","7"]]]' } },
+      {
+        entityIdentity: {
+          ...identity,
+          key: '["repository",[["workspace",8],["id",7]]]',
+        },
+      },
+      { principal: { kind: 'public' as const } },
+      { principal: { ...base.principal, subject: '7' } },
+    ])
+      expect(
+        entitySourceKey({ ...base, entityIdentity: identity, ...change }),
+      ).not.toBe(key);
+    expect(key.length).toBeLessThan(600);
+  });
+  it('bounds saved rule keys while preserving distinct table and filter identities', () => {
+    const first = ruleSourceKey('table-key', 'x'.repeat(10000));
+    expect(first.length).toBeLessThan(300);
+    expect(first).toBe(ruleSourceKey('table-key', 'x'.repeat(10000)));
+    expect(first).not.toBe(ruleSourceKey('another-table', 'x'.repeat(10000)));
+    expect(first).not.toBe(ruleSourceKey('table-key', 'another-rule'));
+  });
+
+  it('rejects path-dependent v3 inputs and malformed entity hashes', () => {
+    expect(() =>
+      sourceKey({
+        ...base,
+        version: 3,
+        kind: 'record',
+        resource: 'repository',
+        entityIdentityHash: 'bad',
+      }),
+    ).toThrow('canonical entity');
+    expect(() =>
+      sourceKey({
+        ...base,
+        version: 3,
+        kind: 'collection',
+        resource: 'repository',
+        parentSourceKey: 'parent',
+      }),
+    ).toThrow('canonical entity');
   });
 });

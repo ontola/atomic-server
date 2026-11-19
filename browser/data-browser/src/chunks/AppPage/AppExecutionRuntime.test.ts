@@ -129,4 +129,81 @@ describe('background app executions', () => {
     expect(runs.isRunning('selected')).toBe(true);
     runs.clear();
   });
+
+  it('serializes one collection while allowing another collection to sync', async () => {
+    const runs = new AppExecutionRegistry();
+    const first = vi.fn(async (signal: AbortSignal) => spec(signal));
+    const second = vi.fn(async (signal: AbortSignal) => spec(signal));
+    const other = vi.fn(async (signal: AbortSignal) => spec(signal));
+    await runs.start('rule-a', first, { group: 'collection-a' });
+    await runs.start('rule-b', second, { group: 'collection-a' });
+    await runs.start('rule-c', other, { group: 'collection-b' });
+    expect(second).not.toHaveBeenCalled();
+    expect(other).toHaveBeenCalledOnce();
+    expect(runs.isRunning('rule-b')).toBe(true);
+    expect(runs.isQueued('rule-b')).toBe(true);
+    const active = runs.getSnapshot().find(run => run.key === 'rule-a')!;
+    runs.settle(active, { ok: true, children: 0 });
+    await vi.waitFor(() => expect(second).toHaveBeenCalledOnce());
+    expect(runs.isQueued('rule-b')).toBe(false);
+    runs.clear();
+  });
+
+  it('revokes a queued filter before its worker can read or write', async () => {
+    const runs = new AppExecutionRegistry();
+    const waiting = vi.fn(async (signal: AbortSignal) => spec(signal));
+    let cancelQueued!: () => void;
+    const unbind = vi.fn();
+    await runs.start('first', async signal => spec(signal), { group: 'table' });
+    await runs.start('waiting', waiting, {
+      group: 'table',
+      subscribe: cancel => {
+        cancelQueued = cancel;
+
+        return unbind;
+      },
+    });
+    cancelQueued();
+    runs.cancel('first');
+    await Promise.resolve();
+    expect(waiting).not.toHaveBeenCalled();
+    expect(unbind).toHaveBeenCalledOnce();
+    expect(runs.isRunning('waiting')).toBe(false);
+    runs.clear();
+  });
+
+  it('clears queued runs without starting them during session teardown', async () => {
+    const runs = new AppExecutionRegistry();
+    const waiting = vi.fn(async (signal: AbortSignal) => spec(signal));
+    await runs.start('first', async signal => spec(signal), { group: 'table' });
+    await runs.start('waiting', waiting, { group: 'table' });
+    runs.clear();
+    await Promise.resolve();
+    expect(waiting).not.toHaveBeenCalled();
+    expect(runs.isRunning('waiting')).toBe(false);
+    expect(runs.getSnapshot()).toEqual([]);
+  });
+
+  it('reports a queued preparation failure and releases the next filter', async () => {
+    const runs = new AppExecutionRegistry();
+    const failed = vi.fn(async () => undefined);
+    const next = vi.fn(async (signal: AbortSignal) => spec(signal));
+    await runs.start('first', async signal => spec(signal), { group: 'table' });
+    await runs.start(
+      'bad',
+      async () => {
+        throw new Error('Changed filter');
+      },
+      {
+        group: 'table',
+        failed,
+      },
+    );
+    await runs.start('next', next, { group: 'table' });
+    runs.cancel('first');
+    await vi.waitFor(() => expect(failed).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(next).toHaveBeenCalledOnce());
+    expect(runs.isRunning('bad')).toBe(false);
+    runs.clear();
+  });
 });

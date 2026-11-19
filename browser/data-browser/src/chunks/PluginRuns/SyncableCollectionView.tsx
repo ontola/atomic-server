@@ -5,8 +5,10 @@ import {
   findSchema,
   subjectsReferToSameResource,
   useResource,
+  useValue,
   useStore,
   type Collection,
+  type Resource,
   type Store,
 } from '@tomic/react';
 import { styled } from 'styled-components';
@@ -41,11 +43,15 @@ export function SyncableCollectionView({
   drive,
   collection,
   ready,
+  activeRule,
+  logicalOwnerProperty,
 }: {
   table: string;
   drive: string;
   collection: Collection;
   ready: boolean;
+  activeRule?: string;
+  logicalOwnerProperty?: string;
 }) {
   const store = useStore();
   const resource = useResource(table);
@@ -149,6 +155,8 @@ export function SyncableCollectionView({
                 table={table}
                 drive={drive}
                 descriptor={descriptor}
+                activeRule={activeRule}
+                logicalOwnerProperty={logicalOwnerProperty}
               />
             ))}
           </tbody>
@@ -164,10 +172,25 @@ async function destination(
   drive: string,
   table: string,
   subject: string,
+  activeRule?: string,
 ) {
-  const target = await openSyncableCollectionRow(store, drive, table, subject);
+  const target = await openSyncableCollectionRow(
+    store,
+    drive,
+    table,
+    subject,
+    activeRule,
+  );
+  if ('view' in target && target.view && target.syncFilter)
+    return constructOpenURL(target.subject, {
+      view: target.view,
+      syncFilter: target.syncFilter,
+    });
   const resource = await store.getResource(target.subject);
   const views = resource.getSubjects(dataBrowser.properties.tableViews);
+  const defaultView = resource.get(dataBrowser.properties.tableDefaultView);
+  const terms = await findSchema(store, drive, syncableHierarchySchema());
+  const configProperty = terms.properties?.['syncable-source-config'];
   let fallback: string | undefined;
   let preferred: string | undefined;
 
@@ -183,12 +206,19 @@ async function destination(
       !view.getSubjects(core.properties.isA).includes(dataBrowser.classes.view)
     )
       continue;
+    const config = configProperty ? view.get(configProperty) : undefined;
+    if (
+      config &&
+      typeof config === 'object' &&
+      (config as { kind?: string }).kind === 'rule'
+    )
+      continue;
     const storedKind = view.get(dataBrowser.properties.viewKind);
     if (
       typeof storedKind === 'string' &&
       normalizeViewKind(storedKind) === 'syncable-collection'
     )
-      preferred = viewSubject;
+      if (!preferred || viewSubject === defaultView) preferred = viewSubject;
     if (storedKind === 'table') fallback = viewSubject;
   }
 
@@ -204,11 +234,15 @@ function CollectionRow({
   table,
   drive,
   descriptor,
+  activeRule,
+  logicalOwnerProperty,
 }: {
   subject: string;
   table: string;
   drive: string;
   descriptor: SyncableCollectionDescriptor;
+  activeRule?: string;
+  logicalOwnerProperty?: string;
 }) {
   const store = useStore();
   const resource = useResource(subject);
@@ -217,7 +251,15 @@ function CollectionRow({
   const [busy, setBusy] = useState(false);
   const stampedDrive = resource.get(driveProperty);
   if (
-    !isSyncableCollectionRow(resource, table, descriptor) ||
+    !(
+      isSyncableCollectionRow(resource, table, descriptor) ||
+      (logicalOwnerProperty &&
+        subjectsReferToSameResource(
+          resource.get(logicalOwnerProperty),
+          table,
+        ) &&
+        resource.hasClasses(descriptor.rowClass))
+    ) ||
     (stampedDrive !== undefined &&
       (typeof stampedDrive !== 'string' ||
         !subjectsReferToSameResource(stampedDrive, drive)))
@@ -227,7 +269,7 @@ function CollectionRow({
   const open = () => {
     setBusy(true);
     setError(undefined);
-    void destination(store, drive, table, subject)
+    void destination(store, drive, table, subject, activeRule)
       .then(path => navigate(path))
       .catch(reason => setError(String(reason?.message ?? reason)))
       .finally(() => setBusy(false));
@@ -236,15 +278,12 @@ function CollectionRow({
   return (
     <tr>
       {descriptor.columns.map((column, index) => (
-        <td key={column.property}>
-          {index === 0 ? (
-            <AtomicLink subject={subject}>
-              {syncableCollectionValue(resource.get(column.property), column)}
-            </AtomicLink>
-          ) : (
-            syncableCollectionValue(resource.get(column.property), column)
-          )}
-        </td>
+        <CollectionCell
+          key={column.property}
+          resource={resource}
+          column={column}
+          first={index === 0}
+        />
       ))}
       <td>
         <Button subtle onClick={open} disabled={busy}>
@@ -253,6 +292,30 @@ function CollectionRow({
         {error && <span role='alert'>{error}</span>}
       </td>
     </tr>
+  );
+}
+
+/** Property subscriptions keep visible cached rows current while the worker runs. */
+function CollectionCell({
+  resource,
+  column,
+  first,
+}: {
+  resource: Resource;
+  column: SyncableCollectionDescriptor['columns'][number];
+  first: boolean;
+}) {
+  const [value] = useValue(resource, column.property);
+  const text = syncableCollectionValue(value, column);
+
+  return (
+    <td>
+      {first ? (
+        <AtomicLink subject={resource.subject}>{text}</AtomicLink>
+      ) : (
+        text
+      )}
+    </td>
   );
 }
 

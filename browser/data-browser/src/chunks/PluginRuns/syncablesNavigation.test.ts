@@ -111,3 +111,23 @@ it.each([
     expect(isSyncablesNavigationTable(catalogNodeId(source))).toBe(false);
   },
 );
+
+it('keeps canonical entity tables as leaves while principals expose their entity types', () => {
+  expect(isSyncablesNavigationTable(catalogNodeId({ kind: 'principal' }))).toBe(
+    true,
+  );
+
+  for (const kind of [
+    'collection',
+    'record',
+    'rule',
+    'syncable-observation',
+    'syncable-sync-run',
+  ]) {
+    expect(
+      isSyncablesNavigationTable(
+        catalogNodeId({ version: 3, kind, resource: 'workspaces' }),
+      ),
+    ).toBe(false);
+  }
+});

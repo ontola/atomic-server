@@ -6,19 +6,23 @@ import {
   bindCollectionNavigation,
   relatedCollectionReads,
   resolveCollectionNavigation,
-  readBoundCollection,
+  describeEntityTypes,
+  compileReadSelection,
+  readSelectionKey,
+  readSelection,
   resolveAuthenticatedPrincipal,
-  projectReadRecord,
   ontologyShortname,
-  deriveOntology,
 } from 'syncables/browser';
 import {
   canonicalValue,
-  collectionIdentity,
   principalIdentity,
   sourceKey,
   sourceConfigFingerprint,
+  entityTableKey,
+  entitySourceKey,
+  ruleSourceKey,
 } from './builtinSyncIdentity.js';
+import { reduceFlatState } from './builtinSyncFlatState.js';
 
 const P = 'https://atomicdata.dev/properties/';
 const core = Object.fromEntries(
@@ -90,21 +94,6 @@ export function createSyncApp(store, context) {
       ...values,
     });
 
-  const configuration = values => {
-    const principal = principalIdentity(values.principal ?? context.principal);
-
-    return {
-      version: 2,
-      proxyOrigin: context.proxyOrigin,
-      platform: context.platform,
-      ...(principal.kind !== 'public' && context.connectionId
-        ? { connectionId: context.connectionId }
-        : {}),
-      ...values,
-      principal,
-    };
-  };
-
   async function queryAll(args) {
     const subjects = [];
 
@@ -161,6 +150,29 @@ export function createSyncApp(store, context) {
   async function legacyNode(key, config, existingSubject) {
     const desired = JSON.parse(key);
     const matches = [];
+
+    for (const alias of context.flatIdentityAliases ?? []) {
+      if (alias.canonicalSourceKey !== key || alias.subject === existingSubject)
+        continue;
+      const row = await store.getResource(alias.subject);
+      if (
+        row.error ||
+        (alias.previousSourceKey !== undefined &&
+          row.get(property('syncable-source-key')) !==
+            alias.previousSourceKey) ||
+        (alias.localId !== undefined &&
+          row.get(core.localId) !== alias.localId) ||
+        (alias.sourceConfigFingerprint !== undefined &&
+          sourceConfigFingerprint(
+            row.get(property('syncable-source-config')),
+          ) !== alias.sourceConfigFingerprint)
+      )
+        throw new Error(
+          'The older entity source changed; no duplicate was created',
+        );
+      matches.push(row);
+      legacyMatches.set(row.subject, alias);
+    }
 
     for (const alias of context.legacySources ?? []) {
       if (alias.subject === existingSubject) continue;
@@ -239,6 +251,31 @@ export function createSyncApp(store, context) {
           row.get(property('syncable-node-kind')) !== kind)
       )
         throw new Error('The source identity does not match its resource');
+
+      if (candidate === key) {
+        const desired = JSON.parse(key);
+
+        if (
+          desired.version === 3 &&
+          ['collection', 'record'].includes(desired.kind)
+        ) {
+          const saved = row.get(property('syncable-source-config'));
+          const expected =
+            saved?.kind === 'record' && saved.entityIdentity
+              ? entitySourceKey({
+                  ...saved,
+                  entityIdentity: saved.entityIdentity,
+                })
+              : saved?.kind === 'collection'
+                ? entityTableKey(saved)
+                : undefined;
+          if (expected !== key)
+            throw new Error(
+              'The full canonical entity identity does not match its saved key',
+            );
+        }
+      }
+
       if (await legacyNode(key, config, row.subject))
         throw new Error(
           'This account or collection has conflicting saved sources. Review its migration before syncing; all saved data was retained.',
@@ -286,7 +323,11 @@ export function createSyncApp(store, context) {
     const subjects = row.get(tableViews) ?? [];
     const definitions = await store.getMany(subjects);
     const kinds = definitions
-      .filter(definition => !definition.error)
+      .filter(
+        definition =>
+          !definition.error &&
+          definition.get(property('syncable-source-config'))?.kind !== 'rule',
+      )
       .map(definition => definition.get(viewKind));
     const added = [];
     let browse;
@@ -333,6 +374,13 @@ export function createSyncApp(store, context) {
       throw new Error(
         'Open the moved resource to sync at its current location',
       );
+    const desired = JSON.parse(key);
+    const block = (context.flatMigrationBlocks ?? []).find(
+      item =>
+        item.resource === desired.resource &&
+        same(item.principal, desired.principal),
+    );
+    if (block) throw new Error(block.message);
     if (context.legacyMigrationBlocked)
       throw new Error(
         'Review the historical source warnings before creating another sync destination',
@@ -356,6 +404,26 @@ export function createSyncApp(store, context) {
         if (!adopted)
           throw new Error(
             'Reconnect the saved account before creating another account. Its existing data has been retained.',
+          );
+      }
+    }
+
+    if (kind === 'collection' && desired.version === 3) {
+      const previousTables = await resources({
+        property: property('syncable-node-kind'),
+        value: 'collection',
+      });
+
+      for (const previous of previousTables) {
+        const config = previous.get(property('syncable-source-config'));
+        if (
+          config?.version === 2 &&
+          same(config.principal, desired.principal) &&
+          (config.collection?.resource ?? config.navigation?.resource) ===
+            desired.resource
+        )
+          throw new Error(
+            'This entity type has older saved collections that need adoption before a shared table can be created. Existing data was retained.',
           );
       }
     }
@@ -450,71 +518,248 @@ export function createSyncApp(store, context) {
         ? columns
         : [{ property: core.name, label: 'Name' }],
       openTargetProperty: property('syncable-open-target'),
+      ...(collection.relationships
+        ? { relationships: collection.relationships }
+        : {}),
     };
   }
 
-  async function ensureCollection({
+  const entityTypes = () => describeEntityTypes(readDocument());
+
+  const entityType = resource => {
+    const found = entityTypes().find(item => item.resource === resource);
+    if (!found) throw new Error('Unknown catalog entity type');
+
+    return found;
+  };
+
+  async function ensureEntityTable({
     parent = root,
     principal = context.principal,
     connectionId = context.connectionId,
-    bound,
-    navigation,
-    parentSourceKey,
+    resource,
   }) {
-    const collection = description(bound?.collection ?? navigation.collection);
-    const key = identity({
-      kind: 'collection',
-      principal,
-      collection: collectionIdentity(bound, navigation),
-      parentSourceKey,
-    });
+    const type = entityType(resource);
+    const key = entityTableKey({ ...context, principal, resource });
+    const adoptionRules = (context.flatAdoptionRules ?? []).filter(
+      item => item.tableSourceKey === key,
+    );
+
+    if (adoptionRules.length) {
+      const previous = await findNode(key, tableClass, 'collection', {
+        principal,
+        connectionId,
+      });
+
+      if (previous) {
+        for (const rule of adoptionRules) {
+          if (rule.definition.resource !== resource)
+            throw new Error(
+              'The adopted saved filter has a different resource type',
+            );
+          await ensureRule(previous, rule.definition, rule.label, key);
+        }
+      }
+    }
 
     return ensureNode({
       key,
       kind: 'collection',
       parent,
-      name: collection.presentation?.title ?? collection.name,
+      name: type.presentation.title,
       isA: [tableClass],
       values: {
-        [core.classtype]: rowClass(collection),
-        [property('syncable-source-config')]: configuration({
+        [core.classtype]: rowClass(type),
+        [property('syncable-source-config')]: {
+          version: 3,
+          kind: 'collection',
+          proxyOrigin: context.proxyOrigin,
+          platform: context.platform,
           principal: principalIdentity(principal),
+          resource,
           ...(principal.kind !== 'public' && connectionId
             ? { connectionId }
             : {}),
-          ...(bound ? { collection: bound } : {}),
-          ...(navigation ? { navigation } : {}),
-          ...(parentSourceKey ? { parentSourceKey } : {}),
-        }),
-        [property('syncable-collection-view')]: collectionView(collection),
+        },
+        [property('syncable-collection-view')]: collectionView(type),
       },
     });
+  }
+
+  async function savedRules(table = root) {
+    return (await resources({ property: core.parent, value: table })).filter(
+      row =>
+        row.hasClasses(viewClass) &&
+        row.get(property('syncable-source-config'))?.kind === 'rule',
+    );
+  }
+
+  async function ensureRule(table, definition, name, tableSourceKey) {
+    compileReadSelection(readDocument(), definition, {
+      querySelection: context.querySelection,
+    });
+    const ruleKey = readSelectionKey(definition);
+    if (typeof ruleKey !== 'string' || !ruleKey)
+      throw new Error('The catalog selection has no stable rule key');
+    const key = ruleSourceKey(
+      tableSourceKey ?? table.get(property('syncable-source-key')),
+      ruleKey,
+    );
+    const rule = await ensureNode({
+      key,
+      kind: 'rule',
+      parent: table.subject,
+      name: name || entityType(definition.resource).presentation.title,
+      isA: [viewClass],
+      values: {
+        [viewKind]: 'syncable-collection',
+        [property('syncable-source-config')]: {
+          version: 3,
+          kind: 'rule',
+          resource: definition.resource,
+          definition,
+          ruleKey,
+        },
+      },
+    });
+    // The membership value is the saved View's actual subject, not its display name.
+    await patch(rule, {
+      [P + 'view-filters']: [
+        {
+          property: property('syncable-rule-memberships'),
+          operator: 'eq',
+          value: rule.subject,
+        },
+      ],
+    });
+    const views =
+      (await store.getResource(table.subject)).get(tableViews) ?? [];
+    if (!views.includes(rule.subject))
+      await patch(table, { [tableViews]: [...views, rule.subject] });
+
+    return rule;
+  }
+
+  async function adoptFlatRows(principal) {
+    for (const alias of context.flatIdentityAliases ?? []) {
+      const config = alias.canonicalConfig;
+      if (
+        !config ||
+        config.kind !== 'record' ||
+        !same(config.principal, principal)
+      )
+        continue;
+      if (
+        (context.flatMigrationBlocks ?? []).some(
+          block =>
+            block.resource === config.resource &&
+            same(block.principal, principal),
+        )
+      )
+        continue;
+      if (
+        config.version !== 3 ||
+        config.proxyOrigin !== context.proxyOrigin ||
+        config.platform !== context.platform ||
+        entitySourceKey({
+          ...config,
+          entityIdentity: config.entityIdentity,
+        }) !== alias.canonicalSourceKey ||
+        entityTableKey(config) !== alias.entityTableSourceKey
+      )
+        throw new Error(
+          'The older row has no validated canonical entity identity',
+        );
+      const table = await findNode(
+        alias.entityTableSourceKey,
+        tableClass,
+        'collection',
+        config,
+      );
+      if (!table)
+        throw new Error('Adopt the entity collection before its saved rows');
+      const row = await findNode(
+        alias.canonicalSourceKey,
+        rowClass(entityType(config.resource)),
+        'record',
+        config,
+      );
+      if (!row)
+        throw new Error(
+          'The older saved entity disappeared; no duplicate was created',
+        );
+      if (!(await withinRoot(row.subject))) continue;
+      await updateNode(row, {
+        key: alias.canonicalSourceKey,
+        kind: 'record',
+        parent: table.subject,
+        isA: [rowClass(entityType(config.resource)), klass('syncable-record')],
+        values: {
+          [property('syncable-source-config')]: config,
+          [property('syncable-entity-table')]: table.subject,
+        },
+      });
+    }
   }
 
   async function discoverCollections(principalTable, principal, connectionId) {
     const created = [];
 
-    for (const collection of descriptions()) {
-      // Unbound roots are available immediately; parameterized instances are explicit form choices.
-      if (
-        collection.contextParams.length ||
-        collection.relationships.length ||
-        (principal.kind === 'public' && !collection.allowsAnonymous)
-      )
-        continue;
-      const bound = bindCollection(readDocument(), {
-        collection: collection.name,
-        selection: context.querySelection,
-      });
-      created.push(
-        await ensureCollection({
+    const errors = [];
+
+    for (const type of entityTypes()) {
+      try {
+        if (!type.collections.length) continue;
+        if (
+          principal.kind === 'public' &&
+          !type.collections.some(collection => collection.allowsAnonymous)
+        )
+          continue;
+        const table = await ensureEntityTable({
           parent: principalTable.subject,
           principal,
           connectionId,
-          bound,
-        }),
-      );
+          resource: type.resource,
+        });
+        created.push(table);
+
+        for (const collection of type.collections) {
+          if (
+            collection.contextParams.length ||
+            collection.relationships.length ||
+            (principal.kind === 'public' && !collection.allowsAnonymous)
+          )
+            continue;
+          const bound = bindCollection(readDocument(), {
+            collection: collection.name,
+            selection: context.querySelection,
+          });
+          await ensureRule(
+            table,
+            {
+              version: 1,
+              resource: type.resource,
+              source: { kind: 'bound', bound },
+            },
+            collection.presentation.title,
+          );
+        }
+      } catch (error) {
+        errors.push(
+          (type.presentation?.title ?? type.resource) +
+            ': ' +
+            String(error?.message ?? error),
+        );
+      }
     }
+
+    try {
+      await adoptFlatRows(principal);
+    } catch (error) {
+      errors.push(String(error?.message ?? error));
+    }
+
+    if (errors.length) throw new Error(errors.join('; ').slice(0, 2048));
 
     return created;
   }
@@ -587,14 +832,24 @@ export function createSyncApp(store, context) {
     return row;
   }
 
-  async function createCollection(name, parameters = {}, sourcePath) {
-    if (context.kind !== 'principal')
+  async function createCollection(
+    name,
+    parameters = {},
+    sourcePath,
+    filterName,
+  ) {
+    if (!['principal', 'collection'].includes(context.kind))
       throw new Error('Choose a principal first');
-    if (
-      context.principal.kind === 'public' &&
-      !description(name).allowsAnonymous
-    )
+    const collection = description(name);
+    if (context.principal.kind === 'public' && !collection.allowsAnonymous)
       throw new Error('This collection requires an authenticated principal');
+    if (
+      context.kind === 'collection' &&
+      (sourcePath || collection.contextParams.length)
+    )
+      throw new Error(
+        'Choose this parameterized source from the principal first',
+      );
     const doc = readDocument();
     const resolved = sourcePath
       ? await resolveCollectionNavigation(
@@ -612,14 +867,33 @@ export function createSyncApp(store, context) {
       context: resolved?.pathParams ?? parameters,
       selection: context.querySelection,
     });
-    const row = await ensureCollection({ bound });
-    await store.ui.openResource(row.subject);
+    const table =
+      context.kind === 'collection'
+        ? await store.getResource(root)
+        : await ensureEntityTable({ resource: collection.resource });
+    if (
+      context.kind === 'collection' &&
+      collection.resource !== context.resource
+    )
+      throw new Error('Choose a source for this entity collection');
+    const rule = await ensureRule(
+      table,
+      {
+        version: 1,
+        resource: collection.resource,
+        source: { kind: 'bound', bound },
+      },
+      filterName || collection.presentation.title,
+    );
+    await store.ui.openResource(rule.subject);
 
-    return row;
+    return rule;
   }
 
+  const statusSubject = () => context.rule?.subject ?? root;
+
   async function status() {
-    const value = (await store.getResource(root)).get(
+    const value = (await store.getResource(statusSubject())).get(
       property('syncable-mirror-status'),
     );
 
@@ -629,206 +903,358 @@ export function createSyncApp(store, context) {
   }
 
   async function saveStatus(values) {
-    await patch(await store.getResource(root), {
+    await patch(await store.getResource(statusSubject()), {
       [property('syncable-mirror-status')]: { ...(await status()), ...values },
     });
   }
 
-  async function refresh() {
-    if (context.kind !== 'collection')
-      throw new Error('Select a collection to sync');
-    if ((await status()).paused) throw new Error('Resume before syncing');
+  function runStamp() {
+    const run = context.rule?.run;
+    if (
+      !run ||
+      typeof run.generation !== 'string' ||
+      typeof run.runId !== 'string' ||
+      !Number.isSafeInteger(run.startOrder)
+    )
+      throw new Error('Start this saved filter through its Sync controls');
 
-    try {
-      const doc = readDocument();
-      const resolved = context.navigation
-        ? await resolveCollectionNavigation(doc, context.navigation, {
-            transport,
-          })
-        : context.collection;
-      const bound =
-        context.navigation && resolved
-          ? bindCollection(doc, {
-              collection: resolved.collection,
-              context: resolved.pathParams,
-              selection: context.querySelection,
-            })
-          : resolved;
-      if (!bound) throw new Error('The collection has no saved source binding');
-      const definition = description(bound.collection);
-      const result = await readBoundCollection(doc, bound, {
-        transport,
-        limits: {
-          maxRequests: context.principal.kind === 'public' ? 40 : 20,
-          maxRecords: 4000,
-          timeoutMs: 120000,
-          maxRetries: 0,
+    return run;
+  }
+
+  async function assertRun() {
+    const run = runStamp();
+    const current = await status();
+    if (
+      current.paused ||
+      current.run?.generation !== run.generation ||
+      current.run?.runId !== run.runId
+    )
+      throw new Error('This saved filter run is no longer current');
+    const rule = await store.getResource(context.rule.subject);
+    const config = rule.get(property('syncable-source-config'));
+    if (
+      config?.ruleKey !== context.rule.key ||
+      readSelectionKey(config.definition) !== context.rule.key
+    )
+      throw new Error('The saved filter definition changed');
+
+    return run;
+  }
+
+  async function durableResource(kind, parent, id, payload) {
+    await assertRun();
+    const existing = await resources({ property: core.localId, value: id });
+    if (existing.length > 1)
+      throw new Error('The durable sync evidence identity is ambiguous');
+
+    if (existing.length) {
+      if (!(await withinRoot(existing[0].subject)))
+        throw new Error('The sync evidence moved outside this table');
+
+      const previous = existing[0].get(property(kind));
+      if (kind === 'syncable-observation' && !same(previous, payload))
+        throw new Error('The immutable entity observation changed');
+      if (
+        kind === 'syncable-sync-run' &&
+        (previous?.complete || previous?.entityKeys?.length)
+      )
+        throw new Error('This sync run was already recorded');
+
+      return existing[0];
+    }
+
+    return store.newResource({
+      parent,
+      isA: [klass(kind)],
+      propVals: {
+        [core.localId]: id,
+        [property('syncable-node-kind')]: kind,
+        [property(kind)]: payload,
+      },
+    });
+  }
+
+  async function ledger() {
+    const runs = [],
+      observations = [];
+
+    for (const rule of await savedRules()) {
+      for (const row of await resources({
+        property: core.parent,
+        value: rule.subject,
+      })) {
+        const run = row.get(property('syncable-sync-run'));
+        if (run) runs.push(run);
+        const observation = row.get(property('syncable-observation'));
+        if (observation) observations.push(observation);
+      }
+    }
+
+    return { runs, observations };
+  }
+
+  async function reconcile() {
+    const evidence = await ledger();
+    const state = reduceFlatState(evidence);
+    const latest = new Map();
+    const runs = new Map(evidence.runs.map(run => [run.runId, run]));
+
+    for (const observation of evidence.observations) {
+      const run = runs.get(observation.runId);
+      if (!run || run.generation !== observation.generation) continue;
+      const old = latest.get(observation.entityKey);
+      if (
+        !old ||
+        old.run.startOrder < run.startOrder ||
+        (old.run.startOrder === run.startOrder && old.run.runId < run.runId)
+      )
+        latest.set(observation.entityKey, { run, observation });
+    }
+
+    const counts = { added: 0, changed: 0, unchanged: 0 };
+
+    for (const [key, reduced] of Object.entries(state)) {
+      await assertRun();
+      const item = latest.get(key)?.observation;
+      if (!item) continue;
+      const old = await findNode(
+        key,
+        rowClass(entityType(context.resource)),
+        'record',
+      );
+      const values = Object.fromEntries(
+        Object.entries(reduced.values).map(([name, value]) => {
+          const subject = context.apiSchema?.properties[name];
+          if (!subject)
+            throw new Error('The catalog property schema is unavailable');
+
+          return [subject, value];
+        }),
+      );
+      const removed = reduced.cleared
+        .map(name => context.apiSchema?.properties[name])
+        .filter(Boolean);
+      const recordConfig = {
+        version: 3,
+        kind: 'record',
+        proxyOrigin: context.proxyOrigin,
+        platform: context.platform,
+        principal: context.principal,
+        resource: context.resource,
+        entityIdentity: item.entity,
+        record: reduced.raw ?? item.raw,
+        context: item.context,
+        read: item.provenance.read,
+        managedProperties: Object.keys(values),
+      };
+      const intents = relatedCollectionReads(readDocument(), {
+        resource: context.resource,
+        record: reduced.raw ?? item.raw,
+        context: item.provenance.read.pathParams,
+      }).map(navigation => ({
+        version: 1,
+        resource: navigation.resource,
+        sourceEntityKey: key,
+        label: description(navigation.collection).presentation.title,
+        definition: {
+          version: 1,
+          resource: navigation.resource,
+          source: {
+            kind: 'related',
+            origin: {
+              entity: item.entity,
+              record: reduced.raw ?? item.raw,
+              context: item.context,
+              read: item.provenance.read,
+            },
+            via: {
+              collection: navigation.collection,
+              kind:
+                navigation.kind === 'responseLink'
+                  ? 'responseLink'
+                  : 'identity',
+              ...(navigation.reference
+                ? { reference: navigation.reference }
+                : {}),
+              ...(navigation.link ? { link: navigation.link } : {}),
+            },
+          },
         },
-      });
-      const snapshot = result.collections[0];
-      if (!snapshot)
-        throw new Error(result.errors[0] ?? 'The collection was not read');
-      if (snapshot.error && !snapshot.items.length)
-        throw new Error(snapshot.error);
-      const tableKey =
-        context.sourceKey ??
-        identity({
-          kind: 'collection',
-          collection: collectionIdentity(bound, context.navigation),
-          parentSourceKey: context.parentSourceKey,
-        });
-      const ontology = deriveOntology(doc);
-      const counts = { added: 0, changed: 0, unchanged: 0 };
-      const seen = new Set();
-      // Validate/project the full accepted prefix before writing any record in it.
-      const accepted = snapshot.items.map(record => {
-        const remoteId = record[definition.idField];
-        if (
-          !(
-            (typeof remoteId === 'string' && remoteId.length) ||
-            (typeof remoteId === 'number' && Number.isSafeInteger(remoteId))
-          )
-        )
-          throw new Error('The catalog record has no stable typed identity');
-        const projected = projectReadRecord(doc, {
-          collection: definition,
-          record,
-          context: bound.pathParams,
-          ontology,
-        });
+      }));
+      let name = item.projected.name;
 
-        if (projected.name === projected.id) {
-          const label = definition.presentation.columns.find(
-            column =>
-              column.datatype === 'https://atomicdata.dev/datatypes/string' &&
-              typeof projected.values[column.property] === 'string' &&
-              projected.values[column.property].trim(),
-          );
-          if (label) projected.name = projected.values[label.property];
-        }
-
-        const values = Object.fromEntries(
-          Object.entries(projected.values).map(([name, value]) => {
-            const subject = context.apiSchema?.properties[name];
-            if (!subject)
-              throw new Error('The catalog property schema is unavailable');
-
-            return [subject, value];
-          }),
+      if (name === item.projected.id) {
+        const label = entityType(context.resource).presentation.columns.find(
+          column =>
+            typeof reduced.values[column.property] === 'string' &&
+            reduced.values[column.property].trim(),
         );
-
-        return { record, remoteId, projected, values };
-      });
-
-      for (const { record, remoteId, projected, values } of accepted) {
-        const key = identity({
-          kind: 'record',
-          parentSourceKey: tableKey,
-          collection: { name: bound.collection, resource: bound.resource },
-          remoteId,
-        });
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const old = await findNode(key, rowClass(definition), 'record');
-        const rowValues = {
-          [core.name]: projected.name,
-          ...values,
-          [property('syncable-source-config')]: configuration({
-            parentSourceKey: tableKey,
-            record,
-            resource: definition.resource,
-            context: bound.pathParams,
-            managedProperties: Object.keys(values),
-          }),
-        };
-        let row;
-
-        if (old) {
-          const previous = old.get(
-            property('syncable-source-config'),
-          )?.managedProperties;
-          const allowed = new Set(Object.values(context.apiSchema.properties));
-          const removed = Array.isArray(previous)
-            ? previous.filter(
-                subject =>
-                  allowed.has(subject) && !Object.hasOwn(values, subject),
-              )
-            : [];
-          counts[
-            (await updateNode(
-              old,
-              {
-                key,
-                kind: 'record',
-                isA: [rowClass(definition), klass('syncable-record')],
-                values: rowValues,
-              },
-              removed,
-            ))
-              ? 'changed'
-              : 'unchanged'
-          ]++;
-          row = old;
-        } else {
-          row = await ensureNode({
-            key,
-            kind: 'record',
-            parent: root,
-            name: projected.name,
-            isA: [rowClass(definition), klass('syncable-record')],
-            values: rowValues,
-          });
-          counts.added++;
-        }
-
-        if (!(await withinRoot(row.subject))) continue;
-        const children = relatedCollectionReads(doc, {
-          resource: definition.resource,
-          record,
-          context: bound.pathParams,
-        });
-        const targets = [];
-        for (const navigation of children)
-          targets.push(
-            await ensureCollection({
-              parent: row.subject,
-              navigation,
-              parentSourceKey: key,
-            }),
-          );
-        // One saved link can open one child directly. With several, Open shows the row's child tables.
-        if (targets.length === 1 && targets[0].get(core.parent) === row.subject)
-          await patch(row, {
-            [property('syncable-open-target')]: targets[0].subject,
-          });
+        if (label) name = reduced.values[label.property];
       }
 
-      await patch(await store.getResource(root), {
-        [core.classtype]: rowClass(definition),
-        [property('syncable-collection-view')]: collectionView(definition),
-      });
-      const incomplete = !snapshot.complete;
+      const rowValues = {
+        [core.name]: name,
+        ...values,
+        [property('syncable-entity-table')]: root,
+        [property('syncable-rule-memberships')]: reduced.memberships,
+        [property('syncable-source-config')]: recordConfig,
+        [property('syncable-navigation-intents')]: intents,
+      };
+
+      if (old) {
+        if (!(await withinRoot(old.subject))) {
+          counts.protected = (counts.protected ?? 0) + 1;
+          continue;
+        }
+
+        counts[
+          (await updateNode(
+            old,
+            {
+              key,
+              kind: 'record',
+              isA: [
+                rowClass(entityType(context.resource)),
+                klass('syncable-record'),
+              ],
+              values: rowValues,
+            },
+            removed,
+          ))
+            ? 'changed'
+            : 'unchanged'
+        ]++;
+      } else {
+        await ensureNode({
+          key,
+          kind: 'record',
+          parent: root,
+          name,
+          isA: [
+            rowClass(entityType(context.resource)),
+            klass('syncable-record'),
+          ],
+          values: rowValues,
+        });
+        counts.added++;
+      }
+    }
+
+    return counts;
+  }
+
+  async function refresh() {
+    if (context.kind !== 'collection' || !context.rule)
+      throw new Error('Choose a saved filter to sync');
+    await assertRun();
+    const stamp = runStamp();
+    let run = {
+      ruleSubject: context.rule.subject,
+      ruleKey: context.rule.key,
+      ...stamp,
+      complete: false,
+      entityKeys: [],
+    };
+    const id =
+      'syncables:run:' +
+      sourceConfigFingerprint([context.rule.subject, stamp.runId]);
+    const storedRun = await durableResource(
+      'syncable-sync-run',
+      context.rule.subject,
+      id,
+      run,
+    );
+
+    try {
+      const result = await readSelection(
+        readDocument(),
+        context.rule.definition,
+        {
+          transport,
+          querySelection: context.querySelection,
+          maxPartitions: 32,
+          limits: {
+            maxRequests: context.principal.kind === 'public' ? 40 : 20,
+            maxRecords: 4000,
+            timeoutMs: 120000,
+            maxRetries: 0,
+          },
+        },
+      );
+      await assertRun();
+      const accepted = result.observations.map(observation => ({
+        ...observation,
+        entityKey: entitySourceKey({
+          ...context,
+          entityIdentity: observation.entity,
+        }),
+        ruleKey: context.rule.key,
+        ...stamp,
+      }));
+      if (
+        accepted.some(
+          observation => observation.entity.resource !== context.resource,
+        )
+      )
+        throw new Error('The read returned a different entity type');
+      for (const observation of accepted)
+        await durableResource(
+          'syncable-observation',
+          context.rule.subject,
+          'syncables:observation:' +
+            sourceConfigFingerprint([
+              context.rule.subject,
+              stamp.runId,
+              observation.entityKey,
+              observation.representationKey,
+              observation.partitionKey,
+            ]),
+          observation,
+        );
+      run = {
+        ...run,
+        entityKeys: [
+          ...new Set(accepted.map(observation => observation.entityKey)),
+        ],
+      };
+      await patch(storedRun, { [property('syncable-sync-run')]: run });
+      const counts = await reconcile();
+      await assertRun();
+
+      if (result.complete) {
+        run = { ...run, complete: true };
+        await patch(storedRun, { [property('syncable-sync-run')]: run });
+        await reconcile();
+      }
+
       const summary = {
         ...counts,
-        rows: seen.size,
-        incomplete,
+        rows: run.entityKeys.length,
+        incomplete: !result.complete,
         error:
-          snapshot.error ??
-          snapshot.notComplete ??
-          (incomplete
-            ? 'The collection read was incomplete. Local rows were retained.'
-            : null),
+          [
+            ...result.errors,
+            ...(counts.protected
+              ? [
+                  'Moved cached rows were retained; open their current location to update them.',
+                ]
+              : []),
+          ]
+            .join('; ')
+            .slice(0, 1024) || null,
       };
       await saveStatus({
         ...summary,
-        ...(!incomplete ? { lastSuccess: new Date().toISOString() } : {}),
+        ...(result.complete ? { lastSuccess: new Date().toISOString() } : {}),
       });
 
       return summary;
     } catch (error) {
-      await saveStatus({
-        error: String(error?.message ?? error).slice(0, 1024),
-      }).catch(() => undefined);
+      await assertRun()
+        .then(() =>
+          saveStatus({ error: String(error?.message ?? error).slice(0, 1024) }),
+        )
+        .catch(() => undefined);
       throw error;
     }
   }
@@ -873,6 +1299,8 @@ export function createSyncApp(store, context) {
           'principal',
           config,
         );
+        if (await withinRoot(row.subject))
+          await discoverCollections(row, config.principal, config.connectionId);
       } catch (error) {
         errors.push(error);
       }
@@ -905,7 +1333,9 @@ export function createSyncApp(store, context) {
         collection =>
           context.principal?.kind !== 'public' || collection.allowsAnonymous,
       ),
-    ensureCollection,
+    ensureEntityTable,
+    ensureRule,
+    savedRules,
     storedPrincipals,
     discoverPrincipals,
   };
@@ -1062,12 +1492,47 @@ export async function view({ root, store }) {
     return;
   }
 
-  if (context.kind === 'principal') {
-    root.append(el('h3', 'Available collections'));
+  if (
+    context.kind === 'principal' ||
+    (context.kind === 'collection' && !context.rule)
+  ) {
+    if (context.kind === 'collection') {
+      root.append(el('h3', 'Saved filters'));
+      for (const rule of await app.savedRules())
+        root.append(
+          button(rule.get(core.name), () =>
+            store.ui.openResource(rule.subject),
+          ),
+        );
+      root.append(
+        el(
+          'p',
+          'All cached rows remain available in Collection. Each saved filter syncs independently.',
+          'muted',
+        ),
+      );
+      root.append(
+        button('Choose source', async () =>
+          store.ui.openResource(
+            (await store.getResource(context.subject)).get(core.parent),
+          ),
+        ),
+      );
+      root.append(...warnings());
+
+      return;
+    }
+
+    root.append(el('h3', 'Save a filter'));
+    const filterName = el('input');
+    filterName.setAttribute('aria-label', 'Filter name');
+    filterName.placeholder = 'Filter name';
     const select = el('select');
-    select.setAttribute('aria-label', 'Collection');
+    select.setAttribute('aria-label', 'Source collection');
     const inputs = el('div');
-    const definitions = app.availableCollections();
+    const definitions = app
+      .availableCollections()
+      .filter(item => !context.resource || item.resource === context.resource);
     const entrypoint = el('select');
     entrypoint.setAttribute('aria-label', 'Source');
 
@@ -1129,9 +1594,10 @@ export async function view({ root, store }) {
     entrypoint.addEventListener('change', renderInputs);
     renderEntrypoints();
     controls.append(
+      filterName,
       select,
       entrypoint,
-      button('Open collection', () =>
+      button('Save filter', () =>
         app.createCollection(
           select.value,
           Object.fromEntries(
@@ -1141,6 +1607,7 @@ export async function view({ root, store }) {
             ]),
           ),
           entrypoint.value || undefined,
+          filterName.value.trim() || undefined,
         ),
       ),
     );
@@ -1156,16 +1623,16 @@ export async function view({ root, store }) {
     clearTimeout(timer);
     const execution = await store.execution('state');
     const status = await app.status();
-    root.replaceChildren(el('h3', 'Collection sync'));
+    root.replaceChildren(el('h3', 'Saved filter sync'));
     controls.replaceChildren();
     const start = button(
-      execution.running ? 'Syncing' : 'Sync now',
+      execution.queued ? 'Queued' : execution.running ? 'Syncing' : 'Sync now',
       async () => {
         await store.execution('start');
         await render();
       },
     );
-    start.disabled = execution.running || status.paused;
+    start.disabled = execution.running || execution.queued || status.paused;
     controls.append(
       start,
       button(status.paused ? 'Resume' : 'Pause', async () => {
@@ -1184,16 +1651,13 @@ export async function view({ root, store }) {
         ),
       );
     controls.append(
-      button('Browse stored data', async () => {
-        const table = await store.getResource(context.subject);
-        const definitions = await store.getMany(table.get(tableViews) ?? []);
-        const target = definitions.find(
-          row => !row.error && row.get(viewKind) === 'syncable-collection',
-        );
-        await store.ui.openResource(target?.subject ?? context.subject);
-      }),
+      button('Browse stored data', () =>
+        store.ui.openResource(context.rule.subject),
+      ),
     );
+    const selected = await store.getResource(context.rule.subject);
     root.append(
+      el('p', selected.get(core.name)),
       controls,
       el('p', (status.rows ?? 0) + ' stored entries'),
       el(
@@ -1212,7 +1676,7 @@ export async function view({ root, store }) {
       );
     if (status.error) showError(status.error);
     root.append(...warnings());
-    if (execution.running)
+    if (execution.running || execution.queued)
       timer = setTimeout(() => void render().catch(showError), 500);
   };
 

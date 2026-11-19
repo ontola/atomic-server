@@ -4,6 +4,8 @@ import {
   collectionIdentity,
   sourceKey,
   sourceConfigFingerprint,
+  entitySourceKey,
+  entityTableKey,
 } from './builtinSyncIdentity.js';
 import {
   parseSyncableSourceConfig,
@@ -56,6 +58,127 @@ it('preserves typed principal and source identities independently of credential 
       key,
     ),
   ).toBe(false);
+});
+
+it('uses one resource table and typed entity identity independently of read paths and credential slots', () => {
+  const entityIdentity = {
+    resource: 'event',
+    template: '/events/{id}',
+    values: [['id', 7]] as [string, string | number][],
+    path: '/events/7',
+    key: '["event",[["id",7]]]',
+  };
+  const table = {
+    ...base,
+    version: 3 as const,
+    kind: 'collection' as const,
+    resource: 'event',
+  };
+  const key = entityTableKey(table);
+  const parsed = parseSyncableSourceKey(key);
+  expect(parsed).toMatchObject({ version: 3, resource: 'event' });
+  if (parsed.version !== 3) throw new Error('Expected flat source');
+  expect(
+    sourceConfigMatchesKey(parseSyncableSourceConfig(table), parsed, key),
+  ).toBe(true);
+  expect(
+    sourceConfigMatchesKey(
+      parseSyncableSourceConfig({ ...table, connectionId: 'x'.repeat(43) }),
+      parsed,
+      key,
+    ),
+  ).toBe(true);
+  const { connectionId: _slot, ...rowBase } = table;
+  const row = {
+    ...rowBase,
+    kind: 'record' as const,
+    entityIdentity,
+    record: { id: 7 },
+    context: {},
+  };
+  const rowKey = entitySourceKey({ ...row, entityIdentity });
+  const rowParsed = parseSyncableSourceKey(rowKey);
+  if (rowParsed.version !== 3) throw new Error('Expected flat source');
+  expect(
+    sourceConfigMatchesKey(parseSyncableSourceConfig(row), rowParsed, rowKey),
+  ).toBe(true);
+  expect(
+    sourceConfigMatchesKey(
+      {
+        ...row,
+        entityIdentity: { ...entityIdentity, key: '["event",[["id","7"]]]' },
+      },
+      rowParsed,
+      rowKey,
+    ),
+  ).toBe(false);
+  expect(() => parseSyncableSourceConfig({ ...row, collection })).toThrow(
+    'flat',
+  );
+  expect(() =>
+    parseSyncableSourceKey(
+      JSON.stringify({
+        ...JSON.parse(rowKey),
+        parentSourceKeyHash: 'a'.repeat(64),
+      }),
+    ),
+  ).toThrow();
+});
+
+it('requires an operational authenticated table slot and rejects forged flat identities', () => {
+  const { connectionId: _slot, ...withoutSlot } = base;
+  expect(() =>
+    parseSyncableSourceConfig({
+      ...withoutSlot,
+      version: 3,
+      kind: 'collection',
+      resource: 'event',
+    }),
+  ).toThrow('connection');
+  expect(
+    parseSyncableSourceConfig({
+      ...withoutSlot,
+      version: 3,
+      kind: 'collection',
+      resource: 'event',
+      principal: { kind: 'public' },
+    }),
+  ).toMatchObject({ version: 3 });
+  expect(() =>
+    parseSyncableSourceConfig({
+      ...base,
+      version: 3,
+      kind: 'record',
+      resource: 'event',
+      record: {},
+      entityIdentity: {
+        resource: 'other',
+        template: '/events/{id}',
+        values: [['id', 7]],
+        path: '/events/7',
+        key: 'identity',
+      },
+    }),
+  ).toThrow('different resource');
+  expect(() =>
+    parseSyncableSourceConfig({
+      ...base,
+      version: 3,
+      kind: 'record',
+      resource: 'event',
+      record: {},
+      entityIdentity: {
+        resource: 'event',
+        template: '/events/{id}',
+        values: [
+          ['id', 7],
+          ['id', '7'],
+        ],
+        path: '/events/7',
+        key: 'identity',
+      },
+    }),
+  ).toThrow('canonical');
 });
 it.each([
   { ...base, principal: { kind: 'public' } },
@@ -126,6 +249,8 @@ it('verifies compact parent digests against the complete saved provenance key', 
     resource: 'event',
     record: { id: 7 },
   });
+  if (config.version !== 2)
+    throw new Error('Expected historical configuration');
   const raw = sourceKey({
     ...config,
     kind: 'record',

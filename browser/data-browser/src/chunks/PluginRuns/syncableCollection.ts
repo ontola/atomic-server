@@ -1,3 +1,5 @@
+import type { RelationshipSelector } from 'syncables/browser';
+import { openFlatSyncableRow } from './syncableFlatNavigation';
 import {
   core,
   dataBrowser,
@@ -26,6 +28,11 @@ export interface SyncableCollectionDescriptor {
   title: string;
   columns: SyncableCollectionColumn[];
   openTargetProperty?: string;
+  relationships?: {
+    resource: string;
+    title: string;
+    via: RelationshipSelector;
+  }[];
 }
 
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -99,11 +106,39 @@ export function parseSyncableCollectionView(
     });
   }
 
+  const relationships: SyncableCollectionDescriptor['relationships'] = [];
+
+  if (value.relationships !== undefined) {
+    if (!Array.isArray(value.relationships) || value.relationships.length > 100)
+      return undefined;
+
+    for (const relationship of value.relationships) {
+      if (
+        !record(relationship) ||
+        !text(relationship.resource) ||
+        !text(relationship.title) ||
+        !record(relationship.via) ||
+        !text(relationship.via.collection) ||
+        !['identity', 'responseLink'].includes(String(relationship.via.kind)) ||
+        (relationship.via.reference !== undefined &&
+          !text(relationship.via.reference)) ||
+        (relationship.via.link !== undefined && !text(relationship.via.link))
+      )
+        return undefined;
+      relationships.push(
+        structuredClone(relationship) as unknown as NonNullable<
+          SyncableCollectionDescriptor['relationships']
+        >[number],
+      );
+    }
+  }
+
   return {
     version: 1,
     rowClass: value.rowClass,
     title: value.title,
     columns,
+    ...(value.relationships !== undefined ? { relationships } : {}),
     ...(value.openTargetProperty
       ? { openTargetProperty: value.openTargetProperty as string }
       : {}),
@@ -198,9 +233,18 @@ export async function openSyncableCollectionRow(
   drive: string,
   table: string,
   rowSubject: string,
-) {
+  activeRule?: string,
+): Promise<{ subject: string; view?: string; syncFilter?: string }> {
   const descriptor = await resolveSyncableCollectionView(store, drive, table);
   const row = await store.getResource(rowSubject);
+  const flat = await openFlatSyncableRow(
+    store,
+    drive,
+    await store.getResource(table),
+    row,
+    activeRule,
+  );
+  if (flat) return flat;
   if (
     !isSyncableCollectionRow(row, table, descriptor) ||
     !(await isSyncableResourceInDrive(store, drive, rowSubject))

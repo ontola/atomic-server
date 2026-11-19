@@ -487,6 +487,12 @@ async function mockIntegrationProxy(
       return;
     }
 
+    if (providerPath === '/repositories/790/issues') {
+      await send([]);
+
+      return;
+    }
+
     if (providerPath === '/repositories/456/issues') {
       expect(url.searchParams.get('state')).toBe('all');
       expect(url.searchParams.get('per_page')).toBe('100');
@@ -559,7 +565,8 @@ async function sourceState(page: Page, subject: string) {
     const rowClass = table.get(base + 'classtype');
     const rows = [...store.resources.values()].filter(
       resource =>
-        resource.get(base + 'parent') === tableSubject &&
+        (resource.get(base + 'parent') === tableSubject ||
+          resource.get(property('syncable-entity-table')) === tableSubject) &&
         resource.get(nodeKind) === 'record' &&
         typeof resource.get(source) === 'string' &&
         typeof rowClass === 'string' &&
@@ -571,12 +578,24 @@ async function sourceState(page: Page, subject: string) {
       localId: table.get(base + 'localId'),
       key: table.get(source) as string | undefined,
       config: table.get(config) as
-        | { principal?: { kind: string }; collection?: { collection: string } }
+        | {
+            principal?: { kind: string };
+            collection?: { collection: string };
+            resource?: string;
+            connectionId?: string;
+          }
         | undefined,
       rows: await Promise.all(
         rows.map(async row => {
           const saved = row.get(config) as
-            | { managedProperties?: string[] }
+            | {
+                managedProperties?: string[];
+                entityIdentity?: {
+                  key: string;
+                  values: Array<[string, string | number]>;
+                };
+                record?: Record<string, unknown>;
+              }
             | undefined;
 
           return {
@@ -585,6 +604,9 @@ async function sourceState(page: Page, subject: string) {
             localId: row.get(base + 'localId'),
             key: row.get(source) as string | undefined,
             note: row.get(base + 'description'),
+            entityIdentity: saved?.entityIdentity,
+            raw: saved?.record,
+            memberships: row.getSubjects(property('syncable-rule-memberships')),
             managed: await Promise.all(
               (saved?.managedProperties ?? []).map(async field => {
                 const definition = await store.getResource(field);
@@ -618,6 +640,7 @@ async function sourceSubject(page: Page, kind: string, collection?: string) {
         if (resource.get(fields['syncable-node-kind']) !== wanted) return false;
         const config = resource.get(fields['syncable-source-config']) as
           | {
+              resource?: string;
               collection?: { collection: string };
               navigation?: { collection: string };
               principal?: { kind: string };
@@ -625,7 +648,8 @@ async function sourceSubject(page: Page, kind: string, collection?: string) {
           | undefined;
 
         return name
-          ? (config?.collection?.collection ??
+          ? (config?.resource ??
+              config?.collection?.collection ??
               config?.navigation?.collection) === name
           : config?.principal?.kind === 'authenticated';
       });
@@ -665,27 +689,45 @@ async function openRow(page: Page, text: string) {
   await expect.poll(() => getCurrentSubject(page)).not.toBe(previous);
 }
 
-async function expandSidebarNode(page: Page, name: string) {
-  const header = page
-    .getByTestId('sidebar')
-    .locator('[data-sidebar-id]')
-    .filter({
-      has: page.getByRole('button', { name, exact: true }),
-    });
-  const expand = header.getByRole('button', {
-    name: 'Expand folder',
+async function selectFilter(page: Page, value?: string) {
+  const select = page.getByRole('combobox', {
+    name: 'Saved filter',
     exact: true,
   });
-  await expect(
-    header.getByRole('button', { name: /^(Expand|Collapse) folder$/ }),
-  ).toHaveCount(1);
-  if (await expand.count()) await expand.click();
-  await expect(
-    header.getByRole('button', { name: 'Collapse folder', exact: true }),
-  ).toBeVisible();
+  await expect(select).toBeVisible({ timeout: 30_000 });
+
+  if (value !== undefined) {
+    await select.selectOption(value);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('syncFilter') ?? '')
+      .toBe(value);
+  } else if (!(await select.inputValue())) {
+    const choices = await select.locator('option').evaluateAll(options =>
+      options
+        .map(option => ({
+          value: (option as HTMLOptionElement).value,
+          label: option.textContent,
+        }))
+        .filter(option => option.value),
+    );
+    expect(
+      choices,
+      'Choose the explicit saved scope when a table has multiple rules',
+    ).toHaveLength(1);
+    await select.selectOption(choices[0].value);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('syncFilter'))
+      .toBe(choices[0].value);
+  }
+
+  return select.inputValue();
 }
 
-async function sync(page: Page) {
+async function sync(page: Page, rule?: string) {
+  await selectFilter(page, rule);
+  await page
+    .getByRole('button', { name: 'Sync settings', exact: true })
+    .click();
   await selectView(page, 'Sync');
   const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
   await expect(
@@ -694,57 +736,115 @@ async function sync(page: Page) {
   await iframe.getByRole('button', { name: 'Sync now', exact: true }).click();
   await expect(
     iframe.getByRole('button', { name: 'Sync now', exact: true }),
-  ).toBeEnabled({ timeout: 45_000 });
+  ).toBeEnabled({ timeout: 60_000 });
   await expect(iframe.getByRole('alert')).toHaveCount(0);
 
   return iframe;
 }
 
-async function legacyPublicMirror(page: Page, parent: string) {
+async function legacyPublicMirror(
+  page: Page,
+  parentSubject: string,
+  tableSubject: string,
+) {
   return page.evaluate(
-    async ({ parent: targetParent, proxy }) => {
-      const store = window.store;
-      const base = 'https://atomicdata.dev/properties/';
+    async ({ parent, targetTable, proxy, raw }) => {
+      const store = window.store,
+        base = 'https://atomicdata.dev/properties/';
       const terms = Object.fromEntries(
         [...store.resources.values()].map(resource => [
           resource.get(base + 'shortname'),
           resource.subject,
         ]),
       );
-      const oldKey = JSON.stringify([
-        proxy,
-        'github-issues',
-        'public-mirror',
-        'github-public-repo:456',
-        'issues',
-      ]);
-      const localId = 'syncables:node:' + encodeURIComponent(oldKey);
-      const table = await store.newResource({
-        parent: targetParent,
-        isA: ['https://atomicdata.dev/classes/Table'],
-        propVals: {
-          [base + 'name']: 'Issues',
-          [base + 'localId']: localId,
-          [base + 'classtype']: terms['syncable-record'],
-          [terms['syncable-source-key']]: oldKey,
-          [terms['syncable-node-kind']]: 'public-mirror',
-          [terms['syncable-source-config']]: {
-            repoId: '456',
-            ownerId: '123',
-            ownerLogin: 'ontola',
-            repoName: 'atomic-server',
+      const canonical = (value: unknown): unknown =>
+        Array.isArray(value)
+          ? value.map(canonical)
+          : value && typeof value === 'object'
+            ? Object.fromEntries(
+                Object.keys(value)
+                  .sort()
+                  .map(key => [
+                    key,
+                    canonical((value as Record<string, unknown>)[key]),
+                  ]),
+              )
+            : value;
+      const bound = {
+        collection: 'repositoryIssues',
+        resource: 'issue',
+        pathParams: { repository_id: '456' },
+        path: '/repositories/456/issues',
+        method: 'GET',
+        query: { per_page: '100', state: 'all' },
+        body: {},
+      };
+      const scope = {
+        version: 2,
+        proxyOrigin: proxy,
+        platform: 'github-issues',
+        principal: { kind: 'public' },
+      };
+      const oldKey = JSON.stringify(
+        canonical({
+          ...scope,
+          kind: 'collection',
+          collection: {
+            name: 'repositoryIssues',
+            resource: 'issue',
+            context: { repository_id: '456' },
           },
-        },
+        }),
+      );
+      const parentHash = Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(JSON.stringify(oldKey)),
+          ),
+        ),
+      )
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+      const rowKey = JSON.stringify(
+        canonical({
+          ...scope,
+          kind: 'record',
+          collection: { name: 'repositoryIssues', resource: 'issue' },
+          parentSourceKeyHash: parentHash,
+          remoteId: 15,
+        }),
+      );
+      const localId = 'syncables:node:' + encodeURIComponent(oldKey);
+      const table = await store.getResource(targetTable);
+      const rowClass = table.get(base + 'classtype') as string;
+      await table.set(base + 'parent', parent);
+      await table.set(base + 'localId', localId);
+      await table.set(terms['syncable-source-key'], oldKey);
+      await table.set(terms['syncable-node-kind'], 'collection');
+      await table.set(terms['syncable-source-config'], {
+        ...scope,
+        collection: bound,
       });
       await table.save();
       const row = await store.newResource({
         parent: table.subject,
-        isA: [terms['syncable-record']],
+        isA: [rowClass, terms['syncable-record']],
         propVals: {
           [base + 'name']: 'Legacy imported issue',
           [base + 'localId']: 'syncables:github-issue:9001',
           [base + 'description']: 'Keep this user note',
           [terms['syncable-issue-number']]: 15,
+          [terms['syncable-source-key']]: rowKey,
+          [terms['syncable-node-kind']]: 'record',
+          [terms['syncable-source-config']]: {
+            ...scope,
+            parentSourceKey: oldKey,
+            record: raw,
+            resource: 'issue',
+            context: { repository_id: '456' },
+            managedProperties: [],
+          },
         },
       });
       await row.save();
@@ -754,7 +854,7 @@ async function legacyPublicMirror(page: Page, parent: string) {
       const previous = drive.get(terms['syncable-resource-index']) as
         | Record<string, string>
         | undefined;
-      drive.set(terms['syncable-resource-index'], {
+      await drive.set(terms['syncable-resource-index'], {
         ...previous,
         [oldKey]: table.subject,
       });
@@ -762,18 +862,25 @@ async function legacyPublicMirror(page: Page, parent: string) {
 
       return { table: table.subject, row: row.subject, localId, oldKey };
     },
-    { parent, proxy: PROXY },
+    {
+      parent: parentSubject,
+      targetTable: tableSubject,
+      proxy: PROXY,
+      raw: issue(9001, 15, 'Legacy imported issue'),
+    },
   );
 }
 
 async function publicForm(page: Page, collection = 'repositoryIssues') {
   await selectView(page, 'Sync');
   const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
-  await expect(iframe.getByLabel('Collection', { exact: true })).toBeVisible({
+  await expect(
+    iframe.getByLabel('Source collection', { exact: true }),
+  ).toBeVisible({
     timeout: 30_000,
   });
   await iframe
-    .getByLabel('Collection', { exact: true })
+    .getByLabel('Source collection', { exact: true })
     .selectOption(collection);
 
   return iframe;
@@ -787,6 +894,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     test.setTimeout(150_000);
     const requests = await mockIntegrationProxy(page);
     await before({ page }, testInfo);
+    // Finish signed setup writes before the settings helper deliberately reloads.
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
     await enableIntegrationDiscovery(page);
     await clickAccountMenuItem(page, 'Apps');
     await page
@@ -925,6 +1035,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     test.setTimeout(240_000);
     const requests = await mockIntegrationProxy(page);
     await before({ page }, testInfo);
+    // Finish signed setup writes before the settings helper deliberately reloads.
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
     const driveUrl = page.url();
     await enableIntegrationDiscovery(page);
     await expect(page).toHaveURL(driveUrl);
@@ -1008,16 +1121,19 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(sidebar.getByText('Accounts', { exact: true })).toHaveCount(0);
     const setupReads = requests.providerRequests.length;
     const setupDocuments = requests.documentRequests.length;
+    await expect(
+      principalTable.getByText('Issues and pull requests', { exact: true }),
+    ).toBeVisible();
     await openRow(page, 'Organizations');
-    const organizationsSubject = await getCurrentSubject(page);
-    const organizationsUrl = page.url();
+    const organizationsSubject = await getCurrentSubject(page),
+      organizationsUrl = page.url();
     await browse(page);
     expect(requests.providerRequests).toHaveLength(setupReads);
     expect(requests.documentRequests).toHaveLength(setupDocuments);
     await sync(page);
-    expect(requests.organizationRequests).toBe(1);
-    expect(requests.repositoryRequests).toBe(0);
-    expect(requests.issueConnections).toEqual([]);
+    const organizationsRule = await page
+      .getByRole('combobox', { name: 'Saved filter', exact: true })
+      .inputValue();
     const directory = await browse(page);
     await expect(directory.getByText('ontola', { exact: true })).toBeVisible();
     await expect(
@@ -1026,46 +1142,25 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(directory.getByText('michiel', { exact: true })).toHaveCount(
       0,
     );
-    await expect(
-      directory.getByRole('button', { name: /Sync|Refresh/ }),
-    ).toHaveCount(0);
     expect((await sourceState(page, organizationsSubject)).rows).toHaveLength(
       2,
     );
-    const nativeReads = requests.providerRequests.length;
-    const nativeDocuments = requests.documentRequests.length;
-    let attemptedNativeReads = 0;
+    expect(requests.organizationRequests).toBe(1);
+    expect(requests.issueConnections).toEqual([]);
 
-    const offline = async (route: Route) => {
-      attemptedNativeReads++;
-      await route.abort('failed');
-    };
-
-    await page.route(PROXY + '/proxy/**', offline);
-    await selectView(page, 'Table');
-    await browse(page);
-    await openRow(page, 'ontola');
+    // Root and organization reads share the same Repositories table and rows.
+    await page.goto(principalUrl);
+    await openRow(page, 'Repositories');
     const repositoriesSubject = await getCurrentSubject(page);
-    const repositoriesUrl = page.url();
-    await browse(page);
-    expect((await sourceState(page, repositoriesSubject)).rows).toHaveLength(0);
-    expect(attemptedNativeReads).toBe(0);
-    expect(requests.providerRequests).toHaveLength(nativeReads);
-    expect(requests.documentRequests).toHaveLength(nativeDocuments);
-    await page.unroute(PROXY + '/proxy/**', offline);
     await sync(page);
-    expect(requests.providerRequests).toContain('/orgs/ontola');
-    expect(requests.providerRequests).toContain('/orgs/ontola/repos');
-    expect(requests.providerRequests).not.toContain('/user/repos');
-    expect(requests.repositoryRequests).toBe(1);
-    const repos = await browse(page);
-    await expect(
-      repos.getByText('atomic-server', { exact: true }),
-    ).toBeVisible();
-    await expect(repos.getByText('notes', { exact: true })).toHaveCount(0);
-    await expect(repos.getByText('Public', { exact: true })).toBeVisible();
-    const repoState = await sourceState(page, repositoriesSubject);
-    const firstRepo = repoState.rows.find(row => row.name === 'atomic-server')!;
+    const rootRepositoriesRule = await page
+      .getByRole('combobox', { name: 'Saved filter', exact: true })
+      .inputValue();
+    const rootRepositoriesUrl = page.url();
+    await browse(page);
+    const rootState = await sourceState(page, repositoriesSubject);
+    expect(rootState.rows).toHaveLength(3);
+    const firstRepo = rootState.rows.find(row => row.name === 'atomic-server')!;
     expect(firstRepo.managed).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1078,13 +1173,82 @@ test.describe('catalog-driven built-in Syncables', () => {
         }),
       ]),
     );
+    expect(requests.providerRequests).toContain('/user/repos');
+    const nativeReads = requests.providerRequests.length,
+      nativeDocuments = requests.documentRequests.length;
+    let attemptedNativeReads = 0;
+
+    const offline = async (route: Route) => {
+      attemptedNativeReads++;
+      await route.abort('failed');
+    };
+
+    await page.route(PROXY + '/proxy/**', offline);
+    await page.goto(organizationsUrl);
+    await browse(page);
+    await selectFilter(page, organizationsRule);
+    await openRow(page, 'ontola');
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      repositoriesSubject,
+    );
+    const repositoriesRule = await selectFilter(page);
+    expect(repositoriesRule).not.toBe(rootRepositoriesRule);
+    const repositoriesUrl = page.url();
+    const emptyScope = await browse(page);
+    await expect(
+      emptyScope.getByText('atomic-server', { exact: true }),
+    ).toHaveCount(0);
+    expect((await sourceState(page, repositoriesSubject)).rows).toHaveLength(3);
+    expect(attemptedNativeReads).toBe(0);
+    expect(requests.providerRequests).toHaveLength(nativeReads);
+    expect(requests.documentRequests).toHaveLength(nativeDocuments);
+    await page.unroute(PROXY + '/proxy/**', offline);
+    await sync(page, repositoriesRule);
+    expect(requests.providerRequests).toContain('/orgs/ontola');
+    expect(requests.providerRequests).toContain('/orgs/ontola/repos');
+    const repos = await browse(page);
+    await expect(
+      repos.getByText('atomic-server', { exact: true }),
+    ).toBeVisible();
+    await expect(repos.getByText('notes', { exact: true })).toHaveCount(0);
+    const shared = await sourceState(page, repositoriesSubject);
+    expect(shared.rows).toHaveLength(3);
+    expect(shared.rows.find(row => row.name === 'atomic-server')?.subject).toBe(
+      firstRepo.subject,
+    );
+    expect(
+      shared.rows.find(row => row.name === 'atomic-server')?.memberships,
+    ).toEqual(expect.arrayContaining([rootRepositoriesRule, repositoriesRule]));
     expect(requests.issueConnections).toHaveLength(0);
-    const nestedNativeReads = requests.providerRequests.length;
+
+    const beforeIssueOpen = requests.providerRequests.length;
     await openRow(page, 'atomic-server');
     const mirrorSubject = await getCurrentSubject(page);
+    const issuesRule = await selectFilter(page);
     await browse(page);
-    expect(requests.providerRequests).toHaveLength(nestedNativeReads);
-    expect(requests.issueConnections).toHaveLength(0);
+    expect(requests.providerRequests).toHaveLength(beforeIssueOpen);
+    expect((await sourceState(page, mirrorSubject)).config).toMatchObject({
+      resource: 'issue',
+    });
+    // Entity tables are siblings. There is no organization/repository mirror tree.
+    expect(
+      await page.evaluate(
+        async ({ subjects, parent }) =>
+          Promise.all(
+            subjects.map(
+              async subject =>
+                (await window.store.getResource(subject)).get(
+                  'https://atomicdata.dev/properties/parent',
+                ) === parent,
+            ),
+          ),
+        {
+          subjects: [organizationsSubject, repositoriesSubject, mirrorSubject],
+          parent: principalSubject,
+        },
+      ),
+    ).toEqual([true, true, true]);
     await selectView(page, 'Sync');
     const syncNow = iframe.getByRole('button', {
       name: 'Sync now',
@@ -1097,26 +1261,24 @@ test.describe('catalog-driven built-in Syncables', () => {
     });
     await syncNow.click();
     await expect.poll(() => requests.issueConnections.length).toBe(1);
-    await sidebar.getByText('Organizations', { exact: true }).click();
+    await sidebar
+      .getByRole('button', { name: 'Organizations', exact: true })
+      .click();
     await expect(page.getByRole('main')).toHaveAttribute(
       'about',
       organizationsSubject,
     );
     await browse(page);
+    await selectFilter(page, organizationsRule);
     await expect(directory.getByText('ontola', { exact: true })).toBeVisible();
     await expect(frame).toHaveCount(0);
     await expect(page.locator('iframe[title="App"]')).toHaveCount(1);
-    await testInfo.attach('github-native-browse-during-sync', {
+    await testInfo.attach('github-native-browse-during-rule-sync', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
-    // Navigating to Organizations collapses deeper ancestors. Reopen the real
-    // tree with its carets before selecting the still-running mirror.
-    const backgroundReads = requests.providerRequests.length;
-    const backgroundDocuments = requests.documentRequests.length;
-    await expandSidebarNode(page, 'ontola');
-    await expandSidebarNode(page, 'Repositories');
-    await expandSidebarNode(page, 'atomic-server');
+    const backgroundReads = requests.providerRequests.length,
+      backgroundDocuments = requests.documentRequests.length;
     await sidebar
       .getByRole('button', { name: 'Issues and pull requests', exact: true })
       .click();
@@ -1124,38 +1286,27 @@ test.describe('catalog-driven built-in Syncables', () => {
       'about',
       mirrorSubject,
     );
-    expect(requests.providerRequests).toHaveLength(backgroundReads);
-    expect(requests.documentRequests).toHaveLength(backgroundDocuments);
+    await selectFilter(page, issuesRule);
     await selectView(page, 'Sync');
     await expect(
       iframe.getByRole('button', { name: 'Syncing', exact: true }),
     ).toBeDisabled();
+    expect(requests.providerRequests).toHaveLength(backgroundReads);
+    expect(requests.documentRequests).toHaveLength(backgroundDocuments);
     release?.();
     requests.issueGate = undefined;
     await expect(
       iframe.getByText('3 stored entries', { exact: true }),
-    ).toBeVisible({ timeout: 45_000 });
+    ).toBeVisible({ timeout: 60_000 });
     await expect(syncNow).toBeEnabled();
     await browse(page);
-    await expect(
-      sidebar.getByRole('button', {
-        name: 'Issues and pull requests',
-        exact: true,
-      }),
-    ).toBeVisible();
-    await testInfo.attach('github-expanded-principal-collections-desktop', {
-      body: await page.screenshot({ animations: 'disabled' }),
-      contentType: 'image/png',
-    });
     const initial = await sourceState(page, mirrorSubject);
     expect(initial.rows).toHaveLength(3);
-    // The API collection also declares PR-shaped records; the generic engine mirrors them faithfully.
-    expect(
-      initial.rows.find(row => JSON.parse(row.key!).remoteId === 17)?.name,
-    ).toBe(PULL_REQUEST_TITLE);
-    expect(
-      initial.rows.find(row => JSON.parse(row.key!).remoteId === 17)?.managed,
-    ).toEqual(
+    // The catalog declares GitHub REST Issues, including its PR-shaped record.
+    expect(initial.rows.find(row => row.raw?.number === 17)?.name).toBe(
+      PULL_REQUEST_TITLE,
+    );
+    expect(initial.rows.find(row => row.raw?.number === 17)?.managed).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           datatype: 'https://atomicdata.dev/datatypes/json',
@@ -1163,9 +1314,7 @@ test.describe('catalog-driven built-in Syncables', () => {
         }),
       ]),
     );
-    const imported = initial.rows.find(
-      row => JSON.parse(row.key!).remoteId === 15,
-    )!;
+    const imported = initial.rows.find(row => row.raw?.number === 15)!;
     expect(imported.name).toBe(FIRST_ISSUE_TITLE);
     expect(imported.managed).toEqual(
       expect.arrayContaining([
@@ -1179,23 +1328,13 @@ test.describe('catalog-driven built-in Syncables', () => {
         }),
       ]),
     );
-    await sync(page);
-    await expect(
-      iframe.getByText('0 added · 1 changed · 0 unchanged', { exact: true }),
-    ).toBeVisible();
-    await browse(page);
-    const updated = await sourceState(page, mirrorSubject);
-    expect(updated.rows).toHaveLength(3);
-    expect(
-      updated.rows.find(row => row.subject === imported.subject)?.name,
-    ).toBe(UPDATED_ISSUE_TITLE);
-    expect(
-      updated.rows.find(row => row.subject === imported.subject)?.localId,
-    ).toBe(imported.localId);
-    await sync(page);
-    await expect(
-      iframe.getByText('0 added · 0 changed · 1 unchanged', { exact: true }),
-    ).toBeVisible();
+    await testInfo.attach('github-flat-principal-collections-desktop', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+
+    // Pausing one saved rule does not freeze its shared entities for other rules.
+    await selectView(page, 'Sync');
     await iframe.getByRole('button', { name: 'Pause', exact: true }).click();
     await expect(
       iframe.getByRole('button', { name: 'Resume', exact: true }),
@@ -1206,7 +1345,41 @@ test.describe('catalog-driven built-in Syncables', () => {
       iframe.getByRole('button', { name: 'Resume', exact: true }),
     ).toBeVisible({ timeout: 30_000 });
     await expect(syncNow).toBeDisabled();
+    await page.goto(repositoriesUrl);
+    await browse(page);
+    const noFanoutReads = requests.providerRequests.length;
+    await page
+      .getByRole('button', {
+        name: 'Open Issues and pull requests',
+        exact: true,
+      })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      mirrorSubject,
+    );
+    const allOrgIssuesRule = await selectFilter(page);
+    expect(allOrgIssuesRule).not.toBe(issuesRule);
+    expect(requests.providerRequests).toHaveLength(noFanoutReads);
+    await sync(page, allOrgIssuesRule);
+    expect(requests.providerRequests).toContain('/repositories/790/issues');
+    const changed = await sourceState(page, mirrorSubject);
+    expect(changed.rows).toHaveLength(3);
+    expect(
+      changed.rows.find(row => row.subject === imported.subject),
+    ).toMatchObject({ name: UPDATED_ISSUE_TITLE, localId: imported.localId });
+    await selectFilter(page, issuesRule);
+    await selectView(page, 'Sync');
+    await expect(
+      iframe.getByRole('button', { name: 'Resume', exact: true }),
+    ).toBeVisible();
     await iframe.getByRole('button', { name: 'Resume', exact: true }).click();
+    await sync(page, issuesRule);
+    await sync(page, issuesRule);
+    await expect(
+      iframe.getByText('0 added · 0 changed · 3 unchanged', { exact: true }),
+    ).toBeVisible();
+
     const connection = requests.redeemed[0];
     browserDiagnostics.expect(
       'error',
@@ -1223,8 +1396,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await openConsent(page, iframe, 'Reconnect');
     await page.getByRole('link', { name: 'Authorize', exact: true }).click();
     await expect(page).toHaveURL(reconnectUrl, { timeout: 45_000 });
-    await sync(page);
-    await expect(iframe.getByRole('alert')).toHaveCount(0);
+    await sync(page, issuesRule);
     expect(requests.redeemed).toHaveLength(2);
     expect(requests.issueConnections.at(-1)).toBe(requests.redeemed[1]);
     expect(
@@ -1233,8 +1405,8 @@ test.describe('catalog-driven built-in Syncables', () => {
         .sort(),
     ).toEqual(initial.rows.map(row => row.subject).sort());
 
-    const completedRows = (await sourceState(page, mirrorSubject)).rows;
-    const pendingReads = requests.issueConnections.length;
+    const completedRows = (await sourceState(page, mirrorSubject)).rows,
+      pendingReads = requests.issueConnections.length;
     requests.issueGate = new Promise(resolve => {
       release = resolve;
     });
@@ -1256,15 +1428,15 @@ test.describe('catalog-driven built-in Syncables', () => {
         .sort(),
     ).toEqual(completedRows.map(row => row.subject).sort());
 
-    // Native cached views remain readable offline and do not mount a new iframe.
-    await browse(page);
-    const offlineReads = requests.providerRequests.length;
-    const offlineDocuments = requests.documentRequests.length;
+    // Offline native navigation selects saved scopes without provider/catalog I/O.
+    const offlineReads = requests.providerRequests.length,
+      offlineDocuments = requests.documentRequests.length;
     await page.route(PROXY + '/proxy/**', offline);
     await page.goto(repositoriesUrl);
     await browse(page);
     await openRow(page, 'atomic-server');
     await browse(page);
+    expect(await getCurrentSubject(page)).toBe(mirrorSubject);
     expect(requests.providerRequests).toHaveLength(offlineReads);
     expect(requests.documentRequests).toHaveLength(offlineDocuments);
     expect(attemptedNativeReads).toBe(0);
@@ -1273,6 +1445,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     ).toBeVisible();
     await page.goto(organizationsUrl);
     await browse(page);
+    await selectFilter(page, organizationsRule);
     const viewport = page.viewportSize()!;
     await page.setViewportSize({ width: 390, height: 844 });
     if (
@@ -1281,24 +1454,31 @@ test.describe('catalog-driven built-in Syncables', () => {
     )
       await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
     const open = directory
-      .getByRole('button', { name: 'Open', exact: true })
-      .first();
+      .getByRole('row')
+      .filter({ hasText: 'ontola' })
+      .getByRole('button', { name: 'Open', exact: true });
     await expect(open).toBeInViewport();
     const bounds = await open.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-    await testInfo.attach('generic-organizations-mobile', {
+    await testInfo.attach('generic-flat-collections-mobile', {
       body: await page.screenshot({ animations: 'disabled' }),
       contentType: 'image/png',
     });
     await page.setViewportSize(viewport);
     await page.unroute(PROXY + '/proxy/**', offline);
+    await page.goto(rootRepositoriesUrl);
+    await browse(page);
+    await selectFilter(page, rootRepositoriesRule);
+    await expect(
+      page.getByRole('main').getByText('notes', { exact: true }),
+    ).toBeVisible();
     await page.goto(principalUrl);
     await browse(page);
     expect(await sourceSubject(page, 'principal')).toBe(principalSubject);
   });
 
-  test('resolves catalog Public inputs into a canonical mirror and migrates saved source aliases', async ({
+  test('resolves catalog Public inputs into a shared entity table and adopts proven saved source aliases', async ({
     page,
   }, testInfo) => {
     test.setTimeout(240_000);
@@ -1362,6 +1542,9 @@ test.describe('catalog-driven built-in Syncables', () => {
       });
     });
     await before({ page }, testInfo);
+    // Finish signed setup writes before the settings helper deliberately reloads.
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
     await enableIntegrationDiscovery(page);
     await clickAccountMenuItem(page, 'Apps');
     await page.getByRole('button', { name: 'Add GitHub to drive' }).click();
@@ -1369,15 +1552,27 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(
       iframe.getByRole('button', { name: 'Public', exact: true }),
     ).toHaveCount(1, { timeout: 45_000 });
+    const appUrl = page.url();
     const appBeforePublic = await getCurrentSubject(page);
     await iframe.getByRole('button', { name: 'Public', exact: true }).click();
     await expect.poll(() => getCurrentSubject(page)).not.toBe(appBeforePublic);
     await browse(page);
     const publicSubject = await getCurrentSubject(page);
     const publicUrl = page.url();
-    const legacy = await legacyPublicMirror(page, publicSubject);
+    const existingIssueTable = await sourceSubject(page, 'collection', 'issue');
+    const legacy = await legacyPublicMirror(
+      page,
+      publicSubject,
+      existingIssueTable,
+    );
     await waitForSynced(page);
     await waitForDriveSettled(page);
+    await page.goto(appUrl);
+    await expect(
+      iframe.getByRole('button', { name: 'Public', exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    await expect(iframe.getByRole('alert')).toHaveCount(0);
+    await page.goto(publicUrl);
     const form = await publicForm(page);
     await form
       .getByLabel('Source', { exact: true })
@@ -1393,7 +1588,7 @@ test.describe('catalog-driven built-in Syncables', () => {
       contentType: 'image/png',
     });
     await form
-      .getByRole('button', { name: 'Open collection', exact: true })
+      .getByRole('button', { name: 'Save filter', exact: true })
       .click();
     await expect(page.getByRole('main')).toHaveAttribute('about', legacy.table);
     await browse(page);
@@ -1402,12 +1597,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     const adopted = await sourceState(page, legacy.table);
     expect(adopted.localId).toBe(legacy.localId);
     expect(JSON.parse(adopted.key!)).toMatchObject({
-      version: 2,
+      version: 3,
       principal: { kind: 'public' },
-      collection: {
-        name: 'repositoryIssues',
-        context: { repository_id: '456' },
-      },
+      resource: 'issue',
     });
     expect(adopted.config?.principal?.kind).toBe('public');
     await sync(page);
@@ -1453,7 +1645,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     const nativeReads = metadataRequests.length + publicIssuePages.length;
     const nativeDocuments = requests.documentRequests.length;
     await page.goto(publicUrl);
-    await openRow(page, 'Issues');
+    await openRow(page, 'Issues and pull requests');
     await browse(page);
     expect(await getCurrentSubject(page)).toBe(legacy.table);
     expect(metadataRequests.length + publicIssuePages.length).toBe(nativeReads);
@@ -1468,7 +1660,7 @@ test.describe('catalog-driven built-in Syncables', () => {
       .getByLabel('Repository name', { exact: true })
       .fill('atomic-server');
     await repeat
-      .getByRole('button', { name: 'Open collection', exact: true })
+      .getByRole('button', { name: 'Save filter', exact: true })
       .click();
     await expect(page.getByRole('main')).toHaveAttribute('about', legacy.table);
     expect(publicIssuePages).toHaveLength(PUBLIC_ISSUE_PAGE_COUNT);
@@ -1485,7 +1677,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     )
       await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
     await expect(
-      mobile.getByRole('button', { name: 'Open collection', exact: true }),
+      mobile.getByRole('button', { name: 'Save filter', exact: true }),
     ).toBeInViewport();
     await testInfo.attach('catalog-public-input-mobile', {
       body: await page.screenshot({ animations: 'disabled' }),
@@ -1635,6 +1827,9 @@ test.describe('catalog-driven built-in Syncables', () => {
       });
     });
     await before({ page }, testInfo);
+    // Finish signed setup writes before the settings helper deliberately reloads.
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
     await enableIntegrationDiscovery(page);
     await clickAccountMenuItem(page, 'Apps');
     await page.getByRole('button', { name: 'Add Notebook to drive' }).click();
@@ -1649,7 +1844,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await form.getByLabel('Workspace name', { exact: true }).fill('research');
     expect(reads).toEqual([]);
     await form
-      .getByRole('button', { name: 'Open collection', exact: true })
+      .getByRole('button', { name: 'Save filter', exact: true })
       .click();
     await expect(
       page.getByRole('heading', { name: 'Entries', exact: true }),

@@ -3140,6 +3140,7 @@ msgstr "Kolom verslepen"
 msgid "View"
 msgstr "Weergave"
 
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
@@ -8763,8 +8764,10 @@ msgstr "{0} installeren"
 
 #. 0: app.name
 #. 0: name
+#. 0: relationship.title
 #: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
 msgid "Open {0}"
 msgstr "{0} openen"
 
@@ -13651,8 +13654,6 @@ msgstr "Synchroniseerbaar account"
 msgid "A connected account through which remote collection instances can be discovered."
 msgstr "Een verbonden account waarmee externe verzamelingsinstanties kunnen worden gevonden."
 
-#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
-#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
@@ -13927,9 +13928,8 @@ msgstr "Oude Accounts-container"
 msgid "Installation-owned compatibility data retained after moving source roots directly under the App."
 msgstr "Compatibiliteitsgegevens van deze installatie, bewaard nadat de bronresources rechtstreeks onder de app zijn geplaatst."
 
-#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
-msgid "This saved source needs migration from its integration App. Moved resources are retained and no replacement will be created from this view."
-msgstr "Deze opgeslagen bron moet vanuit de integratie-app worden gemigreerd. Verplaatste resources blijven behouden en vanuit deze weergave wordt geen vervanging aangemaakt."
+#~ msgid "This saved source needs migration from its integration App. Moved resources are retained and no replacement will be created from this view."
+#~ msgstr "Deze opgeslagen bron moet vanuit de integratie-app worden gemigreerd. Verplaatste resources blijven behouden en vanuit deze weergave wordt geen vervanging aangemaakt."
 
 #: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
 msgid "Open integration App"
@@ -13942,3 +13942,78 @@ msgstr "Van de ingestelde integratieproxy op <0/>. Voeg een dienst toe om door d
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Collection"
 msgstr "Collectie"
+
+#: src/chunks/AppPage/AppExecutionRuntime.tsx
+msgid "The app did not start. Try again."
+msgstr "De app is niet gestart. Probeer het opnieuw."
+
+#: src/chunks/AppPage/AppExecutionRuntime.tsx
+msgid "The app could not be prepared"
+msgstr "De app kon niet worden voorbereid"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Saved filter"
+msgstr "Opgeslagen filter"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Paused"
+msgstr "Gepauzeerd"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Queued"
+msgstr "In wachtrij"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Syncing"
+msgstr "Synchroniseren"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Needs attention"
+msgstr "Aandacht nodig"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Partially synced"
+msgstr "Gedeeltelijk gesynchroniseerd"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Synced"
+msgstr "Gesynchroniseerd"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Ready to sync"
+msgstr "Klaar om te synchroniseren"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Rename filter"
+msgstr "Filter hernoemen"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Filter name"
+msgstr "Filternaam"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Save name"
+msgstr "Naam opslaan"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Sync settings"
+msgstr "Synchronisatie-instellingen"
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Manage sync filters"
+msgstr "Synchronisatiefilters beheren"
+
+#~ msgid "Filter{0} <0><0>All cached rows</0> {0}</0>"
+#~ msgstr ""
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Saved collection filters"
+msgstr "Opgeslagen collectiefilters"
+
+#: src/chunks/PluginRuns/useSyncableFilters.ts
+msgid "This saved filter is unavailable or no longer belongs to this collection."
+msgstr "Dit opgeslagen filter is niet beschikbaar of hoort niet meer bij deze collectie."
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "All cached rows"
+msgstr "Alle lokaal opgeslagen rijen"

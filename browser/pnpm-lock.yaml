@@ -395,8 +395,8 @@ importers:
         specifier: 4.4.0
         version: 4.4.0
       syncables:
-        specifier: 0.29.0
-        version: 0.29.0
+        specifier: 0.30.0
+        version: 0.30.0
       trystero:
         specifier: 0.25.3
         version: 0.25.3
@@ -9687,8 +9687,8 @@ packages:
     peerDependencies:
       react: ^16.11.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  syncables@0.29.0:
-    resolution: {integrity: sha512-ZdppcwQXUbLfQDsFkKY3ySYp9uBGRClZtMmiM2QmndTwTj0lsTklPmusDcfmrM9/3FgKh8rLwM/YVdgCI8RgeA==}
+  syncables@0.30.0:
+    resolution: {integrity: sha512-nQred4SVlj8KIREyb40rrQDUOaiUEtR7BQKUOB/+JuYuUooB7xHnIHQqEhuxM6jedpRmAEXfQ/nhoLCUIR0suA==}
     engines: {node: '>= 22.11'}
     hasBin: true
 
@@ -20647,7 +20647,7 @@ snapshots:
       react: 19.2.6
       use-sync-external-store: 1.6.0(react@19.2.6)
 
-  syncables@0.29.0:
+  syncables@0.30.0:
     dependencies:
       '@bokuweb/zstd-wasm': 0.0.27
       braid-http: 1.4.10
