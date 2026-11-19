@@ -13612,3 +13612,8 @@ msgstr "Los archivos están incluidos. Se cifran en este dispositivo igual que t
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "Se pueden eliminar {0} de historial antiguo. No se pierde nada de lo que puedes ver."
+
+#: src/helpers/verifyAgentSecret.ts
+msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
+msgstr "Este secreto pertenece a otro agente. Pega el secreto que acabas de guardar para esta cuenta."
+

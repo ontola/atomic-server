@@ -13607,3 +13607,8 @@ msgstr "Berkas disertakan. Berkas dienkripsi di perangkat ini seperti yang lainn
 #: src/components/Vault/VaultStorage.tsx
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."
+
+#: src/helpers/verifyAgentSecret.ts
+msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
+msgstr "Secret ini milik agen lain. Tempel secret yang baru saja kamu simpan untuk akun ini."
+

@@ -212,6 +212,10 @@ void main() {
       tester.view.physicalSize = const Size(400, 3000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
+      // The notification row needs Notifications on.
+      SharedPreferences.setMockInitialValues({
+        homeHiddenKey: ['drives']
+      });
       final api = _PicApi(
         files: {'did:ad:bobpic': _png, 'did:ad:docpic': _png, 'did:ad:drvpic': _png},
         conversationList: [convo, noPic, group],

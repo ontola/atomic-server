@@ -146,7 +146,7 @@ In `@tomic/lib`: `signRequest(url, agent, headers, { method, body })`.
 In `atomic_lib`: `client::get_authentication_headers_v2(method, url, body, agent)`.
 Shared test vectors: `lib/src/authentication_v2_vectors.json`.
 
-A server that sees `x-atomic-signature-version: 2` checks only the version 2 message and never falls back to version 1. AtomicServer accepts version 2 on `/app-agent` and `/plugin-view-token`, and refuses it with a `401` on endpoints that do not yet check the body. Cookies and WebSocket `AUTH` are always version 1. The integration proxy accepts only version 2 (see ontola/atomic-plugins#54).
+A server that sees `x-atomic-signature-version: 2` checks only the version 2 message and never falls back to version 1. AtomicServer accepts version 2 on `/app-agent` and `/plugin-view-token`, and refuses it with a `401` on endpoints that do not yet check the body. Cookies and WebSocket `AUTH` are always version 1. The integration proxy accepts only version 2 (see ontola/atomic-plugins#54). A request to the integration proxy that carries `x-connection-key` (the key that opens a connection's stored credential, or a grant of it; ontola/atomic-plugins#730) signs a sixth line, the lowercase hex SHA-256 of that header's value.
 
 ## Verifying an Authentication
 

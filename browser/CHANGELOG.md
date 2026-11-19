@@ -24,6 +24,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Drive page header: the drive switcher, Add icon, Add cover and Drive settings sit in one row under the title, always visible. The "In My drives" / "Add to My drives" toggle is gone from the drive page (the star in the drives lists still saves a drive).
 - New drive no longer asks for a name: it creates "My drive" at once, makes it the current drive and opens it; rename it from the drive page. `/app/new-drive` does the same on load and shows an error with a retry if it fails.
 - Privacy: the drive switcher's recently used drives, drive visits and the recently opened resources of the `@` menu and search overlay are kept per identity (`driveHistory:<agent>`, `driveVisits:<agent>`, `recentResources:<agent>`), not in one list for the whole browser, so a new guest identity no longer sees what another identity opened in the same browser. The old shared lists are deleted, not migrated. `useLocalStorage` re-reads storage when its key changes.
+
+## [v0.41.0-beta.9] - 2026-11-18
+
+- Integrations: provider credentials at the integration proxy are sealed under keys only this app holds (ontola/atomic-plugins#730). The data browser chooses each connection's id and derives its key from the agent's vault proof, sends it once when connecting, and gives each app frame a key grant (the key encrypted to the proxy with HPKE, naming the app) with its capability; the frame signs it as `x-connection-key`. The default proxy is now `https://integrations.atomic.place`, which speaks this protocol; `https://localthought.io` does not, so a setting that still names it uses the new default. Connections made at localthought.io have to be made again.
+- `@tomic/lib`: removed the deprecated `timeTrackingSchema` export (unused); use `workSchema` instead.
 - Internal: one `isPlainObject` in @tomic/lib replaces 5 local type guards.
 - Internal: one `isLoopbackHost` in @tomic/lib replaces 12 inline localhost checks.
 - Removed the dead mobile-Tauri frontend code: Android back-button handling, the native QR scanner ("Scan a QR code" button) and the `@tauri-apps/plugin-barcode-scanner` dependency. The mobile app is the Flutter app; Tauri is desktop only. Pairing codes are still pasted or typed.

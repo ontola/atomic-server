@@ -120,6 +120,11 @@ class SearchScreen extends StatefulWidget {
             initialQuery: initialQuery),
       );
 
+  /// The keyboard's height the last time search was open (this run of the
+  /// app); 0 until then. The next search lays out above it from its first
+  /// frame instead of riding up with the keyboard.
+  static double keyboardHeight = 0;
+
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
@@ -284,6 +289,68 @@ class _Lag extends StatelessWidget {
           parent: animation,
           curve: const Interval(0.25, 1, curve: Curves.easeOut)),
       child: child,
+    );
+  }
+}
+
+/// Lays the page out above the keyboard from its first frame: the keyboard
+/// rises while the page comes in, and the field and results riding up with
+/// it felt slow. While it opens, the page takes the height the keyboard had
+/// the last time it was up (this run of the app); once it is there, or did
+/// not come (a hardware keyboard), the page follows the real one again, so
+/// putting it away still brings the field down.
+class _KeyboardAhead extends StatefulWidget {
+  /// How long the keyboard gets to come up before the page stops waiting.
+  static const settle = Duration(milliseconds: 700);
+
+  final Widget child;
+
+  const _KeyboardAhead({required this.child});
+
+  @override
+  State<_KeyboardAhead> createState() => _KeyboardAheadState();
+}
+
+class _KeyboardAheadState extends State<_KeyboardAhead> {
+  late bool _opening = SearchScreen.keyboardHeight > 0;
+  Timer? _timer;
+
+  /// The highest the keyboard came on this page: the next search expects it.
+  double _peak = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_opening) _timer = Timer(_KeyboardAhead.settle, _settled);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    // No keyboard came (a hardware one): the next search waits for none.
+    SearchScreen.keyboardHeight = _peak;
+    super.dispose();
+  }
+
+  void _settled() {
+    if (mounted && _opening) setState(() => _opening = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final live = media.viewInsets.bottom;
+    _peak = math.max(_peak, live);
+    if (_opening && live >= SearchScreen.keyboardHeight - 1) {
+      _opening = false;
+      _timer?.cancel();
+    }
+    if (!_opening) return widget.child;
+    return MediaQuery(
+      data: media.copyWith(
+          viewInsets: media.viewInsets.copyWith(
+              bottom: math.max(live, SearchScreen.keyboardHeight))),
+      child: widget.child,
     );
   }
 }
@@ -1095,7 +1162,8 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
     final sidebar = _inSidebar(context);
-    return Scaffold(
+    return _KeyboardAhead(
+        child: Scaffold(
       backgroundColor: c.bgBody,
       // The phone has no bar: its back arrow sits left of the field.
       appBar: sidebar
@@ -1121,7 +1189,7 @@ class _SearchScreenState extends State<SearchScreen> {
           field: _field,
         ),
       ),
-    );
+    ));
   }
 
   Widget _row(
