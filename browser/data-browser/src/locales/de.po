@@ -283,6 +283,7 @@ msgid "Choose a default model"
 msgstr "Standardmodell auswählen"
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Back"
 msgstr "Zurück"
 
@@ -13395,10 +13396,6 @@ msgstr "Gespeichert als {0}"
 msgid "Saving your work to your account…"
 msgstr "Deine Arbeit wird in deinem Konto gespeichert…"
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
-msgstr "Deine Arbeit ist auf diesem Gerät gespeichert. Füge deine E-Mail-Adresse hinzu, damit du sie auf anderen Geräten öffnen kannst und nicht verlierst."
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Verbinde ein Gerät, um deine Arbeit darauf zu öffnen"
@@ -13616,10 +13613,17 @@ msgid "This secret belongs to a different agent. Paste the secret you just saved
 msgstr "Dieses Secret gehört zu einem anderen Agenten. Füge das Secret ein, das du gerade für dieses Konto gespeichert hast."
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Your work is saved on this device. Connect another device to open it elsewhere and not lose it."
-msgstr "Deine Arbeit ist auf diesem Gerät gespeichert. Verbinde ein weiteres Gerät, um sie anderswo zu öffnen und nicht zu verlieren."
+msgid "No second device?"
+msgstr "Kein zweites Gerät?"
 
-#. 0: ' '; 1: ' '
 #: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "No second device? An account on{0} <0>atomic.place</0>{1} keeps your work too."
-msgstr "Kein zweites Gerät? Ein Konto bei{0} <0>atomic.place</0>{1} bewahrt deine Arbeit ebenfalls auf."
+msgid "Sign in with atomic.place"
+msgstr "Mit atomic.place anmelden"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Connect another device or sign in, so you can open it elsewhere and don't lose access."
+msgstr "Nur dieser Browser kann deine Arbeit öffnen. Verbinde ein anderes Gerät oder melde dich an, damit du sie anderswo öffnen kannst und den Zugang nicht verlierst."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Sign in or register with your email, so you can open it elsewhere and don't lose access."
+msgstr "Nur dieser Browser kann deine Arbeit öffnen. Melde dich an oder registriere dich mit deiner E-Mail, damit du sie anderswo öffnen kannst und den Zugang nicht verlierst."

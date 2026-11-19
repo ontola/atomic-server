@@ -123,11 +123,13 @@ export function ConnectDevice({
       $embedded={hideTitle}
     >
       {!hideTitle && <Title>Connect a device</Title>}
-      <Note>
-        {showPairing
-          ? 'Codes only route. Your key still decides what syncs.'
-          : 'An always-on device has an address. One you carry has a code.'}
-      </Note>
+      {!hideTitle && (
+        <Note>
+          {showPairing
+            ? 'Codes only route. Your key still decides what syncs.'
+            : 'An always-on device has an address. One you carry has a code.'}
+        </Note>
+      )}
       <Card>
         {showPairing && pairNodeDid && (
           <Side data-testid='connect-device-show'>

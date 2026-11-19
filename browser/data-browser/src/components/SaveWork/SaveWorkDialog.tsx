@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { useLocation } from '@tanstack/react-router';
-import { styled } from 'styled-components';
 import { toast } from 'react-hot-toast';
 import {
   Dialog,
@@ -10,7 +9,7 @@ import {
   useDialog,
 } from '../Dialog';
 import { Button } from '../Button';
-import { Column } from '../Row';
+import { Column, Row } from '../Row';
 import {
   AccountSignInPanel,
   AccountSignInViaBrowser,
@@ -23,6 +22,11 @@ import { useKnownPortalUrl } from '../../hooks/useKnownPortalUrl';
 import { useConnectDeviceProps } from '../../hooks/useConnectDeviceProps';
 import { ConnectDevice } from '../ConnectDevice';
 import { ATOMIC_PLACE_WEBSITE } from '../Logo';
+import {
+  forgetManagedPortalUrl,
+  rememberManagedPortalUrl,
+  safePortalUrl,
+} from '../../helpers/managed/api';
 import { subscribeSaveWorkDialog } from './saveWorkDialogState';
 
 /**
@@ -36,12 +40,30 @@ import { subscribeSaveWorkDialog } from './saveWorkDialogState';
 /** How long to wait for the account to adopt this identity after sign-in. */
 export const SAVE_ADOPT_TIMEOUT_MS = 20_000;
 
+/**
+ * The account portal offered to an install that knows none. Build-time
+ * overridable so local testing can point at a local portal.
+ */
+export function defaultAccountPortal(): string | null {
+  const fromEnv = import.meta.env?.VITE_DEFAULT_ACCOUNT_PORTAL as
+    | string
+    | undefined;
+
+  return safePortalUrl(fromEnv || ATOMIC_PLACE_WEBSITE) ?? null;
+}
+
 export function SaveWorkContent({
   portalUrl,
   onDone,
+  onChoosePortal,
+  onBack,
 }: {
   portalUrl: string | null;
   onDone: () => void;
+  /** Offer signing in with the default account portal (no portal known). */
+  onChoosePortal?: () => void;
+  /** Set when the portal was chosen here: returns to device pairing. */
+  onBack?: () => void;
 }): JSX.Element {
   const connectDeviceProps = useConnectDeviceProps();
   const linked = useIsLinkedToAccount();
@@ -87,17 +109,22 @@ export function SaveWorkContent({
     return (
       <Column gap='1rem'>
         <p>
-          Your work is saved on this device. Connect another device to open it
-          elsewhere and not lose it.
+          Only this browser can open your work. Connect another device or sign
+          in, so you can open it elsewhere and don&apos;t lose access.
         </p>
         <ConnectDevice {...connectDeviceProps} hideTitle />
-        <Muted>
-          No second device? An account on{' '}
-          <a href={ATOMIC_PLACE_WEBSITE} target='_blank' rel='noopener'>
-            atomic.place
-          </a>{' '}
-          keeps your work too.
-        </Muted>
+        {onChoosePortal && (
+          <Row gap='0.25rem' center wrapItems>
+            <span>No second device?</span>
+            <Button
+              subtle
+              data-testid='save-work-choose-portal'
+              onClick={onChoosePortal}
+            >
+              Sign in with atomic.place
+            </Button>
+          </Row>
+        )}
       </Column>
     );
   }
@@ -105,8 +132,8 @@ export function SaveWorkContent({
   return (
     <Column gap='1rem'>
       <p>
-        Your work is saved on this device. Add your email so you can open it on
-        other devices and don&apos;t lose it.
+        Only this browser can open your work. Sign in or register with your
+        email, so you can open it elsewhere and don&apos;t lose access.
       </p>
       {signedIn && timedOut ? (
         <Column gap='0.75rem'>
@@ -141,15 +168,25 @@ export function SaveWorkContent({
           onSignedIn={() => setSignedIn(true)}
         />
       )}
+      {onBack && !signedIn && (
+        <div>
+          <Button subtle data-testid='save-work-back' onClick={onBack}>
+            Back
+          </Button>
+        </div>
+      )}
     </Column>
   );
 }
 
 /** Shows the Save dialog when something calls `openSaveWorkDialog()`. */
 export function SaveWorkDialogHost(): JSX.Element {
-  const portalUrl = useKnownPortalUrl();
+  const knownPortal = useKnownPortalUrl();
+  // The portal the user picked here, for an install that knows none.
+  const [chosenPortal, setChosenPortal] = useState<string | null>(null);
+  const portalUrl = knownPortal ?? chosenPortal;
   const { pathname } = useLocation();
-  const [dialogProps, show, close] = useDialog();
+  const [dialogProps, show, close, visible] = useDialog();
   const [openedOn, setOpenedOn] = useState<string>();
 
   useEffect(
@@ -160,6 +197,28 @@ export function SaveWorkDialogHost(): JSX.Element {
       }),
     [show, pathname],
   );
+
+  // Choosing is explicit, so it is remembered for the identity gate and the
+  // managed API; walking away without an account forgets it again, so the
+  // install is not left in portal mode.
+  const choosePortal = () => {
+    const portal = defaultAccountPortal();
+
+    if (!portal) return;
+
+    rememberManagedPortalUrl(portal);
+    setChosenPortal(portal);
+  };
+
+  const back = useCallback(() => {
+    if (!readManagedAccountBinding()) forgetManagedPortalUrl();
+
+    setChosenPortal(null);
+  }, []);
+
+  useEffect(() => {
+    if (!visible && chosenPortal) back();
+  }, [visible, chosenPortal, back]);
 
   // Signing in can send the page elsewhere (the identity gate's hand-over).
   useEffect(() => {
@@ -175,7 +234,12 @@ export function SaveWorkDialogHost(): JSX.Element {
         <h1>{portalUrl ? 'Register with email' : 'Connect a device'}</h1>
       </DialogTitle>
       <DialogContent>
-        <SaveWorkContent portalUrl={portalUrl} onDone={() => close(true)} />
+        <SaveWorkContent
+          portalUrl={portalUrl}
+          onDone={() => close(true)}
+          onChoosePortal={choosePortal}
+          onBack={chosenPortal && !knownPortal ? back : undefined}
+        />
       </DialogContent>
       <DialogActions>
         <Button subtle onClick={() => close()}>
@@ -185,9 +249,3 @@ export function SaveWorkDialogHost(): JSX.Element {
     </Dialog>
   );
 }
-
-const Muted = styled.p`
-  margin: 0;
-  color: ${p => p.theme.colors.textLight};
-  font-size: 0.82rem;
-`;

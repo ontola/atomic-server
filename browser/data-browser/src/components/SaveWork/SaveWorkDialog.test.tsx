@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
 import React from 'react';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  fireEvent,
+} from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../../styling';
@@ -69,10 +75,36 @@ it('without a portal shows the pairing form in place, never the sign-in', () => 
   expect(
     screen.queryByRole('heading', { name: 'Connect a device' }),
   ).toBeNull();
-  expect(screen.getByText('atomic.place').getAttribute('href')).toBe(
-    'https://atomic.place',
-  );
+  expect(screen.queryByText('atomic.place')).toBeNull();
   expect(onDone).not.toHaveBeenCalled();
+});
+
+function Switcher() {
+  const [portal, setPortal] = React.useState<string | null>(null);
+
+  return (
+    <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
+      <SaveWorkContent
+        portalUrl={portal}
+        onDone={vi.fn()}
+        onChoosePortal={() => setPortal('https://atomic.place')}
+        onBack={portal ? () => setPortal(null) : undefined}
+      />
+    </ThemeProvider>
+  );
+}
+
+it('offers signing in with atomic.place, and Back returns to pairing', () => {
+  render(<Switcher />);
+
+  expect(screen.queryByText('panel')).toBeNull();
+  fireEvent.click(screen.getByTestId('save-work-choose-portal'));
+  expect(screen.getByText('panel')).toBeTruthy();
+  expect(screen.queryByTestId('connect-device-add')).toBeNull();
+
+  fireEvent.click(screen.getByTestId('save-work-back'));
+  expect(screen.getByTestId('connect-device-add')).toBeTruthy();
+  expect(screen.queryByText('panel')).toBeNull();
 });
 
 it('without a portal closes once a device link makes the identity linked', () => {

@@ -283,6 +283,7 @@ msgid "Choose a default model"
 msgstr "Pilih model bawaan"
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Back"
 msgstr "Kembali"
 
@@ -13390,10 +13391,6 @@ msgstr "Disimpan sebagai {0}"
 msgid "Saving your work to your account…"
 msgstr "Menyimpan pekerjaanmu ke akunmu…"
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Your work is saved on this device. Add your email so you can open it on other devices and don't lose it."
-msgstr "Pekerjaanmu tersimpan di perangkat ini. Tambahkan emailmu agar bisa dibuka di perangkat lain dan tidak hilang."
-
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Connect a device to open your work on it"
 msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"
@@ -13608,10 +13605,17 @@ msgid "This secret belongs to a different agent. Paste the secret you just saved
 msgstr "Secret ini milik agen lain. Tempel secret yang baru saja kamu simpan untuk akun ini."
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Your work is saved on this device. Connect another device to open it elsewhere and not lose it."
-msgstr "Pekerjaanmu tersimpan di perangkat ini. Hubungkan perangkat lain untuk membukanya di tempat lain dan agar tidak hilang."
+msgid "No second device?"
+msgstr "Tidak punya perangkat kedua?"
 
-#. 0: ' '; 1: ' '
 #: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "No second device? An account on{0} <0>atomic.place</0>{1} keeps your work too."
-msgstr "Tidak punya perangkat kedua? Akun di{0} <0>atomic.place</0>{1} juga menyimpan pekerjaanmu."
+msgid "Sign in with atomic.place"
+msgstr "Masuk dengan atomic.place"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Connect another device or sign in, so you can open it elsewhere and don't lose access."
+msgstr "Hanya browser ini yang bisa membuka pekerjaanmu. Hubungkan perangkat lain atau masuk agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Sign in or register with your email, so you can open it elsewhere and don't lose access."
+msgstr "Hanya browser ini yang bisa membuka pekerjaanmu. Masuk atau daftar dengan emailmu agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."
