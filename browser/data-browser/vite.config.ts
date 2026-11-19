@@ -133,7 +133,14 @@ export default defineConfig(({ mode }) => {
       // properties of undefined (reading 'localsInner')") on the next view
       // update (e.g. opening the slash menu next to a collaborator cursor).
       // Deduping forces a single shared instance so the `instanceof` holds.
-      dedupe: ['prosemirror-view', 'prosemirror-state', 'prosemirror-model'],
+      // Shared sources receive localization imports from the host compiler.
+      // Resolve that injected runtime through the host's dependency.
+      dedupe: [
+        'prosemirror-view',
+        'prosemirror-state',
+        'prosemirror-model',
+        '@wuchale/jsx',
+      ],
       alias: [
         {
           find: '@tomic/table',
