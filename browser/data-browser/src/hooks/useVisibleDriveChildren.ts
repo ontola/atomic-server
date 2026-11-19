@@ -6,10 +6,11 @@ import {
   useChildren,
   useResource,
   useResources,
+  useStore,
   useString,
 } from '@tomic/react';
-import { canonicalizeScheme } from '@tomic/lib';
-import { useMemo } from 'react';
+import { canonicalizeScheme, readSchema, type Store } from '@tomic/lib';
+import { useEffect, useMemo, useState } from 'react';
 import { isHiddenFromChildLists } from '../helpers/hiddenFromChildLists';
 
 /**
@@ -60,7 +61,9 @@ export function useVisibleDriveChildren(
 
 /**
  * The standard locations a drive page leaves out (canonical subjects): the
- * default ontology, Comments folder, AI Chats folder, Inbox and Trash.
+ * default ontology, Comments folder, AI Chats folder, Inbox, Trash and the
+ * App identities folder (its pointer lives in the drive's own ontology, so it
+ * is read asynchronously).
  */
 export function useHiddenDriveSubjects(drive: string): Set<string> {
   const driveResource = useResource(drive);
@@ -79,13 +82,56 @@ export function useHiddenDriveSubjects(drive: string): Set<string> {
     dataBrowser.properties.trashFolder,
   );
 
+  const appIdentities = useAppIdentitiesFolder(drive);
+
   return useMemo(
     () =>
       new Set(
-        [defaultOntology, commentsFolder, aiChatsFolder, inbox, trashFolder]
+        [
+          defaultOntology,
+          commentsFolder,
+          aiChatsFolder,
+          inbox,
+          trashFolder,
+          appIdentities,
+        ]
           .filter((subject): subject is string => !!subject)
           .map(canonicalizeScheme),
       ),
-    [defaultOntology, commentsFolder, aiChatsFolder, inbox, trashFolder],
+    [
+      defaultOntology,
+      commentsFolder,
+      aiChatsFolder,
+      inbox,
+      trashFolder,
+      appIdentities,
+    ],
   );
+}
+
+/** The drive's App identities folder (see `createApp`), once its pointer resolves. */
+function useAppIdentitiesFolder(drive: string): string | undefined {
+  const store = useStore();
+  const driveResource = useResource(drive);
+  const [folder, setFolder] = useState<string>();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    readSchema(store as unknown as Store, drive)
+      .then(schema => {
+        const property = schema.properties?.['app-identities'];
+        const value = property ? driveResource.get(property) : undefined;
+
+        if (!cancelled)
+          setFolder(typeof value === 'string' ? value : undefined);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [store, drive, driveResource]);
+
+  return folder;
 }
