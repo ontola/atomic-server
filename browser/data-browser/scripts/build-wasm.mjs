@@ -34,7 +34,10 @@ function buildEnv(args) {
     return env;
   }
 
-  const { CARGO_ENCODED_RUSTFLAGS, RUSTFLAGS, ...rest } = env;
+  const rest = { ...env };
+
+  delete rest.CARGO_ENCODED_RUSTFLAGS;
+  delete rest.RUSTFLAGS;
 
   return rest;
 }
