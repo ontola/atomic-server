@@ -136,6 +136,16 @@ tags as production.
 - Open a PR against `develop`.
 - Make sure all relevant tests / lint pass.
 
+### Shared CI ownership
+
+Trekmeester owns shared CI scheduling on both Mancave and GitHub-hosted runners.
+Other agents run local checks and submit PRs with their validation evidence.
+They must not manually trigger or rerun shared CI unless the user explicitly
+requests an exception for that work; such exceptions use hosted runners only.
+Trekmeester may choose either runner and uses the reserved `trekmeester/*` batch
+branches. See `AGENT_WORKFLOW.md` for dispatch routing. This scheduling policy
+does not turn a local pass into a shared CI pass or change automatic release gates.
+
 ### Merging into `develop`
 
 Only the **trekmeester** agent merges pull requests into `develop`. Everyone
@@ -197,7 +207,7 @@ next release reintroduces the bug.
 - We try to test at every level, unit tests, integration tests, e2e tests (playwright).
 - When tests fail, first make sure the unit tests are green, then do integration tests, then to e2e.
 - If e2e tests fail, try walking through the steps 1 by 1 either with the playwright debugger, or by simply reproducing the steps in your browser of choice.
-- Feature-branch CI runs Playwright **light** (`@smoke`). `develop` and `v*` tags run the **full** suite. Opt in to full on a branch with a `full-e2e` PR label, `[full-e2e]` in the commit message, or `workflow_dispatch` `e2e_mode=full`. See `planning/e2e-light-heavy.md`.
+- Main runs the **full** Playwright suite for `develop`, `v*` tags and authorized manual batches. Feature-branch pushes do not automatically start Main. Workers use local focused tests; shared runs follow the trekmeester ownership policy above. See `planning/e2e-light-heavy.md`.
 
 Feature-specific browser journeys belong in `browser/e2e/tests/` and run through
 the shared CI pipeline. For a focused run with CI's service setup, use Dagger
@@ -224,7 +234,7 @@ cargo nextest run test_name_substring
 # First, run the server
 cargo run
 # now, open new terminal window
-cd browser && pnpm i && pnpm test-e2e:light   # @smoke, matches feature-branch CI
+cd browser && pnpm i && pnpm test-e2e:light   # local focused @smoke suite
 # full suite (develop / tags / before a release)
 pnpm test-e2e
 # if things go wrong, debug!
@@ -417,12 +427,12 @@ Two consequences worth knowing:
   unconditional `--prod`, which meant pushing any feature branch republished
   the public documentation, and later `master`-only, which left live docs on a
   branch that was not production.
-- Playwright is `--playwright-mode light` on feature-branch pushes (`@smoke` only)
-  and `full` on `develop` and `v*` tags. `dagger call ci` defaults to `full`
-  so omitting the flag cannot shrink a release gate. Opt in from a branch
-  with a `full-e2e` PR label, `[full-e2e]` in the commit message, or
-  `workflow_dispatch` `e2e_mode=full`. (Do not name the Dagger flag
-  `--e2e-mode`: the CLI camelCases it to `e2EMode` and the call fails.)
+- Main passes `--playwright-mode full` for `develop`, `v*` tags and authorized
+  manual batches. Feature-branch pushes do not automatically start Main.
+  `dagger call ci` also defaults to `full`; local focused runs may select `light`
+  without implying full validation. Shared scheduling follows the trekmeester
+  policy above. Do not name the Dagger flag `--e2e-mode`: the CLI camelCases it
+  to `e2EMode` and the call fails.
 
 Every deploy then has to prove itself: the job polls `/server` on the target
 until it answers `200` (with enough patience for a store migration). A deploy

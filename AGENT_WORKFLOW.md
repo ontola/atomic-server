@@ -15,24 +15,24 @@ more.
 - **Never merge into `develop` yourself.** Only the trekmeester merges (see
   `CONTRIBUTING.md`), in squash batches. It also rebases stale PRs itself, so
   don't rebase or merge `develop` into your PR just to keep it fresh (#1869).
-- **PR branches get no CI by themselves.** `.github/workflows/main.yml` runs
-  on pushes to `develop`, `v*` tags and `workflow_dispatch` only. To test a PR
-  branch, dispatch it: `gh workflow run main.yml --ref <branch>` (or the
-  equivalent GitHub API call). A docs-only change needs no dispatch.
-- **One-run hosted CI.** When the self-hosted runner is unavailable, explicitly
-  select the existing full hosted lane with
-  `gh workflow run main.yml --ref <branch> -f github_hosted=true`. This changes
-  no repository variable, keeps all E2E specs, and never retries a failed suite
-  automatically. The private downstream atomic-saas job remains skipped on
-  hosted runs under the existing policy; report that coverage separately.
-  equivalent GitHub API call). Add `-f runner=github-hosted` to run the full
-  server suite on GitHub-hosted runners for that dispatch only. The default
-  still follows repository runner configuration, normally Mancave. Hosted
-  runs skip the private atomic-saas downstream check; they do not verify it.
-  A docs-only change needs no dispatch.
-  equivalent GitHub API call). Add `-f github_hosted=true` to run the full
-  Main and downstream checks on hosted runners for this dispatch, without
-  changing the repository-wide runner setting. A docs-only change needs no dispatch.
+- **Only trekmeester starts shared CI by default**, on Mancave or hosted runners.
+  Workers run relevant tests/lint locally, open or update a PR and hand over the
+  tested commit and validation evidence. Do not dispatch or rerun shared CI
+  unless the user explicitly requests an exception for that work. General
+  permission to implement, test or open a PR is not such an exception.
+- **Authorized worker exceptions use hosted runners only.** For a branch carrying
+  the hosted option, use `gh workflow run main.yml --ref <branch>` with
+  `-f github_hosted=true` or `-f runner=github-hosted`. Both options select full
+  Main and downstream validation. Verify both jobs select hosted runners.
+  Reruns retain their original routing: workers must not rerun a Mancave job.
+  Do not dispatch an older workflow that would queue on Mancave; prepare the
+  routing change or hand validation to trekmeester. Do not change the global
+  runner override to obtain a lane.
+- **Trekmeester batch routing uses `trekmeester/*` branches.** This namespace is
+  reserved for trekmeester, not a worker escape hatch. Other manual branch/tag
+  dispatches are forced hosted. GitHub's actor name alone cannot identify the
+  chat that triggered a run. Automatic develop/tag validation is unchanged.
+  Docs-only changes need no manual dispatch.
 - **Paired atomic-saas branch.** The `Downstream` job in `main.yml` builds
   ontola/atomic-saas against your commit. It uses an atomic-saas branch with
   the *same name* as yours only if that branch has an open PR; otherwise it

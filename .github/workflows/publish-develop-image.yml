@@ -33,13 +33,12 @@ on:
         default: joepmeneer/atomic-server:develop,ghcr.io/ontola/atomic-server:develop
         type: string
 
-# Mancave, for the same reason the pipeline prefers it: three musl targets
-# are built here, and a cold cross-compile of all of them on a hosted runner
-# is hours of work Dagger would otherwise have cached.
+# Only trekmeester dispatch refs may use Mancave's warm cross-compile cache.
+# Other explicitly authorized manual runs stay hosted, even with an override.
 jobs:
   publish:
     name: Build and publish
-    runs-on: ${{ fromJSON(vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]') }}
+    runs-on: ${{ fromJSON(!startsWith(github.ref, 'refs/heads/trekmeester/') && '["ubuntu-latest"]' || vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]') }}
     timeout-minutes: 120
     permissions:
       contents: read
