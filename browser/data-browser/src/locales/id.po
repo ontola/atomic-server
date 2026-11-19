@@ -698,10 +698,6 @@ msgstr "Ontologi"
 msgid "App"
 msgstr "Aplikasi"
 
-#: src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
-
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
 msgstr "Tidak ada `subject`, `path`, atau `href` yang diteruskan ke AtomicLink ini."
@@ -3189,10 +3185,12 @@ msgstr "Salah"
 msgid "Value…"
 msgstr "Nilai…"
 
+#: ../table/src/filters/FilterChip.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Remove filter"
 msgstr "Hapus filter"
 
+#: ../table/src/filters/FilterChip.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Filter operator"
 msgstr "Operator filter"
@@ -3206,10 +3204,6 @@ msgstr "Tampilan bawaan"
 #: src/chunks/TablePage/TableRow.tsx
 msgid "Row is incomplete or has invalid data"
 msgstr "Baris tidak lengkap atau berisi data tidak valid"
-
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Open resource"
-msgstr "Buka sumber daya"
 
 #: src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
@@ -3735,11 +3729,6 @@ msgstr "Yakin ingin menghapus tampilan <0/>? Ini hanya menghapus tampilannya, bu
 msgid "{0} copy"
 msgstr "Salinan {0}"
 
-#. 0: p; 1: theme.animation.duration
-#: src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
-
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
 msgstr "OpenRouter menyediakan API terpadu yang memberi Anda akses ke ratusan model AI dari semua penyedia utama, sambil menangani peralihan cadangan secara otomatis dan memilih opsi paling hemat biaya."
@@ -3805,11 +3794,6 @@ msgstr "Coba muat ulang halaman. Jika terus terjadi, tab lain dari aplikasi ini 
 msgid "{0}/M input tokens"
 msgstr "{0}/juta token input"
 
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
-
 #. 0: subject
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
 msgid "{0} is loading..."
@@ -3834,14 +3818,17 @@ msgstr "Judul digunakan untuk menyusun subjek. Ingat, subjek tidak dapat diubah 
 msgid "Creating table <0/>"
 msgstr "Membuat tabel <0/>"
 
+#: ../ui/src/components/Dropdown/index.tsx
 #: src/components/Dropdown/index.tsx
 msgid "Filter actions…"
 msgstr "Filter tindakan…"
 
+#: ../ui/src/components/Dropdown/index.tsx
 #: src/components/Dropdown/index.tsx
 msgid "Filter actions"
 msgstr "Filter tindakan"
 
+#: ../ui/src/components/Dropdown/index.tsx
 #: src/components/Dropdown/index.tsx
 msgid "No matching actions"
 msgstr "Tidak ada tindakan yang cocok"
@@ -5056,6 +5043,7 @@ msgstr "sekarang"
 msgid "a date"
 msgstr "tanggal"
 
+#: ../table/src/filters/FilterChip.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Compare against"
 msgstr "Bandingkan dengan"
@@ -5106,6 +5094,8 @@ msgstr "Baris"
 msgid "Measure"
 msgstr "Ukuran"
 
+#: ../table/src/QuickAddFields.tsx
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
@@ -5149,8 +5139,10 @@ msgstr "Pilih angka dan dasar pengelompokannya"
 msgid "No data yet"
 msgstr "Belum ada data"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 #: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
@@ -5175,24 +5167,31 @@ msgstr "Sunting tindakan"
 msgid "Add an action"
 msgstr "Tambahkan tindakan"
 
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "Does what"
 msgstr "Melakukan apa"
 
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "This table has no column of the right kind for that yet."
 msgstr "Tabel ini belum memiliki kolom dengan tipe yang sesuai untuk itu."
 
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "To column"
 msgstr "Ke kolom"
 
+#: ../table/src/QuickAddFields.tsx
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Pick an option…"
 msgstr "Pilih opsi…"
 
+#: ../table/src/QuickAddFields.tsx
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "Button says"
@@ -5235,6 +5234,7 @@ msgstr "Tombol di atas baris untuk membuat baris baru — \"Catat pemberian maka
 msgid "Could not add the {0}"
 msgstr "Tidak dapat menambahkan {0}"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Log a feed"
 msgstr "Catat pemberian makan"
@@ -5243,32 +5243,39 @@ msgstr "Catat pemberian makan"
 msgid "It sits above the rows and creates one. Everything else about the row is edited in the table."
 msgstr "Tombol ini berada di atas baris dan membuat baris baru. Detail lain baris tersebut disunting di tabel."
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Ask for a value first"
 msgstr "Minta nilai terlebih dahulu"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "On for a list you name things in; off for a button you just press."
 msgstr "Aktifkan untuk daftar yang itemnya Anda beri nama; nonaktifkan untuk tombol yang cukup ditekan."
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Type into"
 msgstr "Ketik ke"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "What are you adding?"
 msgstr "Apa yang Anda tambahkan?"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Placeholder"
 msgstr "Teks petunjuk"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Nothing"
 msgstr "Tidak ada"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Also set"
 msgstr "Atur juga"
@@ -5377,9 +5384,9 @@ msgstr "Mendapatkan kode…"
 msgid "Android"
 msgstr "Android"
 
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
+#: ../ui/src/actions/shortcuts.ts
+#: ../ui/src/actions/shortcuts.ts
+#: ../ui/src/actions/shortcuts.ts
 #: src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -6532,10 +6539,6 @@ msgstr "Tidak ada yang cocok. Coba pencarian lain atau minta AI membuatnya."
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "Tanya AI"
-
-#: src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Memuat"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -10349,19 +10352,24 @@ msgstr "Ketuk tombol perbesaran (yang menampilkan tingkat perbesaran) agar semua
 msgid "Select row {0}"
 msgstr "Pilih baris {0}"
 
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete selected rows"
 msgstr "Hapus baris yang dipilih"
 
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Clear selection"
 msgstr "Hapus pilihan"
 
+#. 0: count
 #. 0: selectedRows.size
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "{0} selected"
 msgstr "{0} dipilih"
 
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Selected rows"
 msgstr "Baris yang dipilih"
@@ -11357,6 +11365,7 @@ msgstr "{0}: {1} dokumen,{2} {3}{4} baris yang dipilih"
 msgid "Loading document editor…"
 msgstr "Memuat editor dokumen…"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "On column"
 msgstr "Pada kolom"
@@ -11893,7 +11902,6 @@ msgstr "Kode atau alamat server"
 msgid "Add a device"
 msgstr "Tambahkan perangkat"
 
-#: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Memuat"
@@ -12848,10 +12856,6 @@ msgstr "Tambahkan komentar"
 msgid "Open the comments for this resource"
 msgstr "Buka komentar untuk sumber daya ini"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Row menu"
-msgstr "Menu baris"
-
 #: src/views/Drive/DriveHome.tsx
 msgid "Commented"
 msgstr "Dikomentari"
@@ -13423,10 +13427,6 @@ msgstr "Tambahkan filter"
 msgid "Edit column"
 msgstr "Sunting kolom"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Tambahkan tampilan"
-
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
 msgstr "Tamu"
@@ -13515,6 +13515,18 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
 
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Menu baris"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Buka sumber daya"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Tambahkan tampilan"
+
 #: src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
@@ -13552,3 +13564,20 @@ msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang h
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Secret ini milik agen lain. Tempel secret yang baru saja kamu simpan untuk akun ini."
 
+#. 0: p; 1: uiTheme(theme).animation.duration
+#: ../ui/src/helpers/transition.ts
+msgid "{0} {1} ease-in-out"
+msgstr "{0} {1} ease-in-out"
+
+#: ../table/src/chunks/TableEditor/TableEditor.tsx
+msgid "<0/> Loading"
+msgstr "<0/> Memuat"
+
+#: ../ui/src/components/Dropdown/DefaultTrigger.tsx
+msgid "DefaultTrigger"
+msgstr "DefaultTrigger"
+
+#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
+#: ../table/src/chunks/TableEditor/hooks/useCellSizes.ts
+msgid "{0} {1} minmax(50px, 1fr)"
+msgstr "{0} {1} minmax(50px, 1fr)"

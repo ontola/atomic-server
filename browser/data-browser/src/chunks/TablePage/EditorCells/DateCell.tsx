@@ -1,3 +1,4 @@
+import { DateCell as SharedCell } from '@tomic/table';
 import {
   isString,
   JSONValue,
@@ -8,14 +9,7 @@ import {
 import type { JSX } from 'react';
 import { formatDate } from '@helpers/dates/formatDate';
 import { calendarDateToLocalDate } from '@helpers/dates/calendarDate';
-import {
-  dateInputPlaceholder,
-  formatDateInput,
-  parseDateInput,
-} from '@helpers/dates/dateInput';
-import { InputBase } from './InputBase';
-import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
-import { UNPARSED, useCommittedText } from './useCommittedText';
+import { CellContainer, DisplayCellProps } from './Type';
 
 /**
  * A text input rather than `<input type="date">`. The native one needed a
@@ -24,33 +18,6 @@ import { UNPARSED, useCommittedText } from './useCommittedText';
  * on. This one reads `2/10/2026` (the locale's order) or `2026-10-2`, and
  * stores the date once: on Enter or Tab, or when the cell closes any other way.
  */
-function DateCellEdit({
-  value,
-  onChange,
-  seed,
-}: EditCellProps<JSONValue>): JSX.Element {
-  // Typing on the selected cell opens it with that character, which is not a
-  // date yet: it is only text until Enter, Tab or closing commits it.
-  const input = useCommittedText({
-    value,
-    onChange,
-    seed,
-    format: formatDateInput,
-    parse: parseDate,
-  });
-
-  return (
-    <InputBase
-      type='text'
-      inputMode='numeric'
-      autoFocus
-      placeholder={dateInputPlaceholder()}
-      {...input}
-    />
-  );
-}
-
-const parseDate = (text: string) => parseDateInput(text) ?? UNPARSED;
 
 export const toDisplayData = (value: JSONValue, format: string) => {
   if (isString(value)) {
@@ -79,6 +46,6 @@ function DateCellDisplay({
 }
 
 export const DateCell: CellContainer<JSONValue> = {
-  Edit: DateCellEdit,
+  Edit: SharedCell.Edit,
   Display: DateCellDisplay,
 };

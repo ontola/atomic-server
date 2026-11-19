@@ -698,10 +698,6 @@ msgstr "Ontologies"
 msgid "App"
 msgstr "App"
 
-#: src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
-
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
 msgstr "No `subject`, `path` or `href` passed to this AtomicLink."
@@ -3190,10 +3186,12 @@ msgstr "False"
 msgid "Value…"
 msgstr "Value…"
 
+#: ../table/src/filters/FilterChip.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Remove filter"
 msgstr "Remove filter"
 
+#: ../table/src/filters/FilterChip.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Filter operator"
 msgstr "Filter operator"
@@ -3207,10 +3205,6 @@ msgstr "Default View"
 #: src/chunks/TablePage/TableRow.tsx
 msgid "Row is incomplete or has invalid data"
 msgstr "Row is incomplete or has invalid data"
-
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Open resource"
-msgstr "Open resource"
 
 #: src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
@@ -3737,11 +3731,6 @@ msgstr "Are you sure you want to delete the <0/> view? This only removes the vie
 msgid "{0} copy"
 msgstr "{0} copy"
 
-#. 0: p; 1: theme.animation.duration
-#: src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
-
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
 msgstr "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
@@ -3807,11 +3796,6 @@ msgstr "Try reloading the page. If it keeps happening, another tab of this app o
 msgid "{0}/M input tokens"
 msgstr "{0}/M input tokens"
 
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
-
 #. 0: subject
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
 msgid "{0} is loading..."
@@ -3836,14 +3820,17 @@ msgstr "Title is used to construct the subject, keep in mind that the subject ca
 msgid "Creating table <0/>"
 msgstr "Creating table <0/>"
 
+#: ../ui/src/components/Dropdown/index.tsx
 #: src/components/Dropdown/index.tsx
 msgid "Filter actions…"
 msgstr "Filter actions…"
 
+#: ../ui/src/components/Dropdown/index.tsx
 #: src/components/Dropdown/index.tsx
 msgid "Filter actions"
 msgstr "Filter actions"
 
+#: ../ui/src/components/Dropdown/index.tsx
 #: src/components/Dropdown/index.tsx
 msgid "No matching actions"
 msgstr "No matching actions"
@@ -5058,6 +5045,7 @@ msgstr "now"
 msgid "a date"
 msgstr "a date"
 
+#: ../table/src/filters/FilterChip.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Compare against"
 msgstr "Compare against"
@@ -5108,6 +5096,8 @@ msgstr "Rows"
 msgid "Measure"
 msgstr "Measure"
 
+#: ../table/src/QuickAddFields.tsx
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
@@ -5151,8 +5141,10 @@ msgstr "Pick a number and something to group it by"
 msgid "No data yet"
 msgstr "No data yet"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 #: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
@@ -5177,24 +5169,31 @@ msgstr "Edit action"
 msgid "Add an action"
 msgstr "Add an action"
 
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "Does what"
 msgstr "Does what"
 
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "This table has no column of the right kind for that yet."
 msgstr "This table has no column of the right kind for that yet."
 
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "To column"
 msgstr "To column"
 
+#: ../table/src/QuickAddFields.tsx
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Pick an option…"
 msgstr "Pick an option…"
 
+#: ../table/src/QuickAddFields.tsx
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "Button says"
@@ -5237,6 +5236,7 @@ msgstr "A button above the rows that creates one — \"Log a feed\", \"Add item\
 msgid "Could not add the {0}"
 msgstr "Could not add the {0}"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Log a feed"
 msgstr "Log a feed"
@@ -5245,32 +5245,39 @@ msgstr "Log a feed"
 msgid "It sits above the rows and creates one. Everything else about the row is edited in the table."
 msgstr "It sits above the rows and creates one. Everything else about the row is edited in the table."
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Ask for a value first"
 msgstr "Ask for a value first"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "On for a list you name things in; off for a button you just press."
 msgstr "On for a list you name things in; off for a button you just press."
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Type into"
 msgstr "Type into"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "What are you adding?"
 msgstr "What are you adding?"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Placeholder"
 msgstr "Placeholder"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Nothing"
 msgstr "Nothing"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Also set"
 msgstr "Also set"
@@ -5379,9 +5386,9 @@ msgstr "Getting a code…"
 msgid "Android"
 msgstr "Android"
 
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
+#: ../ui/src/actions/shortcuts.ts
+#: ../ui/src/actions/shortcuts.ts
+#: ../ui/src/actions/shortcuts.ts
 #: src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -6534,10 +6541,6 @@ msgstr "No matches. Try another search or ask AI to build it."
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "Ask AI"
-
-#: src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Loading"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -10352,19 +10355,24 @@ msgstr "Tap the zoom button (it shows the zoom level) to fit all strokes; drag l
 msgid "Select row {0}"
 msgstr "Select row {0}"
 
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete selected rows"
 msgstr "Delete selected rows"
 
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Clear selection"
 msgstr "Clear selection"
 
+#. 0: count
 #. 0: selectedRows.size
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "{0} selected"
 msgstr "{0} selected"
 
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Selected rows"
 msgstr "Selected rows"
@@ -11360,6 +11368,7 @@ msgstr "{0}: {1} documents,{2} {3}{4} selected rows"
 msgid "Loading document editor…"
 msgstr "Loading document editor…"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "On column"
 msgstr "On column"
@@ -11896,7 +11905,6 @@ msgstr "Code or server address"
 msgid "Add a device"
 msgstr "Add a device"
 
-#: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Loading"
@@ -12851,10 +12859,6 @@ msgstr "Add a comment"
 msgid "Open the comments for this resource"
 msgstr "Open the comments for this resource"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Row menu"
-msgstr "Row menu"
-
 #: src/views/Drive/DriveHome.tsx
 msgid "Commented"
 msgstr "Commented"
@@ -13431,10 +13435,6 @@ msgstr "Add filter"
 msgid "Edit column"
 msgstr "Edit column"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Add view"
-
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
 msgstr "Guest"
@@ -13523,6 +13523,18 @@ msgstr "Pressing Send report shares the reviewed chat text, error messages, and 
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Row menu"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Open resource"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Add view"
+
 #: src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
@@ -13562,3 +13574,21 @@ msgstr "{0} of old history can be removed. Nothing you can see is lost."
 #: src/helpers/verifyAgentSecret.ts
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "This secret belongs to a different agent. Paste the secret you just saved for this account."
+
+#. 0: p; 1: uiTheme(theme).animation.duration
+#: ../ui/src/helpers/transition.ts
+msgid "{0} {1} ease-in-out"
+msgstr "{0} {1} ease-in-out"
+
+#: ../table/src/chunks/TableEditor/TableEditor.tsx
+msgid "<0/> Loading"
+msgstr "<0/> Loading"
+
+#: ../ui/src/components/Dropdown/DefaultTrigger.tsx
+msgid "DefaultTrigger"
+msgstr "DefaultTrigger"
+
+#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
+#: ../table/src/chunks/TableEditor/hooks/useCellSizes.ts
+msgid "{0} {1} minmax(50px, 1fr)"
+msgstr "{0} {1} minmax(50px, 1fr)"

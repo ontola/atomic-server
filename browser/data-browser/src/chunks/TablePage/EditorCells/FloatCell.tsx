@@ -8,34 +8,14 @@ import {
 } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import { InputBase } from './InputBase';
+import { FloatCell as SharedFloatCell } from '@tomic/table';
 import { ProgressBar } from './ProgressBar';
-import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
-import { useCommittedText } from './useCommittedText';
-import { formatNumberInput, parseFloatText } from './numberInput';
+import { CellContainer, DisplayCellProps } from './Type';
 import { formatNumber } from '../helpers/formatNumber';
 
 import type { JSX } from 'react';
 
 const { numberFormats } = urls.instances;
-
-function FloatCellEdit({
-  value,
-  onChange,
-  seed,
-}: EditCellProps<JSONValue>): JSX.Element {
-  // Text, not `type='number'`: that one reads a lone `-` or `.` as empty, so
-  // a number could not start with one.
-  const input = useCommittedText({
-    value,
-    onChange,
-    seed,
-    format: formatNumberInput,
-    parse: parseFloatText,
-  });
-
-  return <InputBase type='text' inputMode='decimal' autoFocus {...input} />;
-}
 
 function FloatCellDisplay({
   value,
@@ -74,7 +54,7 @@ function FloatCellDisplay({
 }
 
 export const FloatCell: CellContainer<JSONValue> = {
-  Edit: FloatCellEdit,
+  Edit: SharedFloatCell.Edit,
   Display: FloatCellDisplay,
 };
 

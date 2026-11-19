@@ -698,10 +698,6 @@ msgstr "Ontologieën"
 msgid "App"
 msgstr "App"
 
-#: src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
-
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
 msgstr "Geen `subject`, `path` of `href` meegegeven aan deze AtomicLink."
@@ -3190,10 +3186,12 @@ msgstr "Onwaar"
 msgid "Value…"
 msgstr "Waarde…"
 
+#: ../table/src/filters/FilterChip.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Remove filter"
 msgstr "Filter verwijderen"
 
+#: ../table/src/filters/FilterChip.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Filter operator"
 msgstr "Filteroperator"
@@ -3207,10 +3205,6 @@ msgstr "Standaardweergave"
 #: src/chunks/TablePage/TableRow.tsx
 msgid "Row is incomplete or has invalid data"
 msgstr "Rij is onvolledig of bevat ongeldige gegevens"
-
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Open resource"
-msgstr "Resource openen"
 
 #: src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
@@ -3737,11 +3731,6 @@ msgstr "Weet je zeker dat je de weergave <0/> wilt verwijderen? Hiermee verwijde
 msgid "{0} copy"
 msgstr "{0} kopie"
 
-#. 0: p; 1: theme.animation.duration
-#: src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
-
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
 msgstr "OpenRouter biedt één API voor toegang tot honderden AI-modellen van alle grote aanbieders, regelt automatisch terugvalopties en kiest de voordeligste mogelijkheden."
@@ -3807,11 +3796,6 @@ msgstr "Probeer de pagina opnieuw te laden. Als dit blijft gebeuren, blokkeert e
 msgid "{0}/M input tokens"
 msgstr "{0}/M invoertokens"
 
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
-
 #. 0: subject
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
 msgid "{0} is loading..."
@@ -3836,14 +3820,17 @@ msgstr "De titel wordt gebruikt om het subject te maken. Houd er rekening mee da
 msgid "Creating table <0/>"
 msgstr "Tabel <0/> maken"
 
+#: ../ui/src/components/Dropdown/index.tsx
 #: src/components/Dropdown/index.tsx
 msgid "Filter actions…"
 msgstr "Acties filteren…"
 
+#: ../ui/src/components/Dropdown/index.tsx
 #: src/components/Dropdown/index.tsx
 msgid "Filter actions"
 msgstr "Acties filteren"
 
+#: ../ui/src/components/Dropdown/index.tsx
 #: src/components/Dropdown/index.tsx
 msgid "No matching actions"
 msgstr "Geen overeenkomende acties"
@@ -5058,6 +5045,7 @@ msgstr "nu"
 msgid "a date"
 msgstr "een datum"
 
+#: ../table/src/filters/FilterChip.tsx
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "Compare against"
 msgstr "Vergelijken met"
@@ -5108,6 +5096,8 @@ msgstr "Rijen"
 msgid "Measure"
 msgstr "Meting"
 
+#: ../table/src/QuickAddFields.tsx
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
@@ -5151,8 +5141,10 @@ msgstr "Kies een getal en iets om op te groeperen"
 msgid "No data yet"
 msgstr "Nog geen gegevens"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 #: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
@@ -5177,24 +5169,31 @@ msgstr "Actie bewerken"
 msgid "Add an action"
 msgstr "Een actie toevoegen"
 
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "Does what"
 msgstr "Doet wat"
 
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "This table has no column of the right kind for that yet."
 msgstr "Deze tabel heeft nog geen kolom van het juiste type daarvoor."
 
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "To column"
 msgstr "Naar kolom"
 
+#: ../table/src/QuickAddFields.tsx
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Pick an option…"
 msgstr "Kies een optie…"
 
+#: ../table/src/QuickAddFields.tsx
+#: ../table/src/RowActionFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 msgid "Button says"
@@ -5237,6 +5236,7 @@ msgstr "Een knop boven de rijen die een rij maakt — \"Voeding registreren\", \
 msgid "Could not add the {0}"
 msgstr "Kan de {0} niet toevoegen"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Log a feed"
 msgstr "Voeding registreren"
@@ -5245,32 +5245,39 @@ msgstr "Voeding registreren"
 msgid "It sits above the rows and creates one. Everything else about the row is edited in the table."
 msgstr "Deze staat boven de rijen en maakt een rij aan. Alle andere gegevens van de rij bewerk je in de tabel."
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Ask for a value first"
 msgstr "Eerst om een waarde vragen"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "On for a list you name things in; off for a button you just press."
 msgstr "Aan voor een lijst waarin je dingen een naam geeft; uit voor een knop waarop je alleen drukt."
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Type into"
 msgstr "Typen in"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "What are you adding?"
 msgstr "Wat voeg je toe?"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Placeholder"
 msgstr "Voorbeeldtekst"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Nothing"
 msgstr "Niets"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Also set"
 msgstr "Ook instellen"
@@ -5379,9 +5386,9 @@ msgstr "Code ophalen…"
 msgid "Android"
 msgstr "Android"
 
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
-#: src/actions/shortcuts.ts
+#: ../ui/src/actions/shortcuts.ts
+#: ../ui/src/actions/shortcuts.ts
+#: ../ui/src/actions/shortcuts.ts
 #: src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -6534,10 +6541,6 @@ msgstr "Geen resultaten. Probeer een andere zoekopdracht of vraag AI om het te b
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "Vraag AI"
-
-#: src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Laden"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -10352,19 +10355,24 @@ msgstr "Tik op de zoomknop (die het zoomniveau toont) om alle lijnen passend te 
 msgid "Select row {0}"
 msgstr "Rij {0} selecteren"
 
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete selected rows"
 msgstr "Geselecteerde rijen verwijderen"
 
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Clear selection"
 msgstr "Selectie wissen"
 
+#. 0: count
 #. 0: selectedRows.size
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "{0} selected"
 msgstr "{0} geselecteerd"
 
+#: ../table/src/RowSelection.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Selected rows"
 msgstr "Geselecteerde rijen"
@@ -11360,6 +11368,7 @@ msgstr "{0}: {1} documenten,{2} {3}{4} geselecteerde rijen"
 msgid "Loading document editor…"
 msgstr "Documenteditor laden…"
 
+#: ../table/src/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "On column"
 msgstr "Op kolom"
@@ -11896,7 +11905,6 @@ msgstr "Code of serveradres"
 msgid "Add a device"
 msgstr "Een apparaat toevoegen"
 
-#: src/components/Spinner.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Laden"
@@ -12851,10 +12859,6 @@ msgstr "Een opmerking toevoegen"
 msgid "Open the comments for this resource"
 msgstr "De opmerkingen voor deze resource openen"
 
-#: src/chunks/TableEditor/Cell.tsx
-msgid "Row menu"
-msgstr "Rijmenu"
-
 #: src/views/Drive/DriveHome.tsx
 msgid "Commented"
 msgstr "Opmerking geplaatst"
@@ -13431,10 +13435,6 @@ msgstr "Filter toevoegen"
 msgid "Edit column"
 msgstr "Kolom bewerken"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Weergave toevoegen"
-
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
 msgstr "Gast"
@@ -13523,6 +13523,18 @@ msgstr "Met Melding verzenden deel je de gecontroleerde chattekst, foutmeldingen
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team, samen met technische gegevens over je opstelling (app-versie, serveradres en status). Vermeld geen privé-inhoud uit je werkruimte."
 
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Rijmenu"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Resource openen"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Weergave toevoegen"
+
 #: src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
@@ -13563,3 +13575,20 @@ msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien 
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Deze geheime sleutel hoort bij een andere agent. Plak de sleutel die je net voor dit account hebt bewaard."
 
+#. 0: p; 1: uiTheme(theme).animation.duration
+#: ../ui/src/helpers/transition.ts
+msgid "{0} {1} ease-in-out"
+msgstr "{0} {1} ease-in-out"
+
+#: ../table/src/chunks/TableEditor/TableEditor.tsx
+msgid "<0/> Loading"
+msgstr "<0/> Laden"
+
+#: ../ui/src/components/Dropdown/DefaultTrigger.tsx
+msgid "DefaultTrigger"
+msgstr "DefaultTrigger"
+
+#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
+#: ../table/src/chunks/TableEditor/hooks/useCellSizes.ts
+msgid "{0} {1} minmax(50px, 1fr)"
+msgstr "{0} {1} minmax(50px, 1fr)"
