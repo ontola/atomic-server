@@ -216,12 +216,17 @@ export function parseLockfile(text: string): Lockfile {
  * pinned. A class the lockfile knows must still be in the input; one it does
  * not know yet is fine, that is what a push adds. When the lockfile has a
  * fingerprint it must match too, unless `fingerprint: false`: a push is how a
- * changed schema gets a new one.
+ * changed schema gets a new one. A property the lockfile does not know yet
+ * is a problem (the lockfile is stale) unless `newProperties: true`: a push
+ * adds it.
  */
 export function checkLockfile(
   lock: Lockfile,
   input: OntologyInput,
-  { fingerprint = true }: { fingerprint?: boolean } = {},
+  {
+    fingerprint = true,
+    newProperties = false,
+  }: { fingerprint?: boolean; newProperties?: boolean } = {},
 ): string[] {
   const expected = lockfileFromInput(input, lock.ontology).properties;
   const problems: string[] = [];
@@ -230,6 +235,8 @@ export function checkLockfile(
     const pinned = lock.properties[shortname];
 
     if (pinned === undefined) {
+      if (newProperties) continue;
+
       problems.push(
         `property '${shortname}' is in the schema but not in the lockfile (${id})`,
       );
@@ -278,7 +285,7 @@ export function checkLockfile(
 export function assertLockfileMatches(
   lock: Lockfile,
   input: OntologyInput,
-  options?: { fingerprint?: boolean },
+  options?: { fingerprint?: boolean; newProperties?: boolean },
 ): void {
   const problems = checkLockfile(lock, input, options);
 

@@ -227,10 +227,10 @@ pub async fn push(
     let path = lockfile.unwrap_or_else(|| default_lockfile_path(file));
     let previous = read_lockfile(&path)?;
 
-    // A pinned lockfile must still match, or the push would quietly make new
-    // properties next to the old ones.
+    // A pinned property must still match, or the push would quietly make a
+    // second one next to it. A property the lockfile lacks is simply new.
     if let Some(previous) = &previous {
-        if let Err(e) = previous.check_identities(&plan) {
+        if let Err(e) = previous.check_pinned(&plan) {
             if !accept_changes {
                 return Err(format!(
                     "{}: {e}\nPass --accept-changes to push anyway",

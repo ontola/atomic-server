@@ -105,8 +105,26 @@ impl Lockfile {
     /// ontology, shortname and datatype give, and nothing else is pinned. A
     /// class the lockfile knows must still be in the plan; a class it does not
     /// know yet is fine, that is what a push adds. Other edits to the schema
-    /// pass: that is what `schema diff` and a push are for.
+    /// pass: that is what `schema diff` and a push are for. This is the check
+    /// of `schema check`, where a property the lockfile lacks means it is stale;
+    /// see [`Self::check_pinned`] for a push.
     pub fn check_identities(&self, plan: &OntologyPlan) -> AtomicResult<()> {
+        self.check_identities_with(plan, false)
+    }
+
+    /// Like [`Self::check_identities`], but a property that is in the plan and
+    /// not yet in the lockfile is fine, that is what a push adds. A pinned
+    /// property whose ID changed, or that or a class that is no longer in the
+    /// plan, still fails.
+    pub fn check_pinned(&self, plan: &OntologyPlan) -> AtomicResult<()> {
+        self.check_identities_with(plan, true)
+    }
+
+    fn check_identities_with(
+        &self,
+        plan: &OntologyPlan,
+        allow_new_properties: bool,
+    ) -> AtomicResult<()> {
         let expected = Lockfile::from_plan(plan, &self.ontology, BTreeMap::new())?;
         let mut problems = Vec::new();
 
@@ -119,6 +137,7 @@ impl Lockfile {
                      shortname or datatype makes a new property and leaves the old one behind. \
                      Change it back, or re-lock to accept the new property"
                 )),
+                None if allow_new_properties => {}
                 None => problems.push(format!(
                     "property '{shortname}' is in the schema but not in the lockfile ({id})"
                 )),
@@ -211,6 +230,12 @@ mod tests {
             error.contains(&changed.classes[1].properties[1].shortname),
             "{error}"
         );
+        // Also on a push: the old property would be left behind.
+        assert!(lock
+            .check_pinned(&changed)
+            .unwrap_err()
+            .to_string()
+            .contains("shortname or datatype makes a new property"));
     }
 
     #[test]
@@ -230,12 +255,24 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("not in the lockfile"));
+        assert!(lock
+            .check_identities(&grown)
+            .unwrap_err()
+            .to_string()
+            .contains("not in the lockfile"));
+        // A push adds the new property.
+        lock.check_pinned(&grown).unwrap();
         let mut shrunk = plan.clone();
         shrunk.classes[0].properties.clear();
         shrunk.classes[0].requires.clear();
         shrunk.classes[0].recommends.clear();
         assert!(lock
             .check(&shrunk)
+            .unwrap_err()
+            .to_string()
+            .contains("no longer in the schema"));
+        assert!(lock
+            .check_pinned(&shrunk)
             .unwrap_err()
             .to_string()
             .contains("no longer in the schema"));
