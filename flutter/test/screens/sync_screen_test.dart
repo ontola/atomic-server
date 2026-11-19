@@ -551,6 +551,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
           find.byKey(const Key('ai-settings-row')), 300);
+      // Scrolled into view may be only its top edge; the tap needs its centre.
+      await tester.ensureVisible(find.byKey(const Key('ai-settings-row')));
+      await tester.pumpAndSettle();
       expect(find.text('AI credits'), findsNothing);
       expect(find.byKey(const Key('ai-model-row')), findsNothing);
       await tester.tap(find.byKey(const Key('ai-settings-row')));

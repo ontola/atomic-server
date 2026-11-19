@@ -14,22 +14,22 @@ class PreferenceChoice<T> {
 /// a change from the web app or another screen shows here, and a tap goes
 /// through [Preference.set] (saved locally, written to the private drive).
 class PreferenceRow<T> extends StatelessWidget {
-  PreferenceRow({
+  const PreferenceRow({
     super.key,
     required this.title,
     required this.preference,
     this.subtitle,
     this.icon,
     this.choices,
-  }) : assert(choices != null || T == bool,
-            'Only a boolean can be a switch; give the other types choices.');
+  });
 
   final String title;
   final String? subtitle;
   final IconData? icon;
   final Preference<T> preference;
 
-  /// Null: the preference is a boolean, shown as a switch.
+  /// Null: the preference is a boolean, shown as a switch. Other types need
+  /// choices.
   final List<PreferenceChoice<T>>? choices;
 
   @override
