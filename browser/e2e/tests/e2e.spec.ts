@@ -15,7 +15,6 @@ import {
   changeDrive,
   contextMenu,
   contextMenuClick,
-  currentDialogOkButton,
   currentDriveTitle,
   openCurrentDrive,
   editProfileAndCommit,
@@ -454,25 +453,6 @@ test.describe('data-browser', async () => {
     await page2.getByRole('button', { name: 'Send' }).click();
     await expect(page.locator(`text=${teststring2}`)).toBeVisible();
     await expect(page2.locator(`text=${teststring2}`)).toBeVisible();
-  });
-
-  test('bookmark', async ({ page }) => {
-    await newResource('bookmark', page);
-
-    const input = page.locator('[placeholder="https\\:\\/\\/example\\.com"]');
-    await input.click();
-    await input.fill('https://ontola.io');
-    await page.locator(currentDialogOkButton).click();
-
-    // Verify the bookmark imported page content. Use a substring + role
-    // pairing that the live site is unlikely to change in casing or layout
-    // (the `:text-is("Full-service")` strict match was already brittle and
-    // fails now that the site uses "full-service" inline rather than as its
-    // own element).
-    await expect(
-      page.getByRole('heading', { name: /software development/i }).first(),
-      'Page contents not properly imported',
-    ).toBeVisible();
   });
 
   // Resource-level favorites. Favoriting writes the `favorites` ResourceArray

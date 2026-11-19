@@ -34,11 +34,6 @@ export const BASIC_CREATIONS = [
     description: 'Start a conversation with your team.',
   },
   {
-    subject: dataBrowser.classes.bookmark,
-    title: 'Bookmark',
-    description: 'Save a link for later.',
-  },
-  {
     subject: canvas.classes.canvas,
     title: 'Canvas',
     description: 'Arrange ideas on a shared canvas.',

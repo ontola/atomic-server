@@ -13,7 +13,6 @@ import { IconType } from 'react-icons';
 import {
   FaTag,
   FaAtom,
-  FaBook,
   FaGlobe,
   FaPlug,
   FaGrip,
@@ -50,7 +49,6 @@ import { AIIcon } from '../components/AI/AIIcon';
 
 const iconMap = new Map<string, IconType>([
   [dataBrowser.classes.folder, FaFolder],
-  [dataBrowser.classes.bookmark, FaBook],
   [dataBrowser.classes.chatroom, FaComment],
   [dataBrowser.classes.document, FaFileLines],
   [dataBrowser.classes.documentV2, FaFileLines],

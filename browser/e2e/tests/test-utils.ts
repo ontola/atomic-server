@@ -1372,7 +1372,7 @@ export async function newResource(klass: string, page: Page) {
     await classButton.waitFor({ state: 'visible', timeout: 30000 });
     await classButton.click();
     // Wait for any of: URL leaves /app/new (basic-instance handlers), a
-    // dialog opens (bookmark/table), or the in-place NewFormFullPage shows
+    // dialog opens (table), or the in-place NewFormFullPage shows
     // up (custom user classes — `/app/new?classSubject=...` keeps the path
     // but renders the resource form).
     await Promise.any([
