@@ -8,6 +8,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 ## UNRELEASED
 
 - `atomic-cli schema diff <file> [--against <old file>]` lists how a schema differs from the ontology on the server (or an older file) as compatible, tightening or breaking changes, and fails on breaking ones. `schema push` refuses breaking changes unless you pass `--allow-breaking`. The schema lockfile gets an optional `fingerprint` (`atomic_lib::schema::compat`) that `schema check` compares; older lockfiles keep working.
+- `schema push` no longer needs `--accept-changes` to add a property that the lockfile does not list yet (`atomic-cli` and `@tomic/cli`; `schema check` still fails on it). Pushing a property whose datatype changed no longer fails with "Import identity already exists": the new property is made, and the old one stays under a `schema:property:<shortname>:superseded:<subject>` localId.
 
 ## [v0.41.0-beta.9] - 2026-11-18
 

@@ -175,7 +175,7 @@ npx ad-generate ontology check shop.schema.json
 - `lock` needs no server. Property IDs follow from the ontology subject, the shortname and the datatype, so the lockfile can be made as soon as you know the ontology's subject. Class subjects are minted by the server, so they stay empty until a `push`. Locking again keeps the class subjects of an earlier push of the same ontology.
 - `check` fails when the lockfile no longer matches the schema. Changing a property's shortname or datatype makes a new property with a new ID, and `check` says so. It also fails when the schema's [fingerprint](#changing-a-schema) differs from the one in the lockfile. Commit the lockfile and run `check` in CI.
 - `diff` (`atomic-cli` only) compares the schema file with the ontology on the server that the lockfile points to, or with an older schema file when you pass `--against`. It prints every change grouped by level and exits with an error when one is breaking.
-- `push` refuses to run when a property in the existing lockfile no longer matches the schema, so a changed datatype cannot quietly create a second property. `--accept-changes` pushes anyway. `atomic-cli` also runs `diff` against the server: it refuses breaking changes unless you pass `--allow-breaking`, and warns about tightening ones.
+- `push` refuses to run when a property pinned in the existing lockfile changed or is no longer in the schema, so a changed datatype cannot quietly create a second property. A property the lockfile does not know yet is fine: that is what a push adds. `--accept-changes` pushes anyway. `atomic-cli` also runs `diff` against the server: it refuses breaking changes unless you pass `--allow-breaking`, and warns about tightening ones.
 - `--shortname` overrides the ontology's shortname, `--lockfile <path>` the lockfile's location.
 
 The lockfile is `<file>.lock.json` next to the schema file (`shop.schema.json.lock.json`). Its keys are sorted, it is indented with two spaces and ends with a newline:
@@ -209,6 +209,8 @@ The workflow: edit the schema file, run `schema diff`, run `schema push`, regene
 
 A constraint that changed in a way that has no direction, such as a different `pattern` or `anyOf`, is reported as tightening and says the direction is unknown.
 Names and descriptions are cosmetic: editing them is not a change.
+
+Pushing a property whose datatype changed makes the new property and keeps the old one. The new property carries the schema's `localId` (`schema:property:<shortname>`); the old one gets a `localId` ending in `:superseded:<its subject>`, stays in the ontology's property list, and keeps the values written under it.
 
 The lockfile holds a `fingerprint`, `b3-` and a blake3 hash of the schema's contract: the ontology, the property IDs, and per class what it requires and recommends, the classtype of its properties and its constraints.
 Reordering classes or properties, or rewording a name or description, does not change it; any other edit does.

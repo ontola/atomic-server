@@ -175,7 +175,7 @@ enum SchemaCommands {
         /// Lockfile path. Defaults to <file>.lock.json
         #[arg(long)]
         lockfile: Option<PathBuf>,
-        /// Push even if the lockfile no longer matches the schema (new properties are made)
+        /// Push even if a property pinned in the lockfile changed or is gone (a changed property makes a new one)
         #[arg(long)]
         accept_changes: bool,
         /// Push even if the schema has breaking changes (see `schema diff`)

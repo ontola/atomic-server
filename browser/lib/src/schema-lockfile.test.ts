@@ -94,6 +94,36 @@ describe('schema lockfile', () => {
     expect(problems).toContain("class 'gone' is in the lockfile");
   });
 
+  it('lets a push add a property, but nothing else', () => {
+    const input = inputOf(fixture.cases[0]);
+    const lock = lockfileFromInput(input, fixture.cases[0].ontology);
+    const options = { fingerprint: false, newProperties: true };
+    const grown: OntologyInput = structuredClone(input);
+
+    grown.properties = [{ shortname: 'extra', datatype: Datatype.STRING }];
+
+    expect(checkLockfile(lock, grown, options)).toEqual([]);
+    expect(checkLockfile(lock, grown, { fingerprint: false }).join()).toContain(
+      "property 'extra' is in the schema but not in the lockfile",
+    );
+
+    const changed: OntologyInput = structuredClone(input);
+
+    changed.classes[1].properties![1].datatype = Datatype.INTEGER;
+    expect(checkLockfile(lock, changed, options).join()).toContain(
+      'shortname or datatype makes a new property',
+    );
+
+    const shrunk: OntologyInput = structuredClone(input);
+
+    shrunk.classes[0].properties = [];
+    shrunk.classes[0].requires = [];
+    shrunk.classes[0].recommends = [];
+    expect(checkLockfile(lock, shrunk, options).join()).toContain(
+      'no longer in the schema',
+    );
+  });
+
   it('reports a changed contract, and ignores cosmetic edits and order', () => {
     const input = inputOf(fixture.cases[0]);
     const lock = lockfileFromInput(input, fixture.cases[0].ontology);
