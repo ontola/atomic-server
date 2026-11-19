@@ -165,7 +165,7 @@ export function createSyncApp(store, context) {
       )
         continue;
 
-      if (desired.parentSourceKey) {
+      if (desired.parentSourceKeyHash) {
         const parent = alias.parentSourceSubject
           ? await store.getResource(alias.parentSourceSubject)
           : undefined;
@@ -178,7 +178,8 @@ export function createSyncApp(store, context) {
           throw new Error(
             'The legacy source parent needs adoption before syncing',
           );
-        if (parentKey !== desired.parentSourceKey) continue;
+        if (sourceConfigFingerprint(parentKey) !== desired.parentSourceKeyHash)
+          continue;
       }
 
       const row = await store.getResource(alias.subject);

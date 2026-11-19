@@ -15,7 +15,10 @@ bridge; native Syncable Collection views render saved Atomic data without
 refreshing a provider. Provider tokens remain at the proxy; browser connection
 keys stay outside the frame. Writes retain the selected root/descendant boundary.
 Canonical source identities are independent of mutable resource parents and
-provider transport addresses.
+provider transport addresses. Nested keys contain a SHA-256 digest of the logical
+parent key, while saved configuration retains the full parent key for native
+provenance checks. Deep navigation stays within the existing 2,000-character
+bridge query limit; the limit and write scope are unchanged.
 
 ## Owned source and dependencies
 
@@ -47,7 +50,7 @@ provider transport addresses.
 - [x] Independent security review; fixed empty POST-object scope and malformed
   client-context regressions in the library candidate.
 - [x] Data Browser typecheck, scoped lint, full formatting and translations.
-- [x] All 2,834 Data Browser tests plus 2 MCP checks pass with npm 0.29.0 in UTC.
+- [x] All 2,845 Data Browser tests plus 2 MCP checks pass with npm 0.29.0 in UTC.
 - [ ] Fresh matching native build and Chromium journeys/screenshots.
 - [x] Publish library after required CI; pin exact registry version/lockfile.
 - [x] Publish catalog and verify catalog-only live replacement (SaaS run

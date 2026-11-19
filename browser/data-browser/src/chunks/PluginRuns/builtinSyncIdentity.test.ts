@@ -18,6 +18,87 @@ const base = {
 };
 
 describe('durable catalog source identities', () => {
+  it('bounds deep collection and record keys without embedding ancestor JSON', () => {
+    let parent = sourceKey(base);
+    const seen = new Set([parent]);
+
+    for (let depth = 0; depth < 16; depth++) {
+      for (const kind of ['collection', 'record']) {
+        const key = sourceKey({
+          ...base,
+          kind,
+          collection: { name: 'children', resource: 'child' },
+          parentSourceKey: parent,
+          ...(kind === 'record' ? { remoteId: depth } : {}),
+        });
+        expect(key.length).toBeLessThan(600);
+        const parsed = JSON.parse(key);
+        expect(parsed.parentSourceKey).toBeUndefined();
+        expect(parsed.parentSourceKeyHash).toBe(
+          sourceConfigFingerprint(parent),
+        );
+        expect(seen.has(key)).toBe(false);
+        seen.add(key);
+        parent = key;
+      }
+    }
+  });
+
+  it('round trips a canonical prehashed parent and isolates typed parent identities', () => {
+    const numeric = sourceKey(base);
+    const textual = sourceKey({
+      ...base,
+      principal: { ...base.principal, subject: '7' },
+    });
+    const first = sourceKey({
+      ...base,
+      kind: 'record',
+      parentSourceKey: numeric,
+      remoteId: 7,
+    });
+    expect(sourceKey(JSON.parse(first))).toBe(first);
+    expect(first).not.toBe(
+      sourceKey({
+        ...base,
+        kind: 'record',
+        parentSourceKey: textual,
+        remoteId: 7,
+      }),
+    );
+    expect(first).not.toBe(
+      sourceKey({
+        ...base,
+        kind: 'record',
+        parentSourceKey: numeric,
+        remoteId: '7',
+      }),
+    );
+  });
+
+  it('rejects oversized source identities before any bridge query', () => {
+    expect(() =>
+      sourceKey({
+        ...base,
+        principal: { ...base.principal, subject: 'x'.repeat(2000) },
+      }),
+    ).toThrow('2000 character query limit');
+  });
+
+  it('rejects invalid or competing parent identity inputs', () => {
+    expect(() =>
+      sourceKey({
+        ...base,
+        parentSourceKey: 'parent',
+        parentSourceKeyHash: 'a'.repeat(64),
+      }),
+    ).toThrow('not both');
+    expect(() =>
+      sourceKey({ ...base, parentSourceKeyHash: 'not-a-digest' }),
+    ).toThrow('64 lowercase hexadecimal');
+    expect(() => sourceKey({ ...base, parentSourceKey: '' })).toThrow(
+      'nonempty text',
+    );
+  });
   it('fingerprints canonical saved configuration while preserving JSON types', () => {
     expect(sourceConfigFingerprint({ z: 7, a: 'value' })).toBe(
       sourceConfigFingerprint({ a: 'value', z: 7 }),

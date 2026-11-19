@@ -54,6 +54,9 @@ bridge. Writes stay within the selected table and its children, using the
 person's existing rights. Provider credentials remain at the proxy, and
 browser connection keys stay outside the iframe. Catalog metadata does not
 expand host permissions.
+Nested source keys hash the logical parent identity to stay within existing
+bridge limits. The host verifies that digest against the complete saved parent
+binding before allowing navigation reads.
 
 **Syncable Collection** is a generic native table view, installed with **+**.
 During explicit discovery, the Sync app saves a versioned collection descriptor

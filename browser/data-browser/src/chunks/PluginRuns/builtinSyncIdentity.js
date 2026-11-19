@@ -60,9 +60,25 @@ export function sourceKey({
   principal,
   collection,
   parentSourceKey,
+  parentSourceKeyHash,
   remoteId,
 }) {
-  return JSON.stringify(
+  if (parentSourceKey !== undefined && parentSourceKeyHash !== undefined)
+    throw new Error('Supply a parent source key or its hash, not both');
+  if (
+    parentSourceKey !== undefined &&
+    (typeof parentSourceKey !== 'string' || !parentSourceKey)
+  )
+    throw new Error('The parent source key must be nonempty text');
+  if (
+    parentSourceKeyHash !== undefined &&
+    (typeof parentSourceKeyHash !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(parentSourceKeyHash))
+  )
+    throw new Error(
+      'The parent source hash must be 64 lowercase hexadecimal characters',
+    );
+  const serialized = JSON.stringify(
     canonicalValue({
       version: 2,
       proxyOrigin,
@@ -70,10 +86,19 @@ export function sourceKey({
       kind,
       principal: principalIdentity(principal),
       collection,
-      parentSourceKey,
+      parentSourceKeyHash:
+        parentSourceKey === undefined
+          ? parentSourceKeyHash
+          : sourceConfigFingerprint(parentSourceKey),
       remoteId,
     }),
   );
+  if (serialized.length > 2000)
+    throw new Error(
+      'The source identity exceeds the 2000 character query limit',
+    );
+
+  return serialized;
 }
 
 /** A nested collection's transport address may change; its declared relationship does not. */

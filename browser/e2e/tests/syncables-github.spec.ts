@@ -622,10 +622,15 @@ async function sourceSubject(page: Page, kind: string, collection?: string) {
   );
 }
 
-async function browse(page: Page) {
-  const tab = page.getByRole('tab', { name: 'Browse', exact: true });
+async function selectView(page: Page, name: string) {
+  const tab = page.getByRole('tab', { name, exact: true });
   await expect(tab).toBeVisible({ timeout: 30_000 });
   if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
+async function browse(page: Page) {
+  await selectView(page, 'Browse');
   await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
 
   return page.getByRole('main').getByRole('table');
@@ -633,15 +638,17 @@ async function browse(page: Page) {
 
 async function openRow(page: Page, text: string) {
   const directory = await browse(page);
+  const previous = await getCurrentSubject(page);
   await directory
     .getByRole('row')
     .filter({ hasText: text })
     .getByRole('button', { name: 'Open', exact: true })
     .click();
+  await expect.poll(() => getCurrentSubject(page)).not.toBe(previous);
 }
 
 async function sync(page: Page) {
-  await page.getByRole('tab', { name: 'Sync', exact: true }).click();
+  await selectView(page, 'Sync');
   const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
   await expect(
     iframe.getByRole('button', { name: 'Sync now', exact: true }),
@@ -650,6 +657,7 @@ async function sync(page: Page) {
   await expect(
     iframe.getByRole('button', { name: 'Sync now', exact: true }),
   ).toBeEnabled({ timeout: 45_000 });
+  await expect(iframe.getByRole('alert')).toHaveCount(0);
 
   return iframe;
 }
@@ -721,7 +729,7 @@ async function legacyPublicMirror(page: Page, parent: string) {
 }
 
 async function publicForm(page: Page, collection = 'repositoryIssues') {
-  await page.getByRole('tab', { name: 'Sync', exact: true }).click();
+  await selectView(page, 'Sync');
   const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
   await expect(iframe.getByLabel('Collection', { exact: true })).toBeVisible({
     timeout: 30_000,
@@ -785,6 +793,7 @@ test.describe('catalog-driven built-in Syncables', () => {
       true,
     );
     await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(appSubject);
     const principalSubject = await getCurrentSubject(page);
     expect(principalSubject).not.toBe(appSubject);
     // Migration preserves this old localId; it must still form a navigable principal Table.
@@ -857,7 +866,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     };
 
     await page.route(PROXY + '/proxy/**', offline);
-    await page.getByRole('tab', { name: 'Table', exact: true }).click();
+    await selectView(page, 'Table');
     await browse(page);
     await openRow(page, 'ontola');
     const repositoriesSubject = await getCurrentSubject(page);
@@ -900,7 +909,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await browse(page);
     expect(requests.providerRequests).toHaveLength(nestedNativeReads);
     expect(requests.issueConnections).toHaveLength(0);
-    await page.getByRole('tab', { name: 'Sync', exact: true }).click();
+    await selectView(page, 'Sync');
     const syncNow = iframe.getByRole('button', {
       name: 'Sync now',
       exact: true,
@@ -913,6 +922,10 @@ test.describe('catalog-driven built-in Syncables', () => {
     await syncNow.click();
     await expect.poll(() => requests.issueConnections.length).toBe(1);
     await sidebar.getByText('Organizations', { exact: true }).click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      organizationsSubject,
+    );
     await browse(page);
     await expect(directory.getByText('ontola', { exact: true })).toBeVisible();
     await expect(frame).toHaveCount(0);
@@ -922,13 +935,15 @@ test.describe('catalog-driven built-in Syncables', () => {
       contentType: 'image/png',
     });
     await sidebar
-      .locator(`a[href*="${encodeURIComponent(mirrorSubject)}"]`)
+      .locator(
+        `a[href="${mirrorSubject}"],a[href*="${encodeURIComponent(mirrorSubject)}"]`,
+      )
       .click();
     await expect(page.getByRole('main')).toHaveAttribute(
       'about',
       mirrorSubject,
     );
-    await page.getByRole('tab', { name: 'Sync', exact: true }).click();
+    await selectView(page, 'Sync');
     await expect(
       iframe.getByRole('button', { name: 'Syncing', exact: true }),
     ).toBeDisabled();
@@ -1161,7 +1176,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(
       iframe.getByRole('button', { name: 'Public', exact: true }),
     ).toHaveCount(1, { timeout: 45_000 });
+    const appBeforePublic = await getCurrentSubject(page);
     await iframe.getByRole('button', { name: 'Public', exact: true }).click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(appBeforePublic);
     await browse(page);
     const publicSubject = await getCurrentSubject(page);
     const publicUrl = page.url();
@@ -1432,7 +1449,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(
       iframe.getByRole('button', { name: 'Public', exact: true }),
     ).toBeVisible({ timeout: 45_000 });
+    const appBeforePublic = await getCurrentSubject(page);
     await iframe.getByRole('button', { name: 'Public', exact: true }).click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(appBeforePublic);
     const form = await publicForm(page, 'entries');
     await form.getByLabel('Workspace name', { exact: true }).fill('research');
     expect(reads).toEqual([]);

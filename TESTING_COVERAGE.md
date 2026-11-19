@@ -1303,6 +1303,7 @@ This does not yet prove restoration of the user's private staging workspace.
   `syncableSource.test.ts` use the actual `syncables/browser` library and composed
   IAP fixtures. They cover typed principal identity, canonical source keys,
   catalog selection/navigation, public entrypoints, managed-field reconciliation,
+  compact parent-key hashes across deep nesting under the unchanged bridge limit,
   incomplete-read retention, no eager descendant reads and legacy alias reuse.
 - `builtinSyncablesProfile.test.ts` and `proxyConnections.test.ts` cover fresh
   catalog authority, exact selected-instance/pagination routes, replayed response

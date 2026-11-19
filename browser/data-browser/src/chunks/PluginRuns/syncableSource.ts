@@ -37,7 +37,7 @@ export interface SyncableSourceKey {
   kind: 'principal' | 'collection' | 'record';
   principal: SyncablePrincipal;
   collection?: Record<string, unknown>;
-  parentSourceKey?: string;
+  parentSourceKeyHash?: string;
   remoteId?: string | number;
 }
 export interface LegacySyncableSourceKey {
@@ -230,7 +230,10 @@ export function parseSyncableSourceKey(
     value.version !== 2 ||
     !['principal', 'collection', 'record'].includes(String(value.kind)) ||
     (value.collection !== undefined && !record(value.collection)) ||
-    (value.parentSourceKey !== undefined && !text(value.parentSourceKey)) ||
+    value.parentSourceKey !== undefined ||
+    (value.parentSourceKeyHash !== undefined &&
+      (typeof value.parentSourceKeyHash !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(value.parentSourceKeyHash))) ||
     (value.remoteId !== undefined &&
       !(
         text(value.remoteId) ||

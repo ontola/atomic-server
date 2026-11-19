@@ -1,5 +1,10 @@
 import { expect, it } from 'vitest';
-import { collectionIdentity, sourceKey } from './builtinSyncIdentity.js';
+import {
+  canonicalValue,
+  collectionIdentity,
+  sourceKey,
+  sourceConfigFingerprint,
+} from './builtinSyncIdentity.js';
 import {
   parseSyncableSourceConfig,
   parseSyncableSourceKey,
@@ -107,4 +112,71 @@ it('rejects noncanonical source keys and keeps record identity typed', () => {
       JSON.stringify({ ...JSON.parse(key), extraneous: 'field' }),
     ),
   ).toThrow('canonical');
+});
+
+it('verifies compact parent digests against the complete saved provenance key', () => {
+  const parent = sourceKey({
+    ...base,
+    kind: 'collection',
+    collection: collectionIdentity(collection),
+  });
+  const config = parseSyncableSourceConfig({
+    ...base,
+    parentSourceKey: parent,
+    resource: 'event',
+    record: { id: 7 },
+  });
+  const raw = sourceKey({
+    ...config,
+    kind: 'record',
+    collection: { name: 'events', resource: 'event' },
+    remoteId: 7,
+  });
+  const parsed = parseSyncableSourceKey(raw);
+  if (parsed.version !== 2) throw new Error('Expected current source');
+  expect(parsed).not.toHaveProperty('parentSourceKey');
+  expect(parsed.parentSourceKeyHash).toBe(sourceConfigFingerprint(parent));
+  expect(sourceConfigMatchesKey(config, parsed, raw)).toBe(true);
+  expect(
+    sourceConfigMatchesKey(
+      { ...config, parentSourceKey: parent + 'changed' },
+      parsed,
+      raw,
+    ),
+  ).toBe(false);
+});
+it.each(['a'.repeat(63), 'A'.repeat(64), 'z'.repeat(64), 7])(
+  'rejects malformed saved parent digests %s',
+  hash => {
+    const { connectionId: _slot, ...identity } = base;
+    expect(() =>
+      parseSyncableSourceKey(
+        JSON.stringify(
+          canonicalValue({
+            ...identity,
+            kind: 'record',
+            collection: { name: 'events', resource: 'event' },
+            remoteId: 7,
+            parentSourceKeyHash: hash,
+          }),
+        ),
+      ),
+    ).toThrow();
+  },
+);
+it('rejects an expanded parent in a current compact identity', () => {
+  const { connectionId: _slot, ...identity } = base;
+  expect(() =>
+    parseSyncableSourceKey(
+      JSON.stringify(
+        canonicalValue({
+          ...identity,
+          kind: 'record',
+          parentSourceKey: 'expanded-parent',
+          collection: { name: 'events', resource: 'event' },
+          remoteId: 7,
+        }),
+      ),
+    ),
+  ).toThrow();
 });

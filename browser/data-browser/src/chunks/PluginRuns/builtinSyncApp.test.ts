@@ -603,6 +603,36 @@ describe('catalog-driven Sync through the shared app bridge', () => {
     });
   });
 
+  it('keeps every nested storage lookup within the existing bridge query limit', async () => {
+    const set = setup();
+    const query = set.store.query.getMockImplementation()!;
+    set.store.query.mockImplementation(async args => {
+      if (typeof args.value === 'string' && args.value.length > 2000)
+        throw new Error('value must be text of at most 2000 characters');
+
+      return query(args);
+    });
+    await set.app.refresh();
+    const [workspaces] = nodes(set.data, 'collection')[0];
+    await childApp(set, workspaces).refresh();
+    const [tasks] = nodes(set.data, 'collection').find(
+      ([, row]) =>
+        (config(row).navigation as { collection: string }).collection ===
+        'tasks',
+    )!;
+    await childApp(set, tasks).refresh();
+    expect(nodes(set.data, 'record')).toHaveLength(3);
+
+    for (const [, row] of nodes(set.data, 'record')) {
+      const key = row[prop('source-key')] as string;
+      expect(key.length).toBeLessThanOrEqual(2000);
+      expect(JSON.parse(key).parentSourceKeyHash).toBe(
+        sourceConfigFingerprint(config(row).parentSourceKey),
+      );
+      expect(typeof config(row).parentSourceKey).toBe('string');
+    }
+  });
+
   it('refreshes mutable navigation addresses without changing child table identity', async () => {
     const set = setup();
     await set.app.refresh();
@@ -770,7 +800,7 @@ describe('catalog-driven Sync through the shared app bridge', () => {
     await set.app.refresh();
     const [subject, row] = nodes(set.data, 'record')[0];
     const canonical = row[prop('source-key')] as string;
-    const parentSourceKey = JSON.parse(canonical).parentSourceKey;
+    const parentSourceKey = config(row).parentSourceKey;
     delete row[prop('source-key')];
     row[P + 'localId'] = 'opaque-legacy-local-id';
     row[P + 'isA'] = ['atomic:legacy-class'];

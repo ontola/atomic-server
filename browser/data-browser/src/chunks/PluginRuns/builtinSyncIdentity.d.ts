@@ -13,6 +13,7 @@ export interface SourceKeyInput {
   principal: SyncablePrincipal;
   collection?: Record<string, unknown>;
   parentSourceKey?: string;
+  parentSourceKeyHash?: string;
   remoteId?: string | number;
 }
 /** Provider compatibility is interpreted natively before descriptors reach the iframe. */
