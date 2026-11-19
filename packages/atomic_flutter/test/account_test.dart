@@ -118,6 +118,17 @@ void main() {
     client.close();
     mismatch.close();
   });
+  test('a session the portal no longer knows asks to sign in again', () async {
+    // GET /api/me answers 204 without a body for an unknown session.
+    final client = AtomicAccountClient('https://provider.example',
+        client: MockClient((r) async => http.Response('', 204)))
+      ..restoreSession('{"origin":"https://provider.example","token":"old"}');
+    await expectLater(
+        client.account(),
+        throwsA(isA<StateError>().having(
+            (e) => e.message, 'message', 'Sign in again to continue')));
+    client.close();
+  });
   test('expired links and malformed replies never produce a linked session',
       () async {
     final client = AtomicAccountClient('https://provider.example',

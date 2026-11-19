@@ -212,7 +212,13 @@ class AtomicAssistantApi extends AssistantApi {
       saved = await AccountStore.read();
     }
     if (saved == null) return null;
-    return HostedAi.forSession(saved);
+    final ai = await HostedAi.forSession(saved);
+    if (ai != null) return ai;
+    // Signed in once, but the portal no longer takes that session: sign in
+    // again with the identity instead of saying there is no account.
+    if (!await AccountStore.renewExpired()) return null;
+    final renewed = await AccountStore.read();
+    return renewed == null ? null : HostedAi.forSession(renewed);
   }
 
   @override
