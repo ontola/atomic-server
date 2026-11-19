@@ -1,6 +1,5 @@
 import {
   core,
-  dataBrowser,
   findSchema,
   pluginSchema,
   subjectsReferToSameResource,
@@ -8,7 +7,7 @@ import {
 } from '@tomic/lib';
 import {
   isSyncableResourceInDrive,
-  loadSyncableResource,
+  findSyncableLegacyAccounts,
   platformLocalId,
   syncablePlatformSchema,
 } from '@chunks/PluginRuns/syncablePlatform';
@@ -47,28 +46,23 @@ export async function resolveBuiltinApp(
   )
     throw new Error('This built-in app has no integration source');
   platformLocalId(proxyOrigin, platformId);
-  const tableSubject =
+  if (!(await isSyncableResourceInDrive(store, drive, subject)))
+    throw new Error('This built-in App is outside the selected drive');
+  const binding =
     app.properties?.['app-data'] && resource.get(app.properties['app-data']);
-  const table =
-    typeof tableSubject === 'string'
-      ? await loadSyncableResource(store, tableSubject)
-      : undefined;
-  const tableClasses = table?.get(core.properties.isA);
-  const parent = table?.get(core.properties.parent);
-  if (
-    !table ||
-    !Array.isArray(tableClasses) ||
-    !tableClasses.includes(dataBrowser.classes.table) ||
-    typeof parent !== 'string' ||
-    !subjectsReferToSameResource(parent, subject) ||
-    table.get(platform) !== platformId ||
-    table.get(proxy) !== proxyOrigin ||
-    !(await isSyncableResourceInDrive(store, drive, subject)) ||
-    !(await isSyncableResourceInDrive(store, drive, table.subject))
-  )
-    throw new Error(
-      'This built-in app has no matching Accounts table in this drive',
-    );
+  const legacyProperty = terms.properties?.['syncable-legacy-accounts'];
+  const legacy = legacyProperty && resource.get(legacyProperty);
+  if (typeof binding !== 'string')
+    throw new Error('This built-in App has no saved source root');
 
-  return { kind: 'syncables', table: table.subject };
+  if (!subjectsReferToSameResource(binding, subject) || legacy !== undefined) {
+    if (!(await findSyncableLegacyAccounts(store, drive, subject)))
+      throw new Error(
+        'This built-in App has no matching legacy Accounts table',
+      );
+  }
+
+  // Legacy installations are provisioned only by an explicit Apps Add/Open.
+  // Passive viewing resolves the native root and never reparents saved data.
+  return { kind: 'syncables', table: subject };
 }

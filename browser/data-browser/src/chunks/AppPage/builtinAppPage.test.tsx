@@ -40,11 +40,11 @@ function open() {
 it('opens a registered built-in through the existing Sync app mounting host', async () => {
   vi.mocked(resolveBuiltinApp).mockResolvedValue({
     kind: 'syncables',
-    table: 'accounts-table',
+    table: 'installed-app',
   });
   open();
   expect((await screen.findByTestId('builtin-app')).textContent).toBe(
-    'accounts-table',
+    'installed-app',
   );
   expect(screen.queryByTestId('ordinary-app')).toBeNull();
 });
@@ -60,7 +60,7 @@ it('keeps ordinary App entrypoints on the existing AppFrame path', async () => {
 
 it('refuses an invalid built-in binding before mounting any execution host', async () => {
   vi.mocked(resolveBuiltinApp).mockRejectedValue(
-    new Error('Accounts table is outside this app'),
+    new Error('Saved source root is outside this app'),
   );
   open();
   expect((await screen.findByRole('alert')).textContent).toContain(

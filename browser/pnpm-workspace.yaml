@@ -18,8 +18,8 @@ allowBuilds:
   unix-dgram: true
 
 minimumReleaseAgeExclude:
-  # Paired release #734: source, CI, provenance and tarball integrity verified.
-  - syncables@0.28.0
+  # Paired release #747: source, CI, provenance and tarball integrity verified.
+  - syncables@0.29.0
 
 # Each range below is bounded to the package's current major line
 # (>=patched <nextMajor) — an open-ended ">=x" lets pnpm resolve to a much

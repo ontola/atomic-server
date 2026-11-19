@@ -109,6 +109,13 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
   ],
   classes: [
     {
+      shortname: 'syncable-principal',
+      name: 'Syncable principal',
+      description:
+        'A catalog-declared authenticated identity or an anonymous public source.',
+      recommends: ['name'],
+    },
+    {
       shortname: 'syncable-account',
       name: 'Syncable account',
       description: 'An authorized remote account.',

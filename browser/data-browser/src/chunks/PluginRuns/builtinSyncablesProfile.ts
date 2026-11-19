@@ -1,5 +1,39 @@
+// @wc-ignore-file
+import {
+  bindCollection,
+  describeCollections,
+  describeAuthenticatedPrincipals,
+  relatedCollectionReads,
+  resolveAuthenticatedPrincipal,
+  resolveCollectionNavigation,
+  validateCollectionRead,
+  validateCollectionEntryRead,
+  validateCollectionNavigationRead,
+  validatePrincipalRead,
+  type OpenApiDocument,
+  type BoundCollection,
+  type CollectionNavigation,
+  type QuerySelection,
+  type TransportRequest,
+  type TransportResponse,
+} from 'syncables/browser';
+import {
+  canonicalValue,
+  collectionIdentity,
+  principalIdentity,
+  type SyncablePrincipal,
+} from './builtinSyncIdentity.js';
+import {
+  parseSyncableSourceConfig,
+  parseSyncableSourceKey,
+  sourceConfigMatchesKey,
+  type SyncableSourceKey,
+  type LegacySyncableSourceKey,
+} from './syncableSource';
 import {
   core,
+  CollectionBuilder,
+  isAtomicIdentifier,
   ensureSchema,
   findSchema,
   subjectsReferToSameResource,
@@ -10,32 +44,59 @@ import {
   ProxyConnections,
   readLimitedResponseText,
   type ProxyHost,
+  type ConnectionPrincipal,
 } from '@helpers/proxyConnections';
 import {
   isSyncableResourceInDrive,
   syncablePlatformSchema,
+  platformLocalId,
 } from './syncablePlatform';
 import { syncableHierarchySchema } from './syncableHierarchy';
 
+export interface TrustedSyncableCatalog {
+  document: OpenApiDocument;
+  querySelection?: QuerySelection;
+}
 export interface SyncAppContext {
   subject: string;
   drive: string;
   platform: string;
   proxyOrigin: string;
-  kind: string;
+  kind: 'platform' | 'principal' | 'collection' | 'legacy';
   mode?: 'public';
+  principal?: SyncablePrincipal;
   connectionId?: string;
-  ownerId?: string;
-  ownerLogin?: string;
-  repoId?: string;
-  repoName?: string;
+  collection?: BoundCollection;
+  navigation?: CollectionNavigation;
+  sourceKey?: string;
+  parentRecord?: {
+    resource: string;
+    record: Record<string, unknown>;
+    context?: Record<string, string>;
+    identity: SyncableSourceKey;
+  };
+  legacySource?: LegacySyncableSourceKey;
+  document?: unknown;
+  querySelection?: QuerySelection;
+  apiSchema?: {
+    classes: Record<string, string>;
+    properties: Record<string, string>;
+  };
   selection?: string;
+  clientContext?: string;
   worker?: boolean;
   proxyTransport: 'host';
   schema: {
     classes: Record<string, string>;
     properties: Record<string, string>;
   };
+}
+
+const provenanceGuards = new WeakMap<SyncAppContext, () => void>();
+
+/** Host-only dependency guard, including delayed Atomic writes after a provider reply. */
+export function assertSyncAppContext(context: SyncAppContext): void {
+  provenanceGuards.get(context)?.();
 }
 
 /** Revalidate the selected drive without yielding between authority and mutation.
@@ -122,7 +183,8 @@ export async function syncAppContext(
     },
   } as const;
 
-  if (platform === 'github-issues' && typeof proxyOrigin === 'string') {
+  if (typeof platform === 'string' && typeof proxyOrigin === 'string') {
+    platformLocalId(proxyOrigin, platform);
     if (proxyOrigin !== getIntegrationProxy())
       throw new Error(
         'Select this integration proxy in Settings before syncing',
@@ -133,119 +195,436 @@ export async function syncAppContext(
 
   const sourceProperty = h.properties?.['syncable-source-key'];
   const configProperty = h.properties?.['syncable-source-config'];
-  const source = sourceProperty && resource.get(sourceProperty);
-  const rawConfig = configProperty && resource.get(configProperty);
-  const config =
-    rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
-      ? (rawConfig as Record<string, unknown>)
-      : {};
-  let key: unknown;
-
-  try {
-    key = JSON.parse(typeof source === 'string' ? source : 'null');
-  } catch {
-    throw new Error('Invalid Sync source binding');
-  }
-
-  if (!Array.isArray(key) || ![5, 6].includes(key.length))
-    throw new Error('Invalid Sync source binding');
-  const [origin, service, kind, identity, collection, connection] = key;
-  if (
-    typeof origin !== 'string' ||
-    new URL(origin).origin !== origin ||
-    service !== 'github-issues'
-  )
-    throw new Error('Unsupported Sync source');
-  const publicSource = kind === 'public' || kind === 'public-mirror';
-
-  const read = (name: string, pattern: RegExp): string => {
-    const value = config[name];
-    if (typeof value !== 'string' || !pattern.test(value))
-      throw new Error('Invalid Sync source ' + name);
-
-    return value;
-  };
-
-  const id = (name: string) => read(name, /^[1-9][0-9]{0,20}$/);
-  const login = (name: string) => read(name, /^[A-Za-z0-9._-]{1,120}$/);
+  const raw = sourceProperty && resource.get(sourceProperty);
+  const key = parseSyncableSourceKey(raw);
+  if (key.proxyOrigin !== getIntegrationProxy())
+    throw new Error('Select this integration proxy in Settings before syncing');
+  if (key.version === 1)
+    return {
+      ...context,
+      platform: key.platform,
+      proxyOrigin: key.proxyOrigin,
+      kind: 'legacy',
+      legacySource: key,
+    };
+  const config = parseSyncableSourceConfig(
+    configProperty && resource.get(configProperty),
+  );
+  if (typeof raw !== 'string' || !sourceConfigMatchesKey(config, key, raw))
+    throw new Error(
+      'The Sync configuration does not match its source identity',
+    );
+  if (key.kind === 'record')
+    throw new Error('Open a collection to sync its records');
+  if (key.kind === 'collection' && !config.collection && !config.navigation)
+    throw new Error('The collection has no saved binding');
   const result: SyncAppContext = {
     ...context,
-    platform: service,
-    proxyOrigin: origin,
-    kind: publicSource ? (kind === 'public' ? 'public' : 'mirror') : kind,
+    platform: key.platform,
+    proxyOrigin: key.proxyOrigin,
+    kind: key.kind,
+    principal: config.principal,
+    connectionId: config.connectionId,
+    collection: config.collection,
+    navigation: config.navigation,
+    sourceKey: raw,
+    ...(config.principal.kind === 'public' ? { mode: 'public' } : {}),
+    ...(config.principal.kind === 'authenticated' &&
+    config.principal.clientContext
+      ? { clientContext: config.principal.clientContext }
+      : {}),
   };
 
-  if (publicSource) {
-    const kindProperty = h.properties?.['syncable-node-kind'];
+  if (config.navigation) {
+    if (!config.parentSourceKey || !sourceProperty)
+      throw new Error('The collection has no source record identity');
+    const row = await findSourceRecord(
+      store,
+      drive,
+      sourceProperty,
+      h.properties?.['syncable-resource-index'],
+      config.parentSourceKey,
+      resource.get(core.properties.parent),
+    );
+    const rowKeyRaw = sourceProperty && row.get(sourceProperty);
+    const rowKey = parseSyncableSourceKey(rowKeyRaw);
+    const rowConfig = parseSyncableSourceConfig(
+      configProperty && row.get(configProperty),
+    );
     if (
-      key.length !== 5 ||
-      Object.hasOwn(config, 'connectionId') ||
-      !kindProperty ||
-      resource.get(kindProperty) !== kind
+      rowKey.version !== 2 ||
+      rowKey.kind !== 'record' ||
+      typeof rowKeyRaw !== 'string' ||
+      config.parentSourceKey !== rowKeyRaw ||
+      !sourceConfigMatchesKey(rowConfig, rowKey, rowKeyRaw) ||
+      !rowConfig.record ||
+      !rowConfig.resource ||
+      rowConfig.proxyOrigin !== config.proxyOrigin ||
+      rowConfig.platform !== config.platform ||
+      !same(rowConfig.principal, config.principal) ||
+      rowConfig.connectionId !== config.connectionId
     )
-      throw new Error('Invalid public source binding');
-    result.mode = 'public';
-    if (kind === 'public' && identity === 'github-public' && collection === '')
-      return result;
-  } else {
-    if (origin !== getIntegrationProxy())
       throw new Error(
-        'Select this integration proxy in Settings before syncing',
+        'The collection navigation has a different source record',
       );
-    result.connectionId = read('connectionId', /^[A-Za-z0-9_-]{1,256}$/);
-    if (key.length === 6 && connection !== result.connectionId)
-      throw new Error('The Sync account does not match its source');
+    const stamp = () =>
+      JSON.stringify([row.get(sourceProperty), row.get(configProperty!)]);
+    const savedStamp = stamp();
+    provenanceGuards.set(result, () => {
+      assertSyncAppDrive(store, drive, row.subject);
+      if (stamp() !== savedStamp)
+        throw new Error('The collection source record changed');
+    });
+    result.parentRecord = {
+      resource: rowConfig.resource,
+      record: rowConfig.record,
+      context: rowConfig.context,
+      identity: rowKey,
+    };
+  }
+
+  if (selection) {
+    const row = await store.getResource(selection);
     if (
-      kind === 'organizations' &&
-      key.length === 5 &&
-      identity === result.connectionId
+      row.error ||
+      !subjectsReferToSameResource(row.get(core.properties.parent), table)
     )
-      return result;
+      throw new Error('Select a record from this collection');
+    result.selection = selection;
   }
-
-  result.ownerId = id('ownerId');
-  result.ownerLogin = login('ownerLogin');
-
-  if (
-    kind === 'repositories' &&
-    identity === 'github-owner:' + result.ownerId
-  ) {
-    if (selection) {
-      const row = await store.getResource(selection);
-      const classes = row.get(core.properties.isA);
-      if (
-        row.error ||
-        !subjectsReferToSameResource(row.get(core.properties.parent), table) ||
-        !Array.isArray(classes) ||
-        !classes.includes(h.classes?.['syncable-repository'] ?? '')
-      )
-        throw new Error('Select a repository from this table');
-      result.selection = selection;
-    }
-
-    return result;
-  }
-
-  result.repoId = id('repoId');
-  result.repoName = login('repoName');
-  if (
-    result.kind !== 'mirror' ||
-    collection !== 'issues' ||
-    identity !==
-      (publicSource ? 'github-public-repo:' : 'github-repo:') + result.repoId
-  )
-    throw new Error('Invalid Issues source binding');
 
   return result;
 }
 
-/** Credentials stay in the existing proxy client. This callback grants only
- * read-only HTTP routes for the host-selected connection and collection. */
+async function findSourceRecord(
+  store: Store,
+  drive: string,
+  property: string,
+  indexProperty: string | undefined,
+  key: string,
+  currentParent: unknown,
+) {
+  const safe = (subject: string) => {
+    if (isAtomicIdentifier(subject)) return true;
+
+    try {
+      const url = new URL(subject);
+
+      return (
+        url.origin === new URL(store.getServerUrl()).origin &&
+        !url.username &&
+        !url.password &&
+        !url.hash
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const root = await store.getResource(drive);
+  const rawIndex = indexProperty && root.get(indexProperty);
+  const indexed =
+    rawIndex && typeof rawIndex === 'object' && !Array.isArray(rawIndex)
+      ? (rawIndex as Record<string, unknown>)[key]
+      : undefined;
+  const candidates = new Set<string>();
+  if (typeof indexed === 'string' && safe(indexed)) candidates.add(indexed);
+  if (typeof currentParent === 'string' && safe(currentParent))
+    candidates.add(currentParent);
+
+  for (const candidate of candidates) {
+    if (!(await isSyncableResourceInDrive(store, drive, candidate))) continue;
+    const resource = await store.getResource(candidate);
+    if (!resource.error && resource.get(property) === key) return resource;
+  }
+
+  const collection = new CollectionBuilder(store)
+    .setDrive(drive)
+    .setProperty(property)
+    .setValue(key)
+    .setPageSize(2)
+    .build();
+  await collection.waitForReady();
+  if (collection.totalMembers !== 1)
+    throw new Error('Unknown or ambiguous source record identity');
+  const subject = await collection.getMemberWithIndex(0);
+  if (
+    !subject ||
+    !safe(subject) ||
+    !(await isSyncableResourceInDrive(store, drive, subject))
+  )
+    throw new Error('The source record is outside the selected drive');
+  const resource = await store.getResource(subject);
+  if (resource.error || resource.get(property) !== key)
+    throw new Error('The source record identity changed');
+
+  return resource;
+}
+
+const same = (left: unknown, right: unknown) =>
+  JSON.stringify(canonicalValue(left)) ===
+  JSON.stringify(canonicalValue(right));
+
+/** Recompute saved descriptors from the configured proxy's current declarations. */
+export function canonicalSyncAppContext(
+  context: SyncAppContext,
+  trusted: TrustedSyncableCatalog,
+): SyncAppContext {
+  assertSyncAppContext(context);
+  if (context.kind !== 'collection') return context;
+
+  const scoped = (updates: Partial<SyncAppContext>) => {
+    const result = { ...context, ...updates };
+    const guard = provenanceGuards.get(context);
+    if (guard) provenanceGuards.set(result, guard);
+
+    return result;
+  };
+
+  const { document, querySelection } = trusted;
+  const saved = context.collection ?? context.navigation;
+  if (!saved) throw new Error('The collection has no saved binding');
+  const definitions = describeCollections(document).filter(
+    item => item.name === saved.collection,
+  );
+  const definition = definitions[0];
+  if (
+    definitions.length !== 1 ||
+    !definition ||
+    definition.resource !== saved.resource ||
+    (context.principal?.kind === 'public' && !definition.allowsAnonymous)
+  )
+    throw new Error(
+      'This principal cannot read the selected catalog collection',
+    );
+
+  if (context.navigation) {
+    const parent = context.parentRecord;
+    if (!parent) throw new Error('The collection has no source record');
+    const identityCollection = parent.identity.collection;
+    const parentDefinition = describeCollections(document).find(
+      item =>
+        item.name === identityCollection?.name &&
+        item.resource === parent.resource,
+    );
+    if (
+      !parentDefinition ||
+      parent.record[parentDefinition.idField] !== parent.identity.remoteId
+    )
+      throw new Error(
+        'The source record identity does not match its saved data',
+      );
+    const candidates = relatedCollectionReads(document, parent).filter(
+      candidate =>
+        same(
+          collectionIdentity(undefined, candidate),
+          collectionIdentity(undefined, context.navigation),
+        ),
+    );
+    if (candidates.length !== 1)
+      throw new Error('Unknown or ambiguous declared collection navigation');
+
+    return scoped({ navigation: candidates[0], collection: undefined });
+  }
+
+  const collection = bindCollection(document, {
+    collection: context.collection!.collection,
+    context: context.collection!.pathParams,
+    selection: querySelection,
+  });
+
+  return scoped({ collection });
+}
+
+/** Credentials remain in the shared keyed proxy client. The frame selects no authority. */
 export function syncProxyTransport(
   proxy: ProxyConnections,
-  context: SyncAppContext,
-  assertCurrent: () => void,
+  originalContext: SyncAppContext,
+  assertSessionCurrent: () => void,
+  trusted: TrustedSyncableCatalog,
 ): ProxyHost {
+  const assertCurrent = () => {
+    assertSessionCurrent();
+    assertSyncAppContext(originalContext);
+  };
+
+  assertCurrent();
+  const context = canonicalSyncAppContext(originalContext, trusted);
+  const { document } = trusted;
+  const servers = document.servers as { url?: unknown }[] | undefined;
+  const server = new URL(
+    typeof servers?.[0]?.url === 'string' ? servers[0].url : '',
+  );
+  if (
+    server.protocol !== 'https:' ||
+    server.username ||
+    server.password ||
+    server.search ||
+    server.hash
+  )
+    throw new Error('The catalog must declare a fixed HTTPS API server');
+  let selected = context.collection;
+  let providerReads = 0;
+  const verifications = new Map<string, Promise<{ active: string }>>();
+  const principalSelection =
+    context.principal?.kind === 'authenticated'
+      ? { namespace: context.principal.namespace }
+      : {};
+  const descriptions = describeAuthenticatedPrincipals(document);
+
+  const relay = async (
+    request: TransportRequest,
+    slot: string | undefined,
+    signal?: AbortSignal,
+    expectedActive?: string,
+  ): Promise<TransportResponse> => {
+    assertCurrent();
+    signal?.throwIfAborted();
+    if (++providerReads > 64)
+      throw new Error('The integration read budget was exceeded');
+
+    if (context.principal?.kind === 'public') {
+      if (slot !== undefined)
+        throw new Error('Public collections cannot use credentials');
+      const response = await fetch(request.url, {
+        method: request.method,
+        ...(request.body === undefined ? {} : { body: request.body }),
+        credentials: 'omit',
+        redirect: 'error',
+        referrerPolicy: 'no-referrer',
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
+          : AbortSignal.timeout(15_000),
+        headers: {
+          Accept: 'application/json',
+          ...(request.body === undefined
+            ? {}
+            : { 'Content-Type': 'application/json' }),
+        },
+      });
+      const body = await readLimitedResponseText(response, 'Integration');
+      const headers: Record<string, string> = {};
+
+      for (const name of ['link', 'retry-after', 'etag', 'content-type']) {
+        const value = response.headers.get(name);
+        if (value !== null) headers[name] = value;
+      }
+
+      assertCurrent();
+      signal?.throwIfAborted();
+
+      return { status: response.status, headers, body };
+    }
+
+    if (!slot) throw new Error('Wrong integration account');
+    const active = await proxy.activeKeyedConnection(context.platform, slot);
+    assertCurrent();
+    signal?.throwIfAborted();
+    if (expectedActive !== undefined && active !== expectedActive)
+      throw new Error(
+        'The integration connection changed after identity verification',
+      );
+    const target = new URL(
+      '/proxy/' +
+        encodeURIComponent(active) +
+        '/' +
+        context.platform +
+        request.url.pathname,
+      context.proxyOrigin,
+    );
+    target.search = request.url.search;
+    const response = await proxy.readKeyed(target, signal, {
+      method: request.method as 'GET' | 'POST',
+      ...(request.body === undefined ? {} : { body: request.body }),
+    });
+    if ((await proxy.activeKeyedConnection(context.platform, slot)) !== active)
+      throw new Error(
+        'The integration connection changed during the provider read',
+      );
+    assertCurrent();
+    signal?.throwIfAborted();
+
+    return { ...response, body: JSON.stringify(response.body) };
+  };
+
+  const remember = async (
+    slot: string,
+    operationId: string,
+    response: TransportResponse,
+    request: TransportRequest,
+  ) => {
+    const resolved = await resolveAuthenticatedPrincipal(document, {
+      operationId,
+      ...principalSelection,
+      clientContext: context.clientContext,
+      transport: async expected => {
+        if (
+          expected.url.href !== request.url.href ||
+          expected.method !== request.method
+        )
+          throw new Error('Invalid principal response provenance');
+
+        return response;
+      },
+    });
+    const principal = principalIdentity(resolved);
+    if (context.principal && !same(principal, context.principal))
+      throw new Error(
+        'This connection belongs to a different authenticated principal',
+      );
+    assertCurrent();
+    await proxy.rememberKeyedPrincipal(
+      context.platform,
+      slot,
+      principal as ConnectionPrincipal,
+      operationId,
+    );
+    assertCurrent();
+  };
+
+  const verify = async (slot: string, signal?: AbortSignal) => {
+    const active = await proxy.activeKeyedConnection(context.platform, slot);
+    assertCurrent();
+    const existing = verifications.get(slot);
+    if (existing && (await existing).active === active) return active;
+    const pending = (async () => {
+      const matches = descriptions.filter(
+        item =>
+          !principalSelection.namespace ||
+          item.namespace === principalSelection.namespace,
+      );
+      if (matches.length !== 1)
+        throw new Error('Unknown or ambiguous authenticated principal');
+      const descriptor = matches[0]!;
+      let actual: TransportRequest | undefined;
+      let response: TransportResponse | undefined;
+      await resolveAuthenticatedPrincipal(document, {
+        operationId: descriptor.operationId,
+        ...principalSelection,
+        clientContext: context.clientContext,
+        transport: async request => {
+          actual = request;
+          response = await relay(request, slot, signal, active);
+
+          return response;
+        },
+      });
+      if (!actual || !response)
+        throw new Error('Principal verification was not completed');
+      await remember(slot, descriptor.operationId, response, actual);
+
+      return { active };
+    })();
+    verifications.set(slot, pending);
+
+    try {
+      return (await pending).active;
+    } catch (error) {
+      if (verifications.get(slot) === pending) verifications.delete(slot);
+      throw error;
+    }
+  };
+
   return {
     origin: context.proxyOrigin,
     capability: async () => {
@@ -255,10 +634,11 @@ export function syncProxyTransport(
       assertCurrent();
       if (platform !== context.platform)
         throw new Error('Wrong integration platform');
-      const connections = await proxy.listKeyed(platform);
+      if (context.principal?.kind === 'public') return [];
+      const rows = await proxy.listKeyed(platform);
       assertCurrent();
 
-      return connections
+      return rows
         .filter(
           row =>
             context.kind === 'platform' ||
@@ -266,142 +646,186 @@ export function syncProxyTransport(
         )
         .map(row => ({ connectionId: row.connection_id, platform }));
     },
-    request: async (request, signal?: AbortSignal) => {
+    request: async (input, signal) => {
       assertCurrent();
+      signal?.throwIfAborted();
+      if (context.kind === 'legacy')
+        throw new Error('Open the provider App to upgrade this legacy source');
       if (
-        (request.method !== undefined && request.method !== 'GET') ||
-        request.body !== undefined ||
-        request.platform !== context.platform
+        input.platform !== context.platform ||
+        input.ifMatch !== undefined ||
+        (input.method !== undefined &&
+          !['GET', 'POST'].includes(input.method)) ||
+        (input.body !== undefined && typeof input.body !== 'string') ||
+        typeof input.path !== 'string' ||
+        input.path.includes('?') ||
+        input.path.includes('#') ||
+        input.path.includes('\\')
       )
-        throw new Error('Only the selected read-only provider is available');
-      const path =
-        typeof request.path === 'string' ? request.path.replace(/^\//, '') : '';
-      const query =
-        request.query &&
-        typeof request.query === 'object' &&
-        !Array.isArray(request.query)
-          ? (request.query as Record<string, unknown>)
-          : {};
+        throw new Error('Only the selected catalog read is available');
+      const url = new URL('/' + input.path.replace(/^\//, ''), server.origin);
       if (
-        Object.keys(query).some(
-          key => !['page', 'per_page', 'state', 'after'].includes(key),
-        )
-      )
-        throw new Error('Unsupported provider query');
-      const url = new URL('https://api.github.com/' + path);
-      if (
-        url.origin !== 'https://api.github.com' ||
-        url.search ||
+        url.origin !== server.origin ||
+        url.username ||
+        url.password ||
         url.hash ||
-        path.split('/').some(segment => segment === '.' || segment === '..') ||
-        path.includes('%')
+        url.pathname !== '/' + input.path.replace(/^\//, '')
       )
         throw new Error('Invalid provider path');
-      const page = query.page === undefined ? 1 : Number(query.page);
-      const limit = context.mode === 'public' ? 40 : 20;
       if (
-        !Number.isInteger(page) ||
-        page < 1 ||
-        page > limit ||
-        (['user/repos', 'user/orgs'].includes(path) &&
-          String(query.per_page) !== '100') ||
-        (path.endsWith('/issues') &&
-          (String(query.per_page) !== '100' || query.state !== 'all')) ||
-        (query.per_page !== undefined && String(query.per_page) !== '100') ||
-        (query.state !== undefined && query.state !== 'all') ||
-        (query.after !== undefined &&
-          (typeof query.after !== 'string' || query.after.length > 1024))
+        input.query !== undefined &&
+        (!input.query ||
+          typeof input.query !== 'object' ||
+          Array.isArray(input.query))
       )
-        throw new Error('Invalid provider pagination');
-      for (const [key, value] of Object.entries(query))
-        url.searchParams.set(key, String(value));
-      let response: {
-        status: number;
-        body: unknown;
-        headers: Record<string, string>;
+        throw new Error('Invalid provider query');
+
+      for (const [name, value] of Object.entries(
+        (input.query as Record<string, unknown>) ?? {},
+      )) {
+        if (
+          !['string', 'number', 'boolean'].includes(typeof value) ||
+          (typeof value === 'number' && !Number.isFinite(value))
+        )
+          throw new Error('Invalid provider query');
+        url.searchParams.set(name, String(value));
+      }
+
+      const request: TransportRequest = {
+        url,
+        method: (input.method ?? 'GET') as 'GET' | 'POST',
+        headers: {},
+        ...(input.body === undefined ? {} : { body: input.body }),
       };
-
-      if (context.mode === 'public') {
-        if (
-          request.connectionId !== undefined ||
-          !(context.kind === 'public'
-            ? /^repos\/[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(path) &&
-              !Object.keys(query).length
-            : path === 'repositories/' + context.repoId + '/issues')
-        )
-          throw new Error('This public source cannot read that endpoint');
-        const http = await fetch(url, {
-          method: 'GET',
-          credentials: 'omit',
-          redirect: 'error',
-          referrerPolicy: 'no-referrer',
-          signal: signal
-            ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
-            : AbortSignal.timeout(15_000),
-          headers: { Accept: 'application/vnd.github+json' },
-        });
-        const text = await readLimitedResponseText(http, 'GitHub');
-        response = {
-          status: http.status,
-          body: text ? JSON.parse(text) : null,
-          headers: {},
-        };
-
-        for (const key of ['link', 'retry-after', 'etag', 'content-type']) {
-          const value = http.headers.get(key);
-          if (value) response.headers[key] = value;
-        }
-      } else {
-        const slot =
-          context.kind === 'platform'
-            ? request.connectionId
-            : context.connectionId;
-        if (typeof slot !== 'string' || request.connectionId !== slot)
-          throw new Error('Wrong integration account');
-        const allowed =
-          context.kind === 'platform'
-            ? path === 'user' && page === 1
-            : context.kind === 'organizations'
-              ? ['user', 'user/orgs', 'user/repos'].includes(path)
-              : context.kind === 'repositories'
-                ? path === 'user/repos'
-                : path === 'repositories/' + context.repoId + '/issues';
-        if (
-          !allowed ||
-          (query.after !== undefined && context.kind !== 'mirror')
-        )
-          throw new Error('This source cannot read that endpoint');
-        const active = await proxy.activeKeyedConnection(
-          context.platform,
-          slot,
+      const publicSource = context.principal?.kind === 'public';
+      const slot =
+        context.kind === 'platform' ? input.connectionId : context.connectionId;
+      if (
+        publicSource
+          ? input.connectionId !== undefined
+          : !slot || input.connectionId !== slot
+      )
+        throw new Error('Wrong integration account');
+      const descriptor =
+        !publicSource &&
+        descriptions.find(item =>
+          validatePrincipalRead(document, request, {
+            operationId: item.operationId,
+            ...principalSelection,
+          }),
         );
+
+      if (descriptor) {
+        if (context.kind === 'platform') {
+          const known = await proxy.listKeyed(context.platform);
+          assertCurrent();
+          if (!known.some(row => row.connection_id === slot))
+            throw new Error('Unknown keyed integration connection');
+        }
+
+        const response = await relay(request, slot, signal);
+        if (response.status >= 200 && response.status < 300)
+          await remember(slot!, descriptor.operationId, response, request);
         assertCurrent();
-        const target = new URL(
-          '/proxy/' +
-            encodeURIComponent(active) +
-            '/' +
-            context.platform +
-            '/' +
-            path,
-          context.proxyOrigin,
-        );
-        target.search = url.search;
-        response = await proxy.readKeyed(target, signal);
+        signal?.throwIfAborted();
 
-        if (path === 'user' && response.status === 200) {
-          const id = (response.body as { id?: unknown } | null)?.id;
-          if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0)
-            throw new Error('Invalid GitHub account identity');
-          await proxy.rememberKeyedGithubPrincipal(slot, id);
-        }
+        return {
+          status: response.status,
+          headers: response.headers,
+          text: response.body,
+        };
+      }
+
+      if (
+        context.kind === 'principal' &&
+        validateCollectionEntryRead(document, request, {
+          publicOnly: publicSource,
+        })
+      ) {
+        const verifiedActive = !publicSource
+          ? await verify(slot!, signal)
+          : undefined;
+        assertCurrent();
+        signal?.throwIfAborted();
+        const response = await relay(request, slot, signal, verifiedActive);
+        assertCurrent();
+        signal?.throwIfAborted();
+
+        return {
+          status: response.status,
+          headers: response.headers,
+          text: response.body,
+        };
+      }
+
+      if (context.kind !== 'collection')
+        throw new Error('This source cannot read that endpoint');
+      const navigationRead =
+        context.navigation &&
+        validateCollectionNavigationRead(document, context.navigation, request);
+      const collectionRead =
+        selected && validateCollectionRead(document, selected, request);
+      if (!navigationRead && !collectionRead)
+        throw new Error('This source cannot read that endpoint');
+
+      if (
+        publicSource &&
+        navigationRead &&
+        context.navigation?.kind === 'responseLink'
+      ) {
+        const security =
+          document.paths[context.navigation.source.template]?.get?.security ??
+          document.security;
+        if (
+          Array.isArray(security) &&
+          security.length &&
+          security.every(
+            entry =>
+              entry && typeof entry === 'object' && Object.keys(entry).length,
+          )
+        )
+          throw new Error(
+            'Public navigation cannot read an authenticated operation',
+          );
+      }
+
+      const verifiedActive = !publicSource
+        ? await verify(slot!, signal)
+        : undefined;
+      assertCurrent();
+      signal?.throwIfAborted();
+      const response = await relay(request, slot, signal, verifiedActive);
+
+      if (navigationRead && response.status >= 200 && response.status < 300) {
+        selected = await resolveCollectionNavigation(
+          document,
+          context.navigation!,
+          {
+            transport: async expected => {
+              if (
+                expected.url.href !== request.url.href ||
+                expected.method !== request.method
+              )
+                throw new Error('Invalid navigation response provenance');
+
+              return response;
+            },
+          },
+        );
+        selected = bindCollection(document, {
+          collection: selected.collection,
+          context: selected.pathParams,
+          selection: trusted.querySelection,
+        });
       }
 
       assertCurrent();
+      signal?.throwIfAborted();
 
       return {
         status: response.status,
         headers: response.headers,
-        text: JSON.stringify(response.body),
+        text: response.body,
       };
     },
   };

@@ -395,8 +395,8 @@ importers:
         specifier: 4.4.0
         version: 4.4.0
       syncables:
-        specifier: 0.28.0
-        version: 0.28.0
+        specifier: 0.29.0
+        version: 0.29.0
       trystero:
         specifier: 0.25.3
         version: 0.25.3
@@ -9687,8 +9687,8 @@ packages:
     peerDependencies:
       react: ^16.11.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  syncables@0.28.0:
-    resolution: {integrity: sha512-fgq+KOwOzAmsB7XT9fnWGACj0Jeaz9QcsRppaKt9gMdiN8AnMIaS82aMHm4ylHu4YjzZLoBu3Auw2GDT6qLiTw==}
+  syncables@0.29.0:
+    resolution: {integrity: sha512-ZdppcwQXUbLfQDsFkKY3ySYp9uBGRClZtMmiM2QmndTwTj0lsTklPmusDcfmrM9/3FgKh8rLwM/YVdgCI8RgeA==}
     engines: {node: '>= 22.11'}
     hasBin: true
 
@@ -12307,7 +12307,7 @@ snapshots:
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
       express: 5.2.1(supports-color@10.2.2)
-      express-rate-limit: 8.7.0(express@5.2.1)(supports-color@10.2.2)
+      express-rate-limit: 8.7.0(express@5.2.1(supports-color@10.2.2))(supports-color@10.2.2)
       hono: 4.13.7
       jose: 6.2.12
       json-schema-typed: 8.0.2
@@ -16549,7 +16549,7 @@ snapshots:
     dependencies:
       on-headers: 1.1.0
 
-  express-rate-limit@8.7.0(express@5.2.1)(supports-color@10.2.2):
+  express-rate-limit@8.7.0(express@5.2.1(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       express: 5.2.1(supports-color@10.2.2)
@@ -20647,7 +20647,7 @@ snapshots:
       react: 19.2.6
       use-sync-external-store: 1.6.0(react@19.2.6)
 
-  syncables@0.28.0:
+  syncables@0.29.0:
     dependencies:
       '@bokuweb/zstd-wasm': 0.0.27
       braid-http: 1.4.10

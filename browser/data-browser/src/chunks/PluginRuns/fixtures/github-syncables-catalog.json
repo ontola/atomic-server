@@ -37,7 +37,7 @@
     "schemas": {
       "issue": {
         "type": "object",
-        "description": "An issue in a repository.",
+        "description": "A repository issue or pull request returned by GitHub's REST Issues API. A present pull_request object distinguishes a pull request; this collection includes both kinds without filtering.",
         "properties": {
           "id": {
             "type": "integer",
@@ -80,8 +80,32 @@
             "items": {
               "$ref": "#/components/schemas/label"
             }
+          },
+          "pull_request": {
+            "type": "object",
+            "title": "Pull request",
+            "description": "Present when this Issues API row represents a pull request. Absent for an ordinary issue.",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "html_url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "diff_url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "patch_url": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
           }
-        }
+        },
+        "title": "Issues and pull requests"
       },
       "issue-comment": {
         "type": "object",
@@ -275,6 +299,33 @@
             }
           }
         }
+      },
+      "catalogGithubOrganization": {
+        "type": "object",
+        "title": "Organizations",
+        "description": "An organization returned by GitHub organization reads. Its numeric id is the canonical identity; login is its current transport address.",
+        "required": ["id", "login"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "title": "ID"
+          },
+          "login": {
+            "type": "string",
+            "title": "Organization"
+          },
+          "avatar_url": {
+            "type": "string",
+            "format": "uri",
+            "title": "Avatar"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "title": "Description"
+          }
+        }
       }
     },
     "paginationSchemes": {
@@ -316,59 +367,9 @@
       }
     },
     "crudResources": {
-      "issue": {
-        "schema": {
-          "$ref": "#/components/schemas/issue"
-        },
-        "description": "An issue in a repository. Addressed by its per-repository `number` (the global `id` in the payload is not the URL identity). The `owner`/`repo` context is supplied by configuration.\n",
-        "identity": {
-          "urlTemplate": "/repos/{owner}/{repo}/issues/{issue_number}",
-          "bindings": {
-            "issue_number": {
-              "field": "number"
-            }
-          }
-        },
-        "collections": {
-          "issues": {
-            "urlTemplate": "/repos/{owner}/{repo}/issues",
-            "x-list-query": {
-              "state": "all"
-            }
-          },
-          "repositoryIssues": {
-            "urlTemplate": "/repositories/{repository_id}/issues",
-            "listQuery": {
-              "state": "all"
-            },
-            "envelope": {
-              "itemsField": ""
-            }
-          }
-        }
-      },
-      "issueComment": {
-        "schema": {
-          "$ref": "#/components/schemas/issue-comment"
-        },
-        "description": "A comment on an issue. Listed and created under the parent issue (`.../issues/{issue_number}/comments`), but GitHub addresses a single comment at the non-nested `/repos/{owner}/{repo}/issues/comments/{comment_id}`.\n",
-        "identity": {
-          "urlTemplate": "/repos/{owner}/{repo}/issues/comments/{comment_id}",
-          "bindings": {
-            "comment_id": {
-              "field": "id"
-            }
-          }
-        },
-        "collections": {
-          "issueComments": {
-            "urlTemplate": "/repos/{owner}/{repo}/issues/{issue_number}/comments"
-          }
-        }
-      },
       "githubOrganization": {
         "schema": {
-          "$ref": "#/components/schemas/builtinGithubOrganization"
+          "$ref": "#/components/schemas/catalogGithubOrganization"
         },
         "identity": {
           "urlTemplate": "/organizations/{organization_id}",
@@ -383,6 +384,16 @@
             "urlTemplate": "/user/orgs",
             "envelope": {
               "itemsField": ""
+            }
+          }
+        },
+        "references": {
+          "byLogin": {
+            "resource": "githubOrganizationAddress",
+            "bindings": {
+              "org": {
+                "field": "login"
+              }
             }
           }
         }
@@ -402,6 +413,87 @@
         "collections": {
           "githubRepositories": {
             "urlTemplate": "/user/repos",
+            "envelope": {
+              "itemsField": ""
+            }
+          },
+          "organizationRepositories": {
+            "urlTemplate": "/orgs/{org}/repos",
+            "listQuery": {
+              "type": "all"
+            },
+            "envelope": {
+              "itemsField": ""
+            }
+          }
+        }
+      },
+      "issue": {
+        "collections": {
+          "repositoryIssues": {
+            "urlTemplate": "/repositories/{repository_id}/issues",
+            "listQuery": {
+              "state": "all"
+            },
+            "envelope": {
+              "itemsField": ""
+            },
+            "description": "Issues and pull requests for one repository, including open and closed rows."
+          }
+        },
+        "schema": {
+          "$ref": "#/components/schemas/issue"
+        },
+        "identity": {
+          "urlTemplate": "/repositories/{repository_id}/issues/{issue_number}",
+          "bindings": {
+            "issue_number": {
+              "field": "number"
+            }
+          }
+        },
+        "description": "A repository issue or pull request from the REST Issues API, identified by its per-repository number. This collection includes both issues and pull requests; pull_request marks the latter."
+      },
+      "githubOrganizationAddress": {
+        "description": "A mutable transport address for an existing organization. Not an enumerable entity or a separate stored parent. The canonical organization identity remains its numeric id.",
+        "identity": {
+          "urlTemplate": "/orgs/{org}",
+          "bindings": {
+            "org": {
+              "field": "login"
+            }
+          }
+        }
+      },
+      "githubRepositoryAddress": {
+        "description": "An owner/name transport address for public repository navigation; not an enumerable entity or another stored repository.",
+        "identity": {
+          "urlTemplate": "/repos/{owner}/{repo}",
+          "bindings": {
+            "owner": {
+              "field": "owner.login"
+            },
+            "repo": {
+              "field": "name"
+            }
+          }
+        }
+      },
+      "issueComment": {
+        "schema": {
+          "$ref": "#/components/schemas/issue-comment"
+        },
+        "identity": {
+          "urlTemplate": "/repositories/{repository_id}/issues/comments/{comment_id}",
+          "bindings": {
+            "comment_id": {
+              "field": "id"
+            }
+          }
+        },
+        "collections": {
+          "issueComments": {
+            "urlTemplate": "/repositories/{repository_id}/issues/{issue_number}/comments",
             "envelope": {
               "itemsField": ""
             }
@@ -469,18 +561,14 @@
         "security": [
           {
             "githubOAuth": ["repo"]
-          }
+          },
+          {}
         ],
         "x-pagination": [
           {
             "scheme": "nextLink"
           }
-        ],
-        "x-crud": {
-          "action": "list",
-          "resource": "issue",
-          "collection": "issues"
-        }
+        ]
       },
       "post": {
         "operationId": "issues-create",
@@ -538,24 +626,7 @@
           {
             "githubOAuth": ["repo"]
           }
-        ],
-        "x-crud": {
-          "action": "create",
-          "resource": "issue",
-          "url": {
-            "source": "template"
-          },
-          "addedFields": {
-            "number": {
-              "schema": {
-                "type": "integer"
-              },
-              "source": "generated",
-              "description": "Per-repository issue number assigned by the server. The client does not supply it; it is read back from the create response and is the resource's addressable identity.\n"
-            }
-          },
-          "memberOf": ["issues"]
-        }
+        ]
       }
     },
     "/repos/{owner}/{repo}/issues/{issue_number}": {
@@ -603,12 +674,9 @@
         "security": [
           {
             "githubOAuth": ["repo"]
-          }
-        ],
-        "x-crud": {
-          "action": "read",
-          "resource": "issue"
-        }
+          },
+          {}
+        ]
       },
       "patch": {
         "operationId": "issues-update",
@@ -680,14 +748,7 @@
           {
             "githubOAuth": ["repo"]
           }
-        ],
-        "x-crud": {
-          "action": "update",
-          "mode": "patch",
-          "patchFormat": "jsonMergePatch",
-          "resource": "issue",
-          "description": "Partial update: only the fields present in the request body are modified (e.g. `state`/`state_reason` to close or reopen). GitHub exposes no PUT for issues \u2014 updates must be sent as PATCH. In a merge patch `null` removes a value; GitHub's \"Update an issue\" types `title`, `body`, `milestone`, `state_reason` and `type` as nullable. `labels` and `assignees` are cleared with `[]`, not `null`, and `state` is not nullable.\n"
-        }
+        ]
       }
     },
     "/repos/{owner}/{repo}/issues/{issue_number}/comments": {
@@ -756,18 +817,14 @@
         "security": [
           {
             "githubOAuth": ["repo"]
-          }
+          },
+          {}
         ],
         "x-pagination": [
           {
             "scheme": "nextLink"
           }
-        ],
-        "x-crud": {
-          "action": "list",
-          "resource": "issueComment",
-          "collection": "issueComments"
-        }
+        ]
       },
       "post": {
         "operationId": "issue-comments-create",
@@ -830,24 +887,7 @@
           {
             "githubOAuth": ["repo"]
           }
-        ],
-        "x-crud": {
-          "action": "create",
-          "resource": "issueComment",
-          "url": {
-            "source": "template"
-          },
-          "addedFields": {
-            "id": {
-              "schema": {
-                "type": "integer"
-              },
-              "source": "generated",
-              "description": "Server-assigned comment id, read back from the create response.\n"
-            }
-          },
-          "memberOf": ["issueComments"]
-        }
+        ]
       }
     },
     "/repos/{owner}/{repo}/issues/comments/{comment_id}": {
@@ -895,12 +935,9 @@
         "security": [
           {
             "githubOAuth": ["repo"]
-          }
-        ],
-        "x-crud": {
-          "action": "read",
-          "resource": "issueComment"
-        }
+          },
+          {}
+        ]
       },
       "patch": {
         "operationId": "issue-comment-update",
@@ -963,14 +1000,7 @@
           {
             "githubOAuth": ["repo"]
           }
-        ],
-        "x-crud": {
-          "action": "update",
-          "mode": "patch",
-          "patchFormat": "jsonMergePatch",
-          "resource": "issueComment",
-          "description": "Partial update of a comment's body. Sent as PATCH; GitHub exposes no PUT for issue comments. `body` is required, so the patch always carries it and never sends it as `null`.\n"
-        }
+        ]
       },
       "delete": {
         "operationId": "issue-comment-delete",
@@ -1010,12 +1040,7 @@
           {
             "githubOAuth": ["repo"]
           }
-        ],
-        "x-crud": {
-          "action": "delete",
-          "resource": "issueComment",
-          "removesFrom": "*"
-        }
+        ]
       }
     },
     "/user/repos": {
@@ -1108,172 +1133,6 @@
         }
       }
     },
-    "/repos/{owner}/{repo}/issues/{issue_number}/labels": {
-      "post": {
-        "operationId": "issues-add-labels",
-        "summary": "Add labels to an issue",
-        "description": "Adds the named labels, keeping the issue's other labels. A name the repository has no label for creates that label with a default colour; a label already on the issue is left as is.",
-        "security": [
-          {
-            "githubOAuth": ["repo"]
-          }
-        ],
-        "parameters": [
-          {
-            "name": "owner",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "repo",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "issue_number",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["labels"],
-                "properties": {
-                  "labels": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Every label now on the issue (not the issue).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/label"
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No such repository or issue, or no access."
-          },
-          "410": {
-            "description": "Issues are turned off for the repository."
-          },
-          "422": {
-            "description": "Validation failed."
-          }
-        },
-        "x-crud": {
-          "action": "update",
-          "mode": "patch",
-          "patchFormat": "custom",
-          "resource": "issue",
-          "description": "Adds labels to the issue's `labels`; other labels are kept. Not a merge patch: the body names labels to add, and the response is the issue's full label list, not the issue. Repeating it is harmless."
-        }
-      }
-    },
-    "/repos/{owner}/{repo}/issues/{issue_number}/labels/{name}": {
-      "delete": {
-        "operationId": "issues-remove-label",
-        "summary": "Remove a label from an issue",
-        "description": "Removes one label from the issue; the repository's label itself is kept. `name` is percent-encoded in the path (`atomic%3Adoing`).",
-        "security": [
-          {
-            "githubOAuth": ["repo"]
-          }
-        ],
-        "parameters": [
-          {
-            "name": "owner",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "repo",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "issue_number",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The labels still on the issue.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/label"
-                  }
-                }
-              }
-            }
-          },
-          "301": {
-            "description": "Moved permanently."
-          },
-          "404": {
-            "description": "The label is not on the issue, or no such issue."
-          },
-          "410": {
-            "description": "Issues are turned off for the repository."
-          }
-        },
-        "x-crud": {
-          "action": "update",
-          "mode": "patch",
-          "patchFormat": "custom",
-          "resource": "issue",
-          "description": "Removes one label from the issue's `labels`; other labels are kept. Not idempotent on the wire: repeating it answers 404 once the label is gone, so a client reads the issue's labels first (the issue-tracker app does) or treats that 404 as done."
-        }
-      }
-    },
     "/repositories/{repository_id}/issues": {
       "get": {
         "operationId": "issues-list-for-repo-by-repository-id",
@@ -1344,9 +1203,10 @@
         "security": [
           {
             "githubOAuth": ["repo"]
-          }
+          },
+          {}
         ],
-        "summary": "List repository issues",
+        "summary": "List issues and pull requests for a repository",
         "x-pagination": [
           {
             "scheme": "builtinGithubNextLink"
@@ -1396,9 +1256,14 @@
         "security": [
           {
             "githubOAuth": ["repo"]
-          }
+          },
+          {}
         ],
-        "summary": "Get a single issue comment"
+        "summary": "Get a single issue comment",
+        "x-crud": {
+          "action": "read",
+          "resource": "issueComment"
+        }
       }
     },
     "/repositories/{repository_id}/issues/{issue_number}": {
@@ -1438,9 +1303,14 @@
         "security": [
           {
             "githubOAuth": ["repo"]
-          }
+          },
+          {}
         ],
-        "summary": "Get an issue"
+        "summary": "Get an issue",
+        "x-crud": {
+          "action": "read",
+          "resource": "issue"
+        }
       }
     },
     "/repositories/{repository_id}/issues/{issue_number}/comments": {
@@ -1501,14 +1371,20 @@
         "security": [
           {
             "githubOAuth": ["repo"]
-          }
+          },
+          {}
         ],
         "summary": "List comments on an issue",
         "x-pagination": [
           {
-            "scheme": "nextLink"
+            "scheme": "builtinGithubNextLink"
           }
-        ]
+        ],
+        "x-crud": {
+          "action": "list",
+          "resource": "issueComment",
+          "collection": "issueComments"
+        }
       }
     },
     "/user": {
@@ -1626,7 +1502,7 @@
                         "type": "string"
                       }
                     },
-                    "$ref": "#/components/schemas/builtinGithubOrganization"
+                    "$ref": "#/components/schemas/catalogGithubOrganization"
                   }
                 }
               }
@@ -1639,45 +1515,200 @@
           "collection": "githubOrganizations"
         }
       }
-    }
-  },
-  "x-test-fixture": {
-    "description": "GitHub catalog composed through the ordinary published IAP overlay chain.",
-    "catalog": "overlays/catalog/2026-11-18-syncables-apps.json",
-    "openapi": "https://raw.githubusercontent.com/ontola/openapi-directory/9c5cfb87b3f8b64e11069373a73e3fc85de0de5e/APIs/github.com/github-issues/1.1.4/openapi.yaml",
-    "overlays": [
-      {
-        "path": "overlays/APIs/github.com/github-issues/1.1.4/auth-9c5cfb87b3f8b64e11069373a73e3fc85de0de5e-overlay.yaml",
-        "sha256": "9db3ede1f096dd49a7a8818416561d49b48d727f4c586556d6fe4ab6293fa1dc"
-      },
-      {
-        "path": "overlays/APIs/github.com/github-issues/1.1.4/pagination-9c5cfb87b3f8b64e11069373a73e3fc85de0de5e-overlay.yaml",
-        "sha256": "4e210474a60ac067f70405a2cd44161bdb1526ae841ca4ebaf0fc32529fb962d"
-      },
-      {
-        "path": "overlays/APIs/github.com/github-issues/1.1.4/repositories-read-9c5cfb87b3f8b64e11069373a73e3fc85de0de5e-overlay.yaml",
-        "sha256": "9e03475eb375fd4c5ffdc11bde87ce784c925cd7970a56f5a17722ec2820fe6c"
-      },
-      {
-        "path": "overlays/APIs/github.com/github-issues/1.1.4/crud-causality-v2-9c5cfb87b3f8b64e11069373a73e3fc85de0de5e-overlay.yaml",
-        "sha256": "991c55f57df8eab2ea41e57ba46636d4efd84e87cb0887c6006d333d92f1e063"
-      },
-      {
-        "path": "overlays/APIs/github.com/github-issues/1.1.4/canonical-paths-9c5cfb87b3f8b64e11069373a73e3fc85de0de5e-overlay.yaml",
-        "sha256": "33e83532756443194e736cf65072fb1e2644bd1061535d13e7c232419181fdbc"
-      },
-      {
-        "path": "overlays/APIs/github.com/github-issues/1.1.4/identity-9c5cfb87b3f8b64e11069373a73e3fc85de0de5e-overlay.yaml",
-        "sha256": "54cb21f0b342fd1030e48771cbe997883292610e927bba5857fefd7bcb40f56d"
-      },
-      {
-        "path": "overlays/APIs/github.com/github-issues/1.1.4/syncables-discovery-9c5cfb87b3f8b64e11069373a73e3fc85de0de5e-overlay.yaml",
-        "sha256": "ded7a3bf12e8f20a7ee5e3a557f759597021985aeaa0fb28c30022b4610b33e4"
-      },
-      {
-        "path": "overlays/APIs/github.com/github-issues/1.1.4/builtin-read-model-9c5cfb87b3f8b64e11069373a73e3fc85de0de5e-overlay.yaml",
-        "sha256": "15b770facf184b0c1d4d1e0a43e3edde56d68e75de3a828bc0cd2e68b63d6280"
+    },
+    "/orgs/{org}": {
+      "get": {
+        "operationId": "orgs-get-for-collection-navigation",
+        "summary": "Get an organization by its current login",
+        "security": [
+          {
+            "githubOAuth": ["read:org"]
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Organization login; mutable transport address, not its numeric identity."
+          }
+        ],
+        "x-crud": {
+          "action": "read",
+          "resource": "githubOrganizationAddress"
+        },
+        "responses": {
+          "200": {
+            "description": "An organization, including its current login.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/catalogGithubOrganization"
+                }
+              }
+            },
+            "links": {
+              "repositories": {
+                "operationId": "repos-list-for-org",
+                "parameters": {
+                  "org": "$response.body#/login"
+                },
+                "description": "List repositories using the organization login returned by this actual response."
+              }
+            }
+          }
+        }
       }
-    ]
+    },
+    "/orgs/{org}/repos": {
+      "get": {
+        "operationId": "repos-list-for-org",
+        "summary": "List organization repositories",
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Organization login; mutable transport address, not its numeric identity."
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "public",
+                "private",
+                "forks",
+                "sources",
+                "member"
+              ],
+              "default": "all"
+            }
+          }
+        ],
+        "x-crud": {
+          "action": "list",
+          "resource": "githubRepository",
+          "collection": "organizationRepositories"
+        },
+        "x-pagination": [
+          {
+            "scheme": "builtinGithubNextLink"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of repositories visible to the credentials for this organization.",
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/builtinGithubRepository"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}": {
+      "get": {
+        "operationId": "repos-get-for-collection-navigation",
+        "summary": "Get a repository by owner and name",
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repository owner"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repository name"
+            }
+          }
+        ],
+        "x-crud": {
+          "action": "read",
+          "resource": "githubRepositoryAddress"
+        },
+        "responses": {
+          "200": {
+            "description": "The repository, including its stable numeric id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/builtinGithubRepository"
+                }
+              }
+            },
+            "links": {
+              "issues": {
+                "operationId": "issues-list-for-repo-by-repository-id",
+                "parameters": {
+                  "repository_id": "$response.body#/id"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }

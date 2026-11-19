@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { FaPlug } from 'react-icons/fa6';
+import {
+  describeAuthenticatedPrincipals,
+  describeCollections,
+  prepareDocument,
+} from 'syncables/browser';
 import type { AtomicValue } from '@tomic/lib';
 import { findSchema, useResource, useStore } from '@tomic/react';
 import { ResourceGlyph } from '@components/ResourceGlyph';
@@ -53,8 +58,8 @@ export function visibleProxyPlatforms(ids: string[], query: string): string[] {
 /**
  * Discover provider *definitions* from the configured proxy.
  *
- * Installing a supported service creates an ordinary platform table with
- * Atomic Server's built-in Syncables view.
+ * Installing a supported service creates a provider App whose identities
+ * and collections are described by the catalog.
  */
 export function ProxyCatalogApps({
   drive,
@@ -148,6 +153,20 @@ export function ProxyCatalogApps({
           }
         : await fetchSyncableDocument(catalog.origin, signal, platform);
       const branding = syncableBranding(metadata.document);
+      const document = prepareDocument(
+        metadata.document as Record<string, unknown>,
+      );
+      const collections = describeCollections(document);
+      if (
+        collections.length === 0 ||
+        (describeAuthenticatedPrincipals(document).length === 0 &&
+          !collections.some(
+            collection =>
+              collection.allowsAnonymous ||
+              collection.entrypoints.some(entry => entry.allowsAnonymous),
+          ))
+      )
+        throw new Error('This catalog does not describe a usable sync source');
       const subject = await ensureSyncablePlatform(store, {
         drive,
         proxyOrigin: catalog.origin,
@@ -201,7 +220,8 @@ export function ProxyCatalogApps({
         <h2>Connect a service</h2>
         <p>
           From the configured integration proxy at <code>{catalog.origin}</code>
-          . Add GitHub to browse repositories and import issues into your drive.
+          . Add a service to browse its catalog collections and sync data into
+          your drive.
         </p>
         {lookupError && (
           <p role='alert'>
@@ -214,7 +234,6 @@ export function ProxyCatalogApps({
             const entry = catalog.entries.find(item => item.id === platform);
             const name = entry?.name ?? platformDisplayName(platform);
             const subject = existing[platform];
-            const canInstall = platform === 'github-issues';
 
             return (
               <Card key={platform} data-proxy-platform={platform}>
@@ -230,25 +249,19 @@ export function ProxyCatalogApps({
                     <Description>{entry?.description || platform}</Description>
                   </div>
                   <Row>
-                    {!canInstall && !subject ? (
-                      <small>Sync support unavailable</small>
-                    ) : (
-                      <Button
-                        disabled={
-                          busy !== undefined || loading || !!lookupError
-                        }
-                        onClick={() => install(platform)}
-                        aria-label={
-                          subject ? `Open ${name}` : `Add ${name} to drive`
-                        }
-                      >
-                        {busy === platform
-                          ? 'Adding…'
-                          : subject
-                            ? 'Open'
-                            : 'Add to Drive'}
-                      </Button>
-                    )}
+                    <Button
+                      disabled={busy !== undefined || loading || !!lookupError}
+                      onClick={() => install(platform)}
+                      aria-label={
+                        subject ? `Open ${name}` : `Add ${name} to drive`
+                      }
+                    >
+                      {busy === platform
+                        ? 'Adding…'
+                        : subject
+                          ? 'Open'
+                          : 'Add to Drive'}
+                    </Button>
                   </Row>
                 </Column>
               </Card>

@@ -1,8 +1,10 @@
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import {
   isSyncablesNavigationTable,
+  isSyncablesPlatformRoot,
   withoutTableViews,
 } from '@chunks/PluginRuns/syncablesNavigation';
+import { findSyncableLegacyAccounts } from '@chunks/PluginRuns/syncablePlatform';
 import {
   Fragment,
   memo,
@@ -18,6 +20,7 @@ import {
   forms,
   notifications,
   useResourceSnapshot,
+  useStore,
   useCanWrite,
   unknownSubject,
 } from '@tomic/react';
@@ -61,15 +64,14 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     // in the hierarchy, or if we're too deep.
     const MAX_DEPTH = 10;
 
-    if (
+    const recursive =
       renderedHierarchy.includes(subject) ||
-      renderedHierarchy.length > MAX_DEPTH
-    ) {
-      return null;
-    }
+      renderedHierarchy.length > MAX_DEPTH;
 
     const snapshot = useResourceSnapshot(subject, { allowIncomplete: true });
     const resource = snapshot.resource;
+    const store = useStore();
+    const drive = store.getDrive();
     const canWrite = useCanWrite(resource);
     const active = useIsCurrentSubject(subject);
     const ancestryWhenAncestor = useAncestryIfAncestor(subject);
@@ -83,31 +85,78 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     // that as hidden too: otherwise `useChildren` fetches every table row
     // into the tree, then hides them when the class arrives — the sidebar
     // flash on open.
-    const { classes, isTable, isDirectory, navigationDecorations } =
-      useMemo(() => {
-        const current = snapshot.resource;
-        const currentClasses = current.getClasses();
-        const table = currentClasses.includes(dataBrowser.classes.table);
-        const directory =
-          table &&
-          isSyncablesNavigationTable(current.get(core.properties.localId));
-        const icon = current.get(dataBrowser.properties.icon);
+    const {
+      classes,
+      isTable,
+      isDirectory,
+      isPlatformRoot,
+      navigationDecorations,
+    } = useMemo(() => {
+      const current = snapshot.resource;
+      const currentClasses = current.getClasses();
+      const table = currentClasses.includes(dataBrowser.classes.table);
+      const directory =
+        table &&
+        isSyncablesNavigationTable(current.get(core.properties.localId));
+      const icon = current.get(dataBrowser.properties.icon);
 
-        return {
-          classes: currentClasses,
-          isTable: table,
-          isDirectory: directory,
-          // An app's icon is stored alongside its data, but is not a folder to browse.
-          navigationDecorations: [
-            ...(directory
-              ? current.getSubjects(dataBrowser.properties.tableViews)
-              : []),
-            ...(typeof icon === 'string' ? [icon] : []),
-          ],
-        };
-      }, [snapshot]);
+      return {
+        classes: currentClasses,
+        isTable: table,
+        isDirectory: directory,
+        isPlatformRoot: isSyncablesPlatformRoot(
+          current.get(core.properties.localId),
+        ),
+        // An app's icon is stored alongside its data, but is not a folder to browse.
+        navigationDecorations: [
+          ...(directory ||
+          isSyncablesPlatformRoot(current.get(core.properties.localId))
+            ? current.getSubjects(dataBrowser.properties.tableViews)
+            : []),
+          ...(typeof icon === 'string' ? [icon] : []),
+        ],
+      };
+    }, [snapshot]);
+    const [legacyNavigation, setLegacyNavigation] = useState<{
+      snapshot: typeof snapshot;
+      drive: string;
+      hidden?: string;
+    }>();
+    const legacySnapshot = useResourceSnapshot(
+      legacyNavigation?.hidden ?? unknownSubject,
+      { allowIncomplete: true },
+    );
+    useEffect(() => {
+      if (!isPlatformRoot || !drive || snapshot.loading || snapshot.error)
+        return;
+      let cancelled = false;
+      void findSyncableLegacyAccounts(store, drive, subject)
+        .then(hidden => {
+          if (!cancelled) setLegacyNavigation({ snapshot, drive, hidden });
+        })
+        .catch(() => {
+          // A failed validation must never hide an unrelated user resource.
+          if (!cancelled) setLegacyNavigation({ snapshot, drive });
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [store, drive, subject, snapshot, isPlatformRoot, legacySnapshot]);
+    const validatingLegacy =
+      isPlatformRoot &&
+      (legacyNavigation?.snapshot !== snapshot ||
+        legacyNavigation?.drive !== drive);
+    const hiddenNavigation = [
+      ...navigationDecorations,
+      ...(isPlatformRoot && legacyNavigation?.hidden
+        ? [legacyNavigation.hidden]
+        : []),
+    ];
     const websiteClass = useWebsiteClass(classes.join('|'));
     const hideChildren =
+      recursive ||
+      validatingLegacy ||
       !!websiteClass ||
       classes.length === 0 ||
       (isTable && !isDirectory) ||
@@ -120,9 +169,9 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
 
     const { subjects: children, total } = useChildren(
       hideChildren ? undefined : subject,
-      { limit: SIDEBAR_CHILD_LIMIT + navigationDecorations.length },
+      { limit: SIDEBAR_CHILD_LIMIT + hiddenNavigation.length },
     );
-    const visibleChildren = withoutTableViews(children, navigationDecorations);
+    const visibleChildren = withoutTableViews(children, hiddenNavigation);
     const totalChildren = total - (children.length - visibleChildren.length);
     const subResources =
       visibleChildren.length > SIDEBAR_CHILD_LIMIT
@@ -230,7 +279,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
       }
     }, [ancestryWhenAncestor]);
 
-    if (!subject || subject === unknownSubject) {
+    if (recursive || !subject || subject === unknownSubject) {
       return null;
     }
 

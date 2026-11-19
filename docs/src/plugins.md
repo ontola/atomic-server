@@ -32,8 +32,8 @@ The browser build bundles that reader with the Atomic app into one
 an opaque iframe. No executable module is downloaded from the integration
 proxy at runtime.
 
-Installing a provider creates an ordinary App resource with an Accounts Table
-as its child. Its name and icon come from the proxy's public OpenAPI metadata;
+Installing a provider creates an ordinary App resource. Authenticated principals
+and Public are its direct children; their collections follow the API catalog. Its name and icon come from the proxy's public OpenAPI metadata;
 the `info.x-logo.url` image is resized and uploaded as an Atomic File beneath
 the App. An existing icon is preserved. Opening an older installation explicitly
 from Apps upgrades its root resource in place, retaining the App subject and
@@ -42,9 +42,11 @@ stable source identities rather than creating another installation.
 When the user requests a refresh, the host loads the configured proxy's
 composed OpenAPI document and catalog query defaults. Standard OpenAPI
 Overlays, CRUD Causality and Pagination Schemes describe the available
-collections and their reads. The app uses `describePlatform` and named
-`readCollections` calls; the shared library handles collection selection,
-pagination links, read budgets and partial snapshots.
+collections and their reads. The app uses `resolveAuthenticatedPrincipal`, `describeCollections`,
+`relatedCollectionReads`, `resolveCollectionNavigation` and `readBoundCollection`.
+CRUD references and standard OpenAPI response Links supply parent/child
+relationships. The shared library handles selected-instance binding, typed
+projection, pagination, read budgets and partial snapshots.
 
 Atomic-specific code maps those snapshots into stable drive resources and
 typed rows, provides the UI, and enforces permissions through the existing
@@ -65,9 +67,11 @@ The native view renders these saved values and offers **Open**. It never mounts
 an iframe, refreshes a provider or creates missing collections. Navigation
 rechecks the row, direct child target and selected drive. Missing or invalid
 values remain unknown. Legacy GitHub Organizations and Repositories view kinds
-resolve to this generic view. GitHub's provider-specific projection and sync
-controls remain in the sandboxed Sync app; this renderer does not replace that
-adapter. See [Apps](app/apps.md#import-github-issues) for the user flow.
+resolve to this generic view. The Sync app is provider-independent: schema and
+relationships come from the catalog, while Atomic provisioning, reconciliation
+and UI stay here. Historical GitHub storage formats are recognized only by the
+legacy migration adapter. No provider URL or owner-grouping policy is embedded
+in the active Sync path. See [Apps](app/apps.md#import-github-issues) for the user flow.
 
 ## Installing a plugin
 

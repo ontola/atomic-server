@@ -144,9 +144,10 @@ inside the app and stops on pause, source or identity changes, or closing the ap
 Hosts without this capability reject execution requests. Account connection still
 requires the native confirmation dialog.
 
-The built-in GitHub Organizations and Repositories views are native views of
-stored Atomic data. They use no frame or provider connection. Refreshing GitHub
-belongs to the separate Sync app.
+The built-in Syncable Collection view is a native view of stored Atomic data.
+It uses no frame or provider connection. Its schema labels, fields and child
+targets are saved by the separate Sync app during explicit synchronization.
+Refreshing a provider belongs to that Sync app.
 
 ### Host UI
 

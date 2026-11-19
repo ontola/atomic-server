@@ -41,7 +41,7 @@ async function installed(platform = 'github-issues') {
 
 describe('built-in App registration', () => {
   it.each(['github-issues', 'calendar-service'])(
-    'opens the saved Accounts table for %s without writes',
+    'opens the App source root for %s without writes',
     async provider => {
       const f = await installed(provider);
       const create = vi.spyOn(f.store, 'newResource');
@@ -78,40 +78,85 @@ describe('built-in App registration', () => {
     ).rejects.toThrow('not an App');
   });
 
-  it.each(['parent', 'source', 'class', 'outside', 'stale-stamp'])(
-    'rejects a forged Accounts %s binding',
+  async function legacyInstalled() {
+    const f = await installed();
+    f.resources.set('legacy-accounts', {
+      [core.properties.parent]: f.subject,
+      [core.properties.localId]: 'syncables:accounts',
+      [core.properties.isA]: [dataBrowser.classes.table],
+      [f.terms.properties!['syncable-platform-id']]: 'github-issues',
+      [f.terms.properties!['syncable-proxy-origin']]: 'https://proxy.example',
+    });
+    f.resources.get(f.subject)![f.app.properties!['app-data']] =
+      'legacy-accounts';
+
+    return f;
+  }
+
+  it('reads legacy App bindings without migrating or provisioning', async () => {
+    const f = await legacyInstalled();
+    const before = JSON.stringify([...f.resources]);
+    const create = vi.spyOn(f.store, 'newResource');
+    expect(await resolveBuiltinApp(f.store, 'drive', f.subject)).toEqual({
+      kind: 'syncables',
+      table: f.subject,
+    });
+    expect(JSON.stringify([...f.resources])).toBe(before);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it.each(['parent', 'source', 'class', 'outside', 'local-id', 'pointer'])(
+    'rejects a forged legacy Accounts %s binding without writes',
     async attack => {
-      const f = await installed();
-      const table = f.resources.get(f.table)!;
-
-      switch (attack) {
-        case 'parent':
-          table[core.properties.parent] = 'other-app';
-          break;
-        case 'source':
-          table[f.terms.properties!['syncable-proxy-origin']] =
-            'https://other.example';
-          break;
-        case 'class':
-          table[core.properties.isA] = [f.app.classes!.app];
-          break;
-        case 'outside':
-          table['https://atomicdata.dev/properties/drive'] = 'other-drive';
-          break;
-        case 'stale-stamp':
-          f.resources.get(f.subject)![core.properties.parent] = 'other-drive';
-          f.resources.get(f.subject)![
-            'https://atomicdata.dev/properties/drive'
-          ] = 'drive';
-          table['https://atomicdata.dev/properties/drive'] = 'drive';
-          break;
-      }
-
+      const f = await legacyInstalled();
+      const table = f.resources.get('legacy-accounts')!;
+      if (attack === 'parent') table[core.properties.parent] = 'other-app';
+      if (attack === 'source')
+        table[f.terms.properties!['syncable-proxy-origin']] =
+          'https://other.example';
+      if (attack === 'class') table[core.properties.isA] = [f.app.classes!.app];
+      if (attack === 'outside')
+        table['https://atomicdata.dev/properties/drive'] = 'other-drive';
+      if (attack === 'local-id') table[core.properties.localId] = 'user-table';
+      if (attack === 'pointer')
+        f.resources.get(f.subject)![
+          f.terms.properties!['syncable-legacy-accounts']
+        ] = 'other-table';
+      const before = JSON.stringify([...f.resources]);
       await expect(
         resolveBuiltinApp(f.store, 'drive', f.subject),
-      ).rejects.toThrow('matching Accounts');
+      ).rejects.toThrow('matching legacy Accounts');
+      expect(JSON.stringify([...f.resources])).toBe(before);
     },
   );
+
+  it('accepts a migrated self binding only while its retained Accounts reference remains valid', async () => {
+    const f = await legacyInstalled();
+    f.resources.get(f.subject)![f.app.properties!['app-data']] = f.subject;
+    f.resources.get(f.subject)![
+      f.terms.properties!['syncable-legacy-accounts']
+    ] = 'legacy-accounts';
+    const before = JSON.stringify([...f.resources]);
+    expect(await resolveBuiltinApp(f.store, 'drive', f.subject)).toEqual({
+      kind: 'syncables',
+      table: f.subject,
+    });
+    expect(JSON.stringify([...f.resources])).toBe(before);
+    f.resources.get('legacy-accounts')![core.properties.parent] = 'other-app';
+    await expect(
+      resolveBuiltinApp(f.store, 'drive', f.subject),
+    ).rejects.toThrow('matching legacy Accounts');
+  });
+
+  it('rejects a moved App despite a stale drive stamp', async () => {
+    const f = await installed();
+    f.resources.get(f.subject)![core.properties.parent] = 'other-drive';
+    f.resources.get(f.subject)!['https://atomicdata.dev/properties/drive'] =
+      'drive';
+    await expect(
+      resolveBuiltinApp(f.store, 'drive', f.subject),
+    ).rejects.toThrow('outside');
+  });
 
   it('keeps the binding valid when the App is renamed and moved within its drive', async () => {
     const f = await installed();

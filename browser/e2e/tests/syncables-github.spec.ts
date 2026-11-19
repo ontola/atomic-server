@@ -78,6 +78,7 @@ interface MockState {
   redeemed: string[];
   issueConnections: string[];
   repositoryRequests: number;
+  organizationRequests: number;
   providerRequests: string[];
   documentRequests: string[];
   iconRequests: string[];
@@ -149,7 +150,17 @@ function issue(
  * Atomic node, signed application commits and null-origin iframe intact.
  * This tests the browser-to-host flow without using a real GitHub credential.
  */
-async function mockIntegrationProxy(page: Page): Promise<MockState> {
+async function mockIntegrationProxy(
+  page: Page,
+  options: {
+    platform?: string;
+    name?: string;
+    document?: Record<string, unknown>;
+    selection?: unknown;
+  } = {},
+): Promise<MockState> {
+  const platform = options.platform ?? PLATFORM;
+  const serviceName = options.name ?? 'GitHub';
   await page.addInitScript(
     ({ origin, proxy }) => {
       if (window === window.top && location.origin === origin) {
@@ -167,6 +178,7 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
     redeemed: [],
     issueConnections: [],
     repositoryRequests: 0,
+    organizationRequests: 0,
     providerRequests: [],
     documentRequests: [],
     iconRequests: [],
@@ -219,7 +231,6 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
       full_name: 'ontola/archived',
       owner: { id: 123, login: 'ontola', type: 'Organization' },
       has_issues: false,
-      open_issues_count: -1,
     },
   ];
 
@@ -263,11 +274,11 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
         version: 1,
         platforms: [
           {
-            id: PLATFORM,
-            name: 'GitHub',
+            id: platform,
+            name: serviceName,
             description: 'Mirror repositories and issues',
-            document: '/catalog/github-issues.yaml',
-            icon: GITHUB_ICON,
+            document: '/catalog/' + platform + '.yaml',
+            ...(serviceName === 'GitHub' ? { icon: GITHUB_ICON } : {}),
           },
         ],
       });
@@ -276,14 +287,14 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
     }
 
     if (url.pathname === '/catalog') {
-      await send([PLATFORM]);
+      await send([platform]);
 
       return;
     }
 
     if (
-      url.pathname === '/catalog/github-issues.yaml' ||
-      url.pathname === '/catalog/github-issues.selection.json'
+      url.pathname === '/catalog/' + platform + '.yaml' ||
+      url.pathname === '/catalog/' + platform + '.selection.json'
     ) {
       expect(request.method()).toBe('GET');
       const metadataHeaders = await request.allHeaders();
@@ -298,24 +309,15 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
       state.documentRequests.push(url.pathname);
       await send(
         url.pathname.endsWith('.yaml')
-          ? {
+          ? (options.document ?? {
               ...CATALOG_DOCUMENT,
               info: {
                 ...CATALOG_DOCUMENT.info,
-                title: 'GitHub',
+                title: serviceName,
                 'x-logo': { url: GITHUB_ICON },
               },
-            }
-          : {
-              ...CATALOG_SELECTION,
-              query_overrides: [
-                ...(CATALOG_SELECTION.query_overrides ?? []),
-                {
-                  path: '/repos/{owner}/{repo}/issues',
-                  values: { per_page: 100 },
-                },
-              ],
-            },
+            })
+          : (options.selection ?? CATALOG_SELECTION),
       );
 
       return;
@@ -341,9 +343,9 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
       const back = new URL(callback);
       expect(back.origin).toBe(new URL(FRONTEND_URL).origin);
       expect(back.pathname).toBe('/app/integrations');
-      expect(back.searchParams.get('platform')).toBe(PLATFORM);
+      expect(back.searchParams.get('platform')).toBe(platform);
       expect(back.searchParams.get('integration_state')).toMatch(/^[\w-]{43}$/);
-      expect(url.searchParams.get('platform')).toBe(PLATFORM);
+      expect(url.searchParams.get('platform')).toBe(platform);
       expect(url.searchParams.get('code_challenge_method')).toBe('S256');
       const challenge = url.searchParams.get('code_challenge') ?? '';
       expect(challenge).toMatch(/^[\w-]{43}$/);
@@ -386,7 +388,7 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
       expect(connections.has(connection_id)).toBe(false);
       const connection: MockConnection = {
         connection_id,
-        platform: PLATFORM,
+        platform,
         owner,
         label: 'michiel',
         key: connection_key,
@@ -396,7 +398,7 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
       state.redeemed.push(connection_id);
       await send({
         connection_id,
-        platform: PLATFORM,
+        platform,
         owner,
         label: connection.label,
       });
@@ -414,11 +416,12 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
       return;
     }
 
-    const [, , connectionId, platform, ...endpoint] = url.pathname.split('/');
+    const [, , connectionId, requestedPlatform, ...endpoint] =
+      url.pathname.split('/');
     const connection = connections.get(connectionId);
     if (!connection)
       throw new Error('Provider read without a redeemed connection');
-    expect(platform).toBe(PLATFORM);
+    expect(requestedPlatform).toBe(platform);
     expect(request.method()).toBe('GET');
     expect(request.frame()).toBe(page.mainFrame());
     expect(request.headers().authorization).toBeUndefined();
@@ -433,7 +436,14 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
       return;
     }
 
+    if (providerPath === '/orgs/ontola') {
+      await send({ id: 123, login: 'ontola' });
+
+      return;
+    }
+
     if (providerPath === '/user/orgs') {
+      state.organizationRequests++;
       expect(url.searchParams.get('per_page')).toBe('100');
       await send([
         { id: 123, login: 'ontola' },
@@ -443,10 +453,16 @@ async function mockIntegrationProxy(page: Page): Promise<MockState> {
       return;
     }
 
-    if (providerPath === '/user/repos') {
+    if (
+      providerPath === '/user/repos' ||
+      providerPath === '/orgs/ontola/repos'
+    ) {
       expect(url.searchParams.get('per_page')).toBe('100');
       state.repositoryRequests++;
-      await send(repos);
+      if (providerPath.startsWith('/orgs/')) {
+        expect(url.searchParams.get('type')).toBe('all');
+        await send(repos.filter(repo => repo.owner.id === 123));
+      } else await send(repos);
 
       return;
     }
@@ -502,517 +518,552 @@ async function openConsent(
   ).toBeVisible();
 }
 
-async function addSyncableCollectionView(page: Page) {
-  const name = 'Syncable Collection';
-  await page.getByTitle('Add view', { exact: true }).click();
-  await page.getByRole('menuitem', { name, exact: true }).click();
-  await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
-}
+async function sourceState(page: Page, subject: string) {
+  return page.evaluate(async tableSubject => {
+    const store = window.store;
+    const base = 'https://atomicdata.dev/properties/';
 
-async function installedApp(page: Page, subject: string) {
-  return page.evaluate(async appSubject => {
-    const store = window.store!;
-    const app = await store.getResource(appSubject);
-    const classNames = await Promise.all(
-      app
-        .getSubjects('https://atomicdata.dev/properties/isA')
-        .map(async classSubject =>
-          (await store.getResource(classSubject)).get(
-            'https://atomicdata.dev/properties/shortname',
-          ),
-        ),
+    const property = (name: string) => {
+      const found = [...store.resources.values()].find(
+        resource => resource.get(base + 'shortname') === name,
+      );
+      if (!found) throw new Error('Missing fixture property ' + name);
+
+      return found.subject;
+    };
+
+    const source = property('syncable-source-key');
+    const config = property('syncable-source-config');
+    const table = await store.getResource(tableSubject);
+    const rowClass = table.get(base + 'classtype');
+    const rows = [...store.resources.values()].filter(
+      resource =>
+        resource.get(base + 'parent') === tableSubject &&
+        typeof rowClass === 'string' &&
+        resource.getSubjects(base + 'isA').includes(rowClass),
     );
-    const accounts = [...store.resources.values()]
-      .filter(
-        resource =>
-          resource.get('https://atomicdata.dev/properties/parent') ===
-            appSubject &&
-          resource
-            .getSubjects('https://atomicdata.dev/properties/isA')
-            .includes('https://atomicdata.dev/classes/Table'),
-      )
-      .map(resource => ({
-        subject: resource.subject,
-        name: resource.get('https://atomicdata.dev/properties/name'),
-      }));
 
     return {
-      classNames,
-      isTable: app
-        .getSubjects('https://atomicdata.dev/properties/isA')
-        .includes('https://atomicdata.dev/classes/Table'),
-      icon: app.get('https://atomicdata.dev/properties/icon'),
-      accounts,
+      subject: table.subject,
+      localId: table.get(base + 'localId'),
+      key: table.get(source) as string | undefined,
+      config: table.get(config) as
+        | { principal?: { kind: string }; collection?: { collection: string } }
+        | undefined,
+      rows: await Promise.all(
+        rows.map(async row => {
+          const saved = row.get(config) as
+            | { managedProperties?: string[] }
+            | undefined;
+
+          return {
+            subject: row.subject,
+            name: row.get(base + 'name'),
+            localId: row.get(base + 'localId'),
+            key: row.get(source) as string | undefined,
+            note: row.get(base + 'description'),
+            managed: await Promise.all(
+              (saved?.managedProperties ?? []).map(async field => {
+                const definition = await store.getResource(field);
+
+                return {
+                  name: definition.get(base + 'shortname'),
+                  datatype: definition.get(base + 'datatype'),
+                  value: row.get(field),
+                };
+              }),
+            ),
+          };
+        }),
+      ),
     };
   }, subject);
 }
 
-test.describe('built-in GitHub Syncables onboarding', () => {
-  test('connects, discovers owners, and mirrors selected issues inside a sandbox', async ({
+async function sourceSubject(page: Page, kind: string, collection?: string) {
+  return page.evaluate(
+    ({ kind: wanted, collection: name }) => {
+      const store = window.store;
+      const base = 'https://atomicdata.dev/properties/';
+      const fields = Object.fromEntries(
+        [...store.resources.values()].map(resource => [
+          resource.get(base + 'shortname'),
+          resource.subject,
+        ]),
+      );
+      const found = [...store.resources.values()].find(resource => {
+        if (resource.get(fields['syncable-node-kind']) !== wanted) return false;
+        const config = resource.get(fields['syncable-source-config']) as
+          | {
+              collection?: { collection: string };
+              navigation?: { collection: string };
+              principal?: { kind: string };
+            }
+          | undefined;
+
+        return name
+          ? (config?.collection?.collection ??
+              config?.navigation?.collection) === name
+          : config?.principal?.kind === 'authenticated';
+      });
+      if (!found)
+        throw new Error(
+          'Missing saved source ' + wanted + '/' + (name ?? 'principal'),
+        );
+
+      return found.subject;
+    },
+    { kind, collection },
+  );
+}
+
+async function browse(page: Page) {
+  const tab = page.getByRole('tab', { name: 'Browse', exact: true });
+  await expect(tab).toBeVisible({ timeout: 30_000 });
+  await tab.click();
+  await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
+
+  return page.getByRole('main').getByRole('table');
+}
+
+async function openRow(page: Page, text: string) {
+  const directory = await browse(page);
+  await directory
+    .getByRole('row')
+    .filter({ hasText: text })
+    .getByRole('button', { name: 'Open', exact: true })
+    .click();
+}
+
+async function sync(page: Page) {
+  await page.getByRole('tab', { name: 'Sync', exact: true }).click();
+  const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+  await expect(
+    iframe.getByRole('button', { name: 'Sync now', exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
+  await iframe.getByRole('button', { name: 'Sync now', exact: true }).click();
+  await expect(
+    iframe.getByRole('button', { name: 'Sync now', exact: true }),
+  ).toBeEnabled({ timeout: 45_000 });
+
+  return iframe;
+}
+
+async function legacyPublicMirror(page: Page, parent: string) {
+  return page.evaluate(
+    async ({ parent: targetParent, proxy }) => {
+      const store = window.store;
+      const base = 'https://atomicdata.dev/properties/';
+      const terms = Object.fromEntries(
+        [...store.resources.values()].map(resource => [
+          resource.get(base + 'shortname'),
+          resource.subject,
+        ]),
+      );
+      const oldKey = JSON.stringify([
+        proxy,
+        'github-issues',
+        'public-mirror',
+        'github-public-repo:456',
+        'issues',
+      ]);
+      const localId = 'syncables:node:' + encodeURIComponent(oldKey);
+      const table = await store.newResource({
+        parent: targetParent,
+        isA: ['https://atomicdata.dev/classes/Table'],
+        propVals: {
+          [base + 'name']: 'Issues',
+          [base + 'localId']: localId,
+          [base + 'classtype']: terms['syncable-record'],
+          [terms['syncable-source-key']]: oldKey,
+          [terms['syncable-node-kind']]: 'public-mirror',
+          [terms['syncable-source-config']]: {
+            repoId: '456',
+            ownerId: '123',
+            ownerLogin: 'ontola',
+            repoName: 'atomic-server',
+          },
+        },
+      });
+      await table.save();
+      const row = await store.newResource({
+        parent: table.subject,
+        isA: [terms['syncable-record']],
+        propVals: {
+          [base + 'name']: 'Legacy imported issue',
+          [base + 'localId']: 'syncables:github-issue:9001',
+          [base + 'description']: 'Keep this user note',
+          [terms['syncable-issue-number']]: 15,
+        },
+      });
+      await row.save();
+      const driveSubject = store.getDrive();
+      if (!driveSubject) throw new Error('The fixture has no current drive');
+      const drive = await store.getResource(driveSubject);
+      const previous = drive.get(terms['syncable-resource-index']) as
+        | Record<string, string>
+        | undefined;
+      drive.set(terms['syncable-resource-index'], {
+        ...previous,
+        [oldKey]: table.subject,
+      });
+      await drive.save();
+
+      return { table: table.subject, row: row.subject, localId, oldKey };
+    },
+    { parent, proxy: PROXY },
+  );
+}
+
+async function publicForm(page: Page, collection = 'repositoryIssues') {
+  await page.getByRole('tab', { name: 'Sync', exact: true }).click();
+  const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+  await expect(iframe.getByLabel('Collection', { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await iframe
+    .getByLabel('Collection', { exact: true })
+    .selectOption(collection);
+
+  return iframe;
+}
+
+test.describe('catalog-driven built-in Syncables', () => {
+  test('connects a principal directly and syncs only selected declared collection instances', async ({
     page,
     browserDiagnostics,
   }, testInfo) => {
-    test.setTimeout(180_000);
-
+    test.setTimeout(240_000);
     const requests = await mockIntegrationProxy(page);
     await before({ page }, testInfo);
     const driveUrl = page.url();
     await enableIntegrationDiscovery(page);
     await expect(page).toHaveURL(driveUrl);
     await expect(currentDriveTitle(page)).toBeVisible();
-    const sidebar = page.getByTestId('sidebar');
-    await expect(sidebar.getByText('Apps', { exact: true })).toHaveCount(0);
     await clickAccountMenuItem(page, 'Apps');
-    await expect(
-      page.getByRole('heading', { name: 'Apps', exact: true }),
-    ).toBeVisible();
-
-    const github = page.locator(`[data-proxy-platform="${PLATFORM}"]`);
-    await expect(github).toContainText('GitHub');
-    await testInfo.attach('apps-discovery', {
-      body: await page.screenshot(),
-      contentType: 'image/png',
-    });
-    await github.getByRole('button', { name: 'Add GitHub to drive' }).click();
-
+    const card = page.locator(`[data-proxy-platform="${PLATFORM}"]`);
+    await card.getByRole('button', { name: 'Add GitHub to drive' }).click();
     const frame = page.locator('iframe[title="App"]:visible');
     const iframe = frame.contentFrame();
-    const emptyAccounts = iframe.getByRole('heading', {
-      name: 'No accounts connected',
-    });
-    await expect(emptyAccounts).toBeVisible({ timeout: 30_000 });
-    const platformUrl = page.url();
+    await expect(
+      iframe.getByRole('heading', { name: 'Connected principals' }),
+    ).toBeVisible({ timeout: 45_000 });
+    const appUrl = page.url();
     const appSubject = await getCurrentSubject(page);
-    const app = await installedApp(page, appSubject);
-    expect(app.classNames).toContain('app');
-    expect(app.isTable).toBe(false);
-    expect(app.icon).toEqual(expect.any(String));
-    expect(app.icon).not.toBe(GITHUB_ICON);
-    expect(app.accounts).toEqual([
-      { subject: expect.any(String), name: 'Accounts' },
-    ]);
-    expect(requests.iconRequests).toEqual([GITHUB_ICON]);
-    expect(requests.documentRequests).toContain('/catalog/github-issues.yaml');
-    const installationDocumentReads = requests.documentRequests.length;
-    await expect(sidebar.getByText('GitHub', { exact: true })).toBeVisible();
-    await expect(sidebar.getByText(/^integration-icon/)).toHaveCount(0);
     await expect(frame).toHaveAttribute('sandbox', /\ballow-scripts\b/);
     await expect(frame).not.toHaveAttribute('sandbox', /\ballow-same-origin\b/);
     expect(await iframe.locator('html').evaluate(() => window.origin)).toBe(
       'null',
     );
-
-    await clickAccountMenuItem(page, 'Apps');
-    await github.getByRole('button', { name: 'Open GitHub' }).click();
-    await expect(page).toHaveURL(platformUrl);
-    await expect(emptyAccounts).toBeVisible({ timeout: 30_000 });
-    expect(await getCurrentSubject(page)).toBe(appSubject);
-    expect(await installedApp(page, appSubject)).toEqual(app);
-    expect(requests.documentRequests).toHaveLength(installationDocumentReads);
+    expect(requests.providerRequests).toEqual([]);
     expect(requests.iconRequests).toEqual([GITHUB_ICON]);
-
-    await openConsent(page, iframe, 'Connect GitHub account');
-    await page.getByRole('link', { name: 'Decline' }).click();
-    await expect(page).toHaveURL(platformUrl);
-    await expect(emptyAccounts).toBeVisible({ timeout: 30_000 });
-    expect(requests.redeemed).toHaveLength(0);
-
-    await openConsent(page, iframe, 'Connect GitHub account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(platformUrl, { timeout: 45_000 });
-    await expect(
-      iframe.getByRole('button', { name: 'Browse organizations' }),
-    ).toBeVisible({ timeout: 45_000 });
-    await expect(
-      iframe.getByRole('button', { name: 'Public repositories', exact: true }),
-    ).toBeVisible();
-    await testInfo.attach('github-accounts', {
+    const sidebar = page.getByTestId('sidebar');
+    await expect(sidebar.getByText('Accounts', { exact: true })).toHaveCount(0);
+    await testInfo.attach('github-app-direct-principals', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
-    await iframe.getByRole('button', { name: 'Browse organizations' }).click();
 
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Decline', exact: true }).click();
+    await expect(page).toHaveURL(appUrl);
+    expect(requests.redeemed).toEqual([]);
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(appUrl, { timeout: 45_000 });
     await expect(
-      iframe.getByRole('button', { name: 'Refresh list', exact: true }),
+      iframe.getByRole('button', { name: 'michiel', exact: true }),
     ).toBeVisible({ timeout: 45_000 });
-    await expect(iframe.getByRole('table')).toHaveCount(0);
+    expect(requests.organizationRequests).toBe(0);
     expect(requests.repositoryRequests).toBe(0);
-    expect(requests.documentRequests).toHaveLength(installationDocumentReads);
-    await iframe
-      .getByRole('button', { name: 'Refresh list', exact: true })
-      .click();
-    await expect.poll(() => requests.repositoryRequests).toBe(1);
-    await expect(
-      iframe.getByRole('button', { name: 'Refresh list', exact: true }),
-    ).toBeEnabled({ timeout: 45_000 });
-    const discoveryReads = requests.providerRequests.length;
-    const discoveryDocuments = requests.documentRequests.length;
-    expect(requests.documentRequests).toContain('/catalog/github-issues.yaml');
-    expect(requests.documentRequests).toContain(
-      '/catalog/github-issues.selection.json',
+    expect(requests.providerRequests.every(path => path === '/user')).toBe(
+      true,
     );
-    await page.getByRole('tab', { name: 'Table', exact: true }).click();
-    const rawOwners = page.getByRole('main').getByRole('grid');
-    await expect(rawOwners.getByText('ontola', { exact: true })).toBeVisible();
+    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
+    const principalSubject = await getCurrentSubject(page);
+    expect(principalSubject).not.toBe(appSubject);
+    const principalUrl = page.url();
+    const principalTable = await browse(page);
     await expect(
-      rawOwners.getByRole('button', { name: 'Open', exact: true }),
-    ).toHaveCount(0);
+      principalTable.getByText('Organizations', { exact: true }),
+    ).toBeVisible();
     await expect(
-      rawOwners.getByRole('columnheader', {
-        name: /^(Kind|Repositories|Action)$/,
-      }),
-    ).toHaveCount(0);
-    await addSyncableCollectionView(page);
-    const directory = page.getByRole('main').getByRole('table');
-    await expect(frame).toHaveCount(0);
-    await expect(directory.getByText('ontola', { exact: true })).toBeVisible({
-      timeout: 45_000,
-    });
-    await expect(
-      directory.getByRole('button', { name: /Sync|Refresh/ }),
-    ).toHaveCount(0);
-    await expect(page.getByLabel('Public GitHub repository')).toHaveCount(0);
+      principalTable.getByText('Repositories', { exact: true }),
+    ).toBeVisible();
+    await expect(sidebar.getByText('Accounts', { exact: true })).toHaveCount(0);
+    const setupReads = requests.providerRequests.length;
+    const setupDocuments = requests.documentRequests.length;
+    await openRow(page, 'Organizations');
+    const organizationsSubject = await getCurrentSubject(page);
+    const organizationsUrl = page.url();
+    await browse(page);
+    expect(requests.providerRequests).toHaveLength(setupReads);
+    expect(requests.documentRequests).toHaveLength(setupDocuments);
+    await sync(page);
+    expect(requests.organizationRequests).toBe(1);
+    expect(requests.repositoryRequests).toBe(0);
+    expect(requests.issueConnections).toEqual([]);
+    const directory = await browse(page);
+    await expect(directory.getByText('ontola', { exact: true })).toBeVisible();
     await expect(
       directory.getByText('reporting', { exact: true }),
     ).toBeVisible();
-    const personalOwner = directory.getByRole('row', {
-      name: /michiel.*Personal owner/,
+    await expect(directory.getByText('michiel', { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      directory.getByRole('button', { name: /Sync|Refresh/ }),
+    ).toHaveCount(0);
+    expect((await sourceState(page, organizationsSubject)).rows).toHaveLength(
+      2,
+    );
+    const nativeReads = requests.providerRequests.length;
+    const nativeDocuments = requests.documentRequests.length;
+    let attemptedNativeReads = 0;
+
+    const offline = async (route: Route) => {
+      attemptedNativeReads++;
+      await route.abort('failed');
+    };
+
+    await page.route(PROXY + '/proxy/**', offline);
+    await page.getByRole('tab', { name: 'Table', exact: true }).click();
+    await browse(page);
+    await openRow(page, 'ontola');
+    const repositoriesSubject = await getCurrentSubject(page);
+    const repositoriesUrl = page.url();
+    await browse(page);
+    expect((await sourceState(page, repositoriesSubject)).rows).toHaveLength(0);
+    expect(attemptedNativeReads).toBe(0);
+    expect(requests.providerRequests).toHaveLength(nativeReads);
+    expect(requests.documentRequests).toHaveLength(nativeDocuments);
+    await page.unroute(PROXY + '/proxy/**', offline);
+    await sync(page);
+    expect(requests.providerRequests).toContain('/orgs/ontola');
+    expect(requests.providerRequests).toContain('/orgs/ontola/repos');
+    expect(requests.providerRequests).not.toContain('/user/repos');
+    expect(requests.repositoryRequests).toBe(1);
+    const repos = await browse(page);
+    await expect(
+      repos.getByText('atomic-server', { exact: true }),
+    ).toBeVisible();
+    await expect(repos.getByText('notes', { exact: true })).toHaveCount(0);
+    await expect(repos.getByText('Public', { exact: true })).toBeVisible();
+    const repoState = await sourceState(page, repositoriesSubject);
+    const firstRepo = repoState.rows.find(row => row.name === 'atomic-server')!;
+    expect(firstRepo.managed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          datatype: 'https://atomicdata.dev/datatypes/boolean',
+          value: false,
+        }),
+        expect.objectContaining({
+          datatype: 'https://atomicdata.dev/datatypes/integer',
+          value: 7,
+        }),
+      ]),
+    );
+    expect(requests.issueConnections).toHaveLength(0);
+    const nestedNativeReads = requests.providerRequests.length;
+    await openRow(page, 'atomic-server');
+    const mirrorSubject = await getCurrentSubject(page);
+    await browse(page);
+    expect(requests.providerRequests).toHaveLength(nestedNativeReads);
+    expect(requests.issueConnections).toHaveLength(0);
+    await page.getByRole('tab', { name: 'Sync', exact: true }).click();
+    const syncNow = iframe.getByRole('button', {
+      name: 'Sync now',
+      exact: true,
     });
-    await expect(personalOwner).toBeVisible();
-    await testInfo.attach('syncable-collection-organizations-desktop', {
-      body: await page.screenshot({ animations: 'disabled' }),
+    await expect(syncNow).toBeVisible({ timeout: 30_000 });
+    let release: (() => void) | undefined;
+    requests.issueGate = new Promise(resolve => {
+      release = resolve;
+    });
+    await syncNow.click();
+    await expect.poll(() => requests.issueConnections.length).toBe(1);
+    await sidebar.getByText('Organizations', { exact: true }).click();
+    await browse(page);
+    await expect(directory.getByText('ontola', { exact: true })).toBeVisible();
+    await expect(frame).toHaveCount(0);
+    await expect(page.locator('iframe[title="App"]')).toHaveCount(1);
+    await testInfo.attach('github-native-browse-during-sync', {
+      body: await page.screenshot(),
       contentType: 'image/png',
     });
-    const desktopViewport = page.viewportSize()!;
+    await sidebar
+      .locator(`a[href*="${encodeURIComponent(mirrorSubject)}"]`)
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      mirrorSubject,
+    );
+    await page.getByRole('tab', { name: 'Sync', exact: true }).click();
+    await expect(
+      iframe.getByRole('button', { name: 'Syncing', exact: true }),
+    ).toBeDisabled();
+    release?.();
+    requests.issueGate = undefined;
+    await expect(
+      iframe.getByText('3 stored entries', { exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    await expect(syncNow).toBeEnabled();
+    await browse(page);
+    const initial = await sourceState(page, mirrorSubject);
+    expect(initial.rows).toHaveLength(3);
+    // The API collection also declares PR-shaped records; the generic engine mirrors them faithfully.
+    expect(
+      initial.rows.find(row => JSON.parse(row.key!).remoteId === 17)?.name,
+    ).toBe(PULL_REQUEST_TITLE);
+    expect(
+      initial.rows.find(row => JSON.parse(row.key!).remoteId === 17)?.managed,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          datatype: 'https://atomicdata.dev/datatypes/json',
+          value: {},
+        }),
+      ]),
+    );
+    const imported = initial.rows.find(
+      row => JSON.parse(row.key!).remoteId === 15,
+    )!;
+    expect(imported.name).toBe(FIRST_ISSUE_TITLE);
+    expect(imported.managed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          datatype: 'https://atomicdata.dev/datatypes/integer',
+          value: 15,
+        }),
+        expect.objectContaining({
+          datatype: 'https://atomicdata.dev/datatypes/timestamp',
+          value: Date.parse('2026-11-13T10:00:00Z'),
+        }),
+      ]),
+    );
+    await sync(page);
+    await expect(
+      iframe.getByText('0 added · 1 changed · 0 unchanged', { exact: true }),
+    ).toBeVisible();
+    await browse(page);
+    const updated = await sourceState(page, mirrorSubject);
+    expect(updated.rows).toHaveLength(3);
+    expect(
+      updated.rows.find(row => row.subject === imported.subject)?.name,
+    ).toBe(UPDATED_ISSUE_TITLE);
+    expect(
+      updated.rows.find(row => row.subject === imported.subject)?.localId,
+    ).toBe(imported.localId);
+    await sync(page);
+    await expect(
+      iframe.getByText('0 added · 0 changed · 1 unchanged', { exact: true }),
+    ).toBeVisible();
+    await iframe.getByRole('button', { name: 'Pause', exact: true }).click();
+    await expect(
+      iframe.getByRole('button', { name: 'Resume', exact: true }),
+    ).toBeVisible();
+    await expect(syncNow).toBeDisabled();
+    await page.reload();
+    await expect(
+      iframe.getByRole('button', { name: 'Resume', exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(syncNow).toBeDisabled();
+    await iframe.getByRole('button', { name: 'Resume', exact: true }).click();
+    const connection = requests.redeemed[0];
+    browserDiagnostics.expect(
+      'error',
+      /Failed to load resource:.*401/,
+      'The deliberately expired fixture credential is rejected.',
+      1,
+      /^https:\/\/syncables-test\.example\/proxy\//,
+      { optional: true },
+    );
+    requests.expiredConnection = connection;
+    await syncNow.click();
+    await expect(iframe.getByRole('alert')).toContainText('401');
+    const reconnectUrl = page.url();
+    await openConsent(page, iframe, 'Reconnect');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(reconnectUrl, { timeout: 45_000 });
+    await sync(page);
+    await expect(iframe.getByRole('alert')).toHaveCount(0);
+    expect(requests.redeemed).toHaveLength(2);
+    expect(requests.issueConnections.at(-1)).toBe(requests.redeemed[1]);
+    expect(
+      (await sourceState(page, mirrorSubject)).rows
+        .map(row => row.subject)
+        .sort(),
+    ).toEqual(initial.rows.map(row => row.subject).sort());
+
+    const completedRows = (await sourceState(page, mirrorSubject)).rows;
+    const pendingReads = requests.issueConnections.length;
+    requests.issueGate = new Promise(resolve => {
+      release = resolve;
+    });
+    await syncNow.click();
+    await expect
+      .poll(() => requests.issueConnections.length)
+      .toBe(pendingReads + 1);
+    await iframe.getByRole('button', { name: 'Pause', exact: true }).click();
+    await expect(
+      iframe.getByRole('button', { name: 'Resume', exact: true }),
+    ).toBeVisible();
+    await expect(syncNow).toBeDisabled();
+    release?.();
+    requests.issueGate = undefined;
+    await browse(page);
+    expect(
+      (await sourceState(page, mirrorSubject)).rows
+        .map(row => row.subject)
+        .sort(),
+    ).toEqual(completedRows.map(row => row.subject).sort());
+
+    // Native cached views remain readable offline and do not mount a new iframe.
+    await browse(page);
+    const offlineReads = requests.providerRequests.length;
+    const offlineDocuments = requests.documentRequests.length;
+    await page.route(PROXY + '/proxy/**', offline);
+    await page.goto(repositoriesUrl);
+    await browse(page);
+    await openRow(page, 'atomic-server');
+    await browse(page);
+    expect(requests.providerRequests).toHaveLength(offlineReads);
+    expect(requests.documentRequests).toHaveLength(offlineDocuments);
+    expect(attemptedNativeReads).toBe(0);
+    await expect(
+      page.getByRole('main').getByText(UPDATED_ISSUE_TITLE, { exact: true }),
+    ).toBeVisible();
+    await page.goto(organizationsUrl);
+    await browse(page);
+    const viewport = page.viewportSize()!;
     await page.setViewportSize({ width: 390, height: 844 });
     if (
       (await sidebar.isVisible()) &&
       (await sidebar.evaluate(node => getComputedStyle(node).opacity !== '0'))
     )
       await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
-    await expect(directory.getByText('ontola', { exact: true })).toBeVisible();
-    const mobileOpen = directory
+    const open = directory
       .getByRole('button', { name: 'Open', exact: true })
       .first();
-    await expect(mobileOpen).toBeInViewport();
-    const openBounds = await mobileOpen.boundingBox();
-    expect(openBounds).not.toBeNull();
-    expect(openBounds!.x).toBeGreaterThanOrEqual(0);
-    expect(openBounds!.x + openBounds!.width).toBeLessThanOrEqual(390);
-    await testInfo.attach('syncable-collection-organizations-mobile', {
+    await expect(open).toBeInViewport();
+    const bounds = await open.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    await testInfo.attach('generic-organizations-mobile', {
       body: await page.screenshot({ animations: 'disabled' }),
       contentType: 'image/png',
     });
-    await page.setViewportSize(desktopViewport);
-    if (
-      !(await sidebar.isVisible()) ||
-      (await sidebar.evaluate(node => getComputedStyle(node).opacity === '0'))
-    )
-      await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
-    const ownersUrl = page.url();
-    await expect(personalOwner.getByText('1', { exact: true })).toBeVisible();
-    await expect(
-      directory
-        .getByRole('row', { name: /ontola.*Organization/ })
-        .getByText('2', { exact: true }),
-    ).toBeVisible();
-    await expect(
-      directory
-        .getByRole('row', { name: /reporting.*Organization/ })
-        .getByText('0', { exact: true }),
-    ).toBeVisible();
-    let attemptedNativeProviderReads = 0;
-
-    const offlineProvider = async (route: Route) => {
-      attemptedNativeProviderReads++;
-      await route.abort('failed');
-    };
-
-    await page.route(PROXY + '/proxy/**', offlineProvider);
-    await page.getByRole('tab', { name: 'Table', exact: true }).click();
-    await page
-      .getByRole('tab', { name: 'Syncable Collection', exact: true })
-      .click();
-    await expect(directory.getByText('ontola', { exact: true })).toBeVisible();
-    await expect(
-      page.getByText('Loading stored rows…', { exact: true }),
-    ).toHaveCount(0);
-    expect(requests.providerRequests).toHaveLength(discoveryReads);
-    expect(requests.documentRequests).toHaveLength(discoveryDocuments);
-    await personalOwner.getByRole('button', { name: 'Open' }).click();
-    await expect(
-      page
-        .getByRole('main')
-        .getByRole('heading', { name: 'Repositories', exact: true, level: 1 }),
-    ).toBeVisible();
-    await addSyncableCollectionView(page);
-    await expect(directory.getByText('notes', { exact: true })).toBeVisible({
-      timeout: 45_000,
-    });
-    const personalRepo = directory.getByRole('row', { name: /notes/ });
-    await expect(
-      personalRepo.getByText('Private', { exact: true }),
-    ).toBeVisible();
-    await expect(personalRepo.getByText('3', { exact: true })).toBeVisible();
-    await expect(
-      directory.getByRole('row', { name: /ontola\/atomic-server/ }),
-    ).toHaveCount(0);
-    await page.goto(ownersUrl);
-    await directory
-      .getByRole('row', { name: /ontola/ })
-      .getByRole('button', { name: 'Open' })
-      .click();
-
-    await expect(
-      page
-        .getByRole('main')
-        .getByRole('heading', { name: 'Repositories', exact: true, level: 1 }),
-    ).toBeVisible();
-    await expect(frame).toHaveCount(0);
-    await addSyncableCollectionView(page);
-    await expect(
-      directory.getByText('atomic-server', { exact: true }),
-    ).toBeVisible({ timeout: 45_000 });
-    const organizationRepo = directory.getByRole('row', {
-      name: /atomic-server/,
-    });
-    await expect(
-      organizationRepo.getByText('Public', { exact: true }),
-    ).toBeVisible();
-    await expect(
-      organizationRepo.getByText('7', { exact: true }),
-    ).toBeVisible();
-    await expect(
-      directory.getByRole('columnheader', {
-        name: 'Open issues + PRs',
-        exact: true,
-      }),
-    ).toBeVisible();
-    const unavailableRepo = directory.getByRole('row', { name: /archived/ });
-    await expect(unavailableRepo.getByText('—', { exact: true })).toHaveCount(
-      2,
-    );
-    await expect(
-      unavailableRepo.getByRole('button', { name: 'Open', exact: true }),
-    ).toBeVisible();
-    await expect(
-      unavailableRepo.getByRole('button', { name: 'Sync issues', exact: true }),
-    ).toHaveCount(0);
-    await expect(
-      directory.getByRole('row', { name: /michiel\/notes/ }),
-    ).toHaveCount(0);
-    expect(requests.issueConnections).toHaveLength(0);
-    expect(requests.providerRequests).toHaveLength(discoveryReads);
-    expect(requests.documentRequests).toHaveLength(discoveryDocuments);
-    await expect(frame).toHaveCount(0);
-    await testInfo.attach('github-repositories', {
-      body: await page.screenshot(),
-      contentType: 'image/png',
-    });
-    expect(attemptedNativeProviderReads).toBe(0);
-    await page.unroute(PROXY + '/proxy/**', offlineProvider);
-    const repositoriesUrl = page.url();
-    await page.getByRole('tab', { name: 'Sync', exact: true }).click();
-    await iframe.getByLabel('Repository', { exact: true }).selectOption({
-      label: 'atomic-server',
-    });
-    await iframe
-      .getByRole('button', { name: 'Sync issues', exact: true })
-      .click();
-
-    const syncNow = iframe.getByRole('button', { name: 'Sync now' });
-    const tableTab = page.getByRole('tab', { name: 'Table', exact: true });
-    const syncTab = page.getByRole('tab', { name: 'Sync', exact: true });
-    const rows = page.getByRole('main');
-    await expect(syncNow).toBeVisible({ timeout: 45_000 });
-    expect(requests.issueConnections).toHaveLength(0);
-    expect(requests.providerRequests).toHaveLength(discoveryReads);
-    expect(requests.documentRequests).toHaveLength(discoveryDocuments);
-    const mirrorSubject = await getCurrentSubject(page);
-    await page.goto(repositoriesUrl);
-    await expect(frame).toHaveCount(0);
-    await directory
-      .getByRole('row', { name: /atomic-server/ })
-      .getByRole('button', { name: 'Open', exact: true })
-      .click();
-    await expect(page.getByRole('main')).toHaveAttribute(
-      'about',
-      mirrorSubject,
-    );
-    await expect(frame).toHaveCount(0);
-    await syncTab.click();
-    await expect(syncNow).toBeVisible();
-    expect(requests.issueConnections).toHaveLength(0);
-    expect(requests.documentRequests).toHaveLength(discoveryDocuments);
-    let releaseIssueRead: (() => void) | undefined;
-    requests.issueGate = new Promise(resolve => {
-      releaseIssueRead = resolve;
-    });
-    await syncNow.click();
-    await expect(
-      iframe.getByRole('button', { name: 'Syncing', exact: true }),
-    ).toBeDisabled();
-    await expect.poll(() => requests.issueConnections.length).toBe(1);
-    await tableTab.click();
-    await expect(rows.getByRole('grid')).toBeVisible();
-    await expect(
-      rows.getByRole('grid').getByRole('button', { name: 'Open', exact: true }),
-    ).toHaveCount(0);
-    await sidebar.getByText('Organizations', { exact: true }).click();
-    await page
-      .getByRole('tab', { name: 'Syncable Collection', exact: true })
-      .click();
-    await expect(directory.getByText('ontola', { exact: true })).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(frame).toHaveCount(0);
-    await expect(page.locator('iframe[title="App"]')).toHaveCount(1);
-    expect(requests.repositoryRequests).toBe(1);
-    expect(requests.issueConnections).toHaveLength(1);
-    await testInfo.attach('github-browse-during-issues-sync', {
-      body: await page.screenshot(),
-      contentType: 'image/png',
-    });
-    await sidebar.getByText('Issues', { exact: true }).click();
-    await expect(page.getByRole('main')).toHaveAttribute(
-      'about',
-      mirrorSubject,
-    );
-    await expect(
-      page.getByRole('tab', { name: 'Sync', exact: true }),
-    ).toHaveAttribute('aria-selected', 'true');
-    await expect(
-      iframe.getByRole('button', { name: 'Syncing', exact: true }),
-    ).toBeDisabled();
-    releaseIssueRead?.();
-    requests.issueGate = undefined;
-    await expect(iframe.getByText('2', { exact: true })).toBeVisible();
-    await expect(syncNow).toBeEnabled();
-    await iframe.getByRole('button', { name: 'Pause', exact: true }).click();
-    await expect(iframe.getByText('Paused', { exact: true })).toBeVisible();
-    await page.reload();
-    await expect(iframe.getByText('Paused', { exact: true })).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(syncNow).toHaveCount(0);
-    await testInfo.attach('github-issues-paused', {
-      body: await page.screenshot(),
-      contentType: 'image/png',
-    });
-    await tableTab.click();
-    await expect(
-      rows.getByText(FIRST_ISSUE_TITLE, { exact: true }),
-    ).toBeVisible({ timeout: 45_000 });
-    await expect(
-      rows.getByText(RETAINED_ISSUE_TITLE, { exact: true }),
-    ).toBeVisible();
-    await expect(
-      rows.getByText(PULL_REQUEST_TITLE, { exact: true }),
-    ).toHaveCount(0);
-    expect(requests.issueConnections).toHaveLength(2);
-
-    await syncTab.click();
-    const resume = iframe.getByRole('button', { name: 'Resume', exact: true });
-    await resume.click();
-    await expect(resume).toHaveCount(0);
-    await syncNow.click();
-    await expect(
-      iframe.getByText('0 added · 1 changed · 0 unchanged', { exact: true }),
-    ).toBeVisible();
-    await tableTab.click();
-    await expect(
-      rows.getByText(UPDATED_ISSUE_TITLE, { exact: true }),
-    ).toBeVisible();
-    await expect(
-      rows.getByText(UPDATED_ISSUE_TITLE, { exact: true }),
-    ).toHaveCount(1);
-    await expect(
-      rows.getByText(FIRST_ISSUE_TITLE, { exact: true }),
-    ).toHaveCount(0);
-    await expect(
-      rows.getByText(RETAINED_ISSUE_TITLE, { exact: true }),
-    ).toBeVisible();
-    const updated = rows
-      .getByRole('row')
-      .filter({ hasText: UPDATED_ISSUE_TITLE });
-    await expect(updated.getByText('15', { exact: true })).toBeVisible();
-    await expect(updated.getByText('closed', { exact: true })).toBeVisible();
-    await testInfo.attach('github-issues-table', {
-      body: await page.screenshot(),
-      contentType: 'image/png',
-    });
-
-    expect(requests.redeemed).toHaveLength(1);
-    expect(requests.repositoryRequests).toBeGreaterThan(0);
-    const initialConnection = requests.redeemed[0];
-    expect(requests.issueConnections).toEqual(Array(3).fill(initialConnection));
-
-    await syncTab.click();
-    await expect(syncNow).toBeVisible();
-    const reconnectUrl = page.url();
-    browserDiagnostics.expect(
-      'error',
-      /Failed to load resource:.*401/,
-      'The proxy refuses the deliberately expired GitHub credential.',
-      1,
-      /^https:\/\/syncables-test\.example\/proxy\//,
-      { optional: true },
-    );
-    requests.expiredConnection = initialConnection;
-    await syncNow.click();
-    await expect(
-      iframe.getByText('Needs attention', { exact: true }),
-    ).toBeVisible();
-    await expect(
-      iframe.getByText('GitHub read failed (HTTP 401).', { exact: true }),
-    ).toBeVisible();
-    await openConsent(page, iframe, 'Reconnect');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(reconnectUrl, { timeout: 45_000 });
-    await expect(syncNow).toBeVisible({ timeout: 30_000 });
-    await syncNow.click();
-    await expect(
-      iframe.getByText('0 added · 0 changed · 1 unchanged', { exact: true }),
-    ).toBeVisible();
-    await expect(iframe.getByText('Ready', { exact: true })).toBeVisible();
-    await tableTab.click();
-    await expect(updated).toHaveCount(1);
-    await expect(
-      rows.getByText(RETAINED_ISSUE_TITLE, { exact: true }),
-    ).toBeVisible();
-    expect(requests.redeemed).toHaveLength(2);
-    const replacement = requests.redeemed[1];
-    expect(replacement).not.toBe(initialConnection);
-    expect(requests.issueConnections).toEqual([
-      ...Array(4).fill(initialConnection),
-      replacement,
-    ]);
-
-    await syncTab.click();
-    requests.issueGate = new Promise(resolve => {
-      releaseIssueRead = resolve;
-    });
-    await syncNow.click();
-    await expect.poll(() => requests.issueConnections.length).toBe(6);
-    await iframe.getByRole('button', { name: 'Pause', exact: true }).click();
-    await expect(iframe.getByText('Paused', { exact: true })).toBeVisible();
-    await expect(syncNow).toHaveCount(0);
-    releaseIssueRead?.();
-    requests.issueGate = undefined;
-    await tableTab.click();
-    await expect(updated).toHaveCount(1);
-    await expect(
-      rows.getByText(RETAINED_ISSUE_TITLE, { exact: true }),
-    ).toBeVisible();
+    await page.setViewportSize(viewport);
+    await page.unroute(PROXY + '/proxy/**', offline);
+    await page.goto(principalUrl);
+    await browse(page);
+    expect(await sourceSubject(page, 'principal')).toBe(principalSubject);
   });
 
-  test('links and syncs a public repository without a GitHub account', async ({
+  test('resolves catalog Public inputs into a canonical mirror and migrates saved source aliases', async ({
     page,
   }, testInfo) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
     const requests = await mockIntegrationProxy(page);
     const metadataRequests: string[] = [];
     const publicIssuePages: string[] = [];
@@ -1021,10 +1072,13 @@ test.describe('built-in GitHub Syncables onboarding', () => {
       expect(request.method()).toBe('GET');
       expect(request.frame()).toBe(page.mainFrame());
       const headers = await request.allHeaders();
-      expect(headers.authorization).toBeUndefined();
-      expect(headers.cookie).toBeUndefined();
-      expect(headers['x-connection-key']).toBeUndefined();
-      expect(headers['x-atomic-agent']).toBeUndefined();
+      for (const name of [
+        'authorization',
+        'cookie',
+        'x-connection-key',
+        'x-atomic-agent',
+      ])
+        expect(headers[name]).toBeUndefined();
 
       if (request.url() === PUBLIC_REPOSITORY) {
         metadataRequests.push(request.url());
@@ -1036,7 +1090,6 @@ test.describe('built-in GitHub Syncables onboarding', () => {
             full_name: REPOSITORY,
             owner: { id: 123, login: 'ontola', type: 'Organization' },
             private: false,
-            visibility: 'public',
             has_issues: true,
           },
         });
@@ -1044,149 +1097,358 @@ test.describe('built-in GitHub Syncables onboarding', () => {
         return;
       }
 
-      const issuePage = publicIssuePages.length + 1;
+      const pageNumber = publicIssuePages.length + 1;
       const requested = new URL(request.url());
-      const expected = new URL(publicIssueUrl(issuePage));
-      if (issuePage === 1 && !requested.searchParams.has('page'))
+      const expected = new URL(publicIssueUrl(pageNumber));
+      if (pageNumber === 1 && !requested.searchParams.has('page'))
         requested.searchParams.set('page', '1');
       requested.searchParams.sort();
       expected.searchParams.sort();
       expect(requested.href).toBe(expected.href);
-      expect(issuePage).toBeLessThanOrEqual(PUBLIC_ISSUE_PAGE_COUNT);
+      expect(pageNumber).toBeLessThanOrEqual(PUBLIC_ISSUE_PAGE_COUNT);
       publicIssuePages.push(request.url());
-      const next = publicIssueUrl(issuePage + 1);
-      const entries =
-        issuePage === 1
-          ? [issue(9001, 15, FIRST_ISSUE_TITLE)]
-          : issuePage === PUBLIC_ISSUE_PAGE_COUNT
-            ? [issue(9002, 16, RETAINED_ISSUE_TITLE)]
-            : [];
       await route.fulfill({
         headers: {
           'access-control-allow-origin': '*',
           'access-control-expose-headers': 'link',
-          ...(issuePage < PUBLIC_ISSUE_PAGE_COUNT
-            ? { link: `<${next}>; rel="next"` }
+          ...(pageNumber < PUBLIC_ISSUE_PAGE_COUNT
+            ? { link: `<${publicIssueUrl(pageNumber + 1)}>; rel="next"` }
             : {}),
         },
-        json: entries,
+        json:
+          pageNumber === 1
+            ? [issue(9001, 15, FIRST_ISSUE_TITLE)]
+            : pageNumber === PUBLIC_ISSUE_PAGE_COUNT
+              ? [issue(9002, 16, RETAINED_ISSUE_TITLE)]
+              : [],
       });
     });
-
     await before({ page }, testInfo);
     await enableIntegrationDiscovery(page);
     await clickAccountMenuItem(page, 'Apps');
     await page.getByRole('button', { name: 'Add GitHub to drive' }).click();
     const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
     await expect(
-      iframe.getByRole('heading', { name: 'No accounts connected' }),
-    ).toBeVisible({ timeout: 30_000 });
-    expect(requests.documentRequests).toContain('/catalog/github-issues.yaml');
-    const installationDocumentReads = requests.documentRequests.length;
-    expect(requests.iconRequests).toEqual([GITHUB_ICON]);
-    await iframe
-      .getByRole('button', { name: 'Public repositories', exact: true })
-      .click();
-    await expect(
-      page.getByRole('heading', { name: 'Public', level: 1, exact: true }),
-    ).toBeVisible();
-    await expect(iframe.getByRole('table')).toHaveCount(0);
-
-    const repository = iframe.getByLabel('Public GitHub repository');
-    const link = iframe.getByRole('button', { name: 'Link repository' });
-    await expect(repository).toBeVisible({ timeout: 45_000 });
-    await testInfo.attach('link-public-github-repository', {
+      iframe.getByRole('button', { name: 'Public', exact: true }),
+    ).toHaveCount(1, { timeout: 45_000 });
+    await iframe.getByRole('button', { name: 'Public', exact: true }).click();
+    await browse(page);
+    const publicSubject = await getCurrentSubject(page);
+    const publicUrl = page.url();
+    const legacy = await legacyPublicMirror(page, publicSubject);
+    const form = await publicForm(page);
+    await form
+      .getByLabel('Source', { exact: true })
+      .selectOption('/repos/{owner}/{repo}');
+    await form.getByLabel('Repository owner', { exact: true }).fill('ontola');
+    await form
+      .getByLabel('Repository name', { exact: true })
+      .fill('atomic-server');
+    expect(metadataRequests).toEqual([]);
+    expect(publicIssuePages).toEqual([]);
+    await testInfo.attach('catalog-public-entrypoint', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
-
-    const publicUrl = page.url();
-    await repository.fill(REPOSITORY);
-    expect(metadataRequests).toHaveLength(0);
-    await repository.press('Enter');
-    const syncNow = iframe.getByRole('button', { name: 'Sync now' });
-    await expect(syncNow).toBeVisible({ timeout: 45_000 });
-    await expect(iframe.getByText(/public repository\.$/)).toBeVisible();
+    await form
+      .getByRole('button', { name: 'Open collection', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute('about', legacy.table);
+    await browse(page);
     expect(metadataRequests).toEqual([PUBLIC_REPOSITORY]);
-    expect(publicIssuePages).toHaveLength(0);
-    expect(requests.documentRequests).toHaveLength(installationDocumentReads);
-    const mirrorSubject = await getCurrentSubject(page);
-
-    await syncNow.click();
+    expect(publicIssuePages).toEqual([]);
+    const adopted = await sourceState(page, legacy.table);
+    expect(adopted.localId).toBe(legacy.localId);
+    expect(JSON.parse(adopted.key!)).toMatchObject({
+      version: 2,
+      principal: { kind: 'public' },
+      collection: {
+        name: 'repositoryIssues',
+        context: { repository_id: '456' },
+      },
+    });
+    expect(adopted.config?.principal?.kind).toBe('public');
+    await sync(page);
     await expect(
-      iframe.getByText('2 added · 0 changed · 0 unchanged'),
-    ).toBeVisible();
-    await page.getByRole('tab', { name: 'Table', exact: true }).click();
-    await expect(
-      page.getByRole('main').getByText(FIRST_ISSUE_TITLE, { exact: true }),
-    ).toBeVisible();
+      iframe.getByText('1 added · 1 changed · 0 unchanged', { exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    await browse(page);
     expect(publicIssuePages).toHaveLength(PUBLIC_ISSUE_PAGE_COUNT);
-    expect(requests.documentRequests).toContain('/catalog/github-issues.yaml');
-    const importedDocumentReads = requests.documentRequests.length;
+    const imported = await sourceState(page, legacy.table);
+    expect(imported.rows).toHaveLength(2);
+    expect(imported.rows.find(row => row.subject === legacy.row)).toMatchObject(
+      {
+        name: FIRST_ISSUE_TITLE,
+        localId: 'syncables:github-issue:9001',
+        note: 'Keep this user note',
+      },
+    );
+    expect(
+      await page.evaluate(({ oldKey, table }) => {
+        const store = window.store;
+        const property = [...store.resources.values()].find(
+          resource =>
+            resource.get('https://atomicdata.dev/properties/shortname') ===
+            'syncable-resource-index',
+        )!.subject;
+        const index = store
+          .getResourceLoading(store.getDrive())
+          .get(property) as Record<string, string>;
+
+        return index[oldKey] === table;
+      }, legacy),
+    ).toBe(true);
     const sidebar = page.getByTestId('sidebar');
-
-    for (const resource of [
-      'GitHub',
-      'Accounts',
-      'Public',
-      'ontola',
-      'atomic-server',
-      'Issues',
-    ]) {
-      await expect(sidebar.getByText(resource, { exact: true })).toBeVisible();
-    }
-
+    await expect(sidebar.getByText('Accounts', { exact: true })).toHaveCount(0);
+    await expect(sidebar.getByText('ontola', { exact: true })).toHaveCount(0);
     await expect(
       sidebar.getByText(FIRST_ISSUE_TITLE, { exact: true }),
     ).toHaveCount(0);
-    await expect(sidebar.getByText('Table', { exact: true })).toHaveCount(0);
-    await expect(sidebar.getByText('Sync', { exact: true })).toHaveCount(0);
-    await testInfo.attach('public-github-issues-drive-tree', {
+    await testInfo.attach('public-canonical-issues-migrated', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
-
+    const nativeReads = metadataRequests.length + publicIssuePages.length;
+    const nativeDocuments = requests.documentRequests.length;
     await page.goto(publicUrl);
-    await addSyncableCollectionView(page);
-    await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
-    await expect(
-      page
-        .getByRole('main')
-        .getByRole('table')
-        .getByText('ontola', { exact: true }),
-    ).toBeVisible();
-    expect(metadataRequests).toHaveLength(1);
-    expect(requests.documentRequests).toHaveLength(importedDocumentReads);
-    expect(publicIssuePages).toHaveLength(PUBLIC_ISSUE_PAGE_COUNT);
-    await page.getByRole('tab', { name: 'Sync', exact: true }).click();
-    await repository.fill(REPOSITORY, { timeout: 30_000 });
-    await link.click();
-    await expect(page.getByRole('main')).toHaveAttribute(
-      'about',
-      mirrorSubject,
-    );
-    await expect(
-      page.getByRole('tab', { name: 'Sync', exact: true }),
-    ).toHaveAttribute('aria-selected', 'true');
-    await expect(syncNow).toBeVisible();
-    expect(publicIssuePages).toHaveLength(PUBLIC_ISSUE_PAGE_COUNT);
-    expect(requests.redeemed).toHaveLength(0);
-    expect(requests.issueConnections).toHaveLength(0);
-
+    await openRow(page, 'Issues');
+    await browse(page);
+    expect(await getCurrentSubject(page)).toBe(legacy.table);
+    expect(metadataRequests.length + publicIssuePages.length).toBe(nativeReads);
+    expect(requests.documentRequests).toHaveLength(nativeDocuments);
     await page.goto(publicUrl);
+    const repeat = await publicForm(page);
+    await repeat
+      .getByLabel('Source', { exact: true })
+      .selectOption('/repos/{owner}/{repo}');
+    await repeat.getByLabel('Repository owner', { exact: true }).fill('ontola');
+    await repeat
+      .getByLabel('Repository name', { exact: true })
+      .fill('atomic-server');
+    await repeat
+      .getByRole('button', { name: 'Open collection', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute('about', legacy.table);
+    expect(publicIssuePages).toHaveLength(PUBLIC_ISSUE_PAGE_COUNT);
+    expect(metadataRequests).toHaveLength(2);
+    expect(requests.redeemed).toEqual([]);
+    expect(requests.issueConnections).toEqual([]);
+    expect(requests.providerRequests).toEqual([]);
+    await page.goto(publicUrl);
+    const mobile = await publicForm(page);
     await page.setViewportSize({ width: 390, height: 844 });
-
     if (
       (await sidebar.isVisible()) &&
       (await sidebar.evaluate(node => getComputedStyle(node).opacity !== '0'))
-    ) {
+    )
       await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
-    }
-
-    await expect(sidebar).toHaveCSS('opacity', '0');
-    await expect(link).toBeInViewport();
-    await testInfo.attach('link-public-github-repository-mobile', {
+    await expect(
+      mobile.getByRole('button', { name: 'Open collection', exact: true }),
+    ).toBeInViewport();
+    await testInfo.attach('catalog-public-input-mobile', {
       body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+  });
+
+  test('installs an unrelated catalog and mirrors its typed records through the same native views', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    const upstream = 'https://notes-api.example/v3';
+    const document = {
+      openapi: '3.0.3',
+      info: { title: 'Notebook', version: '1' },
+      servers: [{ url: upstream }],
+      components: {
+        crudResources: {
+          entryAddress: {
+            identity: {
+              urlTemplate: '/by-name/{workspace}',
+              bindings: { workspace: { field: 'name' } },
+            },
+          },
+          entry: {
+            schema: {
+              type: 'object',
+              title: 'Entries',
+              required: ['id', 'name'],
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string', title: 'Entry' },
+                updated_at: {
+                  type: 'string',
+                  format: 'date-time',
+                  title: 'Updated',
+                },
+                active: { type: 'boolean', title: 'Active' },
+              },
+            },
+            identity: {
+              urlTemplate: '/spaces/{space_id}/entries/{entry_id}',
+              bindings: { entry_id: { field: 'id' } },
+            },
+            collections: {
+              entries: { urlTemplate: '/spaces/{space_id}/entries' },
+            },
+          },
+        },
+        paginationSchemes: {
+          pages: {
+            type: 'nextLink',
+            request: {},
+            response: { headers: { Link: { role: 'nextLink' } } },
+          },
+        },
+      },
+      paths: {
+        '/by-name/{workspace}': {
+          get: {
+            operationId: 'namedSpace',
+            security: [],
+            parameters: [
+              {
+                name: 'workspace',
+                in: 'path',
+                required: true,
+                schema: { type: 'string', title: 'Workspace name' },
+              },
+            ],
+            'x-crud': { action: 'read', resource: 'entryAddress' },
+            responses: {
+              '200': {
+                description: 'Space',
+                links: {
+                  entries: {
+                    operationId: 'listEntries',
+                    parameters: { space_id: '$response.body#/id' },
+                  },
+                },
+              },
+            },
+          },
+        },
+        '/spaces/{space_id}/entries': {
+          get: {
+            operationId: 'listEntries',
+            security: [],
+            parameters: [
+              {
+                name: 'space_id',
+                in: 'path',
+                required: true,
+                schema: { type: 'integer', title: 'Workspace ID' },
+              },
+            ],
+            'x-crud': {
+              action: 'list',
+              resource: 'entry',
+              collection: 'entries',
+            },
+            'x-pagination': [{ scheme: 'pages' }],
+            responses: {
+              '200': {
+                description: 'Entries',
+                content: {
+                  'application/json': {
+                    schema: { type: 'array', items: { type: 'object' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const requests = await mockIntegrationProxy(page, {
+      platform: 'notebook',
+      name: 'Notebook',
+      document,
+      selection: { query_overrides: [] },
+    });
+    const reads: string[] = [];
+    await page.route(upstream + '/**', async route => {
+      const request = route.request();
+      const headers = await request.allHeaders();
+      for (const name of [
+        'authorization',
+        'cookie',
+        'x-connection-key',
+        'x-atomic-agent',
+      ])
+        expect(headers[name]).toBeUndefined();
+      reads.push(request.url());
+      await route.fulfill({
+        headers: { 'access-control-allow-origin': '*' },
+        json: request.url().endsWith('/by-name/research')
+          ? { id: 44 }
+          : [
+              {
+                id: 'entry-7',
+                name: 'An unrelated typed record',
+                updated_at: '2026-11-19T09:00:00Z',
+                active: true,
+              },
+            ],
+      });
+    });
+    await before({ page }, testInfo);
+    await enableIntegrationDiscovery(page);
+    await clickAccountMenuItem(page, 'Apps');
+    await page.getByRole('button', { name: 'Add Notebook to drive' }).click();
+    const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+    await expect(
+      iframe.getByRole('button', { name: 'Public', exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    await iframe.getByRole('button', { name: 'Public', exact: true }).click();
+    const form = await publicForm(page, 'entries');
+    await form.getByLabel('Workspace name', { exact: true }).fill('research');
+    expect(reads).toEqual([]);
+    await form
+      .getByRole('button', { name: 'Open collection', exact: true })
+      .click();
+    const subject = await getCurrentSubject(page);
+    await browse(page);
+    expect(reads).toEqual([upstream + '/by-name/research']);
+    await sync(page);
+    await browse(page);
+    await expect(
+      page
+        .getByRole('main')
+        .getByText('An unrelated typed record', { exact: true }),
+    ).toBeVisible();
+    const first = await sourceState(page, subject);
+    expect(first.config?.principal?.kind).toBe('public');
+    expect(first.rows).toHaveLength(1);
+    expect(first.rows[0].managed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          datatype: 'https://atomicdata.dev/datatypes/boolean',
+          value: true,
+        }),
+        expect.objectContaining({
+          datatype: 'https://atomicdata.dev/datatypes/timestamp',
+          value: Date.parse('2026-11-19T09:00:00Z'),
+        }),
+      ]),
+    );
+    await sync(page);
+    await expect(
+      iframe.getByText('0 added · 0 changed · 1 unchanged', { exact: true }),
+    ).toBeVisible();
+    await browse(page);
+    expect((await sourceState(page, subject)).rows[0].subject).toBe(
+      first.rows[0].subject,
+    );
+    expect(reads).toEqual([
+      upstream + '/by-name/research',
+      upstream + '/spaces/44/entries',
+      upstream + '/spaces/44/entries',
+    ]);
+    expect(requests.providerRequests).toEqual([]);
+    expect(requests.redeemed).toEqual([]);
+    await testInfo.attach('unrelated-catalog-native-records', {
+      body: await page.screenshot(),
       contentType: 'image/png',
     });
   });

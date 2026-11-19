@@ -11,6 +11,7 @@ import { fakeSchemaStore as createFakeSchemaStore } from '../../../../lib/src/te
 import {
   ensureSyncablePlatform,
   findSyncablePlatform,
+  findSyncableLegacyAccounts,
   platformLocalId,
   syncablePlatformSchema,
 } from './syncablePlatform';
@@ -59,54 +60,31 @@ describe('platformLocalId', () => {
 });
 
 describe('ensureSyncablePlatform', () => {
-  it('creates one root App with an Accounts table and reuses both on reinstall', async () => {
+  it('creates one root App without an Accounts container and reuses it', async () => {
     const { store, resources } = fakeSchemaStore();
     const options = {
       drive: 'drive',
       proxyOrigin: 'https://proxy.example',
-      platform: 'github-issues',
-      name: 'GitHub',
+      platform: 'calendar-service',
+      name: 'Calendar',
     };
-
     const first = await ensureSyncablePlatform(store, options);
-    const appTerms = await findSchema(store, options.drive, pluginSchema());
-    const accounts = resources.get(first)?.[
-      appTerms.properties!['app-data']
-    ] as string;
-    const rowClass = await store.getResource(
-      resources.get(accounts)?.[core.properties.classtype] as string,
-    );
-    expect(rowClass.get(core.properties.recommends)).toEqual([
-      core.properties.name,
+    const app = await findSchema(store, options.drive, pluginSchema());
+    const size = resources.size;
+    expect(resources.get(first)?.[app.properties!['app-data']]).toBe(first);
+    expect(
+      [...resources.values()].some(
+        values => values[core.properties.localId] === 'syncables:accounts',
+      ),
+    ).toBe(false);
+    expect(
+      await ensureSyncablePlatform(store, { ...options, name: 'Renamed' }),
+    ).toBe(first);
+    expect(resources.size).toBe(size);
+    expect(resources.get(first)?.[core.properties.name]).toBe('Calendar');
+    expect(resources.get(first)?.[core.properties.isA]).toEqual([
+      app.classes!.app,
     ]);
-    await rowClass.set(core.properties.recommends, []);
-    await rowClass.save();
-    const second = await ensureSyncablePlatform(store, {
-      ...options,
-      name: 'Renamed GitHub',
-    });
-
-    expect(second).toBe(first);
-    expect(rowClass.get(core.properties.recommends)).toEqual([
-      core.properties.name,
-    ]);
-    const props = resources.get(first);
-    expect(props?.[core.properties.parent]).toBe('drive');
-    expect(props?.[core.properties.name]).toBe('GitHub');
-    expect(props?.[core.properties.isA]).toContain(appTerms.classes!.app);
-    expect(props?.[core.properties.isA]).not.toContain(
-      dataBrowser.classes.table,
-    );
-    expect(resources.get(accounts)?.[core.properties.parent]).toBe(first);
-    expect(resources.get(accounts)?.[core.properties.isA]).toContain(
-      dataBrowser.classes.table,
-    );
-    expect(resources.get(first)?.[appTerms.properties!['app-data']]).toBe(
-      accounts,
-    );
-    expect(props?.[core.properties.localId]).toBe(
-      platformLocalId(options.proxyOrigin, options.platform),
-    );
   });
 
   it('still recognizes a table after the user moves it', async () => {
@@ -125,44 +103,6 @@ describe('ensureSyncablePlatform', () => {
 
     expect(await findSyncablePlatform(store, input)).toBe(first);
     expect(await ensureSyncablePlatform(store, input)).toBe(first);
-  });
-
-  it('adds the missing Sync tab without changing existing tabs or their default', async () => {
-    const { store, resources } = fakeSchemaStore();
-    const input = {
-      drive: 'drive',
-      proxyOrigin: 'https://proxy.example',
-      platform: 'github-issues',
-      name: 'GitHub',
-    };
-    const subject = await ensureSyncablePlatform(store, input);
-    const appTerms = await findSchema(store, input.drive, pluginSchema());
-    const accounts = resources.get(subject)?.[
-      appTerms.properties!['app-data']
-    ] as string;
-    const table = await store.getResource(accounts);
-    const viewList = dataBrowser.properties.tableViews;
-    const defaultView = dataBrowser.properties.tableDefaultView;
-    const [standard, oldSync] = table.get(viewList) as string[];
-    resources.delete(oldSync);
-    resources.set('custom', {
-      [core.properties.parent]: accounts,
-      [core.properties.isA]: [dataBrowser.classes.view],
-      [dataBrowser.properties.viewKind]: 'kanban',
-    });
-    await table.set(viewList, ['custom', standard]);
-    await table.set(defaultView, 'custom');
-
-    expect(await ensureSyncablePlatform(store, input)).toBe(subject);
-    const nextViews = table.get(viewList) as string[];
-    expect(nextViews).toEqual(['custom', standard, expect.any(String)]);
-    expect(resources.get(nextViews[2])?.[dataBrowser.properties.viewKind]).toBe(
-      'syncables',
-    );
-    expect(table.get(defaultView)).toBe('custom');
-
-    await ensureSyncablePlatform(store, input);
-    expect(table.get(viewList)).toEqual(nextViews);
   });
 
   it('does not adopt an unrelated resource with the platform local ID', async () => {
@@ -208,157 +148,191 @@ describe('ensureSyncablePlatform', () => {
     expect(a).not.toBe(b);
   });
 
-  it('migrates direct account rows and Public without changing remote identities or moved rows', async () => {
+  it('lifts only source-owned principal/Public rows and keeps legacy data and moved descendants', async () => {
     const { store, resources } = fakeSchemaStore();
     const input = {
       drive: 'drive',
       proxyOrigin: 'https://proxy.example',
-      platform: 'github-issues',
-      name: 'GitHub',
+      platform: 'calendar-service',
+      name: 'Calendar',
     };
     const root = await ensureSyncablePlatform(store, input);
-    const appTerms = await findSchema(store, input.drive, pluginSchema());
-    const platform = await findSchema(
-      store,
-      input.drive,
-      syncablePlatformSchema(),
-    );
-    const hierarchy = await ensureSchema(
-      store,
-      input.drive,
-      syncableHierarchySchema(),
-    );
-    const oldAccounts = resources.get(root)![
-      appTerms.properties!['app-data']
-    ] as string;
-    const rootValues = resources.get(root)!;
-    const oldViews = resources.get(oldAccounts)![
-      dataBrowser.properties.tableViews
-    ] as string[];
-    rootValues[core.properties.isA] = [dataBrowser.classes.table];
-    rootValues[core.properties.classtype] =
-      platform.classes!['syncable-account'];
-    rootValues[dataBrowser.properties.tableViews] = oldViews;
-    rootValues[dataBrowser.properties.tableDefaultView] = oldViews[1];
-    delete rootValues[appTerms.properties!['app-data']];
-    delete rootValues[platform.properties!['builtin-app']];
-    resources.delete(oldAccounts);
-    for (const view of oldViews)
-      resources.get(view)![core.properties.parent] = root;
-    resources.set('account', {
+    const app = await findSchema(store, input.drive, pluginSchema());
+    const p = await findSchema(store, input.drive, syncablePlatformSchema());
+    const h = await ensureSchema(store, input.drive, syncableHierarchySchema());
+    resources.set('accounts', {
       [core.properties.parent]: root,
-      [core.properties.isA]: [platform.classes!['syncable-account']],
-      [hierarchy.properties['syncable-source-key']]:
-        'unchanged-remote-account-key',
-    });
-    resources.set('nested-owner', {
-      [core.properties.parent]: 'account',
-      [core.properties.name]: 'saved owner',
-    });
-    resources.set('public', {
-      [core.properties.parent]: root,
+      [core.properties.localId]: 'syncables:accounts',
       [core.properties.isA]: [dataBrowser.classes.table],
-      [hierarchy.properties['syncable-node-kind']]: 'public',
+      [p.properties!['syncable-platform-id']]: input.platform,
+      [p.properties!['syncable-proxy-origin']]: input.proxyOrigin,
+      [dataBrowser.properties.tableViews]: ['view'],
+      [dataBrowser.properties.tableDefaultView]: 'view',
     });
-    resources.set('user-note', {
-      [core.properties.parent]: root,
-      [core.properties.name]: 'leave here',
-    });
+    resources.get(root)![app.properties!['app-data']] = 'accounts';
+    resources.get(root)![p.properties!['syncable-api-document']] = {
+      cached: true,
+    };
+    resources.get(root)![core.properties.write] = ['owner'];
+    resources.get(root)![core.properties.read] = ['reader'];
+
+    const addNode = (
+      subject: string,
+      kind: string,
+      parent = 'accounts',
+      origin = input.proxyOrigin,
+    ) => {
+      const key = JSON.stringify([origin, input.platform, kind, subject, '']);
+      resources.set(subject, {
+        [core.properties.parent]: parent,
+        [core.properties.isA]: [
+          kind === 'account'
+            ? p.classes!['syncable-account']
+            : dataBrowser.classes.table,
+        ],
+        [core.properties.localId]: 'syncables:node:' + encodeURIComponent(key),
+        [h.properties['syncable-source-key']]: key,
+        [h.properties['syncable-node-kind']]: kind,
+      });
+    };
+
+    addNode('account', 'account');
+    addNode('public', 'public');
     resources.set('elsewhere', { [core.properties.parent]: 'drive' });
+    addNode('moved', 'account', 'elsewhere');
+    addNode('foreign', 'account', 'accounts', 'https://other.example');
+    resources.set('view', {
+      [core.properties.parent]: 'accounts',
+      [core.properties.isA]: [dataBrowser.classes.view],
+      [dataBrowser.properties.viewKind]: 'kanban',
+    });
+    resources.set('note', {
+      [core.properties.parent]: 'accounts',
+      [core.properties.name]: 'keep',
+    });
+    resources.set('descendant', { [core.properties.parent]: 'account' });
+    const legacy = JSON.stringify(resources.get('accounts'));
+    const view = JSON.stringify(resources.get('view'));
+    const key = resources.get('account')![h.properties['syncable-source-key']];
+    expect(await ensureSyncablePlatform(store, input)).toBe(root);
+    expect(resources.get(root)![app.properties!['app-data']]).toBe(root);
+    expect(resources.get(root)![core.properties.write]).toEqual(['owner']);
+    expect(resources.get(root)![core.properties.read]).toEqual(['reader']);
+    expect(
+      resources.get(root)![p.properties!['syncable-legacy-accounts']],
+    ).toBe('accounts');
+    expect(resources.get('account')![core.properties.parent]).toBe(root);
+    expect(resources.get('public')![core.properties.parent]).toBe(root);
+    expect(resources.get('account')![h.properties['syncable-source-key']]).toBe(
+      key,
+    );
+    expect(resources.get('descendant')![core.properties.parent]).toBe(
+      'account',
+    );
+    expect(resources.get('moved')![core.properties.parent]).toBe('elsewhere');
+    expect(resources.get('foreign')![core.properties.parent]).toBe('accounts');
+    expect(resources.get('note')![core.properties.parent]).toBe('accounts');
+    expect(JSON.stringify(resources.get('accounts'))).toBe(legacy);
+    expect(JSON.stringify(resources.get('view'))).toBe(view);
+    expect(
+      resources.get(root)![p.properties!['syncable-api-document']],
+    ).toEqual({ cached: true });
+    const after = JSON.stringify([...resources]);
+    expect(await findSyncableLegacyAccounts(store, input.drive, root)).toBe(
+      'accounts',
+    );
+    expect(JSON.stringify([...resources])).toBe(after);
+    await ensureSyncablePlatform(store, input);
+    expect(JSON.stringify([...resources])).toBe(after);
+    // An interrupted migration may already have rebound the runtime root.
+    resources.get('account')![core.properties.parent] = 'accounts';
+    await ensureSyncablePlatform(store, input);
+    expect(resources.get('account')![core.properties.parent]).toBe(root);
+  });
+
+  it('converts a legacy root Table in place and preserves its rows and view links', async () => {
+    const { store, resources } = fakeSchemaStore();
+    const input = {
+      drive: 'drive',
+      proxyOrigin: 'https://proxy.example',
+      platform: 'calendar-service',
+      name: 'Calendar',
+    };
+    const root = await ensureSyncablePlatform(store, input);
+    const app = await findSchema(store, input.drive, pluginSchema());
+    const p = await findSchema(store, input.drive, syncablePlatformSchema());
+    const values = resources.get(root)!;
+    values[core.properties.isA] = [dataBrowser.classes.table];
+    values[dataBrowser.properties.tableViews] = ['view', 'foreign-view'];
+    values[dataBrowser.properties.tableDefaultView] = 'view';
+    delete values[app.properties!['app-data']];
+    delete values[p.properties!['builtin-app']];
+    resources.set('row', { [core.properties.parent]: root });
+    resources.set('view', {
+      [core.properties.parent]: root,
+      [core.properties.isA]: [dataBrowser.classes.view],
+    });
     resources.set('foreign-view', {
       [core.properties.parent]: 'elsewhere',
       [core.properties.isA]: [dataBrowser.classes.view],
     });
-    rootValues[dataBrowser.properties.tableViews] = [
-      ...oldViews,
-      'foreign-view',
-    ];
-    resources.set('moved-account', {
-      [core.properties.parent]: 'elsewhere',
-      [core.properties.isA]: [platform.classes!['syncable-account']],
-    });
-
-    expect(await ensureSyncablePlatform(store, input)).toBe(root);
-    const savedRoot = resources.get(root)!;
-    const accounts = savedRoot[appTerms.properties!['app-data']] as string;
-    expect(accounts).not.toBe(oldAccounts);
-    expect(savedRoot[core.properties.isA]).toContain(appTerms.classes!.app);
-    expect(savedRoot[core.properties.isA]).not.toContain(
-      dataBrowser.classes.table,
-    );
-    expect(resources.get('account')?.[core.properties.parent]).toBe(accounts);
-    expect(
-      resources.get('account')?.[hierarchy.properties['syncable-source-key']],
-    ).toBe('unchanged-remote-account-key');
-    expect(resources.get('nested-owner')?.[core.properties.parent]).toBe(
-      'account',
-    );
-    expect(resources.get('public')?.[core.properties.parent]).toBe(accounts);
-    expect(resources.get('user-note')?.[core.properties.parent]).toBe(root);
-    expect(resources.get('foreign-view')?.[core.properties.parent]).toBe(
-      'elsewhere',
-    );
-    expect(resources.get('moved-account')?.[core.properties.parent]).toBe(
-      'elsewhere',
-    );
-    expect(
-      resources.get(accounts)?.[dataBrowser.properties.tableViews],
-    ).toEqual(oldViews);
-    expect(
-      resources.get(accounts)?.[dataBrowser.properties.tableDefaultView],
-    ).toBe(oldViews[1]);
-    expect(await ensureSyncablePlatform(store, input)).toBe(root);
-    expect(resources.get(root)![appTerms.properties!['app-data']]).toBe(
-      accounts,
-    );
-  });
-
-  it('recovers a partially provisioned App using the saved Accounts child', async () => {
-    const { store, resources } = fakeSchemaStore();
-    const input = {
-      drive: 'drive',
-      proxyOrigin: 'https://proxy.example',
-      platform: 'github-issues',
-      name: 'GitHub',
-    };
-    const root = await ensureSyncablePlatform(store, input);
-    const app = await findSchema(store, input.drive, pluginSchema());
-    const table = resources.get(root)![app.properties!['app-data']];
-    delete resources.get(root)![app.properties!['app-data']];
-    const before = resources.size;
-    expect(await ensureSyncablePlatform(store, input)).toBe(root);
-    expect(resources.get(root)![app.properties!['app-data']]).toBe(table);
-    expect(resources.size).toBe(before);
-  });
-
-  it('recovers listed views already moved by an interrupted legacy migration', async () => {
-    const { store, resources } = fakeSchemaStore();
-    const input = {
-      drive: 'drive',
-      proxyOrigin: 'https://proxy.example',
-      platform: 'github-issues',
-      name: 'GitHub',
-    };
-    const root = await ensureSyncablePlatform(store, input);
-    const app = await findSchema(store, input.drive, pluginSchema());
-    const table = resources.get(root)![app.properties!['app-data']] as string;
-    const views = resources.get(table)![
-      dataBrowser.properties.tableViews
-    ] as string[];
-    resources.get(root)![core.properties.isA] = [dataBrowser.classes.table];
-    resources.get(root)![dataBrowser.properties.tableViews] = views;
-    resources.get(root)![dataBrowser.properties.tableDefaultView] = views[1];
-    resources.get(table)![dataBrowser.properties.tableViews] = [];
-    delete resources.get(table)![dataBrowser.properties.tableDefaultView];
     await ensureSyncablePlatform(store, input);
-    expect(resources.get(table)![dataBrowser.properties.tableViews]).toEqual(
-      views,
-    );
-    expect(resources.get(table)![dataBrowser.properties.tableDefaultView]).toBe(
-      views[1],
-    );
-    expect(resources.get(root)![core.properties.isA]).toContain(
+    expect(resources.get(root)![core.properties.isA]).toEqual([
       app.classes!.app,
+    ]);
+    expect(resources.get(root)![dataBrowser.properties.tableViews]).toEqual([
+      'view',
+      'foreign-view',
+    ]);
+    expect(resources.get(root)![dataBrowser.properties.tableDefaultView]).toBe(
+      'view',
+    );
+    expect(resources.get('row')![core.properties.parent]).toBe(root);
+    expect(resources.get('view')![core.properties.parent]).toBe(root);
+    expect(resources.get('foreign-view')![core.properties.parent]).toBe(
+      'elsewhere',
     );
   });
+
+  it.each(['source', 'parent', 'local-id', 'class', 'outside'])(
+    'rejects a forged legacy %s binding before writes',
+    async attack => {
+      const { store, resources } = fakeSchemaStore();
+      const input = {
+        drive: 'drive',
+        proxyOrigin: 'https://proxy.example',
+        platform: 'calendar-service',
+        name: 'Calendar',
+      };
+      const root = await ensureSyncablePlatform(store, input);
+      const app = await findSchema(store, input.drive, pluginSchema());
+      const p = await findSchema(store, input.drive, syncablePlatformSchema());
+      resources.set('legacy', {
+        [core.properties.parent]: root,
+        [core.properties.localId]: 'syncables:accounts',
+        [core.properties.isA]: [dataBrowser.classes.table],
+        [p.properties!['syncable-platform-id']]: input.platform,
+        [p.properties!['syncable-proxy-origin']]: input.proxyOrigin,
+      });
+      resources.get(root)![app.properties!['app-data']] = 'legacy';
+      const values = resources.get('legacy')!;
+      if (attack === 'source')
+        values[p.properties!['syncable-proxy-origin']] =
+          'https://other.example';
+      if (attack === 'parent') values[core.properties.parent] = 'elsewhere';
+      if (attack === 'local-id') values[core.properties.localId] = 'user-table';
+      if (attack === 'class') values[core.properties.isA] = [app.classes!.app];
+      if (attack === 'outside')
+        values['https://atomicdata.dev/properties/drive'] = 'other-drive';
+      const before = JSON.stringify([...resources]);
+      expect(
+        await findSyncableLegacyAccounts(store, input.drive, root),
+      ).toBeUndefined();
+      expect(JSON.stringify([...resources])).toBe(before);
+      await expect(ensureSyncablePlatform(store, input)).rejects.toThrow(
+        'Accounts',
+      );
+      expect(JSON.stringify([...resources])).toBe(before);
+    },
+  );
 });

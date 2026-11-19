@@ -13547,7 +13547,6 @@ msgid "Report a bug or suggest an improvement. Your message and optional email g
 msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team, samen met technische gegevens over je opstelling (app-versie, serveradres en status). Vermeld geen privé-inhoud uit je werkruimte."
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
-#: src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
 msgstr "GitHub"
 
@@ -13601,9 +13600,8 @@ msgstr "Geïnstalleerde diensten konden niet worden bepaald: {0}"
 msgid "No matching services."
 msgstr "Geen overeenkomende diensten."
 
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "Sync support unavailable"
-msgstr "Synchronisatie niet beschikbaar"
+#~ msgid "Sync support unavailable"
+#~ msgstr "Synchronisatie niet beschikbaar"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Add to Drive"
@@ -13614,9 +13612,8 @@ msgstr "Aan schijf toevoegen"
 msgid "Add {0} to drive"
 msgstr "{0} aan schijf toevoegen"
 
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
-msgstr "Van de ingestelde integratieproxy op <0/>. Voeg GitHub toe om door repository's te bladeren en issues naar je schijf te importeren."
+#~ msgid "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
+#~ msgstr "Van de ingestelde integratieproxy op <0/>. Voeg GitHub toe om door repository's te bladeren en issues naar je schijf te importeren."
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Integration proxy apps"
@@ -13915,10 +13912,29 @@ msgstr "API-selectie voor de integratie"
 msgid "Public catalog consumer selections for the saved API description."
 msgstr "Openbare clientinstellingen uit de catalogus voor de opgeslagen API-beschrijving."
 
-#: src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Accounts"
-msgstr "Accounts"
+#~ msgid "Accounts"
+#~ msgstr "Accounts"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "The app is ready, but its icon could not be loaded."
 msgstr "De app is klaar, maar het pictogram kon niet worden geladen."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Legacy Accounts container"
+msgstr "Oude Accounts-container"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Installation-owned compatibility data retained after moving source roots directly under the App."
+msgstr "Compatibiliteitsgegevens van deze installatie, bewaard nadat de bronresources rechtstreeks onder de app zijn geplaatst."
+
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "This saved source needs migration from its integration App. Moved resources are retained and no replacement will be created from this view."
+msgstr "Deze opgeslagen bron moet vanuit de integratie-app worden gemigreerd. Verplaatste resources blijven behouden en vanuit deze weergave wordt geen vervanging aangemaakt."
+
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "Open integration App"
+msgstr "Integratie-app openen"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
+msgstr "Van de ingestelde integratieproxy op <0/>. Voeg een dienst toe om door de cataloguscollecties te bladeren en gegevens naar je schijf te synchroniseren."

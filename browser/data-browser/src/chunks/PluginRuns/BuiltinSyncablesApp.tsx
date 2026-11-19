@@ -1,4 +1,10 @@
 import { useEffect, useState } from 'react';
+import { findSchema, pluginSchema } from '@tomic/lib';
+import {
+  prepareDocument,
+  describeCollections,
+  type QuerySelection,
+} from 'syncables/browser';
 import {
   useCurrentAgent,
   useServerURL,
@@ -9,6 +15,9 @@ import {
   getIntegrationProxy,
   useIntegrationProxy,
 } from '@helpers/integrationProxy';
+import { AtomicLink } from '@components/AtomicLink';
+import { findSyncablePlatform } from './syncablePlatform';
+import { collectSyncableLegacySources } from './syncableLegacy';
 import { ProxyConnections } from '@helpers/proxyConnections';
 import { AppFrame, type AppFrameProfile } from '@chunks/AppPage/AppFrame';
 import {
@@ -17,12 +26,12 @@ import {
   type AppExecutionSpec,
 } from '@chunks/AppPage/AppExecutionRuntime';
 import { ShowRoute } from '../../routes/ShowRoute';
-import {
-  fetchSyncableDocument,
-  storedSyncableDocument,
-} from './syncableDocument';
+import { fetchSyncableDocument } from './syncableDocument';
+import { syncableApiSchema } from './syncableApiSchema';
 import {
   assertSyncAppDrive,
+  assertSyncAppContext,
+  canonicalSyncAppContext,
   syncAppContext,
   syncProxyTransport,
 } from './builtinSyncablesProfile';
@@ -32,7 +41,7 @@ const executionKey = (drive: string, table: string) =>
 
 /** Only installation/schema bootstrap and capability composition live here.
  * The bundled app owns provider discovery and Atomic data reconciliation. */
-async function appProfile(
+export async function appProfile(
   store: Store,
   drive: string,
   table: string,
@@ -46,7 +55,7 @@ async function appProfile(
   const actorSubject = actor.subject;
   const server = store.getServerUrl();
   const origin = getIntegrationProxy();
-  const context = await syncAppContext(store, drive, table, !worker, selection);
+  let context = await syncAppContext(store, drive, table, !worker, selection);
   const resource = await store.getResource(table);
   const p = context.schema.properties;
   const sourceStamp = () =>
@@ -60,6 +69,7 @@ async function appProfile(
 
   const assertAuthority = () => {
     assertSyncAppDrive(store, drive, table);
+    assertSyncAppContext(context);
     if (
       store.getAgent() !== actor ||
       store.getServerUrl() !== server ||
@@ -87,20 +97,85 @@ async function appProfile(
   const proxy = new ProxyConnections(localStorage, origin, () =>
     store.getAgent(),
   );
-  const metadata = worker
-    ? await fetchSyncableDocument(context.proxyOrigin, signal, context.platform)
-    : await storedSyncableDocument(store, drive, table, context);
+  // Only the configured proxy's current catalog can authorize a provider read.
+  // Editable saved metadata remains presentation data, never additional authority.
+  const metadata = await fetchSyncableDocument(
+    context.proxyOrigin,
+    signal,
+    context.platform,
+  );
+  const document = prepareDocument(metadata.document);
+  const trusted = {
+    document,
+    querySelection: metadata.querySelection as QuerySelection | undefined,
+  };
+  context = canonicalSyncAppContext(context, trusted);
+  const installationApp = await findSyncablePlatform(store, {
+    drive,
+    platform: context.platform,
+    proxyOrigin: context.proxyOrigin,
+  });
+  assertCurrent();
+  if (!installationApp)
+    throw new Error(
+      'The integration installation is unavailable. Its saved sources were retained.',
+    );
+  const appSchema = await findSchema(store, drive, pluginSchema());
+  assertCurrent();
+  const legacy = await collectSyncableLegacySources(store, {
+    drive,
+    app: installationApp,
+    appDataProperty: appSchema.properties?.['app-data'],
+    platform: context.platform,
+    proxyOrigin: context.proxyOrigin,
+    properties: p,
+    collections: describeCollections(document),
+    currentSourceIsLegacy: context.kind === 'legacy',
+  });
+  assertCurrent();
+
+  if (context.kind === 'legacy') {
+    const error = new Error(
+      'This saved source needs migration from its integration App. Moved resources are retained and no replacement will be created from this view.',
+    );
+    Object.assign(error, { installationApp });
+    throw error;
+  }
+
+  const apiSchema = await syncableApiSchema(
+    store,
+    drive,
+    context.proxyOrigin,
+    context.platform,
+    metadata.document,
+    !worker,
+    assertCurrent,
+  );
   assertCurrent();
   const key = executionKey(drive, table);
   const profile: AppFrameProfile = {
     source: server + '/builtin-syncables-ui?format=html',
-    context: { ...context, ...metadata, worker },
+    context: {
+      ...context,
+      document,
+      querySelection: trusted.querySelection,
+      apiSchema,
+      legacySources: legacy.sources,
+      legacyWarnings: legacy.warnings,
+      legacyMigrationBlocked: legacy.warnings.length > 0,
+      worker,
+    },
     access: { root: table, signal, assertCurrent },
-    proxy: syncProxyTransport(proxy, context, () => {
-      assertCurrent();
-      if (status().paused === true)
-        throw new Error('Resume this collection before syncing');
-    }),
+    proxy: syncProxyTransport(
+      proxy,
+      context,
+      () => {
+        assertCurrent();
+        if (status().paused === true)
+          throw new Error('Resume this collection before syncing');
+      },
+      trusted,
+    ),
     execution: async action => {
       assertCurrent();
 
@@ -116,7 +191,7 @@ async function appProfile(
         assertCurrent();
         if (!canWrite)
           throw new Error('Write access to this table is required');
-        if (!['organizations', 'repositories', 'mirror'].includes(context.kind))
+        if (context.kind !== 'collection')
           throw new Error('Select a collection to sync');
         await registry.start(key, async runSignal =>
           appProfile(store, drive, table, registry, runSignal, true),
@@ -134,14 +209,20 @@ async function appProfile(
             const scope = { drive, app: table, appAgent: actorSubject };
 
             if (context.connectionId) {
-              if (!(await proxy.canReconnectGithub(context.connectionId)))
+              if (
+                !(await proxy.canReconnectKeyed(
+                  context.platform,
+                  context.connectionId,
+                ))
+              )
                 throw new Error(
-                  'Connect this account from GitHub’s platform table',
+                  'Open the integration App to reconnect this account',
                 );
               assertCurrent();
 
               return proxy.startKeyedReconnect(
                 scope,
+                context.platform,
                 context.connectionId,
                 location.href,
                 'Atomic Syncables',
@@ -149,7 +230,7 @@ async function appProfile(
             }
 
             if (context.kind !== 'platform')
-              throw new Error('Connect accounts from the platform table');
+              throw new Error('Connect accounts from the integration App');
 
             return proxy.startKeyed(
               scope,
@@ -220,7 +301,10 @@ export function BuiltinSyncablesApp({
     selection?: string;
     profile: AppFrameProfile;
   }>();
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<{
+    message: string;
+    installationApp?: string;
+  }>();
   useEffect(() => {
     if (!registry) return;
     const controller = new AbortController();
@@ -241,12 +325,27 @@ export function BuiltinSyncablesApp({
       })
       .catch(reason => {
         if (!controller.signal.aborted)
-          setError(String(reason.message ?? reason));
+          setError({
+            message: String(reason.message ?? reason),
+            ...(typeof reason.installationApp === 'string'
+              ? { installationApp: reason.installationApp }
+              : {}),
+          });
       });
 
     return () => controller.abort();
   }, [store, drive, table, selection, registry, actor, server, origin]);
-  if (error) return <p role='alert'>{error}</p>;
+  if (error)
+    return (
+      <div role='alert'>
+        <p>{error.message}</p>
+        {error.installationApp && (
+          <AtomicLink subject={error.installationApp}>
+            Open integration App
+          </AtomicLink>
+        )}
+      </div>
+    );
   if (
     !loaded ||
     loaded.table !== table ||

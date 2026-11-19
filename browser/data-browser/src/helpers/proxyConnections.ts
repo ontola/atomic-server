@@ -38,7 +38,6 @@ const PENDING = 'atomic-proxy-connect-v2:';
 const KEYED_CONNECTION = 'atomic-proxy-keyed-v1:';
 const CONNECTION_KEY_HEADER = 'x-connection-key';
 const PROXY_READ_HEADERS = ['link', 'retry-after', 'etag', 'content-type'];
-const GITHUB = 'github-issues';
 const MAX_BODY = 10 * 1024 * 1024;
 const TIMEOUT = 30_000;
 
@@ -69,20 +68,31 @@ interface PendingConnect extends ConnectScope {
   keyed?: {
     owner: string;
     connectionId: string;
-    reconnect?: GithubReconnect;
+    reconnect?: PrincipalReconnect;
   };
 }
 
-interface GithubReconnect {
+export interface ConnectionPrincipal {
+  kind: 'authenticated';
+  namespace: string;
+  subject: string | number;
+  clientContext?: string;
+}
+
+interface PrincipalReconnect {
   slotId: string;
-  githubUserId: string;
+  principal: ConnectionPrincipal;
+  operationId: string;
   previousActiveId: string;
 }
 
 /** Non-secret connection provenance, local to this signed-in browser. */
 interface KeyedConnectionMarker {
   platform: string;
-  githubUserId?: string;
+  principal?: ConnectionPrincipal;
+  operationId?: string;
+  /** Compatibility only: old markers stored a decimal numeric provider ID. */
+  legacyPrincipalId?: string;
   activeId?: string;
   replacement?: true;
 }
@@ -91,15 +101,60 @@ function validConnectionId(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
 }
 
-function githubPrincipal(value: unknown): string | undefined {
-  const id = typeof value === 'number' ? String(value) : value;
+function connectionPrincipal(value: unknown): ConnectionPrincipal | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  const p = value as Partial<ConnectionPrincipal>;
   if (
-    typeof id === 'string' &&
-    /^[1-9][0-9]*$/.test(id) &&
-    Number.isSafeInteger(Number(id))
+    p.kind !== 'authenticated' ||
+    typeof p.namespace !== 'string' ||
+    !p.namespace ||
+    !(
+      (typeof p.subject === 'string' && p.subject.length > 0) ||
+      (typeof p.subject === 'number' && Number.isSafeInteger(p.subject))
+    ) ||
+    (p.clientContext !== undefined &&
+      (typeof p.clientContext !== 'string' || !p.clientContext))
   )
-    return id;
+    return;
+
+  return {
+    kind: 'authenticated',
+    namespace: p.namespace,
+    subject: p.subject,
+    ...(p.clientContext === undefined
+      ? {}
+      : { clientContext: p.clientContext }),
+  };
 }
+
+function samePrincipal(
+  left: ConnectionPrincipal,
+  right: ConnectionPrincipal,
+): boolean {
+  return (
+    left.namespace === right.namespace &&
+    left.subject === right.subject &&
+    left.clientContext === right.clientContext
+  );
+}
+
+export type PrincipalCatalogLoader = (
+  origin: string,
+  platform: string,
+  signal: AbortSignal,
+) => Promise<import('syncables/browser').OpenApiDocument>;
+
+const loadPrincipalCatalog: PrincipalCatalogLoader = async (
+  origin,
+  platform,
+  signal,
+) => {
+  const { fetchSyncableDocument } =
+    await import('@chunks/PluginRuns/syncableDocument');
+
+  return (await fetchSyncableDocument(origin, signal, platform))
+    .document as unknown as import('syncables/browser').OpenApiDocument;
+};
 
 export interface ConnectionReference {
   connectionId: string;
@@ -290,6 +345,7 @@ export class ProxyConnections {
     private agent: () => Agent | undefined,
     private http: typeof fetch = (...args) => fetch(...args),
     private now: () => number = Date.now,
+    private catalog: PrincipalCatalogLoader = loadPrincipalCatalog,
   ) {}
 
   private user(): { agent: Agent; subject: Promise<string> } {
@@ -372,9 +428,10 @@ export class ProxyConnections {
     return this.startKeyedHandoff(scope, platform, returnTo, label, pageOrigin);
   }
 
-  /** Reconnect a stable GitHub slot to a fresh credential for the same user. */
+  /** Reconnect a stable slot to a fresh credential for the same typed principal. */
   async startKeyedReconnect(
     scope: ConnectScope,
+    platform: string,
     slotConnectionId: string,
     returnTo: string,
     label: string,
@@ -382,7 +439,7 @@ export class ProxyConnections {
   ): Promise<string> {
     return this.startKeyedHandoff(
       scope,
-      GITHUB,
+      platform,
       returnTo,
       label,
       pageOrigin,
@@ -400,17 +457,18 @@ export class ProxyConnections {
   ): Promise<string> {
     const signer = this.user();
     const owner = await signer.subject;
-    let reconnect: GithubReconnect | undefined;
+    let reconnect: PrincipalReconnect | undefined;
 
     if (slotId !== undefined) {
-      const slot = this.githubSlot(owner, slotId);
-      if (!slot?.githubUserId)
+      const slot = this.keyedSlot(owner, platform, slotId);
+      if (!slot?.principal || !slot.operationId)
         throw new Error(
-          'A verified GitHub account is required to reconnect this source.',
+          'A verified account identity is required to reconnect this source.',
         );
       reconnect = {
         slotId,
-        githubUserId: slot.githubUserId,
+        principal: slot.principal,
+        operationId: slot.operationId,
         previousActiveId: slot.activeId ?? slotId,
       };
     }
@@ -601,8 +659,9 @@ export class ProxyConnections {
 
       if (keyed.reconnect) {
         try {
-          await this.completeGithubReconnect(
+          await this.completePrincipalReconnect(
             keyed.owner,
+            c.platform,
             connectionId,
             keyed.reconnect,
           );
@@ -682,7 +741,15 @@ export class ProxyConnections {
       if (isPlatformId(marker?.platform)) {
         return {
           platform: marker.platform,
-          githubUserId: githubPrincipal(marker.githubUserId),
+          principal: connectionPrincipal(marker.principal),
+          operationId:
+            typeof marker.operationId === 'string' && marker.operationId
+              ? marker.operationId
+              : undefined,
+          legacyPrincipalId:
+            typeof (marker as Record<string, unknown>).githubUserId === 'string'
+              ? ((marker as Record<string, unknown>).githubUserId as string)
+              : marker.legacyPrincipalId,
           activeId: validConnectionId(marker.activeId)
             ? marker.activeId
             : undefined,
@@ -705,34 +772,49 @@ export class ProxyConnections {
     );
   }
 
-  private githubSlot(
+  private keyedSlot(
     owner: string,
+    platform: string,
     slotId: string,
   ): KeyedConnectionMarker | undefined {
     const marker = this.loadKeyedMarker(owner, slotId);
-    if (marker?.platform === GITHUB && !marker.replacement) return marker;
+    if (marker?.platform === platform && !marker.replacement) return marker;
   }
 
-  async canReconnectGithub(slotId: string): Promise<boolean> {
+  async canReconnectKeyed(platform: string, slotId: string): Promise<boolean> {
     const owner = await this.user().subject;
+    const marker = this.keyedSlot(owner, platform, slotId);
 
-    return Boolean(this.githubSlot(owner, slotId)?.githubUserId);
+    return Boolean(marker?.principal && marker.operationId);
   }
 
-  /** The host calls this after validating a signed /user response. */
-  async rememberKeyedGithubPrincipal(
+  /** Host-only: called after a fresh catalog-declared identity read is verified. */
+  async rememberKeyedPrincipal(
+    platform: string,
     slotId: string,
-    id: string | number,
+    value: ConnectionPrincipal,
+    operationId: string,
   ): Promise<void> {
     const owner = await this.user().subject;
-    const githubUserId = githubPrincipal(id);
-    const marker = this.githubSlot(owner, slotId);
-    if (!githubUserId || !marker)
-      throw new Error('Cannot remember the GitHub account identity.');
-    if (marker.githubUserId && marker.githubUserId !== githubUserId)
-      throw new Error('This connection belongs to a different GitHub account.');
-    if (!marker.githubUserId)
-      this.saveKeyedMarker(owner, slotId, { ...marker, githubUserId });
+    const principal = connectionPrincipal(value);
+    const marker = this.keyedSlot(owner, platform, slotId);
+    if (!principal || !marker || !operationId)
+      throw new Error('Cannot remember the authenticated account identity.');
+    if (
+      (marker.principal && !samePrincipal(marker.principal, principal)) ||
+      (marker.legacyPrincipalId !== undefined &&
+        (typeof principal.subject !== 'number' ||
+          String(principal.subject) !== marker.legacyPrincipalId))
+    )
+      throw new Error(
+        'This connection belongs to a different authenticated principal.',
+      );
+    this.saveKeyedMarker(owner, slotId, {
+      ...marker,
+      principal,
+      operationId,
+      legacyPrincipalId: undefined,
+    });
   }
 
   /** Resolve a saved logical slot to its current, host-only transport ID. */
@@ -748,35 +830,70 @@ export class ProxyConnections {
     return marker.activeId ?? slotId;
   }
 
-  private async completeGithubReconnect(
+  private async completePrincipalReconnect(
     owner: string,
+    platform: string,
     connectionId: string,
-    reconnect: GithubReconnect,
+    reconnect: PrincipalReconnect,
   ): Promise<void> {
-    const response = await this.readKeyed(
-      new URL(`/proxy/${connectionId}/${GITHUB}/user`, this.origin),
+    if (
+      !connectionPrincipal(reconnect.principal) ||
+      !validConnectionId(reconnect.slotId) ||
+      !validConnectionId(reconnect.previousActiveId) ||
+      typeof reconnect.operationId !== 'string' ||
+      !reconnect.operationId
+    )
+      throw new Error('Invalid saved reconnect identity');
+    const { resolveAuthenticatedPrincipal, validatePrincipalRead } =
+      await import('syncables/browser');
+    const document = await this.catalog(
+      this.origin,
+      platform,
+      AbortSignal.timeout(TIMEOUT),
     );
-    if (response.status < 200 || response.status >= 300)
-      throw new Error(
-        'Could not verify the new GitHub connection. Connect again.',
-      );
-    const id = (response.body as { id?: unknown } | null)?.id;
-    if (
-      typeof id !== 'number' ||
-      githubPrincipal(id) !== reconnect.githubUserId
-    )
-      throw new Error(
-        'Reconnect with the same GitHub account to keep your existing tables.',
-      );
+    const resolved = await resolveAuthenticatedPrincipal(document, {
+      operationId: reconnect.operationId,
+      namespace: reconnect.principal.namespace,
+      clientContext: reconnect.principal.clientContext,
+      transport: async request => {
+        if (
+          !validatePrincipalRead(document, request, {
+            operationId: reconnect.operationId,
+            namespace: reconnect.principal.namespace,
+          })
+        )
+          throw new Error('Invalid authenticated principal operation');
+        const target = new URL(
+          '/proxy/' +
+            encodeURIComponent(connectionId) +
+            '/' +
+            platform +
+            request.url.pathname,
+          this.origin,
+        );
+        target.search = request.url.search;
+        const response = await this.readKeyed(target);
 
-    const slot = this.githubSlot(owner, reconnect.slotId);
-    if (
-      slot?.githubUserId !== reconnect.githubUserId ||
-      (slot.activeId ?? reconnect.slotId) !== reconnect.previousActiveId
-    )
+        return { ...response, body: JSON.stringify(response.body) };
+      },
+    });
+    const principal = connectionPrincipal({
+      ...resolved,
+      kind: 'authenticated',
+    });
+    if (!principal || !samePrincipal(principal, reconnect.principal))
       throw new Error(
-        'The GitHub connection changed during reconnect. Try again.',
+        'Reconnect with the same authenticated account to keep your existing tables.',
       );
+    const slot = this.keyedSlot(owner, platform, reconnect.slotId);
+    if (
+      !slot?.principal ||
+      !samePrincipal(slot.principal, reconnect.principal) ||
+      slot.operationId !== reconnect.operationId ||
+      (slot.activeId ?? reconnect.slotId) !== reconnect.previousActiveId ||
+      (await this.user().subject) !== owner
+    )
+      throw new Error('The connection changed during reconnect. Try again.');
     this.saveKeyedMarker(owner, reconnect.slotId, {
       ...slot,
       activeId: connectionId,
@@ -803,7 +920,7 @@ export class ProxyConnections {
       if (marker?.platform !== platform || marker.replacement) continue;
       const row = remote.get(marker.activeId ?? slotId);
       if (row) slots.push({ ...row, connection_id: slotId });
-      else if (platform === GITHUB && marker.githubUserId)
+      else if (marker.principal || marker.legacyPrincipalId)
         slots.push({ connection_id: slotId, platform, owner, delegations: [] });
     }
 
@@ -818,12 +935,18 @@ export class ProxyConnections {
   async readKeyed(
     url: URL,
     signal?: AbortSignal,
+    request: { method: 'GET' | 'POST'; body?: string } = { method: 'GET' },
   ): Promise<{
     status: number;
     headers: Record<string, string>;
     body: unknown;
   }> {
     signal?.throwIfAborted();
+    if (
+      !['GET', 'POST'].includes(request.method) ||
+      (request.method === 'GET' && request.body !== undefined)
+    )
+      throw new Error('Invalid catalog read request');
     const target = new URL(url.href);
     if (
       target.origin !== this.origin ||
@@ -853,16 +976,27 @@ export class ProxyConnections {
     );
     const time = this.now();
     const message = requestSignatureMessageV2(
-      'GET',
+      request.method,
       target.href,
       time,
-      sha256Hex(undefined),
+      sha256Hex(request.body),
     );
+    const publicKey = await agent.getPublicKey();
+    const signature = await agent.sign(message + '\n' + sha256Hex(key));
+    signal?.throwIfAborted();
+    if ((await this.user().subject) !== owner)
+      throw new Error(
+        'The Atomic account changed before the integration request',
+      );
     const response = await this.http(target.href, {
-      method: 'GET',
+      method: request.method,
+      ...(request.body === undefined ? {} : { body: request.body }),
       headers: {
-        'x-atomic-public-key': await agent.getPublicKey(),
-        'x-atomic-signature': await agent.sign(message + '\n' + sha256Hex(key)),
+        ...(request.body === undefined
+          ? {}
+          : { 'content-type': 'application/json' }),
+        'x-atomic-public-key': publicKey,
+        'x-atomic-signature': signature,
         'x-atomic-timestamp': String(time),
         'x-atomic-agent': owner,
         [SIGNATURE_VERSION_HEADER]: '2',

@@ -1,11 +1,25 @@
 // @wc-ignore-file
 import {
   prepareDocument,
-  describePlatform,
-  readCollections,
+  describeCollections,
+  bindCollection,
+  bindCollectionNavigation,
+  relatedCollectionReads,
+  resolveCollectionNavigation,
+  readBoundCollection,
+  resolveAuthenticatedPrincipal,
+  projectReadRecord,
+  ontologyShortname,
+  deriveOntology,
 } from 'syncables/browser';
+import {
+  canonicalValue,
+  collectionIdentity,
+  principalIdentity,
+  sourceKey,
+  sourceConfigFingerprint,
+} from './builtinSyncIdentity.js';
 
-/** Server-delivered GitHub sync app. All I/O uses the shared app bridge. */
 const P = 'https://atomicdata.dev/properties/';
 const core = Object.fromEntries(
   ['name', 'localId', 'parent', 'isA', 'classtype'].map(key => [key, P + key]),
@@ -15,53 +29,70 @@ const viewClass = 'https://atomicdata.dev/classes/View';
 const tableViews = P + 'table-views';
 const defaultView = P + 'table-default-view';
 const viewKind = P + 'view-kind';
-const validId = value =>
-  Number.isSafeInteger(Number(value)) && /^[1-9][0-9]*$/.test(String(value));
-const validLogin = value =>
-  typeof value === 'string' &&
-  /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/i.test(value);
-const validRepo = value =>
-  typeof value === 'string' &&
-  /^[a-z0-9._-]{1,100}$/i.test(value) &&
-  !['.', '..'].includes(value);
-const nonnegative = value => Number.isSafeInteger(value) && value >= 0;
-const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+const same = (left, right) =>
+  JSON.stringify(canonicalValue(left)) ===
+  JSON.stringify(canonicalValue(right));
 
-export function sourceKeys(
-  origin,
-  kind,
-  remoteId,
-  connectionId,
-  collection = '',
-) {
-  const identity = [origin, 'github-issues', kind, remoteId, collection];
-  const legacy = JSON.stringify(identity);
-
-  return kind === 'repositories' || kind === 'mirror'
-    ? [JSON.stringify([...identity, connectionId]), legacy]
-    : [legacy];
-}
-
-/** Domain logic stays in the sync app; its store has host-selected write bounds. */
+/** Catalog interpretation belongs to Syncables; all I/O uses the shared app store. */
 export function createSyncApp(store, context) {
-  const terms = context.schema;
+  const root = context.subject;
 
   const property = name => {
-    const subject = terms.properties[name];
-    if (!subject) throw new Error('The GitHub schema is unavailable');
+    const subject = context.schema?.properties[name];
+    if (!subject) throw new Error('The Sync schema is unavailable');
 
     return subject;
   };
 
   const klass = name => {
-    const subject = terms.classes[name];
-    if (!subject) throw new Error('The GitHub row schema is unavailable');
+    const subject = context.schema?.classes[name];
+    if (!subject) throw new Error('The Sync row schema is unavailable');
 
     return subject;
   };
 
-  const origin = context.proxyOrigin;
-  const root = context.subject;
+  let document;
+
+  const readDocument = () => {
+    if (!context.document)
+      throw new Error('The integration API description is unavailable');
+
+    return (document ??= prepareDocument(context.document));
+  };
+
+  let catalog;
+  const descriptions = () => (catalog ??= describeCollections(readDocument()));
+
+  const description = name => {
+    const matches = descriptions().filter(item => item.name === name);
+    if (matches.length !== 1)
+      throw new Error('Unknown or ambiguous collection ' + name);
+
+    return matches[0];
+  };
+
+  const identity = values =>
+    sourceKey({
+      proxyOrigin: context.proxyOrigin,
+      platform: context.platform,
+      principal: context.principal,
+      ...values,
+    });
+
+  const configuration = values => {
+    const principal = principalIdentity(values.principal ?? context.principal);
+
+    return {
+      version: 2,
+      proxyOrigin: context.proxyOrigin,
+      platform: context.platform,
+      ...(principal.kind !== 'public' && context.connectionId
+        ? { connectionId: context.connectionId }
+        : {}),
+      ...values,
+      principal,
+    };
+  };
 
   async function queryAll(args) {
     const subjects = [];
@@ -91,7 +122,7 @@ export function createSyncApp(store, context) {
   async function withinRoot(subject) {
     const seen = new Set();
 
-    for (let depth = 0; subject && depth < 32 && !seen.has(subject); depth++) {
+    for (let depth = 0; subject && depth < 64 && !seen.has(subject); depth++) {
       if (subject === root) return true;
       seen.add(subject);
       subject = (await store.getResource(subject)).get(core.parent);
@@ -100,60 +131,138 @@ export function createSyncApp(store, context) {
     return false;
   }
 
-  async function patch(row, values) {
-    // Finding a moved resource is not permission to update it from its old parent.
+  async function patch(row, values, remove = []) {
+    // A global source lookup never extends this frame's host-selected write scope.
     if (!(await withinRoot(row.subject))) return false;
     const changed = Object.entries(values).filter(
       ([key, value]) => value !== undefined && !same(row.get(key), value),
     );
+    const removed = remove.filter(key => row.get(key) !== undefined);
     for (const [key, value] of changed) row.set(key, value);
-    if (changed.length) await row.save();
+    for (const key of removed) row.remove(key);
+    if (changed.length || removed.length) await row.save();
 
-    return changed.length > 0;
+    return changed.length > 0 || removed.length > 0;
   }
 
-  async function findNode(keys) {
-    for (const key of keys) {
-      const subjects = await store.query({
-        property: core.localId,
-        value: 'syncables:node:' + encodeURIComponent(key),
-      });
-      if (subjects.length > 1)
-        throw new Error('The GitHub source identity is ambiguous');
+  const legacyMatches = new Map();
 
-      if (subjects.length) {
-        const found = await store.getResource(subjects[0]);
-        const [, , kind, remoteId] = JSON.parse(keys[0]);
-        if (
-          found.error ||
-          !keys.includes(found.get(property('syncable-source-key'))) ||
-          found.get(property('syncable-node-kind')) !== kind ||
-          ([
-            'organizations',
-            'repositories',
-            'mirror',
-            'public',
-            'public-mirror',
-          ].includes(kind) &&
-            !found.hasClasses(tableClass))
-        )
+  async function legacyNode(key, config) {
+    const desired = JSON.parse(key);
+    const matches = [];
+
+    for (const alias of context.legacySources ?? []) {
+      if (
+        alias.kind !== desired.kind ||
+        !same(alias.collection, desired.collection) ||
+        !same(alias.remoteId, desired.remoteId)
+      )
+        continue;
+      if (
+        alias.principal
+          ? !same(principalIdentity(alias.principal), desired.principal)
+          : !alias.connectionId || alias.connectionId !== config?.connectionId
+      )
+        continue;
+
+      if (desired.parentSourceKey) {
+        const parent = alias.parentSourceSubject
+          ? await store.getResource(alias.parentSourceSubject)
+          : undefined;
+        if (parent?.error)
+          throw new Error('The legacy source parent could not be validated');
+        const parentKey = parent
+          ? parent.get(property('syncable-source-key'))
+          : alias.parentSourceKey;
+        if (!parentKey)
           throw new Error(
-            'The GitHub source identity does not match its resource',
+            'The legacy source parent needs adoption before syncing',
           );
-        const config = found.get(property('syncable-source-config'));
-        if (
-          keys.length > 1 &&
-          (config?.connectionId !== JSON.parse(keys[0])[5] ||
-            remoteId !==
-              (kind === 'repositories'
-                ? 'github-owner:' + config?.ownerId
-                : 'github-repo:' + config?.repoId))
-        )
-          continue;
-
-        return found;
+        if (parentKey !== desired.parentSourceKey) continue;
       }
+
+      const row = await store.getResource(alias.subject);
+      if (
+        row.error ||
+        (alias.sourceKey !== undefined &&
+          row.get(property('syncable-source-key')) !== alias.sourceKey) ||
+        (alias.localId !== undefined &&
+          row.get(core.localId) !== alias.localId) ||
+        (alias.sourceConfigFingerprint !== undefined &&
+          sourceConfigFingerprint(
+            row.get(property('syncable-source-config')),
+          ) !== alias.sourceConfigFingerprint) ||
+        (alias.remoteIdProperty !== undefined &&
+          row.get(alias.remoteIdProperty) !== alias.remoteId)
+      )
+        throw new Error(
+          'The legacy source changed or could not be validated; no duplicate was created',
+        );
+      matches.push(row);
+      legacyMatches.set(row.subject, alias);
     }
+
+    if (new Set(matches.map(row => row.subject)).size > 1)
+      throw new Error('The legacy source identity is ambiguous');
+
+    return matches[0];
+  }
+
+  async function findNode(key, expectedClass, kind, config = context) {
+    const aliases = context.identityAliases?.[key] ?? [];
+
+    for (const candidate of [key, ...aliases]) {
+      const matches = await resources({
+        property: property('syncable-source-key'),
+        value: candidate,
+      });
+      if (matches.length > 1)
+        throw new Error('The source identity is ambiguous');
+      if (!matches.length) continue;
+      const row = matches[0];
+      if (
+        !row.hasClasses(expectedClass) ||
+        (!aliases.includes(candidate) &&
+          row.get(property('syncable-node-kind')) !== kind)
+      )
+        throw new Error('The source identity does not match its resource');
+
+      return row;
+    }
+
+    return legacyNode(key, config);
+  }
+
+  async function updateNode(
+    row,
+    { key, kind, isA, values, parent },
+    remove = [],
+  ) {
+    const migrated = row.get(property('syncable-source-key')) !== key;
+    const alias = legacyMatches.get(row.subject);
+    const relocate =
+      migrated &&
+      alias?.reparentToLogicalParent &&
+      alias.previousParent === row.get(core.parent) &&
+      parent &&
+      (await withinRoot(row.subject)) &&
+      (await withinRoot(parent));
+
+    return patch(
+      row,
+      {
+        ...(migrated
+          ? {
+              [property('syncable-source-key')]: key,
+              [property('syncable-node-kind')]: kind,
+              [core.isA]: [...new Set([...(row.get(core.isA) ?? []), ...isA])],
+            }
+          : {}),
+        ...(relocate ? { [core.parent]: parent } : {}),
+        ...values,
+      },
+      remove,
+    );
   }
 
   async function ensureViews(row) {
@@ -163,9 +272,10 @@ export function createSyncApp(store, context) {
       .filter(definition => !definition.error)
       .map(definition => definition.get(viewKind));
     const added = [];
-    let sync;
+    let browse;
 
     for (const [name, kind] of [
+      ['Browse', 'syncable-collection'],
       ['Table', 'table'],
       ['Sync', 'syncables'],
     ]) {
@@ -176,595 +286,290 @@ export function createSyncApp(store, context) {
         propVals: { [core.name]: name, [viewKind]: kind },
       });
       added.push(definition.subject);
-      if (kind === 'syncables') sync = definition.subject;
+      if (kind === 'syncable-collection') browse = definition.subject;
     }
 
     if (added.length)
       await patch(row, {
         [tableViews]: [...subjects, ...added],
-        ...(!subjects.length && !row.get(defaultView) && sync
-          ? { [defaultView]: sync }
-          : {}),
+        ...(!row.get(defaultView) && browse ? { [defaultView]: browse } : {}),
       });
   }
 
-  async function ensureNode({
-    kind,
-    remoteId,
-    name,
-    parent,
-    config,
-    ownerKind,
-    collection = '',
-    metadata = {},
-  }) {
-    const keys = sourceKeys(
-      origin,
+  async function ensureNode({ key, kind, parent, name, isA, values = {} }) {
+    let row = await findNode(
+      key,
+      isA[0],
       kind,
-      remoteId,
-      config?.connectionId,
-      collection,
+      values[property('syncable-source-config')],
     );
-    let row = await findNode(keys);
-    const isTable = [
-      'organizations',
-      'repositories',
-      'mirror',
-      'public',
-      'public-mirror',
-    ].includes(kind);
 
     if (row) {
-      await patch(row, metadata);
+      await updateNode(row, { key, kind, isA, values, parent });
+      if (isA.includes(tableClass) && (await withinRoot(row.subject)))
+        await ensureViews(row);
 
       return row;
     }
 
     if (!(await withinRoot(parent)))
       throw new Error(
-        'Open the moved GitHub resource to sync at its current location',
+        'Open the moved resource to sync at its current location',
       );
-    const rowClass =
-      kind === 'organizations' || kind === 'public'
-        ? klass('syncable-owner')
-        : kind === 'repositories'
-          ? klass('syncable-repository')
-          : klass('syncable-record');
-    const ownClass =
-      kind === 'account'
-        ? klass('syncable-account')
-        : kind === 'owner' || kind === 'public-owner'
-          ? klass('syncable-owner')
-          : klass('syncable-repository');
+    if (context.legacyMigrationBlocked)
+      throw new Error(
+        'Review the historical source warnings before creating another sync destination',
+      );
     row = await store.newResource({
       parent,
-      isA: [isTable ? tableClass : ownClass],
+      isA,
       propVals: {
         [core.name]: name,
-        [core.localId]: 'syncables:node:' + encodeURIComponent(keys[0]),
-        [property('syncable-source-key')]: keys[0],
+        [core.localId]: 'syncables:node:' + encodeURIComponent(key),
+        [property('syncable-source-key')]: key,
         [property('syncable-node-kind')]: kind,
-        ...(config ? { [property('syncable-source-config')]: config } : {}),
-        ...(ownerKind ? { [property('syncable-owner-kind')]: ownerKind } : {}),
-        ...(isTable ? { [core.classtype]: rowClass } : {}),
-        ...metadata,
+        ...values,
       },
     });
-    if (isTable) await ensureViews(row);
+    if (isA.includes(tableClass)) await ensureViews(row);
 
     return row;
   }
 
-  async function request(
-    path,
-    { connectionId = context.connectionId, query } = {},
-  ) {
-    const response = await store.proxy.request({
-      platform: 'github-issues',
-      connectionId,
-      method: 'GET',
-      path,
-      query,
-    });
-    if (response.status < 200 || response.status >= 300)
-      throw new Error('GitHub read failed (HTTP ' + response.status + ').');
-
-    return response;
-  }
-
-  let document;
-
-  function readDocument() {
-    if (!document) {
-      if (!context.document)
-        throw new Error('The integration API description is unavailable');
-      document = prepareDocument(context.document);
-      const description = describePlatform(document);
-      if (new URL(description.upstream).href !== 'https://api.github.com/')
-        throw new Error('The GitHub API description has an unexpected server');
-    }
-
-    return document;
-  }
-
-  async function readCollection(
-    name,
-    connectionId = context.connectionId,
-    optional = false,
-  ) {
-    const doc = readDocument();
-    if (!describePlatform(doc).collections.includes(name))
-      throw new Error('The API description has no collection ' + name);
-    const result = await readCollections(doc, {
-      collectionNames: [name],
-      constants: context.repoId ? { repository_id: context.repoId } : {},
-      selection: context.querySelection,
-      limits: {
-        maxRequests: context.mode === 'public' ? 40 : 20,
-        maxRecords: 4000,
-        timeoutMs: 120000,
-        maxRetries: 0,
-      },
-      transport: async ({ url, method, body }) => {
-        if (
-          url.origin !== 'https://api.github.com' ||
-          url.username ||
-          url.password ||
-          url.hash ||
-          method !== 'GET' ||
-          body !== undefined
-        )
-          throw new Error('This Sync app only reads the selected GitHub API');
-        const query = Object.fromEntries(url.searchParams);
-        if (Object.keys(query).length !== [...url.searchParams].length)
-          throw new Error('Repeated GitHub query parameters are not supported');
-        const response = await request(url.pathname.slice(1), {
-          connectionId,
-          query,
-        });
-
-        return {
-          status: response.status,
-          headers: response.headers,
-          body: JSON.stringify(response.body),
-        };
-      },
-    });
-    const snapshot = result.collections.find(
-      entry => entry.collection.name === name,
-    );
-    if (!snapshot)
+  async function transport(request, connectionId = context.connectionId) {
+    if (context.principal?.kind === 'public') connectionId = undefined;
+    const { url, method, body } = request;
+    if (
+      url.username ||
+      url.password ||
+      url.hash ||
+      !['GET', 'POST'].includes(method)
+    )
       throw new Error(
-        result.errors[0] ?? 'The selected collection was not read',
+        'The catalog read is outside the supported request scope',
       );
-    if (snapshot.error && !snapshot.items.length && !optional)
-      throw new Error(snapshot.error);
-
-    return snapshot;
-  }
-
-  function readState(...snapshots) {
-    const error = snapshots
-      .map(snapshot => snapshot.error ?? snapshot.notComplete)
-      .filter(Boolean)
-      .join('; ');
-
-    return {
-      incomplete: snapshots.some(snapshot => !snapshot.complete),
-      ...(error ? { error } : {}),
-    };
-  }
-
-  async function collectionView(table, rowClass, title, columns) {
-    await patch(table, {
-      [property('syncable-collection-view')]: {
-        version: 1,
-        rowClass: klass(rowClass),
-        title,
-        columns,
-        openTargetProperty: property('syncable-open-target'),
-      },
+    const query = Object.fromEntries(url.searchParams);
+    if (Object.keys(query).length !== [...url.searchParams].length)
+      throw new Error(
+        'Repeated query parameters cannot be represented by this bridge',
+      );
+    const response = await store.proxy.request({
+      platform: context.platform,
+      ...(connectionId ? { connectionId } : {}),
+      path: url.pathname.slice(1),
+      method,
+      query,
+      ...(body !== undefined ? { body } : {}),
     });
-  }
 
-  function collectionSchema(collection) {
-    const schema =
-      readDocument().components?.crudResources?.[collection.resource]?.schema;
-    if (!schema?.properties)
-      throw new Error('The selected collection has no row schema');
-
-    return schema;
-  }
-
-  // Only the field-to-Atomic-property bindings are specific to this storage
-  // projection. Titles, column labels and enum labels come from the API schema.
-  function boundColumns(schema, bindings) {
-    return bindings
-      .filter(([field]) => schema.properties[field])
-      .map(([field, boundProperty, values]) => {
-        const fieldSchema = schema.properties[field];
-        const labels = Object.fromEntries(
-          (fieldSchema.oneOf ?? [])
-            .filter(
-              option =>
-                option.enum?.length === 1 && typeof option.title === 'string',
-            )
-            .map(option => [
-              values?.[option.enum[0]] ?? String(option.enum[0]),
-              option.title,
-            ]),
-        );
-
-        return {
-          property: boundProperty,
-          label: fieldSchema.title ?? field.replaceAll('_', ' '),
-          ...(Object.keys(labels).length
-            ? { format: 'enum', labels }
-            : fieldSchema.type === 'integer' && fieldSchema.minimum === 0
-              ? { format: 'count' }
-              : {}),
-        };
-      });
-  }
-
-  function repositoryColumns(collection) {
-    const schema = collectionSchema(collection);
-    const bindings = [
-      ['name', core.name],
-      ['private', property('syncable-repository-private')],
-      ['open_issues_count', property('syncable-repository-open-issues')],
-      ['has_issues', property('syncable-repository-has-issues')],
-    ];
-
-    return boundColumns(schema, bindings);
-  }
-
-  async function ownerView(table, collection, childCollection) {
-    const schema = collectionSchema(collection);
-    const childSchema = collectionSchema(childCollection);
-    await collectionView(
-      table,
-      'syncable-owner',
-      schema.title ??
-        table.get(core.name) ??
-        collection.name ??
-        collection.resource,
-      [
-        ...boundColumns(schema, [
-          ['login', core.name],
-          [
-            'type',
-            property('syncable-owner-kind'),
-            { Organization: 'organization', User: 'personal' },
-          ],
-        ]),
-        {
-          property: property('syncable-repository-count'),
-          label:
-            childSchema.title ??
-            childCollection.name ??
-            childCollection.resource,
-          format: 'count',
-        },
-      ],
-    );
-  }
-
-  async function openTarget(row, target) {
-    // A moved resource keeps its identity; it is no longer this row's child.
-    if (
-      target.get(core.parent) === row.subject &&
-      (await withinRoot(target.subject))
-    )
-      await patch(row, { [property('syncable-open-target')]: target.subject });
-  }
-
-  function repoMetadata(repo) {
     return {
-      ...(typeof repo.private === 'boolean'
-        ? { [property('syncable-repository-private')]: repo.private }
-        : {}),
-      ...(typeof repo.has_issues === 'boolean'
-        ? { [property('syncable-repository-has-issues')]: repo.has_issues }
-        : {}),
-      ...(nonnegative(repo.open_issues_count)
-        ? {
-            [property('syncable-repository-open-issues')]:
-              repo.open_issues_count,
-          }
-        : {}),
+      status: response.status,
+      headers: response.headers,
+      body: JSON.stringify(response.body),
     };
   }
 
-  function repository(repo) {
-    if (
-      !validId(repo?.id) ||
-      !validRepo(repo?.name) ||
-      !validId(repo?.owner?.id) ||
-      !validLogin(repo?.owner?.login)
-    )
-      throw new Error('GitHub returned an invalid repository');
+  const rowClass = collection => {
+    const subject =
+      context.apiSchema?.classes[ontologyShortname(collection.resource)];
+    if (!subject) throw new Error('The catalog row schema is unavailable');
 
-    return repo;
+    return subject;
+  };
+
+  function collectionView(collection) {
+    const columns = (collection.presentation?.columns ?? [])
+      .flatMap(column => {
+        const subject = context.apiSchema?.properties[column.property];
+
+        return subject
+          ? [
+              {
+                property: subject,
+                label: column.label,
+                ...(column.labels
+                  ? { format: 'enum', labels: column.labels }
+                  : {}),
+              },
+            ]
+          : [];
+      })
+      .slice(0, 40);
+
+    return {
+      version: 1,
+      rowClass: rowClass(collection),
+      title: collection.presentation?.title ?? collection.name,
+      columns: columns.length
+        ? columns
+        : [{ property: core.name, label: 'Name' }],
+      openTargetProperty: property('syncable-open-target'),
+    };
   }
 
-  async function ensureRepository(repo, parent, connectionId) {
-    repository(repo);
-    const config = {
-      connectionId,
-      ownerId: String(repo.owner.id),
-      ownerLogin: repo.owner.login,
-      repoId: String(repo.id),
-      repoName: repo.name,
-    };
+  async function ensureCollection({
+    parent = root,
+    principal = context.principal,
+    connectionId = context.connectionId,
+    bound,
+    navigation,
+    parentSourceKey,
+  }) {
+    const collection = description(bound?.collection ?? navigation.collection);
+    const key = identity({
+      kind: 'collection',
+      principal,
+      collection: collectionIdentity(bound, navigation),
+      parentSourceKey,
+    });
 
     return ensureNode({
-      kind: 'repository',
-      remoteId: 'github-repo:' + repo.id,
-      name: repo.name,
+      key,
+      kind: 'collection',
       parent,
-      config,
-      metadata: repoMetadata(repo),
+      name: collection.presentation?.title ?? collection.name,
+      isA: [tableClass],
+      values: {
+        [core.classtype]: rowClass(collection),
+        [property('syncable-source-config')]: configuration({
+          principal: principalIdentity(principal),
+          ...(principal.kind !== 'public' && connectionId
+            ? { connectionId }
+            : {}),
+          ...(bound ? { collection: bound } : {}),
+          ...(navigation ? { navigation } : {}),
+          ...(parentSourceKey ? { parentSourceKey } : {}),
+        }),
+        [property('syncable-collection-view')]: collectionView(collection),
+      },
     });
   }
 
-  async function refreshOrganizations(
-    table = root,
-    connectionId = context.connectionId,
-  ) {
-    const repositories = await readCollection(
-      'githubRepositories',
-      connectionId,
-    );
-    const repos = new Map(
-      repositories.items.map(record => [String(repository(record).id), record]),
-    );
-    const found = new Map(
-      [...repos.values()].map(repo => [
-        String(repo.owner.id),
-        {
-          ...repo.owner,
-          type:
-            repo.owner.type === 'Organization' ? 'organization' : 'personal',
-        },
-      ]),
-    );
-    const { body: profile } = await request('user', { connectionId });
-    if (!validId(profile?.id) || !validLogin(profile?.login))
-      throw new Error('GitHub returned an invalid account');
-    found.set(String(profile.id), {
-      id: profile.id,
-      login: profile.login,
-      type: 'personal',
-    });
-    const organizations = await readCollection(
-      'githubOrganizations',
-      connectionId,
-      true,
-    );
-    await ownerView(
-      await store.getResource(table),
-      organizations.collection,
-      repositories.collection,
-    );
-    const columns = repositoryColumns(repositories.collection);
+  async function discoverCollections(principalTable, principal, connectionId) {
+    const created = [];
 
-    for (const owner of organizations.items) {
-      if (!validId(owner?.id) || !validLogin(owner?.login))
-        throw new Error('GitHub returned an invalid organization');
-      found.set(String(owner.id), { ...owner, type: 'organization' });
+    for (const collection of descriptions()) {
+      // Unbound roots are available immediately; parameterized instances are explicit form choices.
+      if (
+        collection.contextParams.length ||
+        collection.relationships.length ||
+        (principal.kind === 'public' && !collection.allowsAnonymous)
+      )
+        continue;
+      const bound = bindCollection(readDocument(), {
+        collection: collection.name,
+        selection: context.querySelection,
+      });
+      created.push(
+        await ensureCollection({
+          parent: principalTable.subject,
+          principal,
+          connectionId,
+          bound,
+        }),
+      );
     }
 
-    for (const owner of found.values()) {
-      const selected = [...repos.values()].filter(
-        repo => String(repo.owner.id) === String(owner.id),
-      );
-      const config = {
-        connectionId,
-        ownerId: String(owner.id),
-        ownerLogin: owner.login,
-      };
-      const row = await ensureNode({
-        kind: 'owner',
-        parent: table,
-        remoteId: 'github-owner:' + owner.id,
-        name: owner.login,
-        ownerKind: owner.type,
-        config,
-        metadata: repositories.complete
-          ? { [property('syncable-repository-count')]: selected.length }
-          : {},
-      });
-      if (!(await withinRoot(row.subject))) continue;
-      const listing = await ensureNode({
-        kind: 'repositories',
-        parent: row.subject,
-        remoteId: 'github-owner:' + owner.id,
-        name: 'Repositories',
-        config,
-      });
-      if (!(await withinRoot(listing.subject))) continue;
-      await collectionView(
-        listing,
-        'syncable-repository',
-        collectionSchema(repositories.collection).title ??
-          listing.get(core.name),
-        columns,
-      );
-      await openTarget(row, listing);
-      for (const repo of selected)
-        await ensureRepository(repo, listing.subject, connectionId);
-    }
-
-    return { rows: found.size, ...readState(repositories, organizations) };
+    return created;
   }
 
-  async function refreshRepositories() {
-    const snapshot = await readCollection('githubRepositories');
-    await collectionView(
-      await store.getResource(root),
-      'syncable-repository',
-      collectionSchema(snapshot.collection).title ??
-        (await store.getResource(root)).get(core.name),
-      repositoryColumns(snapshot.collection),
-    );
-    const repos = new Map(
-      snapshot.items
-        .filter(repo => String(repository(repo).owner.id) === context.ownerId)
-        .map(repo => [String(repo.id), repo]),
-    );
-    for (const repo of repos.values())
-      await ensureRepository(repo, root, context.connectionId);
-
-    return { rows: repos.size, ...readState(snapshot) };
-  }
-
-  async function openSync(row) {
-    if (await withinRoot(row.subject)) await ensureViews(row);
-    const definitions = await store.getMany(row.get(tableViews) ?? []);
-    const sync = definitions.find(
-      definition =>
-        !definition.error && definition.get(viewKind) === 'syncables',
-    );
-    await store.ui.openResource(sync?.subject ?? row.subject);
-  }
-
-  async function openAccount(connectionId) {
-    const { body: profile } = await request('user', { connectionId });
-    if (!validId(profile?.id) || !validLogin(profile?.login))
-      throw new Error('GitHub returned an invalid account');
-    const account = await ensureNode({
-      kind: 'account',
-      parent: root,
-      remoteId: connectionId,
-      name: profile.login,
-      config: { connectionId, ownerLogin: profile.login },
+  async function openPrincipal(connectionId, navigate = true) {
+    const principal = await resolveAuthenticatedPrincipal(readDocument(), {
+      clientContext: context.clientContext,
+      transport: request => transport(request, connectionId),
     });
-    const listing = await ensureNode({
-      kind: 'organizations',
-      parent: account.subject,
-      remoteId: connectionId,
-      name: 'Organizations',
-      config: { connectionId },
-    });
-    await openTarget(account, listing);
-    await openSync(listing);
-
-    return listing;
-  }
-
-  async function openPublic() {
+    const durable = principalIdentity(principal);
+    const key = identity({ kind: 'principal', principal: durable });
     const row = await ensureNode({
-      kind: 'public',
+      key,
+      kind: 'principal',
       parent: root,
-      remoteId: 'github-public',
-      name: 'Public',
+      name: principal.claims.name ?? String(principal.subject),
+      isA: [tableClass, klass('syncable-principal')],
+      values: {
+        [core.classtype]: tableClass,
+        [property('syncable-source-config')]: {
+          version: 2,
+          proxyOrigin: context.proxyOrigin,
+          platform: context.platform,
+          principal: durable,
+          connectionId,
+        },
+        [property('syncable-collection-view')]: {
+          version: 1,
+          rowClass: tableClass,
+          title: 'Collections',
+          columns: [{ property: core.name, label: 'Name' }],
+        },
+      },
     });
-    await openSync(row);
+    if (await withinRoot(row.subject))
+      await discoverCollections(row, durable, connectionId);
+    if (navigate) await store.ui.openResource(row.subject);
 
     return row;
   }
 
-  async function ensureMirror(row) {
-    if (!row.hasClasses(klass('syncable-repository')))
-      throw new Error('Choose a repository from this table');
-    const config = row.get(property('syncable-source-config'));
-    if (
-      !config ||
-      !validId(config.repoId) ||
-      !validId(config.ownerId) ||
-      !validRepo(config.repoName) ||
-      !validLogin(config.ownerLogin)
-    )
-      throw new Error('Invalid repository source');
-    if (
-      row.get(core.parent) !== root ||
-      config.connectionId !== context.connectionId ||
-      config.ownerId !== context.ownerId
-    )
-      throw new Error('Choose a repository from this table');
-    if (row.get(property('syncable-repository-has-issues')) === false)
-      throw new Error('Issues are disabled in GitHub');
-    const mirror = await ensureNode({
-      kind: 'mirror',
-      parent: row.subject,
-      remoteId: 'github-repo:' + config.repoId,
-      name: 'Issues',
-      collection: 'issues',
-      config,
+  async function openPublic(navigate = true) {
+    const principal = { kind: 'public' };
+    const row = await ensureNode({
+      key: identity({ kind: 'principal', principal }),
+      kind: 'principal',
+      parent: root,
+      name: 'Public',
+      isA: [tableClass, klass('syncable-principal')],
+      values: {
+        [core.classtype]: tableClass,
+        [property('syncable-source-config')]: {
+          version: 2,
+          proxyOrigin: context.proxyOrigin,
+          platform: context.platform,
+          principal,
+        },
+        [property('syncable-collection-view')]: {
+          version: 1,
+          rowClass: tableClass,
+          title: 'Collections',
+          columns: [{ property: core.name, label: 'Name' }],
+        },
+      },
     });
-    await openTarget(row, mirror);
-    await openSync(mirror);
+    if (await withinRoot(row.subject))
+      await discoverCollections(row, principal, undefined);
+    if (navigate) await store.ui.openResource(row.subject);
 
-    return mirror;
+    return row;
   }
 
-  async function linkPublic(reference) {
-    const match = /^([^/]+)\/([^/]+)$/.exec(reference.trim());
-    if (!match || !validLogin(match[1]) || !validRepo(match[2]))
-      throw new Error('Enter a GitHub repository as owner/repo');
-    const { body: repo } = await request('repos/' + match[1] + '/' + match[2], {
-      connectionId: undefined,
-    });
-    repository(repo);
+  async function createCollection(name, parameters = {}, sourcePath) {
+    if (context.kind !== 'principal')
+      throw new Error('Choose a principal first');
     if (
-      repo.private !== false ||
-      repo.has_issues !== true ||
-      repo.full_name !== repo.owner.login + '/' + repo.name ||
-      repo.owner.login.toLowerCase() !== match[1].toLowerCase() ||
-      repo.name.toLowerCase() !== match[2].toLowerCase()
+      context.principal.kind === 'public' &&
+      !description(name).allowsAnonymous
     )
-      throw new Error('Choose a public GitHub repository with Issues enabled');
-    const config = {
-      ownerId: String(repo.owner.id),
-      ownerLogin: repo.owner.login,
-      repoId: String(repo.id),
-      repoName: repo.name,
-    };
-    const owner = await ensureNode({
-      kind: 'public-owner',
-      parent: root,
-      remoteId: 'github-public-owner:' + repo.owner.id,
-      name: repo.owner.login,
-      ownerKind:
-        repo.owner.type === 'Organization' ? 'organization' : 'personal',
-      config: { ownerId: config.ownerId, ownerLogin: config.ownerLogin },
+      throw new Error('This collection requires an authenticated principal');
+    const doc = readDocument();
+    const resolved = sourcePath
+      ? await resolveCollectionNavigation(
+          doc,
+          bindCollectionNavigation(doc, {
+            collection: name,
+            sourcePath,
+            context: parameters,
+          }),
+          { transport },
+        )
+      : undefined;
+    const bound = bindCollection(doc, {
+      collection: name,
+      context: resolved?.pathParams ?? parameters,
+      selection: context.querySelection,
     });
-    const row = await ensureNode({
-      kind: 'public-repository',
-      parent: owner.subject,
-      remoteId: 'github-public-repo:' + repo.id,
-      name: repo.name,
-      config,
-      metadata: repoMetadata(repo),
-    });
-    const mirror = await ensureNode({
-      kind: 'public-mirror',
-      parent: row.subject,
-      remoteId: 'github-public-repo:' + repo.id,
-      name: 'Issues',
-      collection: 'issues',
-      config,
-    });
-    if (context.document)
-      await ownerView(
-        await store.getResource(root),
-        { resource: 'githubOrganization' },
-        { resource: 'githubRepository' },
-      );
-    await openTarget(row, mirror);
-    const children = await resources({
-      property: core.parent,
-      value: owner.subject,
-    });
-    await patch(owner, {
-      [property('syncable-repository-count')]: children.filter(child =>
-        child.hasClasses(klass('syncable-repository')),
-      ).length,
-    });
-    await openSync(mirror);
+    const row = await ensureCollection({ bound });
+    await store.ui.openResource(row.subject);
 
-    return mirror;
+    return row;
   }
 
   async function status() {
@@ -783,102 +588,197 @@ export function createSyncApp(store, context) {
     });
   }
 
-  async function syncIssues() {
-    if (!validId(context.repoId))
-      throw new Error('Invalid GitHub repository source');
-    const existing = new Map(
-      (await resources({ property: core.parent, value: root })).map(row => [
-        row.get(core.localId),
-        row,
-      ]),
-    );
-    const seen = new Set();
-    const counts = { added: 0, changed: 0, unchanged: 0 };
-    const snapshot = await readCollection('repositoryIssues');
-    const issues = snapshot.items
-      .filter(item => !item?.pull_request)
-      .map(issue => {
-        if (
-          !Number.isSafeInteger(issue?.id) ||
-          issue.id <= 0 ||
-          !Number.isSafeInteger(issue.number) ||
-          issue.number <= 0 ||
-          typeof issue.title !== 'string' ||
-          !issue.title ||
-          issue.title.length > 4096 ||
-          !['open', 'closed'].includes(issue.state) ||
-          typeof issue.updated_at !== 'string' ||
-          issue.updated_at.length > 64 ||
-          !Number.isFinite(Date.parse(issue.updated_at)) ||
-          !/^https:\/\/github\.com\/[a-z0-9._-]+\/[a-z0-9._-]+\/issues\/[0-9]+$/i.test(
-            issue.html_url,
-          ) ||
-          (issue.body !== null &&
-            issue.body !== undefined &&
-            (typeof issue.body !== 'string' || issue.body.length > 200000))
-        )
-          throw new Error('GitHub returned an invalid issue');
-
-        return {
-          id: String(issue.id),
-          values: {
-            [core.name]: issue.title,
-            [core.localId]: 'syncables:github-issue:' + issue.id,
-            [property('syncable-issue-number')]: issue.number,
-            [property('syncable-issue-state')]: issue.state,
-            [property('syncable-issue-updated')]: Date.parse(issue.updated_at),
-            [property('syncable-issue-link')]: issue.html_url,
-            [property('syncable-issue-body')]: issue.body ?? '',
-          },
-        };
-      });
-
-    for (const issue of issues) {
-      if (seen.has(issue.id)) continue;
-      seen.add(issue.id);
-      const old = existing.get(issue.values[core.localId]);
-      if (old && !old.hasClasses(klass('syncable-record')))
-        throw new Error('Issue identity is already in use');
-
-      if (old)
-        counts[(await patch(old, issue.values)) ? 'changed' : 'unchanged']++;
-      else {
-        const row = await store.newResource({
-          parent: root,
-          isA: [klass('syncable-record')],
-          propVals: issue.values,
-        });
-        existing.set(issue.values[core.localId], row);
-        counts.added++;
-      }
-    }
-
-    return { ...counts, rows: seen.size, ...readState(snapshot) };
-  }
-
   async function refresh() {
+    if (context.kind !== 'collection')
+      throw new Error('Select a collection to sync');
     if ((await status()).paused) throw new Error('Resume before syncing');
 
     try {
-      const result =
-        context.kind === 'organizations'
-          ? await refreshOrganizations()
-          : context.kind === 'repositories'
-            ? await refreshRepositories()
-            : context.kind === 'mirror'
-              ? await syncIssues()
-              : (() => {
-                  throw new Error('Select a collection to sync');
-                })();
-      await saveStatus({
-        ...result,
-        ...(result.incomplete ? {} : { lastSuccess: new Date().toISOString() }),
-        error: result.incomplete
-          ? (result.error ?? 'Read limit reached. Local rows were retained.')
-          : null,
+      const doc = readDocument();
+      const resolved = context.navigation
+        ? await resolveCollectionNavigation(doc, context.navigation, {
+            transport,
+          })
+        : context.collection;
+      const bound =
+        context.navigation && resolved
+          ? bindCollection(doc, {
+              collection: resolved.collection,
+              context: resolved.pathParams,
+              selection: context.querySelection,
+            })
+          : resolved;
+      if (!bound) throw new Error('The collection has no saved source binding');
+      const definition = description(bound.collection);
+      const result = await readBoundCollection(doc, bound, {
+        transport,
+        limits: {
+          maxRequests: context.principal.kind === 'public' ? 40 : 20,
+          maxRecords: 4000,
+          timeoutMs: 120000,
+          maxRetries: 0,
+        },
+      });
+      const snapshot = result.collections[0];
+      if (!snapshot)
+        throw new Error(result.errors[0] ?? 'The collection was not read');
+      if (snapshot.error && !snapshot.items.length)
+        throw new Error(snapshot.error);
+      const tableKey =
+        context.sourceKey ??
+        identity({
+          kind: 'collection',
+          collection: collectionIdentity(bound, context.navigation),
+          parentSourceKey: context.parentSourceKey,
+        });
+      const ontology = deriveOntology(doc);
+      const counts = { added: 0, changed: 0, unchanged: 0 };
+      const seen = new Set();
+      // Validate/project the full accepted prefix before writing any record in it.
+      const accepted = snapshot.items.map(record => {
+        const remoteId = record[definition.idField];
+        if (
+          !(
+            (typeof remoteId === 'string' && remoteId.length) ||
+            (typeof remoteId === 'number' && Number.isSafeInteger(remoteId))
+          )
+        )
+          throw new Error('The catalog record has no stable typed identity');
+        const projected = projectReadRecord(doc, {
+          collection: definition,
+          record,
+          context: bound.pathParams,
+          ontology,
+        });
+
+        if (projected.name === projected.id) {
+          const label = definition.presentation.columns.find(
+            column =>
+              column.datatype === 'https://atomicdata.dev/datatypes/string' &&
+              typeof projected.values[column.property] === 'string' &&
+              projected.values[column.property].trim(),
+          );
+          if (label) projected.name = projected.values[label.property];
+        }
+
+        const values = Object.fromEntries(
+          Object.entries(projected.values).map(([name, value]) => {
+            const subject = context.apiSchema?.properties[name];
+            if (!subject)
+              throw new Error('The catalog property schema is unavailable');
+
+            return [subject, value];
+          }),
+        );
+
+        return { record, remoteId, projected, values };
       });
 
-      return result;
+      for (const { record, remoteId, projected, values } of accepted) {
+        const key = identity({
+          kind: 'record',
+          parentSourceKey: tableKey,
+          collection: { name: bound.collection, resource: bound.resource },
+          remoteId,
+        });
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const old = await findNode(key, rowClass(definition), 'record');
+        const rowValues = {
+          [core.name]: projected.name,
+          ...values,
+          [property('syncable-source-config')]: configuration({
+            parentSourceKey: tableKey,
+            record,
+            resource: definition.resource,
+            context: bound.pathParams,
+            managedProperties: Object.keys(values),
+          }),
+        };
+        let row;
+
+        if (old) {
+          const previous = old.get(
+            property('syncable-source-config'),
+          )?.managedProperties;
+          const allowed = new Set(Object.values(context.apiSchema.properties));
+          const removed = Array.isArray(previous)
+            ? previous.filter(
+                subject =>
+                  allowed.has(subject) && !Object.hasOwn(values, subject),
+              )
+            : [];
+          counts[
+            (await updateNode(
+              old,
+              {
+                key,
+                kind: 'record',
+                isA: [rowClass(definition), klass('syncable-record')],
+                values: rowValues,
+              },
+              removed,
+            ))
+              ? 'changed'
+              : 'unchanged'
+          ]++;
+          row = old;
+        } else {
+          row = await ensureNode({
+            key,
+            kind: 'record',
+            parent: root,
+            name: projected.name,
+            isA: [rowClass(definition), klass('syncable-record')],
+            values: rowValues,
+          });
+          counts.added++;
+        }
+
+        if (!(await withinRoot(row.subject))) continue;
+        const children = relatedCollectionReads(doc, {
+          resource: definition.resource,
+          record,
+          context: bound.pathParams,
+        });
+        const targets = [];
+        for (const navigation of children)
+          targets.push(
+            await ensureCollection({
+              parent: row.subject,
+              navigation,
+              parentSourceKey: key,
+            }),
+          );
+        // One saved link can open one child directly. With several, Open shows the row's child tables.
+        if (targets.length === 1 && targets[0].get(core.parent) === row.subject)
+          await patch(row, {
+            [property('syncable-open-target')]: targets[0].subject,
+          });
+      }
+
+      await patch(await store.getResource(root), {
+        [core.classtype]: rowClass(definition),
+        [property('syncable-collection-view')]: collectionView(definition),
+      });
+      const incomplete = !snapshot.complete;
+      const summary = {
+        ...counts,
+        rows: seen.size,
+        incomplete,
+        error:
+          snapshot.error ??
+          snapshot.notComplete ??
+          (incomplete
+            ? 'The collection read was incomplete. Local rows were retained.'
+            : null),
+      };
+      await saveStatus({
+        ...summary,
+        ...(!incomplete ? { lastSuccess: new Date().toISOString() } : {}),
+      });
+
+      return summary;
     } catch (error) {
       await saveStatus({
         error: String(error?.message ?? error).slice(0, 1024),
@@ -887,25 +787,52 @@ export function createSyncApp(store, context) {
     }
   }
 
-  async function storedRepositories() {
+  async function storedPrincipals() {
     return (await resources({ property: core.parent, value: root })).filter(
-      row => row.hasClasses(klass('syncable-repository')),
+      row => row.hasClasses(klass('syncable-principal')),
     );
+  }
+
+  async function discoverPrincipals() {
+    const connected = await store.proxy.connections({
+      platform: context.platform,
+    });
+    const saved = await storedPrincipals();
+    const known = new Set(
+      saved.map(
+        row => row.get(property('syncable-source-config'))?.connectionId,
+      ),
+    );
+    const errors = [];
+
+    for (const connection of connected) {
+      if (known.has(connection.connectionId)) continue;
+
+      try {
+        await openPrincipal(connection.connectionId, false);
+      } catch (error) {
+        errors.push(String(error?.message ?? error));
+      }
+    }
+
+    if (errors.length) throw new Error(errors.join('; ').slice(0, 1024));
   }
 
   return {
     refresh,
-    refreshOrganizations,
-    refreshRepositories,
-    syncIssues,
-    openAccount,
-    openPublic,
-    ensureMirror,
-    linkPublic,
     status,
     saveStatus,
-    storedRepositories,
-    ensureNode,
+    openPrincipal,
+    openPublic,
+    createCollection,
+    availableCollections: () =>
+      descriptions().filter(
+        collection =>
+          context.principal?.kind !== 'public' || collection.allowsAnonymous,
+      ),
+    ensureCollection,
+    storedPrincipals,
+    discoverPrincipals,
   };
 }
 
@@ -917,7 +844,7 @@ function el(tag, text, className) {
   return node;
 }
 
-/** Opening this screen reads saved Atomic state. Only explicit actions refresh GitHub. */
+/** Opening Sync reads saved state; provider requests require an explicit action. */
 export async function view({ root, store }) {
   const context = await store.getContext();
   const app = createSyncApp(store, context);
@@ -929,18 +856,12 @@ export async function view({ root, store }) {
     return;
   }
 
-  if (context.selection) {
-    await app.ensureMirror(await store.getResource(context.selection));
+  const style = document.createElement('style');
+  style.textContent =
+    ':root{font-family:"Open Sans","Segoe UI",sans-serif;color-scheme:light dark}body{margin:0;font-size:14px}#root{padding:12px 0}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}button,input,select{font:inherit;padding:7px 12px;border:1px solid #aaa;border-radius:8px;color:inherit;background:transparent}button{cursor:pointer}button:disabled{opacity:.55}.muted{color:#777}.error{padding:12px;border:1px solid #c66;border-radius:8px}label{display:flex;gap:8px;align-items:center;margin:8px 0}';
+  document.head.append(style);
 
-    return;
-  }
-
-  const styles = document.createElement('style');
-  styles.textContent =
-    ':root{font-family:"Open Sans","Segoe UI",sans-serif;color-scheme:light dark}body{margin:0;font-size:14px}#root{padding:12px 0}.toolbar,.controls{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px}.controls{justify-content:flex-start}button,input,select{font:inherit;padding:7px 12px;border:1px solid #aaa;border-radius:8px;color:inherit;background:transparent}button{cursor:pointer}button:disabled{opacity:.55}.muted{color:#777}.error{padding:12px;border:1px solid #c66;border-radius:8px}.metric-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.metric{padding:14px;border:1px solid #ddd;border-radius:9px}.metric strong{display:block;font-size:18px}@media(max-width:600px){.metric-row{grid-template-columns:1fr}}';
-  document.head.append(styles);
-
-  const error = reason => {
+  const showError = reason => {
     root.querySelector('[role=alert]')?.remove();
     const message = el('p', String(reason?.message ?? reason), 'error');
     message.setAttribute('role', 'alert');
@@ -954,8 +875,8 @@ export async function view({ root, store }) {
 
       try {
         await action();
-      } catch (reason) {
-        error(reason);
+      } catch (error) {
+        showError(error);
       } finally {
         node.disabled = false;
       }
@@ -964,101 +885,144 @@ export async function view({ root, store }) {
     return node;
   };
 
-  const heading = (title, subtitle) => {
-    root.replaceChildren();
-    const bar = el('div', undefined, 'toolbar');
-    const titleBox = el('div');
-    titleBox.append(el('strong', title));
-    if (subtitle) titleBox.append(el('p', subtitle, 'muted'));
-    bar.append(titleBox);
-    root.append(bar);
+  const controls = el('div', undefined, 'controls');
+  const warnings = () =>
+    (context.legacyWarnings ?? [])
+      .filter(message => typeof message === 'string')
+      .slice(0, 20)
+      .map(message => {
+        const node = el('p', message.slice(0, 2048), 'muted');
+        node.setAttribute('role', 'status');
 
-    return bar;
-  };
-
-  const reconnect = () =>
-    button('Reconnect', () =>
-      store.proxy.connect({ platform: 'github-issues' }),
-    );
-
-  const openCustom = async () => {
-    const table = await store.getResource(context.subject);
-    const definitions = await store.getMany(table.get(tableViews) ?? []);
-    const target = definitions.find(
-      row =>
-        !row.error &&
-        [
-          'syncable-collection',
-          'github-organizations',
-          'github-repositories',
-        ].includes(row.get(viewKind)),
-    );
-
-    if (target) await store.ui.openResource(target.subject);
-    else {
-      const normal = definitions.find(
-        row => !row.error && row.get(viewKind) === 'table',
-      );
-      await store.ui.openResource(normal?.subject ?? context.subject);
-    }
-  };
+        return node;
+      });
 
   if (context.kind === 'platform') {
-    const controls = el('div', undefined, 'controls');
-    heading(
-      'Connected GitHub accounts',
-      'Connect an account, then refresh its collections from Sync.',
-    );
-    controls.append(
-      button('Connect account', () =>
-        store.proxy.connect({ platform: 'github-issues' }),
-      ),
-      button('Public repositories', () => app.openPublic()),
-    );
-    root.append(controls);
-    const connected = await store.proxy.connections({
-      platform: 'github-issues',
-    });
+    try {
+      await app.discoverPrincipals();
+    } catch (error) {
+      showError(error);
+    }
 
-    if (!connected.length) {
+    try {
+      await app.openPublic(false);
+    } catch (error) {
+      showError(error);
+    }
+
+    const principals = await app.storedPrincipals();
+    const hasPublic = principals.some(
+      principal =>
+        principal.get(context.schema.properties['syncable-source-config'])
+          ?.principal?.kind === 'public',
+    );
+    root.append(el('h3', 'Connected principals'));
+    controls.append(
+      button('Connect account', async () => {
+        const result = await store.proxy.connect({
+          platform: context.platform,
+        });
+        if (result?.status === 'connected')
+          await app.openPrincipal(result.connectionId);
+      }),
+    );
+    if (!hasPublic) controls.append(button('Public', () => app.openPublic()));
+    root.append(controls);
+    for (const principal of principals)
       root.append(
-        el('h3', 'No accounts connected'),
-        button('Connect GitHub account', () =>
-          store.proxy.connect({ platform: 'github-issues' }),
+        button(principal.get(core.name), () =>
+          store.ui.openResource(principal.subject),
         ),
       );
-    } else
-      for (const connection of connected) {
-        const card = el('div', undefined, 'metric');
-        card.append(
-          el('strong', connection.login ?? 'GitHub account'),
-          button('Browse organizations', () =>
-            app.openAccount(connection.connectionId),
-          ),
-        );
-        root.append(card);
-      }
+    root.append(...warnings());
 
     return;
   }
 
-  if (context.kind === 'public') {
-    heading('Public repositories', 'Link a public repository by name.');
-    const label = el('label', 'Public GitHub repository');
-    const input = el('input');
-    input.id = 'public-github-repository';
-    input.placeholder = 'owner/repo';
-    label.htmlFor = input.id;
-    const link = button('Link repository', () => app.linkPublic(input.value));
-    input.addEventListener('keydown', event => {
-      if (event.key === 'Enter' && !event.isComposing) {
-        event.preventDefault();
-        link.click();
+  if (context.kind === 'principal') {
+    root.append(el('h3', 'Available collections'));
+    const select = el('select');
+    select.setAttribute('aria-label', 'Collection');
+    const inputs = el('div');
+    const definitions = app.availableCollections();
+    const entrypoint = el('select');
+    entrypoint.setAttribute('aria-label', 'Source');
+
+    for (const collection of definitions) {
+      const option = el(
+        'option',
+        collection.presentation?.title ?? collection.name,
+      );
+      option.value = collection.name;
+      select.append(option);
+    }
+
+    const selectedDefinition = () =>
+      definitions.find(item => item.name === select.value);
+    const selectedEntrypoints = () =>
+      (selectedDefinition()?.entrypoints ?? []).filter(
+        source =>
+          context.principal?.kind !== 'public' || source.allowsAnonymous,
+      );
+
+    const renderInputs = () => {
+      inputs.replaceChildren();
+      const source = selectedEntrypoints().find(
+        item => item.sourcePath === entrypoint.value,
+      );
+
+      for (const parameter of source?.inputs ??
+        selectedDefinition()?.inputs ??
+        []) {
+        const label = el('label', parameter.title ?? parameter.name);
+        const input = el('input');
+        input.name = parameter.name;
+        input.required = parameter.required;
+        input.setAttribute('aria-label', parameter.title ?? parameter.name);
+        if (parameter.description) input.title = parameter.description;
+        label.append(input);
+        inputs.append(label);
       }
-    });
-    const controls = el('div', undefined, 'controls');
-    controls.append(input, link, button('Browse owners', openCustom));
-    root.append(label, controls);
+    };
+
+    const renderEntrypoints = () => {
+      entrypoint.replaceChildren();
+      const sources = selectedEntrypoints();
+
+      for (const source of sources) {
+        const option = el('option', source.sourcePath);
+        option.value = source.sourcePath;
+        entrypoint.append(option);
+      }
+
+      const direct = el('option', 'Collection parameters');
+      direct.value = '';
+      entrypoint.append(direct);
+      entrypoint.hidden = !sources.length;
+      renderInputs();
+    };
+
+    select.addEventListener('change', renderEntrypoints);
+    entrypoint.addEventListener('change', renderInputs);
+    renderEntrypoints();
+    controls.append(
+      select,
+      entrypoint,
+      button('Open collection', () =>
+        app.createCollection(
+          select.value,
+          Object.fromEntries(
+            [...inputs.querySelectorAll('input')].map(input => [
+              input.name,
+              input.value,
+            ]),
+          ),
+          entrypoint.value || undefined,
+        ),
+      ),
+    );
+    root.append(controls, inputs);
+    root.append(...warnings());
 
     return;
   }
@@ -1067,70 +1031,54 @@ export async function view({ root, store }) {
 
   const render = async () => {
     clearTimeout(timer);
-    const state = await store.execution('state');
+    const execution = await store.execution('state');
     const status = await app.status();
-    const controls = el('div', undefined, 'controls');
-    heading(
-      context.kind === 'mirror'
-        ? 'Issues sync'
-        : context.kind === 'organizations'
-          ? 'Organizations sync'
-          : 'Repositories sync',
-      context.kind === 'mirror'
-        ? context.ownerLogin + '/' + context.repoName
-        : 'Refresh GitHub here; browse stored data in the other views.',
+    root.replaceChildren(el('h3', 'Collection sync'));
+    controls.replaceChildren();
+    const start = button(
+      execution.running ? 'Syncing' : 'Sync now',
+      async () => {
+        await store.execution('start');
+        await render();
+      },
     );
-
-    if (!status.paused) {
-      const start = button(
-        state.running
-          ? 'Syncing'
-          : context.kind === 'mirror'
-            ? 'Sync now'
-            : 'Refresh list',
-        async () => {
-          await store.execution('start');
-          await render();
-        },
-      );
-      start.disabled = state.running;
-      controls.append(start);
-    }
-
+    start.disabled = execution.running || status.paused;
     controls.append(
+      start,
       button(status.paused ? 'Resume' : 'Pause', async () => {
         if (!status.paused) await store.execution('cancel');
         await app.saveStatus({ paused: !status.paused });
         await render();
       }),
     );
-    if (context.connectionId) controls.append(reconnect());
-    root.append(controls);
-    const grid = el('div', undefined, 'metric-row');
-
-    for (const [value, label] of [
-      [
-        status.rows ?? 0,
-        context.kind === 'mirror' ? 'Imported issues' : 'Stored entries',
-      ],
-      [
-        status.paused
-          ? 'Paused'
-          : state.running
-            ? 'Syncing'
-            : status.error
-              ? 'Needs attention'
-              : 'Ready',
-        'Synchronization',
-      ],
-      [status.lastSuccess ?? 'Never', 'Last successful sync'],
-    ]) {
-      const metric = el('div', undefined, 'metric');
-      metric.append(el('strong', value), el('small', label));
-      grid.append(metric);
-    }
-
-    root.append(grid);
+    if (context.connectionId)
+      controls.append(
+        button('Reconnect', () =>
+          store.proxy.connect({
+            platform: context.platform,
+            connectionId: context.connectionId,
+          }),
+        ),
+      );
+    controls.append(
+      button('Browse stored data', async () => {
+        const table = await store.getResource(context.subject);
+        const definitions = await store.getMany(table.get(tableViews) ?? []);
+        const target = definitions.find(
+          row => !row.error && row.get(viewKind) === 'syncable-collection',
+        );
+        await store.ui.openResource(target?.subject ?? context.subject);
+      }),
+    );
+    root.append(
+      controls,
+      el('p', (status.rows ?? 0) + ' stored entries'),
+      el(
+        'p',
+        'Last successful sync: ' + (status.lastSuccess ?? 'Never'),
+        'muted',
+      ),
+    );
     if (status.lastSuccess || status.incomplete)
       root.append(
         el(
@@ -1139,51 +1087,10 @@ export async function view({ root, store }) {
           'muted',
         ),
       );
-    if (status.error) error(status.error);
-    if (context.kind === 'mirror')
-      root.append(
-        el(
-          'p',
-          'Source: GitHub · ' +
-            context.ownerLogin +
-            '/' +
-            context.repoName +
-            (context.mode === 'public'
-              ? ' · public repository.'
-              : ' · read-only via integration proxy.'),
-          'muted',
-        ),
-      );
-    else root.append(button('Browse stored data', openCustom));
-
-    if (context.kind === 'repositories' && !state.running) {
-      const rows = await app.storedRepositories();
-
-      if (rows.length) {
-        const select = el('select');
-        select.setAttribute('aria-label', 'Repository');
-
-        for (const row of rows) {
-          const option = el('option', row.get(core.name));
-          option.value = row.subject;
-          select.append(option);
-        }
-
-        const repositoryControls = el('div', undefined, 'controls');
-        repositoryControls.append(
-          select,
-          button('Sync issues', async () =>
-            app.ensureMirror(await store.getResource(select.value)),
-          ),
-        );
-        root.append(repositoryControls);
-      }
-    }
-
-    if (state.running)
-      timer = setTimeout(() => {
-        void render().catch(error);
-      }, 500);
+    if (status.error) showError(status.error);
+    root.append(...warnings());
+    if (execution.running)
+      timer = setTimeout(() => void render().catch(showError), 500);
   };
 
   await render();

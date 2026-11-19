@@ -13539,7 +13539,6 @@ msgid "Report a bug or suggest an improvement. Your message and optional email g
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
-#: src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
 msgstr "GitHub"
 
@@ -13593,9 +13592,8 @@ msgstr "Tidak dapat menentukan layanan yang terpasang: {0}"
 msgid "No matching services."
 msgstr "Tidak ada layanan yang cocok."
 
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "Sync support unavailable"
-msgstr "Dukungan sinkronisasi tidak tersedia"
+#~ msgid "Sync support unavailable"
+#~ msgstr "Dukungan sinkronisasi tidak tersedia"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Add to Drive"
@@ -13606,9 +13604,8 @@ msgstr "Tambahkan ke Drive"
 msgid "Add {0} to drive"
 msgstr "Tambahkan {0} ke drive"
 
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
-msgstr "Dari proksi integrasi yang dikonfigurasi di <0/>. Tambahkan GitHub untuk menelusuri repositori dan mengimpor masalah ke drive Anda."
+#~ msgid "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
+#~ msgstr "Dari proksi integrasi yang dikonfigurasi di <0/>. Tambahkan GitHub untuk menelusuri repositori dan mengimpor masalah ke drive Anda."
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Integration proxy apps"
@@ -13907,10 +13904,29 @@ msgstr "Pilihan API integrasi"
 msgid "Public catalog consumer selections for the saved API description."
 msgstr "Pilihan publik klien katalog untuk deskripsi API yang tersimpan."
 
-#: src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Accounts"
-msgstr "Akun"
+#~ msgid "Accounts"
+#~ msgstr "Akun"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "The app is ready, but its icon could not be loaded."
 msgstr "Aplikasi siap, tetapi ikonnya tidak dapat dimuat."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Legacy Accounts container"
+msgstr "Wadah Accounts lama"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Installation-owned compatibility data retained after moving source roots directly under the App."
+msgstr "Data kompatibilitas milik instalasi ini dipertahankan setelah sumber dipindahkan langsung ke bawah aplikasi."
+
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "This saved source needs migration from its integration App. Moved resources are retained and no replacement will be created from this view."
+msgstr "Sumber tersimpan ini perlu dimigrasikan melalui aplikasi integrasinya. Sumber daya yang dipindahkan tetap disimpan dan tampilan ini tidak akan membuat penggantinya."
+
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "Open integration App"
+msgstr "Buka aplikasi integrasi"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
+msgstr "Dari proksi integrasi yang dikonfigurasi di <0/>. Tambahkan layanan untuk menjelajahi koleksi katalognya dan menyinkronkan data ke drive Anda."

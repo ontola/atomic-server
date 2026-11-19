@@ -1,33 +1,50 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { core, Datatype, ensureSchema, type Store } from '@tomic/lib';
+import {
+  core,
+  Datatype,
+  ensureSchema,
+  type Store,
+  type Resource,
+} from '@tomic/lib';
+import {
+  bindCollection,
+  relatedCollectionReads,
+  prepareDocument,
+  type OpenApiDocument,
+} from 'syncables/browser';
 import { fakeSchemaStore } from '../../../../lib/src/test-schema-store';
 import { defaultIntegrationProxy } from '@helpers/integrationProxy';
 import type { ProxyConnections } from '@helpers/proxyConnections';
 import { syncablePlatformSchema } from './syncablePlatform';
 import { syncableHierarchySchema } from './syncableHierarchy';
+import { collectionIdentity, sourceKey } from './builtinSyncIdentity.js';
 import {
   assertSyncAppDrive,
+  assertSyncAppContext,
   syncAppContext,
   syncProxyTransport,
+  canonicalSyncAppContext,
   type SyncAppContext,
 } from './builtinSyncablesProfile';
 
 afterEach(() => vi.restoreAllMocks());
-const context = {
-  subject: 'mirror',
+const principal = {
+  kind: 'authenticated' as const,
+  namespace: 'https://identity.example',
+  subject: 7,
+};
+const slot = 's'.repeat(43);
+const context: SyncAppContext = {
+  subject: 'collection',
   drive: 'drive',
-  platform: 'github-issues',
+  platform: 'calendar-service',
   proxyOrigin: defaultIntegrationProxy,
-  kind: 'mirror',
-  connectionId: 'slot',
-  ownerId: '123',
-  ownerLogin: 'ontola',
-  repoId: '456',
-  repoName: 'atomic-server',
+  kind: 'collection',
+  principal,
+  connectionId: slot,
   proxyTransport: 'host',
   schema: { classes: {}, properties: {} },
-} satisfies SyncAppContext;
-
+};
 const DRIVE_PROPERTY = 'https://atomicdata.dev/properties/drive';
 
 function cachedDriveStore(records: Record<string, Record<string, unknown>>) {
@@ -119,162 +136,638 @@ describe('running Sync drive authority', () => {
   });
 });
 
-function setupProxy() {
-  const readKeyed = vi.fn(async (_url: URL, _signal?: AbortSignal) => ({
-    status: 200,
-    body: [],
-    headers: {},
-  }));
-  const rememberKeyedGithubPrincipal = vi.fn(async () => undefined);
-  const proxy = {
-    listKeyed: vi.fn(async () => [{ connection_id: 'slot' }]),
-    activeKeyedConnection: vi.fn(async () => 'transport-id'),
-    readKeyed,
-    rememberKeyedGithubPrincipal,
-  } as unknown as ProxyConnections;
+function apiDocument(): OpenApiDocument {
+  const operation = (resource: string, collection?: string) => ({
+    operationId: collection ?? resource + 'Detail',
+    'x-crud': {
+      action: collection ? 'list' : 'read',
+      resource,
+      ...(collection ? { collection } : {}),
+    },
+    ...(collection ? { 'x-pagination': [{ scheme: 'pages' }] } : {}),
+    responses: {
+      '200': {
+        description: 'Result',
+        content: {
+          'application/json': {
+            schema: {
+              type: collection ? 'array' : 'object',
+              ...(collection ? { items: { type: 'object' } } : {}),
+            },
+          },
+        },
+      },
+    },
+  });
 
-  return { proxy, readKeyed, rememberKeyedGithubPrincipal };
+  return prepareDocument({
+    openapi: '3.0.3',
+    info: { title: 'Example service', version: '1' },
+    servers: [{ url: 'https://api.example/v2' }],
+    components: {
+      crudResources: {
+        team: {
+          schema: {
+            type: 'object',
+            title: 'Teams',
+            properties: {
+              id: { type: 'integer' },
+              name: { type: 'string' },
+              handle: { type: 'string' },
+            },
+          },
+          identity: {
+            urlTemplate: '/teams/{team_id}',
+            bindings: { team_id: { field: 'id' } },
+          },
+          references: {
+            address: {
+              resource: 'teamAddress',
+              bindings: { handle: { field: 'handle' } },
+            },
+          },
+          collections: { myTeams: { urlTemplate: '/me/teams' } },
+        },
+        teamAddress: {
+          identity: {
+            urlTemplate: '/names/{handle}',
+            bindings: { handle: { field: 'handle' } },
+          },
+        },
+        workspace: {
+          schema: {
+            type: 'object',
+            title: 'Workspaces',
+            properties: {
+              id: { type: 'integer' },
+              name: { type: 'string', title: 'Workspace' },
+              updated_at: { type: 'string', format: 'date-time' },
+              active: {
+                type: 'boolean',
+                oneOf: [
+                  { enum: [true], title: 'Active' },
+                  { enum: [false], title: 'Inactive' },
+                ],
+              },
+            },
+          },
+          identity: {
+            urlTemplate: '/workspaces/{workspace_id}',
+            bindings: { workspace_id: { field: 'id' } },
+          },
+          collections: {
+            myWorkspaces: { urlTemplate: '/me/workspaces' },
+            teamWorkspaces: { urlTemplate: '/names/{handle}/workspaces' },
+          },
+        },
+        task: {
+          schema: {
+            type: 'object',
+            title: 'Tasks',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+            },
+          },
+          identity: {
+            urlTemplate: '/workspaces/{workspace_id}/tasks/{task_id}',
+            bindings: { task_id: { field: 'id' } },
+          },
+          collections: {
+            tasks: {
+              urlTemplate: '/workspaces/{workspace_id}/tasks',
+              listQuery: { status: 'all' },
+            },
+          },
+        },
+      },
+      paginationSchemes: {
+        pages: {
+          type: 'nextLink',
+          request: { queryParameters: { limit: { role: 'pageSize' } } },
+          response: { headers: { Link: { role: 'nextLink' } } },
+        },
+      },
+    },
+    paths: {
+      '/session': {
+        get: {
+          operationId: 'currentPrincipal',
+          security: [{ oauth: [] }],
+          'x-authenticated-principal': {
+            kind: 'user',
+            namespace: principal.namespace,
+            subject: '$response.body#/id',
+            identifier: { scope: 'provider', stable: true, reassigned: false },
+            claims: { name: '$response.body#/label' },
+          },
+          responses: { '200': { description: 'Current principal' } },
+        },
+      },
+      '/me/teams': { get: operation('team', 'myTeams') },
+      '/me/workspaces': { get: operation('workspace', 'myWorkspaces') },
+      '/names/{handle}': {
+        get: {
+          ...operation('teamAddress'),
+          responses: {
+            '200': {
+              description: 'Team address',
+              links: {
+                workspaces: {
+                  operationId: 'teamWorkspaces',
+                  parameters: { handle: '$response.body#/handle' },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/names/{handle}/workspaces': {
+        get: operation('workspace', 'teamWorkspaces'),
+      },
+      '/workspaces/{workspace_id}/tasks': {
+        get: {
+          ...operation('task', 'tasks'),
+          parameters: [
+            {
+              name: 'workspace_id',
+              in: 'path',
+              required: true,
+              schema: { type: 'integer', title: 'Workspace ID' },
+            },
+            { name: 'status', in: 'query', schema: { type: 'string' } },
+            { name: 'page', in: 'query', schema: { type: 'integer' } },
+          ],
+        },
+      },
+    },
+  });
 }
 
-describe('built-in source and proxy capabilities', () => {
-  it('binds moved mirrors to their stored source, not their parent path', async () => {
-    const { store: fake, resources } = fakeSchemaStore();
+function setupProxy() {
+  const readKeyed = vi.fn(
+    async (
+      url: URL,
+      _signal?: AbortSignal,
+      _request?: unknown,
+    ): Promise<{
+      status: number;
+      body: unknown;
+      headers: Record<string, string>;
+    }> => ({
+      status: 200,
+      body: url.pathname.endsWith('/session')
+        ? { id: 7 }
+        : url.pathname.includes('/names/') &&
+            !url.pathname.endsWith('/workspaces')
+          ? { handle: 'current-handle' }
+          : [],
+      headers: {},
+    }),
+  );
+  const rememberKeyedPrincipal = vi.fn(async () => undefined);
+  const proxy = {
+    listKeyed: vi.fn(async () => [{ connection_id: slot }]),
+    activeKeyedConnection: vi.fn(async () => 'active'),
+    readKeyed,
+    rememberKeyedPrincipal,
+  } as unknown as ProxyConnections;
+
+  return { proxy, readKeyed, rememberKeyedPrincipal };
+}
+
+function selected(document = apiDocument()): SyncAppContext {
+  return {
+    ...context,
+    collection: bindCollection(document, {
+      collection: 'tasks',
+      context: { workspace_id: '13' },
+    }),
+  };
+}
+
+const request = (
+  path = 'v2/workspaces/13/tasks',
+  patch: Record<string, unknown> = {},
+) => ({
+  platform: context.platform,
+  connectionId: slot,
+  path,
+  query: { status: 'all' },
+  ...patch,
+});
+
+describe('generic saved source context', () => {
+  it('keeps moved collection identities and rejects source/config/principal disagreement', async () => {
+    const { store, resources } = fakeSchemaStore();
     resources.set(core.properties.name, {
       [core.properties.isA]: [core.classes.property],
       [core.properties.datatype]: Datatype.STRING,
       [core.properties.shortname]: 'name',
     });
-    const h = await ensureSchema(fake, 'drive', syncableHierarchySchema());
-    await ensureSchema(fake, 'drive', syncablePlatformSchema());
-    resources.set('folder', { [core.properties.parent]: 'drive' });
-    resources.set('mirror', {
-      [core.properties.parent]: 'folder',
-      [h.properties['syncable-source-key']]: JSON.stringify([
-        defaultIntegrationProxy,
-        'github-issues',
-        'mirror',
-        'github-repo:456',
-        'issues',
-        'slot',
-      ]),
-      [h.properties['syncable-source-config']]: {
-        connectionId: 'slot',
-        ownerId: '123',
-        ownerLogin: 'ontola',
-        repoId: '456',
-        repoName: 'atomic-server',
-      },
-    });
-    expect(
-      await syncAppContext(fake as unknown as Store, 'drive', 'mirror'),
-    ).toMatchObject(context);
-    resources.get('mirror')![h.properties['syncable-source-config']] = {
-      connectionId: 'other',
-      ownerId: '123',
-      ownerLogin: 'ontola',
-      repoId: '456',
-      repoName: 'atomic-server',
+    const h = await ensureSchema(store, 'drive', syncableHierarchySchema());
+    await ensureSchema(store, 'drive', syncablePlatformSchema());
+    const collection = selected().collection!;
+    const config = {
+      version: 2,
+      proxyOrigin: context.proxyOrigin,
+      platform: context.platform,
+      principal,
+      connectionId: slot,
+      collection,
     };
+    const key = sourceKey({
+      ...config,
+      kind: 'collection',
+      collection: collectionIdentity(collection),
+    });
+    resources.set('folder', { [core.properties.parent]: 'drive' });
+    resources.set(
+      'collection',
+      JSON.parse(
+        JSON.stringify({
+          [core.properties.parent]: 'folder',
+          [h.properties['syncable-source-key']]: key,
+          [h.properties['syncable-source-config']]: config,
+        }),
+      ),
+    );
+    expect(
+      await syncAppContext(store as unknown as Store, 'drive', 'collection'),
+    ).toMatchObject({ ...context, sourceKey: key, collection });
+    resources.get('collection')![h.properties['syncable-source-config']] =
+      JSON.parse(
+        JSON.stringify({
+          ...config,
+          principal: { ...principal, subject: '7' },
+        }),
+      );
     await expect(
-      syncAppContext(fake as unknown as Store, 'drive', 'mirror'),
-    ).rejects.toThrow('account');
+      syncAppContext(store as unknown as Store, 'drive', 'collection'),
+    ).rejects.toThrow('source identity');
     resources.get('folder')![core.properties.parent] = 'other-drive';
     await expect(
-      syncAppContext(fake as unknown as Store, 'drive', 'mirror'),
+      syncAppContext(store as unknown as Store, 'drive', 'collection'),
     ).rejects.toThrow('outside');
   });
-  it('keeps keyed credentials outside the app and restricts each mirror route/account', async () => {
-    const { proxy, readKeyed } = setupProxy();
-    const transport = syncProxyTransport(proxy, context, () => undefined);
+});
+
+it('resolves moved child provenance by source identity and revokes it when its source ancestor leaves the drive', async () => {
+  const { store, resources } = fakeSchemaStore();
+  const runtime = store as unknown as Store;
+  runtime.normalizeSubject = value => value;
+  const getResource = store.getResource.bind(store);
+
+  store.getResource = async subject => {
+    const resource = await getResource(subject);
+    runtime.resources.set(subject, resource as unknown as Resource);
+
+    return resource;
+  };
+
+  resources.set(core.properties.name, {
+    [core.properties.isA]: [core.classes.property],
+    [core.properties.datatype]: Datatype.STRING,
+    [core.properties.shortname]: 'name',
+  });
+  const h = await ensureSchema(store, 'drive', syncableHierarchySchema());
+  await ensureSchema(store, 'drive', syncablePlatformSchema());
+  const doc = apiDocument();
+  const record = { id: 13, handle: 'old-handle' };
+  const navigation = relatedCollectionReads(doc, {
+    resource: 'team',
+    record,
+  })[0]!;
+  const rowKey = sourceKey({
+    ...context,
+    kind: 'record',
+    principal,
+    collection: { name: 'myTeams', resource: 'team' },
+    parentSourceKey: 'saved-parent-collection',
+    remoteId: 13,
+  });
+  const key = sourceKey({
+    ...context,
+    kind: 'collection',
+    principal,
+    collection: collectionIdentity(undefined, navigation),
+    parentSourceKey: rowKey,
+  });
+  const config = {
+    version: 2,
+    proxyOrigin: context.proxyOrigin,
+    platform: context.platform,
+    principal,
+    connectionId: slot,
+  };
+  resources.set('source-folder', { [core.properties.parent]: 'drive' });
+  resources.set('moved-folder', { [core.properties.parent]: 'drive' });
+  resources.set(
+    'atomic:source-row',
+    JSON.parse(
+      JSON.stringify({
+        [core.properties.parent]: 'source-folder',
+        [h.properties['syncable-source-key']]: rowKey,
+        [h.properties['syncable-source-config']]: {
+          ...config,
+          parentSourceKey: 'saved-parent-collection',
+          record,
+          resource: 'team',
+          context: {},
+        },
+      }),
+    ),
+  );
+  resources.set(
+    'atomic:child',
+    JSON.parse(
+      JSON.stringify({
+        [core.properties.parent]: 'moved-folder',
+        [h.properties['syncable-source-key']]: key,
+        [h.properties['syncable-source-config']]: {
+          ...config,
+          navigation,
+          parentSourceKey: rowKey,
+        },
+      }),
+    ),
+  );
+  resources.get('drive')![h.properties['syncable-resource-index']] = {
+    [rowKey]: 'atomic:source-row',
+  };
+  const resolved = await syncAppContext(runtime, 'drive', 'atomic:child');
+  expect(resolved.parentRecord?.record).toEqual(record);
+  const canonical = canonicalSyncAppContext(resolved, { document: doc });
+  expect(canonical.navigation).toEqual(navigation);
+  const { proxy, readKeyed } = setupProxy();
+  const transport = syncProxyTransport(proxy, canonical, () => undefined, {
+    document: doc,
+  });
+  await transport.request!(request('v2/names/old-handle', { query: {} }));
+  const providerReads = readKeyed.mock.calls.length;
+  resources.get('source-folder')![core.properties.parent] = 'other-drive';
+  // This is the guard used by delayed store writes: no subsequent proxy read.
+  expect(() => assertSyncAppContext(canonical)).toThrow('selected drive');
+  expect(readKeyed).toHaveBeenCalledTimes(providerReads);
+  await expect(
+    transport.request!(request('v2/names/old-handle', { query: {} })),
+  ).rejects.toThrow('selected drive');
+  expect(readKeyed).toHaveBeenCalledTimes(providerReads);
+  resources.get('source-folder')![core.properties.parent] = 'drive';
+  const parentConfig = resources.get('atomic:source-row')![
+    h.properties['syncable-source-config']
+  ] as Record<string, unknown>;
+  parentConfig.record = { ...record, handle: 'edited-after-response' };
+  expect(() => assertSyncAppContext(canonical)).toThrow(
+    'source record changed',
+  );
+  expect(readKeyed).toHaveBeenCalledTimes(providerReads);
+});
+
+describe('catalog-derived host relay', () => {
+  it('allows only the selected bound read and paging, after fresh typed principal verification', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed, rememberKeyedPrincipal } = setupProxy();
+    const transport = syncProxyTransport(
+      proxy,
+      selected(doc),
+      () => undefined,
+      { document: doc },
+    );
     for (const patch of [
+      { path: 'v2/me/teams' },
+      { path: 'v2/workspaces/99/tasks' },
       { connectionId: 'other' },
-      { path: 'user/repos' },
-      { path: 'repositories/999/issues' },
-      { platform: 'spotify' },
-      { method: 'POST' },
+      { platform: 'other' },
+      { method: 'DELETE' },
       { body: '{}' },
-      { query: { page: 21 } },
-      { query: { per_page: 100, state: 'closed' } },
-      { query: { per_page: 100 } },
-      { query: { state: 'all' } },
-      { query: { redirect: 'elsewhere' } },
+      { query: { status: 'closed' } },
+      { query: { status: 'all', redirect: 'foreign' } },
+      { path: 'v2/../session' },
+      { path: '//foreign.test/x' },
     ])
       await expect(
-        transport.request!({
-          platform: 'github-issues',
-          connectionId: 'slot',
-          path: 'repositories/456/issues',
-          query: { per_page: 100, state: 'all' },
-          ...patch,
-        }),
+        transport.request!(request(undefined, patch)),
       ).rejects.toThrow();
     expect(readKeyed).not.toHaveBeenCalled();
-    const result = await transport.request!({
-      platform: 'github-issues',
-      connectionId: 'slot',
-      path: 'repositories/456/issues',
-      query: { page: 2, per_page: 100, state: 'all' },
-    });
-    expect(readKeyed.mock.calls[0][0].href).toBe(
-      defaultIntegrationProxy +
-        '/proxy/transport-id/github-issues/repositories/456/issues?page=2&per_page=100&state=all',
+    expect(
+      await transport.request!(
+        request(undefined, { query: { status: 'all', page: '2' } }),
+      ),
+    ).toEqual({ status: 200, headers: {}, text: '[]' });
+    expect(readKeyed.mock.calls.map(([url]) => url.pathname)).toEqual([
+      '/proxy/active/calendar-service/v2/session',
+      '/proxy/active/calendar-service/v2/workspaces/13/tasks',
+    ]);
+    expect(rememberKeyedPrincipal).toHaveBeenCalledWith(
+      'calendar-service',
+      slot,
+      principal,
+      'currentPrincipal',
     );
-    expect(result).toEqual({ status: 200, headers: {}, text: '[]' });
-    expect(JSON.stringify(result)).not.toContain('transport-id');
+    await transport.request!(request());
+    expect(
+      readKeyed.mock.calls.filter(([url]) => url.pathname.endsWith('/session')),
+    ).toHaveLength(1);
   });
-  it('refuses replies when the source/session changes during a provider read', async () => {
+  it('rebinds stored route and request defaults from trusted metadata without widening the collection', () => {
+    const doc = apiDocument();
+    const saved = selected(doc);
+    const edited = {
+      ...saved,
+      collection: {
+        ...saved.collection!,
+        path: '/unrelated',
+        method: 'POST' as const,
+        query: { redirect: 'foreign' },
+        body: { filter: 'injected' },
+      },
+    };
+    expect(
+      canonicalSyncAppContext(edited, { document: doc }).collection,
+    ).toEqual(saved.collection);
+    expect(() =>
+      canonicalSyncAppContext(
+        {
+          ...saved,
+          collection: { ...saved.collection!, resource: 'unrelated' },
+        },
+        { document: doc },
+      ),
+    ).toThrow('selected catalog collection');
+  });
+  it('rejects numeric/string principal mismatch before collection data', async () => {
+    const doc = apiDocument();
     const { proxy, readKeyed } = setupProxy();
-    let current = true;
-    readKeyed.mockImplementation(async () => {
-      current = false;
-
-      return { status: 200, body: [], headers: {} };
+    readKeyed.mockResolvedValue({
+      status: 200,
+      body: { id: '7' },
+      headers: {},
     });
-    const transport = syncProxyTransport(proxy, context, () => {
-      if (!current) throw new Error('Source changed');
-    });
-    await expect(
-      transport.request!({
-        platform: 'github-issues',
-        connectionId: 'slot',
-        path: 'repositories/456/issues',
-        query: { per_page: 100, state: 'all' },
-      }),
-    ).rejects.toThrow('Source changed');
+    const transport = syncProxyTransport(
+      proxy,
+      selected(doc),
+      () => undefined,
+      { document: doc },
+    );
+    await expect(transport.request!(request())).rejects.toThrow(
+      'different authenticated principal',
+    );
+    expect(readKeyed).toHaveBeenCalledTimes(1);
   });
-  it('uses credential-free Public reads fixed to the selected repository', async () => {
+  it('revokes verified scope when the active credential changes before the collection read', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed, rememberKeyedPrincipal } = setupProxy();
+    let active = 'first-active';
+    vi.mocked(proxy.activeKeyedConnection).mockImplementation(
+      async () => active,
+    );
+    rememberKeyedPrincipal.mockImplementation(async () => {
+      active = 'replacement';
+    });
+    const transport = syncProxyTransport(
+      proxy,
+      selected(doc),
+      () => undefined,
+      { document: doc },
+    );
+    await expect(transport.request!(request())).rejects.toThrow(
+      'changed after identity verification',
+    );
+    expect(readKeyed).toHaveBeenCalledTimes(1);
+    expect(readKeyed.mock.calls[0][0].pathname).toBe(
+      '/proxy/first-active/calendar-service/v2/session',
+    );
+  });
+  it('limits platform/principal roots to declared principal operations', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed } = setupProxy();
+    const transport = syncProxyTransport(
+      proxy,
+      {
+        ...context,
+        kind: 'platform',
+        principal: undefined,
+        connectionId: undefined,
+      },
+      () => undefined,
+      { document: doc },
+    );
+    await expect(
+      transport.request!(request('v2/me/teams', { query: {} })),
+    ).rejects.toThrow('endpoint');
+    expect(readKeyed).not.toHaveBeenCalled();
+    await transport.request!(request('v2/session', { query: {} }));
+    expect(readKeyed).toHaveBeenCalledTimes(1);
+  });
+  it('allows declared anonymous setup entrypoints only in Public principal scope', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed } = setupProxy();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => Response.json({ handle: 'canonical' }));
+    const publicContext: SyncAppContext = {
+      ...context,
+      kind: 'principal',
+      principal: { kind: 'public' },
+      connectionId: undefined,
+    };
+    const transport = syncProxyTransport(
+      proxy,
+      publicContext,
+      () => undefined,
+      { document: doc },
+    );
+    await transport.request!(
+      request('v2/names/explicit-input', {
+        connectionId: undefined,
+        query: {},
+      }),
+    );
+    await expect(
+      transport.request!(
+        request('v2/me/teams', { connectionId: undefined, query: {} }),
+      ),
+    ).rejects.toThrow('endpoint');
+    await expect(
+      transport.request!(
+        request('v2/session', { connectionId: undefined, query: {} }),
+      ),
+    ).rejects.toThrow('endpoint');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(readKeyed).not.toHaveBeenCalled();
+    doc.paths['/names/{handle}']!.get!.security = [{ oauth: [] }];
+    await expect(
+      syncProxyTransport(proxy, publicContext, () => undefined, {
+        document: doc,
+      }).request!(
+        request('v2/names/explicit-input', {
+          connectionId: undefined,
+          query: {},
+        }),
+      ),
+    ).rejects.toThrow('endpoint');
+  });
+  it('bounds provider reads even for repeated declared Public setup requests', async () => {
+    const doc = apiDocument();
+    const { proxy } = setupProxy();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => Response.json({ handle: 'canonical' }));
+    const transport = syncProxyTransport(
+      proxy,
+      {
+        ...context,
+        kind: 'principal',
+        principal: { kind: 'public' },
+        connectionId: undefined,
+      },
+      () => undefined,
+      { document: doc },
+    );
+    for (let i = 0; i < 64; i++)
+      await transport.request!(
+        request('v2/names/explicit-input', {
+          connectionId: undefined,
+          query: {},
+        }),
+      );
+    await expect(
+      transport.request!(
+        request('v2/names/explicit-input', {
+          connectionId: undefined,
+          query: {},
+        }),
+      ),
+    ).rejects.toThrow('budget');
+    expect(fetch).toHaveBeenCalledTimes(64);
+  });
+  it('uses anonymous Public transport only for the selected declared public collection', async () => {
+    const doc = apiDocument();
     const { proxy, readKeyed } = setupProxy();
     const fetch = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(Response.json([]));
     const transport = syncProxyTransport(
       proxy,
-      { ...context, mode: 'public', connectionId: undefined },
+      {
+        ...selected(doc),
+        principal: { kind: 'public' },
+        connectionId: undefined,
+      },
       () => undefined,
+      { document: doc },
     );
+    await expect(transport.request!(request())).rejects.toThrow('account');
     await expect(
-      transport.request!({
-        platform: 'github-issues',
-        path: 'repositories/999/issues',
-        query: { per_page: 100, state: 'all' },
-      }),
+      transport.request!(
+        request('v2/session', { connectionId: undefined, query: {} }),
+      ),
     ).rejects.toThrow('endpoint');
-    await expect(
-      transport.request!({
-        platform: 'github-issues',
-        connectionId: 'slot',
-        path: 'repositories/456/issues',
-        query: { per_page: 100, state: 'all' },
-      }),
-    ).rejects.toThrow('endpoint');
-    await transport.request!({
-      platform: 'github-issues',
-      path: 'repositories/456/issues',
-      query: { per_page: 100, state: 'all' },
-    });
+    await transport.request!(request(undefined, { connectionId: undefined }));
     expect(fetch).toHaveBeenCalledWith(
       expect.objectContaining({
-        href: 'https://api.github.com/repositories/456/issues?per_page=100&state=all',
+        href: 'https://api.example/v2/workspaces/13/tasks?status=all',
       }),
       expect.objectContaining({
         credentials: 'omit',
@@ -283,5 +776,94 @@ describe('built-in source and proxy capabilities', () => {
       }),
     );
     expect(readKeyed).not.toHaveBeenCalled();
+    doc.paths['/workspaces/{workspace_id}/tasks']!.get!.security = [
+      { oauth: [] },
+    ];
+    expect(() =>
+      syncProxyTransport(
+        proxy,
+        {
+          ...selected(doc),
+          principal: { kind: 'public' },
+          connectionId: undefined,
+        },
+        () => undefined,
+        { document: doc },
+      ),
+    ).toThrow('principal cannot read');
+  });
+  it('discards a read after cancellation or source changes', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed } = setupProxy();
+    let current = true;
+    readKeyed.mockImplementation(async () => {
+      current = false;
+
+      return { status: 200, body: { id: 7 }, headers: {} };
+    });
+    const transport = syncProxyTransport(
+      proxy,
+      selected(doc),
+      () => {
+        if (!current) throw new Error('Source changed');
+      },
+      { document: doc },
+    );
+    await expect(transport.request!(request())).rejects.toThrow(
+      'Source changed',
+    );
+    expect(readKeyed).toHaveBeenCalledTimes(1);
+  });
+  it('derives child list scope from the actual declared detail response using replay only', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed } = setupProxy();
+    const parent = {
+      resource: 'team',
+      record: { id: 13, handle: 'old-handle' },
+      context: {},
+      identity: {
+        version: 2 as const,
+        proxyOrigin: context.proxyOrigin,
+        platform: context.platform,
+        kind: 'record' as const,
+        principal,
+        collection: { name: 'myTeams', resource: 'team' },
+        remoteId: 13,
+      },
+    };
+    const navigation = relatedCollectionReads(doc, parent)[0]!;
+    const saved = { ...context, navigation, parentRecord: parent };
+    const canonical = canonicalSyncAppContext(saved, { document: doc });
+    expect(canonical.navigation).toEqual(navigation);
+    const transport = syncProxyTransport(proxy, saved, () => undefined, {
+      document: doc,
+    });
+    await expect(
+      transport.request!(
+        request('v2/names/current-handle/workspaces', { query: {} }),
+      ),
+    ).rejects.toThrow('endpoint');
+    expect(readKeyed).not.toHaveBeenCalled();
+    await transport.request!(request('v2/names/old-handle', { query: {} }));
+    await transport.request!(
+      request('v2/names/current-handle/workspaces', { query: {} }),
+    );
+    await expect(
+      transport.request!(request('v2/names/other/workspaces', { query: {} })),
+    ).rejects.toThrow('endpoint');
+    expect(readKeyed.mock.calls.map(([url]) => url.pathname)).toEqual([
+      '/proxy/active/calendar-service/v2/session',
+      '/proxy/active/calendar-service/v2/names/old-handle',
+      '/proxy/active/calendar-service/v2/names/current-handle/workspaces',
+    ]);
+    expect(() =>
+      canonicalSyncAppContext(
+        {
+          ...saved,
+          parentRecord: { ...parent, record: { id: '13', handle: 'other' } },
+        },
+        { document: doc },
+      ),
+    ).toThrow('source record identity');
   });
 });

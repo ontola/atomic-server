@@ -22,6 +22,12 @@
       "values": {
         "per_page": 100
       }
+    },
+    {
+      "path": "/orgs/{org}/repos",
+      "values": {
+        "per_page": 100
+      }
     }
   ]
 }

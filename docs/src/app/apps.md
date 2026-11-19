@@ -26,51 +26,53 @@ It is then one more way to look at rows you already have.
 
 From My Drive, open the account menu and choose **Apps**. Turn on **Show
 experimental plugins** to see services from your configured integration proxy.
-Choose **Add to Drive** on GitHub. This installs a GitHub App with an **Accounts**
-table beneath it. Its icon comes from the proxy's public API metadata and is
-saved as a File in your drive. Reopening the App preserves your chosen icon.
+Choose **Add to Drive** on GitHub. This installs a GitHub App with its provider
+icon saved as a File in your drive. Reopening the App preserves your chosen icon.
 
-Connect your GitHub account from the App. Choose **Browse organizations**, then
-**Refresh list** in **Sync** to discover your organization and personal owner
-namespaces. Use **+** to add **Syncable Collection** to the table. This view
-shows the kinds, counts and **Open** actions saved in Atomic. Open an owner to
-reach its repositories table, where you can add the same **Syncable Collection**
-view. Opening or returning to these views makes no GitHub request.
+Connect your GitHub account from the App. Your authenticated identity appears
+directly beneath GitHub, alongside **Public**. There is no Accounts folder.
+The identity comes from the catalog's Authenticated Principal declaration.
 
-To import issues, open the repositories table's **Sync** tab, select a repository
-and choose **Sync issues**. In the resulting Issues table, choose **Sync now** to
-import issues. The **Table** view shows the imported rows. Run Sync again to
-update changed rows. **Pause** keeps the rows in your drive and prevents
-refreshes until you resume. Once the Issues table exists, **Open** on its saved
-repository row takes you there. Discover later changes with **Refresh list**
-in **Sync**.
+Open your account and choose a collection, such as **Organizations** or
+**Repositories**. These are separate collections described by the API catalog;
+Organizations contains organizations returned by GitHub, without synthetic
+personal-owner rows. Choose **Open collection**, then **Sync now** in its
+**Sync** tab to import its rows. The Repositories collection imports repositories
+available to the connected account.
 
-To link a public repository, choose **Public repositories** in the GitHub App.
-Enter its `owner/repo` name and choose **Link repository**.
-The Issues table appears under the App's **Accounts → Public** branch in the sidebar. This
-branch reads from GitHub's public API and works without a GitHub account.
+Use **+** to add **Syncable Collection** to a table. This native view shows saved
+fields and **Open** actions. An organization opens its saved Repositories table;
+a repository opens its saved **Issues and pull requests** table. Choose **Sync
+now** there to fetch that selected collection. Opening or returning to a native
+view makes no provider request. GitHub's Issues endpoint includes pull requests,
+which remain visible with the API's optional Pull request field.
+
+To link a public repository, open **Public** beneath GitHub. Select **Issues and
+pull requests**, choose the repository source, and enter its owner and repository
+name. **Open collection** resolves that source to its stable repository ID before
+creating the table. This branch uses GitHub's public API without a GitHub account.
 
 Sync starts from **Sync now** and continues while you browse other views or
-resources in the app. Closing the app stops the run. The **Sync** view contains
-controls and status; the **Table** view follows the stored schema.
-**Syncable Collection** is an ordinary native view of saved data. It stays
-available while an import runs or the provider is unavailable. Its labels and
-fields come from stored collection metadata, so it can also display collections
-from other services that supply that metadata.
-Changes you make in Atomic stay in your drive. An interrupted or incomplete import keeps cached issues.
-Moving an Issues table within the same drive keeps its source binding.
+resources in the app. Closing the app stops the run. **Pause** retains stored rows
+and blocks refreshes until you resume. The **Sync** tab contains controls and
+status; the **Table** tab follows the schema derived from the API description.
+**Syncable Collection** reads saved Atomic data and remains available during an
+import or a provider outage. Changes you make in Atomic stay in your drive.
+An interrupted import retains accepted rows. Moving a table within the same
+drive retains its source identity.
 
 For an older installation, choose **Open GitHub** from **Apps** to upgrade its
-existing root table to an App. Its subject, saved accounts and source identities
-are retained. Existing GitHub-specific view tabs open the generic collection
-view; new tabs use **Syncable Collection**.
+existing root in place and remove the extra Accounts navigation level. Migration
+retains resource subjects and saved data; ambiguous historical bindings are
+reported rather than guessed. Existing GitHub-specific view tabs open the
+generic collection view; new tabs use **Syncable Collection**.
 
 Your integration proxy must support client-held connection keys and have
 GitHub OAuth configured. The
-[Syncables Apps catalog](https://github.com/ontola/atomic-plugins/blob/main/overlays/catalog/2026-11-18-syncables-apps.json)
-includes the collection descriptions and schema labels used by this flow.
-Older catalogs may lack these views or show only owners of repositories visible
-to your account.
+[collection-navigation IAP catalog](https://github.com/ontola/atomic-plugins/blob/main/overlays/catalog/2026-11-19-collection-navigation.json)
+provides authenticated identity, collection schemas, public access and nested
+navigation through CRUD references and standard OpenAPI response Links. Other
+providers can use the same runtime when their catalog supplies those definitions.
 
 ## What is special about it
 

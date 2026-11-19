@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isSyncablesNavigationTable,
+  isSyncablesPlatformRoot,
   withoutTableViews,
 } from './syncablesNavigation';
 
@@ -11,7 +12,7 @@ const nodeId = (kind: string, connection?: string) => {
   return 'syncables:node:' + encodeURIComponent(JSON.stringify(key));
 };
 
-it('exposes the built-in App Accounts table children without exposing ordinary table rows', () => {
+it('retains legacy directory recognition without hiding an Accounts resource by local ID', () => {
   expect(isSyncablesNavigationTable('syncables:accounts')).toBe(true);
   expect(isSyncablesNavigationTable('syncables:accounts-extra')).toBe(false);
 });
@@ -55,3 +56,57 @@ describe('Syncables navigation tables', () => {
     ).toEqual([account, userTable]);
   });
 });
+
+it('recognizes the installation root separately from its legacy directories', () => {
+  expect(
+    isSyncablesPlatformRoot(
+      'syncables:platform:https%3A%2F%2Fproxy.example:calendar-service',
+    ),
+  ).toBe(true);
+  expect(isSyncablesPlatformRoot('syncables:accounts')).toBe(false);
+  expect(isSyncablesPlatformRoot(nodeId('public'))).toBe(false);
+});
+
+const catalogNodeId = (overrides: Record<string, unknown> = {}) =>
+  'syncables:node:' +
+  encodeURIComponent(
+    JSON.stringify({
+      version: 2,
+      proxyOrigin: 'https://proxy.example',
+      platform: 'calendar-service',
+      kind: 'collection',
+      principal: {
+        kind: 'authenticated',
+        namespace: 'calendar-service',
+        subject: 7,
+      },
+      collection: { name: 'Events', resource: 'events' },
+      ...overrides,
+    }),
+  );
+
+it('shows generic catalog collection children for authenticated and Public principals', () => {
+  expect(isSyncablesNavigationTable(catalogNodeId())).toBe(true);
+  expect(isSyncablesNavigationTable(catalogNodeId({ kind: 'principal' }))).toBe(
+    true,
+  );
+  expect(
+    isSyncablesNavigationTable(
+      catalogNodeId({ principal: { kind: 'public' } }),
+    ),
+  ).toBe(true);
+});
+
+it.each([
+  { version: 1 },
+  { kind: 'mirror' },
+  { proxyOrigin: null },
+  { platform: '' },
+  { principal: null },
+  { principal: { kind: 'unknown' } },
+])(
+  'keeps malformed or non-directory catalog source %s out of the tree exception',
+  source => {
+    expect(isSyncablesNavigationTable(catalogNodeId(source))).toBe(false);
+  },
+);

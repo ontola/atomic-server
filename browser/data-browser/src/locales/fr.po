@@ -13541,7 +13541,6 @@ msgid "Report a bug or suggest an improvement. Your message and optional email g
 msgstr "Signalez un bug ou suggérez une amélioration. Votre message et votre e-mail facultatif sont transmis à l’équipe Atomic via Sentry, avec des détails techniques sur votre configuration (version de l’application, adresse et état du serveur). Veuillez ne pas inclure de contenu privé de votre espace de travail."
 
 #: src/chunks/PluginRuns/SyncablesFrame.tsx
-#: src/chunks/PluginRuns/builtinSyncablesProfile.ts
 msgid "GitHub"
 msgstr "GitHub"
 
@@ -13595,9 +13594,8 @@ msgstr "Impossible de déterminer les services installés : {0}"
 msgid "No matching services."
 msgstr "Aucun service correspondant."
 
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "Sync support unavailable"
-msgstr "Synchronisation indisponible"
+#~ msgid "Sync support unavailable"
+#~ msgstr "Synchronisation indisponible"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Add to Drive"
@@ -13608,9 +13606,8 @@ msgstr "Ajouter au lecteur"
 msgid "Add {0} to drive"
 msgstr "Ajouter {0} au lecteur"
 
-#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
-msgstr "Depuis le proxy d’intégration configuré à l’adresse <0/>. Ajoutez GitHub pour parcourir les dépôts et importer des tickets dans votre lecteur."
+#~ msgid "From the configured integration proxy at <0/> . Add GitHub to browse repositories and import issues into your drive."
+#~ msgstr "Depuis le proxy d’intégration configuré à l’adresse <0/>. Ajoutez GitHub pour parcourir les dépôts et importer des tickets dans votre lecteur."
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Integration proxy apps"
@@ -13909,10 +13906,29 @@ msgstr "Sélection de l’API d’intégration"
 msgid "Public catalog consumer selections for the saved API description."
 msgstr "Options publiques du client du catalogue pour la description d’API enregistrée."
 
-#: src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Accounts"
-msgstr "Comptes"
+#~ msgid "Accounts"
+#~ msgstr "Comptes"
 
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "The app is ready, but its icon could not be loaded."
 msgstr "L’application est prête, mais son icône n’a pas pu être chargée."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Legacy Accounts container"
+msgstr "Ancien conteneur Accounts"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Installation-owned compatibility data retained after moving source roots directly under the App."
+msgstr "Données de compatibilité propres à cette installation, conservées après le déplacement des ressources sources directement sous l’application."
+
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "This saved source needs migration from its integration App. Moved resources are retained and no replacement will be created from this view."
+msgstr "Cette source enregistrée doit être migrée depuis son application d’intégration. Les ressources déplacées sont conservées et cette vue ne crée aucun remplacement."
+
+#: src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "Open integration App"
+msgstr "Ouvrir l’application d’intégration"
+
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
+msgstr "Depuis le proxy d’intégration configuré à <0/>. Ajoutez un service pour parcourir ses collections du catalogue et synchroniser des données dans votre espace."

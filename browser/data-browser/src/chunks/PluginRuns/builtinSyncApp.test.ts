@@ -1,107 +1,317 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { mergeQuerySelections } from 'syncables/browser';
-import catalogFixture from './fixtures/github-syncables-catalog.json';
-import catalogSelection from './fixtures/github-syncables-selection.json';
+import {
+  bindCollection,
+  deriveOntology,
+  prepareDocument,
+  type OpenApiDocument,
+} from 'syncables/browser';
 import {
   createSyncApp,
-  sourceKeys,
   view,
-  // @ts-expect-error The server-delivered plain JavaScript module has no declarations.
+  // @ts-expect-error The server-delivered JavaScript module has no declarations.
 } from './builtinSyncApp.js';
+import {
+  collectionIdentity,
+  sourceKey,
+  sourceConfigFingerprint,
+} from './builtinSyncIdentity.js';
 
 const P = 'https://atomicdata.dev/properties/';
-const names = [
-  'mirror-status',
-  'issue-number',
-  'issue-state',
-  'issue-updated',
-  'issue-link',
-  'issue-body',
-  'source-config',
-  'source-key',
-  'node-kind',
-  'owner-kind',
-  'repository-count',
-  'repository-private',
-  'repository-has-issues',
-  'repository-open-issues',
-  'collection-view',
-  'open-target',
-];
-const properties = Object.fromEntries(
-  names.map(name => ['syncable-' + name, 'atomic:' + name]),
-);
-const classes = Object.fromEntries(
-  ['account', 'owner', 'repository', 'record'].map(name => [
-    'syncable-' + name,
-    'atomic:' + name,
-  ]),
-);
-const prop = (name: string) => properties['syncable-' + name];
+const tableClass = 'https://atomicdata.dev/classes/Table';
 const root = 'atomic:root';
 const origin = 'https://integrations.example';
-const issue = (title = 'First issue') => ({
-  id: 1001,
-  number: 1,
-  title,
-  state: 'open',
-  updated_at: '2026-11-18T10:00:00Z',
-  body: null,
-  html_url: 'https://github.com/org/project/issues/1',
-});
-const repo = {
-  id: 200,
-  name: 'project',
-  full_name: 'org/project',
-  owner: { id: 100, login: 'org', type: 'Organization' },
-  private: false,
-  has_issues: true,
-  open_issues_count: 7,
+const principal = {
+  kind: 'authenticated' as const,
+  namespace: 'https://identity.example',
+  subject: 7,
 };
+const properties = Object.fromEntries(
+  [
+    'source-config',
+    'source-key',
+    'node-kind',
+    'collection-view',
+    'open-target',
+    'mirror-status',
+  ].map(name => ['syncable-' + name, 'atomic:' + name]),
+);
+const classes = {
+  'syncable-principal': 'atomic:principal',
+  'syncable-record': 'atomic:record',
+};
+const prop = (name: string) => properties['syncable-' + name];
 
-/** The composed published IAP catalog, with one unrelated test-only collection. */
-function apiDocument() {
-  return {
-    ...structuredClone(catalogFixture),
-    paths: {
-      ...structuredClone(catalogFixture.paths),
-      '/unrelated': {
-        get: {
+/** An unrelated provider with a mutable address, response Link, direct child and public input. */
+function apiDocument(): OpenApiDocument {
+  const operation = (resource: string, collection?: string) => ({
+    operationId: collection ?? resource + 'Detail',
+    ...(collection
+      ? {
           parameters: [
-            { name: 'filter', in: 'query', schema: { type: 'string' } },
+            { name: 'page', in: 'query', schema: { type: 'integer' } },
           ],
-          responses: {},
+        }
+      : {}),
+    'x-crud': {
+      action: collection ? 'list' : 'read',
+      resource,
+      ...(collection ? { collection } : {}),
+    },
+    ...(collection ? { 'x-pagination': [{ scheme: 'pages' }] } : {}),
+    responses: {
+      '200': {
+        description: 'Result',
+        content: {
+          'application/json': {
+            schema: {
+              type: collection ? 'array' : 'object',
+              ...(collection ? { items: { type: 'object' } } : {}),
+            },
+          },
         },
       },
     },
+  });
+
+  return prepareDocument({
+    openapi: '3.0.3',
+    info: { title: 'Example service', version: '1' },
+    servers: [{ url: 'https://api.example/v2' }],
     components: {
-      ...structuredClone(catalogFixture.components),
       crudResources: {
-        ...structuredClone(catalogFixture.components.crudResources),
-        unrelated: {
-          collections: { unrelated: { urlTemplate: '/unrelated' } },
+        team: {
+          schema: {
+            type: 'object',
+            title: 'Teams',
+            properties: {
+              id: { type: 'integer' },
+              name: { type: 'string' },
+              handle: { type: 'string' },
+            },
+          },
+          identity: {
+            urlTemplate: '/teams/{team_id}',
+            bindings: { team_id: { field: 'id' } },
+          },
+          references: {
+            address: {
+              resource: 'teamAddress',
+              bindings: { handle: { field: 'handle' } },
+            },
+          },
+          collections: { myTeams: { urlTemplate: '/me/teams' } },
+        },
+        teamAddress: {
+          identity: {
+            urlTemplate: '/names/{handle}',
+            bindings: { handle: { field: 'handle' } },
+          },
+        },
+        workspace: {
+          schema: {
+            type: 'object',
+            title: 'Workspaces',
+            properties: {
+              id: { type: 'integer' },
+              name: { type: 'string', title: 'Workspace' },
+              updated_at: { type: 'string', format: 'date-time' },
+              active: {
+                type: 'boolean',
+                oneOf: [
+                  { enum: [true], title: 'Active' },
+                  { enum: [false], title: 'Inactive' },
+                ],
+              },
+            },
+          },
+          identity: {
+            urlTemplate: '/workspaces/{workspace_id}',
+            bindings: { workspace_id: { field: 'id' } },
+          },
+          collections: {
+            myWorkspaces: { urlTemplate: '/me/workspaces' },
+            teamWorkspaces: { urlTemplate: '/names/{handle}/workspaces' },
+          },
+        },
+        task: {
+          schema: {
+            type: 'object',
+            title: 'Tasks',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+            },
+          },
+          identity: {
+            urlTemplate: '/workspaces/{workspace_id}/tasks/{task_id}',
+            bindings: { task_id: { field: 'id' } },
+          },
+          collections: {
+            tasks: {
+              urlTemplate: '/workspaces/{workspace_id}/tasks',
+              listQuery: { status: 'all' },
+            },
+          },
+        },
+      },
+      paginationSchemes: {
+        pages: {
+          type: 'nextLink',
+          request: { queryParameters: { limit: { role: 'pageSize' } } },
+          response: { headers: { Link: { role: 'nextLink' } } },
         },
       },
     },
-  };
+    paths: {
+      '/session': {
+        get: {
+          operationId: 'currentPrincipal',
+          security: [{ oauth: [] }],
+          'x-authenticated-principal': {
+            kind: 'user',
+            namespace: principal.namespace,
+            subject: '$response.body#/id',
+            identifier: { scope: 'provider', stable: true, reassigned: false },
+            claims: { name: '$response.body#/label' },
+          },
+          responses: { '200': { description: 'Current principal' } },
+        },
+      },
+      '/me/teams': { get: operation('team', 'myTeams') },
+      '/me/workspaces': { get: operation('workspace', 'myWorkspaces') },
+      '/names/{handle}': {
+        get: {
+          ...operation('teamAddress'),
+          responses: {
+            '200': {
+              description: 'Team address',
+              links: {
+                workspaces: {
+                  operationId: 'teamWorkspaces',
+                  parameters: { handle: '$response.body#/handle' },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/names/{handle}/workspaces': {
+        get: operation('workspace', 'teamWorkspaces'),
+      },
+      '/workspaces/{workspace_id}/tasks': {
+        get: {
+          ...operation('task', 'tasks'),
+          parameters: [
+            {
+              name: 'workspace_id',
+              in: 'path',
+              required: true,
+              schema: { type: 'integer', title: 'Workspace ID' },
+            },
+            { name: 'status', in: 'query', schema: { type: 'string' } },
+            { name: 'page', in: 'query', schema: { type: 'integer' } },
+          ],
+        },
+      },
+    },
+  });
 }
 
-function setup(
-  kind = 'organizations',
-  extra: { querySelection?: unknown; [name: string]: unknown } = {},
-) {
-  const data = new Map<string, Record<string, unknown>>([[root, {}]]);
+type Stored = Record<string, unknown>;
+type Request = {
+  path: string;
+  connectionId?: string;
+  method?: string;
+  query?: Record<string, string>;
+  body?: string;
+};
+const team = { id: 100, name: 'A team', handle: 'old-handle' };
+const workspace = {
+  id: 200,
+  name: 'A workspace',
+  updated_at: '2026-11-19T10:00:00Z',
+  active: true,
+};
+
+function withPublicEntrypoint() {
+  const document = apiDocument();
+  const resources = document.components!.crudResources as Record<
+    string,
+    unknown
+  >;
+  resources.workspaceAddress = {
+    identity: {
+      urlTemplate: '/public/{team}/{space}',
+      bindings: { team: { field: 'team' }, space: { field: 'space' } },
+    },
+  };
+  document.paths['/public/{team}/{space}'] = {
+    get: {
+      operationId: 'publicWorkspace',
+      security: [],
+      'x-crud': { action: 'read', resource: 'workspaceAddress' },
+      parameters: [
+        {
+          name: 'team',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', title: 'Team reference' },
+        },
+        {
+          name: 'space',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', title: 'Workspace reference' },
+        },
+      ],
+      responses: {
+        '200': {
+          description: 'A workspace',
+          links: {
+            tasks: {
+              operationId: 'tasks',
+              parameters: { workspace_id: '$response.body#/id' },
+            },
+          },
+        },
+      },
+    },
+  } as never;
+
+  return document;
+}
+
+function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
+  const document = apiDocument();
+  const apiSchema = {
+    classes: Object.fromEntries(
+      deriveOntology(document)
+        .terms.filter(term => term.kind === 'class')
+        .map(term => [term.shortname, 'atomic:api-class-' + term.shortname]),
+    ),
+    properties: Object.fromEntries(
+      deriveOntology(document)
+        .terms.filter(term => term.kind === 'property')
+        .map(term => [term.shortname, 'atomic:api-property-' + term.shortname]),
+    ),
+  };
+  const data = new Map<string, Stored>([[root, { [P + 'isA']: [tableClass] }]]);
   let sequence = 0;
   const resource = (subject: string) => ({
     subject,
-    get: (p: string) => data.get(subject)?.[p],
+    get: (property: string) => data.get(subject)?.[property],
     hasClasses: (...wanted: string[]) =>
-      wanted.every(c =>
-        ((data.get(subject)?.[P + 'isA'] ?? []) as string[]).includes(c),
+      wanted.every(klass =>
+        ((data.get(subject)?.[P + 'isA'] ?? []) as string[]).includes(klass),
       ),
-    set(p: string, value: unknown) {
-      data.get(subject)![p] = value;
+    set(property: string, value: unknown) {
+      data.get(subject)![property] = value;
+
+      return this;
+    },
+    remove(property: string) {
+      delete data.get(subject)![property];
 
       return this;
     },
@@ -111,42 +321,29 @@ function setup(
     subject: root,
     drive: 'atomic:drive',
     proxyOrigin: origin,
-    platform: 'github-issues',
+    platform: 'example-service',
     kind,
+    principal,
     connectionId: 'slot',
-    ownerId: '100',
-    ownerLogin: 'org',
-    repoId: '200',
-    repoName: 'project',
-    document: apiDocument(),
+    document,
     schema: { properties, classes },
+    apiSchema,
+    collection: bindCollection(document, { collection: 'myTeams' }),
     ...extra,
-    querySelection: mergeQuerySelections(
-      catalogSelection,
-      extra.querySelection,
-    ),
   };
-  const request = vi.fn(
-    async ({
-      path,
-    }: {
-      path: string;
-      connectionId?: string;
-      query?: Record<string, string>;
-    }) => ({
-      status: 200,
-      headers: {} as Record<string, string>,
-      body: (path === 'user/repos'
-        ? [repo]
-        : path === 'user/orgs'
-          ? [{ id: 100, login: 'org' }]
-          : path === 'user'
-            ? { id: 300, login: 'person' }
-            : path === 'repos/org/project'
-              ? repo
-              : [issue()]) as unknown,
-    }),
-  );
+  const request = vi.fn(async ({ path }: Request) => ({
+    status: 200,
+    headers: {} as Record<string, string>,
+    body: (path === 'v2/session'
+      ? { id: 7, label: 'Ada' }
+      : path === 'v2/me/teams'
+        ? [team]
+        : path === 'v2/names/old-handle'
+          ? { handle: 'new-handle' }
+          : path.endsWith('/workspaces')
+            ? [workspace]
+            : [{ id: 'task-1', name: 'A task' }]) as unknown,
+  }));
   const store = {
     getContext: vi.fn(async () => context),
     getResource: vi.fn(async (subject: string) => resource(subject)),
@@ -159,7 +356,7 @@ function setup(
         pageSize = 500,
       }: {
         property: string;
-        value: string;
+        value: unknown;
         page?: number;
         pageSize?: number;
       }) =>
@@ -176,7 +373,7 @@ function setup(
       }: {
         parent: string;
         isA: string[];
-        propVals: Record<string, unknown>;
+        propVals: Stored;
       }) => {
         const subject = 'atomic:created-' + ++sequence;
         data.set(subject, {
@@ -188,595 +385,823 @@ function setup(
         return resource(subject);
       },
     ),
-    proxy: { request, connections: vi.fn(async () => []), connect: vi.fn() },
+    proxy: {
+      request,
+      connections: vi.fn(async () => [
+        { connectionId: 'slot', platform: 'example-service' },
+      ]),
+      connect: vi.fn(),
+    },
     ui: { openResource: vi.fn() },
     execution: vi.fn(async () => ({ running: false })),
   };
 
-  return { data, store, context, app: createSyncApp(store, context), request };
+  return { data, store, context, request, app: createSyncApp(store, context) };
 }
 
-const nodes = (data: Map<string, Record<string, unknown>>, kind: string) =>
+const nodes = (data: Map<string, Stored>, kind: string) =>
   [...data].filter(([, props]) => props[prop('node-kind')] === kind);
+const config = (row: Stored) =>
+  row[prop('source-config')] as Record<string, unknown>;
 
-describe('GitHub sync app using the shared bridge', () => {
-  it.each(['organizations', 'repositories', 'mirror'])(
-    'opens %s Sync with stored state and no GitHub refresh',
+function childApp(set: ReturnType<typeof setup>, subject: string) {
+  const saved = set.data.get(subject)!;
+
+  return createSyncApp(set.store, {
+    ...set.context,
+    ...config(saved),
+    subject,
+    kind: saved[prop('node-kind')],
+    sourceKey: saved[prop('source-key')],
+  });
+}
+
+describe('catalog-driven Sync through the shared app bridge', () => {
+  it.each(['principal', 'collection'])(
+    'opens %s using saved state without provider reads',
     async kind => {
-      const { store } = setup(kind);
+      const { store, request } = setup(kind);
       const rootElement = document.createElement('div');
       await view({ root: rootElement, store });
-      expect(store.proxy.request).not.toHaveBeenCalled();
-      expect(store.execution).toHaveBeenCalledWith('state');
+      expect(request).not.toHaveBeenCalled();
       expect(store.execution).not.toHaveBeenCalledWith('start');
       expect(rootElement.querySelector('table')).toBeNull();
-      expect(rootElement.textContent).toContain(
-        kind === 'mirror' ? 'Sync now' : 'Refresh list',
-      );
     },
   );
 
-  it('persists discovery metadata and native browsing destinations idempotently', async () => {
-    const { app, data } = setup();
-    expect(await app.refresh()).toMatchObject({ rows: 2, incomplete: false });
-    const owners = nodes(data, 'owner');
+  it('populates newly connected principals on App entry using identity reads only', async () => {
+    const set = setup('platform');
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(set.request.mock.calls.map(([call]) => call.path)).toEqual([
+      'v2/session',
+    ]);
+    expect(nodes(set.data, 'principal')).toHaveLength(2);
     expect(
-      owners.find(([, row]) => row[P + 'name'] === 'org')![1][
-        prop('repository-count')
-      ],
-    ).toBe(1);
+      [...element.querySelectorAll('button')].filter(
+        button => button.textContent === 'Public',
+      ),
+    ).toHaveLength(1);
+    expect(nodes(set.data, 'record')).toHaveLength(0);
+    expect(set.store.execution).not.toHaveBeenCalledWith('start');
+  });
+
+  it('keeps Public and connection controls available when a principal cannot be resolved', async () => {
+    const set = setup('platform');
+    set.request.mockResolvedValue({ status: 503, headers: {}, body: null });
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.querySelector('[role="alert"]')?.textContent).toContain(
+      '503',
+    );
+    expect(element.textContent).toContain('Connect account');
+    expect(element.textContent).toContain('Public');
+    expect(set.request.mock.calls.map(([request]) => request.path)).toEqual([
+      'v2/session',
+    ]);
+  });
+
+  it('resolves a real principal and provisions only catalog root collections without eager reads', async () => {
+    const set = setup('platform');
+    const first = await set.app.openPrincipal('slot');
+    expect(set.request.mock.calls.map(([call]) => call.path)).toEqual([
+      'v2/session',
+    ]);
+    expect(nodes(set.data, 'principal')).toHaveLength(1);
+    expect(set.data.get(first.subject)?.[P + 'name']).toBe('Ada');
     expect(
-      owners.find(([, row]) => row[P + 'name'] === 'person')![1][
-        prop('repository-count')
-      ],
-    ).toBe(0);
-    expect(nodes(data, 'repository')[0][1]).toMatchObject({
-      [prop('repository-private')]: false,
-      [prop('repository-has-issues')]: true,
-      [prop('repository-open-issues')]: 7,
-    });
-    const before = data.size;
-    await app.refresh();
-    expect(data.size).toBe(before);
-    expect(nodes(data, 'repositories')).toHaveLength(2);
-  });
-
-  it('derives saved collection labels and enum labels from the composed API schema', async () => {
-    const { app, data, context } = setup();
-    const schema = context.document.components.schemas.builtinGithubRepository;
-    schema.title = 'API supplied repository heading';
-    schema.properties.name.title = 'API supplied name label';
-    schema.properties.private.oneOf = [
-      { enum: [true], title: 'API hidden' },
-      { enum: [false], title: 'API visible' },
-    ];
-    await app.refresh();
-    const listing = nodes(data, 'repositories')[0][1];
-    expect(listing[prop('collection-view')]).toMatchObject({
-      version: 1,
-      rowClass: classes['syncable-repository'],
-      title: 'API supplied repository heading',
-      openTargetProperty: prop('open-target'),
-      columns: expect.arrayContaining([
-        { property: P + 'name', label: 'API supplied name label' },
-        {
-          property: prop('repository-private'),
-          label: 'Kind',
-          format: 'enum',
-          labels: { true: 'API hidden', false: 'API visible' },
-        },
-      ]),
-    });
-    expect(data.get(root)![prop('collection-view')]).toMatchObject({
-      rowClass: classes['syncable-owner'],
-      columns: expect.arrayContaining([
-        {
-          property: prop('repository-count'),
-          label: 'API supplied repository heading',
-          format: 'count',
-        },
-        {
-          property: prop('owner-kind'),
-          label: 'Kind',
-          format: 'enum',
-          labels: { organization: 'Organization', personal: 'Personal owner' },
-        },
-      ]),
-    });
-  });
-
-  it('materializes navigation links during explicit discovery and mirror creation without eager issue reads', async () => {
-    const { app, data, store, context, request } = setup();
-    await app.refresh();
-    const [ownerSubject, owner] = nodes(data, 'owner').find(
-      ([, props]) => props[P + 'name'] === 'org',
-    )!;
-    const [listingSubject] = nodes(data, 'repositories').find(
-      ([, props]) => props[P + 'parent'] === ownerSubject,
-    )!;
-    expect(owner[prop('open-target')]).toBe(listingSubject);
-    expect(nodes(data, 'mirror')).toHaveLength(0);
-    expect(request.mock.calls.map(([call]) => call.path)).not.toContain(
-      'repositories/200/issues',
+      nodes(set.data, 'collection').map(
+        ([, row]) =>
+          (config(row).collection as { collection: string }).collection,
+      ),
+    ).toEqual(['myTeams', 'myWorkspaces']);
+    expect(nodes(set.data, 'record')).toHaveLength(0);
+    const count = set.data.size;
+    await set.app.openPrincipal('another-connection');
+    expect(set.data.size).toBe(count);
+    expect(config(set.data.get(first.subject)!).connectionId).toBe(
+      'another-connection',
     );
-    const [repoSubject, savedRepo] = nodes(data, 'repository')[0];
-    expect(savedRepo[prop('open-target')]).toBeUndefined();
-    const repositories = createSyncApp(store, {
-      ...context,
-      subject: listingSubject,
-      kind: 'repositories',
-    });
-    const before = request.mock.calls.length;
-    const mirror = await repositories.ensureMirror(
-      await store.getResource(repoSubject),
-    );
-    expect(savedRepo[prop('open-target')]).toBe(mirror.subject);
-    expect(request.mock.calls.length).toBe(before);
-    const identity = savedRepo[P + 'localId'];
-    await repositories.ensureMirror(await store.getResource(repoSubject));
-    expect(savedRepo[P + 'localId']).toBe(identity);
-    expect(nodes(data, 'mirror')).toHaveLength(1);
   });
 
-  it('retains counts and rows after an incomplete discovery', async () => {
-    const { app, data, request } = setup();
-    await app.refresh();
-    const owner = nodes(data, 'owner').find(
-      ([, row]) => row[P + 'name'] === 'org',
-    )![1];
-    owner[prop('repository-count')] = 42;
-    request.mockImplementation(async ({ path }) => ({
-      status: 200,
-      headers: (path === 'user/repos'
-        ? { link: '<https://api.github.com/user/repos?page=2>; rel="next"' }
-        : {}) as Record<string, string>,
-      body:
-        path === 'user/repos'
-          ? [repo]
-          : path === 'user/orgs'
-            ? []
-            : { id: 300, login: 'person' },
-    }));
-    expect(await app.refresh()).toMatchObject({ incomplete: true });
-    expect(owner[prop('repository-count')]).toBe(42);
-    expect(nodes(data, 'repository')).toHaveLength(1);
-  });
-
-  it('leaves unavailable metadata and incomplete owner counts unknown', async () => {
-    const { app, data, request } = setup();
-    request.mockImplementation(async ({ path }) => ({
-      status: 200,
-      headers: (path === 'user/repos'
-        ? { link: '<https://api.github.com/user/repos?page=2>; rel="next"' }
-        : {}) as Record<string, string>,
-      body:
-        path === 'user/repos'
-          ? [{ id: repo.id, name: repo.name, owner: repo.owner }]
-          : path === 'user/orgs'
-            ? []
-            : { id: 300, login: 'person' },
-    }));
-    expect(await app.refresh()).toMatchObject({ incomplete: true });
-    for (const [, owner] of nodes(data, 'owner'))
-      expect(owner[prop('repository-count')]).toBeUndefined();
-    const row = nodes(data, 'repository')[0][1];
-    for (const name of [
-      'repository-private',
-      'repository-has-issues',
-      'repository-open-issues',
-    ])
-      expect(row[prop(name)]).toBeUndefined();
-  });
-
-  it('reuses moved sources without reparenting or updating outside the selected root', async () => {
-    const { app, data } = setup();
-    await app.refresh();
-    const owner = nodes(data, 'owner').find(
-      ([, row]) => row[P + 'name'] === 'org',
-    )![1];
-    owner[P + 'parent'] = 'atomic:elsewhere';
-    owner[prop('repository-count')] = 99;
-    const before = data.size;
-    await app.refresh();
-    expect(data.size).toBe(before);
-    expect(owner[P + 'parent']).toBe('atomic:elsewhere');
-    expect(owner[prop('repository-count')]).toBe(99);
-  });
-
-  it('refuses to provision a missing descendant beneath a moved account', async () => {
-    const { app, data, store } = setup('platform');
-    await app.openAccount('slot');
-    const [, account] = nodes(data, 'account')[0];
-    account[P + 'parent'] = 'atomic:elsewhere';
-    for (const [subject] of nodes(data, 'organizations')) data.delete(subject);
-    store.newResource.mockClear();
-    await expect(app.openAccount('slot')).rejects.toThrow(
-      'moved GitHub resource',
-    );
-    expect(store.newResource).not.toHaveBeenCalled();
-  });
-
-  it('rejects a conflicting resource occupying a stable source identity', async () => {
-    const { app, data, store } = setup();
-    await app.refresh();
-    const [, owner] = nodes(data, 'owner')[0];
-    owner[prop('source-key')] = 'unrelated';
-    store.newResource.mockClear();
-    await expect(app.refresh()).rejects.toThrow(
-      'source identity does not match',
-    );
-    expect(store.newResource).not.toHaveBeenCalled();
-  });
-
-  it('reuses a moved legacy mirror without changing its identity or location', async () => {
-    const { app, data, store } = setup('repositories');
-    await app.refresh();
-    const [repoSubject] = nodes(data, 'repository')[0];
-    const mirror = await app.ensureMirror(await store.getResource(repoSubject));
-    const saved = data.get(mirror.subject)!;
-    const [, legacy] = sourceKeys(
-      origin,
-      'mirror',
-      'github-repo:200',
-      'slot',
-      'issues',
-    );
-    saved[P + 'parent'] = 'atomic:elsewhere';
-    saved[prop('source-key')] = legacy;
-    saved[P + 'localId'] = 'syncables:node:' + encodeURIComponent(legacy);
-    store.newResource.mockClear();
-    expect(
-      (await app.ensureMirror(await store.getResource(repoSubject))).subject,
-    ).toBe(mirror.subject);
-    expect(store.newResource).not.toHaveBeenCalled();
-    expect(saved[P + 'parent']).toBe('atomic:elsewhere');
-    expect(saved[prop('source-key')]).toBe(legacy);
-  });
-
-  it('upserts typed issues by identity, preserves user fields and retains rows on errors', async () => {
-    const { app, data, request } = setup('mirror');
-    expect(await app.refresh()).toMatchObject({
-      added: 1,
-      changed: 0,
-      unchanged: 0,
-    });
-    const imported = [...data].find(
-      ([, row]) => row[P + 'localId'] === 'syncables:github-issue:1001',
-    )![1];
-    imported['atomic:user-note'] = 'keep';
-    expect(imported[prop('issue-updated')]).toBe(
-      Date.parse(issue().updated_at),
-    );
-    expect(await app.refresh()).toMatchObject({ unchanged: 1 });
-    request.mockResolvedValue({
+  it('preserves typed principals and keeps Public separate from authenticated namespaces', async () => {
+    const set = setup('platform');
+    await set.app.openPrincipal('slot');
+    set.request.mockResolvedValueOnce({
       status: 200,
       headers: {},
-      body: [issue('Changed')],
+      body: { id: '7', label: 'Ada' },
     });
-    expect(await app.refresh()).toMatchObject({ changed: 1 });
-    expect(imported['atomic:user-note']).toBe('keep');
-    request.mockResolvedValue({ status: 500, headers: {}, body: null });
-    await expect(app.refresh()).rejects.toThrow('HTTP 500');
-    expect(imported[P + 'name']).toBe('Changed');
-    expect((await app.status()).error).toContain('HTTP 500');
+    await set.app.openPrincipal('slot');
+    const calls = set.request.mock.calls.length;
+    await set.app.openPublic();
+    expect(set.request).toHaveBeenCalledTimes(calls);
+    expect(nodes(set.data, 'principal')).toHaveLength(3);
+    expect(
+      new Set(
+        nodes(set.data, 'principal').map(([, row]) => row[prop('source-key')]),
+      ).size,
+    ).toBe(3);
+
+    for (const [, row] of nodes(set.data, 'collection')) {
+      if ((config(row).principal as { kind: string }).kind === 'public')
+        expect(config(row).connectionId).toBeUndefined();
+    }
   });
 
-  it('keeps identical remote issue IDs in another mirror separate', async () => {
-    const { app, data } = setup('mirror');
-    const foreign = {
-      [P + 'parent']: 'atomic:other-mirror',
-      [P + 'isA']: [classes['syncable-record']],
-      [P + 'localId']: 'syncables:github-issue:1001',
-      [P + 'name']: 'Other account or public mirror copy',
+  it('creates saved child navigation during explicit Sync and reads only the selected root collection', async () => {
+    const set = setup();
+    expect(await set.app.refresh()).toMatchObject({
+      added: 1,
+      rows: 1,
+      incomplete: false,
+    });
+    expect(set.request.mock.calls.map(([call]) => call.path)).toEqual([
+      'v2/me/teams',
+    ]);
+    const [rowSubject, row] = nodes(set.data, 'record')[0];
+    const [childSubject, child] = nodes(set.data, 'collection')[0];
+    expect(child[P + 'parent']).toBe(rowSubject);
+    expect(row[prop('open-target')]).toBe(childSubject);
+    expect(config(child).navigation).toMatchObject({
+      kind: 'responseLink',
+      collection: 'teamWorkspaces',
+    });
+    expect(set.data.get(root)![prop('collection-view')]).toMatchObject({
+      rowClass: set.context.apiSchema.classes.team,
+      title: 'Teams',
+      columns: expect.arrayContaining([
+        { property: set.context.apiSchema.properties.name, label: 'name' },
+      ]),
+    });
+  });
+
+  it('executes a catalog-declared POST list read through the same shared bridge', async () => {
+    const document = apiDocument();
+    const definition = (
+      document.components!.crudResources as Record<
+        string,
+        { collections: Record<string, unknown> }
+      >
+    ).team;
+    definition.collections.myTeams = {
+      urlTemplate: '/me/teams',
+      listMethod: 'POST',
+      listBody: { filter: 'all' },
     };
-    data.set('atomic:other-issue', foreign);
-    expect(await app.refresh()).toMatchObject({ added: 1 });
-    expect(foreign[P + 'name']).toBe('Other account or public mirror copy');
-    expect(
-      [...data.values()].filter(
-        row => row[P + 'localId'] === foreign[P + 'localId'],
-      ),
-    ).toHaveLength(2);
-  });
-
-  it.each([{ id: '1001' }, { number: '1' }, { updated_at: 123 }])(
-    'rejects invalid typed issue fields %s before import',
-    async invalid => {
-      const { app, store, request } = setup('mirror');
-      request.mockResolvedValue({
-        status: 200,
-        headers: {},
-        body: [{ ...issue(), ...invalid }],
-      });
-      await expect(app.refresh()).rejects.toThrow('invalid issue');
-      expect(store.newResource).not.toHaveBeenCalled();
-    },
-  );
-
-  it('rejects an issue identity occupied by a different row type', async () => {
-    const { app, data, store } = setup('mirror');
-    data.set('atomic:user-row', {
-      [P + 'parent']: root,
-      [P + 'localId']: 'syncables:github-issue:1001',
-      [P + 'isA']: ['atomic:user-type'],
-      [P + 'name']: 'Keep me',
+    const path = document.paths['/me/teams'];
+    path.post = path.get;
+    delete path.get;
+    const set = setup('collection', {
+      document,
+      collection: bindCollection(document, { collection: 'myTeams' }),
     });
-    await expect(app.refresh()).rejects.toThrow('identity is already in use');
-    expect(store.newResource).not.toHaveBeenCalled();
-    expect(data.get('atomic:user-row')![P + 'name']).toBe('Keep me');
-  });
-
-  it('loads existing mirror rows past the first local query page', async () => {
-    const { app, data, store } = setup('mirror');
-    for (let i = 0; i < 101; i++)
-      data.set('atomic:cached-' + i, {
-        [P + 'parent']: root,
-        [P + 'isA']: [classes['syncable-record']],
-        [P + 'localId']:
-          'syncables:github-issue:' + (i === 100 ? 1001 : 2000 + i),
-        [P + 'name']: 'Cached',
-      });
-    expect(await app.refresh()).toMatchObject({ added: 0, changed: 1 });
-    expect(data.get('atomic:cached-100')![P + 'name']).toBe('First issue');
-    expect(store.newResource).not.toHaveBeenCalled();
-    expect(store.query).toHaveBeenCalledWith(
-      expect.objectContaining({ page: 1, pageSize: 100 }),
-    );
-    expect(
-      store.getMany.mock.calls.every(([subjects]) => subjects.length <= 100),
-    ).toBe(true);
-  });
-
-  it('refuses paused work without contacting GitHub', async () => {
-    const { app, data, request } = setup('mirror');
-    data.get(root)![prop('mirror-status')] = { paused: true };
-    await expect(app.refresh()).rejects.toThrow('Resume');
-    expect(request).not.toHaveBeenCalled();
-  });
-
-  it.each([undefined, 'public'])(
-    'forwards a pinned issue cursor for %s access',
-    async mode => {
-      const { app, request } = setup('mirror', { mode });
-      request.mockResolvedValueOnce({
-        status: 200,
-        headers: {
-          link: '</repositories/200/issues?per_page=100&page=2&state=all&after=Y3Vyc29yOjY%3D>; rel="next"',
-        },
-        body: [issue()],
-      });
-      request.mockResolvedValueOnce({ status: 200, headers: {}, body: [] });
-      await app.refresh();
-      expect(request).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          path: 'repositories/200/issues',
-          query: {
-            per_page: '100',
-            page: '2',
-            state: 'all',
-            after: 'Y3Vyc29yOjY=',
-          },
-        }),
-      );
-    },
-  );
-
-  it('selects only the mirror collection while retaining unrelated catalog defaults', async () => {
-    const { app, request } = setup('mirror', {
-      querySelection: {
-        query_overrides: [
-          { path: '/unrelated', values: { filter: 'stored-default' } },
-        ],
-      },
-    });
-    expect(await app.refresh()).toMatchObject({ rows: 1, incomplete: false });
-    expect(request).toHaveBeenCalledTimes(1);
-    expect(request).toHaveBeenCalledWith(
+    expect(await set.app.refresh()).toMatchObject({ added: 1 });
+    expect(set.request).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: 'repositories/200/issues',
-        query: { per_page: '100', state: 'all' },
+        method: 'POST',
+        path: 'v2/me/teams',
+        body: JSON.stringify({ filter: 'all' }),
       }),
     );
   });
 
-  it('opens saved Sync controls without needing provider metadata', async () => {
-    const { store, app, request } = setup('mirror', { document: undefined });
-    const element = document.createElement('div');
-    await view({ root: element, store });
-    expect(element.textContent).toContain('Sync now');
-    expect(request).not.toHaveBeenCalled();
-    await expect(app.refresh()).rejects.toThrow(
-      'API description is unavailable',
-    );
-    expect(request).not.toHaveBeenCalled();
+  it('resolves the source detail Link only during child Sync and never reads sibling collections', async () => {
+    const set = setup();
+    await set.app.refresh();
+    const [childSubject] = nodes(set.data, 'collection')[0];
+    set.request.mockClear();
+    const child = childApp(set, childSubject);
+    expect(await child.refresh()).toMatchObject({ added: 1 });
+    expect(set.request.mock.calls.map(([call]) => call.path)).toEqual([
+      'v2/names/old-handle',
+      'v2/names/new-handle/workspaces',
+    ]);
+    expect(nodes(set.data, 'collection')).toHaveLength(2);
+    const tasks = nodes(set.data, 'collection').find(
+      ([, row]) =>
+        (config(row).navigation as { collection: string }).collection ===
+        'tasks',
+    )![1];
+    expect(config(tasks).navigation).toMatchObject({
+      kind: 'direct',
+      bound: { path: '/workspaces/200/tasks' },
+    });
+    expect(set.data.get(childSubject)![prop('collection-view')]).toMatchObject({
+      columns: expect.arrayContaining([
+        {
+          property: set.context.apiSchema.properties.active,
+          label: 'active',
+          format: 'enum',
+          labels: { true: 'Active', false: 'Inactive' },
+        },
+        {
+          property: set.context.apiSchema.properties['updated-at'],
+          label: 'updated_at',
+        },
+      ]),
+    });
   });
 
-  it('retains accepted rows and the last success when a later page fails', async () => {
-    const { app, data, request } = setup('mirror');
-    data.get(root)![prop('mirror-status')] = {
-      lastSuccess: 'earlier complete read',
-    };
-    request.mockResolvedValueOnce({
+  it('refreshes mutable navigation addresses without changing child table identity', async () => {
+    const set = setup();
+    await set.app.refresh();
+    const [childSubject, child] = nodes(set.data, 'collection')[0];
+    const key = child[prop('source-key')];
+    const localId = child[P + 'localId'];
+    set.request.mockResolvedValue({
       status: 200,
-      headers: {
-        link: '</repositories/200/issues?per_page=100&page=2&state=all>; rel="next"',
-      },
-      body: [issue()],
+      headers: {},
+      body: [{ ...team, handle: 'renamed' }],
     });
-    request.mockResolvedValueOnce({ status: 503, headers: {}, body: [] });
-    expect(await app.refresh()).toMatchObject({
-      rows: 1,
-      added: 1,
-      incomplete: true,
+    await set.app.refresh();
+    expect(nodes(set.data, 'collection')).toHaveLength(1);
+    expect(child[prop('source-key')]).toBe(key);
+    expect(child[P + 'localId']).toBe(localId);
+    expect(config(set.data.get(childSubject)!).navigation).toMatchObject({
+      source: { path: '/names/renamed' },
     });
-    expect(await app.status()).toMatchObject({
-      lastSuccess: 'earlier complete read',
-      error: expect.stringContaining('HTTP 503'),
-    });
-    expect(
-      [...data.values()].some(row => row[P + 'name'] === 'First issue'),
-    ).toBe(true);
   });
 
-  it.each([undefined, 'public'])(
-    'keeps accepted records when the library reaches the %s request budget',
-    async mode => {
-      const { app, request, data } = setup('mirror', {
-        mode,
-        ...(mode ? { connectionId: undefined } : {}),
-      });
-      data.get(root)![prop('mirror-status')] = {
-        lastSuccess: 'earlier complete read',
-      };
-      let page = 0;
-      request.mockImplementation(async () => {
-        page++;
+  it('upserts typed fields idempotently and preserves user values and subjects', async () => {
+    const set = setup();
+    await set.app.refresh();
+    const [rowSubject, row] = nodes(set.data, 'record')[0];
+    row['atomic:user-note'] = 'Keep this';
+    const localId = row[P + 'localId'];
+    const before = set.data.size;
+    expect(await set.app.refresh()).toMatchObject({
+      unchanged: 1,
+      added: 0,
+      changed: 0,
+    });
+    expect(set.data.size).toBe(before);
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ ...team, name: 'Renamed' }],
+    });
+    expect(await set.app.refresh()).toMatchObject({ changed: 1 });
+    expect(set.data.get(rowSubject)).toMatchObject({
+      [P + 'name']: 'Renamed',
+      'atomic:user-note': 'Keep this',
+      [P + 'localId']: localId,
+    });
+  });
 
-        return {
-          status: 200,
-          headers: {
-            link:
-              '</repositories/200/issues?per_page=100&page=' +
-              (page + 1) +
-              '&state=all>; rel="next"',
+  it('uses a declared string column label when the library falls back to an ID', async () => {
+    const set = setup();
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ id: 100, handle: 'catalog-label' }],
+    });
+    await set.app.refresh();
+    expect(nodes(set.data, 'record')[0][1][P + 'name']).toBe('catalog-label');
+  });
+
+  it('blocks new destinations while historical sources need review', async () => {
+    const set = setup('principal', { legacyMigrationBlocked: true });
+    await expect(set.app.createCollection('myTeams')).rejects.toThrow(
+      'historical source warnings',
+    );
+    expect(set.store.newResource).not.toHaveBeenCalled();
+  });
+
+  it('clears null or absent previously managed fields while preserving user properties', async () => {
+    const set = setup('collection', {
+      collection: bindCollection(apiDocument(), { collection: 'myWorkspaces' }),
+    });
+    await set.app.refresh();
+    const [, row] = nodes(set.data, 'record')[0];
+    row['atomic:user-note'] = 'Keep this';
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ id: 200, name: 'A workspace', active: null }],
+    });
+    expect(await set.app.refresh()).toMatchObject({ changed: 1 });
+    expect(row[set.context.apiSchema.properties.active]).toBeUndefined();
+    expect(row[set.context.apiSchema.properties['updated-at']]).toBeUndefined();
+    expect(row['atomic:user-note']).toBe('Keep this');
+    expect(await set.app.refresh()).toMatchObject({ unchanged: 1 });
+  });
+
+  it('retains stable rows after same-drive moves without writing outside the selected root', async () => {
+    const set = setup();
+    await set.app.refresh();
+    const [, row] = nodes(set.data, 'record')[0];
+    row[P + 'parent'] = 'atomic:another-parent';
+    const before = set.data.size;
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ ...team, name: 'Remote update' }],
+    });
+    expect(await set.app.refresh()).toMatchObject({ added: 0 });
+    expect(set.data.size).toBe(before);
+    expect(row[P + 'name']).toBe(team.name);
+    expect(row[P + 'parent']).toBe('atomic:another-parent');
+  });
+
+  it('adopts canonical source format through explicit aliases while preserving subject and local ID', async () => {
+    const set = setup();
+    await set.app.refresh();
+    const [subject, row] = nodes(set.data, 'record')[0];
+    const current = row[prop('source-key')] as string;
+    row[prop('source-key')] = 'legacy-source-key';
+    row[P + 'localId'] = 'legacy-local-id';
+    const migrated = createSyncApp(set.store, {
+      ...set.context,
+      identityAliases: { [current]: ['legacy-source-key'] },
+    });
+    const count = set.data.size;
+    expect(await migrated.refresh()).toMatchObject({ added: 0, changed: 1 });
+    expect(set.data.size).toBe(count);
+    expect(set.data.get(subject)![P + 'localId']).toBe('legacy-local-id');
+    expect(row[prop('source-key')]).toBe(current);
+  });
+
+  it('migrates a host-validated principal alias after resolving its real connection identity', async () => {
+    const set = setup('platform');
+    const subject = 'atomic:legacy-account';
+    set.data.set(subject, {
+      [P + 'parent']: root,
+      [P + 'isA']: ['atomic:old-account'],
+      [P + 'localId']: 'old-account-local-id',
+      [P + 'name']: 'Custom account title',
+      [prop('source-key')]: 'old-source-key',
+      [prop('node-kind')]: 'account',
+    });
+    const app = createSyncApp(set.store, {
+      ...set.context,
+      legacySources: [
+        {
+          subject,
+          sourceKey: 'old-source-key',
+          localId: 'old-account-local-id',
+          kind: 'principal',
+          connectionId: 'slot',
+        },
+      ],
+    });
+    expect((await app.openPrincipal('slot')).subject).toBe(subject);
+    const saved = set.data.get(subject)!;
+    expect(saved[P + 'localId']).toBe('old-account-local-id');
+    expect(saved[P + 'name']).toBe('Custom account title');
+    expect(saved[P + 'isA']).toEqual(
+      expect.arrayContaining([
+        tableClass,
+        classes['syncable-principal'],
+        'atomic:old-account',
+      ]),
+    );
+    expect(JSON.parse(saved[prop('source-key')] as string)).toMatchObject({
+      version: 2,
+      kind: 'principal',
+      principal: { subject: 7 },
+    });
+    expect(config(saved).principal).toEqual(principal);
+    expect(nodes(set.data, 'principal')).toHaveLength(1);
+  });
+
+  it('reuses host-described flat legacy rows without interpreting provider IDs or fields', async () => {
+    const set = setup();
+    await set.app.refresh();
+    const [subject, row] = nodes(set.data, 'record')[0];
+    const canonical = row[prop('source-key')] as string;
+    const parentSourceKey = JSON.parse(canonical).parentSourceKey;
+    delete row[prop('source-key')];
+    row[P + 'localId'] = 'opaque-legacy-local-id';
+    row[P + 'isA'] = ['atomic:legacy-class'];
+    row[prop('node-kind')] = 'old-row';
+    const app = createSyncApp(set.store, {
+      ...set.context,
+      legacySources: [
+        {
+          subject,
+          localId: 'opaque-legacy-local-id',
+          kind: 'record',
+          connectionId: 'slot',
+          collection: { name: 'myTeams', resource: 'team' },
+          parentSourceKey,
+          remoteId: 100,
+        },
+      ],
+    });
+    expect(await app.refresh()).toMatchObject({ added: 0, changed: 1 });
+    expect(row[prop('source-key')]).toBe(canonical);
+    expect(row[P + 'localId']).toBe('opaque-legacy-local-id');
+    expect(row[P + 'isA']).toEqual(
+      expect.arrayContaining([
+        'atomic:legacy-class',
+        set.context.apiSchema.classes.team,
+      ]),
+    );
+    expect(nodes(set.data, 'record')).toHaveLength(1);
+  });
+
+  it('refuses to duplicate a matching historical destination whose saved identity changed', async () => {
+    const set = setup();
+    const subject = 'atomic:changed-legacy';
+    set.data.set(subject, {
+      [P + 'parent']: root,
+      [P + 'localId']: 'changed-local-id',
+      [prop('source-key')]: 'old-key',
+    });
+    const parentSourceKey = sourceKey({
+      proxyOrigin: origin,
+      platform: set.context.platform,
+      principal,
+      kind: 'collection',
+      collection: collectionIdentity(set.context.collection),
+    });
+    const app = createSyncApp(set.store, {
+      ...set.context,
+      legacySources: [
+        {
+          subject,
+          sourceKey: 'old-key',
+          localId: 'expected-old-local-id',
+          kind: 'record',
+          connectionId: 'slot',
+          collection: { name: 'myTeams', resource: 'team' },
+          parentSourceKey,
+          remoteId: 100,
+        },
+      ],
+    });
+    await expect(app.refresh()).rejects.toThrow('no duplicate was created');
+    expect(set.store.newResource).not.toHaveBeenCalled();
+  });
+
+  it.each(['configuration', 'identity'])(
+    'rechecks a legacy alias %s immediately before adoption',
+    async changed => {
+      const set = setup();
+      const subject = 'atomic:legacy';
+      const raw = { slot: 'a' };
+      set.data.set(subject, {
+        [P + 'parent']: root,
+        [P + 'localId']: 'legacy',
+        [prop('source-key')]: 'old-key',
+        [prop('source-config')]:
+          changed === 'configuration' ? { slot: 'b' } : raw,
+        'atomic:legacy-identity': changed === 'identity' ? 200 : 100,
+      });
+      const parentSourceKey = sourceKey({
+        proxyOrigin: origin,
+        platform: set.context.platform,
+        principal,
+        kind: 'collection',
+        collection: collectionIdentity(set.context.collection),
+      });
+      const app = createSyncApp(set.store, {
+        ...set.context,
+        legacySources: [
+          {
+            subject,
+            sourceKey: 'old-key',
+            localId: 'legacy',
+            kind: 'record',
+            connectionId: 'slot',
+            collection: { name: 'myTeams', resource: 'team' },
+            parentSourceKey,
+            remoteId: 100,
+            sourceConfigFingerprint: sourceConfigFingerprint(raw),
+            remoteIdProperty: 'atomic:legacy-identity',
           },
-          body: [{ ...issue(), id: 1000 + page, number: page }],
-        };
+        ],
       });
-      const limit = mode === 'public' ? 40 : 20;
-      expect(await app.refresh()).toMatchObject({
-        added: limit,
-        rows: limit,
-        incomplete: true,
+      await expect(app.refresh()).rejects.toThrow('no duplicate was created');
+      expect(set.store.newResource).not.toHaveBeenCalled();
+    },
+  );
+
+  it('displays native compatibility warnings without any provider read', async () => {
+    const set = setup('principal', {
+      legacyWarnings: ['A historical source needs review.'],
+    });
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.querySelector('[role="status"]')?.textContent).toBe(
+      'A historical source needs review.',
+    );
+    expect(set.request).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'relocates only an unchanged native-described legacy parent (user moved: %s)',
+    async moved => {
+      const set = setup('principal');
+      const owner = 'atomic:old-owner';
+      const userParent = 'atomic:user-parent';
+      set.data.set(owner, { [P + 'parent']: root });
+      set.data.set(userParent, { [P + 'parent']: root });
+      const subject = 'atomic:old-table';
+      set.data.set(subject, {
+        [P + 'parent']: moved ? userParent : owner,
+        [P + 'isA']: [tableClass],
+        [P + 'localId']: 'legacy-table',
+        [prop('source-key')]: 'old-key',
       });
-      expect(request).toHaveBeenCalledTimes(limit);
-      expect(await app.status()).toMatchObject({
-        lastSuccess: 'earlier complete read',
+      const app = createSyncApp(set.store, {
+        ...set.context,
+        legacySources: [
+          {
+            subject,
+            sourceKey: 'old-key',
+            localId: 'legacy-table',
+            kind: 'collection',
+            connectionId: 'slot',
+            collection: { name: 'myTeams', resource: 'team', context: {} },
+            previousParent: owner,
+            reparentToLogicalParent: true,
+          },
+        ],
       });
       expect(
-        request.mock.calls.every(
-          ([sent]) => sent.connectionId === (mode ? undefined : 'slot'),
-        ),
-      ).toBe(true);
+        (await app.ensureCollection({ bound: set.context.collection })).subject,
+      ).toBe(subject);
+      expect(set.data.get(subject)![P + 'parent']).toBe(
+        moved ? userParent : root,
+      );
+      expect(set.data.get(subject)![P + 'localId']).toBe('legacy-table');
     },
   );
 
-  it('retains an incomplete prefix if continuation repeats a provider identity', async () => {
-    const { app, request } = setup('mirror');
-    request.mockResolvedValueOnce({
+  it('uses principal and collection-instance identity to isolate identical remote IDs', async () => {
+    const set = setup();
+    await set.app.refresh();
+    const separate = createSyncApp(set.store, {
+      ...set.context,
+      principal: { ...principal, subject: '7' },
+    });
+    expect(await separate.refresh()).toMatchObject({ added: 1 });
+    expect(nodes(set.data, 'record')).toHaveLength(2);
+  });
+
+  it('rejects conflicting resource classes occupying a source identity', async () => {
+    const set = setup();
+    await set.app.refresh();
+    const [, row] = nodes(set.data, 'record')[0];
+    row[P + 'isA'] = ['atomic:unrelated'];
+    set.store.newResource.mockClear();
+    await expect(set.app.refresh()).rejects.toThrow('identity does not match');
+    expect(set.store.newResource).not.toHaveBeenCalled();
+  });
+
+  it('keeps accepted prefix rows and earlier success when a later page fails', async () => {
+    const set = setup();
+    set.data.get(root)![prop('mirror-status')] = {
+      lastSuccess: 'earlier complete read',
+    };
+    set.request.mockResolvedValueOnce({
       status: 200,
       headers: {
-        link: '</repositories/200/issues?per_page=100&page=2&state=all>; rel="next"',
+        Link: '<https://api.example/v2/me/teams?page=2>; rel="next"',
       },
-      body: [issue()],
+      body: [team],
     });
-    request.mockResolvedValueOnce({
-      status: 200,
-      headers: {},
-      body: [issue()],
-    });
-    expect(await app.refresh()).toMatchObject({
+    set.request.mockResolvedValueOnce({ status: 503, headers: {}, body: null });
+    expect(await set.app.refresh()).toMatchObject({
       added: 1,
       rows: 1,
       incomplete: true,
     });
-    expect((await app.status()).error).toContain('repeated record identity');
+    expect(await set.app.status()).toMatchObject({
+      lastSuccess: 'earlier complete read',
+      error: expect.stringContaining('503'),
+    });
+    expect(nodes(set.data, 'record')).toHaveLength(1);
   });
 
-  it('uses library link validation and retains rows without contacting a foreign origin', async () => {
-    const { app, request } = setup('mirror');
-    request.mockResolvedValue({
-      status: 200,
-      headers: {
-        link: '<https://evil.example/repositories/200/issues?per_page=100&page=2&state=all>; rel="next"',
-      },
-      body: [issue()],
-    });
-    expect(await app.refresh()).toMatchObject({ added: 1, incomplete: true });
-    expect(request).toHaveBeenCalledTimes(1);
-    expect((await app.status()).error).toContain('origin');
+  it('retains previously stored rows on complete empty reads and provider errors', async () => {
+    const set = setup();
+    await set.app.refresh();
+    set.request.mockResolvedValue({ status: 200, headers: {}, body: [] });
+    expect(await set.app.refresh()).toMatchObject({ rows: 0 });
+    expect(nodes(set.data, 'record')).toHaveLength(1);
+    set.request.mockResolvedValue({ status: 500, headers: {}, body: null });
+    await expect(set.app.refresh()).rejects.toThrow('500');
+    expect(nodes(set.data, 'record')).toHaveLength(1);
   });
 
-  it('refuses a lossy query conversion before sending a continuation', async () => {
-    const { app, request } = setup('mirror');
-    request.mockResolvedValue({
+  it('lets the library refuse a foreign next-link without issuing that request', async () => {
+    const set = setup();
+    set.request.mockResolvedValue({
       status: 200,
       headers: {
-        link: '</repositories/200/issues?per_page=100&page=2&state=open&state=all>; rel="next"',
+        Link: '<https://foreign.example/v2/me/teams?page=2>; rel="next"',
       },
-      body: [issue()],
+      body: [team],
     });
-    expect(await app.refresh()).toMatchObject({ added: 1, incomplete: true });
-    expect(request).toHaveBeenCalledTimes(1);
-    expect((await app.status()).error).toContain('Repeated GitHub query');
+    expect(await set.app.refresh()).toMatchObject({
+      added: 1,
+      incomplete: true,
+    });
+    expect(set.request).toHaveBeenCalledTimes(1);
   });
 
-  it('forwards the exact next URL to host permission checks without rewriting its scope', async () => {
-    const { app, request } = setup('mirror');
-    request.mockResolvedValueOnce({
-      status: 200,
-      headers: {
-        link: '</repositories/999/issues?per_page=100&page=2&state=open>; rel="next"',
-      },
-      body: [issue()],
-    });
-    request.mockImplementationOnce(async () => {
-      throw new Error('Host refused a different source');
-    });
-    expect(await app.refresh()).toMatchObject({ added: 1, incomplete: true });
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        path: 'repositories/999/issues',
-        query: { per_page: '100', page: '2', state: 'open' },
-      }),
+  it('opens saved controls without metadata and refuses a refresh before network access', async () => {
+    const set = setup('collection', { document: undefined });
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain('Sync now');
+    await expect(set.app.refresh()).rejects.toThrow(
+      'API description is unavailable',
     );
-    expect((await app.status()).error).toBe('Host refused a different source');
+    expect(set.request).not.toHaveBeenCalled();
   });
 
-  it('links anonymous repositories separately and reuses their identities', async () => {
-    const { app, data, store } = setup('public', {
+  it('refuses paused work before contacting the provider', async () => {
+    const set = setup();
+    set.data.get(root)![prop('mirror-status')] = { paused: true };
+    await expect(set.app.refresh()).rejects.toThrow('Resume');
+    expect(set.request).not.toHaveBeenCalled();
+  });
+
+  it.each([{ id: null }, { id: 1.5 }, { id: '' }])(
+    'rejects an invalid remote identity before storing records %j',
+    async invalid => {
+      const set = setup();
+      set.request.mockResolvedValue({
+        status: 200,
+        headers: {},
+        body: [{ ...team, ...invalid }],
+      });
+      await expect(set.app.refresh()).rejects.toThrow();
+      expect(nodes(set.data, 'record')).toHaveLength(0);
+    },
+  );
+
+  it('stores timestamp projection as an integer and rejects invalid scalar fields', async () => {
+    const doc = apiDocument();
+    const set = setup('collection', {
+      collection: bindCollection(doc, { collection: 'myWorkspaces' }),
+    });
+    await set.app.refresh();
+    const [, row] = nodes(set.data, 'record')[0];
+    expect(row[set.context.apiSchema.properties['updated-at']]).toBe(
+      Date.parse(workspace.updated_at),
+    );
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ ...workspace, active: 'true' }],
+    });
+    await expect(set.app.refresh()).rejects.toThrow();
+    expect(row[set.context.apiSchema.properties.active]).toBe(true);
+  });
+
+  it('validates the accepted snapshot before clearing any previously managed fields', async () => {
+    const set = setup('collection', {
+      collection: bindCollection(apiDocument(), { collection: 'myWorkspaces' }),
+    });
+    await set.app.refresh();
+    const [, row] = nodes(set.data, 'record')[0];
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [
+        { ...workspace, active: null },
+        { ...workspace, id: 201, active: 'invalid' },
+      ],
+    });
+    await expect(set.app.refresh()).rejects.toThrow();
+    expect(row[set.context.apiSchema.properties.active]).toBe(true);
+    expect((config(row).record as { active: boolean }).active).toBe(true);
+    expect(nodes(set.data, 'record')).toHaveLength(1);
+  });
+
+  it('loads saved principals from Atomic without resolving connections on reentry', async () => {
+    const set = setup('platform');
+    const saved = await set.app.openPrincipal('slot');
+    set.request.mockClear();
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain('Ada');
+    expect(set.request).not.toHaveBeenCalled();
+    expect(
+      (await set.app.storedPrincipals()).map(
+        (row: { subject: string }) => row.subject,
+      ),
+    ).toContain(saved.subject);
+  });
+
+  it('renders catalog inputs for parameterized public reads and saves a concrete instance without fetching', async () => {
+    const set = setup('principal', {
+      principal: { kind: 'public' },
       connectionId: undefined,
-      mode: 'public',
     });
-    const first = await app.linkPublic('org/project');
-    const before = data.size;
-    const second = await app.linkPublic('org/project');
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    const select = element.querySelector('select')!;
+    select.value = 'tasks';
+    select.dispatchEvent(new Event('change'));
+    expect(element.querySelector('input')?.getAttribute('aria-label')).toBe(
+      'Workspace ID',
+    );
+    const saved = await set.app.createCollection('tasks', {
+      workspace_id: '42',
+    });
+    expect(config(set.data.get(saved.subject)!).collection).toMatchObject({
+      path: '/workspaces/42/tasks',
+      query: { status: 'all' },
+    });
+    expect(set.request).not.toHaveBeenCalled();
+  });
+
+  it('resolves a catalog public entrypoint on submit and persists only canonical collection identity', async () => {
+    const document = withPublicEntrypoint();
+    const set = setup('principal', {
+      document,
+      principal: { kind: 'public' },
+      connectionId: undefined,
+    });
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: { id: 42 },
+    });
+    const element = globalThis.document.createElement('div');
+    await view({ root: element, store: set.store });
+    const select = element.querySelector(
+      'select[aria-label="Collection"]',
+    ) as HTMLSelectElement;
+    select.value = 'tasks';
+    select.dispatchEvent(new Event('change'));
+    expect(element.querySelector('input')?.getAttribute('aria-label')).toBe(
+      'Team reference',
+    );
+    expect(set.request).not.toHaveBeenCalled();
+    const first = await set.app.createCollection(
+      'tasks',
+      { team: 'one', space: 'first-name' },
+      '/public/{team}/{space}',
+    );
+    const second = await set.app.createCollection(
+      'tasks',
+      { team: 'one', space: 'renamed' },
+      '/public/{team}/{space}',
+    );
     expect(first.subject).toBe(second.subject);
-    expect(data.size).toBe(before);
-    expect(nodes(data, 'public-owner')[0][1][prop('repository-count')]).toBe(1);
-    expect(store.ui.openResource).toHaveBeenCalledWith(
-      expect.stringMatching(/^atomic:created-/),
-    );
-    await expect(app.linkPublic('../project')).rejects.toThrow('owner/repo');
-  });
-
-  it('handshakes the generic worker before performing an explicit sync', async () => {
-    const { store } = setup('mirror', { worker: true });
-    await view({ root: undefined, store });
-    expect(store.execution).toHaveBeenCalledWith('state');
-    expect(store.proxy.request).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('public pagination and stable source binding', () => {
-  it('retains account-qualified mirror keys and the old lookup identity', () => {
-    const [current, legacy] = sourceKeys(
-      origin,
-      'mirror',
-      'github-repo:200',
-      'slot',
-      'issues',
-    );
-    expect(JSON.parse(current)).toEqual([
-      origin,
-      'github-issues',
-      'mirror',
-      'github-repo:200',
-      'issues',
-      'slot',
+    const row = set.data.get(first.subject)!;
+    expect(config(row).collection).toMatchObject({
+      path: '/workspaces/42/tasks',
+      pathParams: { workspace_id: '42' },
+    });
+    expect(config(row).navigation).toBeUndefined();
+    expect(JSON.parse(row[prop('source-key')] as string).collection).toEqual({
+      name: 'tasks',
+      resource: 'task',
+      context: { workspace_id: '42' },
+    });
+    expect(set.request.mock.calls.map(([request]) => request.path)).toEqual([
+      'v2/public/one/first-name',
+      'v2/public/one/renamed',
     ]);
-    expect(JSON.parse(legacy)).toHaveLength(5);
+    expect(
+      set.request.mock.calls.every(
+        ([request]) => request.connectionId === undefined,
+      ),
+    ).toBe(true);
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: { id: 43 },
+    });
+    const third = await set.app.createCollection(
+      'tasks',
+      { team: 'two', space: 'different' },
+      '/public/{team}/{space}',
+    );
+    expect(third.subject).not.toBe(first.subject);
+  });
+
+  it('handshakes the shared worker before reading the selected collection', async () => {
+    const set = setup('collection', { worker: true });
+    await view({ root: undefined, store: set.store });
+    expect(set.store.execution).toHaveBeenCalledWith('state');
+    expect(set.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps durable row keys independent of the Atomic parent and display title', () => {
+    const bound = bindCollection(apiDocument(), { collection: 'myTeams' });
+    expect(
+      JSON.parse(
+        sourceKey({
+          proxyOrigin: origin,
+          platform: 'example-service',
+          principal,
+          kind: 'collection',
+          collection: collectionIdentity(bound),
+        }),
+      ),
+    ).toMatchObject({
+      version: 2,
+      principal: { subject: 7 },
+      collection: { resource: 'team', name: 'myTeams' },
+    });
   });
 });

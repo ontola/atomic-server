@@ -80,8 +80,8 @@ async function sha256Hex(text: string) {
 function fakeProxy(keyed = false, platform = 'pets') {
   const calls: { method: string; url: string; body?: string }[] = [];
   const sealedWith = new Map<string, string>();
-  const githubUsers = new Map<string, number>();
-  let githubUser = 100;
+  const githubUsers = new Map<string, string | number>();
+  let githubUser: string | number = 100;
   const connections: {
     connection_id: string;
     platform: string;
@@ -160,11 +160,12 @@ function fakeProxy(keyed = false, platform = 'pets') {
     if (path === '/connections' && method === 'GET')
       return Response.json({ owner: USER, connections, runtimes: [] });
 
-    const source = /^\/proxy\/([^/]+)\/(pets\/feed|github-issues\/user)$/.exec(
-      path,
-    );
+    const source =
+      /^\/proxy\/([^/]+)\/(pets\/feed|github-issues\/user|[a-z0-9-]+\/principal)$/.exec(
+        path,
+      );
 
-    if (source && method === 'GET') {
+    if (source && (method === 'GET' || method === 'POST')) {
       if (
         !key ||
         sealedWith.get(source[1]) !== key ||
@@ -178,7 +179,10 @@ function fakeProxy(keyed = false, platform = 'pets') {
           { error: 'connection_key_required' },
           { status: 401 },
         );
-      if (source[2] === 'github-issues/user')
+      if (
+        source[2] === 'github-issues/user' ||
+        source[2].endsWith('/principal')
+      )
         return Response.json({
           id: githubUsers.get(source[1]),
           login: 'fixture',
@@ -227,7 +231,7 @@ function fakeProxy(keyed = false, platform = 'pets') {
     http: http as unknown as typeof fetch,
     calls,
     connections,
-    authorizeGithubUser(id: number) {
+    authorizeGithubUser(id: string | number) {
       githubUser = id;
     },
   };
@@ -501,6 +505,38 @@ describe('ProxyConnections', () => {
     expect(proxy.calls).toHaveLength(3);
   });
 
+  it('signs the body and method of catalog-declared POST list reads', async () => {
+    const fixture = fakeProxy(true);
+    const connections = new ProxyConnections(
+      new MemoryStorage(),
+      ORIGIN,
+      user,
+      fixture.http,
+    );
+    const started = await connections.startKeyed(
+      SCOPE,
+      'pets',
+      `${PAGE}/x`,
+      'Pets',
+      PAGE,
+    );
+    const slot = (await connections.finish(callback(started))).connectionId!;
+    const body = JSON.stringify({ filter: { kind: 'pet' }, cursor: 'next' });
+    expect(
+      await connections.readKeyed(
+        new URL(`/proxy/${slot}/pets/feed`, ORIGIN),
+        undefined,
+        { method: 'POST', body },
+      ),
+    ).toMatchObject({ status: 200, body: [{ id: 9, name: 'Max' }] });
+    expect(fixture.calls.at(-1)).toMatchObject({ method: 'POST', body });
+    expect(vi.mocked(fixture.http).mock.calls.at(-1)?.[1]).toMatchObject({
+      credentials: 'omit',
+      redirect: 'error',
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+
   it('does not redeem a keyed handoff as a different Atomic agent', async () => {
     const storage = new MemoryStorage();
     const proxy = fakeProxy(true);
@@ -548,70 +584,197 @@ describe('ProxyConnections', () => {
     expect(connections.keyedReturnTo(handoff, PAGE)).toBeUndefined();
   });
 
-  it('keeps the original slot through GitHub reconnect and rejects a different profile', async () => {
+  it('upgrades legacy numeric provenance only after a typed numeric principal is verified', async () => {
     const storage = new MemoryStorage();
-    const proxy = fakeProxy(true, 'github-issues');
-    const connections = new ProxyConnections(storage, ORIGIN, user, proxy.http);
-    const returnTo = `${PAGE}/app/show?subject=mirror`;
-    const started = await connections.startKeyed(
-      SCOPE,
-      'github-issues',
-      returnTo,
-      'GitHub',
-      PAGE,
+    const fixture = fakeProxy(true);
+    const connections = new ProxyConnections(
+      storage,
+      ORIGIN,
+      user,
+      fixture.http,
     );
-    const slot = (await connections.finish(callback(started))).connectionId!;
-    const reconnect = () =>
-      connections.startKeyedReconnect(SCOPE, slot, returnTo, 'GitHub', PAGE);
-    expect(await connections.canReconnectGithub(slot)).toBe(false);
-    await expect(reconnect()).rejects.toThrow('verified GitHub account');
-    await connections.rememberKeyedGithubPrincipal(slot, '100');
-    await expect(
-      connections.rememberKeyedGithubPrincipal(slot, '101'),
-    ).rejects.toThrow('different GitHub account');
-    expect(await connections.canReconnectGithub(slot)).toBe(true);
-
-    // The current proxy row can expire or be revoked. The remembered slot
-    // still drives the reconnect button even when no active row is listed.
-    await connections.revoke(slot);
-    expect(await connections.listKeyed('github-issues')).toMatchObject([
-      { connection_id: slot, platform: 'github-issues' },
-    ]);
-    proxy.authorizeGithubUser(101);
-    await expect(
-      connections.finish(callback(await reconnect())),
-    ).rejects.toThrow('same GitHub account');
-    expect(await connections.activeKeyedConnection('github-issues', slot)).toBe(
-      slot,
+    const slot = (
+      await connections.finish(
+        callback(
+          await connections.startKeyed(
+            SCOPE,
+            'pets',
+            `${PAGE}/x`,
+            'Pets',
+            PAGE,
+          ),
+        ),
+      )
+    ).connectionId!;
+    const marker = Array.from(
+      { length: storage.length },
+      (_, i) => storage.key(i)!,
+    ).find(key => key.startsWith('atomic-proxy-keyed-v1:'))!;
+    storage.setItem(
+      marker,
+      JSON.stringify({ platform: 'pets', githubUserId: '100' }),
     );
-    expect(
-      proxy.connections.filter(row => row.platform === 'github-issues'),
-    ).toHaveLength(0);
-
-    proxy.authorizeGithubUser(100);
-    const reloaded = new ProxyConnections(storage, ORIGIN, user, proxy.http);
-    expect(await reloaded.finish(callback(await reconnect()))).toEqual({
-      returnTo,
-      connected: true,
-      connectionId: slot,
-    });
-    const active = await reloaded.activeKeyedConnection('github-issues', slot);
-    expect(active).not.toBe(slot);
-    expect(await reloaded.listKeyed('github-issues')).toMatchObject([
-      { connection_id: slot, platform: 'github-issues', delegations: [] },
-    ]);
-    expect(
-      await reloaded.readKeyed(
-        new URL(`/proxy/${active}/github-issues/user`, ORIGIN),
+    const principal = {
+      kind: 'authenticated' as const,
+      namespace: 'https://identity.example',
+      subject: 100,
+    };
+    expect(await connections.canReconnectKeyed('pets', slot)).toBe(false);
+    await expect(
+      connections.rememberKeyedPrincipal(
+        'pets',
+        slot,
+        { ...principal, subject: '100' },
+        'currentPrincipal',
       ),
-    ).toMatchObject({
-      status: 200,
-      body: { id: 100 },
-    });
-    expect(
-      proxy.calls.filter(({ url }) => url.endsWith('/agents')),
-    ).toHaveLength(0);
+    ).rejects.toThrow('different authenticated principal');
+    await connections.rememberKeyedPrincipal(
+      'pets',
+      slot,
+      principal,
+      'currentPrincipal',
+    );
+    expect(await connections.canReconnectKeyed('pets', slot)).toBe(true);
+    expect(storage.values()).not.toContain('githubUserId');
   });
+
+  it.each(['calendar-service', 'github-issues'])(
+    'keeps the original slot through generic %s reconnect and preserves typed identities',
+    async platform => {
+      const storage = new MemoryStorage();
+      const proxy = fakeProxy(true, platform);
+      const namespace = 'https://identities.example/' + platform;
+      const principal = {
+        kind: 'authenticated' as const,
+        namespace,
+        subject: 100,
+      };
+      const document = {
+        openapi: '3.0.3',
+        info: { title: 'Fixture', version: '1' },
+        servers: [{ url: 'https://provider.example' }],
+        paths: {
+          '/principal': {
+            get: {
+              operationId: 'currentPrincipal',
+              security: [{ oauth: [] }],
+              'x-authenticated-principal': {
+                kind: 'user',
+                namespace,
+                subject: '$response.body#/id',
+                identifier: {
+                  scope: 'provider',
+                  stable: true,
+                  reassigned: false,
+                },
+              },
+              responses: { '200': { description: 'Current identity' } },
+            },
+          },
+        },
+      };
+      const catalog = vi.fn(async () => document);
+      const connections = new ProxyConnections(
+        storage,
+        ORIGIN,
+        user,
+        proxy.http,
+        Date.now,
+        catalog,
+      );
+      const returnTo = `${PAGE}/app/show?subject=mirror`;
+      const slot = (
+        await connections.finish(
+          callback(
+            await connections.startKeyed(
+              SCOPE,
+              platform,
+              returnTo,
+              'Provider',
+              PAGE,
+            ),
+          ),
+        )
+      ).connectionId!;
+      const reconnect = () =>
+        connections.startKeyedReconnect(
+          SCOPE,
+          platform,
+          slot,
+          returnTo,
+          'Provider',
+          PAGE,
+        );
+      expect(await connections.canReconnectKeyed(platform, slot)).toBe(false);
+      await expect(reconnect()).rejects.toThrow('verified account');
+      await connections.rememberKeyedPrincipal(
+        platform,
+        slot,
+        principal,
+        'currentPrincipal',
+      );
+      await expect(
+        connections.rememberKeyedPrincipal(
+          platform,
+          slot,
+          { ...principal, subject: '100' },
+          'currentPrincipal',
+        ),
+      ).rejects.toThrow('different authenticated principal');
+      await expect(
+        connections.rememberKeyedPrincipal(
+          platform,
+          slot,
+          { ...principal, clientContext: 'other-client' },
+          'currentPrincipal',
+        ),
+      ).rejects.toThrow('different authenticated principal');
+      expect(await connections.canReconnectKeyed(platform, slot)).toBe(true);
+      await connections.revoke(slot);
+      expect(await connections.listKeyed(platform)).toMatchObject([
+        { connection_id: slot, platform },
+      ]);
+      proxy.authorizeGithubUser('100');
+      await expect(
+        connections.finish(callback(await reconnect())),
+      ).rejects.toThrow('same authenticated account');
+      expect(await connections.activeKeyedConnection(platform, slot)).toBe(
+        slot,
+      );
+      expect(
+        proxy.connections.filter(row => row.platform === platform),
+      ).toHaveLength(0);
+      proxy.authorizeGithubUser(100);
+      const reloaded = new ProxyConnections(
+        storage,
+        ORIGIN,
+        user,
+        proxy.http,
+        Date.now,
+        catalog,
+      );
+      expect(await reloaded.finish(callback(await reconnect()))).toEqual({
+        returnTo,
+        connected: true,
+        connectionId: slot,
+      });
+      const active = await reloaded.activeKeyedConnection(platform, slot);
+      expect(active).not.toBe(slot);
+      expect(await reloaded.listKeyed(platform)).toMatchObject([
+        { connection_id: slot, platform, delegations: [] },
+      ]);
+      expect(catalog).toHaveBeenCalledWith(
+        ORIGIN,
+        platform,
+        expect.any(AbortSignal),
+      );
+      expect(
+        proxy.calls.filter(({ url }) => url.endsWith('/agents')),
+      ).toHaveLength(0);
+      expect(storage.values()).toContain('"namespace":"' + namespace + '"');
+      expect(storage.values()).not.toContain('connection_key');
+    },
+  );
 });
 
 describe('canonicalAgent', () => {

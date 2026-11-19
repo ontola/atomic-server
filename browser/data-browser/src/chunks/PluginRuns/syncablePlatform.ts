@@ -1,11 +1,10 @@
 /**
- * A provider installation is an ordinary drive App with an Accounts table.
+ * A provider installation is an ordinary drive App with direct principal children.
  *
  * This is the first provisioning slice of planning/builtin-syncables-apps.md.
  * Source connections and sandboxed view mounting are deliberately separate:
  * installing an app must never silently authorize an external service.
  */
-import { ensureSyncablesTableViews } from './syncablesViews';
 import { syncableHierarchySchema } from './syncableHierarchy';
 import {
   AtomicError,
@@ -41,6 +40,13 @@ export const syncablePlatformSchema = (): SchemaSpec => ({
       name: 'Built-in app',
       description: 'A registered app delivered by this Atomic Server release.',
       datatype: Datatype.STRING,
+    },
+    {
+      shortname: 'syncable-legacy-accounts',
+      name: 'Legacy Accounts container',
+      description:
+        'Installation-owned compatibility data retained after moving source roots directly under the App.',
+      datatype: Datatype.ATOMIC_URL,
     },
     {
       shortname: 'syncable-api-document',
@@ -291,7 +297,6 @@ const ACCOUNTS_LOCAL_ID = 'syncables:accounts';
 
 type ParentResource = SchemaResource & {
   getChildrenCollection?: () => Promise<{ getAllMembers(): Promise<string[]> }>;
-  remove?: (property: string) => void;
 };
 
 function classesOf(resource: SchemaResource): string[] {
@@ -302,69 +307,144 @@ function classesOf(resource: SchemaResource): string[] {
     : [];
 }
 
-/** Migrate only installation-owned direct rows; every source identity stays put. */
+async function validLegacyAccounts(
+  store: PlatformProvisioner,
+  drive: string,
+  root: SchemaResource,
+  accounts: SchemaResource,
+  platformProperty: string,
+  proxyProperty: string,
+): Promise<boolean> {
+  const parent = accounts.get(core.properties.parent);
+
+  return (
+    typeof parent === 'string' &&
+    subjectsReferToSameResource(parent, root.subject) &&
+    accounts.get(core.properties.localId) === ACCOUNTS_LOCAL_ID &&
+    classesOf(accounts).includes(dataBrowser.classes.table) &&
+    accounts.get(platformProperty) === root.get(platformProperty) &&
+    accounts.get(proxyProperty) === root.get(proxyProperty) &&
+    (await isSyncableResourceInDrive(store, drive, accounts.subject))
+  );
+}
+
+/** Read-only, validated compatibility reference; a local ID alone hides nothing. */
+export async function findSyncableLegacyAccounts(
+  store: PlatformProvisioner,
+  drive: string,
+  subject: string,
+): Promise<string | undefined> {
+  const terms = await findSchema(store, drive, syncablePlatformSchema());
+  const app = await findSchema(store, drive, pluginSchema());
+  const marker = terms.properties?.['builtin-app'];
+  const platform = terms.properties?.['syncable-platform-id'];
+  const proxy = terms.properties?.['syncable-proxy-origin'];
+  const data = app.properties?.['app-data'];
+  if (!marker || !platform || !proxy || !data || !app.classes?.app)
+    return undefined;
+  const root = await loadSyncableResource(store, subject);
+  if (
+    !root ||
+    root.get(marker) !== 'syncables' ||
+    !classesOf(root).includes(app.classes.app) ||
+    typeof root.get(platform) !== 'string' ||
+    typeof root.get(proxy) !== 'string' ||
+    !(await isSyncableResourceInDrive(store, drive, subject))
+  )
+    return undefined;
+
+  try {
+    platformLocalId(root.get(proxy) as string, root.get(platform) as string);
+  } catch {
+    return undefined;
+  }
+
+  const pointer = terms.properties?.['syncable-legacy-accounts'];
+  const saved = pointer && root.get(pointer);
+  const binding = root.get(data);
+  if (binding !== undefined && typeof binding !== 'string') return undefined;
+  const legacyBinding =
+    typeof binding === 'string' &&
+    !subjectsReferToSameResource(binding, subject)
+      ? binding
+      : undefined;
+  if (
+    saved !== undefined &&
+    (typeof saved !== 'string' ||
+      (legacyBinding && !subjectsReferToSameResource(saved, legacyBinding)))
+  )
+    return undefined;
+  const target = typeof saved === 'string' ? saved : legacyBinding;
+  if (!target) return undefined;
+  const accounts = await loadSyncableResource(store, target);
+
+  return accounts &&
+    (await validLegacyAccounts(store, drive, root, accounts, platform, proxy))
+    ? accounts.subject
+    : undefined;
+}
+
+/** Explicit installation/Open migration only; source and descendant identities stay put. */
 async function migratePlatformRows(
   store: PlatformProvisioner,
   drive: string,
-  root: ParentResource,
-  accounts: SchemaResource,
+  root: SchemaResource,
+  accounts: ParentResource,
   accountClass: string,
+  platform: string,
+  proxyOrigin: string,
 ) {
-  if (!root.getChildrenCollection)
+  if (!accounts.getChildrenCollection)
     throw new Error('Cannot enumerate this installation for migration');
   const hierarchy = await findSchema(store, drive, syncableHierarchySchema());
   const kindProperty = hierarchy.properties?.['syncable-node-kind'];
-  const collection = await root.getChildrenCollection();
+  const sourceProperty = hierarchy.properties?.['syncable-source-key'];
+  if (!kindProperty || !sourceProperty) return;
+  const collection = await accounts.getChildrenCollection();
   const children = await collection.getAllMembers();
-  const rawViews = root.get(dataBrowser.properties.tableViews);
-  const views = Array.isArray(rawViews)
-    ? rawViews.filter((value): value is string => typeof value === 'string')
-    : [];
-  const adoptedViews: string[] = [];
 
-  for (const subject of new Set([...children, ...views])) {
-    if (subject === accounts.subject) continue;
+  for (const subject of new Set(children)) {
     const child = await store.getResource(subject);
     const parent = child.get(core.properties.parent);
-    const atRoot =
-      typeof parent === 'string' &&
-      subjectsReferToSameResource(parent, root.subject);
-    const alreadyMoved =
-      typeof parent === 'string' &&
-      subjectsReferToSameResource(parent, accounts.subject);
-    if (!atRoot && !alreadyMoved) continue;
-    if (!(await isSyncableResourceInDrive(store, drive, subject))) continue;
+    if (
+      typeof parent !== 'string' ||
+      !subjectsReferToSameResource(parent, accounts.subject) ||
+      !(await isSyncableResourceInDrive(store, drive, subject))
+    )
+      continue;
+    const kind = child.get(kindProperty);
     const classes = classesOf(child);
-    const view =
-      views.includes(subject) && classes.includes(dataBrowser.classes.view);
-    const row =
-      classes.includes(accountClass) ||
-      (kindProperty &&
-        child.get(kindProperty) === 'public' &&
-        classes.includes(dataBrowser.classes.table));
-    if (!view && !row) continue;
+    if (
+      !(
+        (kind === 'account' || kind === 'principal') &&
+        classes.includes(accountClass)
+      ) &&
+      !(kind === 'public' && classes.includes(dataBrowser.classes.table))
+    )
+      continue;
+    const source = child.get(sourceProperty);
+    let key: unknown;
 
-    if (atRoot) {
-      await child.set(core.properties.parent, accounts.subject);
-      await child.save();
+    try {
+      key = typeof source === 'string' ? JSON.parse(source) : undefined;
+    } catch {
+      continue;
     }
 
-    if (view) adoptedViews.push(subject);
-  }
-
-  if (adoptedViews.length) {
-    const existing = accounts.get(dataBrowser.properties.tableViews);
-    const combined = new Set([
-      ...(Array.isArray(existing)
-        ? existing.filter((value): value is string => typeof value === 'string')
-        : []),
-      ...adoptedViews,
-    ]);
-    await accounts.set(dataBrowser.properties.tableViews, [...combined]);
-    const priorDefault = root.get(dataBrowser.properties.tableDefaultView);
-    if (typeof priorDefault === 'string' && adoptedViews.includes(priorDefault))
-      await accounts.set(dataBrowser.properties.tableDefaultView, priorDefault);
-    await accounts.save();
+    if (
+      !Array.isArray(key) ||
+      ![5, 6].includes(key.length) ||
+      !key.every(value => typeof value === 'string') ||
+      key[0] !== proxyOrigin ||
+      key[1] !== platform ||
+      key[2] !== kind ||
+      !key[3] ||
+      child.get(core.properties.localId) !==
+        'syncables:node:' + encodeURIComponent(source as string)
+    )
+      continue;
+    await child.set(core.properties.parent, root.subject);
+    await child.save();
   }
 }
 
@@ -401,60 +481,70 @@ async function provisionPlatform(
     }
   }
 
-  const root = (await store.getResource(subject)) as ParentResource;
+  const root = await store.getResource(subject);
   const data = root.get(app.properties['app-data']);
-  let accounts =
-    typeof data === 'string'
-      ? await loadSyncableResource(store, data)
-      : await store.findByLocalId(drive, subject, ACCOUNTS_LOCAL_ID);
-  if (typeof data === 'string' && !accounts)
-    throw new Error('The installed app accounts table is unavailable');
-  const accountsParent = accounts?.get(core.properties.parent);
+  const savedLegacy = root.get(schema.properties['syncable-legacy-accounts']);
+  const legacyBinding =
+    typeof data === 'string' && !subjectsReferToSameResource(data, subject)
+      ? data
+      : undefined;
   if (
-    accounts &&
-    (typeof accountsParent !== 'string' ||
-      !subjectsReferToSameResource(accountsParent, subject) ||
-      !classesOf(accounts).includes(dataBrowser.classes.table) ||
-      accounts.get(schema.properties['syncable-platform-id']) !== platform ||
-      accounts.get(schema.properties['syncable-proxy-origin']) !==
-        proxyOrigin ||
-      !(await isSyncableResourceInDrive(store, drive, accounts.subject)))
+    (data !== undefined && typeof data !== 'string') ||
+    (savedLegacy !== undefined && typeof savedLegacy !== 'string') ||
+    (typeof savedLegacy === 'string' &&
+      legacyBinding &&
+      !subjectsReferToSameResource(savedLegacy, legacyBinding))
   )
-    throw new Error('The installed app accounts table has a different source');
+    throw new Error('The installed App has conflicting Accounts references');
+  const legacySubject =
+    typeof savedLegacy === 'string' ? savedLegacy : legacyBinding;
+  const accounts = legacySubject
+    ? await loadSyncableResource(store, legacySubject)
+    : data === undefined
+      ? await store.findByLocalId(drive, subject, ACCOUNTS_LOCAL_ID)
+      : undefined;
+  if (
+    (legacySubject && !accounts) ||
+    (accounts &&
+      !(await validLegacyAccounts(
+        store,
+        drive,
+        root,
+        accounts,
+        schema.properties['syncable-platform-id'],
+        schema.properties['syncable-proxy-origin'],
+      )))
+  )
+    throw new Error('The installed App has no matching legacy Accounts table');
 
-  if (!accounts) {
-    accounts = await store.newResource({
-      parent: subject,
-      isA: [dataBrowser.classes.table],
-      propVals: {
-        [core.properties.name]: 'Accounts',
-        [core.properties.localId]: ACCOUNTS_LOCAL_ID,
-        [core.properties.classtype]: schema.classes['syncable-account'],
-        [schema.properties['syncable-platform-id']]: platform,
-        [schema.properties['syncable-proxy-origin']]: proxyOrigin,
-      },
-    });
-    await accounts.save();
-  }
+  if (accounts) {
+    // Persist recovery information before the first parent update. Never delete
+    // the old table or rewrite its view definitions and user data.
+    if (savedLegacy !== accounts.subject) {
+      await root.set(
+        schema.properties['syncable-legacy-accounts'],
+        accounts.subject,
+      );
+      await root.save();
+    }
 
-  if (classesOf(root).includes(dataBrowser.classes.table))
     await migratePlatformRows(
       store,
       drive,
       root,
-      accounts,
+      accounts as ParentResource,
       schema.classes['syncable-account'],
+      platform,
+      proxyOrigin,
     );
-  await ensureSyncablesTableViews(store, accounts.subject);
-  await root.set(app.properties['app-data'], accounts.subject);
+  }
+
+  await root.set(app.properties['app-data'], subject);
   await root.set(schema.properties['builtin-app'], 'syncables');
   await root.set(core.properties.isA, [
     ...classesOf(root).filter(kind => kind !== dataBrowser.classes.table),
     ...(!classesOf(root).includes(app.classes.app) ? [app.classes.app] : []),
   ]);
-  root.remove?.(core.properties.classtype);
-  root.remove?.(dataBrowser.properties.tableViews);
-  root.remove?.(dataBrowser.properties.tableDefaultView);
   await root.save();
   await indexSyncablePlatform(
     store,
