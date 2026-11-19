@@ -2,12 +2,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ThemeProvider, type DefaultTheme } from 'styled-components';
-import { FancyTable } from './TableEditor';
+import { FancyTable } from './TableEditor.js';
+import { IndexCell } from './Cell.js';
+import { TableEditorContextProvider } from './TableEditorContext.js';
+import { TableHostProvider } from '../../host.js';
 
-vi.mock('./DndWrapper', () => ({
+vi.mock('./DndWrapper.js', () => ({
   DndWrapper: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock('./TableHeader', () => ({ TableHeader: () => <div role='row' /> }));
+vi.mock('./TableHeader.js', () => ({ TableHeader: () => <div role='row' /> }));
 
 // Only the theme fields used by this grid fixture.
 const theme = {
@@ -52,4 +55,25 @@ describe('table loading feedback', () => {
       expect(html).not.toContain('Loading');
     },
   );
+});
+
+it('retains the host translations for row actions across the extraction', () => {
+  const html = renderToStaticMarkup(
+    <TableHostProvider
+      value={{ rowMenuLabel: 'Rijmenu', openResourceLabel: 'Open bron' }}
+    >
+      <TableEditorContextProvider readOnly={false}>
+        <IndexCell
+          rowIndex={0}
+          columnIndex={0}
+          onExpand={() => undefined}
+          onContextMenu={() => undefined}
+        >
+          1
+        </IndexCell>
+      </TableEditorContextProvider>
+    </TableHostProvider>,
+  );
+  expect(html).toContain('title="Rijmenu"');
+  expect(html).toContain('title="Open bron"');
 });
