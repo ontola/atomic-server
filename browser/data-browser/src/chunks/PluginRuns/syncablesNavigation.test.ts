@@ -20,6 +20,8 @@ it('retains legacy directory recognition without hiding an Accounts resource by 
 describe('Syncables navigation tables', () => {
   it.each([
     'syncables:platform:https%3A%2F%2Fproxy.example:github-issues',
+    // A migrated principal keeps its historical localId while becoming a Table.
+    nodeId('account'),
     nodeId('organizations'),
     nodeId('repositories'),
     nodeId('repositories', 'connection-ref'),
@@ -35,7 +37,6 @@ describe('Syncables navigation tables', () => {
     'syncables:node:%',
     nodeId('mirror', 'connection-ref'),
     nodeId('public-mirror'),
-    nodeId('account'),
     nodeId('owner'),
     nodeId('repository'),
   ])('keeps %s out of the navigation table exception', localId => {

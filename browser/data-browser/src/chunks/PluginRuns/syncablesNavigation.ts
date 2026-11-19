@@ -44,7 +44,8 @@ export function isSyncablesNavigationTable(localId: unknown): boolean {
     return (
       Array.isArray(key) &&
       (key.length === 5 || key.length === 6) &&
-      (key[2] === 'organizations' ||
+      (key[2] === 'account' ||
+        key[2] === 'organizations' ||
         key[2] === 'repositories' ||
         key[2] === 'public')
     );
