@@ -1,3 +1,9 @@
+CI infrastructure: `python3 scripts/ci-infrastructure-test.py` exercises the
+actual runner-selection and required-check shell, trusted downstream gating,
+Docker client/daemon failures and bounded timeouts, and stable per-runner Dagger
+engine isolation. Hosted downstream checks require the real plugin runtime.
+These regressions do not establish physical runner health or replace full CI.
+
 Grid extraction and shared helpers: `browser/table/src` retains the existing grid,
 keyboard, selection and primitive-editor tests. The SDK's EventManager and civil
 calendar tests move with their implementations to `browser/utils/src` (nine

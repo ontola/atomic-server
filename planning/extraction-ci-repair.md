@@ -19,8 +19,20 @@
 
 Do not merge: trekmeester owns merge review. Preserve legacy improvement bases and all unfinished extraction plans. Do not treat this bounded batch as complete TablePage or ELFA migration.
 
-CI blocker: Main run 44341171179 selected the self-hosted lane, but both heavy
-Main and downstream SaaS jobs remain queued. Flutter passed on the repair head.
-The existing #2585 hosted-dispatch proposal omits downstream SaaS validation, so
-it does not complete this gate. GitHub also reports conflicts with current
-develop; the repository assigns that integration step to trekmeester.
+## Hosted CI repair (2026-11-19)
+
+- [x] Diagnose run 44342245250: downstream SaaS passed; Main lost communication
+  with its self-hosted runner during the full suite.
+- [x] Port the independently reviewed CI-only repair from the broader browser/table
+  integration: explicit hosted dispatch, complete downstream validation, bounded
+  Docker preflight, isolated and pinned Dagger engine, fail-closed required check.
+- [x] Keep the clean extraction source scope unchanged. The larger 51-PR batch
+  continues separately on `codex/browser-table-ci-batch`.
+- [x] Run infrastructure regressions (16 tests), rustfmt and diff whitespace checks
+  on this checkout; CI-only change does not modify browser/Rust source.
+- [ ] Push the repair and dispatch full hosted Main + downstream on the exact head.
+- [ ] Confirm the final full CI result before trekmeester review/merge.
+
+The hosted option extends #2585 by retaining downstream SaaS validation. It does
+not claim that the physical Mancave runner has been repaired. Its service/network
+failure requires host access to diagnose. No repository-wide runner setting changes.

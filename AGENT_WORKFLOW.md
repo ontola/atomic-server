@@ -18,7 +18,9 @@ more.
 - **PR branches get no CI by themselves.** `.github/workflows/main.yml` runs
   on pushes to `develop`, `v*` tags and `workflow_dispatch` only. To test a PR
   branch, dispatch it: `gh workflow run main.yml --ref <branch>` (or the
-  equivalent GitHub API call). A docs-only change needs no dispatch.
+  equivalent GitHub API call). Add `-f github_hosted=true` to run the full
+  Main and downstream checks on hosted runners for this dispatch, without
+  changing the repository-wide runner setting. A docs-only change needs no dispatch.
 - **Paired atomic-saas branch.** The `Downstream` job in `main.yml` builds
   ontola/atomic-saas against your commit. It uses an atomic-saas branch with
   the *same name* as yours only if that branch has an open PR; otherwise it
@@ -26,8 +28,8 @@ more.
   `Cargo.lock` diff. So a change that moves shared Rust dependencies (or
   breaks an API atomic-saas uses) needs a same-named atomic-saas branch with an
   open PR and an updated `Cargo.lock`. See "Coordinated Rust updates" in
-  `CONTRIBUTING.md` and `scripts/check-rust-alignment.py`. The job only runs
-  on the Mancave runner.
+  `CONTRIBUTING.md` and `scripts/check-rust-alignment.py`. The job runs for trusted pushes and dispatches on the selected runner;
+  PR events never receive the private-repository token.
 
 ## Plugin pin candidates
 

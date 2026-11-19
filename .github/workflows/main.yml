@@ -3,6 +3,11 @@ on:
     branches: [develop]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      github_hosted:
+        description: Run full Main and downstream SaaS validation on GitHub-hosted runners
+        type: boolean
+        default: false
 
 # Feature-branch pushes do not trigger CI. Dispatch full validation explicitly
 # on a temporary branch containing the exact PR heads to test together.
@@ -24,7 +29,8 @@ concurrency:
 # Trusted heavy CI defaults to Mancave so its Dagger cache stays warm. The
 # selector and result jobs use hosted runners to avoid queueing a few seconds
 # of control work behind long Mancave builds. If Mancave is offline, heavy CI
-# queues; set CI_RUNNER_OVERRIDE = ["ubuntu-latest"] to explicitly use hosted runners.
+# queues; select github_hosted for one dispatch without changing other runs.
+# CI_RUNNER_OVERRIDE = ["ubuntu-latest"] remains the repository-wide override.
 # Deployments retain their existing runners.
 #
 # The old variable name, CI_RUNNER, is set to ["ubuntu-latest"] on purpose.
@@ -49,12 +55,19 @@ jobs:
         env:
           FORCE_RUNNER: ${{ vars.CI_RUNNER_OVERRIDE }}
           EVENT_NAME: ${{ github.event_name }}
+          HOSTED_INPUT: ${{ github.event.inputs.github_hosted || 'false' }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "pull_request" ] || [ "$EVENT_NAME" = "pull_request_target" ]; then
             echo "PR event — forcing GitHub-hosted (never run untrusted code on Mancave)"
+            echo "host=hosted" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$HOSTED_INPUT" = "true" ]; then
+            echo "Explicit dispatch input — using hosted runners for Main and downstream"
             echo "host=hosted" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -102,31 +115,40 @@ jobs:
   # branch name); otherwise main. atomic-saas's CI applies the same rule in
   # reverse.
   #
-  # Mancave only. The token can read a private repo, and fork PRs never run
-  # here; PR events are routed to GitHub-hosted heavy CI by `pick`, which also
-  # keeps this job off them. `clean: false` keeps both target/ dirs warm, the same
-  # measured reason atomic-saas's own CI gives.
+  # Trusted pushes and explicit dispatches must validate this on either runner.
+  # PR events never receive the private-repository token. Persistent checkouts
+  # keep warm target/ dirs; hosted runs get clean, disposable checkouts.
   downstream-saas:
     name: Downstream (atomic-saas builds against this commit)
     needs: pick
     if: >-
-      needs.pick.outputs.host == 'mancave' &&
-      github.event_name != 'pull_request' &&
-      github.event_name != 'pull_request_target'
-    runs-on: ${{ fromJSON(vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]') }}
-    timeout-minutes: 30
+      github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ fromJSON(needs.pick.outputs.host == 'hosted' && '["ubuntu-latest"]' || vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]') }}
+    # A cold hosted build cannot reuse the persistent runner's two Cargo targets.
+    timeout-minutes: ${{ needs.pick.outputs.host == 'hosted' && 120 || 30 }}
     permissions:
       contents: read
     env:
       CARGO_TERM_COLOR: always
       # Nothing here runs the dist in a browser; the embed only needs to exist.
       SKIP_WASM_BUILD: "1"
+      # The managed node enables wasm-plugins: a cold build must embed the real
+      # plugin runtime, never silently accept the build script's empty fallback.
+      ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME: "true"
     steps:
       - name: Checkout atomic-server (this commit)
         uses: actions/checkout@v4
         with:
           path: atomic-server
-          clean: false
+          clean: ${{ runner.environment == 'github-hosted' }}
+
+      - name: Install hosted build prerequisites
+        if: runner.environment == 'github-hosted'
+        timeout-minutes: 10
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends pkg-config libssl-dev libclang-dev clang cmake nasm protobuf-compiler
+          echo "CARGO_BUILD_JOBS=4" >> "$GITHUB_ENV"
 
       - name: Pick the atomic-saas branch
         id: saas
@@ -178,7 +200,7 @@ jobs:
           ref: ${{ steps.saas.outputs.ref }}
           token: ${{ secrets.ATOMIC_SAAS_DISPATCH_TOKEN }}
           path: atomic-saas
-          clean: false
+          clean: ${{ runner.environment == 'github-hosted' }}
           # Nothing below pushes to atomic-saas, so the PAT has no business
           # staying in atomic-saas/.git/config on the self-hosted runner
           # (where `clean: false` keeps the checkout around between runs).
@@ -195,6 +217,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.98.1
         with:
           components: clippy
+          targets: wasm32-wasip2
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -263,20 +286,32 @@ jobs:
   Main:
     name: Main
     needs: [pick, mancave, github, downstream-saas]
-    if: always() && needs.pick.result == 'success'
+    # Selector failure must fail the required check, not make it a skipped green.
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Resolve runner outcome
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SELECTED_HOST: ${{ needs.pick.outputs.host }}
+          MANCAVE_RESULT: ${{ needs.mancave.result }}
+          HOSTED_RESULT: ${{ needs.github.result }}
+          DOWNSTREAM_RESULT: ${{ needs.downstream-saas.result }}
         run: |
-          host="${{ needs.pick.outputs.host }}"
-          m="${{ needs.mancave.result }}"
-          g="${{ needs.github.result }}"
-          d="${{ needs.downstream-saas.result }}"
+          set -euo pipefail
+          host="$SELECTED_HOST"
+          m="$MANCAVE_RESULT"
+          g="$HOSTED_RESULT"
+          d="$DOWNSTREAM_RESULT"
           echo "host=$host mancave=$m github=$g downstream-saas=$d"
-          # The downstream build is skipped on PR events and on hosted runs;
-          # when it ran, it has to have passed.
+          # Trusted validation is incomplete unless downstream actually passed.
+          # Keep PR events separate: they must never receive the private token.
+          if { [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; } && [ "$d" != "success" ]; then
+            echo "::error::Required downstream SaaS validation did not succeed ($d)."
+            exit 1
+          fi
           if [ "$d" = "failure" ] || [ "$d" = "cancelled" ]; then
-            echo "atomic-saas no longer builds against this commit — fix it there on a branch with this name, or here."
+            echo "::error::Downstream SaaS validation failed or was cancelled; inspect its job before diagnosing a code incompatibility."
             exit 1
           fi
           if [ "$host" = "mancave" ] && [ "$m" = "success" ]; then
