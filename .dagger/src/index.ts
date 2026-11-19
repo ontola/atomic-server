@@ -110,6 +110,13 @@ const PLAYWRIGHT_PACKAGE_VERSION = '1.63.0';
 const PLAYWRIGHT_VERSION = `v${PLAYWRIGHT_PACKAGE_VERSION}-noble`;
 // Keep in sync with `flutter/.mise.toml` (`[tools].flutter`).
 const FLUTTER_IMAGE = 'ghcr.io/cirruslabs/flutter:3.44.0';
+// GitHub-hosted builders cannot reliably reach the primary Ubuntu HTTP mirrors.
+// Keep Ubuntu's existing archive signatures and TLS verification on its Azure mirror.
+const APT_UPDATE =
+  "find /etc/apt -type f \\( -name '*.list' -o -name '*.sources' \\) " +
+  "-exec sed -i -E 's@https?://(archive|security)\\.ubuntu\\.com/ubuntu@https://azure.archive.ubuntu.com/ubuntu@g' {} + " +
+  '&& apt-get update -qq -o APT::Update::Error-Mode=any';
+
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
 const TARGET_IMAGE_MAP = {
   'x86_64-unknown-linux-musl': 'ghcr.io/rust-cross/rust-musl-cross:x86_64-musl',
@@ -787,7 +794,7 @@ export class AtomicServer {
         .withExec([
           'sh',
           '-c',
-          'apt-get update -qq && apt-get install -y --no-install-recommends ' +
+          APT_UPDATE + ' && apt-get install -y --no-install-recommends ' +
             'ca-certificates curl git build-essential cmake ninja-build ' +
             'pkg-config libssl-dev clang',
         ])
@@ -939,7 +946,7 @@ export class AtomicServer {
           .withExec([
             'sh',
             '-c',
-            'apt-get update -qq && apt-get install -y protobuf-compiler',
+            APT_UPDATE + ' && apt-get install -y protobuf-compiler',
           ]),
         CARGO_HOME_BOOKWORM,
       )
@@ -1512,7 +1519,7 @@ export class AtomicServer {
         .withExec([
           'sh',
           '-c',
-          'apt-get update -qq && apt-get install -y nasm protobuf-compiler',
+          APT_UPDATE + ' && apt-get install -y nasm protobuf-compiler',
         ]),
       CARGO_HOME_MUSL,
     )
@@ -1763,7 +1770,7 @@ export class AtomicServer {
           .withExec([
             'sh',
             '-c',
-            'apt-get update -qq && apt-get install -y nasm protobuf-compiler',
+            APT_UPDATE + ' && apt-get install -y nasm protobuf-compiler',
           ]),
         CARGO_HOME_MUSL,
       )
