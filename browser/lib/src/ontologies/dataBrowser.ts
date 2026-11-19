@@ -7,6 +7,7 @@ import type { OntologyBaseObject, BaseProps, JSONObject } from '../index.js';
 
 export const dataBrowser = {
   classes: {
+    anchor: 'https://atomicdata.dev/classes/Anchor',
     article: 'https://atomicdata.dev/classes/Article',
     bookmark: 'https://atomicdata.dev/class/Bookmark',
     chatroom: 'https://atomicdata.dev/classes/ChatRoom',
@@ -117,6 +118,10 @@ export const dataBrowser = {
     documentContent: 'https://atomicdata.dev/properties/documentContent',
   },
   __classDefs: {
+    ['https://atomicdata.dev/classes/Anchor']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/description',
+    ],
     ['https://atomicdata.dev/classes/Article']: [
       'https://atomicdata.dev/properties/description',
       'https://atomicdata.dev/properties/name',
@@ -267,6 +272,7 @@ export namespace DataBrowser {
   export type Document = typeof dataBrowser.classes.document;
   export type FloatRangeProperty =
     typeof dataBrowser.classes.floatRangeProperty;
+  export type Anchor = typeof dataBrowser.classes.anchor;
   export type Folder = typeof dataBrowser.classes.folder;
   export type FormattedDate = typeof dataBrowser.classes.formattedDate;
   export type FormattedNumber = typeof dataBrowser.classes.formattedNumber;
@@ -287,6 +293,10 @@ export namespace DataBrowser {
 
 declare module '../index.js' {
   interface Classes {
+    [dataBrowser.classes.anchor]: {
+      requires: BaseProps | 'https://atomicdata.dev/properties/name';
+      recommends: 'https://atomicdata.dev/properties/description';
+    };
     [dataBrowser.classes.article]: {
       requires:
         | BaseProps

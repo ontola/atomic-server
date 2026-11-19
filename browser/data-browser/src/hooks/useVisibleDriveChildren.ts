@@ -6,11 +6,10 @@ import {
   useChildren,
   useResource,
   useResources,
-  useStore,
   useString,
 } from '@tomic/react';
-import { canonicalizeScheme, readSchema, type Store } from '@tomic/lib';
-import { useEffect, useMemo, useState } from 'react';
+import { canonicalizeScheme } from '@tomic/lib';
+import { useMemo } from 'react';
 import { isHiddenFromChildLists } from '../helpers/hiddenFromChildLists';
 
 /**
@@ -24,7 +23,7 @@ import { isHiddenFromChildLists } from '../helpers/hiddenFromChildLists';
  * sidebar) the Inbox (opens from Notifications in the app menu) and the Trash folder
  * (reached from the account menu at the bottom of the sidebar).
  * Ontologies the user creates themselves still show. AI chats are hidden by
- * class, and agent notes (a PlainText `about` an agent) are hidden too,
+ * class, as are Anchors (the App identities folder), and agent notes (a PlainText `about` an agent) are hidden too,
  * wherever they sit (the AI sidebar and the agent's page reach them), which
  * also covers legacy drives whose chats sit in a folder. Meetings show.
  *
@@ -61,9 +60,7 @@ export function useVisibleDriveChildren(
 
 /**
  * The standard locations a drive page leaves out (canonical subjects): the
- * default ontology, Comments folder, AI Chats folder, Inbox, Trash and the
- * App identities folder (its pointer lives in the drive's own ontology, so it
- * is read asynchronously).
+ * default ontology, Comments folder, AI Chats folder, Inbox and Trash.
  */
 export function useHiddenDriveSubjects(drive: string): Set<string> {
   const driveResource = useResource(drive);
@@ -82,56 +79,13 @@ export function useHiddenDriveSubjects(drive: string): Set<string> {
     dataBrowser.properties.trashFolder,
   );
 
-  const appIdentities = useAppIdentitiesFolder(drive);
-
   return useMemo(
     () =>
       new Set(
-        [
-          defaultOntology,
-          commentsFolder,
-          aiChatsFolder,
-          inbox,
-          trashFolder,
-          appIdentities,
-        ]
+        [defaultOntology, commentsFolder, aiChatsFolder, inbox, trashFolder]
           .filter((subject): subject is string => !!subject)
           .map(canonicalizeScheme),
       ),
-    [
-      defaultOntology,
-      commentsFolder,
-      aiChatsFolder,
-      inbox,
-      trashFolder,
-      appIdentities,
-    ],
+    [defaultOntology, commentsFolder, aiChatsFolder, inbox, trashFolder],
   );
-}
-
-/** The drive's App identities folder (see `createApp`), once its pointer resolves. */
-function useAppIdentitiesFolder(drive: string): string | undefined {
-  const store = useStore();
-  const driveResource = useResource(drive);
-  const [folder, setFolder] = useState<string>();
-
-  useEffect(() => {
-    let cancelled = false;
-
-    readSchema(store as unknown as Store, drive)
-      .then(schema => {
-        const property = schema.properties?.['app-identities'];
-        const value = property ? driveResource.get(property) : undefined;
-
-        if (!cancelled)
-          setFolder(typeof value === 'string' ? value : undefined);
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [store, drive, driveResource]);
-
-  return folder;
 }
