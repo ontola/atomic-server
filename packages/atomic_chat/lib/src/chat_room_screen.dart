@@ -1,12 +1,17 @@
 import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText;
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:atomic_flutter/atomic_flutter.dart'
     show AppColors, AppColorsExt, Perf;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
+import 'app_shell.dart' show ShellScope;
 import 'app_top_bar.dart';
+import 'meeting_call.dart';
+import 'follow_controller.dart';
+import 'presence_facepile.dart';
 import 'home_sections.dart' show HomeSection;
 import 'chat_bubbles.dart';
 import 'chat_text_styles.dart';
@@ -19,6 +24,7 @@ import 'native_views.dart';
 import 'slide_back_route.dart';
 import 'list_and_field.dart';
 import 'resource_chrome.dart';
+import 'resource_view.dart';
 
 /// Messages of one author closer together than this are one group: the author
 /// is named once above it.
@@ -40,12 +46,17 @@ class ChatRoomScreen extends StatefulWidget {
   /// The room's or meeting's name.
   final String title;
 
+  /// [subject] is a Meeting: a call button in the bar, and while its call is
+  /// on, the video above the chat.
+  final bool meeting;
+
   const ChatRoomScreen({
     super.key,
     required this.api,
     this.drive = '',
     required this.subject,
     this.title = '',
+    this.meeting = false,
   });
 
   @override
@@ -276,21 +287,54 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       child: ChatHeader(
                         title: _title.isEmpty ? 'Chat' : _title,
                         subtitle: _subtitle,
-                        icon: Icons.forum_outlined,
+                        icon: widget.meeting
+                            ? Icons.groups_outlined
+                            : Icons.forum_outlined,
                       ),
                     ),
                     bottom: ResourceBreadcrumbs(
                         api: widget.api,
                         drive: widget.drive,
                         subject: widget.subject),
-                    actions: const [ResourceMoreButton()],
+                    actions: [
+                      if (widget.meeting) ...[
+                        IconButton(
+                          key: const Key('meeting-notes'),
+                          tooltip: 'Notes',
+                          icon: const Icon(Icons.description_outlined),
+                          onPressed: _openNotes,
+                        ),
+                        _MeetingPeople(
+                            api: widget.api,
+                            drive: widget.drive,
+                            meeting: widget.subject),
+                        _JoinCallButton(widget.subject),
+                      ],
+                      const ResourceMoreButton(),
+                    ],
                   ),
-                  body: ListAndField(
-                      fullWidthField: true,
-                      list: _list(c),
-                      field: _composer(c)),
+                  body: Column(children: [
+                    if (widget.meeting) _CallDock(widget.subject),
+                    Expanded(
+                      child: ListAndField(
+                          fullWidthField: true,
+                          list: _list(c),
+                          field: _composer(c)),
+                    ),
+                  ]),
                 ))));
   }
+
+  /// The meeting's notes: its web page (the notes are its text). Back comes
+  /// here again; a call goes on as the tile meanwhile.
+  void _openNotes() => Navigator.of(context).push(SlideBackRoute<void>(
+        builder: (_) => ResourceView(
+            api: widget.api,
+            drive: widget.drive,
+            subject: widget.subject,
+            title: _title,
+            webPage: true),
+      ));
 
   /// The room, and how many people have spoken in it.
   String get _subtitle {
@@ -505,4 +549,253 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
           ],
         ),
       );
+}
+
+/// Who is in the meeting, as avatars; a tap offers to follow them. While
+/// following and this page is on top, the leader's next page opens over the
+/// meeting (back returns here), and that page follows on from there.
+class _MeetingPeople extends StatefulWidget {
+  final AssistantApi api;
+  final String drive;
+  final String meeting;
+
+  const _MeetingPeople(
+      {required this.api, required this.drive, required this.meeting});
+
+  @override
+  State<_MeetingPeople> createState() => _MeetingPeopleState();
+}
+
+class _MeetingPeopleState extends State<_MeetingPeople> {
+  late final PresenceWatch _watch = PresenceWatch(widget.api, widget.drive)
+    ..start();
+  FollowController? _follow;
+
+  /// Where the leader was when last looked at; they moving on from it opens
+  /// their new page.
+  String? _seen;
+
+  /// The watch answered at least once.
+  bool _answered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _watch.addListener(_watched);
+  }
+
+  void _watched() {
+    _answered = true;
+    _moved();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final follow = ShellScope.maybeOf(context)?.follow;
+    if (follow != _follow) {
+      _follow?.removeListener(_moved);
+      _follow = follow?..addListener(_moved);
+    }
+  }
+
+  @override
+  void dispose() {
+    _watch.removeListener(_watched);
+    _follow?.removeListener(_moved);
+    _watch.dispose();
+    super.dispose();
+  }
+
+  /// The resource the followed person is on, if any.
+  String? get _target {
+    final follow = _follow;
+    final leader = follow?.agent;
+    if (follow == null || leader == null) return null;
+    final items = _watch.items.where((i) => i.agent == leader).toList();
+    if (items.isEmpty) return null;
+    return (items.where((i) => i.sessionId == follow.session).firstOrNull ??
+            items.reduce((a, b) => b.updatedAt > a.updatedAt ? b : a))
+        .resource;
+  }
+
+  /// The first read only notes where the leader is: opening the meeting
+  /// (from the strip, say) shows the meeting, not their page.
+  bool _primed = false;
+
+  void _moved() {
+    if (!mounted) return;
+    if (!_primed) {
+      if (!_answered) return;
+      _primed = true;
+      _seen = _target;
+      return;
+    }
+    final target = _target;
+    final moved = target != _seen;
+    _seen = target;
+    final onTop = ModalRoute.of(context)?.isCurrent ?? true;
+    if (moved && onTop) _open(target);
+  }
+
+  void _open(String? target) {
+    if (target == null || target == widget.meeting) return;
+    widget.api.noteOpened(widget.drive, target);
+    unawaited(Navigator.of(context).push(SlideBackRoute<void>(
+      builder: (_) => openResourceView(
+          api: widget.api, drive: widget.drive, subject: target),
+    )));
+  }
+
+  Future<void> _tapped(PresenceItem who) async {
+    final follow = _follow;
+    if (follow == null) return;
+    final identity = _watch.identity(who.agent);
+    final choice = await showPresenceSheet(context,
+        who: who,
+        identity: identity,
+        following: follow.isFollowing(who.agent),
+        canMessage: false);
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case PresenceChoice.follow:
+        follow.follow(who.agent,
+            session: who.sessionId,
+            meeting: widget.meeting,
+            name: identity?.name?.trim());
+        // Go to where they are right away.
+        _seen = _target;
+        _open(_seen);
+      case PresenceChoice.stopFollowing:
+        follow.stop();
+      case PresenceChoice.profile:
+        unawaited(Navigator.of(context).push(SlideBackRoute<void>(
+          builder: (_) => openResourceView(
+              api: widget.api,
+              drive: widget.drive,
+              subject: who.agent,
+              title: identity?.name?.trim() ?? ''),
+        )));
+      case PresenceChoice.message:
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final follow = _follow;
+    if (follow == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: PresenceFacepile(
+        key: const Key('meeting-people'),
+        watch: _watch,
+        follow: follow,
+        subject: widget.meeting,
+        inMeeting: true,
+        onTap: _tapped,
+      ),
+    );
+  }
+}
+
+/// The meeting's call, if it is not on yet: joins it (the shell's call, so
+/// it goes on when this screen is left).
+class _JoinCallButton extends StatelessWidget {
+  final String meeting;
+
+  const _JoinCallButton(this.meeting);
+
+  @override
+  Widget build(BuildContext context) {
+    final call = ShellScope.maybeOf(context)?.call;
+    if (call == null) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: call,
+      builder: (context, _) => call.meeting == meeting
+          ? const SizedBox.shrink()
+          : IconButton(
+              key: const Key('meeting-join-call'),
+              tooltip: 'Join call',
+              icon: const Icon(Icons.videocam_outlined),
+              // Above the chat, not over it: the chat stays in view.
+              onPressed: () => call.start(meeting,
+                  expanded: false,
+                  scheme: Theme.of(context).brightness == Brightness.dark
+                      ? 'dark'
+                      : 'light'),
+            ),
+    );
+  }
+}
+
+/// Room for the call above the meeting's chat while its call is on and this
+/// screen is on top. The call's web view stays the shell's
+/// ([MeetingCallOverlay]); this only tells it where to sit, so it is never
+/// rebuilt and the call goes on when the screen is left (as the tile).
+class _CallDock extends StatefulWidget {
+  final String meeting;
+
+  const _CallDock(this.meeting);
+
+  @override
+  State<_CallDock> createState() => _CallDockState();
+}
+
+class _CallDockState extends State<_CallDock> {
+  final _key = GlobalKey();
+  MeetingCall? _call;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final call = ShellScope.maybeOf(context)?.call;
+    if (call != _call) {
+      _call?.setDock(this, null);
+      _call = call;
+    }
+  }
+
+  @override
+  void dispose() {
+    // Disposed while the tree is locked: the overlay rebuilds after it.
+    final call = _call;
+    if (call != null) scheduleMicrotask(() => call.setDock(this, null));
+    super.dispose();
+  }
+
+  void _report() {
+    final call = _call;
+    if (!mounted || call == null) return;
+    final box = _key.currentContext?.findRenderObject() as RenderBox?;
+    final onTop = ModalRoute.of(context)?.isCurrent ?? true;
+    if (box == null || !box.hasSize || !onTop || call.meeting != widget.meeting) {
+      call.setDock(this, null);
+      return;
+    }
+    call.setDock(this, box.localToGlobal(Offset.zero) & box.size);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final call = _call;
+    if (call == null) return const SizedBox.shrink();
+    // Rebuilt when the route stops or starts being on top.
+    ModalRoute.of(context);
+    return ListenableBuilder(
+      listenable: call,
+      builder: (context, _) {
+        final on = call.meeting == widget.meeting && !call.expanded;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _report());
+        if (!on) return const SizedBox.shrink();
+        return LayoutBuilder(builder: (context, box) {
+          final room = MediaQuery.sizeOf(context);
+          final height =
+              math.min(box.maxWidth * 9 / 16, room.height * 0.45);
+          return SizedBox(
+              key: _key, width: double.infinity, height: height);
+        });
+      },
+    );
+  }
 }
