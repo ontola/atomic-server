@@ -233,6 +233,44 @@ describe('fillAgentPrompt', () => {
   });
 });
 
+describe('fillAgentPrompt with a read that never answers', () => {
+  it('goes on without that part after the timeout', async () => {
+    const prompt = await fillAgentPrompt(
+      '{{custom-classes}}|{{drive-structure}}',
+      {
+        drive: 'did:ad:d',
+        driveTree: () => new Promise<string>(() => undefined),
+        customClasses: async () => ['Recipe: #r'],
+        now: new Date(0),
+      },
+      20,
+    );
+
+    expect(prompt).toBe(
+      'Recipe: #r|The drive structure could not be read; use the tools to look around.',
+    );
+  });
+
+  it('notes classes that failed to load', async () => {
+    const prompt = await fillAgentPrompt(
+      '{{custom-classes}}',
+      {
+        drive: 'did:ad:d',
+        driveTree: async () => '',
+        customClasses: async () => {
+          throw new Error('no index');
+        },
+        now: new Date(0),
+      },
+      20,
+    );
+
+    expect(prompt).toBe(
+      'The custom classes could not be read; use the tools to look them up.',
+    );
+  });
+});
+
 describe('withSearchFallback', () => {
   it('searches locally where the semantic search fails', async () => {
     const wrapped = withSearchFallback(fails, async (q, limit) => [
