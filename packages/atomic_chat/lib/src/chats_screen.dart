@@ -581,7 +581,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void _joinLive(LiveMeeting live) {
     final shell = _shell;
     if (shell == null) return;
-    shell.follow.follow(live.leader.agent, session: live.leader.sessionId);
+    shell.follow.follow(live.leader.agent,
+        session: live.leader.sessionId, meeting: live.meeting);
     _visit(
         openResourceView(
             api: widget.api, drive: _drive, subject: live.meeting),
