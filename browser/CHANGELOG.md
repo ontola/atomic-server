@@ -2,7 +2,7 @@
 
 This changelog covers all five packages, as they are (for now) updated as a whole
 
-## UNRELEASED
+## [v0.41.0-beta.9] - 2026-11-18
 
 - Integrations: provider credentials at the integration proxy are sealed under keys only this app holds (ontola/atomic-plugins#730). The data browser chooses each connection's id and derives its key from the agent's vault proof, sends it once when connecting, and gives each app frame a key grant (the key encrypted to the proxy with HPKE, naming the app) with its capability; the frame signs it as `x-connection-key`. The default proxy is now `https://integrations.atomic.place`, which speaks this protocol; `https://localthought.io` does not, so a setting that still names it uses the new default. Connections made at localthought.io have to be made again.
 - `@tomic/lib`: removed the deprecated `timeTrackingSchema` export (unused); use `workSchema` instead.
