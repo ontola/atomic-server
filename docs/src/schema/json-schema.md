@@ -210,7 +210,7 @@ The workflow: edit the schema file, run `schema diff`, run `schema push`, regene
 A constraint that changed in a way that has no direction, such as a different `pattern` or `anyOf`, is reported as tightening and says the direction is unknown.
 Names and descriptions are cosmetic: editing them is not a change.
 
-Pushing a property whose datatype changed makes the new property and keeps the old one. The new property carries the schema's `localId` (`schema:property:<shortname>`); the old one gets a `localId` ending in `:superseded:<its subject>`, stays in the ontology's property list, and keeps the values written under it.
+Pushing a property whose datatype changed (`atomic-cli`, with `--accept-changes --allow-breaking`) makes the new property and keeps the old one. `@tomic/cli` refuses such a push. The new property carries the schema's `localId` (`schema:property:<shortname>`); the old one gets a `localId` ending in `:superseded:<its subject>`, stays in the ontology's property list, and keeps the values written under it.
 
 The lockfile holds a `fingerprint`, `b3-` and a blake3 hash of the schema's contract: the ontology, the property IDs, and per class what it requires and recommends, the classtype of its properties and its constraints.
 Reordering classes or properties, or rewording a name or description, does not change it; any other edit does.
